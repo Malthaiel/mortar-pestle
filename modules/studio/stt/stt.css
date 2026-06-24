@@ -1,0 +1,145 @@
+/* Voice Transcription (Phase 3) — composer-bar surface at /tools/stt.
+   Candy controls come from the shared primitives; this is layout + the live
+   meter / progress / transcript chrome. Light + dark ride the CSS tokens. */
+
+.stt-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--surface);
+}
+
+/* Header — mirrors the sibling Capture /tools surface. */
+.stt-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.stt-title { font-size: 13.5px; font-weight: 600; color: var(--text); }
+.stt-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: "DM Mono", monospace;
+  font-size: 11.5px;
+  color: var(--text-faint);
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stt-dot { width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0; }
+
+/* Body — transcript or a centered state panel. */
+.stt-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+}
+
+.stt-transcript { flex: 1; min-height: 0; font-size: 14px; line-height: 1.6; color: var(--text); }
+.stt-transcript-live { white-space: pre-wrap; overflow-y: auto; }
+.stt-transcript-edit {
+  width: 100%;
+  resize: none;
+  background: var(--surface-2, var(--surface));
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.6;
+  outline: none;
+}
+.stt-transcript-edit:focus { border-color: var(--accent); }
+.stt-transcript-empty { color: var(--text-faint); }
+.stt-caret { color: var(--accent); margin-left: 1px; animation: stt-blink 1s step-end infinite; }
+@keyframes stt-blink { 50% { opacity: 0; } }
+
+.stt-statepanel { margin: auto; max-width: 460px; text-align: center; padding: 24px; }
+.stt-statepanel-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+.stt-statepanel-sub { font-size: 12.5px; line-height: 1.55; color: var(--text-muted); }
+
+/* Error banner (mic / runtime errors). var(--error) is the only error red. */
+.stt-errorbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 14px 8px;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  color: var(--text);
+  background: color-mix(in oklch, var(--error) 14%, var(--surface));
+  border: 1px solid color-mix(in oklch, var(--error) 45%, transparent);
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+.stt-errorbar span { flex: 1; }
+.stt-errorbar-x {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-faint);
+  font-size: 12px;
+  padding: 2px 4px;
+  line-height: 1;
+}
+.stt-errorbar-x:hover { color: var(--text); }
+
+/* Control bar — extra bottom padding clears the candy depth shadow. */
+.stt-controlbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px 13px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.stt-controlbar-meter { flex: 1; min-width: 80px; display: flex; align-items: center; }
+
+.stt-vu,
+.stt-progress {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--surface-2, color-mix(in oklch, var(--text) 8%, var(--surface)));
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.stt-vu-fill,
+.stt-progress-fill { height: 100%; border-radius: 999px; transition: width 80ms linear; }
+
+.stt-filedrop { flex-shrink: 0; }
+
+/* Recording halo on the Stop button. */
+.stt-rec-pulse { display: inline-flex; border-radius: 999px; animation: stt-pulse 1.4s ease-in-out infinite; }
+@keyframes stt-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--error) 40%, transparent); }
+  50% { box-shadow: 0 0 0 5px color-mix(in oklch, var(--error) 0%, transparent); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stt-caret,
+  .stt-rec-pulse { animation: none; }
+}
+
+/* Visually-hidden live region — the text/aria fallback for the level meter. */
+.stt-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

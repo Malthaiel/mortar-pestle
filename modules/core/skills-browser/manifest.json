@@ -1,0 +1,13 @@
+{
+  "id": "skills-browser",
+  "name": "Skills Browser",
+  "description": "Browse, install, and update skills from the bundled registry.",
+  "version": "1.0.0",
+  "entry": "./index.jsx",
+  "slots": ["settings-tab"],
+  "permissions": ["vault.read", "vault.write"],
+  "requires": [],
+  "license": "MIT",
+  "tier": "core",
+  "iconKey": "IconPackage"
+}

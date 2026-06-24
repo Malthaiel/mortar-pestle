@@ -1,0 +1,16 @@
+{
+  "id": "stt",
+  "name": "Speech-to-Text",
+  "description": "Voice transcription — press-to-talk dictation and file transcribe, fully offline.",
+  "version": "0.1.0",
+  "entry": "./index.jsx",
+  "slots": ["provider", "route", "left-sidebar", "settings-tab"],
+  "permissions": ["vault.read", "vault.write"],
+  "requires": [],
+  "license": "proprietary",
+  "tier": "studio",
+  "platforms": ["linux", "windows"],
+  "routeBase": "/tools/stt",
+  "iconKey": "IconMic",
+  "setupRequired": false
+}

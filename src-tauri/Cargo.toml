@@ -1,0 +1,99 @@
+[package]
+name = "iskariel"
+version = "0.8.0"
+description = "Iskariel — a personal operating system for thinking, planning, and producing"
+authors = ["Malthaiel"]
+license = "PolyForm-Noncommercial-1.0.0"
+repository = "https://github.com/Malthaiel/iskariel"
+edition = "2021"
+rust-version = "1.77.2"
+
+[lib]
+name = "app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.6.2", features = [] }
+
+[dependencies]
+serde_json = { version = "1.0", features = ["preserve_order"] }
+serde = { version = "1.0", features = ["derive"] }
+log = "0.4"
+# `unstable` unlocks the multi-webview embedding API (Window::add_child +
+# WebviewBuilder) the Windows in-app-browser port uses to host isolated per-tab
+# content views over the `main` window (Linux uses raw webkit2gtk instead).
+tauri = { version = "2.11.2", features = ["devtools", "unstable"] }
+tauri-plugin-log = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-updater = "2"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "fs", "process", "time", "io-util", "net"] }
+notify = "6"
+notify-debouncer-full = "0.3"
+portable-pty = "0.8"
+serde_yml = "0.0.12"
+pulldown-cmark = "0.12"
+walkdir = "2.5"
+# Browser History & Data — read-only reader for the WebKit/libsoup cookie SQLite
+# jar (cookie-site listing). `bundled` statically links SQLite (no system dep).
+rusqlite = { version = "0.31", features = ["bundled"] }
+sha1 = "0.10"
+sha2 = "0.10"
+regex = "1"
+urlencoding = "2"
+chrono = "0.4"
+unicode-normalization = "0.1"
+natord = "1"
+http = "1"
+mime_guess = "2"
+# Cover thumbnails — decode + downscale album art server-side (asset_protocol)
+# so the Library Music tab doesn't decode full-res covers into tiny tiles.
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
+axum = "0.7"
+dirs = "5"
+uuid = { version = "1", features = ["v4"] }
+# SF3 of Design Mode — Tauri-side Atelier agent backend.
+reqwest = { version = "0.12", features = ["json", "stream", "rustls-tls"], default-features = false }
+futures-util = "0.3"
+eventsource-stream = "0.2"
+# Password Vault — Argon2id KDF deriving a key that seals the credential store
+# with XChaCha20-Poly1305 (AEAD). `zeroize` scrubs the key + decrypted plaintext.
+argon2 = "0.5"
+chacha20poly1305 = "0.10"
+rand_core = { version = "0.6", features = ["getrandom"] }
+zeroize = { version = "1", features = ["derive"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+# OS keyring backend, split per-platform. Without a backend feature keyring v3 is an
+# in-process mock — set_password "succeeds" but nothing persists (bit us 2026-06-12:
+# Spotify/qbit/creds secrets). Unix → D-Bus Secret Service; Windows → Credential Manager.
+keyring = { version = "3", features = ["sync-secret-service"] }
+
+[target.'cfg(windows)'.dependencies]
+keyring = { version = "3", features = ["windows-native"] }
+# SF9 (Game Capture) — harden the in-game capture HUD: exclude it from the capture
+# stream (SetWindowDisplayAffinity / WDA_EXCLUDEFROMCAPTURE) + a non-activating
+# ex-style (WS_EX_NOACTIVATE) so its buttons don't pull a borderless game out of
+# focus. Pinned to 0.61 so `WebviewWindow::hwnd()`'s HWND unifies with Tauri's
+# (Cargo.lock resolves 0.61.3). `Win32_System_Com` adds IStream (favicon byte
+# read) for the in-app-browser Phase-2 WebView2 reach-through.
+windows = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_System_Com"] }
+# In-app browser Phase 2 — reach through Tauri's child webview to the raw
+# ICoreWebView2 for native permission-deny, faithful history state, favicons,
+# cookie enumeration + profile clear, and renderer-crash recovery. Already in the
+# tree via wry (0.38.2); naming it directly makes the `webview2_com::*` path usable.
+webview2-com = "0.38"
+# Encode favicon PNG bytes into a data: URL (Linux uses glib's base64_encode).
+base64 = "0.22"
+
+# In-app browser content view — raw WebKitGTK webview embedded next to the
+# Tauri chrome. Pinned to the exact versions wry 0.55.1 resolves so the GObject
+# types unify with `PlatformWebview::inner()`.
+[target.'cfg(target_os = "linux")'.dependencies]
+webkit2gtk = { version = "=2.0.2", features = ["v2_40"] }
+gtk = "0.18"
+
+[dev-dependencies]
+tempfile = "3"
+similar = "2"

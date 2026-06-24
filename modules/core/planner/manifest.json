@@ -1,0 +1,15 @@
+{
+  "id": "planner",
+  "name": "Planner",
+  "description": "Day planner with focus timer, session calendar, and a right-sidebar dock tile.",
+  "version": "2.0.0",
+  "entry": "./index.jsx",
+  "slots": ["provider", "widget", "settings-tab", "overlay", "route"],
+  "permissions": ["vault.read", "vault.write", "vault.subscribe", "localStorage"],
+  "requires": [],
+  "license": "MIT",
+  "tier": "core",
+  "routeBase": "/pulse/calendar",
+  "iconKey": null,
+  "setupRequired": false
+}

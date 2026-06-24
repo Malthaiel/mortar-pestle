@@ -1,0 +1,32 @@
+[
+  {
+    "id": "hello",
+    "name": "Hello",
+    "description": "Prints a hello banner. Demo skill for the Skills Browser.",
+    "category": "demo",
+    "license": "MIT",
+    "version": "1.0.0",
+    "install": "auto",
+    "content": "---\nname: hello\ndescription: Demo skill — prints a hello banner.\n---\n\nPrint the following lines verbatim, then exit cleanly:\n\n  Hello from Iskariel.\n  Installed via Skills Browser.\n"
+  },
+  {
+    "id": "timestamp",
+    "name": "Timestamp",
+    "description": "Prints the current ISO 8601 date and time.",
+    "category": "demo",
+    "license": "MIT",
+    "version": "1.0.0",
+    "install": "auto",
+    "content": "---\nname: timestamp\ndescription: Demo skill — prints the current ISO 8601 timestamp.\n---\n\nRun `date -Iseconds` via Bash. Print the output verbatim. No other commentary.\n"
+  },
+  {
+    "id": "vault-stats",
+    "name": "Vault Stats",
+    "description": "Prints page and link counts from the vault manifest.",
+    "category": "demo",
+    "license": "MIT",
+    "version": "1.0.0",
+    "install": "auto",
+    "content": "---\nname: vault-stats\ndescription: Demo skill — print vault page, link, and embed counts.\n---\n\nRead `Infrastructure/.cache/vault_manifest.json`. Sum the relevant fields and print:\n\n  Pages: <count>\n  Outbound links: <count>\n  Embeds: <count>\n\nIf the manifest is missing, print an error and suggest running `/manifest` first.\n"
+  }
+]

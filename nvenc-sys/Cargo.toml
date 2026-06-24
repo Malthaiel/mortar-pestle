@@ -1,0 +1,14 @@
+[package]
+name = "nvenc-sys"
+version = "0.1.0"
+edition = "2021"
+description = "Thin, nothing-linked FFI to NVIDIA NVENC: bindgen over vendored MIT nv-codec-headers + runtime dlopen of libnvidia-encode.so.1."
+publish = false
+
+[dependencies]
+libloading = "0.9.0"
+# libloading lands in Encode SF1 (D1) — runtime dlopen of libnvidia-encode.so.1.
+
+[build-dependencies]
+bindgen = "0.72.1"
+# bindgen lands in A4 once nv-codec-headers are vendored + libclang (A1) is present.

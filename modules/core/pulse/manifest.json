@@ -1,0 +1,15 @@
+{
+  "id": "pulse",
+  "name": "Pulse",
+  "description": "Daily logs, calendar, and review views — the vault's daily heartbeat.",
+  "version": "1.0.0",
+  "entry": "./index.jsx",
+  "slots": ["left-sidebar", "route"],
+  "permissions": ["vault.read", "vault.subscribe", "localStorage"],
+  "requires": [],
+  "license": "MIT",
+  "tier": "core",
+  "routeBase": "/pulse",
+  "iconKey": "IconStar",
+  "setupRequired": false
+}
