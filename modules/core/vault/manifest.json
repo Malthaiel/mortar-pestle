@@ -1,0 +1,15 @@
+{
+  "id": "vault",
+  "name": "Vault View",
+  "description": "Read and edit vault notes with the file tree, wikilinks, and backlinks.",
+  "version": "1.0.0",
+  "entry": "./index.jsx",
+  "slots": ["left-sidebar", "route"],
+  "permissions": ["vault.read", "vault.subscribe", "localStorage"],
+  "requires": [],
+  "license": "MIT",
+  "tier": "core",
+  "routeBase": "/vault",
+  "iconKey": "IconLibrary",
+  "setupRequired": false
+}

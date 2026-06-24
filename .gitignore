@@ -1,0 +1,35 @@
+node_modules/
+web/dist/
+.DS_Store
+.env
+.env.local
+*.log
+
+# Test-fixture render-cache byproducts (regenerated each cargo test run).
+src-tauri/tests/fixtures/daily-vault/Infrastructure/.cache/
+src-tauri/tests/fixtures/vault/Infrastructure/.cache/
+
+# Tauri 2 AppManifest auto-generated permissions (regenerated each `tauri build`).
+src-tauri/permissions/
+
+# Rust build artifacts (all crates: src-tauri, iskariel-stt, iskariel-capture, nvenc-sys).
+target/
+
+# Bundled external tools (ffmpeg/ffprobe/yt-dlp) — dropped here at release-cut,
+# resolved by src-tauri/src/tool_path.rs. Not committed; PATH fallback until then.
+src-tauri/resources/bin/
+
+# No-undo-net backups taken before bulk edits.
+.bak/
+
+# Secrets — never commit. Tauri updater private key + signing material live in CI secrets.
+.env.*
+*.key
+*.pem
+tauri-signing-key*
+.tauri/
+
+# OS / editor junk.
+Thumbs.db
+Desktop.ini
+*.swp

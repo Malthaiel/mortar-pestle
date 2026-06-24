@@ -1,0 +1,15 @@
+{
+  "id": "video-editor",
+  "name": "Video Editor",
+  "description": "Timeline video editor for clipping and exporting recordings.",
+  "version": "0.1.0",
+  "entry": "./index.jsx",
+  "slots": ["route", "left-sidebar"],
+  "permissions": [],
+  "requires": [],
+  "license": "proprietary",
+  "tier": "studio",
+  "routeBase": "/tools/video-editor",
+  "iconKey": "IconClapperboard",
+  "setupRequired": false
+}

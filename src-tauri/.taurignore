@@ -1,0 +1,9 @@
+# Tauri dev-watcher ignores (gitignore syntax, relative to src-tauri/).
+# Data the build scripts write under src-tauri/ is NOT source and must not
+# trigger a cargo rebuild. The USDA food-DB build (scripts/build_fdc_db.py)
+# downloads CSVs into scripts/.fdc_work/, which the `cargo tauri dev` watcher was
+# picking up → repeated spurious rebuilds during iteration. Python scripts ship
+# as bundled resources (copied at build time); editing them needs no rebuild.
+scripts/.fdc_work/
+scripts/*.csv
+scripts/*.zip

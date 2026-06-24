@@ -1,0 +1,16 @@
+{
+  "id": "browser",
+  "name": "Browser",
+  "description": "Sandboxed in-app browser with a tab sidebar, ad & tracker Shield, downloads, and an encrypted password vault.",
+  "version": "1.0.0",
+  "entry": "./index.jsx",
+  "slots": ["route", "left-sidebar", "settings-tab"],
+  "permissions": [],
+  "requires": [],
+  "license": "MIT",
+  "tier": "core",
+  "platforms": ["linux", "windows"],
+  "routeBase": "/tools/browser",
+  "iconKey": "IconGlobe",
+  "setupRequired": false
+}

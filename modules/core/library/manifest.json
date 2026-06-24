@@ -1,0 +1,15 @@
+{
+  "id": "library",
+  "name": "Library",
+  "description": "Anime and music library over the vault — track statuses, browse covers, play local files, manage downloads.",
+  "version": "1.0.0",
+  "entry": "./index.jsx",
+  "slots": ["provider", "route", "left-sidebar", "widget", "settings-tab"],
+  "permissions": ["vault.read", "vault.write", "vault.subscribe", "localStorage", "audio"],
+  "requires": [],
+  "license": "MIT",
+  "tier": "core",
+  "routeBase": "/tools/library",
+  "iconKey": "IconLibrary",
+  "setupRequired": false
+}

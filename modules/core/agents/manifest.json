@@ -1,0 +1,15 @@
+{
+  "id": "agents",
+  "name": "Agents",
+  "description": "App-wide AI agents — Atelier (the design-in-residence) and Concierge (the app-wide helper). Launch either from the Agents button in the dock.",
+  "version": "1.0.0",
+  "entry": "./index.jsx",
+  "slots": ["provider"],
+  "permissions": ["localStorage"],
+  "requires": [],
+  "license": "MIT",
+  "tier": "core",
+  "iconKey": "IconSparkles",
+  "settingsTarget": { "tab": "agents" },
+  "setupRequired": false
+}

@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "browser-content",
+  "description": "Zero-capability isolation boundary for the in-app browser's untrusted content webviews (labels `browser-content-*`, created by browser_new_tab on Windows). Grants NO permissions — no core:*, no app commands, no IPC bridge — so hostile web content loaded here can invoke nothing on the powerful Rust backend (vault FS, media server, qBittorrent, PTY). Belt-and-suspenders: these labels are already excluded from the `default` capability's explicit webview list; this makes the zero-grant boundary explicit and prevents a future capability from accidentally globbing content webviews in. The real network boundary is the loopback-refusing proxy the content view is routed through.",
+  "local": true,
+  "webviews": ["browser-content-*"],
+  "permissions": []
+}

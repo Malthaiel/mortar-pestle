@@ -1,0 +1,13 @@
+{
+  "id": "domain-builder",
+  "name": "Domain Builder",
+  "description": "Guided flow that scaffolds new Knowledge domains — folders, hub page, and starter structure.",
+  "version": "1.0.0",
+  "entry": "./index.jsx",
+  "slots": ["provider", "overlay"],
+  "permissions": ["vault.read", "vault.write"],
+  "requires": [],
+  "license": "MIT",
+  "tier": "core",
+  "setupRequired": false
+}

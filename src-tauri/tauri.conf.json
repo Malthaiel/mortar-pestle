@@ -1,0 +1,96 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "Iskariel",
+  "version": "0.8.0",
+  "identifier": "dev.malthaiel.iskariel",
+  "build": {
+    "frontendDist": "../web/dist",
+    "devUrl": "http://127.0.0.1:5173",
+    "beforeDevCommand": "npm --prefix web run dev",
+    "beforeBuildCommand": "npm --prefix web run build && node scripts/rotate-binary.mjs"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Iskariel",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 960,
+        "minHeight": 600,
+        "resizable": true,
+        "fullscreen": false,
+        "visible": true
+      },
+      {
+        "label": "overlay-capture",
+        "title": "Iskariel Overlay — Capture",
+        "url": "index.html#/overlay/capture",
+        "width": 360,
+        "height": 140,
+        "x": 480,
+        "y": 40,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "resizable": false,
+        "focus": false,
+        "shadow": false,
+        "visible": false
+      },
+      {
+        "label": "overlay-scrim",
+        "title": "Iskariel Overlay — Scrim",
+        "url": "index.html#/overlay/scrim",
+        "width": 380,
+        "height": 520,
+        "x": 980,
+        "y": 40,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "resizable": false,
+        "focus": false,
+        "shadow": false,
+        "visible": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "createUpdaterArtifacts": true,
+    "resources": {
+      "scripts/download_album.py": "scripts/download_album.py",
+      "scripts/download_anime.py": "scripts/download_anime.py",
+      "scripts/import_music_parse.py": "scripts/import_music_parse.py",
+      "scripts/import_mal_parse.py": "scripts/import_mal_parse.py",
+      "resources/usda_foods.db": "resources/usda_foods.db"
+    },
+    "targets": [
+      "nsis"
+    ],
+    "category": "Utility",
+    "shortDescription": "Iskariel desktop shell",
+    "longDescription": "Iskariel — a personal operating system for thinking, planning, and producing: vault browser, focus timer, skills runner, media player, and per-session-token PTY terminal.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.png"
+    ]
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/Malthaiel/iskariel/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQwMkFFMUQwRjAwQkU0NUIKUldSYjVBdncwT0VxME1BQlRzOVErL29NUjJGREo4Z1VXeWhxaFpvSS9XWktIVHE0cG4rakdCRlEK"
+    }
+  }
+}

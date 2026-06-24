@@ -1,0 +1,15 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "build": {
+    "beforeBuildCommand": "npm --prefix web run build && cargo build --release --manifest-path iskariel-stt/Cargo.toml --features vulkan && cargo build --release --manifest-path iskariel-capture/Cargo.toml && node scripts/rotate-binary.mjs"
+  },
+  "bundle": {
+    "resources": {
+      "../iskariel-stt/target/release/iskariel-stt": "iskariel-stt",
+      "../iskariel-capture/target/release/iskariel-capture": "iskariel-capture"
+    },
+    "targets": [
+      "rpm"
+    ]
+  }
+}

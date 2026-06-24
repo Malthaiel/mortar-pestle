@@ -1,0 +1,201 @@
+// One live toast per download job, stacked bottom-right and visible from any
+// route (mounted at the app root by index.jsx's MusicRoot). Active jobs show a
+// progress bar + "N/M · track" + cancel; queued jobs show "Queued — #N";
+// success auto-dismisses after a few seconds; a job with failed tracks persists
+// and lists them (decision #7). Styled on MusicErrorToast's spring-in card.
+
+import { useEffect, useRef, useState } from 'react';
+import { useDownloads } from './DownloadProvider.jsx';
+
+const GREEN = '#6fb56f';
+const RED = '#e07b7b';
+const BLUE = '#6c9fd8';
+const DONE_DISMISS_MS = 4000;
+const CANCEL_DISMISS_MS = 2500;
+
+function stateColor(job) {
+  if (job.state === 'error') return RED;
+  if (job.state === 'done') return (job.failed && job.failed.length) ? RED : GREEN;
+  if (job.state === 'cancelled') return 'var(--text-muted)';
+  return BLUE;
+}
+
+// Terminal one-line summary for the notification-center history entry.
+function terminalLine(job) {
+  const failed = job.failed || [];
+  if (job.state === 'error') return job.error || 'Download failed';
+  if (failed.length) return `Done · ${failed.length} of ${job.trackTotal} failed`;
+  return `Downloaded · ${job.trackTotal} track${job.trackTotal === 1 ? '' : 's'}`;
+}
+
+function Cover({ url }) {
+  const [bad, setBad] = useState(false);
+  const box = {
+    width: 40, height: 40, flexShrink: 0, borderRadius: 6, overflow: 'hidden',
+    background: 'var(--surface-2)', display: 'flex', alignItems: 'center',
+    justifyContent: 'center', color: 'var(--text-faint)', fontSize: 16,
+  };
+  if (!url || bad) return <div style={box}>♪</div>;
+  return (
+    <div style={box}>
+      <img src={url} alt="" onError={() => setBad(true)}
+           style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+    </div>
+  );
+}
+
+export default function DownloadToastStack() {
+  const { jobs, cancel } = useDownloads();
+  const [dismissed, setDismissed] = useState({});
+  const scheduled = useRef({});
+  const notified = useRef({});
+
+  // Schedule auto-dismiss ONCE per job that reaches a clean terminal state.
+  // Guarded by a ref so the frequent progress events of a concurrent download
+  // don't keep resetting another job's dismiss timer.
+  useEffect(() => {
+    jobs.forEach(j => {
+      const cleanDone = j.state === 'done' && !(j.failed && j.failed.length);
+      const cancelled = j.state === 'cancelled';
+      if ((cleanDone || cancelled) && !scheduled.current[j.id]) {
+        scheduled.current[j.id] = true;
+        const ms = cleanDone ? DONE_DISMISS_MS : CANCEL_DISMISS_MS;
+        setTimeout(() => setDismissed(d => ({ ...d, [j.id]: true })), ms);
+      }
+      // Record one notification-center history entry per terminal done/error job.
+      // The live widget above stays the transient surface; this only feeds the
+      // bell panel, bridged to the host store via the agentic:notify event.
+      if ((j.state === 'done' || j.state === 'error') && !notified.current[j.id]) {
+        notified.current[j.id] = true;
+        window.dispatchEvent(new CustomEvent('agentic:notify', { detail: {
+          type: 'download', sourceId: j.id,
+          title: j.title || 'Album',
+          message: terminalLine(j),
+          accent: stateColor(j),
+          iconKey: 'download', transient: false, duration: null,
+          action: (j.state === 'done' && j.albumPath)
+            ? { label: 'Open album', kind: 'open-album', payload: { albumPath: j.albumPath } }
+            : null,
+        } }));
+      }
+    });
+  }, [jobs]);
+
+  const visible = jobs.filter(j => !dismissed[j.id]);
+  if (!visible.length) return null;
+
+  return (
+    <>
+      <style>{`
+        @keyframes dl-toast-spring-in {
+          0%   { opacity: 0; transform: translateY(16px) scale(0.94); }
+          60%  { opacity: 1; transform: translateY(-3px) scale(1.015); }
+          100% { opacity: 1; transform: translateY(0)    scale(1); }
+        }
+      `}</style>
+      <div style={{
+        position: 'fixed', bottom: 20, right: 20, zIndex: 120,
+        display: 'flex', flexDirection: 'column-reverse', gap: 10,
+        pointerEvents: 'none',
+      }}>
+        {visible.map(job => (
+          <Toast key={job.id} job={job}
+                 onCancel={() => cancel(job.id)}
+                 onDismiss={() => setDismissed(d => ({ ...d, [job.id]: true }))} />
+        ))}
+      </div>
+    </>
+  );
+}
+
+function Toast({ job, onCancel, onDismiss }) {
+  const color = stateColor(job);
+  const active = job.state === 'downloading';
+  const queued = job.state === 'queued';
+  const done = job.state === 'done';
+  const cancellable = active || queued;
+  const failed = job.failed || [];
+  const pct = job.trackTotal ? Math.min(100, Math.round((job.trackIndex / job.trackTotal) * 100)) : 0;
+
+  const statusLine = (() => {
+    if (queued) return job.queuePosition > 0 ? `Queued — #${job.queuePosition} in line` : 'Queued';
+    if (active) return `${job.trackIndex}/${job.trackTotal}${job.trackTitle ? ` · ${job.trackTitle}` : ''}`;
+    if (job.state === 'cancelled') return 'Cancelled';
+    if (job.state === 'error') return job.error || 'Download failed';
+    if (done) return failed.length
+      ? `Done · ${failed.length} of ${job.trackTotal} failed`
+      : `Downloaded · ${job.trackTotal} track${job.trackTotal === 1 ? '' : 's'}`;
+    return '';
+  })();
+
+  return (
+    <div
+      role="status"
+      style={{
+        pointerEvents: 'auto',
+        display: 'flex', alignItems: 'flex-start', gap: 12,
+        width: 320, padding: '11px 13px',
+        background: 'var(--bg-elev, #1a1a1a)',
+        border: '1px solid var(--border)', borderLeft: `3px solid ${color}`,
+        borderRadius: 10,
+        boxShadow: '0 12px 32px rgba(0,0,0,0.28), 0 2px 8px rgba(0,0,0,0.16)',
+        color: 'var(--text)', fontFamily: 'var(--font-sans)',
+        animation: 'dl-toast-spring-in 260ms cubic-bezier(0.34, 1.56, 0.64, 1) both',
+      }}
+    >
+      <Cover url={job.cover} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+          <div title={job.title} style={{
+            flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>{job.title || 'Album'}</div>
+          {cancellable ? (
+            <button onClick={onCancel} title="Cancel" style={iconBtn}>✕</button>
+          ) : (
+            <button onClick={onDismiss} title="Dismiss" style={iconBtn}>✕</button>
+          )}
+        </div>
+        <div title={job.artist} style={{
+          fontSize: 11, color: 'var(--text-muted)', marginTop: 1,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>{job.artist}</div>
+
+        {active && (
+          <div style={{
+            marginTop: 8, height: 4, borderRadius: 2,
+            background: 'var(--surface-2)', overflow: 'hidden',
+          }}>
+            <div style={{
+              width: `${pct}%`, height: '100%', background: color,
+              transition: 'width 240ms ease',
+            }} />
+          </div>
+        )}
+
+        <div style={{
+          marginTop: 6, fontSize: 11,
+          color: (job.state === 'error' || (done && failed.length)) ? RED : 'var(--text-faint)',
+          fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }} title={statusLine}>{statusLine}</div>
+
+        {done && failed.length > 0 && (
+          <div style={{ marginTop: 4, fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+            {failed.slice(0, 5).map(f => (
+              <div key={f.n} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                · {f.title || `Track ${f.n}`}
+              </div>
+            ))}
+            {failed.length > 5 && <div>· +{failed.length - 5} more</div>}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const iconBtn = {
+  flexShrink: 0, background: 'transparent', border: 'none', cursor: 'pointer',
+  color: 'var(--text-faint)', fontSize: 12, lineHeight: 1, padding: 2,
+};

@@ -1,0 +1,15 @@
+{
+  "id": "game-wiki",
+  "name": "Game Wiki",
+  "description": "Multi-game reference wiki (Deadlock + future games) browsed from the separate app-managed GameWiki vault; read-only except the writable Deadlock coaching-scrim surface.",
+  "version": "1.0.0",
+  "entry": "./index.jsx",
+  "slots": ["left-sidebar", "route"],
+  "permissions": ["vault.read", "vault.write", "vault.subscribe", "localStorage"],
+  "requires": [],
+  "license": "MIT",
+  "tier": "core",
+  "routeBase": "/game-wiki",
+  "iconKey": "IconGamepad",
+  "setupRequired": false
+}

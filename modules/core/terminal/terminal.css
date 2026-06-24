@@ -1,0 +1,34 @@
+/* Terminal module — Zed (Gruvbox Dark) look. Single appearance: the terminal is
+   styled to match Zed's terminal. xterm's own colors are themed in JS (themes.js
+   GRUVBOX_THEME); this file owns the container chrome JS can't: the background,
+   Zed's left-gutter inset, and the scrollbar. Scoped under .term-surface. */
+
+.term-surface,
+.term-surface[data-skin="zed"] {
+  background: #151411;     /* user-chosen bg (was Gruvbox #282828) — matches the xterm theme background */
+  padding: 0 0 0 9px;      /* Zed inset: ~1 character cell on the left only */
+}
+
+/* xterm 6 hardcodes .xterm-viewport{background:#000} in its own stylesheet; our
+   scoped selector outranks it on specificity, so the #282828 shows through. */
+.term-surface .xterm-viewport {
+  background-color: transparent;
+}
+
+/* Thin, Gruvbox-toned scrollbar (backs the scrollbarSlider* theme slots). */
+.term-surface .xterm-viewport::-webkit-scrollbar {
+  width: 9px;
+}
+.term-surface .xterm-viewport::-webkit-scrollbar-thumb {
+  background: #50494566;   /* gruvbox bg2, translucent */
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+.term-surface .xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: #665c5499;   /* gruvbox bg3 */
+  background-clip: padding-box;
+}
+.term-surface .xterm-viewport::-webkit-scrollbar-track {
+  background: transparent;
+}

@@ -1,0 +1,16 @@
+{
+  "id": "game-capture",
+  "name": "Capture",
+  "description": "Game Capture — replay buffer recording and clip review.",
+  "version": "0.1.0",
+  "entry": "./index.jsx",
+  "slots": ["route", "left-sidebar", "settings-tab"],
+  "permissions": [],
+  "requires": [],
+  "license": "proprietary",
+  "tier": "studio",
+  "platforms": ["linux", "windows"],
+  "routeBase": "/tools/capture",
+  "iconKey": "IconGamepad",
+  "setupRequired": false
+}
