@@ -16,7 +16,7 @@ import { api } from '../../api.js';
 import { useContextMenu } from '../../context-menu/useContextMenu.js';
 import IdeaPickerModal from './IdeaPickerModal.jsx';
 import NewIdeaModal from './NewIdeaModal.jsx';
-import { IconX, IconCheck } from '../icons.jsx';
+import { IconX, IconCheck, IconExternal } from '../icons.jsx';
 import { obsidianHrefForPath } from '../../util/obsidian.js';
 import { todayLocalStr } from '../../util/time.js';
 import { usePlanner } from '@modules/core/planner/PlannerProvider.jsx';
@@ -29,6 +29,12 @@ export function shortDate(ds) {
 
 function readLS(k) { try { return localStorage.getItem(k); } catch { return null; } }
 function writeLS(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+
+// Horizontal row holding a chip-field chip and its out-of-chip action buttons.
+// align-items:center seats the (smaller) action buttons vertically against the
+// chip; each button carries its own explicit height (~25% under the chip) rather
+// than stretching to it, so ✓ / ROUTE / × read as peer controls, not a segmented bar.
+const CHIP_ROW_STYLE = { display: 'flex', alignItems: 'center', gap: '6px', width: '100%' };
 
 // Press-and-hold (dwell) on a chip to pick it up for a calendar drag, while a
 // quick click falls through to the live input's native focus (caret where
@@ -134,49 +140,55 @@ export function TaskChip({ path, line, text, sourceDate, checked = false, showDa
   });
 
   return (
-    <span
-      className="candy-btn"
-      data-shape="chip-field"
-      data-checked={checked ? 'true' : undefined}
-      title={checked ? undefined : 'Click to edit · hold and drag onto the calendar to schedule'}
-      onMouseDown={hold.onMouseDown}
-    >
-      <span className="candy-face">
-        <input
-          ref={inputRef}
-          className="chip-field-input"
-          value={draft}
-          spellCheck={false}
-          onChange={e => setDraft(e.target.value)}
-          onFocus={() => { doneRef.current = false; }}
-          onClick={() => { if (hold.draggingRef.current) { hold.draggingRef.current = false; inputRef.current?.blur(); } }}
-          onBlur={commit}
-          onKeyDown={e => {
-            if (e.key === 'Enter') { e.preventDefault(); commit(); inputRef.current?.blur(); }
-            else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); cancel(); }
-          }}
-        />
-        <button
-          type="button"
-          title={checked ? 'Uncheck task' : 'Check off task'}
-          aria-label={checked ? 'Uncheck task' : 'Check off task'}
-          data-own-press
-          className={`candy-btn${checked ? ' is-active' : ''}`}
-          data-shape="icon"
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={onToggle}
-          style={{ flexShrink: 0, width: 18, height: 18, borderRadius: 6 }}
-        ><span className="candy-face"><IconCheck size={12} /></span></button>
-        {showDate && (
-          <span
-            onClick={openSource}
-            title="Open source log"
-            onMouseDown={(e) => e.stopPropagation()}
-            style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0, cursor: 'pointer' }}
-          >{shortDate(sourceDate)}</span>
-        )}
+    <div style={CHIP_ROW_STYLE}>
+      <span
+        className="candy-btn"
+        data-shape="chip-field"
+        data-checked={checked ? 'true' : undefined}
+        title={checked ? undefined : 'Click to edit · hold and drag onto the calendar to schedule'}
+        onMouseDown={hold.onMouseDown}
+        style={{ flex: 1 }}
+      >
+        <span className="candy-face">
+          <input
+            ref={inputRef}
+            className="chip-field-input"
+            value={draft}
+            spellCheck={false}
+            onChange={e => setDraft(e.target.value)}
+            onFocus={() => { doneRef.current = false; }}
+            onClick={() => { if (hold.draggingRef.current) { hold.draggingRef.current = false; inputRef.current?.blur(); } }}
+            onBlur={commit}
+            onKeyDown={e => {
+              if (e.key === 'Enter') { e.preventDefault(); commit(); inputRef.current?.blur(); }
+              else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); cancel(); }
+            }}
+          />
+          {showDate && (
+            <span
+              onClick={openSource}
+              title="Open source log"
+              onMouseDown={(e) => e.stopPropagation()}
+              style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0, cursor: 'pointer' }}
+            >{shortDate(sourceDate)}</span>
+          )}
+        </span>
       </span>
-    </span>
+
+      {/* ✓ toggle — moved out of the chip face; icon shape hovers to accent. */}
+      <ChipIconBtn
+        title={checked ? 'Uncheck task' : 'Check off task'}
+        active={checked}
+        onClick={onToggle}
+      ><IconCheck size={12} /></ChipIconBtn>
+
+      {/* ✕ delete — circle; reuses deleteTask (5s undo toast). Icon shape → accent on hover. */}
+      <ChipIconBtn
+        round
+        title="Delete task"
+        onClick={() => api.noteActions.deleteTask({ path, line, text })}
+      ><IconX /></ChipIconBtn>
+    </div>
   );
 }
 
@@ -249,77 +261,85 @@ export function NoteChip({ text, sourceDate, index, showDate = true }) {
   ];
 
   return (
-    <span
-      className="candy-btn"
-      data-shape="chip-field"
-      title="Click to edit · hold and drag onto the calendar to promote into a session"
-      onMouseDown={hold.onMouseDown}
-    >
-      <span className="candy-face">
-        <input
-          ref={inputRef}
-          className="chip-field-input"
-          value={draft}
-          spellCheck={false}
-          onChange={e => setDraft(e.target.value)}
-          onFocus={() => { doneRef.current = false; }}
-          onClick={() => { if (hold.draggingRef.current) { hold.draggingRef.current = false; inputRef.current?.blur(); } }}
-          onBlur={commit}
-          onKeyDown={e => {
-            if (e.key === 'Enter') { e.preventDefault(); commit(); inputRef.current?.blur(); }
-            else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); cancel(); }
-          }}
+    <div style={CHIP_ROW_STYLE}>
+      <span
+        className="candy-btn"
+        data-shape="chip-field"
+        title="Click to edit · hold and drag onto the calendar to promote into a session"
+        onMouseDown={hold.onMouseDown}
+        style={{ flex: 1 }}
+      >
+        <span className="candy-face">
+          <input
+            ref={inputRef}
+            className="chip-field-input"
+            value={draft}
+            spellCheck={false}
+            onChange={e => setDraft(e.target.value)}
+            onFocus={() => { doneRef.current = false; }}
+            onClick={() => { if (hold.draggingRef.current) { hold.draggingRef.current = false; inputRef.current?.blur(); } }}
+            onBlur={commit}
+            onKeyDown={e => {
+              if (e.key === 'Enter') { e.preventDefault(); commit(); inputRef.current?.blur(); }
+              else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); cancel(); }
+            }}
+          />
+          {showDate && (
+            <span
+              onMouseDown={(e) => e.stopPropagation()}
+              style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}
+            >{shortDate(sourceDate)}</span>
+          )}
+        </span>
+        <IdeaPickerModal
+          open={pickerOpen}
+          onClose={() => setPickerOpen(false)}
+          onPick={(page) => { setPickerOpen(false); doMove(page); }}
         />
-        <ChipBtn
-          title="Route this note…"
-          onClick={(e) => {
-            // Anchor below the ROUTE button (a left-click trigger, not a right-click);
-            // openContextMenu accepts a {x,y} point for non-event callers like this.
-            const r = e.currentTarget.getBoundingClientRect();
-            openContextMenu({ x: r.left, y: r.bottom + 6 }, menuItems);
-          }}
-        >ROUTE</ChipBtn>
-        <ChipBtn title="Delete note" danger onClick={onDelete}><IconX /></ChipBtn>
-        {showDate && (
-          <span
-            onMouseDown={(e) => e.stopPropagation()}
-            style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}
-          >{shortDate(sourceDate)}</span>
-        )}
+        <NewIdeaModal
+          open={newIdeaOpen}
+          noteText={text}
+          onClose={() => setNewIdeaOpen(false)}
+          onCreate={({ title, domain }) => { setNewIdeaOpen(false); api.noteActions.createStubIdea({ ds, index, text, title, domain }); }}
+        />
       </span>
-      <IdeaPickerModal
-        open={pickerOpen}
-        onClose={() => setPickerOpen(false)}
-        onPick={(page) => { setPickerOpen(false); doMove(page); }}
-      />
-      <NewIdeaModal
-        open={newIdeaOpen}
-        noteText={text}
-        onClose={() => setNewIdeaOpen(false)}
-        onCreate={({ title, domain }) => { setNewIdeaOpen(false); api.noteActions.createStubIdea({ ds, index, text, title, domain }); }}
-      />
-    </span>
+
+      {/* ROUTE + × moved out of the chip face; icon shape hovers to accent. */}
+      <ChipIconBtn
+        title="Route this note…"
+        onClick={(e) => {
+          // Anchor below the ROUTE button (a left-click trigger, not a right-click);
+          // openContextMenu accepts a {x,y} point for non-event callers like this.
+          const r = e.currentTarget.getBoundingClientRect();
+          openContextMenu({ x: r.left, y: r.bottom + 6 }, menuItems);
+        }}
+      ><IconExternal size={13} /></ChipIconBtn>
+      <ChipIconBtn round title="Delete note" onClick={onDelete}><IconX /></ChipIconBtn>
+    </div>
   );
 }
 
-// Small candy chip used in each note chip's action cluster — the ROUTE menu
-// trigger and the × delete (the latter via `danger`, which tints red on hover
-// through the chip shape's .is-danger). Same candy language as the New Event /
-// Edit Frame chips, just compact. `data-own-press` opts out of the global
-// :active scale (the class carries its own press), and the mousedown stop keeps
-// a click from starting the card drag.
-export function ChipBtn({ title, onClick, danger, children }) {
+// Out-of-chip icon action button for a Planner row (✓ / ROUTE / ×). Uses
+// data-shape="icon"; the icon shape's hover is neutral-brighten by design
+// (styles.css:1686-1688, specificity beats the generic accent rule 2030 — the
+// dock's hover-expand is the affordance, accent is the .is-active state), so
+// `is-hover-accent` opts these three buttons INTO an accent fill on hover
+// (styles.css override, gated :not(.is-active) so the checked ✓ keeps its
+// held-accent rest state). `round` makes the delete × a circle; `active` holds
+// the accent fill for the checked ✓. `data-own-press` opts out of the global
+// :active scale; the mousedown stop keeps a click from starting the chip drag.
+export function ChipIconBtn({ title, onClick, round, active, children }) {
   return (
     <button
       type="button"
       title={title}
       aria-label={title}
       data-own-press
-      className={`candy-btn${danger ? ' is-danger' : ''}`}
-      data-shape="chip"
+      className={`candy-btn is-hover-accent${active ? ' is-active' : ''}`}
+      data-shape="icon"
       onMouseDown={(e) => e.stopPropagation()}
       onClick={onClick}
-      style={{ flexShrink: 0, '--cbtn-depth': 'var(--candy-depth-small)' }}
-    ><span className="candy-face" style={{ height: 18, padding: '0 9px', fontSize: 9.5, boxSizing: 'border-box' }}>{children}</span></button>
+      style={{ flexShrink: 0, width: 23, height: 23, borderRadius: round ? '50%' : 6, '--cbtn-depth': 'var(--candy-depth-small)' }}
+    ><span className="candy-face">{children}</span></button>
   );
 }

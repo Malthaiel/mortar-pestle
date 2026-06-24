@@ -1687,6 +1687,15 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
 .candy-btn[data-shape="icon"]:is([data-dock-hover], :hover):not(.is-active) > .candy-face { background: var(--surface-3); color: var(--text); }
 .candy-btn[data-shape="icon"]:is([data-dock-hover], :hover):not(.is-active) .candy-face :where(div, span) { color: var(--text); }
 
+/* Planner chip action buttons (✓ / ROUTE / ×) opt into accent-on-hover.
+   The icon shape's default hover is neutral-brighten (above); this opt-in
+   modifier flips the face to accent on hover/press. Gated :not(.is-active)
+   so the checked ✓ keeps its held-accent state (1978-1981). Specificity (0,6,0)
+   beats the icon override (0,5,0). */
+.candy-btn[data-shape="icon"].is-hover-accent:is(:hover, :active):not(.is-active) { --cbtn-band: var(--accent); }
+.candy-btn[data-shape="icon"].is-hover-accent:is(:hover, :active):not(.is-active) > .candy-face { color: #fff; background: var(--accent); }
+.candy-btn[data-shape="icon"].is-hover-accent:is(:hover, :active):not(.is-active) .candy-face :where(div, span) { color: #fff; }
+
 /* circle — round icon-only button: music controls (button-music-transport/tool/
    primary) + Planner reset/skip (button-planner-circle). Round; same brighten-
    only hover as icon. .is-active flips accent (Shuffle/Repeat/Queue toggles);
