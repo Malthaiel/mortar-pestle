@@ -32,6 +32,8 @@
     "allow-vedit-parity-render",
     "allow-vedit-audio-parity",
     "allow-vedit-composite-parity",
+    "allow-vedit-encoder-probe",
+    "allow-vedit-encode-smoke",
     "allow-vedit-lut-import",
     "allow-vedit-lut-read",
     "allow-open-devtools",
