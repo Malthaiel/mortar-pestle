@@ -231,7 +231,6 @@
     "allow-creds-delete-import-file",
     "allow-creds-change-master",
     "allow-creds-set-keyring-unlock",
-    "allow-creds-settings-get",
     "allow-creds-settings-set",
     "allow-creds-suppress-blur-lock",
     "allow-get-capture-state",
