@@ -5,9 +5,11 @@
 // + the `capture-state` event); a down engine is a calm "unavailable" state, never
 // an error throw. Styling primitives mirror BrowserSettingsTab.
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { open } from '@tauri-apps/plugin-dialog';
+import { openInFiles } from '@host/components/vault-tree/revealInFiles.js';
 
 // Snapshot-only live state (the clip list is CapturePage's concern, not Settings).
 // Mirrors useCaptureState's discriminate-by-`state` idiom; null ⇒ engine down.
@@ -192,6 +194,64 @@ function ReplaySlider({ snapshot }) {
   );
 }
 
+// Recordings destination (WI-2). Reads the resolved folder from get_captures_dir;
+// Change… opens the native folder picker → set_captures_dir (persists + repoints
+// the engine); Reset returns to the platform default. Blocked while recording/armed
+// (the repoint restarts the engine). Existing clips stay where they are.
+function RecordingsSection({ snapshot }) {
+  const [dir, setDir] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const locked = !!snapshot?.recording || !!snapshot?.armed;
+
+  const refresh = useCallback(() => {
+    invoke('get_captures_dir').then((d) => setDir(d || '')).catch(() => {});
+  }, []);
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const change = async () => {
+    setErr(null);
+    let picked;
+    try {
+      picked = await open({ directory: true, multiple: false, title: 'Choose a recordings folder' });
+    } catch { setErr('Could not open the folder picker.'); return; }
+    const path = typeof picked === 'string' ? picked : (picked && picked.path) || null;
+    if (!path) return; // cancelled
+    setBusy(true);
+    try { await invoke('set_captures_dir', { path }); refresh(); }
+    catch (e) { setErr(e?.message || String(e)); }
+    finally { setBusy(false); }
+  };
+  const reset = async () => {
+    setErr(null); setBusy(true);
+    try { await invoke('reset_captures_dir'); refresh(); }
+    catch (e) { setErr(e?.message || String(e)); }
+    finally { setBusy(false); }
+  };
+  const openFolder = () => { if (dir) openInFiles(dir, { isFolder: true }); };
+
+  return (
+    <SectionBand title="Recordings" anchor="set-capture-recordings">
+      <SettingRow stacked
+        label="Save recordings to"
+        hint="New clips save here; existing clips stay where they are. Changing this briefly restarts the capture engine, so it is blocked while recording.">
+        <div style={{
+          fontFamily: 'var(--font-mono)', fontSize: 11.5, color: 'var(--text)',
+          wordBreak: 'break-all', background: 'var(--surface-2)',
+          border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '6px 8px',
+        }}>{dir || '—'}</div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button type="button" onClick={change} disabled={busy || locked} style={actionBtn}>Change folder…</button>
+          <button type="button" onClick={openFolder} disabled={!dir} style={actionBtn}>Open folder</button>
+          <button type="button" onClick={reset} disabled={busy || locked} style={actionBtn}>Reset to default</button>
+        </div>
+        {locked && <div style={hintText}>Stop recording to change the folder.</div>}
+        {err && <div style={{ ...hintText, color: 'var(--error)' }}>{err}</div>}
+      </SettingRow>
+    </SectionBand>
+  );
+}
+
 export default function CaptureSettingsTab() {
   const { snapshot, engine } = useCaptureSnapshot();
   const down = !!engine && (engine.state === 'down' || engine.state === 'failed');
@@ -202,6 +262,7 @@ export default function CaptureSettingsTab() {
           Capture engine is down — values appear once it is running.
         </div>
       )}
+      <RecordingsSection snapshot={snapshot} />
       <EncoderReadout snapshot={snapshot} />
       <AudioReadout snapshot={snapshot} />
       <HotkeyRows snapshot={snapshot} />

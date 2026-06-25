@@ -225,6 +225,8 @@
     "allow-creds-generate-password",
     "allow-creds-export",
     "allow-creds-import",
+    "allow-creds-import-file",
+    "allow-creds-delete-import-file",
     "allow-creds-change-master",
     "allow-creds-set-keyring-unlock",
     "allow-creds-settings-get",

@@ -26,7 +26,7 @@ use tauri::AppHandle;
 use crate::capture::client::{CaptureConfig, CaptureError, StateSnapshot};
 use crate::capture::{supervisor, CONFIG_FILE};
 use crate::commands::sidebar::app_config_root;
-use crate::commands::vault::{atomic_write, library_vault_root, VaultError};
+use crate::commands::vault::{atomic_write, captures_dir, VaultError};
 
 /// Map a [`CaptureError`] to the house [`VaultError`]. `Disconnected` →
 /// `NotFound` (the engine isn't up); everything else → `Io` with the message.
@@ -133,22 +133,22 @@ pub struct ClipDeleteOut {
 
 /// `capture_clip_delete` — soft-delete a clip into the global Recycle Bin (3-SF3).
 /// `path` is the clip's absolute path (from `capture_list_clips`) and must resolve
-/// under the Library mount. Returns the bin id so the Capture page can offer an
-/// in-Toast Restore. Routes through `recycle_bin::trash_clip` (instant `fs::rename`
-/// on the shared `/home` filesystem — even multi-GB clips move for free).
+/// under the captures dir (`captures_dir()` — `%USERPROFILE%\Videos\Iskariel` on
+/// Windows, decision #11). Returns the bin id so the Capture page can offer an
+/// in-Toast Restore; the bin restores via the `captures` mount (`RootKind::Captures`).
 #[tauri::command]
 pub fn capture_clip_delete(app: AppHandle, path: String) -> Result<ClipDeleteOut, VaultError> {
-    let lib = std::fs::canonicalize(library_vault_root())
-        .unwrap_or_else(|_| PathBuf::from(library_vault_root()));
+    let root = std::fs::canonicalize(captures_dir())
+        .unwrap_or_else(|_| PathBuf::from(captures_dir()));
     let abs = std::fs::canonicalize(&path)
         .map_err(|_| VaultError::NotFound(format!("clip not found: {path}")))?;
     let rel = abs
-        .strip_prefix(&lib)
-        .map_err(|_| VaultError::Invalid("clip is not under the Library".into()))?
+        .strip_prefix(&root)
+        .map_err(|_| VaultError::Invalid("clip is not under the captures dir".into()))?
         .to_string_lossy()
         .replace('\\', "/");
     let bin_id =
-        crate::commands::recycle_bin::trash_clip(&app, Some("library".into()), &rel, &abs)?;
+        crate::commands::recycle_bin::trash_clip(&app, Some("captures".into()), &rel, &abs)?;
     Ok(ClipDeleteOut { ok: true, bin_id })
 }
 
@@ -210,6 +210,82 @@ fn config_file(app: &AppHandle) -> Result<PathBuf, VaultError> {
     Ok(app_config_root(app)?.join(CONFIG_FILE))
 }
 
+// ── Configurable recordings destination (WI-2) ──────────────────────────────
+// The captures dir is user-configurable. Persistence-of-record is
+// `<app_config>/captures-dir.json` (`{"path": "..."}`); `captures_dir()` reads an
+// in-process override cache (`vault::captures_override`) loaded at startup and
+// rewritten on set/reset. The daemon binds `ISKARIEL_CAPTURES_DIR` at spawn and
+// computes each clip's path at start, so a change repoints the engine by
+// restarting it (`supervisor::restart`) — the next clip lands in the new dir, and
+// the clip-list scan + reveal allowlist already resolve through `captures_dir()`.
+
+/// The persisted captures-dir path: `app_config_root(app)/captures-dir.json`.
+fn captures_dir_file(app: &AppHandle) -> Result<PathBuf, VaultError> {
+    Ok(app_config_root(app)?.join("captures-dir.json"))
+}
+
+/// Load the persisted captures-dir override into the in-process cache. Call from
+/// `setup` BEFORE the capture supervisor starts, so the first engine spawn binds
+/// the chosen dir. Absent/garbled ⇒ no override (the platform default stands).
+pub fn init_captures_override(app: &AppHandle) {
+    let Ok(path) = captures_dir_file(app) else { return };
+    let Ok(raw) = std::fs::read_to_string(&path) else { return };
+    let dir = serde_json::from_str::<Value>(&raw)
+        .ok()
+        .and_then(|v| v.get("path").and_then(Value::as_str).map(str::to_owned));
+    crate::commands::vault::set_captures_override(dir);
+}
+
+/// Refuse a captures-dir change while a recording or armed ring is live (the
+/// repoint restarts the engine, which would drop it). Engine down ⇒ nothing to
+/// interrupt — allow.
+async fn ensure_capture_idle() -> Result<(), VaultError> {
+    let Some(client) = supervisor::client() else { return Ok(()) };
+    match client.get_state().await {
+        Ok(snap) if snap.recording || snap.armed => Err(VaultError::Invalid(
+            "stop recording before changing the recordings folder".into(),
+        )),
+        _ => Ok(()),
+    }
+}
+
+/// `get_captures_dir` — the resolved recordings folder (settings readout).
+#[tauri::command]
+pub fn get_captures_dir() -> String {
+    captures_dir()
+}
+
+/// `set_captures_dir` — choose the recordings folder. Refuses while recording/armed,
+/// creates the dir, persists it, updates the override cache, and restarts the engine
+/// so new clips land there. Existing clips stay where they are.
+#[tauri::command]
+pub async fn set_captures_dir(app: AppHandle, path: String) -> Result<(), VaultError> {
+    let path = path.trim().to_string();
+    if path.is_empty() {
+        return Err(VaultError::Invalid("path required".into()));
+    }
+    ensure_capture_idle().await?;
+    std::fs::create_dir_all(&path)
+        .map_err(|e| VaultError::Io(format!("create recordings dir {path}: {e}")))?;
+    let file = captures_dir_file(&app)?;
+    atomic_write(&file, json!({ "path": &path }).to_string().as_bytes())?;
+    crate::commands::vault::set_captures_override(Some(path));
+    supervisor::restart();
+    Ok(())
+}
+
+/// `reset_captures_dir` — clear the override, returning to the platform default,
+/// and repoint the engine.
+#[tauri::command]
+pub async fn reset_captures_dir(app: AppHandle) -> Result<(), VaultError> {
+    ensure_capture_idle().await?;
+    let file = captures_dir_file(&app)?;
+    let _ = std::fs::remove_file(&file);
+    crate::commands::vault::set_captures_override(None);
+    supervisor::restart();
+    Ok(())
+}
+
 /// `capture_open_kde_settings` — open KDE System Settings at the global-shortcuts
 /// KCM (`kcm_keys`) so the user can rebind the capture hotkeys.
 ///
@@ -257,14 +333,14 @@ pub struct ClipMeta {
 }
 
 /// `capture_list_clips` — metadata-only scan of `ISKARIEL_CAPTURES_DIR`
-/// (`library_vault_root()/Captures`) for video files, newest-first. App-UI-owned
-/// (the Library has no watcher; the live clip-list signal is `capture-saved`).
-/// Recurses one level into per-game subfolders (the engine groups clips by game).
-/// Never throws on a missing dir — returns an empty list (gate `(5b)`). No probe
-/// here: duration/poster are the Step-8 `capture_clip_meta` (3-SF4) job.
+/// (`captures_dir()` — `%USERPROFILE%\Videos\Iskariel` on Windows, decision #11)
+/// for video files, newest-first. App-UI-owned (no watcher; the live clip-list
+/// signal is `capture-saved`). Recurses one level into per-game subfolders (the
+/// engine groups clips by game). Never throws on a missing dir — returns an empty
+/// list (gate `(5b)`). No probe here: duration/poster are `capture_clip_meta` (3-SF4).
 #[tauri::command]
 pub fn capture_list_clips() -> Result<Vec<ClipMeta>, VaultError> {
-    let root = PathBuf::from(library_vault_root()).join("Captures");
+    let root = PathBuf::from(captures_dir());
     let mut clips = Vec::new();
     collect_clips(&root, &mut clips);
     // Recurse one level into subdirectories (per-game folders).

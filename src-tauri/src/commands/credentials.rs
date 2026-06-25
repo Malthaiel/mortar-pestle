@@ -341,6 +341,7 @@ pub struct ImportSummary {
     pub added: u32,
     pub updated: u32,
     pub skipped: u32,
+    pub skipped_items: Vec<SkipInfo>,
 }
 
 // ── In-memory unlocked state ──────────────────────────────────────────────
@@ -674,10 +675,19 @@ fn generate(opts: &GenOpts) -> Result<String, CredError> {
 }
 
 // ── Import parsing ────────────────────────────────────────────────────────
+/// One import entry that was not brought in, with a human-readable reason.
+/// Non-secret (a name/label + reason) — safe to surface to the frontend.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SkipInfo {
+    pub name: String,
+    pub reason: String,
+}
+
 struct Imported {
     entries: Vec<CredEntry>,
     folders: Vec<Folder>,
-    skipped: u32,
+    skipped_items: Vec<SkipInfo>,
 }
 
 fn parse_import(data: &str, format: &str, password: Option<&str>) -> Result<Imported, CredError> {
@@ -688,7 +698,7 @@ fn parse_import(data: &str, format: &str, password: Option<&str>) -> Result<Impo
             Ok(Imported {
                 entries: store.entries.clone(),
                 folders: store.folders.clone(),
-                skipped: 0,
+                skipped_items: Vec::new(),
             })
         }
         "acvn" | "encrypted" | "acvn-hex" => {
@@ -702,7 +712,7 @@ fn parse_import(data: &str, format: &str, password: Option<&str>) -> Result<Impo
             Ok(Imported {
                 entries: store.entries.clone(),
                 folders: store.folders.clone(),
-                skipped: 0,
+                skipped_items: Vec::new(),
             })
         }
         "bitwarden" => parse_bitwarden(data),
@@ -730,7 +740,7 @@ fn parse_bitwarden(data: &str) -> Result<Imported, CredError> {
         }
     }
     let mut entries = Vec::new();
-    let mut skipped = 0u32;
+    let mut skipped_items: Vec<SkipInfo> = Vec::new();
     if let Some(items) = v.get("items").and_then(|i| i.as_array()) {
         for it in items {
             let typ = it.get("type").and_then(|t| t.as_u64()).unwrap_or(0);
@@ -797,14 +807,18 @@ fn parse_bitwarden(data: &str) -> Result<Imported, CredError> {
                     created: String::new(),
                     updated: String::new(),
                 }),
-                _ => skipped += 1, // cards / identities — not represented in v1
+                _ => skipped_items.push(SkipInfo {
+                    // cards / identities / SSH keys — not represented in v1
+                    name: if title.is_empty() { format!("item type {typ}") } else { title.clone() },
+                    reason: format!("unsupported item type {typ} (cards/identities not represented in v1)"),
+                }),
             }
         }
     }
     Ok(Imported {
         entries,
         folders,
-        skipped,
+        skipped_items,
     })
 }
 
@@ -852,7 +866,7 @@ fn parse_csv(data: &str) -> Result<Imported, CredError> {
         return Ok(Imported {
             entries: Vec::new(),
             folders: Vec::new(),
-            skipped: 0,
+            skipped_items: Vec::new(),
         });
     }
     let header: Vec<String> = rows[0].iter().map(|s| s.trim().to_ascii_lowercase()).collect();
@@ -868,8 +882,8 @@ fn parse_csv(data: &str) -> Result<Imported, CredError> {
     };
 
     let mut entries = Vec::new();
-    let mut skipped = 0u32;
-    for row in rows.iter().skip(1) {
+    let mut skipped_items: Vec<SkipInfo> = Vec::new();
+    for (ri, row) in rows.iter().enumerate().skip(1) {
         if row.iter().all(|c| c.trim().is_empty()) {
             continue;
         }
@@ -889,7 +903,10 @@ fn parse_csv(data: &str) -> Result<Imported, CredError> {
             && password.trim().is_empty()
             && origin.is_none()
         {
-            skipped += 1;
+            skipped_items.push(SkipInfo {
+                name: format!("row {ri}"),
+                reason: "no usable fields (empty name/username/password/url)".into(),
+            });
             continue;
         }
         let host = origin.as_deref().map(normalize_host).filter(|h| !h.is_empty());
@@ -937,7 +954,7 @@ fn parse_csv(data: &str) -> Result<Imported, CredError> {
     Ok(Imported {
         entries,
         folders,
-        skipped,
+        skipped_items,
     })
 }
 
@@ -1246,19 +1263,20 @@ pub fn creds_export(app: AppHandle, password: Option<String>) -> Result<ExportRe
     })
 }
 
-#[tauri::command]
-pub fn creds_import(
-    app: AppHandle,
-    data: String,
-    format: String,
-    password: Option<String>,
-    mode: String,
+/// Apply a parsed import into the unlocked store (merge dedupes on host+username;
+/// replace clears first). Shared by `creds_import` (pasted text) and
+/// `creds_import_file` (a file picked from disk).
+fn apply_import(
+    app: &AppHandle,
+    imported: Imported,
+    mode: &str,
 ) -> Result<ImportSummary, CredError> {
-    let imported = parse_import(&data, &format, password.as_deref())?;
     let now = now_rfc3339();
-    mutate_and_save(&app, move |store| {
+    let mode = mode.to_string();
+    mutate_and_save(app, move |store| {
         let mut summary = ImportSummary {
-            skipped: imported.skipped,
+            skipped: imported.skipped_items.len() as u32,
+            skipped_items: imported.skipped_items,
             ..Default::default()
         };
         if mode == "replace" {
@@ -1303,6 +1321,44 @@ pub fn creds_import(
         }
         Ok(summary)
     })
+}
+
+#[tauri::command]
+pub fn creds_import(
+    app: AppHandle,
+    data: String,
+    format: String,
+    password: Option<String>,
+    mode: String,
+) -> Result<ImportSummary, CredError> {
+    let imported = parse_import(&data, &format, password.as_deref())?;
+    apply_import(&app, imported, &mode)
+}
+
+/// Import from a file the user picked via the OS dialog (the dialog IS the
+/// permission grant — no vault sandboxing). The plaintext file contents stay
+/// Rust-side and are zeroized after parse; only a non-secret summary returns.
+#[tauri::command]
+pub fn creds_import_file(
+    app: AppHandle,
+    path: String,
+    format: String,
+    password: Option<String>,
+    mode: String,
+) -> Result<ImportSummary, CredError> {
+    let data = Zeroizing::new(
+        std::fs::read_to_string(&path).map_err(|e| CredError::Io(format!("read import file: {e}")))?,
+    );
+    let imported = parse_import(&data, &format, password.as_deref())?;
+    apply_import(&app, imported, &mode)
+}
+
+/// Delete a plaintext export file from disk after a successful import (opt-in
+/// cleanup so unencrypted secrets don't linger in Downloads). A plain remove —
+/// not a secure shred (overwrite passes are meaningless on SSDs).
+#[tauri::command]
+pub fn creds_delete_import_file(path: String) -> Result<(), CredError> {
+    std::fs::remove_file(&path).map_err(|e| CredError::Io(format!("delete import file: {e}")))
 }
 
 #[tauri::command]

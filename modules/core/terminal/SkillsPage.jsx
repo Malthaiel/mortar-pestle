@@ -14,10 +14,11 @@ import { skillsApi } from './api.js';
 import { useSkillsData, findSkillBySlug } from './SkillsProvider.jsx';
 import SectionHeader, { EmptyState } from '@host/pages/pulse/SectionHeader.jsx';
 import { PrimaryBtn } from '@host/components/ui/index.js';
+import { IconChevronLeft } from '@host/components/icons.jsx';
 import SkillArgsForm from './SkillArgsForm.jsx';
 import SkillOutput from './SkillOutput.jsx';
 
-export default function SkillsPage({ accent, selectedSlug }) {
+export default function SkillsPage({ accent, selectedSlug, onBack }) {
   const { skills, runningJobs, setRunningJobForSlug, clearJobForSlug } = useSkillsData();
   const [argValues, setArgValues] = useState({});
   const [argsValid, setArgsValid] = useState(true);
@@ -64,6 +65,7 @@ export default function SkillsPage({ accent, selectedSlug }) {
       flex: 1, minWidth: 0, minHeight: 0,
       display: 'flex', flexDirection: 'column', overflow: 'hidden',
     }}>
+        {onBack && <BackBar onBack={onBack}/>}
         {selected ? (
           <>
             <SectionHeader
@@ -167,14 +169,35 @@ export default function SkillsPage({ accent, selectedSlug }) {
             flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
             padding: 48,
           }}>
-            <EmptyState message="Select a skill from the sidebar" accent={accentColor}/>
+            <EmptyState message="Skill not found — go back to the launchpad." accent={accentColor}/>
           </div>
         )}
     </div>
   );
 }
 
-function Badge({ tone, children }) {
+function BackBar({ onBack }) {
+  return (
+    <div style={{ flexShrink: 0, padding: '8px 14px', borderBottom: '1px solid var(--border)' }}>
+      <button
+        type="button"
+        onClick={onBack}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          padding: '4px 8px', background: 'transparent', border: 'none',
+          borderRadius: 'var(--radius-sm)', color: 'var(--text-muted)', cursor: 'pointer',
+          fontSize: 11.5, fontFamily: 'var(--font-mono)', letterSpacing: '0.04em',
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text)'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)'; }}
+      >
+        <IconChevronLeft/> All skills
+      </button>
+    </div>
+  );
+}
+
+export function Badge({ tone, children }) {
   const palette = tone === 'danger'
     ? { bg: 'color-mix(in oklch, #e07b7b 12%, transparent)', fg: '#e07b7b', border: 'color-mix(in oklch, #e07b7b 28%, transparent)' }
     : { bg: 'var(--surface-2)', fg: 'var(--text-muted)', border: 'var(--border)' };

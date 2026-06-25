@@ -1565,7 +1565,12 @@ mod win {
                 })
             }
             Err(e) => {
-                log::error!("capture: mux finalize failed for {mp4_path}: {e}");
+                // WI-3 Step A: log frame count + duration next to ffmpeg's stderr so
+                // a failed save reveals zero-frames vs a headerless/mid-GOP stream.
+                let duration_s = (t_end - t0).max(0) as f64 / 1e9;
+                log::error!(
+                    "capture: mux finalize failed for {mp4_path} ({packets} packets, {duration_s:.2}s, {width}x{height}): {e}"
+                );
                 let _ = event_tx.send(EngineEvent::Error { error: ProtoError::new("internal", e) });
                 None
             }

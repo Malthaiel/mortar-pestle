@@ -20,10 +20,6 @@ pub mod parsers;
 // (std::net + tokio); ported to Windows alongside the WebView2 content views.
 #[cfg(any(target_os = "linux", target_os = "windows"))]
 pub mod proxy;
-// SF0 spike (Windows browser port) — throwaway Path-A feasibility probe behind
-// the ISKARIEL_BROWSER_SPIKE env var; removed once Path A is runtime-confirmed.
-#[cfg(target_os = "windows")]
-mod browser_spike;
 pub mod render;
 // STT is ported to Windows (named-pipe IPC, SF1+); Linux uses the Unix socket.
 #[cfg(any(target_os = "linux", target_os = "windows"))]
@@ -275,11 +271,6 @@ pub fn run() {
                     eprintln!("proxy::run failed: {e}");
                 }
             });
-
-            // SF0 spike — Path-A child-webview feasibility probe (Windows only,
-            // ISKARIEL_BROWSER_SPIKE=1). Throwaway; inert without the env var.
-            #[cfg(target_os = "windows")]
-            browser_spike::run(app.handle().clone());
             }
 
             // Game Capture (5-SF2b/c/e) — studio-artifact-only carriage. The
@@ -294,6 +285,11 @@ pub fn run() {
             // Linux (Unix-socket IPC) AND Windows (named-pipe IPC).
             #[cfg(any(target_os = "linux", target_os = "windows"))]
             {
+            // WI-2: load the persisted recordings-folder override into the
+            // captures_dir() cache BEFORE the engine spawns, so the daemon binds
+            // ISKARIEL_CAPTURES_DIR to the user's chosen dir on first launch.
+            commands::capture::init_captures_override(app.handle());
+
             capture::supervisor::start(app.handle().clone());
 
             // STT (speech-to-text) — supervisor owns the model/worker lifecycle,
@@ -542,6 +538,7 @@ pub fn run() {
             commands::video_editor::vedit_lut_import,
             commands::video_editor::vedit_lut_read,
             commands::devtools::open_devtools,
+            commands::claude_usage::claude_token_stats,
             #[cfg(target_os = "linux")]
             commands::dev_service::dev_service_action,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::browser::browser_navigate,
@@ -727,6 +724,8 @@ pub fn run() {
             commands::credentials::creds_generate_password,
             commands::credentials::creds_export,
             commands::credentials::creds_import,
+            commands::credentials::creds_import_file,
+            commands::credentials::creds_delete_import_file,
             commands::credentials::creds_change_master,
             commands::credentials::creds_set_keyring_unlock,
             commands::credentials::creds_settings_get,
@@ -743,6 +742,9 @@ pub fn run() {
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::capture_rebind_hotkeys,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::capture_open_kde_settings,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::set_capture_config,
+            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::get_captures_dir,
+            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::set_captures_dir,
+            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::reset_captures_dir,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::stt::stt_load_model,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::stt::stt_transcribe_file,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::stt::stt_start_dictation,

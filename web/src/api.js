@@ -72,7 +72,12 @@ if (typeof window !== 'undefined' && window.__TAURI_INTERNALS__) {
   mediaBaseUrl();
 }
 function absFromInput(p, base) {
-  return p.startsWith('/') ? p : `${base || VAULT_ROOT_FOR_MEDIA}/${p}`;
+  // Already-absolute paths pass through unchanged: POSIX (`/…`), Windows
+  // drive-rooted (`C:\…` / `C:/…`), and UNC (`\\server\…`). Only a relative path
+  // is joined against the media root. (Game Capture clips are the one consumer
+  // that passes an absolute path — and on Windows it has a drive letter, not `/`.)
+  if (p.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(p) || p.startsWith('\\\\')) return p;
+  return `${base || VAULT_ROOT_FOR_MEDIA}/${p}`;
 }
 export function mediaUrl(p, opts) {
   if (!p) return '';

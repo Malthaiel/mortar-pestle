@@ -5,21 +5,26 @@
 // route keeps the Generator and the logins list.
 
 import { useState } from 'react';
+import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import * as creds from './credsStore.js';
 import { writeModuleSetting } from '@host/module-sdk/index.js';
 
 const input = { padding: '6px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', font: 'inherit' };
 const ghost = { padding: '7px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text)', cursor: 'pointer', font: 'inherit' };
 function primary(accent) { return { ...ghost, border: `1px solid ${accent}`, background: accent, color: '#fff', fontWeight: 600 }; }
+function basename(p) { if (!p) return ''; const i = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\')); return i >= 0 ? p.slice(i + 1) : p; }
 
 export function ExportImport({ accent }) {
   const [exPw, setExPw] = useState('');
   const [exOut, setExOut] = useState('');
   const [imData, setImData] = useState('');
+  const [imFile, setImFile] = useState('');            // absolute path picked from disk
   const [imFmt, setImFmt] = useState('bitwarden');
   const [imMode, setImMode] = useState('merge');
   const [imPw, setImPw] = useState('');
   const [msg, setMsg] = useState('');
+  const [skipped, setSkipped] = useState([]);          // SkipInfo[] from the last import
+  const [lastImported, setLastImported] = useState(''); // plaintext file eligible for cleanup
 
   const doExport = async (encrypted) => {
     setMsg('');
@@ -32,13 +37,37 @@ export function ExportImport({ accent }) {
       setMsg(encrypted ? 'Encrypted export ready — copy it somewhere safe.' : 'Plaintext export ready (handle with care).');
     } catch (e) { setMsg(e?.message || 'Export failed.'); }
   };
-  const doImport = async () => {
+  const pickFile = async () => {
     setMsg('');
     try {
-      const s = await creds.importVault(imData, imFmt, imPw || null, imMode);
+      const p = await openDialog({ multiple: false, filters: [{ name: 'Vault export', extensions: ['json', 'csv', 'txt'] }] });
+      if (typeof p === 'string') setImFile(p);
+    } catch (e) { setMsg(String(e?.message || e)); }
+  };
+  const doImport = async () => {
+    setMsg(''); setSkipped([]);
+    if (imMode === 'replace' && !window.confirm('Replace all wipes every entry in your current vault. Continue?')) return;
+    try {
+      let s;
+      if (imFile) {
+        s = await creds.importVaultFile(imFile, imFmt, imPw || null, imMode);
+        setLastImported(imFile);
+        setImFile('');
+      } else {
+        s = await creds.importVault(imData, imFmt, imPw || null, imMode);
+        setImData('');
+      }
       setMsg(`Imported: ${s.added} added, ${s.updated} updated, ${s.skipped} skipped.`);
-      setImData('');
+      setSkipped(Array.isArray(s.skippedItems) ? s.skippedItems : []);
     } catch (e) { setMsg(e?.message || 'Import failed.'); }
+  };
+  const doDeleteExport = async () => {
+    if (!window.confirm(`Delete the plaintext export file "${basename(lastImported)}" from disk?`)) return;
+    try {
+      await creds.deleteImportFile(lastImported);
+      setMsg(`Deleted ${basename(lastImported)} from disk.`);
+      setLastImported('');
+    } catch (e) { setMsg(e?.message || 'Delete failed.'); }
   };
 
   return (
@@ -62,10 +91,27 @@ export function ExportImport({ accent }) {
           <option value="replace">Replace all</option>
         </select>
         {imFmt === 'encrypted' && <input type="password" style={input} placeholder="Import password" value={imPw} onChange={e => setImPw(e.target.value)} />}
-        <button type="button" style={ghost} onClick={doImport}>Import</button>
       </div>
-      <textarea style={{ ...input, minHeight: 70, fontFamily: 'var(--font-mono,monospace)', fontSize: 11 }} placeholder="Paste export data to import…" value={imData} onChange={e => setImData(e.target.value)} />
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <input style={{ ...input, flex: 1 }} value={imFile ? basename(imFile) : ''} readOnly placeholder="No file chosen" />
+        <button type="button" style={ghost} onClick={pickFile}>Choose file…</button>
+        <button type="button" style={primary(accent)} disabled={!imFile && !imData.trim()} onClick={doImport}>Import</button>
+      </div>
+      <textarea style={{ ...input, minHeight: 70, fontFamily: 'var(--font-mono,monospace)', fontSize: 11 }} placeholder="…or paste export data to import" value={imData} onChange={e => setImData(e.target.value)} />
       {msg && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{msg}</span>}
+      {skipped.length > 0 && (
+        <details style={{ fontSize: 11, color: 'var(--text-faint)' }}>
+          <summary style={{ cursor: 'pointer' }}>{skipped.length} skipped item{skipped.length === 1 ? '' : 's'}</summary>
+          <ul style={{ margin: '4px 0 0', paddingLeft: 16 }}>
+            {skipped.map((s, i) => <li key={i}>{s.name} — {s.reason}</li>)}
+          </ul>
+        </details>
+      )}
+      {lastImported && (
+        <button type="button" style={{ ...ghost, alignSelf: 'flex-start', borderColor: 'var(--error)', color: 'var(--error)' }} onClick={doDeleteExport}>
+          Delete export file (plaintext): {basename(lastImported)}
+        </button>
+      )}
     </div>
   );
 }

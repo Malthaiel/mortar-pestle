@@ -100,7 +100,9 @@ impl ClipMux {
             .arg(mp4_path)
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
-            .stderr(Stdio::null())
+            // Pipe stderr (was null) so finalize can read ffmpeg's actual error on a
+            // non-zero exit — the EINVAL reason a bare exit code hides (WI-3 Step A).
+            .stderr(Stdio::piped())
             .spawn()
             .map_err(|e| format!("spawn ffmpeg (is it installed / on PATH?): {e}"))?;
         let stdin = child.stdin.take().ok_or("ffmpeg stdin pipe unavailable")?;
@@ -119,11 +121,18 @@ impl ClipMux {
     /// faststart-remux. A non-zero VIDEO ffmpeg exit is a real failure; a remux/mux
     /// failure is not (the fragmented file is already playable).
     pub fn finalize(mut self, audio_pcm: Option<Vec<u8>>, atempo: f64) -> Result<(), String> {
-        let status = self.child.take().map(|mut c| c.wait());
+        // `wait_with_output` drains the (now piped) stderr so a finalize failure
+        // carries ffmpeg's actual diagnostic (e.g. "Invalid data found"/no start
+        // code) — the EINVAL reason a bare exit code hides (WI-3 Step A). stdout is
+        // null; on Unix (inherited stderr) `out.stderr` is just empty, no regression.
+        let status = self.child.take().map(|c| c.wait_with_output());
         let _ = std::fs::remove_file(&self.fifo_path);
         match status {
-            Some(Ok(s)) if s.success() => {}
-            Some(Ok(s)) => return Err(format!("ffmpeg mux exited {s}")),
+            Some(Ok(out)) if out.status.success() => {}
+            Some(Ok(out)) => {
+                let err = String::from_utf8_lossy(&out.stderr);
+                return Err(format!("ffmpeg mux exited {} — stderr: {}", out.status, err.trim()));
+            }
             Some(Err(e)) => return Err(format!("wait ffmpeg: {e}")),
             None => {}
         }

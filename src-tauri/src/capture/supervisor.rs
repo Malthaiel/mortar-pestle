@@ -185,6 +185,29 @@ pub fn start(app: AppHandle) {
     tauri::async_runtime::spawn(supervise(sup, app));
 }
 
+/// Restart the spawned engine child so the next spawn rebinds
+/// `ISKARIEL_CAPTURES_DIR` (= `captures_dir()`) — the repoint path for a
+/// recordings-folder change (WI-2). Kills the child (Unix SIGTERM / Windows
+/// taskkill /T /F, mirroring [`shutdown`]); the live wait-task observes the exit
+/// and respawns (a >5 s run resets the crash streak, so a settings change never
+/// trips the crash-loop guard). An adopted/down engine (no `spawned_pid`) ⇒ the
+/// change applies on the next app start.
+pub fn restart() {
+    let Some(sup) = get() else { return };
+    let pid = lock(&sup.inner).spawned_pid;
+    let Some(pid) = pid else {
+        log::info!(
+            "capture supervisor: no spawned child to restart (adopted/down) — captures-dir change applies on next start"
+        );
+        return;
+    };
+    log::info!("capture supervisor: restarting engine pid {pid} to repoint the captures dir");
+    #[cfg(unix)]
+    signal_term(pid);
+    #[cfg(not(unix))]
+    crate::commands::proc_util::terminate_pid(pid);
+}
+
 impl Supervisor {
     /// Snapshot the current status for an `EngineStatus` emit / a command read.
     fn status(&self, state: &str, message: impl Into<String>) -> EngineStatus {

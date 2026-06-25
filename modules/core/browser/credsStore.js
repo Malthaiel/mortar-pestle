@@ -162,6 +162,25 @@ export async function importVault(data, format, password, mode) {
   return summary;
 }
 
+// Import from a file picked via the OS dialog — the plaintext never enters JS;
+// Rust reads + parses + seals, returning only the non-secret summary.
+export async function importVaultFile(path, format, password, mode) {
+  const summary = await invoke('creds_import_file', {
+    path,
+    format,
+    password: password ?? null,
+    mode: mode || 'merge',
+  });
+  await loadList();
+  await refreshStatus();
+  return summary;
+}
+
+// Opt-in cleanup: delete the plaintext export file from disk after import.
+export function deleteImportFile(path) {
+  return invoke('creds_delete_import_file', { path });
+}
+
 export async function changeMaster(current, next) {
   await invoke('creds_change_master', { current, next });
   await refreshStatus();

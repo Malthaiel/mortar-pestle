@@ -365,6 +365,15 @@ pub fn is_under_allowed_root(canonical: &std::path::Path) -> bool {
             return true;
         }
     }
+    // Game Capture clips live in `captures_dir()` (`%USERPROFILE%\Videos\Iskariel`
+    // on Windows — decision #11), outside every vault root, so the media server /
+    // asset protocol / reveal need an explicit allowance to serve clip + poster files.
+    let captures = std::fs::canonicalize(crate::commands::vault::captures_dir()).ok();
+    if let Some(c) = captures {
+        if canonical.starts_with(&c) {
+            return true;
+        }
+    }
     for root in media_roots() {
         if canonical.starts_with(root) {
             return true;

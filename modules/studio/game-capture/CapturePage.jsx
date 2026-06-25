@@ -5,6 +5,8 @@ import { mediaHttpUrl } from '@host/api.js';
 import useCaptureState from './useCaptureState.js';
 import { sendToEditor } from './sendToEditor.js';
 import { sendToStt } from './sendToStt.js';
+import { openInFiles } from '@host/components/vault-tree/revealInFiles.js';
+import { IconFolder } from '@host/components/icons.jsx';
 
 // Game Capture review surface (Step 4 frontend). Mirrors EditorPage's shell:
 // a header bar (title + status readout + actions), a body row (left clip list
@@ -201,6 +203,13 @@ export default function CapturePage({ api, accent }) {
     sendToStt({ api, path: clip.path });
   }, [api]);
 
+  // Reveal the clip's .mp4 in the OS file explorer (selects the file). The
+  // captures dir is allowlisted by is_under_allowed_root, so reveal_in_files
+  // resolves it. Folder-icon button on each clip card.
+  const handleReveal = useCallback((clip) => {
+    openInFiles(clip.path, { isFolder: false });
+  }, []);
+
   // Soft-delete a clip into the global Recycle Bin (3-SF3). The bin id powers the
   // undo Toast's Restore; reloadClips() drops it from the list (the selection
   // effect re-points the preview). Engine-down/errors surface in the toast.
@@ -337,6 +346,9 @@ export default function CapturePage({ api, accent }) {
                         </OutlinedBtn>
                         <OutlinedBtn chip onClick={(e) => { e.stopPropagation(); handleTranscribe(c); }}>
                           Transcribe
+                        </OutlinedBtn>
+                        <OutlinedBtn chip title="Reveal in Explorer" onClick={(e) => { e.stopPropagation(); handleReveal(c); }}>
+                          <span style={{ display: 'inline-flex' }}><IconFolder size={13} /></span>
                         </OutlinedBtn>
                         <DangerOutlinedBtn chip disabled={deleteBusy} onClick={(e) => { e.stopPropagation(); handleDelete(c); }}>
                           Delete

@@ -8,7 +8,7 @@ use std::fs;
 use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::OnceLock;
+use std::sync::{OnceLock, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use regex::Regex;
@@ -75,6 +75,57 @@ pub fn gamewiki_vault_root() -> String {
     crate::commands::vaults::gamewiki_vault_path().unwrap_or_else(vault_root)
 }
 
+/// User-chosen captures-dir override (WI-2 — configurable recordings folder).
+/// In-process cache that `captures_dir()` reads; the persistence-of-record is
+/// `<app_config>/captures-dir.json`, loaded here at startup and rewritten on every
+/// set/reset (`commands::capture`). `None` ⇒ fall through to the platform default.
+/// Held in a singleton so `captures_dir()` — which has no `AppHandle` — resolves it.
+static CAPTURES_OVERRIDE: OnceLock<RwLock<Option<String>>> = OnceLock::new();
+fn captures_override_cell() -> &'static RwLock<Option<String>> {
+    CAPTURES_OVERRIDE.get_or_init(|| RwLock::new(None))
+}
+/// The active captures-dir override (in-process cache), if any.
+pub fn captures_override() -> Option<String> {
+    captures_override_cell()
+        .read()
+        .unwrap_or_else(|p| p.into_inner())
+        .clone()
+}
+/// Set/clear the captures-dir override cache. Empty/whitespace ⇒ cleared. The
+/// command layer persists to disk; this only updates the value `captures_dir()` reads.
+pub fn set_captures_override(path: Option<String>) {
+    *captures_override_cell().write().unwrap_or_else(|p| p.into_inner()) =
+        path.filter(|p| !p.trim().is_empty());
+}
+
+/// Game Capture clip output root. Precedence: `AGENTIC_CAPTURES_ROOT` env (tests)
+/// → the user override (WI-2) → platform default. Multi-GB media must NOT live in
+/// roaming app-data (decision #11): the Windows default is `%USERPROFILE%\Videos\
+/// Iskariel`, Linux the historical `library_vault_root()/Captures`. The daemon
+/// spawn (`ISKARIEL_CAPTURES_DIR`), the clip-list scan, the reveal allowlist, AND
+/// `RootKind::Captures` (the bin restore target) all resolve through here, so they
+/// agree by construction — including under a user override.
+pub fn captures_dir() -> String {
+    if let Ok(v) = std::env::var("AGENTIC_CAPTURES_ROOT") {
+        return v;
+    }
+    if let Some(p) = captures_override() {
+        return p;
+    }
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(up) = std::env::var("USERPROFILE") {
+            return format!("{up}\\Videos\\Iskariel");
+        }
+    }
+    // Linux (and the Windows fallback if USERPROFILE is unset): the historical
+    // library-rooted captures dir.
+    PathBuf::from(library_vault_root())
+        .join("Captures")
+        .to_string_lossy()
+        .into_owned()
+}
+
 /// Which mounted vault a path resolves against (multi-mount — Multi-Vault P2).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RootKind {
@@ -83,6 +134,10 @@ pub enum RootKind {
     Pulse,
     Library,
     GameWiki,
+    /// Game Capture clip output dir (`captures_dir()`) — NOT a markdown vault;
+    /// used so the recycle bin can resolve a clip's restore path back to where
+    /// clips live (outside the Library on Windows). See decision #11.
+    Captures,
 }
 
 impl RootKind {
@@ -93,6 +148,7 @@ impl RootKind {
             Some("pulse") => RootKind::Pulse,
             Some("library") => RootKind::Library,
             Some("gamewiki") => RootKind::GameWiki,
+            Some("captures") => RootKind::Captures,
             _ => RootKind::Content,
         }
     }
@@ -104,6 +160,7 @@ impl RootKind {
             RootKind::Pulse => pulse_vault_root(),
             RootKind::Library => library_vault_root(),
             RootKind::GameWiki => gamewiki_vault_root(),
+            RootKind::Captures => captures_dir(),
         }
     }
 }
@@ -594,6 +651,7 @@ mod library_tests {
     #[test]
     fn from_opt_maps_library_role() {
         assert_eq!(RootKind::from_opt(Some("library")), RootKind::Library);
+        assert_eq!(RootKind::from_opt(Some("captures")), RootKind::Captures);
         assert_eq!(RootKind::from_opt(Some("app")), RootKind::App);
         assert_eq!(RootKind::from_opt(Some("pulse")), RootKind::Pulse);
         assert_eq!(RootKind::from_opt(None), RootKind::Content);

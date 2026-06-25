@@ -67,30 +67,9 @@ thread_local! {
     static FULLSCREEN: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
-/// A host that must never be reachable as a navigation target (the proxy is the
-/// authoritative IP-level gate; this is a fast literal-host reject).
-fn host_blocked(host: &str) -> bool {
-    let h = host.trim_end_matches('.').to_ascii_lowercase();
-    h == "localhost" || h.ends_with(".localhost") || h.ends_with(".local")
-}
-
-/// Navigation allow-list: only `https:` to a non-local host (plus `about:blank`
-/// for the initial load). Everything else — `http:`, `file:`, `tauri:`, `app:`,
-/// `iskariel-asset:`, `javascript:`, `data:` — is refused.
-fn nav_allowed(uri: &str) -> bool {
-    let lower = uri.to_ascii_lowercase();
-    if lower == "about:blank" {
-        return true;
-    }
-    let Some(rest) = lower.strip_prefix("https://") else {
-        return false;
-    };
-    let host = rest
-        .split(|c| c == '/' || c == '?' || c == '#' || c == ':')
-        .next()
-        .unwrap_or("");
-    !host.is_empty() && !host_blocked(host)
-}
+// Navigation/host allow-list helpers now live in the shared `browser_common`
+// module (kept identical with the Windows WebView2 driver so the two can't drift).
+use crate::commands::browser_common::{host_of_url, nav_allowed};
 
 /// Apply the full sandbox hardening + navigation/permission/new-window policy to
 /// a freshly built content view. Called for EVERY tab so the posture is
@@ -417,18 +396,7 @@ fn apply_tab_layers(ucm: &UserContentManager, on: bool) {
     crate::blocker::ffi::add_ready_filters(ucm);
 }
 
-/// Lowercased hostname from an http(s) URL, or None for about:/data: and
-/// unparseable inputs. Minimal hand-parse — avoids a URL-crate dependency.
-fn host_of_url(url: &str) -> Option<String> {
-    let after = url.split_once("://")?.1;
-    let authority = after.split(['/', '?', '#']).next()?;
-    let host = authority.rsplit('@').next()?.split(':').next()?;
-    if host.is_empty() {
-        None
-    } else {
-        Some(host.to_ascii_lowercase())
-    }
-}
+// `host_of_url` now lives in the shared `browser_common` module (imported above).
 
 /// Create a content view for `id` (no-op if it already exists), hardened and
 /// wired, added to the overlay and started hidden. Must run on the GTK main

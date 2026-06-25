@@ -9,9 +9,13 @@ pub mod browser;
 #[cfg(target_os = "windows")]
 #[path = "browser_windows.rs"]
 pub mod browser;
+// Shared (cross-platform) browser nav/host allow-list helpers, used by both the
+// Linux `browser.rs` and Windows `browser_windows.rs` drivers.
+pub mod browser_common;
 pub mod build;
 #[cfg(any(target_os = "linux", target_os = "windows"))]
 pub mod capture;
+pub mod claude_usage;
 pub mod coaching;
 pub mod credentials;
 pub mod daily;

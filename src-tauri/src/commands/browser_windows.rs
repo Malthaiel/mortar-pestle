@@ -56,46 +56,9 @@ static TABS: Mutex<Option<HashMap<String, Webview>>> = Mutex::new(None);
 static ACTIVE: Mutex<Option<String>> = Mutex::new(None);
 
 // ── shared allow-list helpers ────────────────────────────────────────────────
-// Mirror of `commands/browser.rs` (kept byte-identical there so the Linux build
-// is untouched). SECURITY-CRITICAL: keep in sync — unification into a shared
-// `browser_common` module is queued for when Linux CI can verify the refactor.
-
-/// A host that must never be a navigation target (the proxy is the authoritative
-/// IP gate; this is the fast literal-host reject).
-fn host_blocked(host: &str) -> bool {
-    let h = host.trim_end_matches('.').to_ascii_lowercase();
-    h == "localhost" || h.ends_with(".localhost") || h.ends_with(".local")
-}
-
-/// Navigation allow-list: only `https:` to a non-local host (plus `about:blank`
-/// for the initial load). `http:`/`file:`/`tauri:`/`app:`/`javascript:`/`data:`
-/// are all refused.
-fn nav_allowed(uri: &str) -> bool {
-    let lower = uri.to_ascii_lowercase();
-    if lower == "about:blank" {
-        return true;
-    }
-    let Some(rest) = lower.strip_prefix("https://") else {
-        return false;
-    };
-    let host = rest
-        .split(|c| c == '/' || c == '?' || c == '#' || c == ':')
-        .next()
-        .unwrap_or("");
-    !host.is_empty() && !host_blocked(host)
-}
-
-/// Lowercased hostname from an http(s) URL, or None for about:/data: + junk.
-fn host_of_url(url: &str) -> Option<String> {
-    let after = url.split_once("://")?.1;
-    let authority = after.split(['/', '?', '#']).next()?;
-    let host = authority.rsplit('@').next()?.split(':').next()?;
-    if host.is_empty() {
-        None
-    } else {
-        Some(host.to_ascii_lowercase())
-    }
-}
+// SECURITY-CRITICAL nav/host gate — now shared with the Linux WebKitGTK driver
+// (`browser.rs`) via the `browser_common` module, so the two can't drift.
+use crate::commands::browser_common::{host_of_url, nav_allowed};
 
 // ── Shield (best-effort cosmetic layer; network blocking rides the proxy) ─────
 

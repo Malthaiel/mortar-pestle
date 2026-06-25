@@ -33,8 +33,8 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command as TokioCommand;
 
 /// The resolved env-var name carrying the captures output root (plan Risk #10):
-/// `library_vault_root() + "/Captures"`. The app's clip-list scan (Step 4) reads
-/// the same root.
+/// `captures_dir()` (`%USERPROFILE%\Videos\Iskariel` on Windows — decision #11).
+/// The app's clip-list scan (Step 4) reads the same root.
 const CAPTURES_DIR_ENV: &str = "ISKARIEL_CAPTURES_DIR";
 
 /// Spawn the capture engine daemon (5-SF2b, driven by [`supervisor`]) — a bare,
@@ -45,7 +45,7 @@ const CAPTURES_DIR_ENV: &str = "ISKARIEL_CAPTURES_DIR";
 /// supervisor never owns the `Child`, only its PID + exit signal.
 ///
 /// Environment:
-/// - `ISKARIEL_CAPTURES_DIR` = `library_vault_root()/Captures` (created up-front).
+/// - `ISKARIEL_CAPTURES_DIR` = `captures_dir()` (created up-front).
 /// - `RUST_LOG` is passed through from the app's own env when set.
 ///
 /// stdout + stderr are drained line-by-line to `~/.local/state/iskariel/
@@ -57,11 +57,11 @@ const CAPTURES_DIR_ENV: &str = "ISKARIEL_CAPTURES_DIR";
 /// on `tauri::async_runtime::spawn`): spawning a `tokio::process::Child` off the
 /// reactor panics with "there is no reactor running".
 pub fn spawn_engine_child(bin: &PathBuf) -> std::io::Result<(u32, JoinHandle<Option<i32>>)> {
-    // Captures root: library_vault_root()/Captures, created before spawn so the
-    // engine never has to mkdir it. NOTE `root:'library'` rel-paths carry no
-    // `Library/` prefix — this is the canonicalized library vault root.
-    let captures_dir =
-        PathBuf::from(crate::commands::vault::library_vault_root()).join("Captures");
+    // Captures root: `captures_dir()` (`%USERPROFILE%\Videos\Iskariel` on Windows
+    // per decision #11), created before spawn so the engine never has to mkdir it.
+    // Clips live outside the Library, so the bin resolves them via the `captures`
+    // mount (`RootKind::Captures`), not `root:'library'`.
+    let captures_dir = PathBuf::from(crate::commands::vault::captures_dir());
     if let Err(e) = std::fs::create_dir_all(&captures_dir) {
         log::warn!("capture: failed to create captures dir {}: {e}", captures_dir.display());
         // Continue: the engine resolves/creates its own per-game subdirs; a
