@@ -212,7 +212,6 @@ fn main() {
         "creds_delete_import_file",
         "creds_change_master",
         "creds_set_keyring_unlock",
-        "creds_settings_get",
         "creds_settings_set",
         "creds_suppress_blur_lock",
         "get_capture_state",

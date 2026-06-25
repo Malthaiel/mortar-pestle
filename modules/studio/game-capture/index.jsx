@@ -1,6 +1,7 @@
 import React, { Suspense } from 'react';
 import SidebarPill from '@host/components/SidebarPill.jsx';
 import RailStat from '@host/components/sidebar/RailStat.jsx';
+import { LazyErrorBoundary, lazyChunkError } from '@host/components/LazyErrorBoundary.jsx';
 import useCaptureState from './useCaptureState.js';
 import CaptureSettingsTab from './CaptureSettingsTab.jsx';
 
@@ -15,45 +16,10 @@ import CaptureSettingsTab from './CaptureSettingsTab.jsx';
 // - Never list "game-capture" in a core module's `requires` — the post-filter
 //   toposort throws in core builds once the studio manifest is dropped.
 //
-// CapturePage mounts via React.lazy + .catch + a local error boundary (the
+// CapturePage mounts via React.lazy + .catch + a shared error boundary (the
 // lazy-chunk black-app rule): a failed chunk fetch OR a render throw must
 // degrade to a visible note on the route, never unmount the whole app tree.
-const CapturePage = React.lazy(() => import('./CapturePage.jsx').catch((err) => {
-  console.error('[capture] page chunk failed to load', err);
-  return {
-    default: () => (
-      <div style={{ padding: 24, fontFamily: '"DM Mono", monospace', fontSize: 12.5, color: 'var(--text-muted)' }}>
-        Capture failed to load — see the console (right-click → Inspect Element).
-      </div>
-    ),
-  };
-}));
-
-class CaptureBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { err: null };
-  }
-
-  static getDerivedStateFromError(err) {
-    return { err };
-  }
-
-  componentDidCatch(err) {
-    console.error('[capture] page crashed', err);
-  }
-
-  render() {
-    if (this.state.err) {
-      return (
-        <div style={{ padding: 24, fontFamily: '"DM Mono", monospace', fontSize: 12.5, color: 'var(--text-muted)' }}>
-          Capture crashed: {String(this.state.err?.message || this.state.err)} — see the console.
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
+const CapturePage = React.lazy(() => import('./CapturePage.jsx').catch(lazyChunkError('Capture', '[capture]')));
 
 // Collapsed 56 px rail: surface REC / IDLE / DOWN at a glance.
 function CaptureRail({ accent, api }) {
@@ -91,11 +57,11 @@ export default {
         ? { rest: r.slice('/tools/capture'.length).replace(/^\//, '') }
         : false,
       render: ({ params, accent }) => (
-        <CaptureBoundary>
+        <LazyErrorBoundary label="Capture" tag="[capture]">
           <Suspense fallback={null}>
             <CapturePage api={api} accent={accent} rest={params.rest || ''} />
           </Suspense>
-        </CaptureBoundary>
+        </LazyErrorBoundary>
       ),
     });
     // Settings → Modules › Capture (5-SF4): read-only encoder readout, live
