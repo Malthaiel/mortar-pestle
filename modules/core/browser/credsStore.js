@@ -14,6 +14,7 @@ let _entries = []; // CredSummary[]  (no secrets)
 let _folders = []; // Folder[]
 let _snapshot = { status: null, entries: [], folders: [] };
 let _booted = false;
+let _focusBound = false;
 const subs = new Set();
 
 function recompute() {
@@ -54,6 +55,16 @@ function clearLocal() {
 async function boot() {
   if (_booted) return;
   _booted = true;
+  // Lock-on-blur is enforced app-wide by the Rust window-focus handler, so the
+  // auto-reunlock must be app-wide too. useVaultLock only mounts on the in-app
+  // browser page, so on other surfaces (e.g. the Password Vault settings page)
+  // the vault would lock on blur with nothing to re-unlock it — forcing a master
+  // re-entry. Bind a global focus listener here so the keyring "stay unlocked"
+  // re-unlock fires no matter which module is open.
+  if (typeof window !== 'undefined' && !_focusBound) {
+    _focusBound = true;
+    window.addEventListener('focus', () => { resyncOnFocus(); });
+  }
   await refreshStatus();
   if (_status?.initialized && !_status?.unlocked) {
     // Opt-in "stay unlocked" — a no-op (returns false) when not enabled.
@@ -179,6 +190,13 @@ export async function importVaultFile(path, format, password, mode) {
 // Opt-in cleanup: delete the plaintext export file from disk after import.
 export function deleteImportFile(path) {
   return invoke('creds_delete_import_file', { path });
+}
+
+// Arm the one-shot blur-lock suppressor right before opening an app-owned file
+// dialog, so the dialog's toplevel-blur doesn't trip lock-on-blur and lock the
+// vault mid-import. Non-fatal if unavailable.
+export function suppressBlurLock() {
+  return invoke('creds_suppress_blur_lock').catch(() => {});
 }
 
 export async function changeMaster(current, next) {

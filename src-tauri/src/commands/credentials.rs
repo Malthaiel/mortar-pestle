@@ -592,11 +592,14 @@ struct KeyringPayload {
 
 fn keyring_store(salt: &[u8], key: &[u8]) -> Result<(), CredError> {
     let payload = serde_json::json!({ "salt": to_hex(salt), "key": to_hex(key) }).to_string();
-    let entry = keyring::Entry::new(KR_SERVICE, KR_ACCOUNT)
-        .map_err(|e| CredError::Keyring(format!("open: {e}")))?;
-    entry
-        .set_password(&payload)
-        .map_err(|e| CredError::Keyring(format!("set: {e}")))
+    let entry = keyring::Entry::new(KR_SERVICE, KR_ACCOUNT).map_err(|e| {
+        eprintln!("[creds] keyring open failed: {e}");
+        CredError::Keyring(format!("open: {e}"))
+    })?;
+    entry.set_password(&payload).map_err(|e| {
+        eprintln!("[creds] keyring set failed: {e}");
+        CredError::Keyring(format!("set: {e}"))
+    })
 }
 
 fn keyring_load() -> Option<KeyringPayload> {
@@ -1088,7 +1091,18 @@ pub fn creds_lock() {
 /// focus (real app-switch — not focus moving to a child native web view in the
 /// same window). Locks the vault iff the user enabled lock-on-blur. Returns
 /// whether it locked, so the caller can notify the frontend to re-sync.
+///
+/// One-shot escape hatch: the importer arms `SUPPRESS_BLUR_LOCK` right before it
+/// opens an app-owned file dialog, which blurs the toplevel window exactly like a
+/// real app-switch. When armed, the next blur is consumed WITHOUT locking, so
+/// picking an import file doesn't lock the vault mid-flow. Real app-switch blurs
+/// (flag unset) still lock as before.
+static SUPPRESS_BLUR_LOCK: AtomicBool = AtomicBool::new(false);
+
 pub fn lock_if_blur_enabled() -> bool {
+    if SUPPRESS_BLUR_LOCK.swap(false, Ordering::SeqCst) {
+        return false;
+    }
     let mut guard = VAULT.lock().unwrap_or_else(|e| e.into_inner());
     let should = guard
         .as_ref()
@@ -1098,6 +1112,14 @@ pub fn lock_if_blur_enabled() -> bool {
         *guard = None;
     }
     should
+}
+
+/// Arm the one-shot blur-lock suppressor before opening an app-owned dialog (the
+/// importer's file picker). Consumed by the next toplevel blur; harmless if no
+/// blur follows (the next real app-switch clears it).
+#[tauri::command]
+pub fn creds_suppress_blur_lock() {
+    SUPPRESS_BLUR_LOCK.store(true, Ordering::SeqCst);
 }
 
 #[tauri::command]

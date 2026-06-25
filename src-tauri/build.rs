@@ -214,6 +214,7 @@ fn main() {
         "creds_set_keyring_unlock",
         "creds_settings_get",
         "creds_settings_set",
+        "creds_suppress_blur_lock",
         "get_capture_state",
         "capture_start",
         "capture_stop",

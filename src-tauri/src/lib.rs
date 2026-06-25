@@ -731,6 +731,7 @@ pub fn run() {
             commands::credentials::creds_set_keyring_unlock,
             commands::credentials::creds_settings_get,
             commands::credentials::creds_settings_set,
+            commands::credentials::creds_suppress_blur_lock,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::get_capture_state,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::capture_start,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::capture_stop,

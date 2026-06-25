@@ -13,22 +13,59 @@
 
 use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetForegroundWindow, GetWindowTextLengthW, GetWindowTextW,
+    GetForegroundWindow, GetWindow, GetWindowTextLengthW, GetWindowTextW,
+    IsWindowVisible, GW_HWNDNEXT,
 };
 
-/// Detect the current game for clip attribution from the foreground window title.
-/// Always returns a non-empty, sanitized folder component (worst case `"Desktop"`).
+/// Detect the current game for clip attribution from the capture-target window's
+/// title. Always returns a non-empty, sanitized folder component (worst case
+/// `"Desktop"`). Uses the SAME target as the capture, so a clip recorded from the
+/// Shift+C HUD is named after the window behind it — not the HUD.
 pub fn detect_game() -> String {
-    foreground_title()
+    title_for(capture_target_hwnd())
         .map(|t| sanitize_folder(&t))
         .filter(|t| !t.is_empty())
         .unwrap_or_else(|| "Desktop".to_string())
 }
 
-/// The foreground window's title via Win32, or `None` when there is no foreground
-/// window / it has no title text. Never panics.
-fn foreground_title() -> Option<String> {
-    let hwnd: HWND = unsafe { GetForegroundWindow() };
+/// The window WGC should capture: the foreground window, unless it is one of our own
+/// capture-excluded overlays (the Shift+C HUD / scrim, hardened `WDA_EXCLUDEFROMCAPTURE`).
+/// Those are invisible to WGC — capturing one delivers zero frames and the start
+/// aborts — so walk down the Z-order to the first visible, non-excluded top-level
+/// window the overlay is floating over (the game / desktop app). Returns null only if
+/// nothing eligible is found. This is the 5-WI3 fix: an overlay-triggered record must
+/// capture the content behind the HUD, not the HUD itself.
+pub fn capture_target_hwnd() -> HWND {
+    let mut hwnd = unsafe { GetForegroundWindow() };
+    for _ in 0..32 {
+        if hwnd.0.is_null() {
+            break;
+        }
+        if is_visible(hwnd) && !is_skippable_target(hwnd) {
+            return hwnd;
+        }
+        hwnd = unsafe { GetWindow(hwnd, GW_HWNDNEXT) }.unwrap_or_default();
+    }
+    hwnd
+}
+
+/// A window we must never capture: our own overlays (the Shift+C HUD / scrim), which
+/// are hardened `WDA_EXCLUDEFROMCAPTURE` — invisible to WGC, so capturing one yields
+/// zero frames. Matched by the "Iskariel Overlay" window title (their tauri.conf
+/// titles); the main app window keeps its own title, so in-app capture is unaffected.
+fn is_skippable_target(hwnd: HWND) -> bool {
+    match title_for(hwnd) {
+        Some(t) => t.starts_with("Iskariel Overlay"),
+        None => false,
+    }
+}
+
+fn is_visible(hwnd: HWND) -> bool {
+    unsafe { IsWindowVisible(hwnd) }.as_bool()
+}
+
+/// `hwnd`'s title via Win32, or `None` when it has no title text. Never panics.
+fn title_for(hwnd: HWND) -> Option<String> {
     if hwnd == HWND::default() {
         return None;
     }

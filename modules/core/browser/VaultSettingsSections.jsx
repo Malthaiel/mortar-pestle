@@ -40,6 +40,7 @@ export function ExportImport({ accent }) {
   const pickFile = async () => {
     setMsg('');
     try {
+      await creds.suppressBlurLock(); // app-owned dialog blur must not lock the vault mid-import
       const p = await openDialog({ multiple: false, filters: [{ name: 'Vault export', extensions: ['json', 'csv', 'txt'] }] });
       if (typeof p === 'string') setImFile(p);
     } catch (e) { setMsg(String(e?.message || e)); }

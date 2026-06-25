@@ -1226,14 +1226,18 @@ mod win {
     /// consumers attached. The caller attaches the ring and/or recorder + sets state.
     fn build_win_session(engine: &Arc<Mutex<Engine>>) -> Result<WinSession, String> {
         use windows::Win32::Foundation::HWND;
-        use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId};
+        use windows::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId;
 
         let (params, codec, audio_track) = {
             let e = engine.lock().expect("engine mutex poisoned");
             (params_from_config(&e.config), e.config.codec.clone(), e.config.audio.track.clone())
         };
-        // SAFETY: a plain FFI read of the current foreground window handle.
-        let hwnd: HWND = unsafe { GetForegroundWindow() };
+        // Pick the capture target: the foreground window, but skip our own
+        // WDA_EXCLUDEFROMCAPTURE overlays (the Shift+C HUD / scrim) — WGC yields no
+        // frames for them, so a record triggered from the overlay must capture the
+        // window behind it, not the HUD itself (5-WI3: the HUD was being targeted →
+        // zero frames → "produced no frames" start abort).
+        let hwnd: HWND = save::namer::capture_target_hwnd();
         if hwnd.0.is_null() {
             return Err("no foreground window to capture (focus a window first)".into());
         }
