@@ -31,10 +31,15 @@
 //! loads the speech model + streams `vu` + transcribed `segment`s; `stop_dictation`
 //! emits a terminal `final` with the full transcript.
 
+use std::path::PathBuf;
+
 use serde::Serialize;
 use serde_json::Value;
 use tauri::ipc::Channel;
+use tauri::{AppHandle, Emitter};
+use tauri_plugin_opener::OpenerExt;
 
+use crate::commands::downloads_history::{now_ms, record as record_history, HistoryRecord};
 use crate::stt::client::{
     CachedModelInfo, Final, HotkeysSnapshot, ModelLoaded, Progress, ProtoError, Segment, SttClient,
     SttError, Vu,
@@ -335,8 +340,19 @@ pub async fn stt_start_dictation(
 /// model `name` WITHOUT loading it (download ≠ activate), relaying `progress` over
 /// `on_event` until the terminal `download_complete` (or `error`). Mirrors
 /// `stt_load_model`'s relay shape; `stt_cancel` aborts an in-flight download.
+///
+/// In addition to the per-call Channel (which drives the Settings model-row bar), the
+/// relay also emits the GLOBAL `stt-download-progress` / `stt-download-done` Tauri
+/// events so the Downloads popup + dock badge mirror the run from any route, and
+/// records a `HistoryRecord` on every terminal state — matching `music_download` /
+/// `anime_download`. The global path survives a Settings-page unmount (the Rust task
+/// outlives the JS Channel); the per-call Channel does not.
 #[tauri::command]
-pub async fn stt_download_model(name: String, on_event: Channel<SttEvent>) -> Result<(), String> {
+pub async fn stt_download_model(
+    app: AppHandle,
+    name: String,
+    on_event: Channel<SttEvent>,
+) -> Result<(), String> {
     use tokio::sync::broadcast::error::RecvError;
 
     let client = require_client()?;
@@ -344,7 +360,11 @@ pub async fn stt_download_model(name: String, on_event: Channel<SttEvent>) -> Re
     // Subscribe BEFORE the request so an early `progress` isn't lost.
     let mut rx = client.subscribe();
 
-    let args = serde_json::json!({ "name": name });
+    // Seed the popup instantly (mirrors music/anime `queued`) — before the engine
+    // even acks, so the dock badge lights on click, not on first progress byte.
+    let _ = app.emit("stt-download-progress", serde_json::json!({ "name": name, "pct": 0 }));
+
+    let args = serde_json::json!({ "name": name.clone() });
     client
         .request("download_model", args)
         .await
@@ -358,18 +378,27 @@ pub async fn stt_download_model(name: String, on_event: Channel<SttEvent>) -> Re
                 "progress" => {
                     if let Ok(p) = serde_json::from_value::<Progress>(ev.data) {
                         let _ = on_event.send(SttEvent::Progress { pct: p.pct });
+                        let _ = app.emit(
+                            "stt-download-progress",
+                            serde_json::json!({ "name": name, "pct": p.pct }),
+                        );
                     }
                 }
                 "download_complete" => {
                     let _ = on_event.send(SttEvent::Done { ok: true });
+                    stt_finalize(&app, &name, true, "", None);
                     break;
                 }
                 "error" => {
                     let (code, message) = serde_json::from_value::<ProtoError>(ev.data)
                         .map(|e| (e.code, e.message))
                         .unwrap_or_else(|_| ("internal".into(), "stt engine error".into()));
-                    let _ = on_event.send(SttEvent::Error { code, message });
+                    let _ = on_event.send(SttEvent::Error {
+                        code: code.clone(),
+                        message: message.clone(),
+                    });
                     let _ = on_event.send(SttEvent::Done { ok: false });
+                    stt_finalize(&app, &name, false, &code, Some(&message));
                     break;
                 }
                 // model_loaded / vu / segment / final / unknown — not relevant to a
@@ -383,11 +412,57 @@ pub async fn stt_download_model(name: String, on_event: Channel<SttEvent>) -> Re
                     message: "stt engine disconnected".into(),
                 });
                 let _ = on_event.send(SttEvent::Done { ok: false });
+                stt_finalize(&app, &name, false, "disconnected", Some("stt engine disconnected"));
                 break;
             }
         }
     }
     Ok(())
+}
+
+/// Emit the terminal `stt-download-done` Tauri event AND append a `HistoryRecord`, so
+/// the Downloads popup's Recent list + the persisted history both reflect the outcome.
+/// `code == "cancelled"` (a user `stt_cancel`) maps to the `cancelled` state, not
+/// `error` — matching music/anime's terminal-state mapping. Best-effort: a history
+/// write failure is swallowed by `record` itself, never breaking the download.
+fn stt_finalize(app: &AppHandle, name: &str, ok: bool, code: &str, message: Option<&str>) {
+    let reveal = model_cache_path(name).to_string_lossy().into_owned();
+    let _ = app.emit(
+        "stt-download-done",
+        serde_json::json!({
+            "name": name,
+            "ok": ok,
+            "code": code,
+            "error": message,
+            "revealPath": if ok { Some(&reveal) } else { None },
+        }),
+    );
+    let state = if ok {
+        "done"
+    } else if code == "cancelled" {
+        "cancelled"
+    } else {
+        "error"
+    };
+    record_history(
+        app,
+        HistoryRecord {
+            id: format!("stt:{name}"),
+            source: "stt".into(),
+            title: name.into(),
+            subtitle: "Speech model".into(),
+            state: state.into(),
+            cover: None,
+            finished_at: now_ms(),
+            open_path: None,
+            reveal_path: if ok { Some(reveal) } else { None },
+            size_bytes: None,
+            save_path: None,
+            failed_count: 0,
+            error: if state == "error" { message.map(Into::into) } else { None },
+            args: serde_json::json!({ "kind": "stt", "name": name }),
+        },
+    );
 }
 
 // ── Non-streaming commands (capture.rs request wrappers) ─────────────────────
@@ -526,4 +601,64 @@ fn open_global_shortcuts_settings() -> Result<(), String> {
 #[cfg(not(target_os = "linux"))]
 fn open_global_shortcuts_settings() -> Result<(), String> {
     Ok(())
+}
+
+// ── Model cache path (host-side mirror) ───────────────────────────────────────
+//
+// ponytail: duplicates `iskariel-stt::models::model_cache_dir` / `resolve_model_path`.
+// The STT engine is a separate sidecar binary (not a crate dep of src-tauri), so the
+// cache dir it owns isn't reachable from here — mirroring the resolver is the
+// shortest path. The daemon is the source of truth; if it ever relocates the cache,
+// these two fns must follow. Used to populate `reveal_path` on a completed download
+// and to resolve the target of `stt_reveal_model`.
+
+/// Windows: `%LOCALAPPDATA%\iskariel\models\whisper` (non-roaming — models are multi-GB).
+#[cfg(target_os = "windows")]
+fn model_cache_dir() -> PathBuf {
+    std::env::var_os("LOCALAPPDATA")
+        .map(PathBuf::from)
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("iskariel")
+        .join("models")
+        .join("whisper")
+}
+
+/// Linux/other: prefer a non-empty `$XDG_DATA_HOME`, else `$HOME/.local/share`.
+#[cfg(not(target_os = "windows"))]
+fn model_cache_dir() -> PathBuf {
+    let data = std::env::var_os("XDG_DATA_HOME")
+        .map(PathBuf::from)
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or_else(|| {
+            std::env::var_os("HOME")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| PathBuf::from("."))
+                .join(".local")
+                .join("share")
+        });
+    data.join("iskariel").join("models").join("whisper")
+}
+
+/// Resolve a registry model `name` (e.g. `small.en`) to its cached file path
+/// `<cache>/<name>.bin` — the location the engine downloads + verifies into.
+fn model_cache_path(name: &str) -> PathBuf {
+    model_cache_dir().join(format!("{name}.bin"))
+}
+
+/// `stt_reveal_model` — open the OS file manager with the cached model file
+/// highlighted (the "Reveal in files" action on a completed STT download row in the
+/// Downloads popup). `reveal_in_files` can't be reused: it's vault-containment-gated
+/// (`is_under_allowed_root`) and the model cache lives under `%LOCALAPPDATA%`, not a
+/// vault root — so this dedicated command reveals an app-owned cache file directly.
+/// A missing file (e.g. deleted since the row was recorded) is a clean error.
+#[tauri::command]
+pub fn stt_reveal_model(app: AppHandle, name: String) -> Result<(), String> {
+    let path = model_cache_path(&name);
+    if !path.exists() {
+        return Err(format!("Model not cached: {name}"));
+    }
+    app.opener()
+        .reveal_item_in_dir(&path)
+        .map_err(|e| e.to_string())
 }

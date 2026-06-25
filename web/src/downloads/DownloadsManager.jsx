@@ -7,7 +7,7 @@
 
 import { useAllDownloads } from './DownloadsProvider.jsx';
 import { IconBtn, AppWindow } from '../components/ui';
-import { IconX, IconMusic, IconFilm, IconExternal, IconFolder, IconRotateCw } from '../components/icons.jsx';
+import { IconX, IconMusic, IconFilm, IconMic, IconExternal, IconFolder, IconRotateCw } from '../components/icons.jsx';
 
 const GREEN = '#6fb56f';
 const RED = '#e07b7b';
@@ -105,7 +105,7 @@ export default function DownloadsManager({ open, onClose, accent = GREEN }) {
               </thead>
               <tbody>
                 {rows.map(r => {
-                  const Glyph = r.source === 'music' ? IconMusic : IconFilm;
+                  const Glyph = r.source === 'music' ? IconMusic : r.source === 'stt' ? IconMic : IconFilm;
                   const isActive = ACTIVE.has(r.state);
                   return (
                     <tr key={r.id}>

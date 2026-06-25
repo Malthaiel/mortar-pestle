@@ -9,7 +9,7 @@
 // and exposed with cancel / retry / clear / open / reveal actions.
 
 import { createContext, useContext, useCallback, useEffect, useMemo, useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke, Channel } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { navigate } from '../router.js';
 
@@ -92,13 +92,44 @@ function normAnime(j, nowMs) {
   };
 }
 
+// STT model download — the `stt-download-progress` / `stt-download-done` Tauri events
+// emitted by `stt_download_model` (download ≠ activate). No cover, no library Open
+// target; Reveal routes to the dedicated `stt_reveal_model` command (the cache lives
+// under %LOCALAPPDATA%, outside `reveal_in_files`'s vault-containment gate).
+function normStt(p, nowMs) {
+  const pct = Math.round(p.pct || 0);
+  return {
+    id: `stt:${p.name}`, source: 'stt', title: p.name, subtitle: 'Speech model',
+    cover: null, state: 'downloading', progress: Math.min(1, (p.pct || 0) / 100),
+    statusLine: `${pct}%`,
+    finishedAt: null, openPath: null, revealPath: p.revealPath ?? null,
+    sizeBytes: null, speed: null, eta: null, savePath: null,
+    failedCount: 0, error: null,
+    args: { kind: 'stt', name: p.name }, live: true,
+  };
+}
+
+function normSttDone(p, nowMs) {
+  const cancelled = p.code === 'cancelled';
+  const state = p.ok ? 'done' : cancelled ? 'cancelled' : 'error';
+  return {
+    id: `stt:${p.name}`, source: 'stt', title: p.name, subtitle: 'Speech model',
+    cover: null, state, progress: p.ok ? 1 : 0,
+    statusLine: p.ok ? 'Downloaded' : cancelled ? 'Cancelled' : (p.error || 'Download failed'),
+    finishedAt: nowMs, openPath: null, revealPath: p.revealPath ?? null,
+    sizeBytes: null, speed: null, eta: null, savePath: null,
+    failedCount: 0, error: p.ok ? null : (p.error || null),
+    args: { kind: 'stt', name: p.name }, live: false,
+  };
+}
+
 function normHistory(r) {
   let statusLine;
   if (r.state === 'error') statusLine = r.error || 'Download failed';
   else if (r.state === 'cancelled') statusLine = 'Cancelled';
   else statusLine = r.source === 'music' && r.failedCount ? `Done · ${r.failedCount} failed` : 'Downloaded';
   return {
-    id: r.id, source: r.source, title: r.title || (r.source === 'music' ? 'Album' : 'Anime'),
+    id: r.id, source: r.source, title: r.title || (r.source === 'music' ? 'Album' : r.source === 'stt' ? 'Speech model' : 'Anime'),
     subtitle: r.subtitle || '', cover: r.cover || null, state: r.state,
     progress: r.state === 'done' ? 1 : 0, statusLine,
     finishedAt: r.finishedAt || 0,
@@ -147,8 +178,13 @@ export function DownloadsProvider({ children, settings }) {
     const subs = [
       listen('music-download-progress', (e) => { if (e.payload && e.payload.id) upsertLive(normMusic(e.payload, Date.now())); }),
       listen('anime-download-progress', (e) => { if (e.payload && e.payload.id) upsertLive(normAnime(e.payload, Date.now())); }),
+      listen('stt-download-progress', (e) => { if (e.payload && e.payload.name) upsertLive(normStt(e.payload, Date.now())); }),
       listen('music-download-done', () => reloadHistory()),
       listen('anime-download-done', () => reloadHistory()),
+      listen('stt-download-done', (e) => {
+        if (e.payload && e.payload.name) upsertLive(normSttDone(e.payload, Date.now()));
+        reloadHistory();
+      }),
     ];
     return () => subs.forEach(p => p.then(f => f()).catch(() => {}));
   }, [upsertLive, reloadHistory]);
@@ -173,6 +209,7 @@ export function DownloadsProvider({ children, settings }) {
   }, [liveById, history, cap, expiryDays]);
 
   const cancel = useCallback((row) => {
+    if (row.source === 'stt') { invoke('stt_cancel').catch(() => {}); return; }
     const cmd = row.source === 'music' ? 'music_download_cancel' : 'anime_download_cancel';
     invoke(cmd, { jobId: row.id }).catch(() => {});
   }, []);
@@ -196,12 +233,25 @@ export function DownloadsProvider({ children, settings }) {
   }, []);
 
   const reveal = useCallback((row) => {
+    // STT models live under %LOCALAPPDATA% (outside the vault-containment gate), so
+    // route to the dedicated command by name; the path itself never crosses to JS.
+    if (row.source === 'stt') {
+      invoke('stt_reveal_model', { name: row.args?.name ?? row.title }).catch(() => {});
+      return;
+    }
     if (row.revealPath) invoke('reveal_in_files', { path: row.revealPath }).catch(() => {});
   }, []);
 
   const retry = useCallback(async (row) => {
     const a = row.args || {};
     try {
+      if (row.source === 'stt') {
+        // Re-download by name; the global stt-download-* events drive the popup, so
+        // the throwaway Channel just satisfies the command signature.
+        const ch = new Channel();
+        await invoke('stt_download_model', { name: a.name ?? row.title, onEvent: ch });
+        return;
+      }
       if (row.source === 'music') {
         await invoke('music_download_enqueue', {
           rgMbid: a.rgMbid, title: a.title ?? row.title, artist: a.artist ?? row.subtitle,

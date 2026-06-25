@@ -239,6 +239,7 @@ fn main() {
         "stt_list_models",
         "stt_delete_model",
         "stt_download_model",
+        "stt_reveal_model",
         "stt_rebind_hotkeys",
         "stt_open_kde_settings",
         "overlay_go_live",

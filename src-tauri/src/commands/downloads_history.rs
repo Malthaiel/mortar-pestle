@@ -35,7 +35,7 @@ const HARD_CAP: usize = 1000;
 #[serde(rename_all = "camelCase")]
 pub struct HistoryRecord {
     pub id: String,
-    /// "music" | "video"
+    /// "music" | "video" | "stt"
     pub source: String,
     pub title: String,
     pub subtitle: String,
