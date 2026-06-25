@@ -3,8 +3,10 @@
 //! GlobalShortcuts portal. Reuses the STT winhook threading model
 //! ([[project-iskariel-winhook-hold-to-talk]]): a captureless `extern "system"`
 //! callback the OS invokes under a hard ~300 ms budget does the MINIMUM (debounce the
-//! held-key auto-repeat, post an edge to a channel) and ALWAYS returns `CallNextHookEx`
-//! (default passthrough — the chord still reaches the focused game). A dedicated
+//! held-key auto-repeat, post an edge to a channel). It passes keys through via
+//! `CallNextHookEx`, EXCEPT it swallows the held `C` while the overlay is shown so the
+//! Shift+C peek never leaks into the focused window/game (Ctrl+Alt+R still passes
+//! through). A dedicated
 //! `std::thread` owns the hook + a `GetMessage` pump (an LL hook only fires while its
 //! installing thread pumps messages); a tokio task drains the edges onto the SAME
 //! `EngineCmd` path the socket verbs use, exactly like the Linux `portal.rs`.
@@ -141,8 +143,9 @@ fn post(edge: HotkeyEdge) {
 }
 
 /// The low-level keyboard callback. Captureless, near-zero-work: on the rising/falling
-/// edges of R / C, check the chord's modifiers + post an edge, then ALWAYS
-/// `CallNextHookEx` (never swallow the key → the chord still reaches the game).
+/// edges of R / C, check the chord's modifiers + post an edge. Passes keys through via
+/// `CallNextHookEx`, EXCEPT the held `C` is swallowed while the overlay is shown (so the
+/// Shift+C peek never leaks into the focused window/game); Ctrl+Alt+R always passes through.
 unsafe extern "system" fn hook_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     if code >= 0 {
         let kb = &*(lparam as *const KBDLLHOOKSTRUCT);
@@ -154,10 +157,17 @@ unsafe extern "system" fn hook_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -
                     if !R_DOWN.swap(true, Ordering::AcqRel) && key_down(VK_CONTROL) && key_down(VK_MENU) {
                         post(HotkeyEdge::RecordToggle);
                     }
-                } else if vk == VK_C && !C_DOWN.swap(true, Ordering::AcqRel) && key_down(VK_SHIFT) {
-                    // Shift+C down → show the overlay (held).
-                    OVERLAY_SHOWN.store(true, Ordering::Release);
-                    post(HotkeyEdge::OverlayShow);
+                } else if vk == VK_C {
+                    if !C_DOWN.swap(true, Ordering::AcqRel) && key_down(VK_SHIFT) {
+                        // Shift+C down → show the overlay (held).
+                        OVERLAY_SHOWN.store(true, Ordering::Release);
+                        post(HotkeyEdge::OverlayShow);
+                    }
+                    // Overlay session active → swallow C (down + auto-repeat) so the
+                    // held key never leaks into the focused window/game.
+                    if OVERLAY_SHOWN.load(Ordering::Acquire) {
+                        return 1;
+                    }
                 }
             }
             WM_KEYUP | WM_SYSKEYUP => {
@@ -167,8 +177,10 @@ unsafe extern "system" fn hook_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -
                     && C_DOWN.swap(false, Ordering::AcqRel)
                     && OVERLAY_SHOWN.swap(false, Ordering::AcqRel)
                 {
-                    // C up after a show → hide the overlay.
+                    // C up after a show → hide the overlay, and swallow the matching
+                    // key-up so the focused window/game never sees a stray C release.
                     post(HotkeyEdge::OverlayHide);
+                    return 1;
                 }
             }
             _ => {}

@@ -76,13 +76,16 @@ export default function OverlayCaptureView() {
       }
     } catch { /* no/garbled saved position — leave at the configured default */ }
   }, []);
-  const onPointerDown = async (e) => {
+  const onPointerDown = (e) => {
     if (e.target.closest('button')) return; // let button presses through
     e.preventDefault();
-    let pos;
-    try { pos = await win.outerPosition(); } catch { return; }
-    dragRef.current = { sx: e.screenX, sy: e.screenY, wx: pos.x, wy: pos.y };
+    // Capture the pointer + start coords SYNCHRONOUSLY (before the async IPC) so no
+    // early moves are lost; fill the window origin once outerPosition() resolves.
+    const sx = e.screenX, sy = e.screenY;
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* capture optional */ }
+    win.outerPosition()
+      .then((pos) => { dragRef.current = { sx, sy, wx: pos.x, wy: pos.y }; })
+      .catch(() => { /* denied/unavailable — drag stays inert */ });
   };
   const onPointerMove = (e) => {
     const d = dragRef.current;
