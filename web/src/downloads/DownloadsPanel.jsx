@@ -4,14 +4,15 @@
 // useAnchoredRect (falls back to centered-above-dock if the dock collapsed it
 // away); Esc + click-outside close (the dock button is exempt so it toggles).
 // Two sections: Active (in-flight, progress bars) on top, Recent (finished/
-// failed, deduped from persisted history) below — flat across music + video with
-// a per-row source glyph. Row actions: Cancel (active); Open / Reveal (done);
-// Retry (failed/cancelled); Clear (recent). Monitor-only — downloads are still
-// started from the Library module.
+// failed, deduped from persisted history) below — flat across music, video, and
+// voice-model (STT) sources with a per-row source glyph. Row actions: Cancel
+// (active); Open / Reveal (done); Retry (failed/cancelled); Clear (recent).
+// Monitor-only — downloads are still started from the Library module or Settings
+// → Voice.
 
 import { useAllDownloads } from './DownloadsProvider.jsx';
 import { Popover, useAnchoredRect, OutlinedBtn } from '../components/ui';
-import { IconX, IconMusic, IconFilm, IconExternal, IconFolder, IconRotateCw, IconMaximize } from '../components/icons.jsx';
+import { IconX, IconMusic, IconFilm, IconMic, IconExternal, IconFolder, IconRotateCw, IconMaximize } from '../components/icons.jsx';
 import { timeAgo } from '../util/time.js';
 
 const PANEL_W = 360;
@@ -59,7 +60,7 @@ function statusText(color) {
 }
 
 function SourceGlyph({ source }) {
-  const Icon = source === 'music' ? IconMusic : IconFilm;
+  const Icon = source === 'music' ? IconMusic : source === 'stt' ? IconMic : IconFilm;
   return (
     <span aria-hidden="true" style={{
       display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -170,7 +171,7 @@ export default function DownloadsPanel({ open, onClose, accent = GREEN, onOpenMa
         <div style={{ padding: '32px 20px', textAlign: 'center' }}>
           <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>No downloads yet</div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-            Music and anime downloads show up here while they run and after they finish.
+            Music, anime, and voice-model downloads show up here while they run and after they finish.
           </div>
         </div>
       ) : (

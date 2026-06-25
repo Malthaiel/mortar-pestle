@@ -259,6 +259,7 @@
     "allow-stt-list-models",
     "allow-stt-delete-model",
     "allow-stt-download-model",
+    "allow-stt-reveal-model",
     "allow-stt-rebind-hotkeys",
     "allow-stt-open-kde-settings",
     "allow-overlay-go-live",

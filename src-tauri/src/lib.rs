@@ -756,6 +756,7 @@ pub fn run() {
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::stt::stt_list_models,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::stt::stt_delete_model,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::stt::stt_download_model,
+            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::stt::stt_reveal_model,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::stt::stt_rebind_hotkeys,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::stt::stt_open_kde_settings,
             overlay::state::overlay_go_live,
