@@ -47,6 +47,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Open beta: bundle Studio-tier modules (Video Editor, Game Capture,
+          # STT) into public releases so they can be tested. At 1.0 these move
+          # behind a paid subscription; revisit this flag then. Overrides the
+          # gitignored web/.env (which sets the same locally).
+          VITE_BUILD_TIER: studio
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Iskariel ${{ github.ref_name }}'
