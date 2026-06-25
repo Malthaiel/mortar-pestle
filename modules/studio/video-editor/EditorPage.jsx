@@ -13,6 +13,7 @@ import Timeline, { clampStartToGap } from './Timeline.jsx';
 import ExportDialog from './ExportDialog.jsx';
 import ParityPanel from './color/ParityPanel.jsx';
 import CompositeParityPanel from './CompositeParityPanel.jsx';
+import EncodeSmokePanel from './EncodeSmokePanel.jsx';
 import AudioParityPanel from './audio/AudioParityPanel.jsx';
 import ColorSuite from './color/ColorSuite.jsx';
 import MixSuite from './MixSuite.jsx';
@@ -368,6 +369,7 @@ export default function EditorPage({ api, accent, rest }) {
   const [parityOpen, setParityOpen] = useState(false); // SF5 DEV battery
   const [audioParityOpen, setAudioParityOpen] = useState(false); // Audio Post SF8 DEV battery
   const [compParityOpen, setCompParityOpen] = useState(false); // Compositing SF12 DEV battery
+  const [encodeSmokeOpen, setEncodeSmokeOpen] = useState(false); // Delivery & Presets SF9 DEV battery
   const [exportToast, setExportToast] = useState(null); // { path } — completion toast
   const exportToastTimer = useRef(null);
   const playheadFrameRef = useRef(0); // Timeline writes; trim-to-playhead reads
@@ -1061,6 +1063,24 @@ export default function EditorPage({ api, accent, rest }) {
               COMP PARITY
             </button>
           )}
+          {import.meta.env.DEV && (
+            <button
+              type="button"
+              onClick={() => setEncodeSmokeOpen(true)}
+              style={{
+                ...mono,
+                fontSize: 10.5,
+                padding: '3px 8px',
+                border: '1px solid var(--border)',
+                borderRadius: 6,
+                background: 'transparent',
+                color: 'var(--text-faint)',
+                cursor: 'pointer',
+              }}
+            >
+              ENC SMOKE
+            </button>
+          )}
           <div style={{ flex: 1 }} />
           <div style={{ ...mono, fontSize: 11.5, color: saveState === 'conflict' || saveState === 'error' ? 'var(--error)' : 'var(--text-faint)' }}>
             {saveLabel}
@@ -1297,6 +1317,9 @@ export default function EditorPage({ api, accent, rest }) {
       )}
       {import.meta.env.DEV && compParityOpen && (
         <CompositeParityPanel onClose={() => setCompParityOpen(false)} api={api} accent={accent} />
+      )}
+      {import.meta.env.DEV && encodeSmokeOpen && (
+        <EncodeSmokePanel onClose={() => setEncodeSmokeOpen(false)} api={api} accent={accent} />
       )}
 
       {exportToast && (

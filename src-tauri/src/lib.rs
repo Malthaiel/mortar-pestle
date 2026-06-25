@@ -534,6 +534,8 @@ pub fn run() {
             commands::video_editor::vedit_export_start,
             commands::video_editor::vedit_export_cancel,
             commands::video_editor::vedit_export_status,
+            commands::video_editor::vedit_encoder_probe,
+            commands::video_editor::vedit_encode_smoke,
             commands::video_editor::vedit_parity_render,
             commands::video_editor::vedit_audio_parity,
             commands::video_editor::vedit_composite_parity,

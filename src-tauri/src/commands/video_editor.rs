@@ -605,6 +605,29 @@ pub struct LoudnormMeasured {
     pub input_thresh: f64,
 }
 
+/// Delivery & Presets (SF3) — how the export is encoded. `None` on `ExportSpec`
+/// takes the byte-identical Phase-1 path (libx264/veryfast/crf18 + AAC 192k +
+/// mp4). `Some` routes through `build_export_argv`'s encode arm: the `codec`
+/// resolves to a working encoder via the probe caps (an explicit `encoder` wins
+/// when available), `quality` (0–100, higher = better) maps to the encoder's
+/// native control, and `container` selects the muxer (mp4/webm). Output dims
+/// come from `ExportSpec::width/height`, so downscale presets just send smaller
+/// dims — no encode field needed for that.
+#[derive(Deserialize, Default, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct EncodeSpec {
+    pub container: String,
+    pub codec: String,
+    #[serde(default)]
+    pub encoder: Option<String>,
+    #[serde(default)]
+    pub quality: Option<u32>,
+    #[serde(default)]
+    pub bitrate_kbps: Option<u32>,
+    #[serde(default)]
+    pub audio_bitrate_kbps: Option<u32>,
+}
+
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ExportSpec {
@@ -629,6 +652,10 @@ pub struct ExportSpec {
     /// ignored and the region filtergraph runs.
     #[serde(default)]
     pub regions: Option<Vec<ExportRegion>>,
+    /// Delivery & Presets SF3 — encoder/container/quality. None → byte-identical
+    /// Phase-1 encode (libx264/crf18 + AAC 192k + mp4).
+    #[serde(default)]
+    pub encode: Option<EncodeSpec>,
 }
 
 /// Per-segment (Phase-1) or per-region×layer (SF7 composite) LUT temp paths,
@@ -1438,11 +1465,153 @@ async fn measure_loudnorm(spec: &ExportSpec, lut_paths: &LutPaths, title_paths: 
     parse_loudnorm_json(&String::from_utf8_lossy(&out?.stderr))
 }
 
+// ── Delivery & Presets (SF3) — encoder / quality / container argv ─────────────
+
+/// Auto-fallback order per codec family (software-first for quality, then NVENC
+/// / QSV / AMF, then a software fallback). Walked against the probe caps.
+fn encoder_chain(codec: &str) -> &'static [&'static str] {
+    match codec {
+        "h264" => &["libx264", "h264_nvenc", "h264_qsv", "h264_amf", "libopenh264"],
+        "hevc" => &["libx265", "hevc_nvenc", "hevc_qsv", "hevc_amf"],
+        "vp9" => &["libvpx-vp9"],
+        "av1" => &["libsvtav1", "av1_nvenc", "av1_qsv", "av1_amf"],
+        _ => &[],
+    }
+}
+
+/// Resolve an `EncodeSpec` to a concrete working encoder. An explicit
+/// `enc.encoder` (Custom) wins when the caps say it works; otherwise the codec's
+/// chain is walked for the first available. None → nothing in the chain works
+/// (the caller surfaces a remediation error).
+pub(crate) fn resolve_export_encoder(enc: &EncodeSpec, caps: &EncoderCaps) -> Option<String> {
+    let ok = |name: &str| caps.encoders.get(name).copied().unwrap_or(false);
+    if let Some(explicit) = enc.encoder.as_deref() {
+        if ok(explicit) {
+            return Some(explicit.to_string());
+        }
+    }
+    encoder_chain(&enc.codec)
+        .iter()
+        .find(|c| ok(c))
+        .map(|c| (*c).to_string())
+}
+
+/// Map unified quality (0–100, higher = better) to an encoder's native quality
+/// value over [0, rmax] (lower native = better). q=65, rmax=51 → 18 (the
+/// Phase-1 libx264 CRF), so the default presets match today's output.
+fn quality_to_native(q: u32, rmax: u32) -> u32 {
+    let q = q.min(100);
+    ((100 - q) * rmax + 50) / 100
+}
+
+/// `-c:v <enc>` + the encoder's rate-control flags. An explicit `bitrate_kbps`
+/// selects the encoder's VBR/bitrate mode; otherwise unified quality maps to the
+/// encoder's quality control (CRF / CQ / global_quality / QP).
+fn video_encode_args(encoder: &str, quality: u32, bitrate_kbps: Option<u32>) -> Vec<String> {
+    let mut a = vec!["-c:v".to_string(), encoder.to_string()];
+    if let Some(kbps) = bitrate_kbps {
+        let br = format!("{kbps}k");
+        match encoder {
+            "h264_nvenc" | "hevc_nvenc" | "av1_nvenc" => {
+                a.extend(["-rc".into(), "vbr".into(), "-b:v".into(), br]);
+            }
+            "h264_amf" | "hevc_amf" | "av1_amf" => {
+                a.extend(["-rc".into(), "vbr_latency".into(), "-b:v".into(), br]);
+            }
+            // libx264/x265, svtav1, vp9, qsv, openh264: plain target bitrate.
+            _ => a.extend(["-b:v".into(), br]),
+        }
+        return a;
+    }
+    match encoder {
+        "libx264" | "libx265" => a.extend([
+            "-preset".into(),
+            "veryfast".into(),
+            "-crf".into(),
+            quality_to_native(quality, 51).to_string(),
+        ]),
+        "libsvtav1" => a.extend([
+            "-preset".into(),
+            "8".into(),
+            "-crf".into(),
+            quality_to_native(quality, 63).to_string(),
+        ]),
+        "libvpx-vp9" => a.extend([
+            "-b:v".into(),
+            "0".into(),
+            "-crf".into(),
+            quality_to_native(quality, 63).to_string(),
+        ]),
+        "h264_nvenc" | "hevc_nvenc" | "av1_nvenc" => a.extend([
+            "-rc".into(),
+            "vbr".into(),
+            "-cq".into(),
+            quality_to_native(quality, 51).to_string(),
+        ]),
+        "h264_qsv" | "hevc_qsv" | "av1_qsv" => {
+            a.extend(["-global_quality".into(), quality_to_native(quality, 51).to_string()])
+        }
+        "h264_amf" | "hevc_amf" | "av1_amf" => {
+            let qp = quality_to_native(quality, 51).to_string();
+            a.extend([
+                "-rc".into(),
+                "cqp".into(),
+                "-qp_i".into(),
+                qp.clone(),
+                "-qp_p".into(),
+                qp.clone(),
+                "-qp_b".into(),
+                qp,
+            ]);
+        }
+        // libopenh264 is bitrate-only — estimate from quality (last-resort sw fallback).
+        "libopenh264" => {
+            let kbps = 2000 + quality.min(100) * 60;
+            a.extend(["-b:v".into(), format!("{kbps}k")]);
+        }
+        _ => a.extend(["-crf".into(), quality_to_native(quality, 51).to_string()]),
+    }
+    a
+}
+
+/// `-c:a <codec> -b:a <kbps>k`. WebM gets Opus; every other container AAC.
+fn audio_encode_args(container: &str, audio_kbps: u32) -> Vec<String> {
+    let codec = if container == "webm" { "libopus" } else { "aac" };
+    vec!["-c:a".into(), codec.into(), "-b:a".into(), format!("{audio_kbps}k")]
+}
+
+/// Container/muxer tail (+ progress reporting). The mp4 branch is byte-identical
+/// to the Phase-1 tail; webm drops faststart and pins yuv420p.
+fn container_muxer_args(container: &str, partial: &str) -> Vec<String> {
+    let mut a: Vec<String> = if container == "webm" {
+        vec!["-pix_fmt".into(), "yuv420p".into(), "-f".into(), "webm".into()]
+    } else {
+        vec!["-movflags".into(), "+faststart".into(), "-f".into(), "mp4".into()]
+    };
+    a.extend([
+        "-progress".into(),
+        "pipe:1".into(),
+        "-stats_period".into(),
+        "0.25".into(),
+        partial.into(),
+    ]);
+    a
+}
+
 /// One accurate `-ss <in> -t <dur+slack> -i <src>` per media segment
 /// (decode-discard while re-encoding), srcIn corrected by startTimeOffset
 /// here. `-t` carries +0.05 s slack so the demuxer never under-delivers the
 /// last frame; the filter graph's frame-domain caps cut back to exact length.
-pub(crate) fn build_export_argv(spec: &ExportSpec, title_paths: &[Vec<Option<PathBuf>>], filter_script: &str, partial: &str) -> Vec<String> {
+///
+/// `video_encoder` is the SF3-resolved encoder for `spec.encode`; None → the
+/// byte-identical Phase-1 libx264 path (the source-match preset sends no encode).
+pub(crate) fn build_export_argv(
+    spec: &ExportSpec,
+    title_paths: &[Vec<Option<PathBuf>>],
+    filter_script: &str,
+    partial: &str,
+    video_encoder: Option<&str>,
+) -> Vec<String> {
     let mut argv: Vec<String> = vec![
         "-y".into(),
         "-hide_banner".into(),
@@ -1458,17 +1627,26 @@ pub(crate) fn build_export_argv(spec: &ExportSpec, title_paths: &[Vec<Option<Pat
         "[outv]".into(),
         "-map".into(),
         "[outa]".into(),
-        "-c:v".into(),
-        "libx264".into(),
-        "-preset".into(),
-        "veryfast".into(),
-        "-crf".into(),
-        "18".into(),
-        "-c:a".into(),
-        "aac".into(),
-        "-b:a".into(),
-        "192k".into(),
     ]);
+    match (spec.encode.as_ref(), video_encoder) {
+        (Some(enc), Some(vid)) => {
+            argv.extend(video_encode_args(vid, enc.quality.unwrap_or(65), enc.bitrate_kbps));
+            argv.extend(audio_encode_args(&enc.container, enc.audio_bitrate_kbps.unwrap_or(192)));
+        }
+        // None encode (or an unresolved encoder) → the byte-identical Phase-1 encode.
+        _ => argv.extend([
+            "-c:v".into(),
+            "libx264".into(),
+            "-preset".into(),
+            "veryfast".into(),
+            "-crf".into(),
+            "18".into(),
+            "-c:a".into(),
+            "aac".into(),
+            "-b:a".into(),
+            "192k".into(),
+        ]),
+    }
     // ≥1 graded segment/layer → those were normalized to bt709/tv by the lut3d
     // sandwich, so tag the container to match. Zero grades → argv stays
     // byte-identical to Phase 1 (tagging unconverted passthrough content
@@ -1489,18 +1667,240 @@ pub(crate) fn build_export_argv(spec: &ExportSpec, title_paths: &[Vec<Option<Pat
             "tv".into(),
         ]);
     }
-    argv.extend([
-        "-movflags".into(),
-        "+faststart".into(),
-        "-f".into(),
-        "mp4".into(),
-        "-progress".into(),
-        "pipe:1".into(),
-        "-stats_period".into(),
-        "0.25".into(),
-        partial.into(),
-    ]);
+    let container = spec.encode.as_ref().map_or("mp4", |e| e.container.as_str());
+    argv.extend(container_muxer_args(container, partial));
     argv
+}
+
+// ── Delivery & Presets (sub-plan 7) ──────────────────────────────────────────
+// Runtime encoder capability probe. The GPU & Codec Spike proved `ffmpeg
+// -encoders` LISTS encoders that can't initialize (HW encoders with no GPU /
+// driver present), so every candidate is 1-frame test-encoded against a
+// synthetic lavfi source — the only truthful signal. Each test-encode is
+// time-boxed so a wedged HW encoder can't stall the probe. SF2 wraps this in a
+// path+version-keyed disk cache.
+
+/// Every encoder the export matrix can emit, grouped by family in auto-fallback
+/// order (software-first for quality, then NVENC / QSV / AMF, then a software
+/// fallback). The probe reports each as available or not; `encode_args` (SF3)
+/// walks these orders to resolve a codec to a working encoder.
+const PROBE_VIDEO_ENCODERS: &[&str] = &[
+    "libx264", "h264_nvenc", "h264_qsv", "h264_amf", "libopenh264",
+    "libx265", "hevc_nvenc", "hevc_qsv", "hevc_amf",
+    "libvpx-vp9",
+    "libsvtav1", "av1_nvenc", "av1_qsv", "av1_amf",
+];
+const PROBE_AUDIO_ENCODERS: &[&str] = &["aac", "libopus"];
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct EncoderCaps {
+    /// encoder name → did a 1-frame test-encode succeed.
+    pub encoders: std::collections::BTreeMap<String, bool>,
+    pub ffmpeg_path: String,
+    pub ffmpeg_version: String,
+}
+
+/// First line of `ffmpeg -version` (an SF2 cache-key component); "" on failure.
+async fn ffmpeg_version_line(ffmpeg: &str) -> String {
+    match tokio::process::Command::new(ffmpeg)
+        .args(["-hide_banner", "-version"])
+        .output()
+        .await
+    {
+        Ok(o) => String::from_utf8_lossy(&o.stdout)
+            .lines()
+            .next()
+            .unwrap_or("")
+            .trim()
+            .to_string(),
+        Err(_) => String::new(),
+    }
+}
+
+/// Run one ffmpeg invocation to a null muxer, time-boxed. true = clean exit 0.
+async fn probe_test_encode(ffmpeg: &str, args: &[&str]) -> bool {
+    let child = tokio::process::Command::new(ffmpeg)
+        .args(args)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .kill_on_drop(true)
+        .spawn();
+    let mut child = match child {
+        Ok(c) => c,
+        Err(_) => return false,
+    };
+    match tokio::time::timeout(std::time::Duration::from_secs(5), child.wait()).await {
+        Ok(Ok(status)) => status.success(),
+        Ok(Err(_)) => false,
+        Err(_) => {
+            // Timed out — a wedged encoder. Kill it and report unavailable.
+            let _ = child.start_kill();
+            false
+        }
+    }
+}
+
+/// Test-encode every matrix encoder against a 1-frame (video) / 0.1 s (audio)
+/// synthetic source. The truthful capability map behind the preset system.
+async fn run_encoder_probe() -> EncoderCaps {
+    let ffmpeg = crate::tool_path::resolve("ffmpeg");
+    let ffmpeg_version = ffmpeg_version_line(&ffmpeg).await;
+    let mut encoders = std::collections::BTreeMap::new();
+    for enc in PROBE_VIDEO_ENCODERS {
+        let ok = probe_test_encode(
+            &ffmpeg,
+            &[
+                "-hide_banner", "-loglevel", "error",
+                "-f", "lavfi", "-i", "color=black:s=256x256:d=0.1",
+                "-frames:v", "1", "-c:v", enc, "-f", "null", "-",
+            ],
+        )
+        .await;
+        encoders.insert((*enc).to_string(), ok);
+    }
+    for enc in PROBE_AUDIO_ENCODERS {
+        let ok = probe_test_encode(
+            &ffmpeg,
+            &[
+                "-hide_banner", "-loglevel", "error",
+                "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo",
+                "-t", "0.1", "-c:a", enc, "-f", "null", "-",
+            ],
+        )
+        .await;
+        encoders.insert((*enc).to_string(), ok);
+    }
+    EncoderCaps { encoders, ffmpeg_path: ffmpeg, ffmpeg_version }
+}
+
+/// Path of the probe cache: a serialized `EncoderCaps` keyed (by its own
+/// `ffmpeg_path` + `ffmpeg_version` fields) to the ffmpeg it was measured
+/// against. Lives beside the other app-config stores (sidebar.json, etc.).
+fn caps_cache_path(app: &tauri::AppHandle) -> Result<PathBuf, VaultError> {
+    Ok(super::sidebar::app_config_root(app)?.join("video-export-caps.json"))
+}
+
+/// Encoder caps with the SF2 disk cache: returns the cached verdict when the
+/// resolved ffmpeg path + version still match; otherwise (or when `force`)
+/// re-runs the full test-encode probe and rewrites the cache. The cheap `ffmpeg
+/// -version` call is the invalidation key — an upgraded or relocated ffmpeg
+/// re-probes automatically; a GPU/driver swap needs `force`. Shared by the probe
+/// command (SF1–SF2) and the export path (SF3).
+pub(crate) async fn caps_cached(app: &tauri::AppHandle, force: bool) -> EncoderCaps {
+    let ffmpeg = crate::tool_path::resolve("ffmpeg");
+    let cache_path = caps_cache_path(app).ok();
+    if !force {
+        if let Some(cp) = &cache_path {
+            if let Ok(txt) = fs::read_to_string(cp) {
+                if let Ok(cached) = serde_json::from_str::<EncoderCaps>(&txt) {
+                    let version = ffmpeg_version_line(&ffmpeg).await;
+                    if cached.ffmpeg_path == ffmpeg && cached.ffmpeg_version == version {
+                        return cached;
+                    }
+                }
+            }
+        }
+    }
+    let caps = run_encoder_probe().await;
+    // Best-effort cache write — the probe result still returns if the write fails.
+    if let Some(cp) = &cache_path {
+        if let Ok(txt) = serde_json::to_string_pretty(&caps) {
+            let _ = fs::write(cp, txt);
+        }
+    }
+    caps
+}
+
+/// Runtime encoder capability probe (Delivery & Presets SF1–SF2).
+#[tauri::command]
+pub async fn vedit_encoder_probe(
+    app: tauri::AppHandle,
+    force: bool,
+) -> Result<EncoderCaps, VaultError> {
+    Ok(caps_cached(&app, force).await)
+}
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SmokeResult {
+    pub codec: String,
+    pub encoder: Option<String>,
+    pub ok: bool,
+    pub detail: String,
+}
+
+/// Delivery & Presets SF9 (DEV) — end-to-end encode smoke across the built-in
+/// codec families, exercising the REAL `resolve_export_encoder` + `video_encode_
+/// args` + `audio_encode_args` against a 1 s synthetic source, then ffprobing the
+/// result's codec tag. A family with no available encoder reports ok:false /
+/// "no available encoder" (skipped, not a hard fail).
+#[tauri::command]
+pub async fn vedit_encode_smoke(app: tauri::AppHandle) -> Result<Vec<SmokeResult>, VaultError> {
+    let caps = caps_cached(&app, false).await;
+    let ffmpeg = crate::tool_path::resolve("ffmpeg");
+    let ffprobe = crate::tool_path::resolve("ffprobe");
+    let cases: &[(&str, &str)] = &[("h264", "mp4"), ("hevc", "mp4"), ("av1", "mp4"), ("vp9", "webm")];
+    let mut out = Vec::new();
+    for (codec, container) in cases {
+        let enc_spec = EncodeSpec {
+            container: (*container).to_string(),
+            codec: (*codec).to_string(),
+            encoder: None,
+            quality: Some(65),
+            bitrate_kbps: None,
+            audio_bitrate_kbps: None,
+        };
+        let Some(encoder) = resolve_export_encoder(&enc_spec, &caps) else {
+            out.push(SmokeResult {
+                codec: (*codec).to_string(),
+                encoder: None,
+                ok: false,
+                detail: "no available encoder".into(),
+            });
+            continue;
+        };
+        let tmp = std::env::temp_dir().join(format!("vedit-smoke-{codec}.{container}"));
+        let mut argv: Vec<String> = vec![
+            "-y".into(), "-hide_banner".into(), "-loglevel".into(), "error".into(),
+            "-f".into(), "lavfi".into(), "-i".into(), "testsrc2=size=320x240:rate=30:duration=1".into(),
+            "-f".into(), "lavfi".into(), "-i".into(), "sine=frequency=440:duration=1".into(),
+        ];
+        argv.extend(video_encode_args(&encoder, 65, None));
+        argv.extend(audio_encode_args(container, 128));
+        if *container == "webm" {
+            argv.extend(["-pix_fmt".into(), "yuv420p".into(), "-f".into(), "webm".into()]);
+        } else {
+            argv.extend(["-movflags".into(), "+faststart".into(), "-f".into(), "mp4".into()]);
+        }
+        argv.push(tmp.to_string_lossy().to_string());
+        let status = tokio::process::Command::new(&ffmpeg)
+            .args(&argv)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .await;
+        let (ok, detail) = match status {
+            Ok(s) if s.success() => {
+                let probe = tokio::process::Command::new(&ffprobe)
+                    .args(["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_name", "-of", "csv=p=0"])
+                    .arg(&tmp)
+                    .output()
+                    .await;
+                let got = probe
+                    .ok()
+                    .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+                    .unwrap_or_default();
+                (got == *codec, format!("{encoder} → {got}"))
+            }
+            _ => (false, format!("{encoder} encode failed")),
+        };
+        let _ = fs::remove_file(&tmp);
+        out.push(SmokeResult { codec: (*codec).to_string(), encoder: Some(encoder), ok, detail });
+    }
+    Ok(out)
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
@@ -1558,6 +1958,24 @@ pub async fn vedit_export_start(app: tauri::AppHandle, spec: ExportSpec) -> Resu
     if spec.segments.is_empty() && !has_regions {
         return Err(VaultError::Invalid("nothing to export — the timeline is empty".into()));
     }
+    // Delivery & Presets SF3: resolve the export encoder from the probe caps
+    // before any work. None encode → the byte-identical Phase-1 path; an
+    // unresolvable codec errors here (the JS remediation banner should prevent
+    // reaching this, but defend so a bad preset never spawns a doomed ffmpeg).
+    let resolved_encoder: Option<String> = if let Some(enc) = spec.encode.as_ref() {
+        let caps = caps_cached(&app, false).await;
+        match resolve_export_encoder(enc, &caps) {
+            Some(name) => Some(name),
+            None => {
+                return Err(VaultError::Invalid(format!(
+                    "no available encoder for codec '{}' — open Export presets to re-probe, or install an ffmpeg that has it",
+                    enc.codec
+                )));
+            }
+        }
+    } else {
+        None
+    };
     let total_secs: f64 = match &spec.regions {
         Some(rs) => rs.iter().map(|r| r.dur).sum(),
         None => spec.segments.iter().map(|s| s.dur).sum(),
@@ -1639,7 +2057,13 @@ pub async fn vedit_export_start(app: tauri::AppHandle, spec: ExportSpec) -> Resu
         s.temp_paths = lut_files.iter().map(|p| p.display().to_string()).collect();
         s.temp_paths.push(filter_path.display().to_string());
     }
-    let argv = build_export_argv(&spec, &title_paths, &filter_path.to_string_lossy(), &partial);
+    let argv = build_export_argv(
+        &spec,
+        &title_paths,
+        &filter_path.to_string_lossy(),
+        &partial,
+        resolved_encoder.as_deref(),
+    );
 
     let mut child = tokio::process::Command::new(crate::tool_path::resolve("ffmpeg"))
         .args(&argv)
@@ -1926,6 +2350,7 @@ pub async fn vedit_composite_parity(
             dur: 2.0 / spec.fps.max(1.0),
             layers: spec.layers,
         }]),
+        encode: None,
     };
     let regions = export_spec.regions.as_ref().unwrap();
     let (lut_paths, lut_files) = materialize_luts(&export_spec)?;
@@ -2078,6 +2503,7 @@ fn audio_parity_export_spec(p: &AudioParitySpec) -> ExportSpec {
         output_path: String::new(),
         mixer: p.mixer.clone(),
         regions: None,
+        encode: None,
     }
 }
 
@@ -2420,6 +2846,7 @@ mod export_tests {
             output_path: "/tmp/out.mp4".into(),
             mixer: None,
             regions: None,
+            encode: None,
         }
     }
 
@@ -2547,7 +2974,7 @@ mod export_tests {
     #[test]
     fn argv_shapes() {
         let sp = spec();
-        let argv = build_export_argv(&sp, &[], "/tmp/f.txt", "/tmp/out.mp4.partial");
+        let argv = build_export_argv(&sp, &[], "/tmp/f.txt", "/tmp/out.mp4.partial", None);
         let joined = argv.join(" ");
         // startTimeOffset correction applied inside the builder; -t has slack
         assert!(joined.contains("-ss 4.278667 -t 2.050000 -i /tmp/a.mp4"));
@@ -2618,11 +3045,81 @@ mod export_tests {
 
     #[test]
     fn argv_tags_bt709_only_when_graded() {
-        let j = build_export_argv(&graded_spec(), &[], "/tmp/f.txt", "/tmp/out.mp4.partial").join(" ");
+        let j = build_export_argv(&graded_spec(), &[], "/tmp/f.txt", "/tmp/out.mp4.partial", None).join(" ");
         assert!(j.contains("-colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_range tv"));
         // tags are output options: after the encoders, before the muxer flags
         assert!(j.find("-b:a 192k").unwrap() < j.find("-colorspace").unwrap());
         assert!(j.find("-colorspace").unwrap() < j.find("-movflags").unwrap());
+    }
+
+    #[test]
+    fn sf3_encoder_resolution_and_argv() {
+        let caps = |avail: &[&str]| EncoderCaps {
+            encoders: avail.iter().map(|e| ((*e).to_string(), true)).collect(),
+            ffmpeg_path: "ffmpeg".into(),
+            ffmpeg_version: "t".into(),
+        };
+        // quality mapping: q65 → crf 18 (Phase-1 parity); endpoints clamp.
+        assert_eq!(quality_to_native(65, 51), 18);
+        assert_eq!(quality_to_native(100, 51), 0);
+        assert_eq!(quality_to_native(0, 51), 51);
+
+        // resolution: software-first chain; explicit-available wins; explicit-dead
+        // falls through the chain; nothing available → None (caller remediates).
+        let h264 = EncodeSpec {
+            container: "mp4".into(),
+            codec: "h264".into(),
+            encoder: None,
+            quality: None,
+            bitrate_kbps: None,
+            audio_bitrate_kbps: None,
+        };
+        assert_eq!(
+            resolve_export_encoder(&h264, &caps(&["libx264", "h264_nvenc"])).as_deref(),
+            Some("libx264")
+        );
+        let forced_nvenc = EncodeSpec { encoder: Some("h264_nvenc".into()), ..h264.clone() };
+        assert_eq!(
+            resolve_export_encoder(&forced_nvenc, &caps(&["libx264", "h264_nvenc"])).as_deref(),
+            Some("h264_nvenc")
+        );
+        assert_eq!(
+            resolve_export_encoder(&forced_nvenc, &caps(&["h264_amf"])).as_deref(),
+            Some("h264_amf")
+        );
+        assert_eq!(resolve_export_encoder(&h264, &caps(&[])), None);
+
+        // argv: vp9/webm — crf quality, opus audio, webm muxer, no faststart.
+        let mut sp = spec();
+        sp.encode = Some(EncodeSpec {
+            container: "webm".into(),
+            codec: "vp9".into(),
+            encoder: None,
+            quality: Some(65),
+            bitrate_kbps: None,
+            audio_bitrate_kbps: None,
+        });
+        let j = build_export_argv(&sp, &[], "/tmp/f.txt", "/tmp/out.webm.partial", Some("libvpx-vp9"))
+            .join(" ");
+        assert!(j.contains("-c:v libvpx-vp9 -b:v 0 -crf"));
+        assert!(j.contains("-c:a libopus -b:a 192k"));
+        assert!(j.contains("-f webm"));
+        assert!(!j.contains("-movflags"));
+
+        // argv: explicit bitrate → nvenc VBR mode (not CQ).
+        sp.encode = Some(EncodeSpec {
+            container: "mp4".into(),
+            codec: "h264".into(),
+            encoder: Some("h264_nvenc".into()),
+            quality: None,
+            bitrate_kbps: Some(8000),
+            audio_bitrate_kbps: None,
+        });
+        let j2 = build_export_argv(&sp, &[], "/tmp/f.txt", "/tmp/out.mp4.partial", Some("h264_nvenc"))
+            .join(" ");
+        assert!(j2.contains("-c:v h264_nvenc -rc vbr -b:v 8000k"));
+        assert!(j2.contains("-c:a aac -b:a 192k"));
+        assert!(j2.contains("-movflags +faststart -f mp4"));
     }
 
     #[test]
@@ -2787,7 +3284,7 @@ mod export_tests {
     fn region_input_args_lockstep() {
         let mut sp = pip_spec(); // region 0: base + pip (2 inputs)
         sp.regions.as_mut().unwrap().push(ExportRegion { dur: 1.0, layers: vec![] }); // gap: no input
-        let argv = build_export_argv(&sp, &[], "/tmp/f.txt", "/tmp/out.mp4.partial");
+        let argv = build_export_argv(&sp, &[], "/tmp/f.txt", "/tmp/out.mp4.partial", None);
         assert_eq!(argv.iter().filter(|a| *a == "-i").count(), 2);
         let joined = argv.join(" ");
         assert!(joined.contains("-i /tmp/base.mp4"));
@@ -2820,6 +3317,7 @@ mod export_tests {
                 dur: 2.0,
                 layers: vec![title_layer(b64, 800, 120, 2.0)],
             }]),
+            encode: None,
         }
     }
 
@@ -2913,7 +3411,7 @@ mod export_tests {
         assert!(s.contains("concat=n=1:v=1:a=1[catv][cona]"));
         assert!(s.contains("[catv]setparams=colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv[outv]"));
         // and the container gets the bt709 tags.
-        let j = build_export_argv(&sp, &[], "/tmp/f.txt", "/tmp/out.mp4.partial").join(" ");
+        let j = build_export_argv(&sp, &[], "/tmp/f.txt", "/tmp/out.mp4.partial", None).join(" ");
         assert!(j.contains("-colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_range tv"));
     }
 

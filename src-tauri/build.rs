@@ -14,6 +14,8 @@ fn main() {
         "vedit_export_start",
         "vedit_export_cancel",
         "vedit_export_status",
+        "vedit_encoder_probe",
+        "vedit_encode_smoke",
         "vedit_parity_render",
         "vedit_audio_parity",
         "vedit_composite_parity",
