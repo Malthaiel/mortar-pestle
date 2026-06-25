@@ -179,6 +179,7 @@ fn main() {
         "app_self_apply_update",
         "app_self_revert",
         "app_self_set_poll_interval",
+        "app_relaunch",
         "docs_get_manifest",
         "agent_chat",
         "agent_chat_cli",

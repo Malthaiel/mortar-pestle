@@ -696,6 +696,7 @@ pub fn run() {
             commands::self_update::app_self_apply_update,
             commands::self_update::app_self_revert,
             commands::self_update::app_self_set_poll_interval,
+            commands::self_update::app_relaunch,
             commands::docs::docs_get_manifest,
             commands::design::agent_chat,
             commands::design::agent_chat_cli,

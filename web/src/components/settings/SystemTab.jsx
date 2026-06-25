@@ -11,6 +11,7 @@ import { useUpdateStatus, applyUpdate, revertUpdate, setPollInterval } from '../
 import { Seg, OutlinedBtn, Slider, Topbar } from '../ui/index.js';
 import EnableToggle from '../ui/EnableToggle.jsx';
 import { SectionBand, Row, StackedRow } from './section-primitives.jsx';
+import { useNetworkUpdate } from '../../hooks/useNetworkUpdate.js';
 import { TAB_SECTIONS, scopeFor, scopeModified } from './settings-registry.js';
 import { SETTINGS_DEFAULTS } from '../../hooks/useSettings.js';
 
@@ -442,78 +443,109 @@ const POLL_INTERVAL_OPTIONS = [
 ];
 
 function UpdatesSection({ settings, setSetting, accent }) {
-  const status = useUpdateStatus();
+  const status = useUpdateStatus();                 // local on-disk dev-rebuild signal
   const [busy, setBusy] = useState(null);
   const [err, setErr] = useState(null);
   const autoCheck = settings.dev?.autoCheckUpdates !== false;
   const pollInterval = settings.dev?.updatePollInterval ?? 30000;
+  const appVersion = import.meta.env.PACKAGE_VERSION || '0.0.0';
+  const net = useNetworkUpdate({ autoCheck });      // network (GitHub Releases) updater
   const builtAt = (status.diskMtimeSecs && status.available)
     ? new Date(status.diskMtimeSecs * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : null;
 
-  // Push the persisted interval to the Rust loop on mount so the loop
-  // honors the stored preference after app restart. Run-once is fine —
-  // subsequent changes go through handlePollChange below.
+  // Push the persisted interval to the Rust loop on mount so the loop honors
+  // the stored preference after app restart. Run-once is fine.
   useEffect(() => { setPollInterval(pollInterval).catch(() => {}); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleRestart = async () => {
     if (busy) return;
-    setBusy('restart');
-    setErr(null);
-    try {
-      await applyUpdate(status.diskSha256Prefix);
-    } catch (e) {
-      setErr((e && (e.message || e.toString())) || 'restart failed');
-      setBusy(null);
-    }
+    setBusy('restart'); setErr(null);
+    try { await applyUpdate(status.diskSha256Prefix); }
+    catch (e) { setErr((e && (e.message || e.toString())) || 'restart failed'); setBusy(null); }
   };
   const handleRevert = async () => {
     if (busy) return;
-    setBusy('revert');
-    setErr(null);
-    try {
-      await revertUpdate();
-    } catch (e) {
-      setErr((e && (e.message || e.toString())) || 'revert failed');
-      setBusy(null);
-    }
+    setBusy('revert'); setErr(null);
+    try { await revertUpdate(); }
+    catch (e) { setErr((e && (e.message || e.toString())) || 'revert failed'); setBusy(null); }
   };
   const handlePollChange = (ms) => {
     setSetting('dev', { updatePollInterval: ms });
     setPollInterval(ms).catch(e => setErr(e?.message || 'poll interval failed'));
   };
 
+  const netBusy = net.phase === 'checking' || net.phase === 'downloading' || net.phase === 'installing';
+  const netHint =
+    net.phase === 'uptodate'    ? `Up to date · v${appVersion}` :
+    net.phase === 'available'   ? `New version available — v${net.info?.version}` :
+    net.phase === 'downloading' ? `Downloading · ${Math.round((net.progress || 0) * 100)}%` :
+    net.phase === 'installing'  ? 'Installing — the app will restart…' :
+    net.phase === 'checking'    ? 'Checking GitHub…' :
+    `You're on v${appVersion}`;
+
   return (
     <SectionBand title="Updates">
-      <Row label="Notify me about new builds" anchor="set-autoCheckUpdates">
+      <Row label="Version">
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-muted)' }}>v{appVersion}</span>
+      </Row>
+
+      {/* Network updater — the real GitHub-Releases auto-update */}
+      <StackedRow label="Check for updates" hint={netHint}>
+        {net.phase === 'available' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {net.info?.notes ? (
+              <div style={{
+                maxHeight: 132, overflowY: 'auto',
+                fontSize: 11.5, lineHeight: 1.5, color: 'var(--text-muted)',
+                whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                background: 'var(--surface-sunken, rgba(0,0,0,0.18))',
+                border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px',
+              }}>{net.info.notes}</div>
+            ) : null}
+            <OutlinedBtn small onClick={() => net.downloadAndInstall()} disabled={netBusy}>
+              Download &amp; install v{net.info?.version}
+            </OutlinedBtn>
+          </div>
+        ) : net.phase === 'downloading' || net.phase === 'installing' ? (
+          <div style={{ height: 8, borderRadius: 999, background: 'var(--border)', overflow: 'hidden' }}>
+            <div style={{
+              height: '100%', borderRadius: 999,
+              width: `${Math.round((net.phase === 'installing' ? 1 : (net.progress || 0)) * 100)}%`,
+              background: accent || 'var(--accent)', transition: 'width 160ms ease',
+            }}/>
+          </div>
+        ) : (
+          <OutlinedBtn small onClick={() => net.check({ silent: false })} disabled={netBusy}>
+            {net.phase === 'checking' ? 'Checking…' : 'Check for updates'}
+          </OutlinedBtn>
+        )}
+      </StackedRow>
+      {net.phase === 'error' && net.error && (
+        <div style={{ fontSize: 11, color: '#e07b7b', fontFamily: 'var(--font-mono)' }}>{net.error}</div>
+      )}
+
+      <Row label="Automatically check on launch" anchor="set-autoCheckUpdates">
         <EnableToggle
           enabled={autoCheck}
           accent={accent}
           onChange={v => setSetting('dev', { autoCheckUpdates: v })}
-          title="Show sidebar dot + toast when a fresh npm run tauri build lands. Rebuilds happen regardless."
+          title="On launch, check GitHub for a newer release and show a subtle prompt. Also drives the local dev-build dot/toast."
         />
       </Row>
+
+      {/* ── Local dev-build signal (detects a fresh npm run tauri build) ── */}
       {autoCheck && (
-        <Row label="Check cadence" anchor="set-updatePollInterval">
-          <Seg
-            value={pollInterval}
-            onChange={handlePollChange}
-            options={POLL_INTERVAL_OPTIONS}
-            accent={accent}
-          />
+        <Row label="Dev rebuild cadence" anchor="set-updatePollInterval">
+          <Seg value={pollInterval} onChange={handlePollChange} options={POLL_INTERVAL_OPTIONS} accent={accent} />
         </Row>
       )}
       {status.available && autoCheck && (
-        <StackedRow label="Update available" hint={builtAt ? `Built ${builtAt} · ${status.diskSha256Prefix?.slice(0, 8)}…` : 'A fresh build is ready'}>
+        <StackedRow label="Local build ready" hint={builtAt ? `Built ${builtAt} · ${status.diskSha256Prefix?.slice(0, 8)}…` : 'A fresh local build is ready'}>
           <OutlinedBtn small onClick={handleRestart} disabled={!!busy}>
             {busy === 'restart' ? '…' : 'Restart'}
           </OutlinedBtn>
         </StackedRow>
-      )}
-      {!status.available && (
-        <div style={{ fontSize: 11, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)' }}>
-          Up to date{status.currentSha256Prefix ? ` · ${status.currentSha256Prefix.slice(0, 8)}…` : ''}
-        </div>
       )}
       {status.prevExists && (
         <Row label="Previous build">

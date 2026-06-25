@@ -22,6 +22,7 @@ const TAGLINES = [
 export default function SidebarToggleButton({ accent, expanded, onToggle, showTagline }) {
   const [pulsing, setPulsing] = useState(false);
   const tagline = useMemo(() => TAGLINES[Math.floor(Math.random() * TAGLINES.length)], []);
+  const version = import.meta.env.PACKAGE_VERSION || '0.0.0';
 
   useEffect(() => {
     let timer = null;
@@ -70,7 +71,7 @@ export default function SidebarToggleButton({ accent, expanded, onToggle, showTa
           }}>
             <span style={{
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>Iskariel</span>
+            }}>Iskariel <span style={{ textTransform: 'none', fontSize: '0.82em', fontWeight: 500 }}>v{version}</span></span>
             {showTagline && (
               <span style={{
                 fontSize: 9.5, fontStyle: 'italic',

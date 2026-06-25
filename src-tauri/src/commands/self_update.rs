@@ -147,6 +147,16 @@ pub fn app_self_apply_update(
     app.restart();
 }
 
+/// Unconditional restart into the on-disk binary. Used by the network updater
+/// (`plugin-updater`) after it has downloaded + installed a newer signed
+/// release, to relaunch into it — mirrors the `app.restart()` path that
+/// `app_self_apply_update` uses for the local dev-build flow (no extra
+/// dependency vs. tauri-plugin-process).
+#[tauri::command]
+pub fn app_relaunch(app: AppHandle) -> Result<(), String> {
+    app.restart();
+}
+
 /// Updates the background poll cadence. Validates `secs` against the
 /// [`MIN_POLL_INTERVAL_SECS`]..=[`MAX_POLL_INTERVAL_SECS`] window so a
 /// runaway setting can't peg the CPU or silently disable update checks.

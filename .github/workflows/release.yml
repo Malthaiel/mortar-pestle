@@ -50,6 +50,10 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Iskariel ${{ github.ref_name }}'
-          releaseBody: 'Download the `.exe` installer below. The installer is not yet code-signed — Windows SmartScreen may warn; click More info → Run anyway.'
-          releaseDraft: true
+          releaseBody: |
+            Iskariel ${{ github.ref_name }}.
+
+            Install or update in-app from Settings ▸ System (or accept the on-launch prompt).
+            The installer is not yet code-signed — Windows SmartScreen may warn; click More info → Run anyway.
+          releaseDraft: false
           prerelease: false

@@ -197,6 +197,7 @@
     "allow-app-self-apply-update",
     "allow-app-self-revert",
     "allow-app-self-set-poll-interval",
+    "allow-app-relaunch",
     "allow-docs-get-manifest",
     "allow-agent-chat",
     "allow-agent-chat-cli",

@@ -11,8 +11,10 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { applyUpdate } from '../hooks/useUpdateStatus.js';
+import { checkForUpdate } from '../hooks/useNetworkUpdate.js';
 import { api } from '../api.js';
 import { navigate } from '../router.js';
+import { sharedEvents } from '../module-sdk/index.js';
 
 const NotificationCtx = createContext(null);
 export const useNotifications = () => useContext(NotificationCtx);
@@ -35,6 +37,10 @@ function loadHistory() {
 let _seq = 0;
 function genId(type) { _seq += 1; return `${type}-${Date.now()}-${_seq}`; }
 
+// Startup network-update check runs at most once per app session (survives
+// StrictMode's mount/unmount/mount and any provider remount).
+let _netStartupKicked = false;
+
 // Resolve a serialized action (kind + payload) to its live handler. Shared by
 // the toast action buttons and the panel row-click — reuses the exact handlers
 // the old toasts used so behavior is identical.
@@ -55,6 +61,10 @@ export async function runNotificationAction(action) {
   if (action.kind === 'open-album') {
     const p = action.payload?.albumPath;
     if (p) navigate('/tools/library/music/downloaded/' + encodeURIComponent(p));
+    return;
+  }
+  if (action.kind === 'open-settings-system') {
+    sharedEvents.emit('host:open-settings', { tab: 'system' });
   }
 }
 
@@ -150,6 +160,28 @@ export function NotificationProvider({ settings, children }) {
   const getBellRect = useCallback(() => {
     try { return bellRef.current?.getBoundingClientRect() || null; } catch { return null; }
   }, []);
+
+  // Startup network-update check (GitHub Releases) — gated by the same
+  // `autoCheckUpdates` setting as the local dev-build signal. A few seconds
+  // after launch, once per session; on a found update it raises a subtle,
+  // dismissible toast that deep-links into Settings ▸ System to install.
+  useEffect(() => {
+    if (autoCheckRef.current === false || _netStartupKicked) return;
+    _netStartupKicked = true;
+    // Deliberately no cleanup-cancel: the one-shot timer should survive
+    // StrictMode's mount/unmount/mount so the check actually fires in dev.
+    setTimeout(async () => {
+      try {
+        const update = await checkForUpdate();
+        if (update) addNotification({
+          type: 'update', title: 'Update available',
+          message: `Version ${update.version} is ready to install`,
+          accent: 'var(--accent)', iconKey: 'rotate', duration: 8000,
+          action: { label: 'View update', kind: 'open-settings-system' },
+        });
+      } catch { /* no published release yet / offline — stay silent */ }
+    }, 3000);
+  }, [addNotification]);
 
   // ── Event wiring (registered once) ──────────────────────────────────────────
   useEffect(() => {
