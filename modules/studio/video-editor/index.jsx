@@ -3,6 +3,7 @@ import SidebarPill from '@host/components/SidebarPill.jsx';
 import RailStat from '@host/components/sidebar/RailStat.jsx';
 import { useHashRoute } from '@host/router.js';
 import { registerModuleKeybinds } from '@host/keybinds/registry.js';
+import { LazyErrorBoundary, lazyChunkError } from '@host/components/LazyErrorBoundary.jsx';
 import { VEDIT_KEYBIND_ENTRIES } from './keybinds.js';
 import VeditNav from './color/VeditNav.jsx';
 
@@ -21,46 +22,11 @@ import VeditNav from './color/VeditNav.jsx';
 // EditorPage mounts via React.lazy so the editor tree stays off the boot path:
 // loadAll() awaits every module entry before first paint, and ARCHITECTURE.md
 // budgets cold start < 1.5 s.
-// .catch on the lazy import + a local error boundary (the lazy-chunk
+// .catch on the lazy import + a shared error boundary (the lazy-chunk
 // black-app rule): a failed chunk fetch OR a render throw inside the editor
 // must degrade to a visible note on the editor route — never unmount the
 // whole app tree into a blank window.
-const EditorPage = React.lazy(() => import('./EditorPage.jsx').catch((err) => {
-  console.error('[vedit] editor chunk failed to load', err);
-  return {
-    default: () => (
-      <div style={{ padding: 24, fontFamily: '"DM Mono", monospace', fontSize: 12.5, color: 'var(--text-muted)' }}>
-        Video Editor failed to load — see the console (right-click → Inspect Element).
-      </div>
-    ),
-  };
-}));
-
-class EditorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { err: null };
-  }
-
-  static getDerivedStateFromError(err) {
-    return { err };
-  }
-
-  componentDidCatch(err) {
-    console.error('[vedit] editor crashed', err);
-  }
-
-  render() {
-    if (this.state.err) {
-      return (
-        <div style={{ padding: 24, fontFamily: '"DM Mono", monospace', fontSize: 12.5, color: 'var(--text-muted)' }}>
-          Video Editor crashed: {String(this.state.err?.message || this.state.err)} — see the console.
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
+const EditorPage = React.lazy(() => import('./EditorPage.jsx').catch(lazyChunkError('Video Editor', '[vedit]')));
 
 // Collapsed 56 px rail: show the active mode (Edit / Color) as a stat.
 function VeditRail({ accent }) {
@@ -99,11 +65,11 @@ export default {
         ? { rest: r.slice('/tools/video-editor'.length).replace(/^\//, '') }
         : false,
       render: ({ params, accent }) => (
-        <EditorBoundary>
+        <LazyErrorBoundary label="Video Editor" tag="[vedit]">
           <Suspense fallback={null}>
             <EditorPage api={api} accent={accent} rest={params.rest || ''} />
           </Suspense>
-        </EditorBoundary>
+        </LazyErrorBoundary>
       ),
     });
   },

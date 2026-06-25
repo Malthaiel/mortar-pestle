@@ -1452,11 +1452,6 @@ pub fn creds_set_keyring_unlock(app: AppHandle, enabled: bool) -> Result<(), Cre
 }
 
 #[tauri::command]
-pub fn creds_settings_get() -> Result<CredSettings, CredError> {
-    read_unlocked(|store| Ok(store.settings.clone()))
-}
-
-#[tauri::command]
 pub fn creds_settings_set(
     app: AppHandle,
     settings: CredSettings,

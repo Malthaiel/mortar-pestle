@@ -1,6 +1,7 @@
 import React, { Suspense } from 'react';
 import SidebarPill from '@host/components/SidebarPill.jsx';
 import RailStat from '@host/components/sidebar/RailStat.jsx';
+import { LazyErrorBoundary, lazyChunkError } from '@host/components/LazyErrorBoundary.jsx';
 import SttProvider, { useStt } from './SttProvider.jsx';
 import SttSettingsTab from './SttSettingsTab.jsx';
 
@@ -8,35 +9,10 @@ import SttSettingsTab from './SttSettingsTab.jsx';
 // Tier gating is BUILD-TIME: web/.env sets VITE_BUILD_TIER=studio; module-loader
 // drops studio manifests when buildTier !== 'studio' — verify by ARTIFACT-DIFF,
 // not dev (dev always loads studio). The /tools/:sub route shape is generic, so
-// NO router.js edit is needed. SttPage mounts via React.lazy + .catch + a local
+// NO router.js edit is needed. SttPage mounts via React.lazy + .catch + a shared
 // error boundary (the lazy-chunk black-app rule): a failed chunk OR a render
 // throw degrades to a visible note, never unmounts the whole app tree.
-const SttPage = React.lazy(() => import('./SttPage.jsx').catch((err) => {
-  console.error('[stt] page chunk failed to load', err);
-  return {
-    default: () => (
-      <div style={{ padding: 24, fontFamily: '"DM Mono", monospace', fontSize: 12.5, color: 'var(--text-muted)' }}>
-        Speech-to-Text failed to load — see the console (right-click → Inspect Element).
-      </div>
-    ),
-  };
-}));
-
-class SttBoundary extends React.Component {
-  constructor(props) { super(props); this.state = { err: null }; }
-  static getDerivedStateFromError(err) { return { err }; }
-  componentDidCatch(err) { console.error('[stt] page crashed', err); }
-  render() {
-    if (this.state.err) {
-      return (
-        <div style={{ padding: 24, fontFamily: '"DM Mono", monospace', fontSize: 12.5, color: 'var(--text-muted)' }}>
-          Speech-to-Text crashed: {String(this.state.err?.message || this.state.err)} — see the console.
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
+const SttPage = React.lazy(() => import('./SttPage.jsx').catch(lazyChunkError('Speech-to-Text', '[stt]')));
 
 // Collapsed 56px rail — REC while dictating, WORK while transcribing a file,
 // DOWN when the engine is unavailable, else IDLE. Reads the app-level context.
@@ -73,11 +49,11 @@ export default {
         ? { rest: r.slice('/tools/stt'.length).replace(/^\//, '') }
         : false,
       render: ({ accent }) => (
-        <SttBoundary>
+        <LazyErrorBoundary label="Speech-to-Text" tag="[stt]">
           <Suspense fallback={null}>
             <SttPage accent={accent} />
           </Suspense>
-        </SttBoundary>
+        </LazyErrorBoundary>
       ),
     });
     // Settings → Modules › Voice (Phase 5). Model picker + backend + VAD tuning.

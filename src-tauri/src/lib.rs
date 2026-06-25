@@ -729,7 +729,6 @@ pub fn run() {
             commands::credentials::creds_delete_import_file,
             commands::credentials::creds_change_master,
             commands::credentials::creds_set_keyring_unlock,
-            commands::credentials::creds_settings_get,
             commands::credentials::creds_settings_set,
             commands::credentials::creds_suppress_blur_lock,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::get_capture_state,
