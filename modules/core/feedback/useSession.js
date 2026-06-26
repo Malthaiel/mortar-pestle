@@ -21,5 +21,17 @@ export function useSession(fb) {
     refresh();
   }, [refresh]);
 
-  return { session, loading, refresh, setSession };
+  // True if the user has a profile handle. Re-checks the server once when the
+  // cached session has none — the handle may have just been set in the Settings
+  // → Feedback drawer, which doesn't remount the board, so the local copy goes
+  // stale. Lets write-gates avoid both raw FK errors and falsely blocking a user
+  // who already has a handle.
+  const ensureHandle = useCallback(async () => {
+    if (session?.profile?.handle) return true;
+    const s = await fb.getSession().catch(() => null);
+    if (s) setSession(s);
+    return !!s?.profile?.handle;
+  }, [session, fb]);
+
+  return { session, loading, refresh, setSession, ensureHandle };
 }

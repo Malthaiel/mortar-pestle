@@ -19,7 +19,7 @@ const CATEGORY_FILTERS = [
 const SORTS = [{ value: 'new', label: 'Newest' }, { value: 'top', label: 'Top voted' }];
 
 export default function BoardPage({ api, fb, accent }) {
-  const { session, refresh: refreshSession } = useSession(fb);
+  const { session, refresh: refreshSession, ensureHandle } = useSession(fb);
   const [posts, setPosts] = useState([]);
   const [voted, setVoted] = useState(new Map());
   const [category, setCategory] = useState('all');
@@ -28,6 +28,7 @@ export default function BoardPage({ api, fb, accent }) {
   const [error, setError] = useState('');
   const [showSignIn, setShowSignIn] = useState(false);
   const [showCompose, setShowCompose] = useState(false);
+  const needsHandle = session?.signedIn && !session?.profile?.handle;
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
@@ -50,6 +51,7 @@ export default function BoardPage({ api, fb, accent }) {
 
   const onVote = async (post, value) => {
     if (!session?.signedIn) { setShowSignIn(true); return; }
+    if (!(await ensureHandle())) return;          // banner below explains
     try {
       const r = await fb.voteSet(post.id, value);
       setVoted((prev) => { const n = new Map(prev); r.value ? n.set(post.id, r.value) : n.delete(post.id); return n; });
@@ -58,7 +60,10 @@ export default function BoardPage({ api, fb, accent }) {
     } catch (e) { console.error('vote failed', e); }
   };
 
-  const newPost = () => (session?.signedIn ? setShowCompose(true) : setShowSignIn(true));
+  const newPost = async () => {
+    if (!session?.signedIn) return setShowSignIn(true);
+    if (await ensureHandle()) setShowCompose(true);   // else banner below explains
+  };
 
   return (
     <div style={{ padding: '24px 28px', maxWidth: 860, margin: '0 auto' }}>
@@ -70,6 +75,16 @@ export default function BoardPage({ api, fb, accent }) {
           : <OutlinedBtn small onClick={() => setShowSignIn(true)}>Sign in</OutlinedBtn>}
         <PrimaryBtn small onClick={newPost}>New post</PrimaryBtn>
       </div>
+
+      {needsHandle && (
+        <div style={{
+          fontSize: 13, color: 'var(--text)', marginBottom: 16, padding: '10px 14px',
+          borderRadius: 'var(--radius-md)', border: '1px solid var(--border)',
+          background: 'color-mix(in oklch, var(--accent) 10%, var(--surface-2))',
+        }}>
+          Pick a handle in <strong>Settings → Feedback</strong> before you can post, vote, or comment.
+        </div>
+      )}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
         {CATEGORY_FILTERS.map((c) => (
