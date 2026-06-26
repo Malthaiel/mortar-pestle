@@ -2044,8 +2044,11 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
 .candy-btn:disabled,
 .candy-btn[aria-disabled="true"] { opacity: 0.55; cursor: not-allowed; }
 
-/* Nested label/value elements flip white with the face. */
-.candy-face :where(div, span) { transition: color 150ms cubic-bezier(0, 0, 0.58, 1); }
+/* Nested label/value elements flip white with the face. :not(.candy-face) so this
+   color-only transition SHORTHAND doesn't clobber a NESTED candy button's own face
+   transition (transform/background) — that clobber was the instant-press + hover
+   band-desync bug on candy-btns nested inside another candy-btn's face. */
+.candy-face :where(div, span):not(.candy-face) { transition: color 150ms cubic-bezier(0, 0, 0.58, 1); }
 .candy-btn:is(:hover, :active, .is-active, .is-selected, .is-primary, .is-danger) .candy-face :where(div, span) { color: #fff; }
 
 /* Animation gating — mirror the .candy-btn-legacy gates for the two-layer system.
