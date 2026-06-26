@@ -174,7 +174,7 @@ export default function PlannerDock() {
     const dock = dockRef.current;
     const body = calBodyRef.current;
     if (!dock || !body) return;
-    const list = dock.closest('.sidebar-pattern');
+    const list = dock.closest('.sidebar-widget-list');
     if (!list) return;
     const recompute = () => {
       const cs = getComputedStyle(list);

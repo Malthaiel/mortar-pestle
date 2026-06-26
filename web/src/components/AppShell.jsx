@@ -180,6 +180,7 @@ export default function AppShell({ children, onOpenSettings, settingsOpen, accen
           </div>
           {effectiveToolkitExpanded ? (
             <DraggableSidebarList
+              className="sidebar-widget-list"
               items={rightSlots}
               keyExtractor={(slot) => slot.moduleId + ':' + slot.id}
               // 10px breathing room above the first module (below the toggle-
