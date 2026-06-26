@@ -1,0 +1,33 @@
+/* Feedback Board module styles — promoted from Iskariel/Docs/Reference/Prototypes.md.
+   Namespaced .fb-* because web/src/styles.css is a single global sheet. The candy
+   recipe itself (.candy-btn / .candy-face / .is-active) is the host's global one. */
+
+/* StatusBadge — read-only muted candy pill. The muted colour rides inline --cbtn-band
+   (set per status) so the candy band + frame darken to match, and the face reads it;
+   inert (no hover-flip), the same low-key treatment as .fb-avatar. */
+.fb-status { pointer-events: none; cursor: default; }
+
+/* VoteButton — two candy buttons (UPVOTE / DOWNVOTE), word + count, no glyph; the
+   caller's current vote lights via .is-active (accent face). */
+.fb-vote { display: inline-flex; gap: 6px; align-items: center; }
+.fb-vote-up > .candy-face,
+.fb-vote-down > .candy-face { gap: 7px; }
+.fb-vote-n { font-family: var(--font-mono); font-weight: 600; letter-spacing: 0; }
+
+/* UserAvatar — circle; centred initial fallback (line-height:1) or a cover image. */
+.fb-avatar {
+  display: inline-flex; align-items: center; justify-content: center; line-height: 1;
+  flex-shrink: 0; border-radius: 50%; overflow: hidden;
+  color: var(--text); font-weight: 600;
+}
+.fb-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* DevControls — role-gated dev bar on a post (set status / pin / hide / official reply). */
+.fb-devbar {
+  margin-top: 20px; padding: 12px 14px;
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: color-mix(in oklch, var(--accent) 5%, var(--surface-2));
+  display: flex; flex-direction: column; gap: 10px;
+}
+.fb-devbar-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.fb-devbar-label { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; color: var(--accent); }

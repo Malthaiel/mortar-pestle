@@ -1,8 +1,9 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { TextInput } from '@host/components/ui/Input.jsx';
 import { PrimaryBtn, OutlinedBtn } from '@host/components/ui/Button.jsx';
 import { makeFeedbackApi } from './feedbackApi.js';
 import { useSession } from './useSession.js';
+import UserAvatar from './UserAvatar.jsx';
 
 // Settings → Feedback tab: manage handle + display name. Avatar upload lands in
 // Phase 4 (UserAvatar). Reuses candy primitives only.
@@ -11,16 +12,35 @@ export default function AccountSettingsTab({ api, accent }) {
   const { session, loading, refresh } = useSession(fb);
   const [handle, setHandle] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
+  const fileRef = useRef(null);
 
   useEffect(() => {
     if (session?.profile) {
       setHandle(session.profile.handle || '');
       setDisplayName(session.profile.display_name || '');
+      setAvatarUrl(session.profile.avatar_url || '');
     }
   }, [session]);
+
+  const onPickAvatar = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setError(''); setMsg(''); setUploading(true);
+    try {
+      const bytes = Array.from(new Uint8Array(await file.arrayBuffer()));
+      const r = await fb.avatarUpload(bytes, file.type);
+      setAvatarUrl(r?.avatarUrl || '');
+      await refresh();
+      setMsg('Avatar updated.');
+    } catch (e2) { setError(e2.message || 'Could not upload avatar'); }
+    finally { setUploading(false); }
+  };
 
   const save = async () => {
     setError(''); setMsg(''); setBusy(true);
@@ -54,7 +74,15 @@ export default function AccountSettingsTab({ api, accent }) {
         <label style={label}>Display name</label>
         <TextInput value={displayName} onChange={setDisplayName} placeholder="Your name" accent={accent} style={{ width: '100%' }} />
       </div>
-      {/* Avatar upload + preview lands in Phase 4 (UserAvatar). */}
+      <div>
+        <label style={label}>Avatar</label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <UserAvatar src={avatarUrl} name={handle} size={48} />
+          <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={onPickAvatar} style={{ display: 'none' }} />
+          <OutlinedBtn onClick={() => fileRef.current?.click()} disabled={uploading}>{uploading ? 'Uploading…' : 'Change avatar'}</OutlinedBtn>
+        </div>
+        <div style={hint}>PNG, JPEG, or WebP · max 4 MB · cropped to a circle.</div>
+      </div>
       {error && <div style={{ color: 'var(--error)', fontSize: 12 }}>{error}</div>}
       {msg && <div style={{ color: 'var(--accent)', fontSize: 12 }}>{msg}</div>}
       <div style={{ display: 'flex', gap: 8 }}>

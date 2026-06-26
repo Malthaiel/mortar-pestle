@@ -8,6 +8,7 @@ import { recordVisit } from './hooks/useRecentPages.js';
 import { registerCommandAction } from './command-actions.js';
 import { useGlobalTactileSound } from './hooks/useTactileSound.js';
 import { useEventReminders } from './hooks/useEventReminders.js';
+import { useFeedbackNotifications } from './hooks/useFeedbackNotifications.js';
 import AppShell from './components/AppShell.jsx';
 import ToolsPage from './pages/ToolsPage.jsx';
 import PageView from './pages/PageView.jsx';
@@ -94,6 +95,7 @@ function PlayerRouteDispatcher({ hash }) {
 function MainApp() {
   useGlobalTactileSound();
   useEventReminders();
+  useFeedbackNotifications();
   const route = useHashRoute();
   const routeSlots = useRouteSlots();
 

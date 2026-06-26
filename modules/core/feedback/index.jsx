@@ -4,6 +4,7 @@ import BoardPage from './BoardPage.jsx';
 import PostDetail from './PostDetail.jsx';
 import AccountSettingsTab from './AccountSettingsTab.jsx';
 import { makeFeedbackApi } from './feedbackApi.js';
+import './feedback.css';
 
 // Public, Canny-style feedback board. The React chrome runs in the privileged
 // `main` webview; all Supabase traffic routes through the Rust `feedback_*`

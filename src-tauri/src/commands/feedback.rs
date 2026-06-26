@@ -454,7 +454,7 @@ pub async fn feedback_posts_list(
         q.push_str(&format!("&status=eq.{s}"));
     }
     let order = match sort.as_deref() {
-        Some("top") => "pinned.desc,vote_count.desc,created_at.desc",
+        Some("top") => "pinned.desc,score.desc,created_at.desc",
         _ => "pinned.desc,created_at.desc",
     };
     q.push_str(&format!("&order={order}"));
@@ -534,31 +534,81 @@ pub async fn feedback_post_delete_own(id: String) -> Result<Value, FeedbackError
 
 // ════════════════════════ Phase 2 — votes + comments ════════════════════════
 
+/// Set the caller's directional vote on a post. `value`: +1 = up, -1 = down.
+/// Clicking the current direction clears the vote; the opposite switches it.
+/// (Name kept from the single-toggle era to avoid 4-site re-registration — it now
+/// SETS a directional vote: `votes.value ∈ {-1,+1}`, one row per (post,user).)
 #[tauri::command]
-pub async fn feedback_vote_toggle(post_id: String) -> Result<Value, FeedbackError> {
+pub async fn feedback_vote_toggle(post_id: String, value: i64) -> Result<Value, FeedbackError> {
     let uid = current_uid()?;
-    // Delete first; if it removed a row the user had voted, so we're done.
-    let del = rest(
-        Method::DELETE,
-        &format!("votes?post_id=eq.{post_id}&user_id=eq.{uid}"),
-        true,
-    )
-    .await?
-    .header("Prefer", "return=representation")
-    .send()
-    .await?;
-    let removed = handle_json(del).await?;
-    let was_voted = removed.as_array().map(|a| !a.is_empty()).unwrap_or(false);
-    if was_voted {
-        return Ok(json!({ "voted": false }));
-    }
-    let ins = rest(Method::POST, "votes", true)
+    let dir: i64 = if value < 0 { -1 } else { 1 };
+    // Read the current vote (if any) to decide toggle-off vs. switch.
+    let current = handle_json(
+        rest(
+            Method::GET,
+            &format!("votes?post_id=eq.{post_id}&user_id=eq.{uid}&select=value"),
+            true,
+        )
         .await?
-        .json(&json!({ "post_id": post_id, "user_id": uid }))
         .send()
+        .await?,
+    )
+    .await?;
+    let current_val = current
+        .as_array()
+        .and_then(|a| a.first())
+        .and_then(|r| r.get("value"))
+        .and_then(|v| v.as_i64());
+    // Clear any existing vote first (idempotent), then re-insert unless toggling off.
+    if current_val.is_some() {
+        handle_json(
+            rest(
+                Method::DELETE,
+                &format!("votes?post_id=eq.{post_id}&user_id=eq.{uid}"),
+                true,
+            )
+            .await?
+            .send()
+            .await?,
+        )
         .await?;
-    handle_json(ins).await?;
-    Ok(json!({ "voted": true }))
+    }
+    let new_val: i64 = if current_val == Some(dir) {
+        0 // same direction clicked → vote removed
+    } else {
+        handle_json(
+            rest(Method::POST, "votes", true)
+                .await?
+                .json(&json!({ "post_id": post_id, "user_id": uid, "value": dir }))
+                .send()
+                .await?,
+        )
+        .await?;
+        dir
+    };
+    // Return the post's fresh denormalized counts so the UI updates without a refetch.
+    let post = handle_json(
+        rest(
+            Method::GET,
+            &format!("posts?id=eq.{post_id}&select=upvote_count,downvote_count,score"),
+            false,
+        )
+        .await?
+        .send()
+        .await?,
+    )
+    .await?;
+    let counts = post
+        .as_array()
+        .and_then(|a| a.first())
+        .cloned()
+        .unwrap_or_else(|| json!({}));
+    Ok(json!({
+        "value": new_val,
+        "upvote_count": counts.get("upvote_count").cloned().unwrap_or_else(|| json!(0)),
+        "downvote_count": counts.get("downvote_count").cloned().unwrap_or_else(|| json!(0)),
+        "score": counts.get("score").cloned().unwrap_or_else(|| json!(0)),
+    }))
 }
 
 #[tauri::command]
@@ -607,7 +657,7 @@ pub async fn feedback_comment_delete_own(id: String) -> Result<Value, FeedbackEr
 pub async fn feedback_my_interactions() -> Result<Value, FeedbackError> {
     let uid = current_uid()?;
     let votes = handle_json(
-        rest(Method::GET, &format!("votes?user_id=eq.{uid}&select=post_id"), true)
+        rest(Method::GET, &format!("votes?user_id=eq.{uid}&select=post_id,value"), true)
             .await?
             .send()
             .await?,

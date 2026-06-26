@@ -33,8 +33,9 @@ export function makeFeedbackApi(api) {
       call(api, 'feedback_post_create', { category, title, body, attachLogs, logs }),
     postDeleteOwn: (id) => call(api, 'feedback_post_delete_own', { id }),
 
-    // votes + comments
-    voteToggle: (postId) => call(api, 'feedback_vote_toggle', { postId }),
+    // votes + comments — voteSet(postId, +1|-1): directional; same dir clears, opposite switches.
+    // (Rust command name is still feedback_vote_toggle — kept to avoid 4-site re-registration.)
+    voteSet: (postId, value) => call(api, 'feedback_vote_toggle', { postId, value }),
     commentsList: (postId) => call(api, 'feedback_comments_list', { postId }),
     commentCreate: (postId, body) => call(api, 'feedback_comment_create', { postId, body }),
     commentDeleteOwn: (id) => call(api, 'feedback_comment_delete_own', { id }),
