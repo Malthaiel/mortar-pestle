@@ -1,6 +1,6 @@
 // The Downloads dock button + active-count badge. Mounted by Dock.jsx's
 // renderBtn special-case (mirrors the notification bell). Reads the global
-// active-download count so the badge + glow stay live from any route; tags
+// active-download count so the badge stays live from any route; tags
 // itself [data-downloads-btn] so the popup can anchor above it and the panel's
 // click-outside guard can exempt it.
 
@@ -16,10 +16,6 @@ export default function DownloadsDockButton({ label, onClick, isActive, accent, 
       data-downloads-btn
       style={{
         display: 'inline-flex', position: 'relative',
-        filter: running
-          ? `drop-shadow(0 0 6px color-mix(in oklch, ${accent || 'var(--accent)'} 70%, transparent))`
-          : undefined,
-        transition: 'filter 240ms ease',
       }}
     >
       <DockButton Icon={IconDownload} label={label} onClick={onClick} isActive={isActive} accent={accent} onContextMenu={onContextMenu} />
