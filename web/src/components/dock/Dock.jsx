@@ -161,7 +161,7 @@ export default function Dock({
         label={b.label}
         onClick={() => b.onClick?.(ctx)}
         isActive={b.isActive ? !!b.isActive(ctx) : false}
-        accent="#6fb56f"
+        accent="var(--text-muted)"
         onContextMenu={(e) => onItemContext(e, b.id)}
       />
     );
