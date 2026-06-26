@@ -28,6 +28,7 @@ pub mod devtools;
 pub mod docs;
 pub mod domain;
 pub mod downloads_history;
+pub mod feedback;
 pub mod folder;
 pub mod food;
 pub mod health;

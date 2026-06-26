@@ -206,6 +206,9 @@ pub fn run() {
             commands::self_update::init_cache();
             commands::self_update::spawn_poll(app.handle().clone());
 
+            // Feedback Board — 60s in-app notification poll (signed-in + focused only).
+            commands::feedback::spawn_poll(app.handle().clone());
+
             // Anime Browse — capture the per-app cache dir for the Jikan
             // response cache (in-memory LRU + on-disk JSON). Best-effort.
             commands::anime_search::init_cache_dir(app.handle());
@@ -731,6 +734,30 @@ pub fn run() {
             commands::credentials::creds_set_keyring_unlock,
             commands::credentials::creds_settings_set,
             commands::credentials::creds_suppress_blur_lock,
+            commands::feedback::feedback_otp_send,
+            commands::feedback::feedback_otp_verify,
+            commands::feedback::feedback_get_session,
+            commands::feedback::feedback_sign_out,
+            commands::feedback::feedback_profile_get,
+            commands::feedback::feedback_profile_upsert,
+            commands::feedback::feedback_posts_list,
+            commands::feedback::feedback_post_get,
+            commands::feedback::feedback_post_create,
+            commands::feedback::feedback_post_delete_own,
+            commands::feedback::feedback_vote_toggle,
+            commands::feedback::feedback_comments_list,
+            commands::feedback::feedback_comment_create,
+            commands::feedback::feedback_comment_delete_own,
+            commands::feedback::feedback_my_interactions,
+            commands::feedback::feedback_follow_toggle,
+            commands::feedback::feedback_notifications_poll,
+            commands::feedback::feedback_notifications_mark_read,
+            commands::feedback::feedback_post_set_status,
+            commands::feedback::feedback_post_pin,
+            commands::feedback::feedback_post_delete_any,
+            commands::feedback::feedback_comment_delete_any,
+            commands::feedback::feedback_comment_official_reply,
+            commands::feedback::feedback_avatar_upload,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::get_capture_state,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::capture_start,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::capture_stop,
@@ -766,6 +793,7 @@ pub fn run() {
         .on_window_event(|_window, event| {
             if let WindowEvent::Focused(focused) = event {
                 commands::self_update::record_focus_change(*focused);
+                commands::feedback::record_focus_change(*focused);
                 // Lock-on-blur: toplevel focus loss = real app-switch (does NOT
                 // fire when focus moves to a child native web view).
                 if !*focused {
