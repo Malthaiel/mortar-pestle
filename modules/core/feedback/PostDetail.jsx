@@ -2,17 +2,16 @@ import { useState, useEffect, useCallback } from 'react';
 import { PrimaryBtn, OutlinedBtn } from '@host/components/ui/Button.jsx';
 import SignInModal from './SignInModal.jsx';
 import { useSession } from './useSession.js';
-
-const STATUS_LABELS = {
-  open: 'Open', under_review: 'Under review', planned: 'Planned',
-  in_progress: 'In progress', done: 'Done', declined: 'Declined',
-};
+import VoteButton from './VoteButton.jsx';
+import StatusBadge from './StatusBadge.jsx';
+import UserAvatar from './UserAvatar.jsx';
+import DevControls from './DevControls.jsx';
 
 export default function PostDetail({ api, fb, accent, postId }) {
   const { session, refresh: refreshSession } = useSession(fb);
   const [post, setPost] = useState(null);
   const [comments, setComments] = useState([]);
-  const [voted, setVoted] = useState(false);
+  const [myVote, setMyVote] = useState(0);
   const [following, setFollowing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -33,21 +32,22 @@ export default function PostDetail({ api, fb, accent, postId }) {
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    if (!session?.signedIn) { setVoted(false); setFollowing(false); return; }
+    if (!session?.signedIn) { setMyVote(0); setFollowing(false); return; }
     fb.myInteractions().then((r) => {
-      setVoted(new Set((r?.votes || []).map((v) => v.post_id)).has(postId));
+      const mine = new Map((r?.votes || []).map((v) => [v.post_id, v.value]));
+      setMyVote(mine.get(postId) || 0);
       setFollowing(new Set((r?.follows || []).map((f) => f.post_id)).has(postId));
     }).catch(() => {});
   }, [session, fb, postId]);
 
   const requireAuth = () => { if (!session?.signedIn) { setShowSignIn(true); return false; } return true; };
 
-  const onVote = async () => {
+  const onVote = async (value) => {
     if (!requireAuth()) return;
     try {
-      const r = await fb.voteToggle(postId);
-      setVoted(r.voted);
-      setPost((p) => (p ? { ...p, vote_count: (p.vote_count || 0) + (r.voted ? 1 : -1) } : p));
+      const r = await fb.voteSet(postId, value);
+      setMyVote(r.value);
+      setPost((p) => (p ? { ...p, upvote_count: r.upvote_count, downvote_count: r.downvote_count, score: r.score } : p));
     } catch (e) { console.error(e); }
   };
   const onFollow = async () => {
@@ -72,15 +72,18 @@ export default function PostDetail({ api, fb, accent, postId }) {
       <OutlinedBtn small onClick={() => api.router.navigate('/tools/feedback')}>← Board</OutlinedBtn>
 
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginTop: 16 }}>
-        {/* PLACEHOLDER vote → <VoteButton> after green light */}
-        <OutlinedBtn onClick={onVote} title={voted ? 'Remove vote' : 'Upvote'}>▲ {post.vote_count ?? 0}</OutlinedBtn>
+        <VoteButton up={post.upvote_count ?? 0} down={post.downvote_count ?? 0} myVote={myVote} onVote={onVote} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <h2 style={{ margin: 0, fontSize: 22, fontWeight: 600, color: 'var(--text)' }}>{post.title}</h2>
           <div style={{ display: 'flex', gap: 10, fontSize: 12, color: 'var(--text-muted)', marginTop: 6, flexWrap: 'wrap' }}>
             <span style={{ textTransform: 'capitalize' }}>{post.category}</span><span>·</span>
-            {/* PLACEHOLDER status → <StatusBadge> after green light */}
-            <span>{STATUS_LABELS[post.status] || post.status}</span>
-            {post.author?.handle && <><span>·</span><span>@{post.author.handle}</span></>}
+            <StatusBadge status={post.status} />
+            {post.author?.handle && (
+              <><span>·</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <UserAvatar name={post.author.handle} src={post.author.avatar_url} size={18} />@{post.author.handle}
+              </span></>
+            )}
           </div>
         </div>
         <OutlinedBtn small onClick={onFollow}>{following ? 'Following' : 'Follow'}</OutlinedBtn>
@@ -102,7 +105,8 @@ export default function PostDetail({ api, fb, accent, postId }) {
               padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)',
               background: c.is_official ? 'color-mix(in oklch, var(--accent) 8%, var(--surface-2))' : 'var(--surface-2)',
             }}>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
+                <UserAvatar name={c.author?.handle} src={c.author?.avatar_url} size={18} />
                 @{c.author?.handle || 'user'}
                 {c.is_official && <span style={{ color: 'var(--accent)', marginLeft: 6, fontWeight: 600 }}>· official</span>}
               </div>
@@ -126,7 +130,9 @@ export default function PostDetail({ api, fb, accent, postId }) {
         </div>
       </div>
 
-      {/* Dev controls (set status / pin / official reply / hide) land in Phase 3 (role-gated). */}
+      {session?.profile?.role === 'dev' && (
+        <DevControls fb={fb} post={post} accent={accent} onChanged={load} />
+      )}
 
       <SignInModal open={showSignIn} onClose={() => setShowSignIn(false)} fb={fb} accent={accent}
         onSignedIn={() => { refreshSession(); load(); }} />

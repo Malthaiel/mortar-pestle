@@ -5,6 +5,9 @@ import CandySelect from '@host/components/ui/CandySelect.jsx';
 import SignInModal from './SignInModal.jsx';
 import ComposeModal from './ComposeModal.jsx';
 import { useSession } from './useSession.js';
+import VoteButton from './VoteButton.jsx';
+import StatusBadge from './StatusBadge.jsx';
+import UserAvatar from './UserAvatar.jsx';
 
 const CATEGORY_FILTERS = [
   { value: 'all', label: 'All' },
@@ -13,16 +16,12 @@ const CATEGORY_FILTERS = [
   { value: 'improvement', label: 'Improvements' },
   { value: 'other', label: 'Other' },
 ];
-const STATUS_LABELS = {
-  open: 'Open', under_review: 'Under review', planned: 'Planned',
-  in_progress: 'In progress', done: 'Done', declined: 'Declined',
-};
 const SORTS = [{ value: 'new', label: 'Newest' }, { value: 'top', label: 'Top voted' }];
 
 export default function BoardPage({ api, fb, accent }) {
   const { session, refresh: refreshSession } = useSession(fb);
   const [posts, setPosts] = useState([]);
-  const [voted, setVoted] = useState(new Set());
+  const [voted, setVoted] = useState(new Map());
   const [category, setCategory] = useState('all');
   const [sort, setSort] = useState('new');
   const [loading, setLoading] = useState(true);
@@ -43,19 +42,19 @@ export default function BoardPage({ api, fb, accent }) {
 
   // Which posts the signed-in user voted on (for the highlight).
   useEffect(() => {
-    if (!session?.signedIn) { setVoted(new Set()); return; }
+    if (!session?.signedIn) { setVoted(new Map()); return; }
     fb.myInteractions()
-      .then((r) => setVoted(new Set((r?.votes || []).map((v) => v.post_id))))
+      .then((r) => setVoted(new Map((r?.votes || []).map((v) => [v.post_id, v.value]))))
       .catch(() => {});
   }, [session, fb]);
 
-  const onVote = async (post) => {
+  const onVote = async (post, value) => {
     if (!session?.signedIn) { setShowSignIn(true); return; }
     try {
-      const r = await fb.voteToggle(post.id);
-      setVoted((prev) => { const n = new Set(prev); r.voted ? n.add(post.id) : n.delete(post.id); return n; });
+      const r = await fb.voteSet(post.id, value);
+      setVoted((prev) => { const n = new Map(prev); r.value ? n.set(post.id, r.value) : n.delete(post.id); return n; });
       setPosts((prev) => prev.map((p) =>
-        p.id === post.id ? { ...p, vote_count: (p.vote_count || 0) + (r.voted ? 1 : -1) } : p));
+        p.id === post.id ? { ...p, upvote_count: r.upvote_count, downvote_count: r.downvote_count, score: r.score } : p));
     } catch (e) { console.error('vote failed', e); }
   };
 
@@ -95,8 +94,8 @@ export default function BoardPage({ api, fb, accent }) {
           <PostRow
             key={post.id}
             post={post}
-            voted={voted.has(post.id)}
-            onVote={() => onVote(post)}
+            myVote={voted.get(post.id) || 0}
+            onVote={(value) => onVote(post, value)}
             onOpen={() => api.router.navigate(`/tools/feedback/post/${post.id}`)}
           />
         ))}
@@ -110,19 +109,16 @@ export default function BoardPage({ api, fb, accent }) {
   );
 }
 
-// PLACEHOLDER row: existing primitives + plain text for the gated visuals.
-// After the Prototypes.md green light: vote→<VoteButton>, status→<StatusBadge>, author→<UserAvatar>.
-function PostRow({ post, voted, onVote, onOpen }) {
-  const statusLabel = STATUS_LABELS[post.status] || post.status;
+// One board row. Vote (two-button up/down), status badge, and author avatar are the
+// promoted Prototypes components; the rest stays plain candy primitives.
+function PostRow({ post, myVote, onVote, onOpen }) {
   return (
     <div style={{
       display: 'flex', alignItems: 'flex-start', gap: 14, padding: '12px 14px',
       border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', background: 'var(--surface-2)',
     }}>
       <div style={{ flexShrink: 0 }}>
-        <OutlinedBtn small onClick={onVote} title={voted ? 'Remove vote' : 'Upvote'}>
-          ▲ {post.vote_count ?? 0}
-        </OutlinedBtn>
+        <VoteButton up={post.upvote_count ?? 0} down={post.downvote_count ?? 0} myVote={myVote} onVote={onVote} />
       </div>
       <div style={{ flex: 1, minWidth: 0, cursor: 'pointer' }} onClick={onOpen}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
@@ -134,10 +130,15 @@ function PostRow({ post, voted, onVote, onOpen }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: 'var(--text-muted)', flexWrap: 'wrap' }}>
           <span style={{ textTransform: 'capitalize' }}>{post.category}</span>
           <span>·</span>
-          <span>{statusLabel}</span>
+          <StatusBadge status={post.status} />
           <span>·</span>
           <span>{post.comment_count ?? 0} comments</span>
-          {post.author?.handle && <><span>·</span><span>@{post.author.handle}</span></>}
+          {post.author?.handle && (
+            <><span>·</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <UserAvatar name={post.author.handle} src={post.author.avatar_url} size={16} />@{post.author.handle}
+            </span></>
+          )}
         </div>
       </div>
     </div>
