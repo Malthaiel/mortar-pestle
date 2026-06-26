@@ -1,0 +1,16 @@
+{
+  "id": "feedback",
+  "name": "Feedback",
+  "description": "Public feedback board — post bugs, features & improvements, upvote, comment, follow, and track each on the roadmap.",
+  "version": "1.0.0",
+  "entry": "./index.jsx",
+  "slots": ["route", "left-sidebar", "settings-tab"],
+  "permissions": [],
+  "requires": [],
+  "license": "MIT",
+  "tier": "core",
+  "platforms": ["linux", "windows"],
+  "routeBase": "/tools/feedback",
+  "iconKey": "IconMessageSquare",
+  "setupRequired": false
+}
