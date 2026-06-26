@@ -8,7 +8,7 @@ import UserAvatar from './UserAvatar.jsx';
 import DevControls from './DevControls.jsx';
 
 export default function PostDetail({ api, fb, accent, postId }) {
-  const { session, refresh: refreshSession } = useSession(fb);
+  const { session, refresh: refreshSession, ensureHandle } = useSession(fb);
   const [post, setPost] = useState(null);
   const [comments, setComments] = useState([]);
   const [myVote, setMyVote] = useState(0);
@@ -18,6 +18,7 @@ export default function PostDetail({ api, fb, accent, postId }) {
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [showSignIn, setShowSignIn] = useState(false);
+  const needsHandle = session?.signedIn && !session?.profile?.handle;
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
@@ -40,10 +41,13 @@ export default function PostDetail({ api, fb, accent, postId }) {
     }).catch(() => {});
   }, [session, fb, postId]);
 
-  const requireAuth = () => { if (!session?.signedIn) { setShowSignIn(true); return false; } return true; };
+  const requireAuth = async () => {
+    if (!session?.signedIn) { setShowSignIn(true); return false; }
+    return ensureHandle();                         // banner + disabled composer explain
+  };
 
   const onVote = async (value) => {
-    if (!requireAuth()) return;
+    if (!(await requireAuth())) return;
     try {
       const r = await fb.voteSet(postId, value);
       setMyVote(r.value);
@@ -51,11 +55,11 @@ export default function PostDetail({ api, fb, accent, postId }) {
     } catch (e) { console.error(e); }
   };
   const onFollow = async () => {
-    if (!requireAuth()) return;
+    if (!(await requireAuth())) return;
     try { const r = await fb.followToggle(postId); setFollowing(r.following); } catch (e) { console.error(e); }
   };
   const submitComment = async () => {
-    if (!requireAuth()) return;
+    if (!(await requireAuth())) return;
     if (!draft.trim()) return;
     setBusy(true);
     try { await fb.commentCreate(postId, draft.trim()); setDraft(''); await load(); }
@@ -70,6 +74,16 @@ export default function PostDetail({ api, fb, accent, postId }) {
   return (
     <div style={{ padding: '24px 28px', maxWidth: 760, margin: '0 auto' }}>
       <OutlinedBtn small onClick={() => api.router.navigate('/tools/feedback')}>← Board</OutlinedBtn>
+
+      {needsHandle && (
+        <div style={{
+          fontSize: 13, color: 'var(--text)', marginTop: 16, padding: '10px 14px',
+          borderRadius: 'var(--radius-md)', border: '1px solid var(--border)',
+          background: 'color-mix(in oklch, var(--accent) 10%, var(--surface-2))',
+        }}>
+          Pick a handle in <strong>Settings → Feedback</strong> to vote, follow, or comment.
+        </div>
+      )}
 
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginTop: 16 }}>
         <VoteButton up={post.upvote_count ?? 0} down={post.downvote_count ?? 0} myVote={myVote} onVote={onVote} />
@@ -118,8 +132,8 @@ export default function PostDetail({ api, fb, accent, postId }) {
 
         <div style={{ marginTop: 16 }}>
           <textarea className="candy-input" value={draft} onChange={(e) => setDraft(e.target.value)}
-            placeholder={session?.signedIn ? 'Add a comment…' : 'Sign in to comment'}
-            disabled={!session?.signedIn}
+            placeholder={!session?.signedIn ? 'Sign in to comment' : needsHandle ? 'Pick a handle in Settings → Feedback to comment' : 'Add a comment…'}
+            disabled={!session?.signedIn || needsHandle}
             style={{ width: '100%', minHeight: 80, resize: 'vertical', padding: '8px 10px',
               fontSize: 13, fontFamily: 'var(--font-body)', color: 'var(--text)' }} />
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>

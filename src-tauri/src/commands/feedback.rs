@@ -445,7 +445,7 @@ pub async fn feedback_posts_list(
     sort: Option<String>,
 ) -> Result<Value, FeedbackError> {
     let mut q = String::from(
-        "posts?select=*,author:profiles(handle,display_name,avatar_url)&deleted=eq.false&hidden=eq.false",
+        "posts?select=*,author:author_id(handle,display_name,avatar_url)&deleted=eq.false&hidden=eq.false",
     );
     if let Some(c) = category.filter(|c| c != "all" && !c.is_empty()) {
         q.push_str(&format!("&category=eq.{c}"));
@@ -464,7 +464,7 @@ pub async fn feedback_posts_list(
 
 #[tauri::command]
 pub async fn feedback_post_get(id: String) -> Result<Value, FeedbackError> {
-    let q = format!("posts?id=eq.{id}&select=*,author:profiles(handle,display_name,avatar_url)");
+    let q = format!("posts?id=eq.{id}&select=*,author:author_id(handle,display_name,avatar_url)");
     let resp = rest(Method::GET, &q, false).await?.send().await?;
     let arr = handle_json(resp).await?;
     arr.as_array()
