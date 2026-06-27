@@ -122,8 +122,8 @@ export default function LyricsPanel({ open, onClose, accent }) {
 }
 
 function LyricsState({ message, tone }) {
-  const color = tone === 'error' ? '#e07b7b' : (tone === 'muted' ? 'var(--text-muted)' : 'var(--text-faint)');
-  const dotColor = tone === 'error' ? '#e07b7b' : 'var(--text-faint)';
+  const color = tone === 'error' ? 'var(--text)' : (tone === 'muted' ? 'var(--text-muted)' : 'var(--text-faint)');
+  const dotColor = tone === 'error' ? 'var(--text)' : 'var(--text-faint)';
   return (
     <div style={{
       display: 'flex', flexDirection: 'column',

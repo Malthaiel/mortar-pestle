@@ -231,7 +231,7 @@ function SearchResults({ query, accent, series, inLib }) {
           )}
         </div>
         {loading && <Muted>Searching…</Muted>}
-        {!loading && error && <div style={{ color: '#e07b7b', fontSize: 12 }}>{error}</div>}
+        {!loading && error && <div style={{ color: 'var(--text)', fontSize: 12 }}>{error}</div>}
         {!loading && !error && mal && (
           mal.length === 0
             ? <Muted>No results.</Muted>

@@ -139,10 +139,6 @@ export const SETTINGS_SEARCH_INDEX = [
   // ── Navigation / Dock ─────────────────────────────────────────────────────
   { id: 'dock.edge', label: 'Edge depth', tabId: 'navigation', section: 'dock', anchor: 'set-dock-edgeStyle',
     keywords: ['dock', 'flush', 'hairline', 'band', 'shadow'], settingsKey: 'dock.edgeStyle' },
-  { id: 'dock.bgShade', label: 'Dock color', tabId: 'navigation', section: 'dock', anchor: 'set-dock-bgShade',
-    keywords: ['dock', 'color', 'colour', 'background', 'grey', 'gray', 'charcoal', 'graphite', 'slate', 'dark'], settingsKey: 'dock.bgShade' },
-  { id: 'dock.iconStyle', label: 'Icon style', tabId: 'navigation', section: 'dock', anchor: 'set-dock-iconStyle',
-    keywords: ['dock', 'icon', 'chip', 'button', 'light', 'dark', 'native'], settingsKey: 'dock.iconStyle' },
   { id: 'dock.defaultMode', label: 'Default module on launch', tabId: 'navigation', section: 'dock', anchor: 'set-dock-defaultMode',
     keywords: ['dock', 'boot', 'startup', 'last', 'specific'], settingsKey: 'dock.modules.defaultMode' },
   { id: 'dock.clickBehavior', label: 'Dock button click', tabId: 'navigation', section: 'dock', anchor: 'set-dock-clickBehavior',

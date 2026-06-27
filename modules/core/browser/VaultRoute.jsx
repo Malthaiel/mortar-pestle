@@ -196,7 +196,7 @@ function LockedView({ initialized, accent, onClose }) {
           <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12 }}>
             <input type="checkbox" checked={stay} onChange={e => setStay(e.target.checked)} /> Stay unlocked on this device
           </label>
-          {err && <span style={{ fontSize: 12, color: 'var(--danger,#e5484d)' }}>{err}</span>}
+          {err && <span style={{ fontSize: 12, color: 'var(--danger,var(--text))' }}>{err}</span>}
           <button type="button" style={primary(accent)} disabled={busy} onClick={submit}>{busy ? '…' : (initialized ? 'Unlock' : 'Create vault')}</button>
         </div>
       </div>

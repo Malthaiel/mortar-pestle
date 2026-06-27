@@ -124,11 +124,11 @@ function ErrorRow({ error }) {
   return (
     <div style={{
       padding: '8px 12px',
-      background: 'color-mix(in oklch, #e07b7b 12%, transparent)',
-      border: '1px solid color-mix(in oklch, #e07b7b 30%, transparent)',
+      background: 'color-mix(in oklch, var(--text) 12%, transparent)',
+      border: '1px solid color-mix(in oklch, var(--text) 30%, transparent)',
       borderRadius: 10,
       fontSize: 11.5, lineHeight: 1.45,
-      color: '#c95a5a',
+      color: 'var(--text)',
       fontFamily: 'var(--font-mono)',
     }}>
       <strong style={{ fontWeight: 700 }}>{code}</strong> — {message}

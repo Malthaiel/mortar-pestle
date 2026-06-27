@@ -295,26 +295,10 @@ body {
   55%  { opacity: 1; }
   100% { opacity: 1; transform: rotateX(0deg); transform-origin: center 50%; }
 }
-/* Design Mode — dock-button aura pulse while Design mode is active. Matches
-   the radial-clock breath pace (~2.4s) so the dock and the clock share a
-   subliminal rhythm. Accent-tinted box-shadow expands and fades to nothing. */
-@keyframes designAura {
-  0%, 100% { box-shadow: 0 0 0 0 transparent; }
-  50%      { box-shadow: 0 0 0 6px color-mix(in oklch, var(--accent) 22%, transparent); }
-}
-/* Design Mode — ceremonial entry/exit. The 4-beat reveal: desaturate (CSS
-   rule below, gated on body[data-design-mode]), accent sheen (sweep top→
-   bottom), per-component wake stagger, chat window slide-in. Exit reverses. */
-@keyframes designSheen {
-  0%   { transform: translateY(0);            opacity: 0; }
-  10%  { opacity: 1; }
-  100% { transform: translateY(100vh);         opacity: 0; }
-}
-@keyframes designWake {
-  0%   { box-shadow: 0 0 0 0 transparent; }
-  50%  { box-shadow: 0 0 0 4px color-mix(in oklch, var(--accent) 28%, transparent); }
-  100% { box-shadow: 0 0 0 0 transparent; }
-}
+/* Design Mode — ceremonial entry/exit. The reveal: desaturate (CSS rule
+   below, gated on body[data-design-mode]) + chat window slide-in. Exit
+   reverses. (The accent-sheen sweep + per-component wake glow were removed
+   under the no-glow rule.) */
 @keyframes atelierChatIn {
   from { opacity: 0; transform: translateY(8px) scale(0.98); }
   to   { opacity: 1; transform: translateY(0)   scale(1); }
@@ -323,18 +307,9 @@ body {
   from { opacity: 1; transform: translateY(0)   scale(1); }
   to   { opacity: 0; transform: translateY(8px) scale(0.98); }
 }
-@keyframes atelierAvatarPulse {
-  0%, 100% { box-shadow: 0 0 0 0    color-mix(in oklch, var(--accent) 38%, transparent); opacity: 1; }
-  50%      { box-shadow: 0 0 0 6px  color-mix(in oklch, var(--accent) 0%,  transparent); opacity: 0.75; }
-}
 @keyframes streamCaret {
   0%, 100% { opacity: 1; }
   50%      { opacity: 0.2; }
-}
-@keyframes markupPulse {
-  0%   { box-shadow: 0 0 0 0   color-mix(in oklch, var(--accent) 60%, transparent); }
-  60%  { box-shadow: 0 0 0 8px color-mix(in oklch, var(--accent) 0%,  transparent); }
-  100% { box-shadow: 0 0 0 4px color-mix(in oklch, var(--accent) 16%, transparent); }
 }
 body[data-design-pointer="markup"],
 body[data-design-pointer="markup"] *:not(input):not(textarea):not(select):not([data-aos-no-mark]):not([data-aos-no-mark] *) {
@@ -360,12 +335,6 @@ body[data-design-mode] #root {
 [data-frame-edit="on"] [data-cal-block]:not([data-frame-block]) {
   filter: grayscale(1) opacity(0.45);
   transition: filter 160ms ease;
-}
-/* Per-component wake glow injected by DesignModeOverlay. animation-delay is
-   set inline per element so the stagger reads as a wave across the viewport. */
-.aos-wake {
-  animation: designWake 460ms cubic-bezier(0.32, 0.72, 0, 1) both;
-  animation-delay: var(--aos-wake-delay, 0ms);
 }
 
 /* Dock hover-expand — the hovered/focused dock button grows in-flow from a 36px
@@ -434,24 +403,23 @@ body[data-design-mode] #root {
 
 /* Dock — a full-width rectangle flush with the screen bottom, the horizontal
    twin of the side rails. Squared, a single top hairline, no float shadow.
-   Solid dark-grey fill chosen by data-dock-bg-shade (Settings → Dock color),
-   FIXED across every theme — keyed on the attribute, not the theme. The shared
+   Solid dark-grey charcoal fill, FIXED across every theme (the Dock color
+   picker + graphite/slate were removed). The shared
    lines-pattern is dropped. `height` is the single source of truth for the
    app-wide bottom reservation (AppShell: calc(100vh - --dock-height)). */
-.dock-root[data-dock-bg-shade="charcoal"] { --dock-bg: oklch(0.190 0.005 78); }
-.dock-root[data-dock-bg-shade="graphite"] { --dock-bg: oklch(0.245 0     0);  }
-.dock-root[data-dock-bg-shade="slate"]    { --dock-bg: oklch(0.170 0.005 78); }
 .dock-root {
+  --dock-bg: oklch(0.190 0.005 78);
   height: var(--dock-height);
-  background-color: var(--dock-bg, oklch(0.190 0.005 78));
+  background-color: var(--dock-bg);
   background-image: none;
-  border-top: 1px solid color-mix(in oklch, var(--dock-bg, oklch(0.190 0.005 78)), white 10%);
+  border-top: 1px solid color-mix(in oklch, var(--dock-bg), white 10%);
 }
 /* Community themes reskin the dock bar — derive --dock-bg from the theme's
    elevated surface so the bar matches the palette. Active only while a
-   community (non-Monastic) theme is on; Monastic keeps the data-dock-bg-shade
-   picker. Specificity (0,4,0) beats the shade rules (0,2,0). The dark-icon dock
-   buttons follow automatically (their --cbtn-band reads --dock-bg). */
+   community (non-Monastic) theme is on; Monastic uses the fixed charcoal
+   --dock-bg set on .dock-root above. Specificity (0,4,0) beats .dock-root
+   (0,1,0). The dark-icon dock buttons follow automatically (their --cbtn-band
+   reads --dock-bg). */
 :root[data-theme-preset]:not([data-theme-preset="monastic"]) .dock-root {
   --dock-bg: var(--surface-2);
 }
@@ -461,11 +429,12 @@ body[data-design-mode] #root {
 .dock-root[data-dock-edge-style="band"] {
   box-shadow: 0 -6px 18px rgba(0,0,0,0.10);
 }
-/* Dock icon style (Settings → Icon style). Scoped to the dock + to inactive
-   buttons so the .is-active accent fill is never touched. Both variants swap
-   the candy frame/shadow base to --dock-bg (so the depth reads on the grey
-   across rest/hover/active automatically — see button.button-dock-icon) and
-   set only the face + glyph colour. 'native' = no override (base theme candy). */
+/* Dock icon face colour, driven by data-dock-icon-style={resolvedTheme} on
+   Dock (follows the color mode — no user picker). Scoped to the dock + to
+   inactive buttons so the .is-active accent fill is never touched. Both
+   variants swap the candy frame/shadow base to --dock-bg (so the depth reads
+   on the grey across rest/hover/active automatically — see
+   button.button-dock-icon) and set only the face + glyph colour. */
 .dock-root[data-dock-icon-style="light"] .candy-btn[data-shape="icon"]:not(.is-active) {
   --cbtn-band: var(--dock-bg);
 }
@@ -488,9 +457,6 @@ body[data-design-mode] #root {
 }
 @keyframes march       { to { stroke-dashoffset: -10; } }
 @keyframes breath      { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.015); } }
-@keyframes pulseGlow   { 0%, 100% { filter: drop-shadow(0 0 0 transparent); }
-                         50%      { filter: drop-shadow(0 0 14px var(--aura, currentColor)); } }
-@keyframes bottomGlowPulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.7; } }
 @keyframes chevronFlipDown { 0% { transform: rotate(0deg); } 60% { transform: rotate(200deg); } 100% { transform: rotate(180deg); } }
 @keyframes chevronFlipUp   { 0% { transform: rotate(180deg); } 60% { transform: rotate(-20deg); } 100% { transform: rotate(0deg); } }
 @keyframes expandSettle    { 0% { opacity: 0; transform: translateY(-4px) scaleY(0.96); } 100% { opacity: 1; transform: translateY(0) scaleY(1); } }
@@ -532,39 +498,8 @@ body[data-page-tx-style="candy"] .page-tx::after {
   50%      { opacity: 0.72; transform: scale(0.96); }
 }
 
-/* Sub-feature 5 — brand-pill vault-sync pulse. Fires when notify watcher
-   emits ≥3 events within 1.5s (e.g. during /update or /manifest). Drop-
-   shadow stacks with the button's inline box-shadow so the existing hover
-   glow stays intact. */
-@keyframes vault-sync-pulse {
-  0%   { filter: drop-shadow(0 0 0 transparent); }
-  40%  { filter: drop-shadow(0 0 14px color-mix(in oklch, var(--accent) 55%, transparent)); }
-  100% { filter: drop-shadow(0 0 0 transparent); }
-}
 
-/* Sub-feature 6 — 120ms accent glow on a sidebar row immediately after its
-   order persisted to AppConfig. Dispatched by the reorder consumers (left
-   rail, right rail, modules tab, Knowledge / Infrastructure / Pulse sidebars,
-   folder pages) via the `agentic:sidebar-row-persisted` window event with
-   `{ key, id }`. useDropPulse(key) matches by id and applies this animation
-   for one frame. Microinteraction band per DESIGN.md (80–120ms). */
-@keyframes sidebar-row-drop-pulse {
-  0%   { box-shadow: 0 0 0 0 transparent; }
-  40%  { box-shadow: 0 0 10px 1px color-mix(in oklch, var(--accent) 45%, transparent); }
-  100% { box-shadow: 0 0 0 0 transparent; }
-}
 
-/* Sub-feature 8 — SkillOutput chunk-burst pulse. Fires when ≥5 streamed
-   chunks arrive within 1.5s of each other inside SkillOutput.jsx, giving a
-   tactile "data flowing" signal that survives ANSI scrollback (cursor-
-   manipulating output doesn't visibly advance the rendered terminal even
-   though bytes are still streaming). Mirrors vault-sync-pulse but uses
-   box-shadow instead of drop-shadow to stack with xterm's own border. */
-@keyframes skill-chunk-pulse {
-  0%   { box-shadow: 0 0 0 0 transparent; }
-  40%  { box-shadow: 0 0 14px 2px color-mix(in oklch, var(--accent) 35%, transparent); }
-  100% { box-shadow: 0 0 0 0 transparent; }
-}
 
 @keyframes wipeSweep {
   from { transform: translateX(0); }
@@ -3688,9 +3623,7 @@ body[data-anim-button-depth="off"] { --candy-center-on: 0; }
  * JS-driven animations (drag-tile-follow, the clock-ambient dial glow), the
  * component reads the bag directly and bails — CSS alone is insufficient. */
 
-body[data-anim-clock-ambient="off"] [style*="breath"],
-body[data-anim-clock-ambient="off"] [style*="pulseGlow"],
-body[data-anim-clock-ambient="off"] [style*="bottomGlowPulse"] {
+body[data-anim-clock-ambient="off"] [style*="breath"] {
   animation: none !important;
   filter: none !important;
 }
@@ -3764,9 +3697,6 @@ body[data-anim-section-accordion="off"] .planner-calendar-toggle-chevron {
 }
 
 body[data-anim-pulse-indicators="off"] [style*="newBadgePulse"],
-body[data-anim-pulse-indicators="off"] [style*="vault-sync-pulse"],
-body[data-anim-pulse-indicators="off"] [style*="sidebar-row-drop-pulse"],
-body[data-anim-pulse-indicators="off"] [style*="skill-chunk-pulse"],
 body[data-anim-pulse-indicators="off"] [style*="conflict-toast-spring"],
 body[data-anim-pulse-indicators="off"] [style*="notif-toast-spring"],
 body[data-anim-pulse-indicators="off"] [style*="bellAbsorb"],

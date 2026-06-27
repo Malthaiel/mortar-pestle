@@ -183,7 +183,7 @@ function AdBlockPanel({ accent }) {
             style={{ ...removeBtn, opacity: busy ? 0.6 : 1, cursor: busy ? 'default' : 'pointer' }}>
             {busy ? 'Updating…' : 'Update now'}
           </button>
-          {err && <span style={{ fontSize: 11, color: 'var(--danger, #c0392b)' }}>{err}</span>}
+          {err && <span style={{ fontSize: 11, color: 'var(--danger, var(--text))' }}>{err}</span>}
         </div>
         <div style={hintText}>Refreshes blocked domains + cosmetic filters from EasyList/EasyPrivacy (auto on launch when &gt;7 days old). Scriptlets and path-level filters refresh with app updates.</div>
       </SectionBand>
@@ -363,7 +363,7 @@ function InlineUnlock({ initialized, accent, }) {
         <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12 }}>
           <input type="checkbox" checked={stay} onChange={e => setStay(e.target.checked)} /> Stay unlocked on this device
         </label>
-        {err && <span style={{ fontSize: 12, color: 'var(--danger,#e5484d)' }}>{err}</span>}
+        {err && <span style={{ fontSize: 12, color: 'var(--danger,var(--text))' }}>{err}</span>}
         <button type="button" disabled={busy} onClick={submit}
           style={{ padding: '7px 12px', borderRadius: 'var(--radius-md)', border: `1px solid ${accent}`, background: accent, color: '#fff', fontWeight: 600, cursor: 'pointer', font: 'inherit' }}>
           {busy ? '…' : (initialized ? 'Unlock' : 'Create vault')}

@@ -135,7 +135,7 @@ export default function WikilinkHoverPreview() {
         <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>Loading…</div>
       )}
       {state.status === 'error' && (
-        <div style={{ fontSize: 11, color: '#e07b7b' }}>Could not load preview.</div>
+        <div style={{ fontSize: 11, color: 'var(--text)' }}>Could not load preview.</div>
       )}
       {state.status === 'ready' && (
         <div style={{

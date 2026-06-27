@@ -257,7 +257,7 @@ function StepPreview() {
     runPreview();
   }, [runPreview]);
   if (busy && !plan) return <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Generating preview…</div>;
-  if (error) return <div style={{ color: '#e07b7b', fontSize: 13 }}>Error: {error}</div>;
+  if (error) return <div style={{ color: 'var(--text)', fontSize: 13 }}>Error: {error}</div>;
   if (!plan) return <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No preview yet.</div>;
   return (
     <>

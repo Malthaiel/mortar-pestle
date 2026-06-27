@@ -37,7 +37,6 @@ export default function DockButton({ Icon, label, onClick, isActive = false, acc
           // shape's own --cbtn-depth (small band). See util/candy.js.
           ...candyCenterOffset(),
           ...(accent ? { '--accent': accent } : {}),
-          ...(auraPulse ? { animation: 'designAura 2.4s ease-in-out infinite' } : {}),
         }}
       >
         <DockFace label={label}>{children ?? (Icon && <Icon size={ICON_SIZE}/>)}</DockFace>

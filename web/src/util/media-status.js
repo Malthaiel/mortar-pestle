@@ -7,21 +7,21 @@ export const STATUS_DOT_COLOR = {
   // Video / film / TV
   'Plan-to-Watch': 'var(--text-muted)',
   'Currently-Watching': null,
-  'Completed': '#6fb56f',
+  'Completed': 'var(--text-muted)',
   'On-Hold': '#d9a55a',
-  'Dropped': '#e07b7b',
+  'Dropped': 'var(--text)',
   // Music
   'Plan-to-Listen': 'var(--text-muted)',
   'Currently-Listening': null,
-  'Listened': '#6fb56f',
+  'Listened': 'var(--text-muted)',
   // Books / written
   'Plan-to-Read': 'var(--text-muted)',
   'Currently-Reading': null,
-  'Read': '#6fb56f',
+  'Read': 'var(--text-muted)',
   // Games / play
   'Plan-to-Play': 'var(--text-muted)',
   'Currently-Playing': null,
-  'Played': '#6fb56f',
+  'Played': 'var(--text-muted)',
 };
 
 export function resolveDot(map, value, accent) {

@@ -372,7 +372,7 @@ function Row({ label, hint, anchor, children }) {
 }
 
 function KeyStatus({ present }) {
-  const color = present ? '#6fb56f' : 'var(--text-faint)';
+  const color = present ? 'var(--text-muted)' : 'var(--text-faint)';
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
       <span style={{
@@ -406,7 +406,7 @@ function CliStatusBanner({ status, busy, onRefresh, onCopyLogin }) {
   const installed = !!status?.installed;
   const loggedIn  = !!status?.loggedIn;
   const ok = installed && loggedIn;
-  const color = ok ? '#6fb56f' : '#d9a55a';
+  const color = ok ? 'var(--text-muted)' : '#d9a55a';
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -488,13 +488,13 @@ function PersonaChip({ accent }) {
 
 function ReachSummary({ backend }) {
   const cliRows = [
-    { glyph: '✓', tone: '#6fb56f', label: 'Read',  detail: 'Read/Glob/Grep over the repo (Claude Code native)' },
-    { glyph: '✓', tone: '#6fb56f', label: 'Edit',  detail: 'web/src/, web/styles/ (system-prompt scope rule)' },
+    { glyph: '✓', tone: 'var(--text-muted)', label: 'Read',  detail: 'Read/Glob/Grep over the repo (Claude Code native)' },
+    { glyph: '✓', tone: 'var(--text-muted)', label: 'Edit',  detail: 'web/src/, web/styles/ (system-prompt scope rule)' },
     { glyph: '⊘', tone: 'var(--text-faint)', label: 'Block', detail: 'No Bash, no WebSearch — pure read+edit' },
   ];
   const apiRows = [
-    { glyph: '✓', tone: '#6fb56f', label: 'Read',  detail: 'all of C:\\Users\\malth\\Code\\iskariel\\' },
-    { glyph: '✓', tone: '#6fb56f', label: 'Write', detail: 'web/src/, web/styles/' },
+    { glyph: '✓', tone: 'var(--text-muted)', label: 'Read',  detail: 'all of C:\\Users\\malth\\Code\\iskariel\\' },
+    { glyph: '✓', tone: 'var(--text-muted)', label: 'Write', detail: 'web/src/, web/styles/' },
     { glyph: '⚠', tone: '#d9a55a', label: 'Confirm', detail: 'src-tauri/, tauri.conf.json, modules/, package.json' },
   ];
   const rows = backend === 'claude-cli' ? cliRows : apiRows;

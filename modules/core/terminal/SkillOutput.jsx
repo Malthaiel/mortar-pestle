@@ -12,10 +12,9 @@
 // resizeRun so the PTY's COLUMNS/LINES match what we render, re-fit on
 // container resize.
 //
-// Creative: SF8 chunk-burst pulse — when ≥5 stdout chunks arrive within
-// 1.5s the terminal frame gets a 250ms accent-tinted box-shadow glow. Gives
-// a tactile "data flowing" signal that survives ANSI scrollback where the
-// cursor-positioning escapes don't visibly advance the rendered output.
+// Creative: SF8 chunk-burst — ≥5 stdout chunks within 1.5s flips `pulsing`.
+// The accent box-shadow glow was removed under the no-glow rule; the chunk
+// detection (below) is dormant pending a neutral-motion replacement.
 
 import { useEffect, useRef, useState } from 'react';
 import { Terminal } from '@xterm/xterm';
@@ -153,7 +152,7 @@ export default function SkillOutput({ jobId, onCleared, accent }) {
     ? accentColor
     : status === 'cancelled'
       ? '#d9a55a'
-      : (exitCode === 0 ? '#6fb56f' : '#e07b7b');
+      : (exitCode === 0 ? 'var(--text-muted)' : 'var(--text)');
   const dotGlow = status === 'running';
   const statusLabel = status === 'running'
     ? 'Running'
@@ -210,9 +209,6 @@ export default function SkillOutput({ jobId, onCleared, accent }) {
           borderRadius: 'var(--radius-md)',
           padding: 8,
           overflow: 'hidden',
-          animation: pulsing
-            ? 'skill-chunk-pulse 250ms cubic-bezier(0.32, 0.72, 0, 1)'
-            : 'none',
         }}
       />
     </div>

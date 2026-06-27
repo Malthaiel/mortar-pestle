@@ -18,21 +18,6 @@ import { Application, Container, Graphics, Sprite, Texture, Text } from 'pixi.js
 import { forceSimulation, forceManyBody, forceLink, forceCollide, forceX, forceY } from 'd3-force';
 import { orderedGroups, groupColor } from '../lib/linkGraph.js';
 
-// Soft radial glow (the focus bloom): opaque core → transparent edge.
-function makeGlowTexture() {
-  const size = 64;
-  const c = document.createElement('canvas');
-  c.width = c.height = size;
-  const ctx = c.getContext('2d');
-  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-  g.addColorStop(0, 'rgba(255,255,255,1)');
-  g.addColorStop(0.25, 'rgba(255,255,255,0.65)');
-  g.addColorStop(0.55, 'rgba(255,255,255,0.22)');
-  g.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, size, size);
-  return Texture.from(c);
-}
 
 // Flat disc with a thin anti-aliased edge (the node body). Tinted per group.
 function makeDiscTexture() {
@@ -123,7 +108,6 @@ export default function GraphCanvas({ nodes, links, accent, selectedId, localMod
       const groupInt = new Map();
       for (const g of groups) groupInt.set(g, cssColorToInt(groupColor(g, groups)));
 
-      const glowTex = makeGlowTexture();
       const discTex = makeDiscTexture();
 
       // Scene: world (pan/zoom target) → edges, focus glow, nodes, labels.
@@ -133,11 +117,6 @@ export default function GraphCanvas({ nodes, links, accent, selectedId, localMod
 
       const edgeG = new Graphics();
       world.addChild(edgeG);
-
-      const focusGlow = new Sprite(glowTex);
-      focusGlow.anchor.set(0.5);
-      focusGlow.visible = false;
-      world.addChild(focusGlow);
 
       const nodeLayer = new Container();
       world.addChild(nodeLayer);
@@ -283,28 +262,10 @@ export default function GraphCanvas({ nodes, links, accent, selectedId, localMod
         }
       }
 
-      // The single accent glow, repositioned under the focused node.
-      function updateFocusGlow() {
-        const { selectedId: sel } = stateRef.current;
-        const focus = hoverId || sel;
-        const vis = visibleSet();
-        if (focus && nodeById.has(focus) && (!vis || vis.has(focus))) {
-          const n = nodeById.get(focus);
-          const r = spriteById.get(focus)?._r || 5;
-          focusGlow.tint = accentInt;
-          focusGlow.position.set(n.x, n.y);
-          focusGlow.width = focusGlow.height = r * DOT * 5;
-          focusGlow.alpha = (focus === hoverId) ? 0.95 : 0.8;
-          focusGlow.visible = true;
-        } else {
-          focusGlow.visible = false;
-        }
-      }
 
       function redraw() {
         styleNodes();
         drawEdges();
-        updateFocusGlow();
         layoutLabels();
       }
       redrawRef.current = redraw;
@@ -342,7 +303,7 @@ export default function GraphCanvas({ nodes, links, accent, selectedId, localMod
         .force('x', forceX(0).strength(0.07))
         .force('y', forceY(0).strength(0.07))
         .alpha(1);
-      sim.on('tick', () => { updatePositions(); drawEdges(); updateFocusGlow(); layoutLabels(); });
+      sim.on('tick', () => { updatePositions(); drawEdges(); layoutLabels(); });
       sim.on('end', () => { settled = true; redraw(); fit(null); });
 
       // Pan + zoom (cursor-anchored) + node drag, via DOM events on the canvas.

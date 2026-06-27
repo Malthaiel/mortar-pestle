@@ -266,7 +266,7 @@ export function DownloadsProvider({ children, settings }) {
           window.dispatchEvent(new CustomEvent('agentic:notify', { detail: {
             type: 'anime-download', title: 'Download blocked',
             message: `${why} Start it in Settings → Anime, then retry.`,
-            accent: '#e07b7b', iconKey: 'alert', duration: 7000,
+            accent: 'var(--text)', iconKey: 'alert', duration: 7000,
           } }));
           return;
         }
@@ -281,7 +281,7 @@ export function DownloadsProvider({ children, settings }) {
       window.dispatchEvent(new CustomEvent('agentic:notify', { detail: {
         type: 'download', title: 'Retry failed',
         message: String((e && e.message) || e || 'Could not start download'),
-        accent: '#e07b7b', iconKey: 'alert', duration: 6000,
+        accent: 'var(--text)', iconKey: 'alert', duration: 6000,
       } }));
     }
   }, []);

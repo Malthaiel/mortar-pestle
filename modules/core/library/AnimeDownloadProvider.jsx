@@ -65,7 +65,7 @@ export function AnimeDownloadProvider({ children }) {
           type: 'download', sourceId: j.id,
           title: j.title || 'Anime',
           message: ok ? (add ? 'Added to library' : 'Download complete') : (j.error || (add ? 'Add failed' : 'Download failed')),
-          accent: ok ? '#6fb56f' : '#e07b7b',
+          accent: ok ? 'var(--text-muted)' : 'var(--text)',
           iconKey: ok ? 'download' : 'alert',
           transient: true, duration: ok ? 5000 : null,
         } }));
@@ -87,7 +87,7 @@ export function AnimeDownloadProvider({ children }) {
           const msg = `${why} Start it (with its Web UI enabled) in Settings → Anime, then retry.`;
           window.dispatchEvent(new CustomEvent('agentic:notify', { detail: {
             type: 'anime-download', title: 'Download blocked', message: msg,
-            accent: '#e07b7b', iconKey: 'alert', duration: 7000,
+            accent: 'var(--text)', iconKey: 'alert', duration: 7000,
           } }));
           throw new Error(msg);
         }

@@ -43,13 +43,13 @@ function VaultStatusDisplay({ status, name }) {
   let label = '';
   let labelColor = 'var(--text-muted)';
   if (status === 'connected') {
-    dotColor = '#6fb56f'; dotRing = true; label = name; labelColor = 'var(--text)';
+    dotColor = 'var(--text-muted)'; dotRing = true; label = name; labelColor = 'var(--text)';
   } else if (status === 'loading') {
     label = 'Loading…'; labelColor = 'var(--text-faint)';
   } else if (status === 'no-note') {
     dotColor = '#d9a55a'; label = `${vaultStatusTodayDs()}.md not found`;
   } else if (status === 'error') {
-    dotColor = '#e07b7b'; label = 'Backend unreachable'; labelColor = '#e07b7b';
+    dotColor = 'var(--text)'; label = 'Backend unreachable'; labelColor = 'var(--text)';
   } else {
     label = String(status || '');
   }
@@ -296,7 +296,7 @@ export default function VaultsTab({ accent }) {
         </div>
       )}
 
-      {error && <div style={{ marginTop: 10, fontSize: 12, color: 'var(--danger, #e5484d)' }}>{error}</div>}
+      {error && <div style={{ marginTop: 10, fontSize: 12, color: 'var(--danger, var(--text))' }}>{error}</div>}
       {note && !error && <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text-muted)' }}>{note}</div>}
 
       <ConfirmModal
@@ -435,7 +435,7 @@ function VaultMappingEditor({ vault, onClose, setVaultMapping, accent }) {
           </div>
         </>
       )}
-      {err && <div style={{ fontSize: 12, color: 'var(--danger, #e5484d)' }}>{err}</div>}
+      {err && <div style={{ fontSize: 12, color: 'var(--danger, var(--text))' }}>{err}</div>}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
         <OutlinedBtn small onClick={onClose}>Cancel</OutlinedBtn>
         <OutlinedBtn small onClick={save} disabled={busy || folders === null}>{busy ? 'Saving…' : 'Save mapping'}</OutlinedBtn>

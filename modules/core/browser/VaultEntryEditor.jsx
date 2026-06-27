@@ -69,7 +69,7 @@ export default function VaultEntryEditor({ entryId, prefillOrigin, folders = [],
     return (
       <div style={overlay} onClick={onClose}>
         <div style={card} onClick={e => e.stopPropagation()}>
-          <div style={body}>{err ? <span style={{ color: 'var(--danger,#e5484d)' }}>{err}</span> : 'Loading…'}</div>
+          <div style={body}>{err ? <span style={{ color: 'var(--danger,var(--text))' }}>{err}</span> : 'Loading…'}</div>
         </div>
       </div>
     );
@@ -157,13 +157,13 @@ export default function VaultEntryEditor({ entryId, prefillOrigin, folders = [],
             ))}
             <button type="button" style={ghost} onClick={addField}>＋ Add field</button>
           </div>
-          {err && <span style={{ fontSize: 12, color: 'var(--danger,#e5484d)' }}>{err}</span>}
+          {err && <span style={{ fontSize: 12, color: 'var(--danger,var(--text))' }}>{err}</span>}
         </div>
         <div style={foot}>
           <button type="button" style={primary(accent)} disabled={busy} onClick={save}>{busy ? 'Saving…' : 'Save'}</button>
           <button type="button" style={ghost} onClick={onClose}>Cancel</button>
           {isEdit && (
-            <button type="button" style={{ ...ghost, marginLeft: 'auto', color: 'var(--danger,#e5484d)', borderColor: 'var(--danger,#e5484d)' }} disabled={busy} onClick={del}>
+            <button type="button" style={{ ...ghost, marginLeft: 'auto', color: 'var(--danger,var(--text))', borderColor: 'var(--danger,var(--text))' }} disabled={busy} onClick={del}>
               {confirmDel ? 'Confirm delete' : 'Delete'}
             </button>
           )}

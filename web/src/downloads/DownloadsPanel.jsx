@@ -16,8 +16,8 @@ import { IconX, IconMusic, IconFilm, IconMic, IconExternal, IconFolder, IconRota
 import { timeAgo } from '../util/time.js';
 
 const PANEL_W = 360;
-const GREEN = '#6fb56f';
-const RED = '#e07b7b';
+const GREEN = 'var(--text-muted)';
+const RED = 'var(--text)';
 
 function rowColor(r) {
   if (r.state === 'error') return RED;

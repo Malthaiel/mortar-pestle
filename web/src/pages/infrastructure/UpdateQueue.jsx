@@ -10,7 +10,7 @@ export default function UpdateQueue({ accent }) {
     setLoading(true);
     api.getUpdateQueue()
       .then(({ html }) => setHtml(html))
-      .catch(err => setHtml(`<p style="color:#e07b7b">${err.message}</p>`))
+      .catch(err => setHtml(`<p style="color:var(--text)">${err.message}</p>`))
       .finally(() => setLoading(false));
   };
 

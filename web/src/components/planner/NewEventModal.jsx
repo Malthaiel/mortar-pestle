@@ -331,7 +331,7 @@ export default function NewEventModal({ open, onClose, onCreated, accent = 'var(
           padding: '20px 18px', borderTop: '1px solid var(--border-soft)',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexShrink: 0,
         }}>
-          <div style={{ fontSize: 11, color: err ? '#e07b7b' : 'var(--text-faint)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div style={{ fontSize: 11, color: err ? 'var(--text)' : 'var(--text-faint)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {err || `Scheduling for ${ds}`}
           </div>
           <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>

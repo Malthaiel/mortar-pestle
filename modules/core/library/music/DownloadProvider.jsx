@@ -20,8 +20,8 @@ export function useDownloads() {
   return useContext(Ctx) || { jobs: [], enqueue: async () => null, cancel: async () => {} };
 }
 
-const GREEN = '#6fb56f';
-const RED = '#e07b7b';
+const GREEN = 'var(--text-muted)';
+const RED = 'var(--text)';
 
 function stateColor(job) {
   if (job.state === 'error') return RED;

@@ -40,7 +40,6 @@ export default function SelectionHighlight({ element, crumbs = [], accent, onPic
           pointerEvents: 'none',
           zIndex: 'var(--z-design)',
           boxShadow: `0 0 0 4px color-mix(in oklch, ${accent || 'var(--accent)'} 16%, transparent)`,
-          animation: pulsing ? 'markupPulse 600ms cubic-bezier(0.32, 0.72, 0, 1) both' : 'none',
         }}
       />
       <div

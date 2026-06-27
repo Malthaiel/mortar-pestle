@@ -54,7 +54,7 @@ export default function Toast({
           </div>
         )}
         {error && (
-          <div style={{ fontSize: 11, color: '#e07b7b', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={error}>
+          <div style={{ fontSize: 11, color: 'var(--text)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={error}>
             {error}
           </div>
         )}

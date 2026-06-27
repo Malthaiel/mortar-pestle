@@ -27,7 +27,7 @@ function useTransparentRoot() {
 
 function HudButton({ label, sub, onClick, tone }) {
   const [hover, setHover] = useState(false);
-  const accent = tone === 'rec' ? '#e0574f' : tone === 'shot' ? '#5aa9e6' : '#6fb56f';
+  const accent = tone === 'rec' ? 'var(--text)' : tone === 'shot' ? '#5aa9e6' : 'var(--text-muted)';
   return (
     <button
       onClick={onClick}
@@ -176,7 +176,7 @@ export default function OverlayCaptureView() {
           <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.6, color: '#fff', opacity: 0.85 }}>
             ▣ CAPTURE
           </span>
-          <span style={{ fontSize: 10, color: recording ? '#e0574f' : 'rgba(255,255,255,0.5)', fontWeight: 600 }}>
+          <span style={{ fontSize: 10, color: recording ? 'var(--text)' : 'rgba(255,255,255,0.5)', fontWeight: 600 }}>
             {recording ? '● REC' : 'idle'}
           </span>
         </div>

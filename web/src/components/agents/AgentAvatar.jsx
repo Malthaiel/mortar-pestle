@@ -15,9 +15,8 @@ export default function AgentAvatar({ accent, streaming = false, size = 11 }) {
         borderRadius: '50%',
         background: color,
         boxShadow: streaming
-          ? `0 0 0 0 ${color}`
+          ? `0 0 0 2.5px ${color}`
           : `0 0 0 2.5px color-mix(in oklch, ${color} 24%, transparent)`,
-        animation: streaming ? 'atelierAvatarPulse 1.4s ease-in-out infinite' : undefined,
         flexShrink: 0,
       }}
     />

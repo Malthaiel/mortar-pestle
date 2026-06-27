@@ -13,28 +13,28 @@ export const STATUS_DOT_COLOR = {
   // Video
   'Plan-to-Watch': 'var(--text-muted)',
   'Currently-Watching': null,
-  'Completed': '#6fb56f',
+  'Completed': 'var(--text-muted)',
   'On-Hold': '#d9a55a',
-  'Dropped': '#e07b7b',
+  'Dropped': 'var(--text)',
   // Music
   'Plan-to-Listen': 'var(--text-muted)',
   'Currently-Listening': null,
-  'Listened': '#6fb56f',
+  'Listened': 'var(--text-muted)',
   // Books / written
   'Plan-to-Read': 'var(--text-muted)',
   'Currently-Reading': null,
-  'Read': '#6fb56f',
+  'Read': 'var(--text-muted)',
   // Games / play
   'Plan-to-Play': 'var(--text-muted)',
   'Currently-Playing': null,
-  'Played': '#6fb56f',
+  'Played': 'var(--text-muted)',
 };
 
 export const DOWNLOAD_DOT_COLOR = {
   'Queued': 'var(--text-faint)',
   'Downloading': null,
-  'Failed': '#e07b7b',
-  'Error': '#e07b7b',
+  'Failed': 'var(--text)',
+  'Error': 'var(--text)',
   'Stalled': '#d9a55a',
 };
 

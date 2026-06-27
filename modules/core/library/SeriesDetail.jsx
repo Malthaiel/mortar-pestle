@@ -175,7 +175,7 @@ export default function SeriesDetail({ accent, seriesPath }) {
     const qbit = await videoApi.qbitStatus().catch(() => null);
     if (!qbit || !qbit.connected) {
       const why = (qbit && qbit.error) || 'qBittorrent isn’t reachable.';
-      notify({ type: 'anime-download', title: 'Download blocked', message: `${why} Start it in Settings → Anime, then retry.`, accent: '#e07b7b', iconKey: 'alert', duration: 7000 });
+      notify({ type: 'anime-download', title: 'Download blocked', message: `${why} Start it in Settings → Anime, then retry.`, accent: 'var(--text)', iconKey: 'alert', duration: 7000 });
       return;
     }
     setPickerOpen(true);
@@ -208,11 +208,11 @@ export default function SeriesDetail({ accent, seriesPath }) {
         if (warns.length) notify({ type: 'anime-download', title: 'Uninstall warnings', message: warns.join('  •  '), accent: '#d9a55a', iconKey: 'alert', duration: 9000 });
         window.location.hash = '/tools/library/anime';
       } else {
-        notify({ type: 'anime-download', title: 'Uninstall incomplete', message: warns[0] || 'Could not remove the library card.', accent: '#e07b7b', iconKey: 'alert', duration: 9000 });
+        notify({ type: 'anime-download', title: 'Uninstall incomplete', message: warns[0] || 'Could not remove the library card.', accent: 'var(--text)', iconKey: 'alert', duration: 9000 });
       }
     } catch (e) {
       setConfirmOpen(false);
-      notify({ type: 'anime-download', title: 'Uninstall blocked', message: (e && e.message) || 'Uninstall failed.', accent: '#e07b7b', iconKey: 'alert', duration: 9000 });
+      notify({ type: 'anime-download', title: 'Uninstall blocked', message: (e && e.message) || 'Uninstall failed.', accent: 'var(--text)', iconKey: 'alert', duration: 9000 });
     } finally {
       setUninstalling(false);
     }
@@ -334,7 +334,7 @@ export default function SeriesDetail({ accent, seriesPath }) {
                   { label: 'Uninstall…', onClick: async () => {
                     const qbit = await videoApi.qbitStatus().catch(() => null);
                     if (!qbit || !qbit.connected) {
-                      notify({ type: 'anime-download', title: 'Uninstall blocked', message: `${(qbit && qbit.error) || 'qBittorrent isn’t reachable.'} Start it in Settings → Anime, then retry.`, accent: '#e07b7b', iconKey: 'alert', duration: 7000 });
+                      notify({ type: 'anime-download', title: 'Uninstall blocked', message: `${(qbit && qbit.error) || 'qBittorrent isn’t reachable.'} Start it in Settings → Anime, then retry.`, accent: 'var(--text)', iconKey: 'alert', duration: 7000 });
                       return;
                     }
                     setDeleteFiles(true);
@@ -347,7 +347,7 @@ export default function SeriesDetail({ accent, seriesPath }) {
           </>
         )}
         actions={flatStartIdx < 0 && dlJob && dlJob.state === 'error' ? (
-          <span style={{ fontSize: 11, color: '#e07b7b' }}>{dlJob.error || 'Download failed — press Retry.'}</span>
+          <span style={{ fontSize: 11, color: 'var(--text)' }}>{dlJob.error || 'Download failed — press Retry.'}</span>
         ) : null}
       />
 
@@ -481,7 +481,7 @@ function Centered({ children, tone }) {
   return (
     <div style={{
       flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-      color: tone === 'error' ? '#e07b7b' : 'var(--text-faint)',
+      color: tone === 'error' ? 'var(--text)' : 'var(--text-faint)',
       fontSize: 13,
     }}>{children}</div>
   );

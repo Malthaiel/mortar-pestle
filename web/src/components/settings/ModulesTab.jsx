@@ -16,7 +16,6 @@ import { api } from '../../api.js';
 import { useManifests } from '../../module-sdk/useModuleRegistry.js';
 import { useDragReorder } from '../../module-sdk/useDragReorder.js';
 import { useSidebarOrder, applyOrder, emitSidebarOrderChange } from '../../hooks/useSidebarOrder.js';
-import { useDropPulse, SIDEBAR_ROW_PULSE_STYLE } from '../../hooks/useDropPulse.js';
 import {
   useModuleEnabledMap,
   useDirtyModules,
@@ -105,7 +104,6 @@ function TierPanel({ tier, accent, onOpenModule, onOpenKeybinds }) {
       .catch(() => {});
   }, [ordered, orderKey]);
 
-  const pulsingModuleId = useDropPulse(orderKey);
   const { dragIndex, dropTarget, rowProps, containerProps } = useDragReorder({ onReorder: handleReorder });
 
   const handleSetEnabled = useCallback((moduleId, nextEnabled) => {
@@ -127,14 +125,9 @@ function TierPanel({ tier, accent, onOpenModule, onOpenKeybinds }) {
         {...containerProps}
       >
         {ordered.map((m, i) => {
-          const pulsing = pulsingModuleId === m.id;
           return (
             <div
               key={m.id}
-              style={{
-                animation: pulsing ? SIDEBAR_ROW_PULSE_STYLE : undefined,
-                borderRadius: pulsing ? 8 : undefined,
-              }}
             >
               <ModuleCard
                 manifest={m}

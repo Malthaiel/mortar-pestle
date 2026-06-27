@@ -56,7 +56,7 @@ export default function BrowseResultCard({ result, accent, onSelect, inLibrary }
             position: 'absolute', top: 6, right: 6,
             width: 20, height: 20, borderRadius: '50%',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: accent || '#6fb56f', color: 'white', fontSize: 12,
+            background: accent || 'var(--text-muted)', color: 'white', fontSize: 12,
             boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
           }} title="Already in your library">✓</span>
         )}

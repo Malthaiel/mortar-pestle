@@ -32,8 +32,7 @@ export default function ModuleDockButton({
   const lifted = lift
     ? {
         transform: 'translateY(-2px)',
-        filter: `drop-shadow(0 4px 8px color-mix(in oklch, ${accentColor} 38%, transparent))`,
-        transition: 'transform 160ms cubic-bezier(0.16, 1, 0.3, 1), filter 160ms ease',
+        transition: 'transform 160ms cubic-bezier(0.16, 1, 0.3, 1)',
       }
     : null;
 

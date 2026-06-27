@@ -276,9 +276,9 @@ export default function SidebarSeam({
           borderRadius: 1,
           opacity: visible ? 1 : 0,
           boxShadow: pulseFlash
-            ? `0 0 0 4px color-mix(in oklch, ${accentColor} 42%, transparent), 0 0 14px ${accentColor}`
+            ? `0 0 0 4px color-mix(in oklch, ${accentColor} 42%, transparent)`
             : dragging
-              ? `0 0 14px color-mix(in oklch, ${accentColor} 60%, transparent)`
+              ? `0 0 0 3px color-mix(in oklch, ${accentColor} 60%, transparent)`
               : 'none',
           transition: dragging
             ? 'box-shadow 80ms ease'
@@ -409,7 +409,6 @@ function WidthBadge({ x, y, value, accent }) {
       pointerEvents: 'none',
       zIndex: 1400,
       whiteSpace: 'nowrap',
-      boxShadow: `0 6px 18px color-mix(in oklch, ${accent} 35%, transparent)`,
       fontWeight: 700,
     }}>{value}px</div>
   );

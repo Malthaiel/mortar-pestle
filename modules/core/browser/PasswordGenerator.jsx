@@ -80,7 +80,7 @@ export default function PasswordGenerator({ accent, clearSecs = 30, onUse }) {
         {check('!@#', symbols, setSymbols)}
         {check('No look-alikes', avoid, setAvoid)}
       </div>
-      {err && <span style={{ fontSize: 12, color: 'var(--danger, #e5484d)' }}>{err}</span>}
+      {err && <span style={{ fontSize: 12, color: 'var(--danger, var(--text))' }}>{err}</span>}
       {onUse && (
         <button type="button" onClick={() => onUse(value)}
           style={{ padding: '7px 12px', borderRadius: 'var(--radius-md)', border: `1px solid ${accent}`, background: accent, color: '#fff', cursor: 'pointer', font: 'inherit', fontWeight: 600 }}>

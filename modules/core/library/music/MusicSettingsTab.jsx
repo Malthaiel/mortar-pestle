@@ -105,7 +105,7 @@ function ImportSection({ accent }) {
         )}
       </div>
 
-      {err && <div style={{ fontSize: 11, color: 'var(--error, #e07b7b)' }}>{err}</div>}
+      {err && <div style={{ fontSize: 11, color: 'var(--error, var(--text))' }}>{err}</div>}
 
       {active && <ProgressLine job={active}/>}
       {!active && lastDone && <SummaryLine job={lastDone}/>}
@@ -133,8 +133,8 @@ function ProgressLine({ job }) {
 }
 
 function SummaryLine({ job }) {
-  const color = job.state === 'error' ? 'var(--error, #e07b7b)'
-    : (job.unmatched && job.unmatched.length) ? '#d8a657' : '#6fb56f';
+  const color = job.state === 'error' ? 'var(--error, var(--text))'
+    : (job.unmatched && job.unmatched.length) ? '#d8a657' : 'var(--text-muted)';
   return (
     <div style={{ fontSize: 11, color, display: 'flex', flexDirection: 'column', gap: 4 }}>
       <span>{job.state === 'error' ? (job.error || 'Import failed') : (job.summary || 'Done')}</span>

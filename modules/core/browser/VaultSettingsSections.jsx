@@ -151,7 +151,7 @@ export function SettingsPanel({ accent, status }) {
           onChange={async e => { try { await creds.setKeyringUnlock(e.target.checked); } catch (err) { setMsg(err?.message || 'Keyring unavailable.'); } }} />
         Stay unlocked on this device (OS keyring)
       </label>
-      {msg && <span style={{ fontSize: 12, color: 'var(--danger,#e5484d)' }}>{msg}</span>}
+      {msg && <span style={{ fontSize: 12, color: 'var(--danger,var(--text))' }}>{msg}</span>}
     </div>
   );
 }

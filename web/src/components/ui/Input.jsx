@@ -11,7 +11,7 @@ export function TextInput({
 }) {
   const [focus, setFocus] = useState(false);
   const borderColor = invalid
-    ? '#e07b7b'
+    ? 'var(--text)'
     : focus
       ? (accent || 'var(--text)')
       : 'var(--border)';

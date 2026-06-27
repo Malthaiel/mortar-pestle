@@ -223,7 +223,7 @@ export default function BrowsePreview({ result, accent, onBack, libraryEntry }) 
                 )}
               </div>
               {(dlError || (job && job.state === 'error' && job.error)) && (
-                <div style={{ marginTop: 6, fontSize: 11, color: '#e07b7b' }}>{dlError || job.error}</div>
+                <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text)' }}>{dlError || job.error}</div>
               )}
             </div>
           </div>
@@ -233,7 +233,7 @@ export default function BrowsePreview({ result, accent, onBack, libraryEntry }) 
         <div style={{ marginTop: 28 }}>
           {loading && <div style={{ color: 'var(--text-faint)', fontSize: 12 }}>Loading tracklist…</div>}
           {!loading && error && (
-            <div style={{ color: '#e07b7b', fontSize: 12, padding: '12px 0' }}>{error}</div>
+            <div style={{ color: 'var(--text)', fontSize: 12, padding: '12px 0' }}>{error}</div>
           )}
           {!loading && !error && detail && (
             <div style={{ display: 'flex', flexDirection: 'column' }}>

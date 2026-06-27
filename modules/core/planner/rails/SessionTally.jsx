@@ -31,12 +31,6 @@ export default function SessionTally({ accent }) {
       gap: 8, padding: '10px 4px',
       overflow: 'hidden',
     }}>
-      <style>{`
-        @keyframes toolkit-tally-pulse {
-          0%, 100% { box-shadow: 0 0 0 0 currentColor; opacity: 1; }
-          50%      { box-shadow: 0 0 0 3px color-mix(in oklch, currentColor 30%, transparent); opacity: 0.7; }
-        }
-      `}</style>
       <span style={{
         fontSize: 9,
         fontFamily: 'var(--font-mono)',
@@ -68,7 +62,6 @@ export default function SessionTally({ accent }) {
               ...base,
               background: 'transparent',
               boxShadow: `inset 0 0 0 2px ${phaseColor}`,
-              animation: 'toolkit-tally-pulse 1.6s ease-in-out infinite',
             }}/>;
           }
           return <div key={i} style={{

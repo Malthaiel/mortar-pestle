@@ -173,11 +173,11 @@ export const AGENTS_DEFAULT = {
 
 // Dock chrome settings. The dock is a full-width bar flush with the screen
 // bottom, always visible. `edgeStyle` picks the bottom-bar edge depth
-// ('flush' top hairline | 'band' soft upward shadow). `bgShade` is the solid
-// fill colour ('charcoal' | 'graphite' | 'slate'), FIXED across every theme.
-// `iconStyle` is how the icon buttons sit on the dark dock ('light' fixed
-// bright chips | 'dark' chips derived from the fill | 'native' the original
-// theme-adaptive candy). `order` is the
+// ('flush' top hairline | 'band' soft upward shadow). The fill is fixed
+// charcoal across every theme (the Dock color picker + graphite/slate were
+// removed). Icon face colour follows the resolved color mode (light chips in
+// light mode, dark in dark) via data-dock-icon-style={resolvedTheme} on Dock
+// — no user picker. `order` is the
 // drag-persisted button order (empty array = declaration order).
 // `expandMs` / `collapseMs` are the dock hover-expand grow / shrink durations
 // (ms), published as --dock-expand-ms / --dock-collapse-ms and consumed by the
@@ -196,8 +196,6 @@ export const AGENTS_DEFAULT = {
 
 export const DOCK_DEFAULT = {
   edgeStyle: 'flush',
-  bgShade: 'charcoal',
-  iconStyle: 'light',
   order: [],
   hidden: [],            // button ids hidden from the dock (right-click → Hide)
   edgeSnap: false,       // snap a dragged icon to the nearest zone on release
@@ -249,7 +247,7 @@ export const SETTINGS_DEFAULTS = {
   // Default OFF — a streak that silently breaks is demotivating ("loss is silent"),
   // so it's opt-in. Read by FitnessSection via computeFitnessStreak.
   showFitnessStreak: false,
-  themeMode: 'light',
+  themeMode: 'dark',
   // Active Community Themes preset id (themes/registry.js). 'monastic' = the
   // built-in default (null override maps → styles.css base stands). While a
   // community (non-monastic) preset is active, accent collapses to the single

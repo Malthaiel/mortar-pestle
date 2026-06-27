@@ -96,7 +96,7 @@ function MalImportSection({ accent }) {
           <button onClick={() => cancel(active.id)} className="candy-btn"><span className="candy-face">Cancel</span></button>
         )}
       </div>
-      {err && <div style={{ fontSize: 11, color: 'var(--error, #e07b7b)' }}>{err}</div>}
+      {err && <div style={{ fontSize: 11, color: 'var(--error, var(--text))' }}>{err}</div>}
       {active && (
         <div style={{ fontSize: 11, color: 'var(--text-2)', display: 'flex', flexDirection: 'column', gap: 6 }}>
           <span>{active.state === 'parsing' ? `Parsing ${active.source}…`
@@ -108,7 +108,7 @@ function MalImportSection({ accent }) {
         </div>
       )}
       {!active && lastDone && (
-        <div style={{ fontSize: 11, color: lastDone.state === 'error' ? 'var(--error, #e07b7b)' : (lastDone.unmatched && lastDone.unmatched.length ? '#d8a657' : '#6fb56f') }}>
+        <div style={{ fontSize: 11, color: lastDone.state === 'error' ? 'var(--error, var(--text))' : (lastDone.unmatched && lastDone.unmatched.length ? '#d8a657' : 'var(--text-muted)') }}>
           {lastDone.state === 'error' ? (lastDone.error || 'Import failed') : (lastDone.summary || 'Done')}
         </div>
       )}
@@ -168,9 +168,9 @@ function QbitSection() {
 
   const dot = (() => {
     if (!status) return { c: 'var(--text-faint)', label: 'Checking…' };
-    if (status.connected) return { c: '#6fb56f', label: 'Connected' };
+    if (status.connected) return { c: 'var(--text-muted)', label: 'Connected' };
     if (status.daemonRunning) return { c: '#d8a657', label: status.error || 'Daemon up, not authenticated' };
-    return { c: '#e07b7b', label: status.error || 'Daemon not running' };
+    return { c: 'var(--text)', label: status.error || 'Daemon not running' };
   })();
 
   return (
@@ -192,7 +192,7 @@ function QbitSection() {
         <input className="candy-input" type="password" value={pass} onChange={e => setPass(e.target.value)}
                placeholder={hasPass ? '•••••• (set — blank keeps it)' : 'set password'} style={inputStyle}/>
       </Field>
-      {msg && <div style={{ fontSize: 11, color: msg === 'Saved.' ? '#6fb56f' : '#e07b7b' }}>{msg}</div>}
+      {msg && <div style={{ fontSize: 11, color: msg === 'Saved.' ? 'var(--text-muted)' : 'var(--text)' }}>{msg}</div>}
       <div style={{ display: 'flex', gap: 8 }}>
         <button onClick={save} disabled={saving} className="candy-btn"><span className="candy-face">{saving ? 'Saving…' : 'Save'}</span></button>
         {status && status.daemonRunning
