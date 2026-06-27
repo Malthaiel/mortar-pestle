@@ -428,7 +428,7 @@ function BuildResultLine({ result, mode }) {
   return (
     <div style={{
       fontSize: 11, fontFamily: 'var(--font-mono)',
-      color: ok ? '#6fb56f' : '#e07b7b',
+      color: ok ? 'var(--text-muted)' : 'var(--text)',
     }}>{text}</div>
   );
 }
@@ -522,7 +522,7 @@ function UpdatesSection({ settings, setSetting, accent }) {
         )}
       </StackedRow>
       {net.phase === 'error' && net.error && (
-        <div style={{ fontSize: 11, color: '#e07b7b', fontFamily: 'var(--font-mono)' }}>{net.error}</div>
+        <div style={{ fontSize: 11, color: 'var(--text)', fontFamily: 'var(--font-mono)' }}>{net.error}</div>
       )}
 
       <Row label="Automatically check on launch" anchor="set-autoCheckUpdates">
@@ -555,7 +555,7 @@ function UpdatesSection({ settings, setSetting, accent }) {
         </Row>
       )}
       {err && (
-        <div style={{ fontSize: 11, color: '#e07b7b', marginTop: 6, fontFamily: 'var(--font-mono)' }}>{err}</div>
+        <div style={{ fontSize: 11, color: 'var(--text)', marginTop: 6, fontFamily: 'var(--font-mono)' }}>{err}</div>
       )}
     </SectionBand>
   );

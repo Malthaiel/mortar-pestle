@@ -162,7 +162,7 @@ export default function BrowsePage({ accent, initialQuery = '', initialMode = MO
           <div style={{ color: 'var(--text-faint)', fontSize: 12 }}>Searching…</div>
         )}
         {!loading && error && (
-          <div style={{ color: '#e07b7b', fontSize: 12, textAlign: 'center', padding: 24 }}>{error}</div>
+          <div style={{ color: 'var(--text)', fontSize: 12, textAlign: 'center', padding: 24 }}>{error}</div>
         )}
         {!loading && !error && !query.trim() && !selectedArtist && (
           <Hint mode={mode} />

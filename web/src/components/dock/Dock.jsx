@@ -68,6 +68,7 @@ export default function Dock({
   setDownloadsOpen, downloadsOpen,
   setRecycleBinOpen, recycleBinOpen,
   accent,
+  resolvedTheme,
 }) {
   const route = useHashRoute();
   const { openContextMenu } = useContextMenu();
@@ -76,8 +77,6 @@ export default function Dock({
   const { available: updateAvailable } = useUpdateStatus();
   const dock = { ...DOCK_DEFAULT, ...(settings?.dock || {}) };
   const edgeStyle = dock.edgeStyle || DOCK_DEFAULT.edgeStyle;
-  const bgShade   = dock.bgShade   || DOCK_DEFAULT.bgShade;
-  const iconStyle = dock.iconStyle || DOCK_DEFAULT.iconStyle;
   const dockRootRef = useRef(null);
   // Last dock icon the cursor entered. Held across the inter-icon gaps (empty
   // flex gap, not a hover target) so the expanded button doesn't collapse
@@ -346,8 +345,7 @@ export default function Dock({
         ref={dockRootRef}
         className="dock-root"
         data-dock-edge-style={edgeStyle}
-        data-dock-bg-shade={bgShade}
-        data-dock-icon-style={iconStyle}
+        data-dock-icon-style={resolvedTheme}
         data-quick-capture-open={quickCaptureOpen ? 'true' : undefined}
         onMouseLeave={onDockLeave}
         onMouseOver={onDockOver}

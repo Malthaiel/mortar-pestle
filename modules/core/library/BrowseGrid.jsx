@@ -98,7 +98,7 @@ export default function BrowseGrid({ accent, mode, query, kind, name }) {
       </div>
 
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 18, display: 'flex', flexDirection: 'column', gap: 18 }}>
-        {error && <div style={{ color: '#e07b7b', fontSize: 12 }}>{error}</div>}
+        {error && <div style={{ color: 'var(--text)', fontSize: 12 }}>{error}</div>}
         {items === null && loading && <div style={{ color: 'var(--text-faint)', fontSize: 12 }}>Loading…</div>}
         {items && (
           filtered.length === 0

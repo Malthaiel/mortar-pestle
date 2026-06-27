@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 
 function VaultTaskRow({ task, active, onSelect, onToggle, accent, onDragStart }) {
   const [hover, setHover] = useState(false);
-  const priorityColor = task.priority === 'high' ? '#c0392b'
+  const priorityColor = task.priority === 'high' ? 'var(--text)'
     : task.priority === 'medium' ? '#d35400'
     : task.priority === 'low' ? '#27ae60'
     : 'var(--text-faint)';
@@ -120,7 +120,7 @@ export default function VaultTaskSection({ tasks, activeRaw, onSelect, onToggle,
 
   return (
     <div style={{ paddingTop: 4, paddingBottom: 8 }}>
-      {sections.overdue.length > 0 && sectionHeader('Overdue', '#c0392b')}
+      {sections.overdue.length > 0 && sectionHeader('Overdue', 'var(--text)')}
       {renderRows(sections.overdue, 'ov')}
       {sections.today_high.length > 0 && sectionHeader('High Priority', 'var(--text-muted)')}
       {renderRows(sections.today_high, 'th')}

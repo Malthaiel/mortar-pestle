@@ -9,8 +9,8 @@ import { useAllDownloads } from './DownloadsProvider.jsx';
 import { IconBtn, AppWindow } from '../components/ui';
 import { IconX, IconMusic, IconFilm, IconMic, IconExternal, IconFolder, IconRotateCw } from '../components/icons.jsx';
 
-const GREEN = '#6fb56f';
-const RED = '#e07b7b';
+const GREEN = 'var(--text-muted)';
+const RED = 'var(--text)';
 const ACTIVE = new Set(['queued', 'preparing', 'downloading']);
 
 function fmtBytes(n) {

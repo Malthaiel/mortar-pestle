@@ -133,7 +133,7 @@ export default function DiscoveryDetail({ malId, accent, onResolveTitle }) {
       const why = (qbit && qbit.error) || 'qBittorrent isn’t reachable.';
       const msg = `${why} Start it in Settings → Anime, then retry.`;
       setDlError(msg);
-      notify({ type: 'anime-download', title: 'Download blocked', message: msg, accent: '#e07b7b', iconKey: 'alert', duration: 7000 });
+      notify({ type: 'anime-download', title: 'Download blocked', message: msg, accent: 'var(--text)', iconKey: 'alert', duration: 7000 });
       return;
     }
     setPickerOpen(true);
@@ -255,7 +255,7 @@ export default function DiscoveryDetail({ malId, accent, onResolveTitle }) {
               </div>
             )}
             {(dlError || (job && job.state === 'error' && job.error)) && (
-              <div style={{ fontSize: 11, color: '#e07b7b' }}>{dlError || job.error}</div>
+              <div style={{ fontSize: 11, color: 'var(--text)' }}>{dlError || job.error}</div>
             )}
           </>
         )}
@@ -264,7 +264,7 @@ export default function DiscoveryDetail({ malId, accent, onResolveTitle }) {
       {/* Episodes */}
       <div style={{ marginTop: 26, padding: '0 24px 24px' }}>
         {loading && <div style={{ color: 'var(--text-faint)', fontSize: 12 }}>Loading episodes…</div>}
-        {!loading && error && <div style={{ color: '#e07b7b', fontSize: 12, padding: '12px 0' }}>{error}</div>}
+        {!loading && error && <div style={{ color: 'var(--text)', fontSize: 12, padding: '12px 0' }}>{error}</div>}
         {!loading && !error && episodes && episodes.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <div style={{

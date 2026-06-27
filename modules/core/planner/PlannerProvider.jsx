@@ -267,7 +267,7 @@ export function PlannerProvider({ children }) {
     if (typeof window === 'undefined') return;
     window.dispatchEvent(new CustomEvent('agentic:notify', { detail: {
       type: 'planner-block', title: 'Planner', message,
-      accent: '#e07b7b', iconKey: 'alert', duration: 6000,
+      accent: 'var(--text)', iconKey: 'alert', duration: 6000,
     } }));
   }, []);
 

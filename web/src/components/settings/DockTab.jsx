@@ -75,39 +75,7 @@ export default function DockTab({ settings, setSetting, accent }) {
         />
       </Row>
 
-      <Row
-        anchor="set-dock-bgShade"
-        label="Dock color"
-        hint="Solid fill behind the icons, fixed across every theme. Charcoal matches the app's grey family; the lines pattern is removed."
-      >
-        <Seg
-          accent={accent}
-          value={dock.bgShade}
-          options={[
-            { value: 'charcoal', label: 'Charcoal' },
-            { value: 'graphite', label: 'Graphite' },
-            { value: 'slate',    label: 'Slate' },
-          ]}
-          onChange={(v) => set({ bgShade: v })}
-        />
-      </Row>
 
-      <Row
-        anchor="set-dock-iconStyle"
-        label="Icon style"
-        hint="Light keeps bright chips on the dark bar (macOS look). Dark blends the chips into the fill. Native uses the theme-adaptive candy treatment."
-      >
-        <Seg
-          accent={accent}
-          value={dock.iconStyle}
-          options={[
-            { value: 'light',  label: 'Light' },
-            { value: 'dark',   label: 'Dark' },
-            { value: 'native', label: 'Native' },
-          ]}
-          onChange={(v) => set({ iconStyle: v })}
-        />
-      </Row>
 
       <SectionHeader title="Module selection" />
 
@@ -202,7 +170,7 @@ export default function DockTab({ settings, setSetting, accent }) {
           options={[
             { value: 'accent-fill', label: 'Accent fill' },
             { value: 'vertical-beam',   label: 'Vertical beam' },
-            { value: 'lift',            label: 'Lift + glow' },
+            { value: 'lift',            label: 'Lift' },
           ]}
           onChange={(v) => setModules({ activeIndicator: v })}
         />

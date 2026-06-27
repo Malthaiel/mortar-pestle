@@ -125,14 +125,14 @@ export default function SkillsPage({ accent, selectedSlug, onBack }) {
                   display: 'flex', alignItems: 'center', gap: 10,
                   padding: '10px 14px',
                   borderRadius: 'var(--radius-md)',
-                  background: 'color-mix(in oklch, #e07b7b 10%, transparent)',
-                  border: '1px solid color-mix(in oklch, #e07b7b 28%, transparent)',
-                  fontSize: 12, color: '#e07b7b',
+                  background: 'color-mix(in oklch, var(--text) 10%, transparent)',
+                  border: '1px solid color-mix(in oklch, var(--text) 28%, transparent)',
+                  fontSize: 12, color: 'var(--text)',
                   fontFamily: 'var(--font-mono)', letterSpacing: '0.04em',
                 }}>
                   <span style={{
                     width: 6, height: 6, borderRadius: '50%',
-                    background: '#e07b7b', flexShrink: 0,
+                    background: 'var(--text)', flexShrink: 0,
                   }}/>
                   {runError}
                 </div>
@@ -199,7 +199,7 @@ function BackBar({ onBack }) {
 
 export function Badge({ tone, children }) {
   const palette = tone === 'danger'
-    ? { bg: 'color-mix(in oklch, #e07b7b 12%, transparent)', fg: '#e07b7b', border: 'color-mix(in oklch, #e07b7b 28%, transparent)' }
+    ? { bg: 'color-mix(in oklch, var(--text) 12%, transparent)', fg: 'var(--text)', border: 'color-mix(in oklch, var(--text) 28%, transparent)' }
     : { bg: 'var(--surface-2)', fg: 'var(--text-muted)', border: 'var(--border)' };
   return (
     <span style={{

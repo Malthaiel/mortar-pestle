@@ -19,8 +19,8 @@ export function useImportJobs() {
   return useContext(Ctx) || { jobs: [], enqueue: async () => null, cancel: async () => {} };
 }
 
-const GREEN = '#6fb56f';
-const RED = '#e07b7b';
+const GREEN = 'var(--text-muted)';
+const RED = 'var(--text)';
 const AMBER = '#d8a657';
 
 function stateColor(job) {

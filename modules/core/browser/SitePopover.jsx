@@ -16,7 +16,7 @@ const input = {
   border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', font: 'inherit',
 };
 const label = { fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 3 };
-const errStyle = { fontSize: 12, color: 'var(--danger, #e5484d)' };
+const errStyle = { fontSize: 12, color: 'var(--danger, var(--text))' };
 const note = { fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.4 };
 
 function primaryBtn(accent) {

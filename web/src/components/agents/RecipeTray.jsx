@@ -89,8 +89,6 @@ export default function RecipeTray({ recipeState, def, accent, onApply, onDiscar
         }}>
           <span style={{
             width: 7, height: 7, borderRadius: '50%', background: accentColor, flexShrink: 0,
-            animation: (phase === 'loading' || phase === 'running' || phase === 'applying')
-              ? 'atelierAvatarPulse 1100ms ease-in-out infinite' : 'none',
           }}/>
           {(STATUS[phase] ? STATUS[phase](file) : '…')}
         </div>

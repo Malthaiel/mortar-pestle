@@ -265,7 +265,7 @@ function SearchResults({ query, accent, albums, ownedIds, onPlay }) {
             </button>
           )}
         </div>
-        {error && <div style={{ color: '#e07b7b', fontSize: 12 }}>{error}</div>}
+        {error && <div style={{ color: 'var(--text)', fontSize: 12 }}>{error}</div>}
         {!error && mbAlbums === null && <Muted>Searching…</Muted>}
         {!error && mbAlbums && (mbAlbums.length === 0
           ? <Muted>No albums.</Muted>

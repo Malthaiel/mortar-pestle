@@ -138,7 +138,7 @@ export default function PlaylistModal({
           </div>
         </div>
 
-        {error && <div style={{ fontSize: 12, color: '#e07b7b' }}>{error}</div>}
+        {error && <div style={{ fontSize: 12, color: 'var(--text)' }}>{error}</div>}
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <OutlinedBtn onClick={onClose} disabled={busy}>Cancel</OutlinedBtn>

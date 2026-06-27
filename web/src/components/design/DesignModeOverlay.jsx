@@ -133,8 +133,6 @@ function DesignAccentSweep({ accent }) {
       style={{
         position: 'fixed', top: 0, left: 0, right: 0, height: 1,
         background: accent || 'var(--accent, var(--text))',
-        boxShadow: `0 0 12px 2px ${accent || 'var(--accent, var(--text))'}66`,
-        animation: 'designSheen 280ms cubic-bezier(0.32, 0.72, 0, 1) both',
         pointerEvents: 'none',
         zIndex: 1200,
       }}

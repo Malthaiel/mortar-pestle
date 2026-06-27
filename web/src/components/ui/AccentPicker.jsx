@@ -95,7 +95,7 @@ export function HexInput({ value, onChange, accent }) {
         display: 'flex', alignItems: 'center', pointerEvents: 'none',
         color: valid
           ? (dirty ? (accent || 'var(--text-muted)') : 'var(--text-faint)')
-          : '#e07b7b',
+          : 'var(--text)',
         fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700,
       }}>{valid ? '✓' : '!'}</span>
     </div>

@@ -24,7 +24,7 @@ const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
 // Section heading + bullet-dot color by type (accent for the neutral ones).
 const sectionColor = (name, accent) => ({
-  New: accent, Changed: accent, Removed: '#c0392b', Performance: '#8b5cf6',
+  New: accent, Changed: accent, Removed: 'var(--text)', Performance: '#8b5cf6',
   Fixed: '#2a9d4a', Migration: '#c78a1a', 'Known Issues': '#c78a1a',
   Process: 'var(--text-faint)',
 }[name] || accent);
@@ -899,9 +899,9 @@ function ShipReleaseModal({ accent, queue, latestVersion, tag, onClose, onShippe
               )}
               {error && (
                 <div style={{
-                  marginTop: 10, fontSize: 12, color: '#c0392b',
-                  background: 'color-mix(in oklch, #c0392b 8%, transparent)',
-                  border: '1px solid color-mix(in oklch, #c0392b 25%, transparent)',
+                  marginTop: 10, fontSize: 12, color: 'var(--text)',
+                  background: 'color-mix(in oklch, var(--text) 8%, transparent)',
+                  border: '1px solid color-mix(in oklch, var(--text) 25%, transparent)',
                   borderRadius: 6, padding: '8px 10px',
                 }}>
                   {error}

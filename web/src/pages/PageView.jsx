@@ -588,7 +588,7 @@ export default function PageView({ path, accent }) {
           </div>
         )}
         {!loading && !notFound && error && (
-          <div style={{ padding: 48, color: '#e07b7b', fontSize: 13 }}>{error}</div>
+          <div style={{ padding: 48, color: 'var(--text)', fontSize: 13 }}>{error}</div>
         )}
         {!loading && !notFound && !error && mode === 'reading' && (
           <>

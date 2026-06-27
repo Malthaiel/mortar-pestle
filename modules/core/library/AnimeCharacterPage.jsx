@@ -207,7 +207,7 @@ function Centered({ children, tone }) {
   return (
     <div style={{
       flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-      color: tone === 'error' ? '#e07b7b' : 'var(--text-faint)', fontSize: 13, padding: 40,
+      color: tone === 'error' ? 'var(--text)' : 'var(--text-faint)', fontSize: 13, padding: 40,
     }}>{children}</div>
   );
 }

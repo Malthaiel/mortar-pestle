@@ -360,7 +360,7 @@ function Centered({ children, tone }) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        color: tone === 'error' ? '#e07b7b' : 'var(--text-faint)',
+        color: tone === 'error' ? 'var(--text)' : 'var(--text-faint)',
         fontSize: 13,
         padding: 40,
       }}

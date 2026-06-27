@@ -292,12 +292,13 @@ function MainApp() {
         setRecycleBinOpen={setRecycleBinOpen}
         recycleBinOpen={recycleBinOpen}
         accent={accent}
+        resolvedTheme={resolvedTheme}
       />
       <TransientToastLayer/>
       <NotificationPanel open={notifOpen} onClose={() => setNotifOpen(false)} accent={accent}/>
-      <DownloadsPanel open={downloadsOpen} onClose={() => setDownloadsOpen(false)} accent="#6fb56f"
+      <DownloadsPanel open={downloadsOpen} onClose={() => setDownloadsOpen(false)} accent="var(--text-muted)"
         onOpenManager={() => { setDownloadsOpen(false); setDownloadsManagerOpen(true); }}/>
-      <DownloadsManager open={downloadsManagerOpen} onClose={() => setDownloadsManagerOpen(false)} accent="#6fb56f"/>
+      <DownloadsManager open={downloadsManagerOpen} onClose={() => setDownloadsManagerOpen(false)} accent="var(--text-muted)"/>
       <BreakOverlay accent={accent}/>
       <ConfettiBurst accent={accent}/>
       <WikilinkHoverPreview/>

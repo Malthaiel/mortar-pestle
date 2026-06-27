@@ -7,7 +7,7 @@
 // shows the centered brand-mark; expanded adds the ISKARIEL label + tagline.
 // Wires to the two-layer `.candy-btn.is-primary` block (data-variant="brand").
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 
 const TAGLINES = [
   'your knowledge layer',
@@ -20,23 +20,9 @@ const TAGLINES = [
 ];
 
 export default function SidebarToggleButton({ accent, expanded, onToggle, showTagline }) {
-  const [pulsing, setPulsing] = useState(false);
   const tagline = useMemo(() => TAGLINES[Math.floor(Math.random() * TAGLINES.length)], []);
   const version = import.meta.env.PACKAGE_VERSION || '0.0.0';
 
-  useEffect(() => {
-    let timer = null;
-    function onPulse() {
-      setPulsing(true);
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => setPulsing(false), 600);
-    }
-    window.addEventListener('agentic:vault-sync-pulse', onPulse);
-    return () => {
-      window.removeEventListener('agentic:vault-sync-pulse', onPulse);
-      if (timer) clearTimeout(timer);
-    };
-  }, []);
 
   const tooltip = expanded ? 'Collapse sidebar' : 'Expand sidebar';
 
@@ -53,7 +39,6 @@ export default function SidebarToggleButton({ accent, expanded, onToggle, showTa
       data-variant="brand"
       style={{
         ...(accent ? { '--accent': accent } : {}),
-        ...(pulsing ? { animation: 'vault-sync-pulse 600ms cubic-bezier(0.32, 0.72, 0, 1)' } : {}),
       }}
     >
       <span

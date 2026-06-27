@@ -3,8 +3,8 @@
 //   - StatTile: block stat — 9px mono caption above 15-18px weight 600 value
 //   - StatChip: inline outlined chip with label + value + optional dot/sub
 //   - FrontmatterChip: key:value pill used in PageView frontmatter rows
-// Status palette: Plan = --text-muted, Current = accent, Completed = #6fb56f,
-// On-Hold = #d9a55a, Dropped/Failed = #e07b7b.
+// Status palette: Plan = --text-muted, Current = accent, Completed = var(--text-muted),
+// On-Hold = #d9a55a, Dropped/Failed = var(--text).
 
 export function Dot({ color, glow, size = 6 }) {
   return (
