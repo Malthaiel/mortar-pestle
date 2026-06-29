@@ -32,7 +32,7 @@ import {
   loadUserPresets, saveUserPreset, deleteUserPreset,
 } from './presets.js';
 
-const mono = { fontFamily: '"DM Mono", monospace' };
+const mono = { fontFamily: 'var(--font-mono), monospace' };
 
 const fmtEta = (s) => {
   if (s == null || !Number.isFinite(s)) return '—';

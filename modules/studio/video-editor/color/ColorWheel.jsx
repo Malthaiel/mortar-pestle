@@ -15,7 +15,7 @@
 
 import { useRef } from 'react';
 
-const mono = { fontFamily: '"DM Mono", monospace' };
+const mono = { fontFamily: 'var(--font-mono), monospace' };
 const SQ3 = Math.sqrt(3);
 const SIZE = 84;
 const R = SIZE / 2;

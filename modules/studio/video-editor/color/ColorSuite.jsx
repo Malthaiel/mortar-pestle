@@ -20,7 +20,7 @@ import ScopeView from './ScopeView.jsx';
 import { DEFAULT_GRADE, normalizeGrade, isIdentityGrade } from './gradeOps.js';
 import { setGradeDraft } from './gradePipeline.js';
 
-const mono = { fontFamily: '"DM Mono", monospace' };
+const mono = { fontFamily: 'var(--font-mono), monospace' };
 
 const paneLabel = {
   fontSize: 11,

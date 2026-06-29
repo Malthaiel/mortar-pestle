@@ -26,7 +26,7 @@ import TimelineClip from './TimelineClip.jsx';
 import { newId } from './project.js';
 import { trimBounds } from './editList.js';
 
-const mono = { fontFamily: '"DM Mono", monospace' };
+const mono = { fontFamily: 'var(--font-mono), monospace' };
 const MAGNET_PX = 8;
 const LANE_H = 54;
 const AUDIO_H = 22;

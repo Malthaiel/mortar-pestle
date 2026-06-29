@@ -21,7 +21,7 @@ import { IconClapperboard } from '@host/components/icons.jsx';
 import { createGlDisplay } from './color/glDisplay.js';
 import { drawTitle } from './drawTitle.js';
 
-const mono = { fontFamily: '"DM Mono", monospace' };
+const mono = { fontFamily: 'var(--font-mono), monospace' };
 const W = 1280;
 const H = 720;
 const ID = Object.freeze({ x: 0, y: 0, scale: 1, rot: 0, opacity: 1, crop: { l: 0, t: 0, r: 0, b: 0 } });

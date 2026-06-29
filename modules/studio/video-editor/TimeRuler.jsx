@@ -7,7 +7,7 @@
 import { memo } from 'react';
 
 const STEPS = [1, 2, 5, 10, 30, 60, 120, 300, 600, 1800];
-const mono = { fontFamily: '"DM Mono", monospace' };
+const mono = { fontFamily: 'var(--font-mono), monospace' };
 
 function fmt(t) {
   const s = Math.round(t);

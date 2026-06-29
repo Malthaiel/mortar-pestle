@@ -4,6 +4,7 @@ import App from './App.jsx';
 import { loadAll } from './module-loader.js';
 import { initSmoothWheel } from './util/smoothWheel.js';
 import './pages/docs/register.jsx';   // side effect: registerPageSidebar('docs', …)
+import './fonts.css';
 import './styles.css';
 
 loadAll().then(() => {

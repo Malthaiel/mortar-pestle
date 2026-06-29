@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { PrimaryBtn } from '@host/components/ui/Button.jsx';
 
-const mono = { fontFamily: '"DM Mono", monospace' };
+const mono = { fontFamily: 'var(--font-mono), monospace' };
 
 const posterCache = new Map(); // proxyHash → dataURL | null(claimed)
 

@@ -41,7 +41,7 @@ const paneLabel = {
   padding: '10px 12px',
   userSelect: 'none',
 };
-const mono = { fontFamily: '"DM Mono", monospace' };
+const mono = { fontFamily: 'var(--font-mono), monospace' };
 
 const GAIN_PRESETS = [['+6 dB', 2], ['+3 dB', 1.41], ['0 dB', 1], ['−3 dB', 0.71], ['−6 dB', 0.5], ['−12 dB', 0.25]];
 

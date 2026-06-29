@@ -27,7 +27,7 @@ import { createGlDisplay } from './glDisplay.js';
 import { parseCube, compileGrade, toRGBA8, serializeCube, LUT_N } from './gradeLut.js';
 import { resolveColorimetry } from './colorimetry.js';
 
-const mono = { fontFamily: '"DM Mono", monospace' };
+const mono = { fontFamily: 'var(--font-mono), monospace' };
 
 // Documented tunable consts (locked decision 5). Floor measured 2026-06-11 on
 // the static chart (clean untagged cells): identity G-mean 2.19, s-curve G p99

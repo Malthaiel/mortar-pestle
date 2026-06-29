@@ -11,7 +11,7 @@ import { IconBtn } from '@host/components/ui/Button.jsx';
 import { IconPlay, IconPause, IconChevronLeft, IconChevronRight } from '@host/components/icons.jsx';
 import { candyGap } from '@host/util/candy.js';
 
-const mono = { fontFamily: '"DM Mono", monospace' };
+const mono = { fontFamily: 'var(--font-mono), monospace' };
 
 const chip = {
   ...mono,

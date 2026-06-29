@@ -11,7 +11,7 @@ import { lutState, registerLutText, lastCompileMs } from './gradePipeline.js';
 import { OutlinedBtn } from '@host/components/ui/Button.jsx';
 import { Seg } from '@host/components/ui/Pill.jsx';
 
-const mono = { fontFamily: '"DM Mono", monospace' };
+const mono = { fontFamily: 'var(--font-mono), monospace' };
 
 const rowLabel = {
   fontSize: 10,
