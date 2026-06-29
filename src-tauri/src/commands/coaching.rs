@@ -2,7 +2,7 @@
 //!
 //! `coaching_read_image` reads a user-picked image (the scoreboard screenshot,
 //! chosen via the file dialog) and returns it as a `data:` URL so the ScrimViewer
-//! can show it inline. Unlike the `iskariel-asset://` scheme — which rejects any
+//! can show it inline. Unlike the `mortar-pestle-asset://` scheme — which rejects any
 //! path outside the vault / media roots (`asset_protocol::is_under_allowed_root`)
 //! — this serves the file wherever it lives, because the path came from an
 //! explicit user file-pick (trusted) and never widens the asset allowlist. Capped
@@ -91,7 +91,7 @@ pub fn coaching_open_path(app: tauri::AppHandle, path: String) -> Result<(), Vau
 // ── Comms Extraction (audio → 16 kHz mono WAV) ───────────────────────────────
 // Deadlock Scrim Coaching sub-plan 4. A match's Scrim Recording `.mp4` carries the
 // coached team's voice comms; `coaching_extract_audio` shells system ffmpeg to a
-// disposable 16 kHz mono WAV in the cache dir — the only format the `iskariel-stt`
+// disposable 16 kHz mono WAV in the cache dir — the only format the `mortar-pestle-stt`
 // sidecar (`stt_transcribe_file`) decodes (WAV/PCM). Extracting here keeps the STT
 // engine untouched and is robust to any source codec; the frontend feeds the returned
 // path straight to `stt_transcribe_file`. Mirrors the `video_transcode` ffmpeg lane.
@@ -99,10 +99,10 @@ pub fn coaching_open_path(app: tauri::AppHandle, path: String) -> Result<(), Vau
 /// Comms WAVs older than this are evicted on the next extraction (best-effort).
 const COMMS_CACHE_MAX_AGE_SECS: u64 = 7 * 24 * 60 * 60; // 7 days
 
-/// `<cache>/iskariel/comms/`, created on demand. Mirrors `video_transcode::cache_root`.
+/// `<cache>/mortar-pestle/comms/`, created on demand. Mirrors `video_transcode::cache_root`.
 fn comms_cache_dir() -> Result<PathBuf, VaultError> {
     let base = dirs::cache_dir().ok_or_else(|| VaultError::Io("cache_dir() unavailable".into()))?;
-    let dir = base.join("iskariel/comms");
+    let dir = base.join("mortar-pestle/comms");
     std::fs::create_dir_all(&dir).map_err(|e| VaultError::Io(format!("mkdir comms cache: {e}")))?;
     Ok(dir)
 }
@@ -135,7 +135,7 @@ fn prune_comms_cache(dir: &Path) {
 /// Extract a recording's audio to a disposable 16 kHz mono WAV and return its path.
 /// Canonicalizes + `is_file`-guards the user-picked recording (trusted file-pick, like
 /// `coaching_read_image`), then shells system ffmpeg (`-vn -ac 1 -ar 16000 -f wav`) to
-/// `<cache>/iskariel/comms/<hash>.wav`, writing `<hash>.wav.part` first and renaming
+/// `<cache>/mortar-pestle/comms/<hash>.wav`, writing `<hash>.wav.part` first and renaming
 /// atomically on success. The cache key is the recording's canonical path + mtime, so a
 /// re-extract of the same file is a no-op fast-path (the heavy, re-runnable pass is STT,
 /// not extraction). Mirrors `video_transcode::extract_subs_sync`.
@@ -255,7 +255,7 @@ pub async fn deadlock_fetch_match(match_id: String) -> Result<serde_json::Value,
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(FETCH_TIMEOUT_SECS))
-        .user_agent("iskariel/1.0 (deadlock-scrim-coaching)")
+        .user_agent("mortar-pestle/1.0 (deadlock-scrim-coaching)")
         .build()
         .map_err(|e| DeadlockError::Network(format!("HTTP client init failed: {e}")))?;
 
@@ -314,7 +314,7 @@ fn classify_model_id(alias: &str) -> &'static str {
 /// Inlined here (vs reusing design::load_api_key) to keep this command self-contained
 /// on DeadlockError — no cross-module error mapping.
 fn classify_api_key() -> Result<String, DeadlockError> {
-    if let Ok(entry) = keyring::Entry::new("iskariel", "anthropic") {
+    if let Ok(entry) = keyring::Entry::new("mortar-pestle", "anthropic") {
         if let Ok(k) = entry.get_password() {
             if !k.is_empty() {
                 return Ok(k);

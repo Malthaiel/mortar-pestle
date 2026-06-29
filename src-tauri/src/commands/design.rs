@@ -26,7 +26,7 @@ use tokio::process::Command as TokioCommand;
 
 use crate::commands::vault;
 
-const SERVICE: &str = "iskariel";
+const SERVICE: &str = "mortar-pestle";
 const ACCOUNT: &str = "anthropic";
 const ANTHROPIC_URL: &str = "https://api.anthropic.com/v1/messages";
 /// Map the UI model alias (`opus`/`sonnet`/`haiku`, from `settings.agents.model`)
@@ -48,8 +48,8 @@ fn project_root() -> PathBuf {
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| {
             dirs::home_dir()
-                .map(|h| h.join("Code").join("iskariel"))
-                .unwrap_or_else(|| PathBuf::from("iskariel"))
+                .map(|h| h.join("Code").join("mortar-pestle"))
+                .unwrap_or_else(|| PathBuf::from("mortar-pestle"))
         })
 }
 

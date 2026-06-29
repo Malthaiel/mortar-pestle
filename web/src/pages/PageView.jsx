@@ -22,7 +22,7 @@ function dailyLogDsFromPath(path) {
 
 // Live Preview embed resolvers (passed to livePreview()). Kept at module scope
 // so the image cache survives editor re-mounts. Images resolve to an
-// iskariel-asset:// URL; note transclusions fetch the target's rendered HTML.
+// mortar-pestle-asset:// URL; note transclusions fetch the target's rendered HTML.
 const _embedImgCache = new Map();
 async function resolveEmbedImage(target, direct) {
   const key = (direct ? 'd|' : 'w|') + target;

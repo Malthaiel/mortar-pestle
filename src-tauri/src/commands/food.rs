@@ -51,7 +51,7 @@ fn resolve_db(app: &AppHandle) -> Option<PathBuf> {
         }
     }
     if let Some(home) = dirs::home_dir() {
-        let dev = home.join("Code/iskariel/src-tauri/resources/usda_foods.db");
+        let dev = home.join("Code/mortar-pestle/src-tauri/resources/usda_foods.db");
         if dev.exists() {
             return Some(dev);
         }

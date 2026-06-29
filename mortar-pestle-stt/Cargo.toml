@@ -1,0 +1,61 @@
+[package]
+name = "mortar-pestle-stt"
+version = "0.1.0"
+edition = "2021"
+description = "Speech-to-text engine: Unix-socket NDJSON daemon driving local Whisper transcription. Windowless. SF2: resident whisper-rs model + batch whisper_full (file mode)."
+publish = false
+
+[features]
+# GPU backend is a one-line whisper-rs cargo feature (research-locked). Default OFF so
+# `cargo build` is the fast CPU shakeout build. `vulkan` is the prod default (built by
+# tauri.conf.json's beforeBuildCommand); `cuda` is OPT-IN and NON-DEFAULT (Phase 4 SF2 —
+# attempt-only on this host: nvcc 13.0 rejects host gcc 15.2, no older g++ to pin via
+# CUDAHOSTCXX, so it stays inert here). The runtime resolver (`whisper::load_ctx`) reports
+# the backend that ACTUALLY loaded into `model_loaded.backend`, GPU-first with a CPU fallback.
+default = []
+vulkan = ["whisper-rs/vulkan"]
+cuda = ["whisper-rs/cuda"]
+
+[dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "time", "io-util"] }
+log = "0.4"
+env_logger = "0.11"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# SF2 dependency add (ask-first gate, user-approved 2026-06-16). whisper-rs vendors
+# whisper.cpp (offline C/C++/CMake build); symphonia decodes the input file to f32
+# PCM (wav+pcm only this SF — mp3/isomp4/aac are a one-line bump when a later phase
+# transcribes capture-engine output).
+whisper-rs = { version = "0.16" }
+symphonia = { version = "0.5", default-features = false, features = ["wav", "pcm"] }
+# SF3 dependency add (ask-first gate, user-approved 2026-06-16). ureq: blocking, minimal
+# HTTP client (rustls TLS, no system OpenSSL) for fetch-on-demand model download on the
+# blocking whisper worker thread; sha2: verifies the published HuggingFace git-LFS SHA256
+# OID as the bytes stream, before the temp file is atomically committed to the cache.
+ureq = "2"
+sha2 = "0.10"
+# Phase 2 SF1 dependency add (ask-first gate, user-approved 2026-06-16). cpal: the
+# locked cross-platform mic API (Linux backend = ALSA via alsa-sys → needs
+# alsa-lib-devel at build time); opens the default input device and streams native
+# frames. rubato: anti-aliased sample-rate conversion (device-native 44.1/48 kHz →
+# the 16 kHz mono f32 whisper audio contract). Both backend-independent of the
+# vulkan feature.
+cpal = "0.15"
+rubato = "0.15"
+
+# Push-to-talk deps are per-OS (STT Windows port SF5). Linux drives it through the XDG
+# GlobalShortcuts portal (ashpd: typed portal client; futures-util: StreamExt over the
+# Activated/Deactivated signal streams). Windows uses a WH_KEYBOARD_LL low-level
+# keyboard hook (windows-sys) — no portal, no D-Bus.
+[target.'cfg(target_os = "linux")'.dependencies]
+ashpd = { version = "0.13", features = ["global_shortcuts"] }
+futures-util = "0.3"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Threading",
+] }
+

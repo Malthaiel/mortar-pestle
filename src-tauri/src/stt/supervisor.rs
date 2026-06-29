@@ -1,6 +1,6 @@
-//! STT SF1 — the iskariel-stt engine supervisor.
+//! STT SF1 — the mortar-pestle-stt engine supervisor.
 //!
-//! Owns the optional `iskariel-stt` engine's whole lifecycle for the app's
+//! Owns the optional `mortar-pestle-stt` engine's whole lifecycle for the app's
 //! lifetime: **adopt-first / spawn-second**, bounded-backoff respawn on
 //! unexpected exit, a crash-loop terminal state, and a `RunEvent::Exit` reap.
 //! It feeds the `stt-engine-status` Tauri event and holds the single
@@ -10,7 +10,7 @@
 //! crash-loop terminal latch, generation stale-write guard, signal helpers, and
 //! reap are copied verbatim. STT-specific deltas: the event name
 //! (`stt-engine-status`), the client type ([`SttClient`]), and — since the SF1
-//! `iskariel-stt` daemon has no persisted config — the capture `config_path` /
+//! `mortar-pestle-stt` daemon has no persisted config — the capture `config_path` /
 //! `push_config` machinery is dropped.
 //!
 //! ## Adopt-first (single-instance)

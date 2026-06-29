@@ -97,7 +97,7 @@ fn resolve_script(app: &AppHandle, name: &str) -> Option<String> {
         }
     }
     if let Some(home) = dirs::home_dir() {
-        let dev = home.join(format!("Code/iskariel/src-tauri/scripts/{name}"));
+        let dev = home.join(format!("Code/mortar-pestle/src-tauri/scripts/{name}"));
         if dev.exists() {
             return Some(dev.to_string_lossy().into_owned());
         }

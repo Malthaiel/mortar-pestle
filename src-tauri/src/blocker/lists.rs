@@ -48,7 +48,7 @@ fn http_client() -> &'static reqwest::Client {
     static CELL: OnceLock<reqwest::Client> = OnceLock::new();
     CELL.get_or_init(|| {
         reqwest::Client::builder()
-            .user_agent("Iskariel-Shield/1.0")
+            .user_agent("mortar-pestle-Shield/1.0")
             .build()
             .unwrap_or_else(|_| reqwest::Client::new())
     })

@@ -16,10 +16,10 @@ Plan of record: Citadel vault `Knowledge/Iskariel/Plans/Feedback Board.md`.
 
 4. **Build with the keys.** Set these before `npm run tauri dev` (or in CI for a release build) — they bake into the Rust binary via `option_env!`, never into the JS bundle:
    ```sh
-   export ISKARIEL_SUPABASE_URL="https://<project>.supabase.co"
-   export ISKARIEL_SUPABASE_ANON_KEY="<anon-public-key>"
+   export MORTAR_PESTLE_SUPABASE_URL="https://<project>.supabase.co"
+   export MORTAR_PESTLE_SUPABASE_ANON_KEY="<anon-public-key>"
    ```
-   On Windows PowerShell: `$env:ISKARIEL_SUPABASE_URL = "..."` etc.
+   On Windows PowerShell: `$env:MORTAR_PESTLE_SUPABASE_URL = "..."` etc.
 
 5. **Make yourself the dev.** Launch the app, sign in by email code, pick a handle (creates your `profiles` row). Then in the dashboard SQL editor:
    ```sql

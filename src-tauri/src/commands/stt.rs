@@ -1,4 +1,4 @@
-//! STT command surface — the Tauri front door to the `iskariel-stt` sidecar.
+//! STT command surface — the Tauri front door to the `mortar-pestle-stt` sidecar.
 //!
 //! Seven commands forward to the supervisor's single shared [`SttClient`]
 //! (`crate::stt::client`) via its generic `request(op, args)` (the client exposes
@@ -605,7 +605,7 @@ fn open_global_shortcuts_settings() -> Result<(), String> {
 
 // ── Model cache path (host-side mirror) ───────────────────────────────────────
 //
-// ponytail: duplicates `iskariel-stt::models::model_cache_dir` / `resolve_model_path`.
+// ponytail: duplicates `mortar-pestle-stt::models::model_cache_dir` / `resolve_model_path`.
 // The STT engine is a separate sidecar binary (not a crate dep of src-tauri), so the
 // cache dir it owns isn't reachable from here — mirroring the resolver is the
 // shortest path. The daemon is the source of truth; if it ever relocates the cache,
@@ -619,7 +619,7 @@ fn model_cache_dir() -> PathBuf {
         .map(PathBuf::from)
         .filter(|p| !p.as_os_str().is_empty())
         .unwrap_or_else(|| PathBuf::from("."))
-        .join("iskariel")
+        .join("mortar-pestle")
         .join("models")
         .join("whisper")
 }
@@ -637,7 +637,7 @@ fn model_cache_dir() -> PathBuf {
                 .join(".local")
                 .join("share")
         });
-    data.join("iskariel").join("models").join("whisper")
+    data.join("mortar-pestle").join("models").join("whisper")
 }
 
 /// Resolve a registry model `name` (e.g. `small.en`) to its cached file path

@@ -1,6 +1,6 @@
 //! STT SF1 — studio-artifact-only carriage gate.
 //!
-//! Resolves the optional `iskariel-stt` engine binary at runtime. Coupling to the
+//! Resolves the optional `mortar-pestle-stt` engine binary at runtime. Coupling to the
 //! engine is the resolved **path** only — there is no compile-time dependency on
 //! the engine crate and no `studio` cargo feature on src-tauri (the binary is
 //! present in studio bundles and absent in stable ones, so a runtime
@@ -19,17 +19,17 @@ use tauri::{AppHandle, Manager};
 /// on Windows, bare on Unix). Used for BOTH the bundled-resource resolve and the
 /// dev-tree artifact basename.
 #[cfg(windows)]
-const ENGINE_BIN_FILE: &str = "iskariel-stt.exe";
+const ENGINE_BIN_FILE: &str = "mortar-pestle-stt.exe";
 #[cfg(not(windows))]
-const ENGINE_BIN_FILE: &str = "iskariel-stt";
+const ENGINE_BIN_FILE: &str = "mortar-pestle-stt";
 
 /// Resolve the STT engine binary, first-existing-wins:
 ///
-/// 1. **Bundled** — `BaseDirectory::Resource` / `iskariel-stt` (studio RPM).
-/// 2. **Dev tree** — `<home>/Code/iskariel/iskariel-stt/target/{release,debug}/`
-///    `iskariel-stt[.exe]` (home is `%USERPROFILE%` on Windows, `$HOME` on Unix; dev
+/// 1. **Bundled** — `BaseDirectory::Resource` / `mortar-pestle-stt` (studio RPM).
+/// 2. **Dev tree** — `<home>/Code/mortar-pestle/mortar-pestle-stt/target/{release,debug}/`
+///    `mortar-pestle-stt[.exe]` (home is `%USERPROFILE%` on Windows, `$HOME` on Unix; dev
 ///    runs from source, not the bundle; a `cargo build` lands either profile).
-/// 3. **Override** — the `ISKARIEL_STT_BIN` env var (explicit path).
+/// 3. **Override** — the `MORTAR_PESTLE_STT_BIN` env var (explicit path).
 ///
 /// Returns `None` when none exist. **This function logs nothing** — neither on
 /// success nor on the `None` path. The single "stt disabled" log lives at the
@@ -50,7 +50,7 @@ pub fn resolve_engine_binary(app: &AppHandle) -> Option<PathBuf> {
     #[cfg(not(windows))]
     let dev_home = std::env::var_os("HOME");
     if let Some(home) = dev_home {
-        let base = PathBuf::from(home).join("Code/iskariel/iskariel-stt/target");
+        let base = PathBuf::from(home).join("Code/mortar-pestle/mortar-pestle-stt/target");
         for profile in ["release", "debug"] {
             let dev = base.join(profile).join(ENGINE_BIN_FILE);
             if dev.exists() {
@@ -60,7 +60,7 @@ pub fn resolve_engine_binary(app: &AppHandle) -> Option<PathBuf> {
     }
 
     // 3. Explicit override.
-    if let Some(p) = std::env::var_os("ISKARIEL_STT_BIN").map(PathBuf::from) {
+    if let Some(p) = std::env::var_os("MORTAR_PESTLE_STT_BIN").map(PathBuf::from) {
         if p.exists() {
             return Some(p);
         }

@@ -5,7 +5,7 @@
 //!
 //!   cargo run -p nvenc-sys --example encoder300
 //!   ffprobe -count_frames -select_streams v:0 -show_entries stream=nb_read_frames \
-//!     -of default=noprint_wrappers=1 /tmp/iskariel-capture-300.h264
+//!     -of default=noprint_wrappers=1 /tmp/mortar-pestle-capture-300.h264
 
 // The CUDA `NvencH264Encoder` is gated off Windows (Game Capture SF1), so this
 // Linux-only SF3 acceptance example is a no-op there.
@@ -104,7 +104,7 @@ fn main() {
     }
 
     // Dump the concatenated ES for the ffmpeg frame-count cross-check.
-    let path = "/tmp/iskariel-capture-300.h264";
+    let path = "/tmp/mortar-pestle-capture-300.h264";
     let mut f = std::fs::File::create(path).expect("create output");
     f.write_all(&es).expect("write output");
 

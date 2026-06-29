@@ -1,4 +1,4 @@
-//! STT SF1 — the sole owner of the iskariel-stt engine's Unix control socket.
+//! STT SF1 — the sole owner of the mortar-pestle-stt engine's Unix control socket.
 //!
 //! An async tokio NDJSON client speaking the **frozen** protocol (see below).
 //! One [`SttClient`] owns the socket; callers interact through it via
@@ -10,7 +10,7 @@
 //!
 //! # Frozen protocol — byte-identical mirror
 //!
-//! The structs below mirror `iskariel-stt/src/daemon/protocol.rs`
+//! The structs below mirror `mortar-pestle-stt/src/daemon/protocol.rs`
 //! **byte-for-byte** (same field names, same types, same serde attributes, same
 //! snake_case-vs-camelCase boundary). The two crates are decoupled by design (no
 //! shared dependency); `tests/stt_roundtrip.rs` is the cross-crate round-trip
@@ -47,7 +47,7 @@ use tokio::net::windows::named_pipe::{ClientOptions, NamedPipeClient};
 use tokio::sync::{broadcast, mpsc, oneshot};
 
 // ===========================================================================
-// Frozen protocol structs — byte-identical mirror of iskariel-stt/.../protocol.rs.
+// Frozen protocol structs — byte-identical mirror of mortar-pestle-stt/.../protocol.rs.
 // ===========================================================================
 //
 // Envelope (snake_case, NO `rename_all`) — identical to capture's envelope.
@@ -98,7 +98,7 @@ impl ProtoError {
 // ---------------------------------------------------------------------------
 // STT payload structs (snake_case, NO `rename_all`). These are the typed
 // bodies carried in `Request.args` / `Event.data` / `Response.data`. They
-// mirror iskariel-stt's protocol module exactly; the drift gate pins them.
+// mirror mortar-pestle-stt's protocol module exactly; the drift gate pins them.
 // ---------------------------------------------------------------------------
 
 /// `echo` payload — both the request `args` and the `echo` event `data`. The SF1
@@ -180,7 +180,7 @@ pub struct Vu {
 }
 
 // ---------------------------------------------------------------------------
-// Phase 5 model-management payloads — byte-identical mirror of iskariel-stt's
+// Phase 5 model-management payloads — byte-identical mirror of mortar-pestle-stt's
 // protocol.rs (list_models / delete_model / download_model). The drift gate
 // (tests/stt_roundtrip.rs) pins these.
 // ---------------------------------------------------------------------------
@@ -214,14 +214,14 @@ pub struct DownloadComplete {
 }
 
 // ---------------------------------------------------------------------------
-// Phase 5 push-to-talk (SF5) — byte-identical mirror of iskariel-stt's protocol.rs
+// Phase 5 push-to-talk (SF5) — byte-identical mirror of mortar-pestle-stt's protocol.rs
 // hotkeys structs. The daemon pushes the snapshot as a `hotkeys` event + answers it
 // inside `get_state` / `rebind_hotkeys` (both under `data.hotkeys`); dictation
 // lifecycle events carry the source so the host routes a HOTKEY transcript to the
 // daily log. The drift gate (tests/stt_roundtrip.rs) pins these.
 // ---------------------------------------------------------------------------
 
-/// The bound global-shortcut state (mirrors iskariel-capture's `HotkeysSnapshot`).
+/// The bound global-shortcut state (mirrors mortar-pestle-capture's `HotkeysSnapshot`).
 /// `bound:false` + `last_error` when the portal is unavailable. `last_error` has
 /// NO `skip_serializing_if` (mirrors capture) → `None` serializes as `null`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -262,20 +262,20 @@ pub struct DictationCommitted {
 // Async NDJSON client.
 // ===========================================================================
 
-/// `$XDG_RUNTIME_DIR/iskariel/stt.sock` (falls back to `/tmp` when the env var
-/// is unset). Mirrors `iskariel-stt/src/daemon/socket.rs::socket_path`.
+/// `$XDG_RUNTIME_DIR/mortar-pestle/stt.sock` (falls back to `/tmp` when the env var
+/// is unset). Mirrors `mortar-pestle-stt/src/daemon/socket.rs::socket_path`.
 pub fn socket_path() -> PathBuf {
     let runtime = std::env::var_os("XDG_RUNTIME_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("/tmp"));
-    runtime.join("iskariel").join("stt.sock")
+    runtime.join("mortar-pestle").join("stt.sock")
 }
 
-/// `\\.\pipe\iskariel-stt` — the Windows named-pipe endpoint. Mirrors
-/// `iskariel-stt/src/daemon/socket.rs::PIPE_NAME` (the two crates are decoupled by
+/// `\\.\pipe\mortar-pestle-stt` — the Windows named-pipe endpoint. Mirrors
+/// `mortar-pestle-stt/src/daemon/socket.rs::PIPE_NAME` (the two crates are decoupled by
 /// design; this name string is the coupling, exactly as the socket path is on Unix).
 #[cfg(windows)]
-pub const PIPE_NAME: &str = r"\\.\pipe\iskariel-stt";
+pub const PIPE_NAME: &str = r"\\.\pipe\mortar-pestle-stt";
 
 /// Open the control pipe, retrying only the transient `ERROR_PIPE_BUSY` (231 — all
 /// server instances momentarily busy, the `WaitNamedPipe` pattern). Every other

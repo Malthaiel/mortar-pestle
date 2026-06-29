@@ -1,6 +1,6 @@
 //! 5-SF2a — studio-artifact-only carriage gate.
 //!
-//! Resolves the optional `iskariel-capture` engine binary at runtime. Coupling to
+//! Resolves the optional `mortar-pestle-capture` engine binary at runtime. Coupling to
 //! the engine is the resolved **path** only — there is no compile-time dependency
 //! on the engine crate and no `studio` cargo feature on src-tauri (the binary is
 //! present in studio bundles and absent in stable ones, so a runtime
@@ -8,7 +8,7 @@
 //!
 //! Mirrors `commands::music_download::resolve_script` (bundled-resource-first,
 //! dev-tree fallback) with the engine's two extra knobs: a release→debug dev
-//! search and an `ISKARIEL_CAPTURE_BIN` override.
+//! search and an `MORTAR_PESTLE_CAPTURE_BIN` override.
 
 use std::path::PathBuf;
 
@@ -18,17 +18,17 @@ use tauri::{AppHandle, Manager};
 /// on Windows, bare on Unix). Used for BOTH the bundled-resource resolve and the
 /// dev-tree artifact basename.
 #[cfg(windows)]
-const ENGINE_BIN_FILE: &str = "iskariel-capture.exe";
+const ENGINE_BIN_FILE: &str = "mortar-pestle-capture.exe";
 #[cfg(not(windows))]
-const ENGINE_BIN_FILE: &str = "iskariel-capture";
+const ENGINE_BIN_FILE: &str = "mortar-pestle-capture";
 
 /// Resolve the capture engine binary, first-existing-wins:
 ///
-/// 1. **Bundled** — `BaseDirectory::Resource` / `iskariel-capture[.exe]` (studio bundle).
-/// 2. **Dev tree** — `<home>/Code/iskariel/iskariel-capture/target/{release,debug}/`
-///    `iskariel-capture[.exe]` (home is `%USERPROFILE%` on Windows, `$HOME` on Unix;
+/// 1. **Bundled** — `BaseDirectory::Resource` / `mortar-pestle-capture[.exe]` (studio bundle).
+/// 2. **Dev tree** — `<home>/Code/mortar-pestle/mortar-pestle-capture/target/{release,debug}/`
+///    `mortar-pestle-capture[.exe]` (home is `%USERPROFILE%` on Windows, `$HOME` on Unix;
 ///    dev runs from source, not the bundle; a `cargo build` lands either profile).
-/// 3. **Override** — the `ISKARIEL_CAPTURE_BIN` env var (explicit path).
+/// 3. **Override** — the `MORTAR_PESTLE_CAPTURE_BIN` env var (explicit path).
 ///
 /// Returns `None` when none exist. **This function logs nothing** — neither on
 /// success nor on the `None` path. The single "capture disabled" log lives at
@@ -49,7 +49,7 @@ pub fn resolve_engine_binary(app: &AppHandle) -> Option<PathBuf> {
     #[cfg(not(windows))]
     let dev_home = std::env::var_os("HOME");
     if let Some(home) = dev_home {
-        let base = PathBuf::from(home).join("Code/iskariel/iskariel-capture/target");
+        let base = PathBuf::from(home).join("Code/mortar-pestle/mortar-pestle-capture/target");
         for profile in ["release", "debug"] {
             let dev = base.join(profile).join(ENGINE_BIN_FILE);
             if dev.exists() {
@@ -59,7 +59,7 @@ pub fn resolve_engine_binary(app: &AppHandle) -> Option<PathBuf> {
     }
 
     // 3. Explicit override.
-    if let Some(p) = std::env::var_os("ISKARIEL_CAPTURE_BIN").map(PathBuf::from) {
+    if let Some(p) = std::env::var_os("MORTAR_PESTLE_CAPTURE_BIN").map(PathBuf::from) {
         if p.exists() {
             return Some(p);
         }

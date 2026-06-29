@@ -4,9 +4,9 @@
 //! background task hashes the on-disk binary and emits `update-available`
 //! when the disk content diverges from the cached value. Companion
 //! `app_self_apply_update` restarts into the new binary; `app_self_revert`
-//! atomically swaps `iskariel.prev` back into place and restarts.
+//! atomically swaps `mortar-pestle.prev` back into place and restarts.
 //!
-//! Rotation of `iskariel` -> `.prev` -> `.prev2` happens in the
+//! Rotation of `mortar-pestle` -> `.prev` -> `.prev2` happens in the
 //! pre-build hook at `scripts/rotate-binary.mjs`, chained into
 //! `tauri.conf.json::beforeBuildCommand`.
 
@@ -111,7 +111,7 @@ fn check_inner() -> Result<SelfUpdateStatus, String> {
         .map(|d| d.as_secs());
     let prev_exists = path
         .parent()
-        .map(|p| p.join("iskariel.prev").exists())
+        .map(|p| p.join("mortar-pestle.prev").exists())
         .unwrap_or(false);
 
     Ok(SelfUpdateStatus {
@@ -183,11 +183,11 @@ pub fn app_self_revert(app: AppHandle) -> Result<(), String> {
         .parent()
         .ok_or_else(|| "no parent dir".to_string())?
         .to_path_buf();
-    let prev = dir.join("iskariel.prev");
+    let prev = dir.join("mortar-pestle.prev");
     if !prev.exists() {
         return Err("no previous binary to revert to".into());
     }
-    let tmp = dir.join("iskariel.tmp_revert");
+    let tmp = dir.join("mortar-pestle.tmp_revert");
 
     // 3-rename atomic swap. Each rename is atomic on the same filesystem;
     // partial failure rolls back best-effort and surfaces the original error.

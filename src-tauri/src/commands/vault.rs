@@ -102,7 +102,7 @@ pub fn set_captures_override(path: Option<String>) {
 /// → the user override (WI-2) → platform default. Multi-GB media must NOT live in
 /// roaming app-data (decision #11): the Windows default is `%USERPROFILE%\Videos\
 /// Iskariel`, Linux the historical `library_vault_root()/Captures`. The daemon
-/// spawn (`ISKARIEL_CAPTURES_DIR`), the clip-list scan, the reveal allowlist, AND
+/// spawn (`MORTAR_PESTLE_CAPTURES_DIR`), the clip-list scan, the reveal allowlist, AND
 /// `RootKind::Captures` (the bin restore target) all resolve through here, so they
 /// agree by construction — including under a user override.
 pub fn captures_dir() -> String {

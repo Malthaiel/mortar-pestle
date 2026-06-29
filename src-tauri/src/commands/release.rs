@@ -41,8 +41,8 @@ fn code_root() -> PathBuf {
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| {
             dirs::home_dir()
-                .map(|h| h.join("Code").join("iskariel"))
-                .unwrap_or_else(|| PathBuf::from("iskariel"))
+                .map(|h| h.join("Code").join("mortar-pestle"))
+                .unwrap_or_else(|| PathBuf::from("mortar-pestle"))
         })
 }
 

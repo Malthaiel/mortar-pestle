@@ -1,7 +1,7 @@
 //! Loopback HTTP server for media bytes only.
 //!
 //! WebKitGTK's HTMLMediaElement rejects custom URI schemes
-//! (`iskariel-asset://...`) with NotSupportedError, so `<audio>` / `<video>`
+//! (`mortar-pestle-asset://...`) with NotSupportedError, so `<audio>` / `<video>`
 //! can't load from the asset protocol. This module re-exposes the existing
 //! byte-serving helpers in `asset_protocol` over plain HTTP on 127.0.0.1 —
 //! the only origin WebKit accepts for media. SF12 removed the Fastify

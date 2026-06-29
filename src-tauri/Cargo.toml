@@ -1,10 +1,10 @@
 [package]
-name = "iskariel"
+name = "mortar-pestle"
 version = "0.8.2"
-description = "Iskariel — a personal operating system for thinking, planning, and producing"
+description = "Mortar & Pestle — a personal operating system for thinking, planning, and producing"
 authors = ["Malthaiel"]
 license = "PolyForm-Noncommercial-1.0.0"
-repository = "https://github.com/Malthaiel/iskariel"
+repository = "https://github.com/Malthaiel/mortar-pestle"
 edition = "2021"
 rust-version = "1.77.2"
 

@@ -1,5 +1,5 @@
 //! 5-SF2e — the sole owner of the capture engine's control transport (a Unix socket
-//! on Linux; the `\\.\pipe\iskariel-capture` named pipe on Windows, SF4).
+//! on Linux; the `\\.\pipe\mortar-pestle-capture` named pipe on Windows, SF4).
 //!
 //! An async tokio NDJSON client speaking the **frozen** protocol (see below).
 //! One [`CaptureClient`] owns the socket; callers interact through it via
@@ -11,7 +11,7 @@
 //!
 //! # Frozen protocol — byte-identical mirror
 //!
-//! The structs below mirror `iskariel-capture/src/daemon/protocol.rs`
+//! The structs below mirror `mortar-pestle-capture/src/daemon/protocol.rs`
 //! **byte-for-byte** (same field names, same types, same serde attributes, same
 //! snake_case-vs-camelCase boundary). The two crates are decoupled by design
 //! (no shared dependency); `tests/capture_roundtrip.rs` is the cross-crate
@@ -199,21 +199,21 @@ pub struct SavedClip {
 // Async NDJSON client.
 // ===========================================================================
 
-/// `$XDG_RUNTIME_DIR/iskariel/capture.sock` (falls back to `/tmp` when the env
-/// var is unset). Mirrors `iskariel-capture/src/daemon/socket.rs::socket_path`.
+/// `$XDG_RUNTIME_DIR/mortar-pestle/capture.sock` (falls back to `/tmp` when the env
+/// var is unset). Mirrors `mortar-pestle-capture/src/daemon/socket.rs::socket_path`.
 #[cfg(unix)]
 pub fn socket_path() -> PathBuf {
     let runtime = std::env::var_os("XDG_RUNTIME_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("/tmp"));
-    runtime.join("iskariel").join("capture.sock")
+    runtime.join("mortar-pestle").join("capture.sock")
 }
 
-/// `\\.\pipe\iskariel-capture` — the Windows named-pipe endpoint (SF4), mirroring the
-/// daemon's `iskariel-capture/src/daemon/socket.rs::PIPE_NAME`. This name string is
+/// `\\.\pipe\mortar-pestle-capture` — the Windows named-pipe endpoint (SF4), mirroring the
+/// daemon's `mortar-pestle-capture/src/daemon/socket.rs::PIPE_NAME`. This name string is
 /// the cross-crate coupling, exactly as the socket path is on Unix.
 #[cfg(windows)]
-pub const PIPE_NAME: &str = r"\\.\pipe\iskariel-capture";
+pub const PIPE_NAME: &str = r"\\.\pipe\mortar-pestle-capture";
 
 /// Connect to the daemon's named pipe, retrying only on `ERROR_PIPE_BUSY` (231) — all
 /// server instances momentarily occupied. Any other error (incl. `ERROR_FILE_NOT_FOUND`

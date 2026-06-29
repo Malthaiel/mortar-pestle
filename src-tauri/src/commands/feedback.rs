@@ -4,7 +4,7 @@
 //! Security model (see `supabase/migrations/0001_feedback_board.sql`):
 //!   - The **anon key + project URL are public** (baked via `option_env!`, with a
 //!     runtime `std::env::var` fallback for dev). Row-Level Security is the gate.
-//!   - The **user session JWT lives in the OS keyring** (`iskariel`/`feedback_session`).
+//!   - The **user session JWT lives in the OS keyring** (`mortar-pestle`/`feedback_session`).
 //!   - `bearer()` attaches the user's access token so Postgres RLS sees `auth.uid()`;
 //!     public reads fall back to the anon key alone. Token refresh is Mutex-serialized.
 //!
@@ -25,8 +25,8 @@ use tauri::{AppHandle, Emitter};
 // Baked at build time; release builds must set these (a placeholder/empty value
 // makes every command return Config). Runtime env fallback lets dev set them
 // without a recompile.
-const SUPABASE_URL_BAKED: Option<&str> = option_env!("ISKARIEL_SUPABASE_URL");
-const SUPABASE_ANON_BAKED: Option<&str> = option_env!("ISKARIEL_SUPABASE_ANON_KEY");
+const SUPABASE_URL_BAKED: Option<&str> = option_env!("MORTAR_PESTLE_SUPABASE_URL");
+const SUPABASE_ANON_BAKED: Option<&str> = option_env!("MORTAR_PESTLE_SUPABASE_ANON_KEY");
 
 fn base_url() -> Result<String, FeedbackError> {
     if let Some(u) = SUPABASE_URL_BAKED {
@@ -34,13 +34,13 @@ fn base_url() -> Result<String, FeedbackError> {
             return Ok(u.trim_end_matches('/').to_string());
         }
     }
-    if let Ok(u) = std::env::var("ISKARIEL_SUPABASE_URL") {
+    if let Ok(u) = std::env::var("MORTAR_PESTLE_SUPABASE_URL") {
         if !u.is_empty() {
             return Ok(u.trim_end_matches('/').to_string());
         }
     }
     Err(FeedbackError::Config(
-        "Supabase URL not configured (set ISKARIEL_SUPABASE_URL)".into(),
+        "Supabase URL not configured (set MORTAR_PESTLE_SUPABASE_URL)".into(),
     ))
 }
 
@@ -50,13 +50,13 @@ fn anon_key() -> Result<String, FeedbackError> {
             return Ok(k.to_string());
         }
     }
-    if let Ok(k) = std::env::var("ISKARIEL_SUPABASE_ANON_KEY") {
+    if let Ok(k) = std::env::var("MORTAR_PESTLE_SUPABASE_ANON_KEY") {
         if !k.is_empty() {
             return Ok(k.to_string());
         }
     }
     Err(FeedbackError::Config(
-        "Supabase anon key not configured (set ISKARIEL_SUPABASE_ANON_KEY)".into(),
+        "Supabase anon key not configured (set MORTAR_PESTLE_SUPABASE_ANON_KEY)".into(),
     ))
 }
 
@@ -104,7 +104,7 @@ impl From<reqwest::Error> for FeedbackError {
 }
 
 // ───────────────────────── session (OS keyring) ─────────────────────────
-const KR_SERVICE: &str = "iskariel";
+const KR_SERVICE: &str = "mortar-pestle";
 const KR_ACCOUNT: &str = "feedback_session";
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -248,7 +248,7 @@ async fn refresh_session(refresh_token: &str) -> Result<Session, FeedbackError> 
 fn client() -> Result<reqwest::Client, FeedbackError> {
     reqwest::Client::builder()
         .timeout(Duration::from_secs(20))
-        .user_agent("iskariel-feedback/1.0")
+        .user_agent("mortar-pestle-feedback/1.0")
         .build()
         .map_err(|e| FeedbackError::Network(format!("HTTP client init: {e}")))
 }
@@ -398,7 +398,7 @@ pub async fn feedback_profile_get(user_id: Option<String>) -> Result<Value, Feed
 }
 
 const RESERVED: &[&str] = &[
-    "admin", "dev", "iskariel", "support", "mod", "moderator", "staff", "official", "system",
+    "admin", "dev", "iskariel", "mortar-pestle", "support", "mod", "moderator", "staff", "official", "system",
 ];
 
 fn is_valid_handle(h: &str) -> bool {

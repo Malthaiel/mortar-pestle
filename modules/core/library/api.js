@@ -59,7 +59,7 @@ export const videoApi = {
   animeUninstall: (seriesPath, deleteFiles) =>
     _api.invoke('anime_uninstall', { seriesPath, deleteFiles: !!deleteFiles }),
   revealInFiles:     (path) => _api.invoke('reveal_in_files', { path }),
-  // SF12 (2026-05-24): video_start_transcode returns an `iskariel-asset://`
+  // SF12 (2026-05-24): video_start_transcode returns an `mortar-pestle-asset://`
   // URL but WebKitGTK rejects custom URI schemes for HTMLMediaElement. Wait
   // for the loopback media server's port, then rewrite the URL to
   // `http://127.0.0.1:<port>/transcode/<hash>.mp4` which WebKit accepts.

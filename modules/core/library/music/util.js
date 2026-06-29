@@ -7,10 +7,10 @@ import { mediaUrl } from '@host/api.js';
 export function coverSrc(image, width, opts) {
   if (!image) return null;
   const url = mediaUrl(image, opts) || null;
-  // Local covers (iskariel-asset:// scheme) support server-side resize via
+  // Local covers (mortar-pestle-asset:// scheme) support server-side resize via
   // ?w=<n>, which hits the cached-thumbnail path in the Rust asset protocol.
   // Remote URLs (http/data/blob) are returned untouched.
-  if (width && url && url.startsWith('iskariel-asset:')) {
+  if (width && url && url.startsWith('mortar-pestle-asset:')) {
     return url + (url.includes('?') ? '&' : '?') + 'w=' + width;
   }
   return url;
