@@ -19,6 +19,10 @@ target/
 # resolved by src-tauri/src/tool_path.rs. Not committed; PATH fallback until then.
 src-tauri/resources/bin/
 
+# USDA food database (86 MB) — fetched by scripts/fetch-usda-db.mjs at build time
+# (Release asset on Malthaiel/mortar-pestle, tag usda-db-v1). Not committed.
+src-tauri/resources/usda_foods.db
+
 # No-undo-net backups taken before bulk edits.
 .bak/
 
