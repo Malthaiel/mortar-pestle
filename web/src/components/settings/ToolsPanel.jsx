@@ -23,7 +23,7 @@ const TOOL_BLOCKS = [
     Icon: IconMic,
     description: 'Local speech-to-text transcription powered by whisper.cpp.',
     status: 'planned',
-    // Epic plan: Knowledge/Iskariel/Plans/Voice Transcription/
+    // Epic plan: Knowledge/Mortar & Pestle/Plans/Voice Transcription/
   },
   {
     id: 'color-picker',

@@ -327,7 +327,7 @@ export function VideoPlayerProvider({ children }) {
   }, [currentEpisode?.fileAbs, audioIdx, reloadNonce]);
 
   // Sub-feature 7.5 — subtitle URL is now async (Tauri command extracts VTT
-  // to a hash-keyed file under `~/.cache/iskariel/subs/`). Resolve at the
+  // to a hash-keyed file under `~/.cache/mortar-pestle/subs/`). Resolve at the
   // provider level so the <track> below renders only when the URL is ready.
   const [subsUrl, setSubsUrl] = useState(null);
   useEffect(() => {

@@ -17,7 +17,7 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
   --candy-depth-small: 5px;
 
   /* Height of the full-bleed brand-button section at the top of each sidebar
-     (ISKARIEL / TOOLKIT). The button face fills this minus the candy depth;
+     (MORTAR & PESTLE / TOOLKIT). The button face fills this minus the candy depth;
      the depth shadow occupies the remaining band and acts as the divider. */
   --brand-section-h: 40px;
 
@@ -1110,7 +1110,7 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
  * which is the bug the two real layers exist to avoid. Built parallel to the
  * single-layer system during migration (now .candy-btn-legacy — frozen Template
  * demos only); reclaimed the .candy-btn name at Finalize 2026-06-04.
- * Spec: Iskariel/Docs/Reference/Buttons.md. */
+ * Spec: Mortar & Pestle/Docs/Reference/Buttons.md. */
 
 .candy-btn {
   --cbtn-band: var(--surface);
@@ -1336,7 +1336,7 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
    flips on hover. */
 .candy-btn[data-shape="block"] { border-radius: 999px; }
 
-/* block[data-variant="brand"] — full-bleed sidebar section header (the ISKARIEL
+/* block[data-variant="brand"] — full-bleed sidebar section header (the MORTAR & PESTLE
    / TOOLKIT toggles). The button IS the section: full width, squared corners, fills
    the section height; its band shadow forms the section's bottom edge (no divider).
    Always paired with .is-primary. */
@@ -3629,7 +3629,7 @@ body[data-anim-button-depth="off"] { --candy-center-on: 0; }
 }
 
 /* ── Docs Buttons reference page — live demo rows ───────────────────────── *
- * Live <button> demos in Iskariel/Docs/Reference/Buttons.md sit inside
+ * Live <button> demos in Mortar & Pestle/Docs/Reference/Buttons.md sit inside
  * `<div class="demo-row">` wrappers so multiple buttons lay out horizontally
  * with breathing room. Only applies inside `.docs-body`. */
 

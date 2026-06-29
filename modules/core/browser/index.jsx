@@ -8,7 +8,7 @@ import BrowserSettingsTab from './BrowserSettingsTab.jsx';
 // `main` webview; page content renders in separate, zero-IPC raw WebKitGTK
 // views (one per tab) that the Rust `browser_*` commands drive. The left
 // sidebar hosts the tab strip (TabSidebar) / collapsed favicon rail (TabRail).
-// See Iskariel/Plans/Browser Multi-Tab.md.
+// See Mortar & Pestle/Plans/Browser Multi-Tab.md.
 export default {
   register(api) {
     const { IconGlobe } = api.ui.icons;

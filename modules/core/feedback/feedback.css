@@ -1,4 +1,4 @@
-/* Feedback Board module styles — promoted from Iskariel/Docs/Reference/Prototypes.md.
+/* Feedback Board module styles — promoted from Mortar & Pestle/Docs/Reference/Prototypes.md.
    Namespaced .fb-* because web/src/styles.css is a single global sheet. The candy
    recipe itself (.candy-btn / .candy-face / .is-active) is the host's global one. */
 

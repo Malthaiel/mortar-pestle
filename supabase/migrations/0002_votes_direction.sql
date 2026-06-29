@@ -1,8 +1,8 @@
--- Iskariel Feedback Board — migration 0002: directional (up / down) votes.
+-- Mortar & Pestle Feedback Board — migration 0002: directional (up / down) votes.
 -- Run ONCE against the project that already has 0001 applied (SQL editor or `supabase db push`).
 -- Adds a signed vote direction, splits the denormalized count into up/down + a generated
 -- score, and rewrites the count + guard triggers to match. No data migration needed
--- (pre-beta, no rows yet). Plan: Citadel `Knowledge/Iskariel/Plans/Feedback Board.md`.
+-- (pre-beta, no rows yet). Plan: Citadel `Knowledge/Mortar & Pestle/Plans/Feedback Board.md`.
 
 -- ── votes: add a signed direction (+1 up / -1 down); one row per (post,user) ──
 alter table votes add column value smallint not null default 1 check (value in (-1, 1));

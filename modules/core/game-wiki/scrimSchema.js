@@ -2,7 +2,7 @@
 // object and back, losslessly. The ScrimViewer renders the structured object as
 // fill-in boxes; every save round-trips read -> parse -> merge -> serialize -> write.
 //
-// Contract (see Knowledge/Iskariel/Plans/Deadlock Scrim Coaching/Scrim Surface & Viewer.md):
+// Contract (see Knowledge/Mortar & Pestle/Plans/Deadlock Scrim Coaching/Scrim Surface & Viewer.md):
 //   frontmatter (ordered Key: value)
 //   ## Scrim          (- Key: value bullets — Score, VOD Review)
 //   ## Match N        { - Key: value bullets (Match ID, Time, Scrim Recording, Scoreboard),

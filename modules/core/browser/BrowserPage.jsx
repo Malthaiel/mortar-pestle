@@ -23,7 +23,7 @@ import LoadingScreen from './LoadingScreen.jsx';
 // region (`holderRef`) and keeps the ACTIVE native view aligned to it via
 // `browser_set_bounds`. A tab whose url is null shows the React New-Tab Page
 // instead (native view hidden). The sidebar tab list/rail (TabSidebar/TabRail)
-// read the same store. See Iskariel/Plans/Browser Multi-Tab.md.
+// read the same store. See Mortar & Pestle/Plans/Browser Multi-Tab.md.
 
 // Rust holds one native WebView per tab, and they persist across this
 // component's mount/unmount (route changes). `_rustSeeded` recreates the
