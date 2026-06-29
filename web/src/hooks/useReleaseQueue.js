@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 
-const QUEUE_PATH = 'Iskariel/Release Queue.md';
+const QUEUE_PATH = 'Mortar & Pestle/Release Queue.md';
 
 // Canonical Releases.md section order (mirrors useReleases.js). Drives parse + compose.
 const CANONICAL_SECTIONS = ['New', 'Changed', 'Removed', 'Performance', 'Fixed', 'Migration', 'Known Issues', 'Process'];

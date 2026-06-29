@@ -93,8 +93,8 @@ pub fn release_publish(
     }
 
     // 2. Resolve both vault paths (sandboxed under the vault root).
-    let (_, releases_abs) = resolve_in("Iskariel/Releases.md", RootKind::App)?;
-    let (_, queue_abs) = resolve_in("Iskariel/Release Queue.md", RootKind::App)?;
+    let (_, releases_abs) = resolve_in("Mortar & Pestle/Releases.md", RootKind::App)?;
+    let (_, queue_abs) = resolve_in("Mortar & Pestle/Release Queue.md", RootKind::App)?;
 
     // 3. Mtime gate — CONFLICT if either file drifted since the modal read it.
     check_mtime(&releases_abs, releases_base_mtime)?;

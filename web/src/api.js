@@ -199,18 +199,18 @@ async function readCall(command, args) {
 
 // === Planner: Block Library + daily-log section helpers ===
 // Hand-rolled YAML parse/serialize for our controlled schema in
-// `Iskariel/Block Library.md`. Avoids adding a JS YAML dep; the
+// `Mortar & Pestle/Block Library.md`. Avoids adding a JS YAML dep; the
 // Rust side has `serde_yml` if we ever need robust round-trip.
 
-const BLOCK_LIBRARY_PATH = 'Iskariel/Block Library.md';
-const RELEASES_PATH = 'Iskariel/Releases.md';
-const RELEASE_QUEUE_PATH = 'Iskariel/Release Queue.md';
+const BLOCK_LIBRARY_PATH = 'Mortar & Pestle/Block Library.md';
+const RELEASES_PATH = 'Mortar & Pestle/Releases.md';
+const RELEASE_QUEUE_PATH = 'Mortar & Pestle/Release Queue.md';
 const BLOCK_FIELD_ORDER = [
   'id', 'name', 'color', 'kind',
   'cadence', 'fixed_time', 'fixed_days',
   'preferred_window', 'default_duration',
 ];
-const EVENT_TYPES_PATH = 'Iskariel/Event Types.md';
+const EVENT_TYPES_PATH = 'Mortar & Pestle/Event Types.md';
 const EVENT_TYPE_FIELD_ORDER = ['id', 'name', 'color'];
 const EVENT_TYPES_BODY_TAIL = '\n\nUser-defined event types for the Planner’s New Event popup. Edit the YAML above or add types in-app (New Event → + New type).\n';
 const PULSE_INDEX_PATH = 'Infrastructure/Indexes/Pulse Index.md';
@@ -1424,7 +1424,7 @@ export const api = {
     getManifest: () => readCall('docs_get_manifest'),
     getVersion: async () => {
       try {
-        const r = await readCall('vault_read_file', { path: 'Iskariel/Releases.md', root: 'app' });
+        const r = await readCall('vault_read_file', { path: 'Mortar & Pestle/Releases.md', root: 'app' });
         const m = r.content.match(/^Version:\s*([\d.]+)/m);
         return m ? m[1] : null;
       } catch {

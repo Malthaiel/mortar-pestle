@@ -1,4 +1,4 @@
-// Planner block library — reads/writes `Iskariel/Block Library.md`.
+// Planner block library — reads/writes `Mortar & Pestle/Block Library.md`.
 //
 // The file is canonical (Build Convention #8) and editable in Obsidian. The
 // vault watcher's `manifest` event triggers a refresh, so external edits

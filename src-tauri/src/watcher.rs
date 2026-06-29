@@ -281,8 +281,8 @@ mod tests {
     #[test]
     fn nested_standard_page_emits_file() {
         assert_eq!(
-            match_event(&rel("Iskariel/Plans/Foo.md"), TODAY),
-            vec![("file", Some("Iskariel/Plans/Foo.md".into()))],
+            match_event(&rel("Mortar & Pestle/Plans/Foo.md"), TODAY),
+            vec![("file", Some("Mortar & Pestle/Plans/Foo.md".into()))],
         );
     }
 

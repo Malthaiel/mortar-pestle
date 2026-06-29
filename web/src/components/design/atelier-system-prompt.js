@@ -5,7 +5,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 
-const DESIGN_MD_PATH = 'Iskariel/Reference/DESIGN.md';
+const DESIGN_MD_PATH = 'Mortar & Pestle/Reference/DESIGN.md';
 const MAX_VISIBLE = 30;
 
 let cachedDesignMd = null;

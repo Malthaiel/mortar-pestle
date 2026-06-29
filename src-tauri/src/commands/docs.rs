@@ -1,6 +1,6 @@
 //! Official Docs page — `docs_get_manifest` command.
 //!
-//! Reads `Iskariel/Docs/docs-manifest.json` from the App vault, validates each
+//! Reads `Mortar & Pestle/Docs/docs-manifest.json` from the App vault, validates each
 //! entry's `path` canonicalizes under vault root, and expands the
 //! `{ source: "decisions-folder" }` sentinel into ordered Decision records
 //! (mtime desc). Body rendering reuses `vault_render_reference` — this command
@@ -14,8 +14,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::commands::vault::{app_vault_root, VaultError};
 
-const MANIFEST_REL: &str = "Iskariel/Docs/docs-manifest.json";
-const DECISIONS_REL: &str = "Iskariel/Decisions";
+const MANIFEST_REL: &str = "Mortar & Pestle/Docs/docs-manifest.json";
+const DECISIONS_REL: &str = "Mortar & Pestle/Decisions";
 
 #[derive(Debug, Deserialize)]
 struct RawManifest {
@@ -196,7 +196,7 @@ mod tests {
     static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     fn write_fixture(dir: &std::path::Path, manifest_body: &str) {
-        let docs_dir = dir.join("Iskariel/Docs");
+        let docs_dir = dir.join("Mortar & Pestle/Docs");
         fs::create_dir_all(&docs_dir).unwrap();
         fs::write(docs_dir.join("docs-manifest.json"), manifest_body).unwrap();
         // Make a real file referenced by tests

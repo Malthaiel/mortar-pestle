@@ -10,7 +10,7 @@ import './feedback.css';
 // `main` webview; all Supabase traffic routes through the Rust `feedback_*`
 // commands (the webview never calls the internet directly). One route renders
 // the board (/tools/feedback) or a single post (/tools/feedback/post/<id>).
-// See Citadel Knowledge/Iskariel/Plans/Feedback Board.md.
+// See Citadel Knowledge/Mortar & Pestle/Plans/Feedback Board.md.
 function FeedbackRoot({ api, accent, rest }) {
   const fb = useMemo(() => makeFeedbackApi(api), [api]);
   if (rest.startsWith('post/')) {

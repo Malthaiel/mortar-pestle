@@ -1,6 +1,6 @@
--- Iskariel Feedback Board — Phase 0 schema (all phases; app code lands incrementally).
+-- Mortar & Pestle Feedback Board — Phase 0 schema (all phases; app code lands incrementally).
 -- Run ONCE against a fresh Supabase project (SQL editor or `supabase db push`).
--- Plan: Citadel `Knowledge/Iskariel/Plans/Feedback Board.md`.
+-- Plan: Citadel `Knowledge/Mortar & Pestle/Plans/Feedback Board.md`.
 -- Security model: the webview never holds the service-role key. Dev powers are gated
 -- by `is_dev()` (the caller's own profiles.role), enforced in RLS. The first dev is
 -- set by hand in the dashboard: update profiles set role='dev' where id='<your uid>'.

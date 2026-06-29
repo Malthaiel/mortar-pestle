@@ -1,4 +1,4 @@
-// Planner event types — reads/writes `Iskariel/Event Types.md`, mirroring
+// Planner event types — reads/writes `Mortar & Pestle/Event Types.md`, mirroring
 // useBlockLibrary. The file is canonical (Build Convention #8) and editable in
 // Obsidian; the vault watcher's `manifest` event triggers a refresh. Writes
 // round-trip the prior read's mtime for conflict safety. When the file is

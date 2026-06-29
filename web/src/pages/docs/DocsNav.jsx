@@ -3,7 +3,7 @@
 // (TreeSidebar), matching the vault: manifest categories are collapsible folder
 // pills, entries are leaf rows, and the Releases view is a pinned top-level leaf.
 // Toolbar: Sort (name + by-date, using each entry's mtime), Collapse/Expand all,
-// Reveal current, Reveal in files (the App vault's Iskariel/Docs folder).
+// Reveal current, Reveal in files (the App vault's Mortar & Pestle/Docs folder).
 
 import { useEffect, useMemo, useRef } from 'react';
 import { navigate } from '../../router.js';
@@ -103,7 +103,7 @@ export default function DocsNav({ route, accent }) {
     sort:          { show: true },
     collapse:      { show: true },
     revealCurrent: { show: true, title: 'Reveal current doc' },
-    revealInFiles: { show: true, title: 'Reveal in files', onClick: () => openInFiles('Iskariel/Docs', { isFolder: true, root: 'app' }) },
+    revealInFiles: { show: true, title: 'Reveal in files', onClick: () => openInFiles('Mortar & Pestle/Docs', { isFolder: true, root: 'app' }) },
   };
 
   if (!manifest) return null;

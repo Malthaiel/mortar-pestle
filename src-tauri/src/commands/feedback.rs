@@ -8,7 +8,7 @@
 //!   - `bearer()` attaches the user's access token so Postgres RLS sees `auth.uid()`;
 //!     public reads fall back to the anon key alone. Token refresh is Mutex-serialized.
 //!
-//! Plan of record: Citadel `Knowledge/Iskariel/Plans/Feedback Board.md`.
+//! Plan of record: Citadel `Knowledge/Mortar & Pestle/Plans/Feedback Board.md`.
 //! Patterns cloned from `design.rs` (error/keyring/reqwest) + `self_update.rs` (poll task).
 
 use std::collections::HashSet;

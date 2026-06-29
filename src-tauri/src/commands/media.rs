@@ -356,7 +356,7 @@ pub fn is_under_allowed_root(canonical: &std::path::Path) -> bool {
             return true;
         }
     }
-    // App vault (Iskariel Docs / Decisions / DESIGN.md) — read by the Docs
+    // App vault (Mortar & Pestle Docs / Decisions / DESIGN.md) — read by the Docs
     // sidebar's "Reveal in files". Lives outside vault_root(), under the app's
     // config dir, so it needs its own allowance.
     let app_vault = std::fs::canonicalize(crate::commands::vault::app_vault_root()).ok();
@@ -365,7 +365,7 @@ pub fn is_under_allowed_root(canonical: &std::path::Path) -> bool {
             return true;
         }
     }
-    // Game Capture clips live in `captures_dir()` (`%USERPROFILE%\Videos\Iskariel`
+    // Game Capture clips live in `captures_dir()` (`%USERPROFILE%\Videos\Mortar & Pestle`
     // on Windows — decision #11), outside every vault root, so the media server /
     // asset protocol / reveal need an explicit allowance to serve clip + poster files.
     let captures = std::fs::canonicalize(crate::commands::vault::captures_dir()).ok();

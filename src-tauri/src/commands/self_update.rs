@@ -1,4 +1,4 @@
-//! In-app updater (Stage 2 of Iskariel/Decisions/2026-05-23 In-App Update Mechanism).
+//! In-app updater (Stage 2 of Mortar & Pestle/Decisions/2026-05-23 In-App Update Mechanism).
 //!
 //! Caches the SHA-256 of the running binary at startup, then a 30s
 //! background task hashes the on-disk binary and emits `update-available`
