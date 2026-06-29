@@ -100,7 +100,7 @@ export default function SettingsTab({ settings: hostSettings, setSetting: setHos
       </SectionBand>
 
       <SectionBand title="Motion">
-        <AnimationField keys={['clock-ambient', 'planner-day-slide', 'counter-tick', 'task-celebration']} settings={hostSettings} setSetting={setHostSetting} accent={accent}/>
+        <AnimationField keys={['clock-ambient', 'planner-day-slide', 'counter-tick', 'task-celebration', 'copy-day-pop', 'frame-reset-restore']} settings={hostSettings} setSetting={setHostSetting} accent={accent}/>
       </SectionBand>
     </div>
   );

@@ -13,22 +13,21 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import CalendarPanel, { getVisibleDays } from '@modules/core/planner/CalendarPanel.jsx';
 import { usePlanner } from '@modules/core/planner/PlannerProvider.jsx';
 import { DRAG_DURATIONS } from '@modules/core/planner/dragDurations.js';
-import { Seg, OutlinedBtn } from '@host/components/ui/index.js';
-import CandySelect from '@host/components/ui/CandySelect.jsx';
+import { Seg } from '@host/components/ui/index.js';
 import BlockLibraryPopover from './BlockLibraryPopover.jsx';
-import { IconChevronLeft, IconChevronRight } from '@host/components/icons.jsx';
+import CopyFramePopup from './CopyFramePopup.jsx';
+import { IconChevronLeft, IconChevronRight, IconRotateCw } from '@host/components/icons.jsx';
 import { weekdayForKey, dateFromKey, keyForDate } from '@host/util/events.js';
 import { minsToHM, todayLocalStr } from '@host/util/time.js';
 import { useBlockLibrary } from '@host/hooks/useBlockLibrary.js';
 import { useFrameEditing } from '@host/hooks/useFrameEditing.js';
-import { DAY_ORDER, WEEKDAY_KEYS, WEEKEND_KEYS, copyDayToTargets } from '@host/util/frames.js';
+import { copyDayToTargets } from '@host/util/frames.js';
 
 function isTypingTarget(el) {
   if (!el) return false;
   const tag = el.tagName;
   return tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable;
 }
-const DAY_FULL = { mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday', fri: 'Friday', sat: 'Saturday', sun: 'Sunday' };
 
 export default function CalendarPane({ accent, pushUndo, pivotDs, onPivotChange }) {
   const p = usePlanner();
@@ -68,7 +67,7 @@ export default function CalendarPane({ accent, pushUndo, pivotDs, onPivotChange 
     () => visibleDates.map(d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`),
     [visibleDates]
   );
-  const { mergeIntoSessions, frames, writeFrames, handlers: frameHandlers } = useFrameEditing(dateKeys, { pushUndo });
+  const { mergeIntoSessions, frames, writeFrames, overrides: frameOverrides, restoreDeleted, handlers: frameHandlers } = useFrameEditing(dateKeys, { pushUndo });
   const sessionsWithFrame = useMemo(() => mergeIntoSessions(p.sessions), [mergeIntoSessions, p.sessions]);
 
   // sessionsRef keeps the latest sessions array accessible to undo closures
@@ -108,16 +107,23 @@ export default function CalendarPane({ accent, pushUndo, pivotDs, onPivotChange 
   // weekdayForKey returns 'Mon', hence the .toLowerCase() on every access. Each
   // template edit pushes an undo entry (see useFrameEditing) so Ctrl+Z reverts.
   const focusedWeekday = dateKeys[0] ? weekdayForKey(dateKeys[0]).toLowerCase() : 'mon';
-  // Copy-source day: defaults to the anchor (leftmost) column, but the user can
-  // pick any visible day from the copy picker. Falls back to the anchor when the
-  // chosen weekday scrolls out of view.
-  const visibleWeekdays = useMemo(() => dateKeys.map(k => weekdayForKey(k).toLowerCase()), [dateKeys]);
-  const [copySource, setCopySource] = useState(null);
-  const copySourceDay = (copySource && visibleWeekdays.includes(copySource)) ? copySource : focusedWeekday;
-  const copyLabelStyle = {
-    fontSize: 9, fontWeight: 700, color: 'var(--text-faint)',
-    fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', textTransform: 'uppercase',
-  };
+  const focusedDs = dateKeys[0] || null;
+  // SF3 reset circle: shown only when the focused (anchor) day has ≥1 deleted
+  // frame override. restoreDeleted clears them + returns the restored ids so
+  // CalendarPanel can stagger their re-entry (restoreAnim → entranceDelay).
+  const hasDeletedOverride = !!(frameOverrides?.[focusedDs] && Object.values(frameOverrides[focusedDs]).some(ov => ov?.deleted));
+  const [copyPopupOpen, setCopyPopupOpen] = useState(false);
+  const [restoreAnim, setRestoreAnim] = useState(null);
+  const [resetSpinKey, setResetSpinKey] = useState(0);
+  const handleRestoreDeleted = useCallback(async () => {
+    if (!focusedDs) return;
+    const ids = await restoreDeleted(focusedDs);
+    if (ids?.length) {
+      setRestoreAnim(Object.fromEntries(ids.map((id, i) => [id, i * 40])));
+      setResetSpinKey(k => k + 1);
+      setTimeout(() => setRestoreAnim(null), 1000);
+    }
+  }, [focusedDs, restoreDeleted]);
 
   // Esc exits edit mode. Capture phase + stopImmediatePropagation so the outer
   // PlannerModal's bubble-phase Esc (which closes the whole modal) doesn't also
@@ -137,8 +143,8 @@ export default function CalendarPane({ accent, pushUndo, pivotDs, onPivotChange 
   }, [frameEditMode]);
 
   const applyFocusedToDays = useCallback(async (targets) => {
-    try { await writeFrames(copyDayToTargets(frames, copySourceDay, targets)); } catch (e) { console.error('Frame copy failed', e); }
-  }, [frames, copySourceDay, writeFrames]);
+    try { await writeFrames(copyDayToTargets(frames, focusedWeekday, targets)); } catch (e) { console.error('Frame copy failed', e); }
+  }, [frames, focusedWeekday, writeFrames]);
 
   const handleNoteDrop = useCallback((ds, payload, startMins) => {
     const endMins = Math.min(24 * 60, startMins + DRAG_DURATIONS.note);
@@ -221,24 +227,25 @@ export default function CalendarPane({ accent, pushUndo, pivotDs, onPivotChange 
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {frameEditMode && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={copyLabelStyle}>Copy</span>
-              {visibleWeekdays.length > 1 ? (
-                <CandySelect
-                  value={copySourceDay}
-                  options={visibleWeekdays.map(wd => ({ value: wd, label: DAY_FULL[wd] }))}
-                  onChange={setCopySource}
-                  title="Source day to copy from"
-                  compact
-                />
-              ) : (
-                <span style={copyLabelStyle}>{DAY_FULL[copySourceDay]}</span>
-              )}
-              <span style={copyLabelStyle}>to</span>
-              <OutlinedBtn small onClick={() => applyFocusedToDays(DAY_ORDER)} title="Copy the source day to all 7 days">all</OutlinedBtn>
-              <OutlinedBtn small onClick={() => applyFocusedToDays(WEEKDAY_KEYS)} title="Copy the source day to Mon–Fri">weekdays</OutlinedBtn>
-              <OutlinedBtn small onClick={() => applyFocusedToDays(WEEKEND_KEYS)} title="Copy the source day to Sat–Sun">weekend</OutlinedBtn>
-            </div>
+            <button
+              type="button"
+              className={`candy-btn${copyPopupOpen ? ' is-active' : ''}`}
+              data-shape="chip"
+              data-own-press
+              onClick={() => setCopyPopupOpen(v => !v)}
+              aria-label="Copy day frame"
+            ><span className="candy-face">Copy</span></button>
+          )}
+          {hasDeletedOverride && (
+            <button
+              type="button"
+              className="candy-btn"
+              data-shape="circle"
+              data-own-press
+              onClick={handleRestoreDeleted}
+              aria-label="Restore today's deleted frames"
+              title="Restore today's deleted frames"
+            ><span className="candy-face" key={resetSpinKey} style={resetSpinKey ? { animation: 'frameResetSpin 0.4s ease' } : undefined}><IconRotateCw/></span></button>
           )}
           <button
             type="button"
@@ -266,6 +273,14 @@ export default function CalendarPane({ accent, pushUndo, pivotDs, onPivotChange 
         open={libOpen}
         onClose={() => setLibOpen(false)}
         anchorRef={libBtnRef}
+        accent={accent}
+      />
+
+      <CopyFramePopup
+        open={copyPopupOpen}
+        onClose={() => setCopyPopupOpen(false)}
+        onCopy={applyFocusedToDays}
+        sourceDay={focusedWeekday}
         accent={accent}
       />
 
@@ -303,6 +318,7 @@ export default function CalendarPane({ accent, pushUndo, pivotDs, onPivotChange 
           {...frameHandlers}
           frameEditMode={frameEditMode}
           onFrameEditExit={() => setFrameEditMode(false)}
+          restoreAnim={restoreAnim}
         />
       </div>
     </div>
