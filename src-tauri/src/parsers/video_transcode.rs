@@ -1,5 +1,5 @@
 //! Sub-feature 7.5 — ffmpeg transcode + subtitle extraction with hash-keyed
-//! cache files under `~/.cache/iskariel/transcodes/`. The `mortar-pestle-asset://`
+//! cache files under `~/.cache/mortar-pestle/transcodes/`. The `mortar-pestle-asset://`
 //! scheme is extended (in `asset_protocol.rs`) with `/transcode/<hash>.mp4`
 //! and `/subs/<hash>.vtt` virtual paths that Range-serve the completed files.
 //!
@@ -90,13 +90,13 @@ fn signal_term(pid: u32) {
 pub fn cache_root() -> Result<PathBuf, VaultError> {
     let base = dirs::cache_dir()
         .ok_or_else(|| VaultError::Io("cache_dir() unavailable".into()))?;
-    Ok(base.join("iskariel/transcodes"))
+    Ok(base.join("mortar-pestle/transcodes"))
 }
 
 pub fn subs_root() -> Result<PathBuf, VaultError> {
     let base = dirs::cache_dir()
         .ok_or_else(|| VaultError::Io("cache_dir() unavailable".into()))?;
-    Ok(base.join("iskariel/subs"))
+    Ok(base.join("mortar-pestle/subs"))
 }
 
 pub fn transcode_path(hash: &str) -> Result<PathBuf, VaultError> {

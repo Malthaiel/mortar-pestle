@@ -9,9 +9,9 @@
 //! daemon self-installs `<APP_ID>.desktop` with an ABSOLUTE `Exec=<current_exe>
 //! daemon` — correct in dev (target/{debug,release}) AND in the bundled RPM.
 //!
-//! App-id is the DASH-FREE `dev.malthaiel.iskariel.stt` (a dash is allowed only in
+//! App-id is the DASH-FREE `dev.malthaiel.mortar-pestle.stt` (a dash is allowed only in
 //! the last segment of ashpd's typed `AppID`). DISTINCT from capture's
-//! `dev.malthaiel.iskariel.capture`, so KDE keeps the two engines' bindings separate.
+//! `dev.malthaiel.mortar-pestle.capture`, so KDE keeps the two engines' bindings separate.
 //! FROZEN once bound — KDE persists the user's trigger under this exact string.
 
 use std::path::PathBuf;
@@ -21,10 +21,10 @@ use ashpd::desktop::global_shortcuts::NewShortcut;
 use crate::protocol::Shortcut;
 
 /// The GlobalShortcuts app-id — FROZEN (KDE persists the binding under it).
-pub const APP_ID: &str = "dev.malthaiel.iskariel.stt";
+pub const APP_ID: &str = "dev.malthaiel.mortar-pestle.stt";
 
 /// `<APP_ID>.desktop` — the host Registry resolves the app-id to this file.
-pub const DESKTOP_BASENAME: &str = "dev.malthaiel.iskariel.stt.desktop";
+pub const DESKTOP_BASENAME: &str = "dev.malthaiel.mortar-pestle.stt.desktop";
 
 /// One reservable global shortcut.
 pub struct ShortcutDef {
@@ -90,10 +90,10 @@ pub fn install_desktop_file() {
     let body = format!(
         "[Desktop Entry]\n\
          Type=Application\n\
-         Name=Iskariel Voice\n\
+         Name=Mortar & Pestle Voice\n\
          Comment=Voice transcription engine (windowless)\n\
          Exec={exec} daemon\n\
-         Icon=dev.malthaiel.iskariel\n\
+         Icon=dev.malthaiel.mortar-pestle\n\
          Terminal=false\n\
          NoDisplay=true\n\
          X-KDE-GlobalShortcuts=true\n"

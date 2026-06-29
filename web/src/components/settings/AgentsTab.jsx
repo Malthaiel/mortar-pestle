@@ -493,7 +493,7 @@ function ReachSummary({ backend }) {
     { glyph: '⊘', tone: 'var(--text-faint)', label: 'Block', detail: 'No Bash, no WebSearch — pure read+edit' },
   ];
   const apiRows = [
-    { glyph: '✓', tone: 'var(--text-muted)', label: 'Read',  detail: 'all of C:\\Users\\malth\\Code\\iskariel\\' },
+    { glyph: '✓', tone: 'var(--text-muted)', label: 'Read',  detail: 'all of C:\\Users\\malth\\Code\\mortar-pestle\\' },
     { glyph: '✓', tone: 'var(--text-muted)', label: 'Write', detail: 'web/src/, web/styles/' },
     { glyph: '⚠', tone: '#d9a55a', label: 'Confirm', detail: 'src-tauri/, tauri.conf.json, modules/, package.json' },
   ];

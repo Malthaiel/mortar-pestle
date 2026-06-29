@@ -1,4 +1,4 @@
-//! Dev-server supervisor — Start/Stop/Restart/Status for the `iskariel-dev`
+//! Dev-server supervisor — Start/Stop/Restart/Status for the `mortar-pestle-dev`
 //! systemd *user* service (the `cargo tauri dev` surface) plus a Vite health
 //! probe. Drives the Dev Server panel in Settings → Dev. Unlike the rest of
 //! that tab this command is compiled into the production RPM (the panel is kept

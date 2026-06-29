@@ -2,7 +2,7 @@
 
 Reproducible regeneration of the **Shield** ad/tracker blocker's vendored seed
 (`src-tauri/src/blocker/seed/`). Shield is a native, uBlock-style blocker for the
-in-app browser — see `Iskariel/Plans/Browser Ad Blocker (Shield).md` for the
+in-app browser — see `Mortar & Pestle/Plans/Browser Ad Blocker (Shield).md` for the
 full design and honest ceiling.
 
 ## Run

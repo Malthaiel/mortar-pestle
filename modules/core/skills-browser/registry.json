@@ -7,7 +7,7 @@
     "license": "MIT",
     "version": "1.0.0",
     "install": "auto",
-    "content": "---\nname: hello\ndescription: Demo skill — prints a hello banner.\n---\n\nPrint the following lines verbatim, then exit cleanly:\n\n  Hello from Iskariel.\n  Installed via Skills Browser.\n"
+    "content": "---\nname: hello\ndescription: Demo skill — prints a hello banner.\n---\n\nPrint the following lines verbatim, then exit cleanly:\n\n  Hello from Mortar & Pestle.\n  Installed via Skills Browser.\n"
   },
   {
     "id": "timestamp",

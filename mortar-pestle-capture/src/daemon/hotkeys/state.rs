@@ -8,8 +8,8 @@
 //! ABSOLUTE `Exec=<current_exe> daemon` — correct in dev (target/debug) AND in the
 //! bundled RPM (where the binary lives under resources/, off PATH).
 //!
-//! App-id is the DASH-FREE `dev.malthaiel.iskariel.capture`. Spike-confirmed: the KDE
-//! portal accepts both the dashed (`dev.malthaiel.iskariel.capture`) and dash-free
+//! App-id is the DASH-FREE `dev.malthaiel.mortar-pestle.capture`. Spike-confirmed: the KDE
+//! portal accepts both the dashed (`dev.malthaiel.mortar-pestle.capture`) and dash-free
 //! forms, but only the dash-free one passes ashpd's typed `AppID` validation (a dash
 //! is allowed only in the last segment), so we register via the clean typed
 //! `register_host_app_with_connection` instead of a raw zbus proxy. FROZEN once
@@ -22,10 +22,10 @@ use ashpd::desktop::global_shortcuts::NewShortcut;
 use crate::daemon::protocol::Shortcut;
 
 /// The GlobalShortcuts app-id — FROZEN (KDE persists bindings under it).
-pub const APP_ID: &str = "dev.malthaiel.iskariel.capture";
+pub const APP_ID: &str = "dev.malthaiel.mortar-pestle.capture";
 
 /// `<APP_ID>.desktop` — the host Registry resolves the app-id to this file.
-pub const DESKTOP_BASENAME: &str = "dev.malthaiel.iskariel.capture.desktop";
+pub const DESKTOP_BASENAME: &str = "dev.malthaiel.mortar-pestle.capture.desktop";
 
 /// One reservable global shortcut. `reserved` shortcuts are bound now (so a Phase-2
 /// activation needs no fresh consent prompt) but the daemon ignores their
@@ -98,10 +98,10 @@ pub fn install_desktop_file() {
     let body = format!(
         "[Desktop Entry]\n\
          Type=Application\n\
-         Name=Iskariel Capture\n\
+         Name=Mortar & Pestle Capture\n\
          Comment=Game Capture engine (windowless)\n\
          Exec={exec} daemon\n\
-         Icon=dev.malthaiel.iskariel\n\
+         Icon=dev.malthaiel.mortar-pestle\n\
          Terminal=false\n\
          NoDisplay=true\n\
          X-KDE-GlobalShortcuts=true\n"

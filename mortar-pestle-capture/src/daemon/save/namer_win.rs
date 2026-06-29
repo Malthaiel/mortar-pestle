@@ -51,11 +51,11 @@ pub fn capture_target_hwnd() -> HWND {
 
 /// A window we must never capture: our own overlays (the Shift+C HUD / scrim), which
 /// are hardened `WDA_EXCLUDEFROMCAPTURE` — invisible to WGC, so capturing one yields
-/// zero frames. Matched by the "Iskariel Overlay" window title (their tauri.conf
+/// zero frames. Matched by the "Mortar & Pestle Overlay" window title (their tauri.conf
 /// titles); the main app window keeps its own title, so in-app capture is unaffected.
 fn is_skippable_target(hwnd: HWND) -> bool {
     match title_for(hwnd) {
-        Some(t) => t.starts_with("Iskariel Overlay"),
+        Some(t) => t.starts_with("Mortar & Pestle Overlay"),
         None => false,
     }
 }

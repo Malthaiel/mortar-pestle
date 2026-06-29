@@ -315,8 +315,8 @@ fn notify_critical(summary: String, body: String) {
         if let Ok(mut child) = std::process::Command::new("notify-send")
             .args([
                 "-u", "critical",
-                "-a", "Iskariel Capture",
-                "-i", "dev.malthaiel.iskariel",
+                "-a", "Mortar & Pestle Capture",
+                "-i", "dev.malthaiel.mortar-pestle",
                 &summary, &body,
             ])
             .spawn()
@@ -326,7 +326,7 @@ fn notify_critical(summary: String, body: String) {
     });
 }
 
-/// Synthesize the save chime to `$XDG_RUNTIME_DIR/iskariel/save-chime.wav` once
+/// Synthesize the save chime to `$XDG_RUNTIME_DIR/mortar-pestle/save-chime.wav` once
 /// at daemon start; returns the path on success. The PCM is generated in-process
 /// (16-bit mono 48 kHz WAV) — no bundled asset, no `include_bytes!`, achieving the
 /// same "embedded, no external file dependency" end with less machinery. A failed

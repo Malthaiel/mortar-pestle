@@ -4,7 +4,7 @@
 //
 // Candy slab: the accent face fills the section's full width + height; its 3D
 // depth shadow forms the section's bottom edge (no separate divider). Collapsed
-// shows the centered brand-mark; expanded adds the ISKARIEL label + tagline.
+// shows the centered brand-mark; expanded adds the MORTAR & PESTLE label + tagline.
 // Wires to the two-layer `.candy-btn.is-primary` block (data-variant="brand").
 
 import { useMemo } from 'react';
@@ -56,7 +56,7 @@ export default function SidebarToggleButton({ accent, expanded, onToggle, showTa
           }}>
             <span style={{
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>Iskariel <span style={{ textTransform: 'none', fontSize: '0.82em', fontWeight: 500 }}>v{version}</span></span>
+            }}>Mortar &amp; Pestle <span style={{ textTransform: 'none', fontSize: '0.82em', fontWeight: 500 }}>v{version}</span></span>
             {showTagline && (
               <span style={{
                 fontSize: 9.5, fontStyle: 'italic',

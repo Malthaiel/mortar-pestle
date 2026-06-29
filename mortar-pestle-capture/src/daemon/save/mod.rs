@@ -63,15 +63,15 @@ fn captures_root() -> PathBuf {
 }
 
 /// Windows captures root: `MORTAR_PESTLE_CAPTURES_DIR` (the app sets it) → default
-/// `%USERPROFILE%\Videos\Iskariel` (decision #11 — Roaming app-data is wrong for
-/// multi-GB media) → `%TEMP%\iskariel\captures` as a last resort.
+/// `%USERPROFILE%\Videos\Mortar & Pestle` (decision #11 — Roaming app-data is wrong for
+/// multi-GB media) → `%TEMP%\mortar-pestle\captures` as a last resort.
 #[cfg(windows)]
 fn captures_root() -> PathBuf {
     if let Some(dir) = std::env::var_os("MORTAR_PESTLE_CAPTURES_DIR") {
         return PathBuf::from(dir);
     }
     if let Some(home) = std::env::var_os("USERPROFILE") {
-        return PathBuf::from(home).join("Videos").join("Iskariel");
+        return PathBuf::from(home).join("Videos").join("Mortar & Pestle");
     }
     runtime_dir().join("captures")
 }

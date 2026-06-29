@@ -220,7 +220,7 @@ fn saved_clip_interim_step3_payload_is_tolerated() {
     // not a regression — the unified `.mp4`-only contract only fully holds after
     // Step 5). This guards the cross-step constraint binding SF2e.
     const GOLDEN: &str = concat!(
-        r#"{"path":"/tmp/iskariel/clip.h264","game":"Deadlock","duration_s":3.0,"#,
+        r#"{"path":"/tmp/mortar-pestle/clip.h264","game":"Deadlock","duration_s":3.0,"#,
         r#""started_monotonic_pts_ns":0,"last_monotonic_pts_ns":3000000000,"#,
         r#""poster":null,"width":0,"height":0,"codec":"h264"}"#
     );

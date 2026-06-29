@@ -7,7 +7,7 @@
 // album against MusicBrainz to drop a not-downloaded album card. Survives the
 // drawer closing (state lives in ImportProvider / the Rust job queue).
 //
-// Export: Spotify Premium-gates every Web API app, so Iskariel does NOT export
+// Export: Spotify Premium-gates every Web API app, so Mortar & Pestle does NOT export
 // playlists in-app. The Export section points users to Exportify — a free,
 // open-source web tool that logs into the user's OWN (free) Spotify account and
 // produces a CSV the Import section above accepts verbatim. (Rationale + the
@@ -169,7 +169,7 @@ function ExportSection() {
         style={{ fontSize: 11, color: 'var(--text-2)', lineHeight: 1.6 }}
       >
         Spotify requires a paid developer account to read playlists through its API, so
-        Iskariel doesn’t export them directly. Use <b>Exportify</b> — a free, open-source
+        Mortar & Pestle doesn’t export them directly. Use <b>Exportify</b> — a free, open-source
         web tool — to turn any of your playlists into a CSV, then import it above.
       </div>
       <ol style={{ margin: 0, paddingLeft: 18, fontSize: 11.5, color: 'var(--text-2)', lineHeight: 1.7 }}>

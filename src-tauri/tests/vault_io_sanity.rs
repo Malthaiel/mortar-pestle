@@ -8,7 +8,7 @@
 //!
 //! Marked `#[ignore]` so `cargo test` in CI without the vault skips them.
 //! Run locally with:
-//!   cargo test -p iskariel --test vault_io_sanity -- --ignored --nocapture
+//!   cargo test -p mortar-pestle --test vault_io_sanity -- --ignored --nocapture
 
 use app_lib::render;
 

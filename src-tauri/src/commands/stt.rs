@@ -612,7 +612,7 @@ fn open_global_shortcuts_settings() -> Result<(), String> {
 // these two fns must follow. Used to populate `reveal_path` on a completed download
 // and to resolve the target of `stt_reveal_model`.
 
-/// Windows: `%LOCALAPPDATA%\iskariel\models\whisper` (non-roaming — models are multi-GB).
+/// Windows: `%LOCALAPPDATA%\mortar-pestle\models\whisper` (non-roaming — models are multi-GB).
 #[cfg(target_os = "windows")]
 fn model_cache_dir() -> PathBuf {
     std::env::var_os("LOCALAPPDATA")

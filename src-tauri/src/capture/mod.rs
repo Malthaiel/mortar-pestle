@@ -3,7 +3,7 @@
 //!
 //! The engine itself is a **separate, optional binary** (`mortar-pestle-capture`,
 //! built only in the studio tier). This crate is deliberately decoupled from it:
-//! there is NO `use iskariel_capture::…`, no engine-crate dependency, and no
+//! there is NO `use mortar_pestle_capture::…`, no engine-crate dependency, and no
 //! `studio` cargo feature on src-tauri. The ONLY coupling is
 //!
 //!   1. the runtime-resolved binary **path** ([`carriage::resolve_engine_binary`]), and
@@ -33,7 +33,7 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command as TokioCommand;
 
 /// The resolved env-var name carrying the captures output root (plan Risk #10):
-/// `captures_dir()` (`%USERPROFILE%\Videos\Iskariel` on Windows — decision #11).
+/// `captures_dir()` (`%USERPROFILE%\Videos\Mortar & Pestle` on Windows — decision #11).
 /// The app's clip-list scan (Step 4) reads the same root.
 const CAPTURES_DIR_ENV: &str = "MORTAR_PESTLE_CAPTURES_DIR";
 
@@ -48,7 +48,7 @@ const CAPTURES_DIR_ENV: &str = "MORTAR_PESTLE_CAPTURES_DIR";
 /// - `MORTAR_PESTLE_CAPTURES_DIR` = `captures_dir()` (created up-front).
 /// - `RUST_LOG` is passed through from the app's own env when set.
 ///
-/// stdout + stderr are drained line-by-line to `~/.local/state/iskariel/
+/// stdout + stderr are drained line-by-line to `~/.local/state/mortar-pestle/
 /// mortar-pestle-capture.log` (parent created). Mirrors the
 /// `parsers::video_transcode` Tokio + `Stdio` + `kill_on_drop` idiom and the
 /// `commands::build` concurrent-drain idiom.
@@ -57,7 +57,7 @@ const CAPTURES_DIR_ENV: &str = "MORTAR_PESTLE_CAPTURES_DIR";
 /// on `tauri::async_runtime::spawn`): spawning a `tokio::process::Child` off the
 /// reactor panics with "there is no reactor running".
 pub fn spawn_engine_child(bin: &PathBuf) -> std::io::Result<(u32, JoinHandle<Option<i32>>)> {
-    // Captures root: `captures_dir()` (`%USERPROFILE%\Videos\Iskariel` on Windows
+    // Captures root: `captures_dir()` (`%USERPROFILE%\Videos\Mortar & Pestle` on Windows
     // per decision #11), created before spawn so the engine never has to mkdir it.
     // Clips live outside the Library, so the bin resolves them via the `captures`
     // mount (`RootKind::Captures`), not `root:'library'`.
@@ -68,7 +68,7 @@ pub fn spawn_engine_child(bin: &PathBuf) -> std::io::Result<(u32, JoinHandle<Opt
         // missing root is the engine's error to surface, not a spawn blocker.
     }
 
-    // Log file: ~/.local/state/iskariel/mortar-pestle-capture.log (parent created).
+    // Log file: ~/.local/state/mortar-pestle/mortar-pestle-capture.log (parent created).
     let log_path = engine_log_path();
     if let Some(parent) = log_path.as_ref().and_then(|p| p.parent()) {
         if let Err(e) = std::fs::create_dir_all(parent) {
@@ -180,8 +180,8 @@ async fn drain_to_log<R>(
 }
 
 /// The sidecar's stdout/stderr log sink. Windows:
-/// `%LOCALAPPDATA%\iskariel\logs\mortar-pestle-capture.log`; Linux:
-/// `~/.local/state/iskariel/mortar-pestle-capture.log`. `None` if the base env var is unset.
+/// `%LOCALAPPDATA%\mortar-pestle\logs\mortar-pestle-capture.log`; Linux:
+/// `~/.local/state/mortar-pestle/mortar-pestle-capture.log`. `None` if the base env var is unset.
 #[cfg(windows)]
 fn engine_log_path() -> Option<PathBuf> {
     std::env::var_os("LOCALAPPDATA")
@@ -191,6 +191,6 @@ fn engine_log_path() -> Option<PathBuf> {
 #[cfg(not(windows))]
 fn engine_log_path() -> Option<PathBuf> {
     std::env::var_os("HOME").map(|home| {
-        PathBuf::from(home).join(".local/state/iskariel/mortar-pestle-capture.log")
+        PathBuf::from(home).join(".local/state/mortar-pestle/mortar-pestle-capture.log")
     })
 }

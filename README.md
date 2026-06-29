@@ -1,4 +1,4 @@
-# Iskariel
+# Mortar & Pestle
 
 A personal operating system for thinking, planning, and producing — a desktop app that reads and writes a local [Obsidian](https://obsidian.md) vault. Vault browser, focus timer + planner, skills runner, media library (anime / music / video), per-session-token PTY terminal, and a built-in Claude agent.
 
@@ -6,9 +6,9 @@ Built with [Tauri 2](https://tauri.app) (Rust backend) wrapping a Vite-served Re
 
 ## Install (Windows)
 
-1. Download the latest `Iskariel_x.y.z_x64-setup.exe` from the [Releases page](https://github.com/Malthaiel/iskariel/releases/latest).
+1. Download the latest `Mortar & Pestle_x.y.z_x64-setup.exe` from the [Releases page](https://github.com/Malthaiel/mortar-pestle/releases/latest).
 2. Run it. Because the installer is **not yet code-signed**, Windows SmartScreen may warn: click **More info → Run anyway**. (Code signing is planned for a later release.)
-3. Iskariel checks for updates automatically and can install them in place.
+3. Mortar & Pestle checks for updates automatically and can install them in place.
 
 ### Prerequisites for the media features
 
@@ -25,8 +25,8 @@ The core vault, planner, timer, terminal, and agent features work without any of
 Requires [Node.js](https://nodejs.org) 20+, [Rust](https://rustup.rs) (stable), and the [Tauri prerequisites](https://tauri.app/start/prerequisites/) for your platform.
 
 ```powershell
-git clone https://github.com/Malthaiel/iskariel
-cd iskariel
+git clone https://github.com/Malthaiel/mortar-pestle
+cd mortar-pestle
 npm install
 npm --prefix web install
 npm run tauri dev      # dev window with Vite HMR
