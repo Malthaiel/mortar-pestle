@@ -1,7 +1,7 @@
-//! iskariel-stt bridge — the src-tauri side of the studio-tier STT engine
+//! mortar-pestle-stt bridge — the src-tauri side of the studio-tier STT engine
 //! (Speech-to-Text SF1).
 //!
-//! The engine itself is a **separate, optional binary** (`iskariel-stt`, built
+//! The engine itself is a **separate, optional binary** (`mortar-pestle-stt`, built
 //! only in the studio tier). This crate is deliberately decoupled from it: there
 //! is NO `use iskariel_stt::…`, no engine-crate dependency, and no `studio` cargo
 //! feature on src-tauri. The ONLY coupling is
@@ -9,13 +9,13 @@
 //!   1. the runtime-resolved binary **path** ([`carriage::resolve_engine_binary`]), and
 //!   2. the NDJSON control **protocol** — serde structs duplicated byte-for-byte
 //!      in [`client`] (the engine's canonical copy lives in
-//!      `iskariel-stt/src/daemon/protocol.rs`; a cross-crate round-trip test in
+//!      `mortar-pestle-stt/src/daemon/protocol.rs`; a cross-crate round-trip test in
 //!      `tests/stt_roundtrip.rs` gates the two against drift).
 //!
 //! Faithful clone of `capture::mod`. STT-specific deltas: the spawn-time output
-//! env var ([`STT_OUTPUT_DIR_ENV`]) and the log filename (`iskariel-stt.log`);
+//! env var ([`STT_OUTPUT_DIR_ENV`]) and the log filename (`mortar-pestle-stt.log`);
 //! the capture `CONFIG_FILE` / `read_persisted_config` config-push machinery is
-//! dropped (the SF1 `iskariel-stt` daemon has no persisted config).
+//! dropped (the SF1 `mortar-pestle-stt` daemon has no persisted config).
 //!
 //! Module map:
 //! - [`carriage`] — runtime presence-check that resolves the engine binary.
@@ -38,22 +38,22 @@ use tokio::process::Command as TokioCommand;
 
 /// The env-var name carrying the STT output/work root: `library_vault_root() +
 /// "/STT"`. The engine writes transcription artifacts here.
-const STT_OUTPUT_DIR_ENV: &str = "ISKARIEL_STT_DIR";
+const STT_OUTPUT_DIR_ENV: &str = "MORTAR_PESTLE_STT_DIR";
 
 /// Spawn the STT engine daemon (driven by [`supervisor`]) — a bare,
-/// kill-on-drop child. Argv is `[bin, "daemon"]` (the iskariel-capture
-/// convention; iskariel-stt's CLI mirrors it). Returns the child PID (for the
+/// kill-on-drop child. Argv is `[bin, "daemon"]` (the mortar-pestle-capture
+/// convention; mortar-pestle-stt's CLI mirrors it). Returns the child PID (for the
 /// reap) plus a join-handle that resolves to the child's exit code once it exits
 /// (drives the supervisor's respawn decision). The child itself stays **owned by
 /// the wait-task** so `kill_on_drop(true)` keeps holding — the supervisor never
 /// owns the `Child`, only its PID + exit signal.
 ///
 /// Environment:
-/// - `ISKARIEL_STT_DIR` = `library_vault_root()/STT` (created up-front).
+/// - `MORTAR_PESTLE_STT_DIR` = `library_vault_root()/STT` (created up-front).
 /// - `RUST_LOG` is passed through from the app's own env when set.
 ///
 /// stdout + stderr are drained line-by-line to `~/.local/state/iskariel/
-/// iskariel-stt.log` (parent created).
+/// mortar-pestle-stt.log` (parent created).
 ///
 /// MUST be called from inside the Tokio reactor (it is — the supervise loop runs
 /// on `tauri::async_runtime::spawn`): spawning a `tokio::process::Child` off the
@@ -70,7 +70,7 @@ pub fn spawn_engine_child(bin: &PathBuf) -> std::io::Result<(u32, JoinHandle<Opt
         // is the engine's error to surface, not a spawn blocker.
     }
 
-    // Log file: ~/.local/state/iskariel/iskariel-stt.log (parent created).
+    // Log file: ~/.local/state/iskariel/mortar-pestle-stt.log (parent created).
     let log_path = engine_log_path();
     if let Some(parent) = log_path.as_ref().and_then(|p| p.parent()) {
         if let Err(e) = std::fs::create_dir_all(parent) {
@@ -163,18 +163,18 @@ async fn drain_to_log<R>(
 }
 
 /// The sidecar's stdout/stderr log sink. Windows:
-/// `%LOCALAPPDATA%\iskariel\logs\iskariel-stt.log`; Linux:
-/// `~/.local/state/iskariel/iskariel-stt.log`. `None` if the base env var is unset.
+/// `%LOCALAPPDATA%\iskariel\logs\mortar-pestle-stt.log`; Linux:
+/// `~/.local/state/iskariel/mortar-pestle-stt.log`. `None` if the base env var is unset.
 #[cfg(windows)]
 fn engine_log_path() -> Option<PathBuf> {
     std::env::var_os("LOCALAPPDATA")
-        .map(|base| PathBuf::from(base).join("iskariel").join("logs").join("iskariel-stt.log"))
+        .map(|base| PathBuf::from(base).join("mortar-pestle").join("logs").join("mortar-pestle-stt.log"))
 }
 
 #[cfg(not(windows))]
 fn engine_log_path() -> Option<PathBuf> {
     std::env::var_os("HOME").map(|home| {
-        PathBuf::from(home).join(".local/state/iskariel/iskariel-stt.log")
+        PathBuf::from(home).join(".local/state/iskariel/mortar-pestle-stt.log")
     })
 }
 

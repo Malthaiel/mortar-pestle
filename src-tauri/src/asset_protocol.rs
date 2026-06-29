@@ -1,11 +1,11 @@
-//! Sub-feature 7 / 7.5 — `iskariel-asset://` URI scheme handler.
+//! Sub-feature 7 / 7.5 — `mortar-pestle-asset://` URI scheme handler.
 //!
 //! URL forms:
 //!
 //! ```text
-//! iskariel-asset://localhost/<abs>                     (native files)
-//! iskariel-asset://localhost/transcode/<16-hex>.mp4    (live ffmpeg remux)
-//! iskariel-asset://localhost/subs/<16-hex>.vtt         (extracted WebVTT)
+//! mortar-pestle-asset://localhost/<abs>                     (native files)
+//! mortar-pestle-asset://localhost/transcode/<16-hex>.mp4    (live ffmpeg remux)
+//! mortar-pestle-asset://localhost/subs/<16-hex>.vtt         (extracted WebVTT)
 //! ```
 //!
 //! Native files are canonicalized and rejected unless contained under
@@ -142,7 +142,7 @@ fn serve_thumbnail(path: &Path, width: u32) -> Option<Response<Cow<'static, [u8]
     width.hash(&mut hasher);
     let key = format!("{:016x}", hasher.finish());
 
-    let cache_dir = std::env::temp_dir().join("iskariel-thumbs");
+    let cache_dir = std::env::temp_dir().join("mortar-pestle-thumbs");
     let cache_path = cache_dir.join(format!("{key}.jpg"));
 
     if let Ok(bytes) = fs::read(&cache_path) {

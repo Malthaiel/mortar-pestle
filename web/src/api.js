@@ -20,11 +20,11 @@ export async function invoke(cmd, args) {
   return fn(cmd, args);
 }
 
-// WebKitGTK rejects custom URI schemes (`iskariel-asset://...`) in
+// WebKitGTK rejects custom URI schemes (`mortar-pestle-asset://...`) in
 // HTMLMediaElement, so audio/video can't use convertFileSrc. The Rust side
 // runs a loopback HTTP server on a kernel-assigned 127.0.0.1 port; the port
 // is fetched once at startup via `media_server_port` and cached. Plain
-// `<img>` tags happily accept iskariel-asset:// so they still use it.
+// `<img>` tags happily accept mortar-pestle-asset:// so they still use it.
 let VAULT_ROOT_FOR_MEDIA = '/home/malthaiel/Documents/Citadel';
 // VaultProvider calls this on switch so media (img/audio/video) paths resolve
 // against the active vault's root instead of the Citadel default.
@@ -84,11 +84,11 @@ export function mediaUrl(p, opts) {
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(p) || p.startsWith('data:') || p.startsWith('blob:')) return p;
   const abs = absFromInput(p, opts && opts.library ? LIBRARY_ROOT_FOR_MEDIA : undefined);
   // <img> path — still works via custom scheme.
-  return convertFileSrc(abs, 'iskariel-asset');
+  return convertFileSrc(abs, 'mortar-pestle-asset');
 }
 // Rewrite dead `<img src="/api/file/{path}">` (emitted by the Rust Reading-mode
 // renderer for `![[image]]` embeds — the Fastify route was deleted) to a live
-// iskariel-asset:// URL. Run on any container after injecting reference-render
+// mortar-pestle-asset:// URL. Run on any container after injecting reference-render
 // HTML (Reading mode, transclusion bodies).
 export function hydrateVaultImages(root) {
   if (!root || !root.querySelectorAll) return;
@@ -114,12 +114,12 @@ export function mediaHttpUrl(p, opts) {
   const abs = absFromInput(p, opts && opts.library ? LIBRARY_ROOT_FOR_MEDIA : undefined);
   return `${_mediaBaseUrl}/media?path=${encodeURIComponent(abs)}`;
 }
-// Rewrite an `iskariel-asset://localhost/<rest>` URL (as returned by Rust
+// Rewrite an `mortar-pestle-asset://localhost/<rest>` URL (as returned by Rust
 // video_start_transcode / video_extract_subs) into the equivalent loopback
 // HTTP URL for WebKit-compatible media playback.
 export function rewriteAssetToHttp(assetUrl) {
   if (!assetUrl || !_mediaBaseUrl) return null;
-  const prefix = 'iskariel-asset://localhost';
+  const prefix = 'mortar-pestle-asset://localhost';
   if (!assetUrl.startsWith(prefix)) return assetUrl;
   return _mediaBaseUrl + assetUrl.slice(prefix.length);
 }

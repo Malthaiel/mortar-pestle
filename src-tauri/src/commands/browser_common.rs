@@ -15,7 +15,7 @@ pub fn host_blocked(host: &str) -> bool {
 
 /// Navigation allow-list: only `https:` to a non-local host (plus `about:blank`
 /// for the initial load). Everything else — `http:`, `file:`, `tauri:`, `app:`,
-/// `iskariel-asset:`, `javascript:`, `data:` — is refused.
+/// `mortar-pestle-asset:`, `javascript:`, `data:` — is refused.
 pub fn nav_allowed(uri: &str) -> bool {
     let lower = uri.to_ascii_lowercase();
     if lower == "about:blank" {

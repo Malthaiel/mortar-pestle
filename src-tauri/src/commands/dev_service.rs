@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 use serde::Serialize;
 use tokio::process::Command as TokioCommand;
 
-const SERVICE: &str = "iskariel-dev.service";
+const SERVICE: &str = "mortar-pestle-dev.service";
 const DEV_URL: &str = "http://localhost:5173/";
 const POLL_TIMEOUT: Duration = Duration::from_secs(45);
 const POLL_INTERVAL: Duration = Duration::from_secs(1);
@@ -36,7 +36,7 @@ pub struct DevServiceResult {
     pub error: Option<String>,
 }
 
-/// Run `systemctl --user <verb> iskariel-dev.service` and capture its output.
+/// Run `systemctl --user <verb> mortar-pestle-dev.service` and capture its output.
 async fn systemctl(verb: &str) -> Result<std::process::Output, String> {
     TokioCommand::new("systemctl")
         .args(["--user", verb, SERVICE])

@@ -233,7 +233,7 @@ pub struct RemuxOut {
 }
 
 /// Remux `path` into the editor-proxy lane and await completion, then pin the
-/// hash and return the loopback URL directly (no iskariel-asset:// round-trip).
+/// hash and return the loopback URL directly (no mortar-pestle-asset:// round-trip).
 /// Cache hits (including completed files from prior runs) return on the first
 /// poll tick — that's the instant re-pin on project open.
 #[tauri::command]

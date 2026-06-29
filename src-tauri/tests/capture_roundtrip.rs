@@ -1,7 +1,7 @@
 //! Game Capture Phase 1 — Step 2 cross-crate round-trip GATE (plan §10 Risk #1).
 //!
 //! The src-tauri NDJSON client structs (`app_lib::capture::client`) are a
-//! **byte-identical mirror** of the engine's frozen `iskariel-capture/src/daemon/
+//! **byte-identical mirror** of the engine's frozen `mortar-pestle-capture/src/daemon/
 //! protocol.rs`. The two crates are decoupled by design (no shared dependency),
 //! so this test is what holds them in sync: for each wire type it pins the
 //! **golden JSON exactly as the engine emits it** (derived from the engine's

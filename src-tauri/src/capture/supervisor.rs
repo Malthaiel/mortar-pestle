@@ -1,6 +1,6 @@
 //! 5-SF2c/5-SF2d — the capture engine supervisor.
 //!
-//! Owns the optional `iskariel-capture` engine's whole lifecycle for the app's
+//! Owns the optional `mortar-pestle-capture` engine's whole lifecycle for the app's
 //! lifetime: **adopt-first / spawn-second**, bounded-backoff respawn on
 //! unexpected exit, a crash-loop terminal state, and a `RunEvent::Exit` reap.
 //! It feeds the `capture-engine-status` Tauri event and holds the single
@@ -138,7 +138,7 @@ pub struct Supervisor {
     gen: AtomicU64,
     /// The shared socket client (cheap clone; reconnect-surviving).
     client: CaptureClient,
-    /// Absolute path to the persisted `iskariel-capture.json`, resolved from the
+    /// Absolute path to the persisted `mortar-pestle-capture.json`, resolved from the
     /// real `AppHandle` at [`start`] (same file the `set_capture_config` command
     /// writes) — read for the best-effort `set_config` push.
     config_path: Option<PathBuf>,
@@ -186,7 +186,7 @@ pub fn start(app: AppHandle) {
 }
 
 /// Restart the spawned engine child so the next spawn rebinds
-/// `ISKARIEL_CAPTURES_DIR` (= `captures_dir()`) — the repoint path for a
+/// `MORTAR_PESTLE_CAPTURES_DIR` (= `captures_dir()`) — the repoint path for a
 /// recordings-folder change (WI-2). Kills the child (Unix SIGTERM / Windows
 /// taskkill /T /F, mirroring [`shutdown`]); the live wait-task observes the exit
 /// and respawns (a >5 s run resets the crash streak, so a settings change never
@@ -395,7 +395,7 @@ async fn supervise(sup: &'static Supervisor, app: AppHandle) {
 
 /// Best-effort `set_config` push after (re)connect (config-push contract: the
 /// file is persistence-of-record, the push is best-effort). Reads the persisted
-/// `iskariel-capture.json` and forwards it on the socket; absent / unreadable ⇒
+/// `mortar-pestle-capture.json` and forwards it on the socket; absent / unreadable ⇒
 /// skip silently (the engine keeps its own defaults). Detached so a slow socket
 /// can't stall the supervise loop.
 fn push_config(sup: &Supervisor) {

@@ -29,7 +29,7 @@ function saveJSON(key, val) {
 }
 
 // SF12 (2026-05-24): WebKitGTK rejects custom URI schemes
-// (iskariel-asset://) in HTMLMediaElement. The Rust side runs a loopback
+// (mortar-pestle-asset://) in HTMLMediaElement. The Rust side runs a loopback
 // axum server on a kernel-assigned 127.0.0.1 port; mediaHttpUrl returns the
 // http:// URL that WebKit accepts.
 function audioSrcFor(audioPath) {
@@ -39,7 +39,7 @@ function audioSrcFor(audioPath) {
 
 // Surface play() rejections so a future audio bug isn't invisible. Console line
 // names the track + resolved src (which differs between browser-tab dev and the
-// Tauri shell — `iskariel-asset://` vs `/api/file/`); the dispatched event is
+// Tauri shell — `mortar-pestle-asset://` vs `/api/file/`); the dispatched event is
 // what MusicErrorToast renders.
 function emitPlayError(track, err) {
   const msg = err?.message || String(err);

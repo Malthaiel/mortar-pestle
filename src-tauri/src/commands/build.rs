@@ -16,7 +16,7 @@ use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command as TokioCommand;
 
-const REPO_RELATIVE: &str = "Code/iskariel";
+const REPO_RELATIVE: &str = "Code/mortar-pestle";
 const OUTPUT_TAIL_CAP: usize = 200;
 #[cfg(unix)]
 const CANCEL_GRACE_MS: u64 = 2000;

@@ -102,7 +102,7 @@ export default function CapturePage({ api, accent }) {
   //     freezes (GST_DEBUG: both sinks hold their next buffer, clock stuck at
   //     ~20s; only a seek PAST the buffered edge nudges it). A 206 isn't an
   //     option (souphttpsrc reads the chunk length as EOF at 8 MB) and <video>
-  //     rejects iskariel-asset://. So fetch the proxy into a complete in-memory
+  //     rejects mortar-pestle-asset://. So fetch the proxy into a complete in-memory
   //     blob: URL — WebKit plays a whole blob with no progressive path, no
   //     buffering-pause, no cork. Capped so a long clip can't OOM the webview;
   //     above the cap we stream the HTTP URL (may stall — "Send to editor").

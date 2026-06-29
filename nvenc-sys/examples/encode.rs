@@ -3,7 +3,7 @@
 //! dump the elementary stream to disk. Run, then decode/verify with ffmpeg:
 //!
 //!   cargo run -p nvenc-sys --example encode
-//!   ffmpeg -i /tmp/iskariel-capture-test.h264 -frames:v 1 -y /tmp/iskariel-capture-test.png
+//!   ffmpeg -i /tmp/mortar-pestle-capture-test.h264 -frames:v 1 -y /tmp/mortar-pestle-capture-test.png
 //!
 //! A `00 00 00 01 67 …` header (start code + NAL type 7 = SPS) proves the output
 //! is a standalone-decodable H.264 access unit, not a listing-only "capability".
@@ -12,7 +12,7 @@ use std::io::Write;
 
 const W: u32 = 256;
 const H: u32 = 256;
-const OUT: &str = "/tmp/iskariel-capture-test.h264";
+const OUT: &str = "/tmp/mortar-pestle-capture-test.h264";
 
 fn main() {
     // ARGB (word-order [B, G, R, A]) diagonal-gradient test pattern:
@@ -49,5 +49,5 @@ fn main() {
     let head: Vec<String> = es.iter().take(8).map(|b| format!("{b:02x}")).collect();
     println!("encoded {}x{} ARGB → {} bytes, wrote {OUT}", W, H, es.len());
     println!("first bytes: {}  (expect `00 00 00 01 67` = start code + SPS)", head.join(" "));
-    println!("decode: ffmpeg -i {OUT} -frames:v 1 -y /tmp/iskariel-capture-test.png");
+    println!("decode: ffmpeg -i {OUT} -frames:v 1 -y /tmp/mortar-pestle-capture-test.png");
 }

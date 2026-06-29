@@ -67,7 +67,7 @@ export default function DevServerPanel({ accent }) {
     <div style={{ maxWidth: 680 }}>
       <SectionLabel style={{ marginTop: 0 }}>Dev Server</SectionLabel>
       <div style={{ ...mono, color: 'var(--text-muted)', marginBottom: 12 }}>
-        iskariel-dev.service · cargo tauri dev → localhost:5173
+        mortar-pestle-dev.service · cargo tauri dev → localhost:5173
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-start' }}>

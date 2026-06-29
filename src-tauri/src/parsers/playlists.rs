@@ -11,7 +11,7 @@
 //! exists" invariant no longer holds. The album cell upgrades from plain text to
 //! a wikilink once the album card exists.
 //! Custom cover images live under `Music/Playlists/Covers/<Name>.<ext>`
-//! and are served to the webview via the `iskariel-asset://` scheme.
+//! and are served to the webview via the `mortar-pestle-asset://` scheme.
 //!
 //! The app is the read/write authority: pages are emitted canonically from
 //! scratch (`emit_canonical`), never round-tripped through a parser, so a

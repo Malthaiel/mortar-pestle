@@ -71,7 +71,7 @@ fn shield_init_script() -> String {
     let scriptlets = crate::blocker::scriptlets::bootstrap();
     format!(
         "(function(){{try{{var d=document,s=d.createElement('style');\
-         s.id='__iskariel_shield__';s.textContent={css};\
+         s.id='__mortar-pestle_shield__';s.textContent={css};\
          (d.head||d.documentElement).appendChild(s);}}catch(e){{}}}})();\n{scriptlets}"
     )
 }
@@ -80,7 +80,7 @@ fn shield_init_script() -> String {
 /// off for the host — globally disabled or per-site allow-listed). The proxy
 /// already stopped network ad/tracker loads; this just un-hides cosmetically.
 const STRIP_SHIELD_JS: &str =
-    "(function(){try{var e=document.getElementById('__iskariel_shield__');if(e)e.remove();}catch(_){}})();";
+    "(function(){try{var e=document.getElementById('__mortar-pestle_shield__');if(e)e.remove();}catch(_){}})();";
 
 // ── tab-store plumbing ───────────────────────────────────────────────────────
 

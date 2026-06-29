@@ -271,7 +271,7 @@ export default function SttDevPanel({ accent }) {
         </PrimaryBtn>
       </div>
       <div style={{ ...mono, color: 'var(--text-faint)', marginTop: 6 }}>
-        Tip: paste the absolute path to <b>iskariel-stt/tests/fixtures/jfk.wav</b> (relative to repo root).
+        Tip: paste the absolute path to <b>mortar-pestle-stt/tests/fixtures/jfk.wav</b> (relative to repo root).
       </div>
       <div style={{ ...mono, marginTop: 8, lineHeight: 1.6, color: 'var(--text-muted)', minHeight: 16 }}>
         {filePct != null

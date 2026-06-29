@@ -13,7 +13,7 @@ use tokio::process::Command as TokioCommand;
 
 use crate::commands::vault::{self, VaultError};
 
-const QBIT_SERVICE: &str = "iskariel";
+const QBIT_SERVICE: &str = "mortar-pestle";
 const QBIT_ACCOUNT: &str = "qbittorrent";
 const QBIT_CONFIG_FILE: &str = "qbit.json";
 const DEFAULT_HOST: &str = "http://localhost:8080";

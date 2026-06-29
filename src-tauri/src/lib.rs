@@ -58,11 +58,12 @@ fn migrate_sidebar_to_app_config(app: &tauri::AppHandle) {
     }
 }
 
-/// Iskariel rebrand — one-shot migration of app-data from any legacy identifier
-/// (`dev.judeau.agentic-os` original, `dev.malthaiel.lodestar` first rebrand) to
-/// the current `dev.malthaiel.iskariel`. Tauri derives the data / config / cache
-/// dirs from `tauri.conf.json::identifier`, so changing it would otherwise orphan
-/// the user's vaults, config, and cache. Strategy: atomic same-volume `rename` of
+/// Mortar & Pestle rebrand — one-shot migration of app-data from any legacy
+/// identifier (`dev.judeau.agentic-os` original, `dev.malthaiel.lodestar` first
+/// rebrand, `dev.malthaiel.iskariel` second rebrand) to the current
+/// `dev.malthaiel.mortar-pestle`. Tauri derives the data / config / cache dirs
+/// from `tauri.conf.json::identifier`, so changing it would otherwise orphan the
+/// user's vaults, config, and cache. Strategy: atomic same-volume `rename` of
 /// each app-data dir (instant even for multi-GB Library data), then rewrite the
 /// absolute legacy-id paths baked into the top-level `*.json` configs — chiefly
 /// `vaults.json`, whose App/Pulse/Library/GameWiki mounts are stored as absolute
@@ -72,10 +73,10 @@ fn migrate_sidebar_to_app_config(app: &tauri::AppHandle) {
 /// app, never a crash; the legacy dir is left intact for manual recovery). MUST
 /// run first in `setup`, before the log plugin or any app-data read.
 fn migrate_legacy_identity_data(app: &tauri::AppHandle) {
-    // Newest legacy id first so a chained install (judeau -> lodestar -> iskariel)
-    // migrates from its most recent identity.
-    const LEGACY_IDS: [&str; 2] = ["dev.malthaiel.lodestar", "dev.judeau.agentic-os"];
-    const NEW_ID: &str = "dev.malthaiel.iskariel";
+    // Newest legacy id first so a chained install (judeau -> lodestar -> iskariel
+    // -> mortar-pestle) migrates from its most recent identity.
+    const LEGACY_IDS: [&str; 3] = ["dev.malthaiel.iskariel", "dev.malthaiel.lodestar", "dev.judeau.agentic-os"];
+    const NEW_ID: &str = "dev.malthaiel.mortar-pestle";
 
     // 1. Move each per-OS app-data dir (data / local / config) old -> new. On
     //    Windows data==config (Roaming) and local is Local; on Linux data==local
@@ -152,12 +153,13 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .register_uri_scheme_protocol("iskariel-asset", |ctx, req| asset_protocol::handle(ctx, req))
+        .register_uri_scheme_protocol("mortar-pestle-asset", |ctx, req| asset_protocol::handle(ctx, req))
         .setup(|app| {
-            // Iskariel rebrand — migrate legacy app-data (dev.judeau.agentic-os
-            // or dev.malthaiel.lodestar) to dev.malthaiel.iskariel BEFORE the log
-            // plugin or any app-data read (the log plugin would otherwise create
-            // the new log dir first and block the atomic cache-dir move).
+            // Mortar & Pestle rebrand — migrate legacy app-data
+            // (dev.judeau.agentic-os, dev.malthaiel.lodestar, or
+            // dev.malthaiel.iskariel) to dev.malthaiel.mortar-pestle BEFORE the
+            // log plugin or any app-data read (the log plugin would otherwise
+            // create the new log dir first and block the atomic cache-dir move).
             migrate_legacy_identity_data(app.handle());
 
             if cfg!(debug_assertions) {
@@ -241,7 +243,7 @@ pub fn run() {
 
             // SF12 follow-up — loopback HTTP server for media bytes. WebKitGTK
             // rejects custom URI schemes in HTMLMediaElement, so audio/video
-            // can't load from `iskariel-asset://`. Spawn an axum router on a
+            // can't load from `mortar-pestle-asset://`. Spawn an axum router on a
             // kernel-assigned 127.0.0.1 port that re-exposes the existing
             // asset-protocol helpers over plain HTTP (which WebKit accepts).
             tauri::async_runtime::spawn(async {
@@ -290,7 +292,7 @@ pub fn run() {
             {
             // WI-2: load the persisted recordings-folder override into the
             // captures_dir() cache BEFORE the engine spawns, so the daemon binds
-            // ISKARIEL_CAPTURES_DIR to the user's chosen dir on first launch.
+            // MORTAR_PESTLE_CAPTURES_DIR to the user's chosen dir on first launch.
             commands::capture::init_captures_override(app.handle());
 
             capture::supervisor::start(app.handle().clone());

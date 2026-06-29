@@ -1,7 +1,7 @@
 //! Voice Transcription SF1 — STT cross-crate round-trip GATE.
 //!
 //! The src-tauri NDJSON client structs (`app_lib::stt::client`) are a
-//! **byte-identical mirror** of the engine's frozen `iskariel-stt/src/
+//! **byte-identical mirror** of the engine's frozen `mortar-pestle-stt/src/
 //! protocol.rs`. The two crates are decoupled by design (no shared dependency),
 //! so this test is what holds them in sync: for each wire type it pins the
 //! **golden JSON exactly as the engine emits it** (derived from the engine's

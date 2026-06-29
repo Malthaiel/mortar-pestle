@@ -1,11 +1,11 @@
-//! Sub-feature 7 — Media metadata + `iskariel-asset://` host commands.
+//! Sub-feature 7 — Media metadata + `mortar-pestle-asset://` host commands.
 //!
 //! 17 `#[tauri::command]` fns covering music/video readers + writers. The 2
 //! ffmpeg-transcoded video paths (`/api/video/stream`, `/api/video/subs`) are
 //! deferred to Sub-feature 7.5 — Tauri 2.11's protocol response API requires
 //! buffered `Cow<'static, [u8]>` bodies (no native stream-into-response).
 //!
-//! The `iskariel-asset://` URI scheme is registered in `lib.rs::run` and served
+//! The `mortar-pestle-asset://` URI scheme is registered in `lib.rs::run` and served
 //! from `crate::asset_protocol`; this module owns the `media_roots()` config
 //! consulted by both the protocol handler and any future absolute-path
 //! command (e.g. probe).
@@ -211,7 +211,7 @@ pub async fn video_start_transcode(
     }
 
     Ok(StartTranscodeResponse {
-        url: format!("iskariel-asset://localhost/transcode/{hash}.mp4"),
+        url: format!("mortar-pestle-asset://localhost/transcode/{hash}.mp4"),
         duration: probe.duration,
     })
 }
@@ -242,7 +242,7 @@ pub async fn video_extract_subs(
         video_transcode::extract_subs_sync(canonical_str, stream, out_path).await?;
     }
     Ok(ExtractSubsResponse {
-        url: format!("iskariel-asset://localhost/subs/{hash}.vtt"),
+        url: format!("mortar-pestle-asset://localhost/subs/{hash}.vtt"),
     })
 }
 
@@ -391,7 +391,7 @@ mod tests {
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_nanos())
             .unwrap_or(0);
-        std::env::temp_dir().join(format!("iskariel-media-roots-{prefix}-{stamp}"))
+        std::env::temp_dir().join(format!("mortar-pestle-media-roots-{prefix}-{stamp}"))
     }
 
     #[test]

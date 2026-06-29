@@ -174,7 +174,7 @@ fn decode_optional_snapshot(data: Option<Value>) -> Option<StateSnapshot> {
 /// `set_capture_config` — persist the engine config + best-effort push it.
 ///
 /// **File is persistence-of-record** (config contract): `atomic_write` the
-/// camelCase JSON to `app_config_root(app)/iskariel-capture.json` (precedent
+/// camelCase JSON to `app_config_root(app)/mortar-pestle-capture.json` (precedent
 /// `vault.rs::atomic_write` + `sidebar.rs::app_config_root`). Then a best-effort
 /// `set_config` socket push so a running engine picks it up live — a failed push
 /// is logged, never surfaced (the file already holds the truth; the supervisor
@@ -204,7 +204,7 @@ pub async fn set_capture_config(app: AppHandle, config: Value) -> Result<(), Vau
     Ok(())
 }
 
-/// The persisted-config path: `app_config_root(app)/iskariel-capture.json`. Shared
+/// The persisted-config path: `app_config_root(app)/mortar-pestle-capture.json`. Shared
 /// shape with the supervisor's reader (`capture::CONFIG_FILE`).
 fn config_file(app: &AppHandle) -> Result<PathBuf, VaultError> {
     Ok(app_config_root(app)?.join(CONFIG_FILE))
@@ -214,7 +214,7 @@ fn config_file(app: &AppHandle) -> Result<PathBuf, VaultError> {
 // The captures dir is user-configurable. Persistence-of-record is
 // `<app_config>/captures-dir.json` (`{"path": "..."}`); `captures_dir()` reads an
 // in-process override cache (`vault::captures_override`) loaded at startup and
-// rewritten on set/reset. The daemon binds `ISKARIEL_CAPTURES_DIR` at spawn and
+// rewritten on set/reset. The daemon binds `MORTAR_PESTLE_CAPTURES_DIR` at spawn and
 // computes each clip's path at start, so a change repoints the engine by
 // restarting it (`supervisor::restart`) — the next clip lands in the new dir, and
 // the clip-list scan + reveal allowlist already resolve through `captures_dir()`.
@@ -332,7 +332,7 @@ pub struct ClipMeta {
     pub poster: Option<String>,
 }
 
-/// `capture_list_clips` — metadata-only scan of `ISKARIEL_CAPTURES_DIR`
+/// `capture_list_clips` — metadata-only scan of `MORTAR_PESTLE_CAPTURES_DIR`
 /// (`captures_dir()` — `%USERPROFILE%\Videos\Iskariel` on Windows, decision #11)
 /// for video files, newest-first. App-UI-owned (no watcher; the live clip-list
 /// signal is `capture-saved`). Recurses one level into per-game subfolders (the

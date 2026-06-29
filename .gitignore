@@ -12,7 +12,7 @@ src-tauri/tests/fixtures/vault/Infrastructure/.cache/
 # Tauri 2 AppManifest auto-generated permissions (regenerated each `tauri build`).
 src-tauri/permissions/
 
-# Rust build artifacts (all crates: src-tauri, iskariel-stt, iskariel-capture, nvenc-sys).
+# Rust build artifacts (all crates: src-tauri, mortar-pestle-stt, mortar-pestle-capture, nvenc-sys).
 target/
 
 # Bundled external tools (ffmpeg/ffprobe/yt-dlp) — dropped here at release-cut,

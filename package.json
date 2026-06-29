@@ -1,8 +1,8 @@
 {
-  "name": "iskariel",
+  "name": "mortar-pestle",
   "version": "0.8.2",
   "private": true,
-  "description": "Iskariel — personal operating system for thinking, planning, and producing",
+  "description": "Mortar & Pestle — personal operating system for thinking, planning, and producing",
   "scripts": {
     "dev": "tauri dev",
     "build": "tauri build",

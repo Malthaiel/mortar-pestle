@@ -1,7 +1,7 @@
 //! Game Capture bridge — the src-tauri side of the studio-tier capture engine
 //! (Game Capture Phase 1, Step 2 `[APP]`).
 //!
-//! The engine itself is a **separate, optional binary** (`iskariel-capture`,
+//! The engine itself is a **separate, optional binary** (`mortar-pestle-capture`,
 //! built only in the studio tier). This crate is deliberately decoupled from it:
 //! there is NO `use iskariel_capture::…`, no engine-crate dependency, and no
 //! `studio` cargo feature on src-tauri. The ONLY coupling is
@@ -9,7 +9,7 @@
 //!   1. the runtime-resolved binary **path** ([`carriage::resolve_engine_binary`]), and
 //!   2. the NDJSON control **protocol** — serde structs duplicated byte-for-byte
 //!      in [`client`] (the engine's canonical copy lives in
-//!      `iskariel-capture/src/daemon/protocol.rs`; a cross-crate round-trip test
+//!      `mortar-pestle-capture/src/daemon/protocol.rs`; a cross-crate round-trip test
 //!      in `tests/capture_roundtrip.rs` gates the two against drift).
 //!
 //! Module map:
@@ -35,7 +35,7 @@ use tokio::process::Command as TokioCommand;
 /// The resolved env-var name carrying the captures output root (plan Risk #10):
 /// `captures_dir()` (`%USERPROFILE%\Videos\Iskariel` on Windows — decision #11).
 /// The app's clip-list scan (Step 4) reads the same root.
-const CAPTURES_DIR_ENV: &str = "ISKARIEL_CAPTURES_DIR";
+const CAPTURES_DIR_ENV: &str = "MORTAR_PESTLE_CAPTURES_DIR";
 
 /// Spawn the capture engine daemon (5-SF2b, driven by [`supervisor`]) — a bare,
 /// kill-on-drop child. Argv is `[bin, "daemon"]`. Returns the child PID (for the
@@ -45,11 +45,11 @@ const CAPTURES_DIR_ENV: &str = "ISKARIEL_CAPTURES_DIR";
 /// supervisor never owns the `Child`, only its PID + exit signal.
 ///
 /// Environment:
-/// - `ISKARIEL_CAPTURES_DIR` = `captures_dir()` (created up-front).
+/// - `MORTAR_PESTLE_CAPTURES_DIR` = `captures_dir()` (created up-front).
 /// - `RUST_LOG` is passed through from the app's own env when set.
 ///
 /// stdout + stderr are drained line-by-line to `~/.local/state/iskariel/
-/// iskariel-capture.log` (parent created). Mirrors the
+/// mortar-pestle-capture.log` (parent created). Mirrors the
 /// `parsers::video_transcode` Tokio + `Stdio` + `kill_on_drop` idiom and the
 /// `commands::build` concurrent-drain idiom.
 ///
@@ -68,7 +68,7 @@ pub fn spawn_engine_child(bin: &PathBuf) -> std::io::Result<(u32, JoinHandle<Opt
         // missing root is the engine's error to surface, not a spawn blocker.
     }
 
-    // Log file: ~/.local/state/iskariel/iskariel-capture.log (parent created).
+    // Log file: ~/.local/state/iskariel/mortar-pestle-capture.log (parent created).
     let log_path = engine_log_path();
     if let Some(parent) = log_path.as_ref().and_then(|p| p.parent()) {
         if let Err(e) = std::fs::create_dir_all(parent) {
@@ -153,7 +153,7 @@ pub fn read_persisted_config(path: &std::path::Path) -> Option<Value> {
 
 /// The persisted engine-config filename (config-push contract). Shared by the
 /// command writer and the supervisor reader.
-pub const CONFIG_FILE: &str = "iskariel-capture.json";
+pub const CONFIG_FILE: &str = "mortar-pestle-capture.json";
 
 /// Drain one child pipe line-by-line into the shared log file (or the app log
 /// facade as a fallback). Never panics on child output.
@@ -180,17 +180,17 @@ async fn drain_to_log<R>(
 }
 
 /// The sidecar's stdout/stderr log sink. Windows:
-/// `%LOCALAPPDATA%\iskariel\logs\iskariel-capture.log`; Linux:
-/// `~/.local/state/iskariel/iskariel-capture.log`. `None` if the base env var is unset.
+/// `%LOCALAPPDATA%\iskariel\logs\mortar-pestle-capture.log`; Linux:
+/// `~/.local/state/iskariel/mortar-pestle-capture.log`. `None` if the base env var is unset.
 #[cfg(windows)]
 fn engine_log_path() -> Option<PathBuf> {
     std::env::var_os("LOCALAPPDATA")
-        .map(|base| PathBuf::from(base).join("iskariel").join("logs").join("iskariel-capture.log"))
+        .map(|base| PathBuf::from(base).join("mortar-pestle").join("logs").join("mortar-pestle-capture.log"))
 }
 
 #[cfg(not(windows))]
 fn engine_log_path() -> Option<PathBuf> {
     std::env::var_os("HOME").map(|home| {
-        PathBuf::from(home).join(".local/state/iskariel/iskariel-capture.log")
+        PathBuf::from(home).join(".local/state/iskariel/mortar-pestle-capture.log")
     })
 }

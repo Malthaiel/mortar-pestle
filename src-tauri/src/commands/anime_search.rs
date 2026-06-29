@@ -23,7 +23,7 @@ use serde::{Deserialize, Serialize};
 use crate::commands::vault::VaultError;
 
 const JIKAN_BASE: &str = "https://api.jikan.moe/v4";
-const JIKAN_USER_AGENT: &str = "Citadel/1.0 (iskariel)";
+const JIKAN_USER_AGENT: &str = "Citadel/1.0 (mortar-pestle)";
 
 // Token-bucket rate limit — Jikan documents 3 req/s and 60 req/min. We stay
 // inside both windows while letting a page's calls OVERLAP (up to the cap)

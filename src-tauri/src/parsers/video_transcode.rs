@@ -1,5 +1,5 @@
 //! Sub-feature 7.5 — ffmpeg transcode + subtitle extraction with hash-keyed
-//! cache files under `~/.cache/iskariel/transcodes/`. The `iskariel-asset://`
+//! cache files under `~/.cache/iskariel/transcodes/`. The `mortar-pestle-asset://`
 //! scheme is extended (in `asset_protocol.rs`) with `/transcode/<hash>.mp4`
 //! and `/subs/<hash>.vtt` virtual paths that Range-serve the completed files.
 //!

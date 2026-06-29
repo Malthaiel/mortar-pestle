@@ -1,7 +1,7 @@
 // commsCompile.js — Comms Extraction (Deadlock Scrim Coaching, sub-plan 4) helpers.
 // Pure ESM (no React, no @host) so it round-trips through a Node harness exactly like
 // scrimSchema.js / matchData.js / noteCompile.js. The per-match Extract Comms button
-// transcribes a Scrim Recording's audio (via coaching_extract_audio + the iskariel-stt
+// transcribes a Scrim Recording's audio (via coaching_extract_audio + the mortar-pestle-stt
 // sidecar) and persists the full segments to a `.commstranscript.…` sidecar; this module
 // renders the one-line `### Comms Transcript` opaque summary (a pointer to that sidecar)
 // and parses the sidecar back into a view-model. Mirrors setCoachingSummaryBody

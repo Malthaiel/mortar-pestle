@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "Iskariel",
+  "productName": "Mortar & Pestle",
   "version": "0.8.2",
-  "identifier": "dev.malthaiel.iskariel",
+  "identifier": "dev.malthaiel.mortar-pestle",
   "build": {
     "frontendDist": "../web/dist",
     "devUrl": "http://127.0.0.1:5173",
@@ -14,7 +14,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Iskariel",
+        "title": "Mortar & Pestle",
         "width": 1440,
         "height": 900,
         "minWidth": 960,
@@ -25,7 +25,7 @@
       },
       {
         "label": "overlay-capture",
-        "title": "Iskariel Overlay — Capture",
+        "title": "Mortar & Pestle Overlay — Capture",
         "url": "index.html#/overlay/capture",
         "width": 360,
         "height": 140,
@@ -42,7 +42,7 @@
       },
       {
         "label": "overlay-scrim",
-        "title": "Iskariel Overlay — Scrim",
+        "title": "Mortar & Pestle Overlay — Scrim",
         "url": "index.html#/overlay/scrim",
         "width": 380,
         "height": 520,
@@ -76,8 +76,9 @@
       "nsis"
     ],
     "category": "Utility",
-    "shortDescription": "Iskariel desktop shell",
-    "longDescription": "Iskariel — a personal operating system for thinking, planning, and producing: vault browser, focus timer, skills runner, media player, and per-session-token PTY terminal.",
+    "publisher": "Malthaiel",
+    "shortDescription": "Mortar & Pestle desktop shell",
+    "longDescription": "Mortar & Pestle — a personal operating system for thinking, planning, and producing: vault browser, focus timer, skills runner, media player, and per-session-token PTY terminal.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -88,7 +89,7 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://github.com/Malthaiel/iskariel/releases/latest/download/latest.json"
+        "https://github.com/Malthaiel/mortar-pestle/releases/latest/download/latest.json"
       ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDc0MjczODk4QzE1RkQ4M0UKUldRKzJGL0JtRGduZElDQTVJVXQrOVJNMUtJUzRrUkVwMi9qM0tmUGhpTnBkY2Vxd3NQVE53T28K"
     }

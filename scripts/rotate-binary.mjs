@@ -12,9 +12,9 @@ if (!existsSync(releaseDir)) {
   process.exit(0);
 }
 
-const current = join(releaseDir, 'iskariel');
-const prev    = join(releaseDir, 'iskariel.prev');
-const prev2   = join(releaseDir, 'iskariel.prev2');
+const current = join(releaseDir, 'mortar-pestle');
+const prev    = join(releaseDir, 'mortar-pestle.prev');
+const prev2   = join(releaseDir, 'mortar-pestle.prev2');
 
 function safeUnlink(p) {
   try { if (existsSync(p)) unlinkSync(p); } catch (e) { console.warn('[rotate-binary] unlink failed (ignored):', p, e.message); }

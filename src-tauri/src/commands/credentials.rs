@@ -49,7 +49,7 @@ const ARGON_T_COST: u32 = 3;
 const ARGON_P_COST: u32 = 1;
 
 // Keyring (libsecret on Linux) — same service as design.rs/qbit.rs, new account.
-const KR_SERVICE: &str = "iskariel";
+const KR_SERVICE: &str = "mortar-pestle";
 const KR_ACCOUNT: &str = "credentials";
 
 // ── Error type (mirrors design.rs DesignError → {code,message}) ───────────

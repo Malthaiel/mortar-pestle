@@ -98,7 +98,7 @@ function MiniBtn({ icon: Icon, title, onClick }) {
 }
 
 // Inline scoreboard — read via the coaching_read_image Rust command (returns a data:
-// URL for any user-picked path, dodging the iskariel-asset:// allowlist). For the
+// URL for any user-picked path, dodging the mortar-pestle-asset:// allowlist). For the
 // user's eyes only; the pipeline never reads it.
 function Scoreboard({ path }) {
   const [src, setSrc] = useState(null);
@@ -454,7 +454,7 @@ export default function ScrimViewer({ path, accent }) {
   }, [path, doSave]);
 
   // Extract Comms — extract the match's Scrim Recording audio (ffmpeg → 16 kHz mono WAV via
-  // coaching_extract_audio), transcribe it through the iskariel-stt sidecar, persist the full
+  // coaching_extract_audio), transcribe it through the mortar-pestle-stt sidecar, persist the full
   // segments to the .commstranscript sidecar (verbatim) + a one-line summary into the opaque
   // ### Comms Transcript. Mirrors runProcess: flush → work → ordered opaque write behind a
   // fresh-mtime conflict guard. Separate from Run Process (the heavy, re-runnable STT pass);
