@@ -23,7 +23,7 @@ const paneLabel = {
   padding: '10px 12px',
   userSelect: 'none',
 };
-const mono = { fontFamily: '"DM Mono", monospace' };
+const mono = { fontFamily: 'var(--font-mono), monospace' };
 
 const fmtSize = (b) => {
   if (!b && b !== 0) return '';

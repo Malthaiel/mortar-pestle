@@ -31,7 +31,7 @@ import { parseWav, wavToAudioBuffer } from './wav.js';
 import { mkEq, chainEq, applyEqNodes, applyCompNode, mkPan, setPan } from './mixerGraph.js';
 import { resolveTrackParams } from './mix.js';
 
-const mono = { fontFamily: '"DM Mono", monospace' };
+const mono = { fontFamily: 'var(--font-mono), monospace' };
 
 // Documented tunable consts. EQ/pan/multiclip are deterministic on both sides
 // (same RBJ biquads, same scalar gains) → expect the diff far below −60 dB; comp

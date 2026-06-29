@@ -18,7 +18,7 @@ function VaultTaskRow({ task, active, onSelect, onToggle, accent, onDragStart })
         background: active ? `${accent}12` : 'transparent',
         borderRadius: 0, transition: 'background 80ms',
       }}>
-      <span style={{ fontSize: 8, color: 'var(--text-faint)', fontFamily: 'DM Mono', width: 14, flexShrink: 0, textAlign: 'right' }}>
+      <span style={{ fontSize: 8, color: 'var(--text-faint)', fontFamily: 'var(--font-mono), monospace', width: 14, flexShrink: 0, textAlign: 'right' }}>
         {hover ? '⋮⋮' : ''}
       </span>
       <span style={{ width: 2, height: 2, borderRadius: '50%', background: priorityColor, flexShrink: 0 }}/>

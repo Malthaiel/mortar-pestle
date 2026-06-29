@@ -16,7 +16,7 @@ import { useEffect, useRef, useState } from 'react';
 import { trackAudible } from './audio/mix.js';
 import { evaluate } from './keyframes/engine.js';
 
-const mono = { fontFamily: '"DM Mono", monospace' };
+const mono = { fontFamily: 'var(--font-mono), monospace' };
 const paneLabel = {
   fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase',
   color: 'var(--text-faint)', padding: '8px 12px', userSelect: 'none', flexShrink: 0,

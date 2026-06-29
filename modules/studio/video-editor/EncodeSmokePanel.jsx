@@ -10,7 +10,7 @@ import AppWindow from '@host/components/ui/AppWindow.jsx';
 import { PrimaryBtn } from '@host/components/ui/Button.jsx';
 import { IconClapperboard } from '@host/components/icons.jsx';
 
-const mono = { fontFamily: '"DM Mono", monospace' };
+const mono = { fontFamily: 'var(--font-mono), monospace' };
 
 export default function EncodeSmokePanel({ onClose, api, accent }) {
   const [rows, setRows] = useState([]);

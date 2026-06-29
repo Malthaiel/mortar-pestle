@@ -63,9 +63,14 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
   --shadow-card:  0 8px 40px rgba(0,0,0,0.18);
   --shadow-fab:   0 2px 8px rgba(0,0,0,0.07);
 
-  --font-display: 'DM Sans', sans-serif;
   --font-body:    'DM Sans', sans-serif;
   --font-mono:    'DM Mono', ui-monospace, monospace;
+  --font-heading: 'DM Sans', sans-serif;
+  --font-candy:   'DM Sans', sans-serif;
+  /* Aliases the orphaned --font-sans references (NotificationProvider, Toast,
+     Popover) onto the body font so they pick up the Body picker + render in
+     DM Sans offline instead of the system fallback. */
+  --font-sans:    var(--font-body);
 
   --density:      1;
   --space-scale:  1;
@@ -218,6 +223,10 @@ body {
   transition: background 0.12s ease, color 0.12s ease;
 }
 
+/* Headings track --font-heading (Settings → Appearance → Fonts → Headings).
+   No base h1–h6 font-family rule existed before; headings inherited body. */
+h1, h2, h3, h4, h5, h6 { font-family: var(--font-heading); }
+
 /* Scrollbar — button-style solid fill.
    A constant thin flat thumb (no gloss, gradient, or grow): neutral grey at
    rest, solid accent while actively scrolling OR while the thumb itself is
@@ -260,6 +269,11 @@ body {
   animation: ftvShimmer 1.4s ease-in-out infinite;
 }
 @keyframes plannerModalIn { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }
+/* Planner Frame Edit & Copy flair (Pivot-2 follow-up). Inline-applied so the
+   body[data-anim-<key>="off"] [style*="<name>"] gates keep matching. */
+@keyframes frameResetSpin { to { transform: rotate(360deg); } }
+@keyframes copyDayPop    { 0% { transform: scale(1); } 50% { transform: scale(1.08); } 100% { transform: scale(1); } }
+@keyframes frameRestoreIn { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
 /* Day-pane directional slide (Pivot 2) — future days enter from the right,
    past days from the left. Applied INLINE by DayPane (keyed by pivot) so the
    body[data-anim-planner-day-slide="off"] gate keeps matching. */
@@ -1125,6 +1139,14 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
 }
 /* The base never moves — beat the global button:active scale(0.97). */
 .candy-btn:active { transform: none !important; }
+
+/* Candy button labels track --font-candy (Settings → Appearance → Fonts →
+   Candy). Locally re-alias --font-body → --font-candy so every candy content
+   shape (which declares font-family: var(--font-body)) follows the candy
+   picker with no per-shape edits. .candy-face, .card-sub, and the field shape
+   stay on --font-mono (the Mono picker). Default --font-candy = DM Sans, so
+   nothing changes until the Candy picker is moved. */
+.candy-btn, .candy-btn-legacy { --font-body: var(--font-candy); }
 
 .candy-face {
   /* Pointer-transparent so the IMMOVABLE base is the sole hit target. The press
@@ -3666,6 +3688,15 @@ body[data-anim-drawer-modal="off"] [style*="backdropIn"],
 body[data-anim-drawer-modal="off"] [style*="backdropOut"],
 body[data-anim-drawer-modal="off"] [style*="fadeIn"],
 body[data-anim-drawer-modal="off"] [style*="plannerModalIn"] {
+  animation: none !important;
+}
+
+/* Planner Frame Edit & Copy flair gates. */
+body[data-anim-frame-reset-restore="off"] [style*="frameResetSpin"],
+body[data-anim-frame-reset-restore="off"] [style*="frameRestoreIn"] {
+  animation: none !important;
+}
+body[data-anim-copy-day-pop="off"] [style*="copyDayPop"] {
   animation: none !important;
 }
 

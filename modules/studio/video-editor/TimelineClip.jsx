@@ -15,7 +15,7 @@
 import { memo, useRef, useState } from 'react';
 import useClipDrag from './useClipDrag.js';
 
-const mono = { fontFamily: '"DM Mono", monospace' };
+const mono = { fontFamily: 'var(--font-mono), monospace' };
 
 export default memo(function TimelineClip({
   clip, name, ppf, laneIdx, laneH,

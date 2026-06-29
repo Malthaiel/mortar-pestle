@@ -27,7 +27,7 @@ import { useModuleEnabledMap } from '../hooks/useModuleEnabled.js';
 import { candyGap } from '../util/candy.js';
 import ModulesTab from './settings/ModulesTab.jsx';
 import { AnimationField } from './settings/AnimationRows.jsx';
-import { ANIMATION_KEYS, ANIMATION_PRESETS, ANIMATION_KEY_CONFIG, SETTINGS_DEFAULTS } from '../hooks/useSettings.js';
+import { ANIMATION_KEYS, ANIMATION_PRESETS, ANIMATION_KEY_CONFIG, SETTINGS_DEFAULTS, SANS_OPTIONS, MONO_OPTIONS } from '../hooks/useSettings.js';
 import SoundsTab from './settings/SoundsTab.jsx';
 import NavigationTab from './settings/NavigationTab.jsx';
 import AgentsTab from './settings/AgentsTab.jsx';
@@ -713,6 +713,40 @@ function AppearanceTab({ settings, setSetting, setPreviewAccent, accent, resolve
               { value: 'pill',    label: 'Pill' },
             ]}
             onChange={v => setSetting('radiusScale', v)}
+            accent={accent}
+          />
+        </Row>
+      </SectionBand>
+      <SectionBand title="Fonts">
+        <Row label="Body" anchor="set-fontBody">
+          <Seg
+            value={settings.fontBody}
+            options={SANS_OPTIONS}
+            onChange={v => setSetting('fontBody', v)}
+            accent={accent}
+          />
+        </Row>
+        <Row label="Headings" anchor="set-fontHeading">
+          <Seg
+            value={settings.fontHeading}
+            options={SANS_OPTIONS}
+            onChange={v => setSetting('fontHeading', v)}
+            accent={accent}
+          />
+        </Row>
+        <Row label="Mono" anchor="set-fontMono">
+          <Seg
+            value={settings.fontMono}
+            options={MONO_OPTIONS}
+            onChange={v => setSetting('fontMono', v)}
+            accent={accent}
+          />
+        </Row>
+        <Row label="Candy" anchor="set-fontCandy">
+          <Seg
+            value={settings.fontCandy}
+            options={SANS_OPTIONS}
+            onChange={v => setSetting('fontCandy', v)}
             accent={accent}
           />
         </Row>

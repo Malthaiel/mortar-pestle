@@ -30,6 +30,8 @@ export const ANIMATION_KEYS = [
   'planner-day-slide',
   'counter-tick',
   'task-celebration',
+  'copy-day-pop',
+  'frame-reset-restore',
 ];
 
 // Per-key config for non-boolean animation buckets. Keys absent here are
@@ -254,6 +256,14 @@ export const SETTINGS_DEFAULTS = {
   // global `themeAccent` and the per-page accent system is suspended.
   themePreset: 'monastic',
   themeAccent: '#7c2d2d',
+  // Global font families (Settings → Appearance → Fonts). Each value is a key
+  // into FONT_OPTIONS below; the CSS-var useEffect resolves it to a font-stack
+  // on :root. Defaults preserve the pre-font-changer look (DM Sans body +
+  // headings + candy labels, DM Mono mono).
+  fontBody: 'dm-sans',
+  fontHeading: 'dm-sans',
+  fontMono: 'dm-mono',
+  fontCandy: 'dm-sans',
   // Hover-preview trailing-drag bucket for the animation preview cards.
   // 'none' | 'light' | 'medium' | 'heavy'. Read in AnimationRows.jsx (AnimationField).
   previewFollowDrag: 'light',
@@ -571,6 +581,30 @@ export const SURFACE_DEPTH_SCALE = {
   off: 0, low: 2, medium: 4, high: 7,
 };
 
+// Font family registry (Settings → Appearance → Fonts). A key maps to a CSS
+// font-stack; settings persist the KEY (stable across font renames) and the
+// CSS-var useEffect resolves it onto --font-body / -heading / -mono / -candy.
+// woff2 files live in web/public/fonts and are @font-face'd in web/src/fonts.css.
+// SANS_OPTIONS feeds the Body / Heading / Candy pickers; MONO_OPTIONS feeds Mono.
+export const FONT_OPTIONS = {
+  'dm-sans':        { stack: "'DM Sans', sans-serif",                      label: 'DM Sans' },
+  'inter':          { stack: "'Inter', sans-serif",                        label: 'Inter' },
+  'ibm-plex-sans':  { stack: "'IBM Plex Sans', sans-serif",                label: 'IBM Plex Sans' },
+  'dm-mono':        { stack: "'DM Mono', ui-monospace, monospace",         label: 'DM Mono' },
+  'jetbrains-mono': { stack: "'JetBrains Mono', ui-monospace, monospace",  label: 'JetBrains Mono' },
+  'ibm-plex-mono':  { stack: "'IBM Plex Mono', ui-monospace, monospace",   label: 'IBM Plex Mono' },
+};
+export const SANS_OPTIONS = [
+  { value: 'dm-sans',       label: 'DM Sans' },
+  { value: 'inter',         label: 'Inter' },
+  { value: 'ibm-plex-sans', label: 'IBM Plex Sans' },
+];
+export const MONO_OPTIONS = [
+  { value: 'dm-mono',         label: 'DM Mono' },
+  { value: 'jetbrains-mono',  label: 'JetBrains Mono' },
+  { value: 'ibm-plex-mono',   label: 'IBM Plex Mono' },
+];
+
 function loadGlobalSettings() {
   try {
     const raw = JSON.parse(localStorage.getItem('focus_settings') || '{}');
@@ -772,6 +806,12 @@ export function useSettings(pageKey = 'pulse') {
     root.style.setProperty('--radius-sm', r.sm + 'px');
     root.style.setProperty('--radius-md', r.md + 'px');
     root.style.setProperty('--radius-lg', r.lg + 'px');
+    // Font families — resolve each setting key to a CSS stack via FONT_OPTIONS.
+    // The ?? fallback covers a persisted key that's missing or renamed.
+    root.style.setProperty('--font-body',    FONT_OPTIONS[globalSettings.fontBody]?.stack    ?? FONT_OPTIONS['dm-sans'].stack);
+    root.style.setProperty('--font-heading', FONT_OPTIONS[globalSettings.fontHeading]?.stack ?? FONT_OPTIONS['dm-sans'].stack);
+    root.style.setProperty('--font-mono',    FONT_OPTIONS[globalSettings.fontMono]?.stack    ?? FONT_OPTIONS['dm-mono'].stack);
+    root.style.setProperty('--font-candy',   FONT_OPTIONS[globalSettings.fontCandy]?.stack   ?? FONT_OPTIONS['dm-sans'].stack);
     // Paint accent from live settings (sync) rather than the `accent` state
     // (which lags a tick) so committing a theme can't flash the old accent.
     root.style.setProperty('--accent', resolveActiveAccent(globalSettings));
@@ -781,7 +821,8 @@ export function useSettings(pageKey = 'pulse') {
     // effect means the light↔dark toggle auto-re-picks the correct variant.
     paintTheme(root, THEME_BY_ID[globalSettings.themePreset] || THEME_BY_ID[DEFAULT_THEME_ID], resolvedTheme);
   }, [resolvedTheme, globalSettings.density, globalSettings.radiusScale,
-      globalSettings.themePreset, globalSettings.themeAccent]);
+      globalSettings.themePreset, globalSettings.themeAccent,
+      globalSettings.fontBody, globalSettings.fontHeading, globalSettings.fontMono, globalSettings.fontCandy]);
 
   // Push per-animation toggles onto body data-attrs so the matching CSS
   // rules in styles.css (§ Settings gating) can disable keyframes /

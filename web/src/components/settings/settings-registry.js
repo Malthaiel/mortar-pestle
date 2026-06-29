@@ -169,7 +169,7 @@ export function resolveOpenAddress({ route, manifests, enabledMap, hasPage }) {
 // without an entry (module pages, keybinds, vaults, dev, placeholders)
 // disable the footer Reset — their state isn't plain settings keys.
 export const RESET_SCOPES = {
-  'appearance':         { label: 'Appearance', keys: ['themeMode', 'themePreset', 'themeAccent', 'density', 'radiusScale', 'animations', 'animationsPreset', 'scrollSmoothness', 'previewFollowDrag', 'hoverPressIntensity', 'largeButtonDepth', 'smallButtonDepth', 'musicTileDepth', 'surfaceDepth', 'sidebarPattern'] },
+  'appearance':         { label: 'Appearance', keys: ['themeMode', 'themePreset', 'themeAccent', 'density', 'radiusScale', 'animations', 'animationsPreset', 'scrollSmoothness', 'previewFollowDrag', 'hoverPressIntensity', 'largeButtonDepth', 'smallButtonDepth', 'musicTileDepth', 'surfaceDepth', 'sidebarPattern', 'fontBody', 'fontHeading', 'fontMono', 'fontCandy'] },
   'sounds':             { label: 'Sounds', keys: ['sounds', 'soundsPreset'] },
   'navigation/dock':    { label: 'Navigation › Dock', keys: ['dock'] },
   'navigation/left':    { label: 'Navigation › Left Sidebar', keys: ['sidebarGroupMode', 'vaultTreeReveal', 'vaultTreeSuffix'] },

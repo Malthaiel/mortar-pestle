@@ -7,7 +7,7 @@ import React from 'react';
 
 const NOTE_STYLE = {
   padding: 24,
-  fontFamily: '"DM Mono", monospace',
+  fontFamily: 'var(--font-mono), monospace',
   fontSize: 12.5,
   color: 'var(--text-muted)',
 };

@@ -24,7 +24,7 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  font-family: "DM Mono", monospace;
+  font-family: var(--font-mono), monospace;
   font-size: 11.5px;
   color: var(--text-faint);
   max-width: 55%;
@@ -119,16 +119,8 @@
 
 .stt-filedrop { flex-shrink: 0; }
 
-/* Recording halo on the Stop button. */
-.stt-rec-pulse { display: inline-flex; border-radius: 999px; animation: stt-pulse 1.4s ease-in-out infinite; }
-@keyframes stt-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--error) 40%, transparent); }
-  50% { box-shadow: 0 0 0 5px color-mix(in oklch, var(--error) 0%, transparent); }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .stt-caret,
-  .stt-rec-pulse { animation: none; }
+  .stt-caret { animation: none; }
 }
 
 /* Visually-hidden live region — the text/aria fallback for the level meter. */
