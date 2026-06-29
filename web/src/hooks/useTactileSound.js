@@ -174,16 +174,21 @@ export function useGlobalTactileSound() {
 // Candy button full-press on click — sibling to useGlobalTactileSound.
 // The .candy-face 150ms ease-out transition (styles.css) means :active alone
 // releases at mouseup before the press reaches full depth — a quick click only
-// partial-presses, you have to hold to see the full press. Holding .is-pressed
-// past mouseup keeps the computed transform at translateY(--cbtn-depth) through
-// the release, so the in-flight 150ms ease-down completes to full depth; the
-// class then drops at 150ms to ease back up. The press is class-driven, NOT
-// hover-driven, so the full down+up animation plays to completion even if the
-// user moves the pointer off the button mid-animation (the press releases only
-// on pointerup / the 150ms timer / pointercancel — never on hover-leave). CSS
-// drives the transform via :is(:active, .is-pressed) (styles.css); this hook
-// only manages the class timing and mirrors the seg-option / music-tile /
-// anim-off / self-managed suppressions so non-pressing shapes still don't press.
+// partial-presses, you have to hold to see the full press. Setting
+// data-candy-pressed past mouseup holds the computed transform at
+// translateY(--cbtn-depth) through the release, so the in-flight 150ms ease-down
+// completes to full depth; the attribute drops at 150ms to ease back up. The
+// press is attribute-driven, NOT hover-driven, so the full down+up animation
+// plays to completion even if the user moves the pointer off the button
+// mid-animation (it releases only on pointerup / the 150ms timer / pointercancel
+// — never on hover-leave). CSS matches :is(:active, .is-pressed, [data-candy-pressed])
+// (styles.css). The signal is a data ATTRIBUTE, not a class: React rewrites
+// className from JSX on every re-render of a candy-btn that toggles is-active
+// (tree rows, dock, tabs, sidebar nav, etc.), stripping an imperatively-added
+// class mid-press — but React leaves a data attribute alone because no candy
+// component authors it. This hook only manages the attribute timing and mirrors
+// the seg-option / music-tile / anim-off / self-managed suppressions so
+// non-pressing shapes still don't press.
 let active = null;
 const MIN_HOLD_MS = 150;   // match .candy-face transition (styles.css)
 
@@ -191,7 +196,7 @@ function releasePressHold() {
   if (!active) return;
   const { el, timer } = active;
   clearTimeout(timer);
-  el.classList.remove('is-pressed');
+  el.removeAttribute('data-candy-pressed');
   window.removeEventListener('pointerup', onHoldUp, true);
   window.removeEventListener('pointercancel', onHoldCancel, true);
   active = null;
@@ -222,7 +227,7 @@ function onCandyPressDown(e) {
     if (nested && nested !== candy) return;                           // a nested control owns its own press
   }
   releasePressHold();                                                 // cancel any overlapping press (rapid clicks)
-  candy.classList.add('is-pressed');
+  candy.setAttribute('data-candy-pressed', '');
   active = { el: candy, timer: setTimeout(onHoldTimer, MIN_HOLD_MS), stillDown: true };
   window.addEventListener('pointerup', onHoldUp, true);
   window.addEventListener('pointercancel', onHoldCancel, true);
