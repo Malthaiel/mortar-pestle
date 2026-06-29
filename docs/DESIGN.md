@@ -1,6 +1,6 @@
-# Iskariel — Design Language
+# Mortar & Pestle — Design Language
 
-A reproducible reference for polishing any surface in the Iskariel web app to the established quality bar: modern, smooth, elegant, minimal where it counts.
+A reproducible reference for polishing any surface in the Mortar & Pestle web app to the established quality bar: modern, smooth, elegant, minimal where it counts.
 
 This doc is written for an LLM/agent doing the next polish pass. Reach for tokens before colors, primitives before inline styles, and existing patterns before new ones.
 

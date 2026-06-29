@@ -4,7 +4,7 @@
 //! and run multi-second timing-sensitive workloads. Run explicitly with:
 //!
 //! ```bash
-//! cargo test -p iskariel --test transcode_integration -- --ignored --test-threads=1
+//! cargo test -p mortar-pestle --test transcode_integration -- --ignored --test-threads=1
 //! ```
 //!
 //! The registry is process-wide singleton state, so we serialize all tests
@@ -85,7 +85,7 @@ fn make_fixture_mkv_with_subs(dir: &std::path::Path) -> std::path::PathBuf {
 
 fn override_cache_dirs(tmp: &std::path::Path) {
     // dirs::cache_dir() honors XDG_CACHE_HOME on Linux — point it at the tmp
-    // dir so `cache_root()` returns `<tmp>/iskariel/transcodes`.
+    // dir so `cache_root()` returns `<tmp>/mortar-pestle/transcodes`.
     std::env::set_var("XDG_CACHE_HOME", tmp);
 }
 

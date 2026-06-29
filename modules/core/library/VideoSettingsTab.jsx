@@ -180,7 +180,7 @@ function QbitSection() {
         <span style={{ fontSize: 12, color: 'var(--text)' }}>{dot.label}</span>
       </div>
       <div data-search-anchor="set-video-qbitWebUiHelp" style={{ fontSize: 11, color: 'var(--text-faint)', lineHeight: 1.5 }}>
-        Requires qBittorrent’s <strong>Web UI</strong> enabled (qBittorrent → Tools → Options → Web UI) — Iskariel drives downloads through it. On Windows qBittorrent runs GUI-only (no headless mode), so install it and switch its Web UI on.
+        Requires qBittorrent’s <strong>Web UI</strong> enabled (qBittorrent → Tools → Options → Web UI) — Mortar & Pestle drives downloads through it. On Windows qBittorrent runs GUI-only (no headless mode), so install it and switch its Web UI on.
       </div>
       <Field label="Host" anchor="set-video-qbitHost">
         <input className="candy-input" value={host} onChange={e => setHost(e.target.value)} placeholder="http://localhost:8080" style={inputStyle}/>

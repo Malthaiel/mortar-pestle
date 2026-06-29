@@ -1,4 +1,4 @@
-// Dev Server control panel — Start/Stop/Restart/Status for the `iskariel-dev`
+// Dev Server control panel — Start/Stop/Restart/Status for the `mortar-pestle-dev`
 // systemd *user* service (the `cargo tauri dev` surface), with a Vite health
 // probe. Unlike the rest of the Dev tab this panel is built into the production
 // RPM (VITE_DEV_TOOLS gate in SettingsDrawer) so the stable build can revive a

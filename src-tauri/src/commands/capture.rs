@@ -133,7 +133,7 @@ pub struct ClipDeleteOut {
 
 /// `capture_clip_delete` — soft-delete a clip into the global Recycle Bin (3-SF3).
 /// `path` is the clip's absolute path (from `capture_list_clips`) and must resolve
-/// under the captures dir (`captures_dir()` — `%USERPROFILE%\Videos\Iskariel` on
+/// under the captures dir (`captures_dir()` — `%USERPROFILE%\Videos\Mortar & Pestle` on
 /// Windows, decision #11). Returns the bin id so the Capture page can offer an
 /// in-Toast Restore; the bin restores via the `captures` mount (`RootKind::Captures`).
 #[tauri::command]
@@ -333,7 +333,7 @@ pub struct ClipMeta {
 }
 
 /// `capture_list_clips` — metadata-only scan of `MORTAR_PESTLE_CAPTURES_DIR`
-/// (`captures_dir()` — `%USERPROFILE%\Videos\Iskariel` on Windows, decision #11)
+/// (`captures_dir()` — `%USERPROFILE%\Videos\Mortar & Pestle` on Windows, decision #11)
 /// for video files, newest-first. App-UI-owned (no watcher; the live clip-list
 /// signal is `capture-saved`). Recurses one level into per-game subfolders (the
 /// engine groups clips by game). Never throws on a missing dir — returns an empty

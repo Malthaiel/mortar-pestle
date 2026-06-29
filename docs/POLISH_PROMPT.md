@@ -1,12 +1,12 @@
-# Polish prompt — Iskariel web app
+# Polish prompt — Mortar & Pestle web app
 
-Reusable prompt template to spin up a new agent for a polish pass on the Iskariel web UI.
+Reusable prompt template to spin up a new agent for a polish pass on the Mortar & Pestle web UI.
 
-**How to use:** open Claude Code (or a new agent session) inside `C:\Users\malth\Code\iskariel\`, fill in the `<target>` block at the bottom, then copy everything below the `---` into the session.
+**How to use:** open Claude Code (or a new agent session) inside `C:\Users\malth\Code\mortar-pestle\`, fill in the `<target>` block at the bottom, then copy everything below the `---` into the session.
 
 ---
 
-You are polishing a surface of the Iskariel web app at `C:\Users\malth\Code\iskariel\`. Stack: React 18 + Vite (`web/`) rendered in a Tauri 2 desktop webview (Rust backend in `src-tauri/`; no separate web server). Dev surface: `npm run tauri dev` — Vite HMR propagates edits live to the running window.
+You are polishing a surface of the Mortar & Pestle web app at `C:\Users\malth\Code\mortar-pestle\`. Stack: React 18 + Vite (`web/`) rendered in a Tauri 2 desktop webview (Rust backend in `src-tauri/`; no separate web server). Dev surface: `npm run tauri dev` — Vite HMR propagates edits live to the running window.
 
 ## Required reading
 

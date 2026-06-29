@@ -159,7 +159,7 @@ export function parseCube(text) {
   return { n, data: Float32Array.from(values), title, domainMin, domainMax };
 }
 
-export function serializeCube(f32, title = 'Iskariel grade') {
+export function serializeCube(f32, title = 'Mortar & Pestle grade') {
   const n = Math.round(Math.cbrt(f32.length / 3));
   const lines = [`TITLE "${title}"`, `LUT_3D_SIZE ${n}`];
   for (let i = 0; i < f32.length; i += 3) {

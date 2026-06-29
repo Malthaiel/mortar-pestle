@@ -4,7 +4,7 @@
 //! A `load_model {name}` resolves `name` against the static [`REGISTRY`] table (the
 //! single source of truth for both this downloader and Phase 5's Settings picker), then
 //! ensures the model file is present + SHA256-verified under the XDG data-dir cache
-//! (`~/.local/share/iskariel/models/whisper/<name>.bin`), fetching it on first use.
+//! (`~/.local/share/mortar-pestle/models/whisper/<name>.bin`), fetching it on first use.
 //!
 //! Integrity contract (SF3): download to a temp file IN THE CACHE DIR → hash the bytes
 //! as they stream → verify against the published HuggingFace git-LFS SHA256 OID → only
@@ -95,8 +95,8 @@ pub fn lookup(name: &str) -> Option<&'static ModelInfo> {
     REGISTRY.iter().find(|m| m.name == name)
 }
 
-/// The model cache dir. Windows: `%LOCALAPPDATA%\iskariel\models\whisper` (non-roaming
-/// — models are multi-GB). Linux: `~/.local/share/iskariel/models/whisper` (honoring
+/// The model cache dir. Windows: `%LOCALAPPDATA%\mortar-pestle\models\whisper` (non-roaming
+/// — models are multi-GB). Linux: `~/.local/share/mortar-pestle/models/whisper` (honoring
 /// `$XDG_DATA_HOME`).
 ///
 /// The standalone sidecar has no Tauri path API, so the per-OS base dir is resolved

@@ -7,7 +7,7 @@
 //! - **No active slot, no kill-prior** — imports remux sequentially (the JS
 //!   import queue serializes), and nothing SIGTERMs a prior child.
 //! - **No LRU, no exit-wipe** — proxies live in
-//!   `~/.cache/iskariel/editor-proxies/` (sibling of the player cache) and
+//!   `~/.cache/mortar-pestle/editor-proxies/` (sibling of the player cache) and
 //!   survive app restarts; reopening a project re-pins instantly off disk.
 //! - **Pinning + byte budget, Phase 1 shape** — hashes referenced by the open
 //!   project are pinned (never evicted); a const 20 GB budget is ACCOUNTED
@@ -50,7 +50,7 @@ fn lock() -> std::sync::MutexGuard<'static, HashMap<String, ProxyEntry>> {
 
 pub fn cache_root() -> Result<PathBuf, VaultError> {
     let base = dirs::cache_dir().ok_or_else(|| VaultError::Io("cache_dir() unavailable".into()))?;
-    Ok(base.join("iskariel/editor-proxies"))
+    Ok(base.join("mortar-pestle/editor-proxies"))
 }
 
 pub fn proxy_path(hash: &str) -> Result<PathBuf, VaultError> {

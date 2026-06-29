@@ -3,7 +3,7 @@
 //!
 //! The engine itself is a **separate, optional binary** (`mortar-pestle-stt`, built
 //! only in the studio tier). This crate is deliberately decoupled from it: there
-//! is NO `use iskariel_stt::…`, no engine-crate dependency, and no `studio` cargo
+//! is NO `use mortar_pestle_stt::…`, no engine-crate dependency, and no `studio` cargo
 //! feature on src-tauri. The ONLY coupling is
 //!
 //!   1. the runtime-resolved binary **path** ([`carriage::resolve_engine_binary`]), and
@@ -52,7 +52,7 @@ const STT_OUTPUT_DIR_ENV: &str = "MORTAR_PESTLE_STT_DIR";
 /// - `MORTAR_PESTLE_STT_DIR` = `library_vault_root()/STT` (created up-front).
 /// - `RUST_LOG` is passed through from the app's own env when set.
 ///
-/// stdout + stderr are drained line-by-line to `~/.local/state/iskariel/
+/// stdout + stderr are drained line-by-line to `~/.local/state/mortar-pestle/
 /// mortar-pestle-stt.log` (parent created).
 ///
 /// MUST be called from inside the Tokio reactor (it is — the supervise loop runs
@@ -70,7 +70,7 @@ pub fn spawn_engine_child(bin: &PathBuf) -> std::io::Result<(u32, JoinHandle<Opt
         // is the engine's error to surface, not a spawn blocker.
     }
 
-    // Log file: ~/.local/state/iskariel/mortar-pestle-stt.log (parent created).
+    // Log file: ~/.local/state/mortar-pestle/mortar-pestle-stt.log (parent created).
     let log_path = engine_log_path();
     if let Some(parent) = log_path.as_ref().and_then(|p| p.parent()) {
         if let Err(e) = std::fs::create_dir_all(parent) {
@@ -163,8 +163,8 @@ async fn drain_to_log<R>(
 }
 
 /// The sidecar's stdout/stderr log sink. Windows:
-/// `%LOCALAPPDATA%\iskariel\logs\mortar-pestle-stt.log`; Linux:
-/// `~/.local/state/iskariel/mortar-pestle-stt.log`. `None` if the base env var is unset.
+/// `%LOCALAPPDATA%\mortar-pestle\logs\mortar-pestle-stt.log`; Linux:
+/// `~/.local/state/mortar-pestle/mortar-pestle-stt.log`. `None` if the base env var is unset.
 #[cfg(windows)]
 fn engine_log_path() -> Option<PathBuf> {
     std::env::var_os("LOCALAPPDATA")
@@ -174,7 +174,7 @@ fn engine_log_path() -> Option<PathBuf> {
 #[cfg(not(windows))]
 fn engine_log_path() -> Option<PathBuf> {
     std::env::var_os("HOME").map(|home| {
-        PathBuf::from(home).join(".local/state/iskariel/mortar-pestle-stt.log")
+        PathBuf::from(home).join(".local/state/mortar-pestle/mortar-pestle-stt.log")
     })
 }
 

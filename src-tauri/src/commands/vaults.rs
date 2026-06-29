@@ -732,7 +732,7 @@ pub fn scaffold_vault(
         name.trim().to_string()
     };
     let welcome = format!(
-        "# Welcome to {nm}\n\nThis vault was created with Iskariel. Start writing \u{2014} make folders and notes however you like.\n"
+        "# Welcome to {nm}\n\nThis vault was created with Mortar & Pestle. Start writing \u{2014} make folders and notes however you like.\n"
     );
     atomic_write(&target.join("Welcome.md"), welcome.as_bytes())?;
 

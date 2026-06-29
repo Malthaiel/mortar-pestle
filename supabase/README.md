@@ -1,8 +1,8 @@
-# Iskariel Supabase backend (Feedback Board)
+# Mortar & Pestle Supabase backend (Feedback Board)
 
-The Feedback Board is the app's only cloud-backed feature. Everything else in Iskariel is local-first. The app talks to Supabase **only through Rust** (`src-tauri/src/commands/feedback.rs`) — the webview never calls Supabase directly, and the service-role key is never used by the client.
+The Feedback Board is the app's only cloud-backed feature. Everything else in Mortar & Pestle is local-first. The app talks to Supabase **only through Rust** (`src-tauri/src/commands/feedback.rs`) — the webview never calls Supabase directly, and the service-role key is never used by the client.
 
-Plan of record: Citadel vault `Knowledge/Iskariel/Plans/Feedback Board.md`.
+Plan of record: Citadel vault `Knowledge/Mortar & Pestle/Plans/Feedback Board.md`.
 
 ## One-time setup
 

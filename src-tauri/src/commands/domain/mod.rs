@@ -404,7 +404,7 @@ fn render_config_page(cfg: &DomainConfig, today: &str, cfg_json: &str) -> String
     let fm = frontmatter_of(cfg);
     let name = cfg.domain_name.trim();
     format!(
-        "---\nType: Infrastructure\nFeature Kind: domain-state\nDomain: {fm}\nStatus: Active\nCreated: {today}\nUpdated: {today}\n---\n\nMachine-managed state for the {name} knowledge domain, written by the Iskariel Domain Builder. Do not hand-edit the JSON block — re-open the builder to reconfigure.\n\n```json\n{cfg_json}\n```\n"
+        "---\nType: Infrastructure\nFeature Kind: domain-state\nDomain: {fm}\nStatus: Active\nCreated: {today}\nUpdated: {today}\n---\n\nMachine-managed state for the {name} knowledge domain, written by the Mortar & Pestle Domain Builder. Do not hand-edit the JSON block — re-open the builder to reconfigure.\n\n```json\n{cfg_json}\n```\n"
     )
 }
 
@@ -764,7 +764,7 @@ fn convention_doc_ops(name: &str, fm: &str, subtypes: &str) -> Vec<(&'static str
             "Infrastructure/Reference/Structure.md",
             EditOp::InsertBeforeHeading {
                 heading: "## Vault Ownership".into(),
-                block: "### Infrastructure/Domains/\n\nPurpose: Machine-managed per-domain state written by the Iskariel Domain Builder — one `<Domain>.md` per built domain, each holding a fenced JSON `DomainConfig` block. Accepts: `<Domain>.md` state pages. Rejects: hand-authored content (re-open the builder to reconfigure).\n".into(),
+                block: "### Infrastructure/Domains/\n\nPurpose: Machine-managed per-domain state written by the Mortar & Pestle Domain Builder — one `<Domain>.md` per built domain, each holding a fenced JSON `DomainConfig` block. Accepts: `<Domain>.md` state pages. Rejects: hand-authored content (re-open the builder to reconfigure).\n".into(),
                 marker: "### Infrastructure/Domains/".into(),
             },
         ),

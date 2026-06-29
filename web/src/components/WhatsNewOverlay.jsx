@@ -64,7 +64,7 @@ export default function WhatsNewOverlay() {
           }}>
             <span style={{
               fontSize: 13, fontWeight: 600, color: 'var(--text)',
-            }}>Iskariel</span>
+            }}>Mortar &amp; Pestle</span>
             <span style={{
               fontSize: 11, fontFamily: 'var(--font-mono)',
               color: accentColor, fontWeight: 600,
