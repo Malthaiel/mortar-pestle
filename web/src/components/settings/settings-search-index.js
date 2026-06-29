@@ -57,6 +57,8 @@ const ANIM_TOGGLES = [
   ['planner-day-slide',      'Planner day slide',      ['planner', 'slide', 'day', 'pivot'],    'planner'],
   ['counter-tick',           'Section counter tick',   ['planner', 'counter', 'count', 'tick'], 'planner'],
   ['task-celebration',       'Task celebration',       ['confetti', 'chime', 'task', 'done'],   'planner'],
+  ['copy-day-pop',           'Copy day pop',           ['copy', 'frame', 'pop', 'stagger'],     'planner'],
+  ['frame-reset-restore',    'Frame reset spin-restore', ['reset', 'restore', 'spin', 'undo', 'frame'], 'planner'],
 ];
 
 // 3 sound toggles (mirrors SoundsTab ROWS).

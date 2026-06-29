@@ -676,6 +676,10 @@ function SessionBlock({ session, hourHeight, accent, onDelete, onDuplicate, onRe
     ? fmtRange(hm(liveStartMins), hm(liveEndMins), timeFormat24h)
     : fmtRange(session.start, session.end, timeFormat24h);
 
+  // SF3 restore stagger: entranceDelay (mapped from restoreAnim per frame)
+  // drives a one-shot scale/fade-in. Gated by [data-anim-frame-reset-restore="off"].
+  const entranceStyle = entranceDelay != null ? { animation: 'frameRestoreIn 0.3s ease', animationDelay: entranceDelay + 'ms' } : null;
+
   return (
     <div
       ref={elRef}
@@ -712,6 +716,7 @@ function SessionBlock({ session, hourHeight, accent, onDelete, onDuplicate, onRe
       onContextMenu={pullState ? (e) => { e.preventDefault(); e.stopPropagation(); } : onSessionContextMenu}
       style={{
         position: 'absolute',
+        ...entranceStyle,
         ...(lanes > 1
           ? {
               left: `calc(${(lane / lanes) * 100}% + 2px)`,

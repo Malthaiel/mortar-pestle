@@ -33,6 +33,8 @@ const ROWS = [
   { key: 'planner-day-slide',      label: 'Planner day slide',       description: 'Directional slide when the Planner day pane changes day — past days enter from the left, future days from the right.' },
   { key: 'counter-tick',           label: 'Section counter tick',    description: 'The Planner day pane’s section counters (events / tasks / notes) count up to new values instead of snapping.' },
   { key: 'task-celebration',       label: 'Task celebration',        description: 'Confetti burst and a short chime when you check off the last open task of today in the Planner.' },
+  { key: 'copy-day-pop',           label: 'Copy day pop',           description: 'Checked weekday rows pop in sequence when you confirm a day-frame copy in the Planner.' },
+  { key: 'frame-reset-restore',    label: 'Frame reset spin-restore', description: 'The reset circle spins 360° while recently-deleted frames scale back in with a soft stagger.' },
 ];
 
 const ROW_BY_KEY = Object.fromEntries(ROWS.map(r => [r.key, r]));
@@ -384,6 +386,20 @@ function AnimVisual({ animKey, value, accent }) {
           ))}
         </div>
       );
+    case 'copy-day-pop':
+      return <div style={{
+        width: 30, height: 24, borderRadius: 'var(--radius-sm)',
+        background: `color-mix(in oklch, ${a} 40%, transparent)`,
+        border: `1px solid ${a}`,
+        animation: 'preview-pulse 1.4s ease-in-out infinite',
+      }}/>;
+    case 'frame-reset-restore':
+      return <div style={{
+        width: 30, height: 30, borderRadius: '50%',
+        background: `color-mix(in oklch, ${a} 35%, transparent)`,
+        border: `1px solid ${a}`,
+        animation: 'ftvSpin 1.6s linear infinite',
+      }}/>;
     default:
       return null;
   }
