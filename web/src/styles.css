@@ -1994,8 +1994,13 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
 /* Hover / press — colour flip via --cbtn-band; NO movement on the base. */
 .candy-btn:is(:hover, :active) { --cbtn-band: var(--accent); }
 .candy-btn:is(:hover, :active) > .candy-face { color: #fff; background: var(--accent); }
-/* Press — only the face slides down --cbtn-depth, over the immovable base. */
-.candy-btn:active > .candy-face { transform: translateY(var(--cbtn-depth)); }
+/* Press — only the face slides down --cbtn-depth, over the immovable base.
+   .is-pressed is JS-held past mouseup (useGlobalCandyPressHold) so the 150ms
+   ease-down completes to full depth on a quick click; :active alone releases
+   mid-transition (the partial-press bug). Same value both states → no computed
+   change at mouseup → the in-flight transition runs to completion, then the
+   class drops at 150ms to ease back up. */
+.candy-btn:is(:active, .is-pressed) > .candy-face { transform: translateY(var(--cbtn-depth)); }
 
 .candy-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .candy-btn:disabled,
@@ -2011,12 +2016,12 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
 /* Animation gating — mirror the .candy-btn-legacy gates for the two-layer system.
    Spring press off → face doesn't slide; Button depth off → frame-only (no band /
    no slide); colour states still apply in both. */
-body[data-anim-spring-press="off"] .candy-btn:active > .candy-face {
+body[data-anim-spring-press="off"] .candy-btn:is(:active, .is-pressed) > .candy-face {
   transform: none !important;
   transition: none !important;
 }
 body[data-anim-button-depth="off"] .candy-btn { box-shadow: none !important; }
-body[data-anim-button-depth="off"] .candy-btn:active > .candy-face { transform: none !important; }
+body[data-anim-button-depth="off"] .candy-btn:is(:active, .is-pressed) > .candy-face { transform: none !important; }
 
 /* ── Compact Planner rect ring-button ──────────────────────────────────── *
  * Candy-shell wrapper for the rectangular DualRingRect dial in the compact
