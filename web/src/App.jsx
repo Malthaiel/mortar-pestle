@@ -6,7 +6,7 @@ import { useProviders, useRouteSlots } from './module-sdk/useModuleRegistry.js';
 import { sharedEvents } from './module-sdk/index.js';
 import { recordVisit } from './hooks/useRecentPages.js';
 import { registerCommandAction } from './command-actions.js';
-import { useGlobalTactileSound } from './hooks/useTactileSound.js';
+import { useGlobalTactileSound, useGlobalCandyPressHold } from './hooks/useTactileSound.js';
 import { useEventReminders } from './hooks/useEventReminders.js';
 import { useFeedbackNotifications } from './hooks/useFeedbackNotifications.js';
 import AppShell from './components/AppShell.jsx';
@@ -94,6 +94,7 @@ function PlayerRouteDispatcher({ hash }) {
 
 function MainApp() {
   useGlobalTactileSound();
+  useGlobalCandyPressHold();
   useEventReminders();
   useFeedbackNotifications();
   const route = useHashRoute();
