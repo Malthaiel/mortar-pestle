@@ -515,6 +515,13 @@ pub fn run() {
             // in prod). No port-probe wait, no Node-sidecar handoff — show
             // the window immediately.
             if let Some(window) = app.get_webview_window("main") {
+                // Per-worktree dev windows: mortar-pestle_wt.py injects a distinct
+                // MORTAR_PESTLE_WT_TITLE so each worktree's app window is tellable apart
+                // in the taskbar/Alt-Tab. Absent (normal `tauri dev`, installed app) →
+                // the tauri.conf.json title "Mortar & Pestle" stands.
+                if let Ok(title) = std::env::var("MORTAR_PESTLE_WT_TITLE") {
+                    let _ = window.set_title(&title);
+                }
                 if let Err(e) = window.show() {
                     eprintln!("window.show failed: {e}");
                 }

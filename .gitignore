@@ -4,6 +4,7 @@ web/dist/
 .env
 .env.local
 *.log
+.wt-dev-config.json
 
 # Test-fixture render-cache byproducts (regenerated each cargo test run).
 src-tauri/tests/fixtures/daily-vault/Infrastructure/.cache/
