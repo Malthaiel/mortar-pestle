@@ -1,54 +1,35 @@
-// Capture HUD panel — the in-game Clip / Record / Screenshot HUD, migrated from
-// the standalone `overlay-capture` window into the overlay-host as a draggable
-// DOM panel (Overlay epic sub-plan 2). Invoke/listen logic is UNCHANGED from
-// OverlayCaptureView; only the move mechanism differs — the window-move dance
-// (async outerPosition + DPR + setPosition) is replaced by useOverlayPanelDrag
-// (CSS transform), and the transparent root + fullscreen container now belong to
-// the host shell (OverlayHostView). Standalone webview = no theme context, so
-// everything stays inline-styled.
-import { useEffect, useRef, useState } from 'react';
+// Capture HUD panel — the in-game Clip / Record / Screenshot HUD in the
+// overlay-host, in the app's candy language (Overlay epic; promoted from the
+// "Capture HUD (Overlay A)" prototype). The whole slab is one draggable candy
+// button (.video-cinema dark scope + the .music-tile nesting pattern); the three
+// nested action buttons take pointer priority. Drag via useOverlayPanelDrag (CSS
+// transform); the transient flash is a host-local screen-anchored toast
+// (showToast, owned by OverlayHostView — a fixed toast can't live inside the
+// transformed panel). Invoke/listen logic unchanged from the original HUD.
+import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import useOverlayPanelDrag from './useOverlayPanelDrag.js';
 
-// v1 quick-clip window — the user's "past 30s". (Configurable length is a tracked
-// follow-up: the overlay is a standalone webview with no settings context yet.)
 const CLIP_SECS = 30;
 
-function HudButton({ label, sub, onClick, tone }) {
-  const [hover, setHover] = useState(false);
-  const accent = tone === 'rec' ? 'var(--text)' : tone === 'shot' ? '#5aa9e6' : 'var(--text-muted)';
-  return (
-    <button
-      onClick={onClick}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-        padding: '10px 6px', cursor: 'pointer', userSelect: 'none',
-        borderRadius: 10, border: `1.5px solid ${accent}`,
-        background: hover ? `color-mix(in oklch, ${accent} 28%, rgba(20,20,24,0.9))` : 'rgba(28,28,34,0.86)',
-        color: '#fff', font: '600 13px/1.1 var(--font-mono, ui-monospace, monospace)',
-        transition: 'background 90ms ease',
-      }}
-    >
-      <span>{label}</span>
-      <span style={{ fontSize: 10, opacity: 0.7, fontWeight: 500 }}>{sub}</span>
-    </button>
-  );
-}
+const SVG = { width: 19, height: 19, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' };
+const IconClip = () => (
+  <svg {...SVG}><path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z"/><path d="m6.2 5.3 3.1 3.9"/><path d="m12.4 3.4 3.1 4"/><path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>
+);
+const IconRecord = () => (
+  <svg {...SVG}><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+);
+const IconStop = () => (
+  <svg {...SVG}><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+);
+const IconShot = () => (
+  <svg {...SVG}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+);
 
-export default function CaptureHudPanel() {
+export default function CaptureHudPanel({ showToast }) {
   const [recording, setRecording] = useState(false);
-  const [flash, setFlash] = useState(null);
-  const flashTimer = useRef(null);
   const { style: dragStyle, dragProps } = useOverlayPanelDrag('overlay-panel-capture', { x: 480, y: 40 });
-
-  const showFlash = (msg) => {
-    setFlash(msg);
-    clearTimeout(flashTimer.current);
-    flashTimer.current = setTimeout(() => setFlash(null), 2200);
-  };
 
   // Reflect recording state: initial fetch + live `capture-state` events.
   useEffect(() => {
@@ -60,78 +41,62 @@ export default function CaptureHudPanel() {
       if (typeof d.state === 'string') {
         if (typeof d.recording === 'boolean') setRecording(d.recording);
       } else if (d.code || d.message) {
-        // Folded engine error (disjoint payload: code/message, no `state`). The
-        // save-time mux finalize failure lands here — surface it instead of the
-        // old optimistic "Recording stopped" that masked a non-save.
-        showFlash('Save failed');
+        // Folded engine error (disjoint payload: code/message, no `state`).
+        showToast('Save failed');
       }
     }).then((u) => { un = u; }).catch(() => {});
-    return () => { if (un) un(); clearTimeout(flashTimer.current); };
-  }, []);
+    return () => { if (un) un(); };
+  }, [showToast]);
 
-  // Screenshot saved → confirm. (The scoreboard auto-fill during a live scrim is
-  // handled by the scrim overlay, which owns the active-match context.)
+  // Save confirmations — the engine emits these only after the file is on disk.
   useEffect(() => {
     const subs = [
-      listen('capture-screenshot-saved', () => showFlash('Screenshot saved')),
-      // Real save confirmation — the engine emits this only after the .mp4 is on
-      // disk, so it (not the stop click) is the source of truth for a saved clip.
-      listen('capture-saved', () => showFlash('Clip saved ✓')),
+      listen('capture-screenshot-saved', () => showToast('Screenshot saved')),
+      listen('capture-saved', () => showToast('Clip saved ✓')),
     ];
     return () => subs.forEach((p) => p.then((un) => un()).catch(() => {}));
-  }, []);
+  }, [showToast]);
 
   const clip = async () => {
     try {
       await invoke('capture_save_replay', { windowSecs: CLIP_SECS });
-      showFlash(`Clipped last ${CLIP_SECS}s`);
+      showToast(`Clipped last ${CLIP_SECS}s`);
     } catch (e) {
       const msg = String(e?.message || e || '');
-      showFlash(/arm|ring/i.test(msg) ? 'Arm the replay ring first' : 'Clip failed — engine down?');
+      showToast(/arm|ring/i.test(msg) ? 'Arm the replay ring first' : 'Clip failed — engine down?');
     }
   };
 
   const toggleRecord = async () => {
     try {
-      if (recording) { await invoke('capture_stop'); showFlash('Saving…'); }
-      else { await invoke('capture_start'); showFlash('Recording started'); }
+      if (recording) { await invoke('capture_stop'); showToast('Saving…'); }
+      else { await invoke('capture_start'); showToast('Recording started'); }
     } catch {
-      showFlash('Capture engine unavailable');
+      showToast('Capture engine unavailable');
     }
   };
 
   const screenshot = async () => {
-    try { await invoke('capture_screenshot'); showFlash('Screenshot…'); }
-    catch { showFlash('Screenshot failed'); }
+    try { await invoke('capture_screenshot'); showToast('Screenshot…'); }
+    catch { showToast('Screenshot failed'); }
   };
 
   return (
-    <div
-      {...dragProps}
-      style={{
-        position: 'absolute', top: 0, left: 0, ...dragStyle, width: 340,
-        background: 'rgba(18,18,22,0.78)', border: '1px solid rgba(255,255,255,0.12)',
-        borderRadius: 14, padding: 10, backdropFilter: 'blur(6px)',
-        boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
-        cursor: 'move', userSelect: 'none', touchAction: 'none',
-        fontFamily: 'var(--font-mono, ui-monospace, monospace)',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '0 2px 8px' }}>
-        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.6, color: '#fff', opacity: 0.85 }}>
-          ▣ CAPTURE
-        </span>
-        <span style={{ fontSize: 10, color: recording ? 'var(--text)' : 'rgba(255,255,255,0.5)', fontWeight: 600 }}>
-          {recording ? '● REC' : 'idle'}
-        </span>
-      </div>
-      <div style={{ display: 'flex', gap: 6 }}>
-        <HudButton label="Clip" sub={`last ${CLIP_SECS}s`} tone="clip" onClick={clip} />
-        <HudButton label={recording ? 'Stop' : 'Record'} sub={recording ? 'recording' : 'start'} tone="rec" onClick={toggleRecord} />
-        <HudButton label="Shot" sub="screenshot" tone="shot" onClick={screenshot} />
-      </div>
-      <div style={{ height: 14, marginTop: 6, textAlign: 'center', fontSize: 11, color: 'rgba(255,255,255,0.7)' }}>
-        {flash || ''}
+    <div className="video-cinema" style={{ position: 'absolute', top: 0, left: 0, background: 'transparent', padding: 0, ...dragStyle }}>
+      <div className="capture-hud candy-btn" role="button" tabIndex={0} {...dragProps} style={{ touchAction: 'none' }}>
+        <div className="candy-face">
+          <div className="acts candy-center-row">
+            <button type="button" className="candy-btn is-hover-accent" data-shape="icon" title="Clip" aria-label="Clip" onClick={clip}>
+              <span className="candy-face"><IconClip/></span>
+            </button>
+            <button type="button" className={`candy-btn is-hover-accent${recording ? ' is-active' : ''}`} data-shape="icon" title={recording ? 'Stop' : 'Record'} aria-label={recording ? 'Stop' : 'Record'} onClick={toggleRecord}>
+              <span className="candy-face">{recording ? <IconStop/> : <IconRecord/>}</span>
+            </button>
+            <button type="button" className="candy-btn is-hover-accent" data-shape="icon" title="Screenshot" aria-label="Screenshot" onClick={screenshot}>
+              <span className="candy-face"><IconShot/></span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

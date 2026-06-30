@@ -4706,3 +4706,17 @@ button.cal-customdays__step:hover {
   padding-bottom: 6px;
   scrollbar-width: thin;
 }
+
+/* === Overlay-host capture HUD (Overlay epic) ===
+   Promoted from the "Capture HUD (Overlay A)" prototype. The slab IS a candy
+   button; the 3 nested action buttons take pointer priority (the .music-tile
+   :has() pattern). Renders in the transparent overlay-host webview. */
+.capture-hud { cursor: move; }
+.capture-hud > .candy-face { padding: calc(16px + var(--candy-depth-small) / 2) 16px; }
+.capture-hud .acts { display: flex; gap: 6px; }
+.capture-hud .acts > .candy-btn { pointer-events: auto; cursor: pointer; }
+.capture-hud:has(.acts > .candy-btn:hover) { --cbtn-band: var(--surface); }
+.capture-hud:has(.acts > .candy-btn:hover) > .candy-face { background: var(--surface-3); }
+.capture-hud:active:has(.acts > .candy-btn:active) > .candy-face { transform: none !important; }
+/* Host-local screen-anchored toast (bottom-right), transient. */
+.overlay-toast { position: fixed; right: 16px; bottom: 16px; z-index: 10; pointer-events: none; }
