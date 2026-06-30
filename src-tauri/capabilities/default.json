@@ -5,7 +5,8 @@
   "webviews": [
     "main",
     "overlay-capture",
-    "overlay-scrim"
+    "overlay-scrim",
+    "overlay-host"
   ],
   "local": true,
   "remote": {

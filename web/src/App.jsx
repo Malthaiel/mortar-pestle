@@ -35,6 +35,7 @@ import DownloadsManager from './downloads/DownloadsManager.jsx';
 import { VaultProvider, useVaults } from './hooks/useVaults.jsx';
 import OverlayCaptureView from './overlays/OverlayCaptureView.jsx';
 import OverlayScrimView from './overlays/OverlayScrimView.jsx';
+import OverlayHostView from './overlays/OverlayHostView.jsx';
 
 // Compose every module-registered provider around the app tree. Order is
 // registration order (topological if modules declare `requires`).
@@ -63,6 +64,7 @@ export default function App() {
   // off their URL hash, the same self-identifying pattern as the /player popout.
   if (hash.startsWith('#/overlay/capture')) return <OverlayCaptureView/>;
   if (hash.startsWith('#/overlay/scrim')) return <OverlayScrimView/>;
+  if (hash.startsWith('#/overlay/host')) return <OverlayHostView/>;
   return (
     <VaultProvider>
       {hash.startsWith('#/player')

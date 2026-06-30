@@ -461,12 +461,12 @@ pub fn run() {
                                 // In-game capture overlay show/hide (Phase A). The
                                 // capture daemon's Shift+C hold emits this wire event
                                 // (press → show, release → hide); toggle the always-
-                                // on-top overlay-capture window host-side (instant,
+                                // on-top overlay-host window host-side (instant,
                                 // even if its webview is idle) + mirror the visibility
-                                // to the overlay's own UI via `overlay-capture-visible`.
+                                // to the overlay's own UI via `overlay-host-visible`.
                                 "overlay" => {
                                     let show = ev.data.get("show").and_then(|v| v.as_bool()).unwrap_or(false);
-                                    if let Some(win) = bridge_app.get_webview_window("overlay-capture") {
+                                    if let Some(win) = bridge_app.get_webview_window("overlay-host") {
                                         if show {
                                             // SF9 — harden before showing: topmost,
                                             // excluded from the capture stream, and
@@ -478,7 +478,7 @@ pub fn run() {
                                             let _ = win.hide();
                                         }
                                     }
-                                    let _ = bridge_app.emit("overlay-capture-visible", &ev.data);
+                                    let _ = bridge_app.emit("overlay-host-visible", &ev.data);
                                 }
                                 other => {
                                     log::debug!("capture bridge: ignoring engine event {other}");

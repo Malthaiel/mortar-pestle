@@ -56,6 +56,20 @@
         "focus": false,
         "shadow": false,
         "visible": false
+      },
+      {
+        "label": "overlay-host",
+        "title": "Mortar & Pestle Overlay",
+        "url": "index.html#/overlay/host",
+        "fullscreen": true,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "resizable": false,
+        "focus": false,
+        "shadow": false,
+        "visible": false
       }
     ],
     "security": {
