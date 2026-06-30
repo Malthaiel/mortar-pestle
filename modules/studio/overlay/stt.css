@@ -1,4 +1,4 @@
-/* Voice Transcription (Phase 3) — composer-bar surface at /tools/stt.
+/* Voice Transcription (Phase 3) — composer-bar surface at /tools/overlay/transcription.
    Candy controls come from the shared primitives; this is layout + the live
    meter / progress / transcript chrome. Light + dark ride the CSS tokens. */
 

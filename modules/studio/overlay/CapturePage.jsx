@@ -197,7 +197,7 @@ export default function CapturePage({ api, accent }) {
   }, [api]);
 
   // Hand the clip to the STT module to transcribe its audio (Voice
-  // Transcription Phase 3) — emits on the event bus + navigates to /tools/stt,
+  // Transcription Phase 3) — emits on the event bus + navigates to /tools/overlay/transcription,
   // where the progress + transcript appear.
   const handleTranscribe = useCallback((clip) => {
     sendToStt({ api, path: clip.path });

@@ -7,7 +7,7 @@ import { useSettings } from '@host/hooks/useSettings.js';
 
 // App-level STT context (registered as a module `provider` slot, so it mounts
 // once near the app root in studio builds and STAYS mounted — dictation survives
-// navigating away from /tools/stt; the page is a pure consumer). It owns the
+// navigating away from /tools/overlay/transcription; the page is a pure consumer). It owns the
 // dictation + file-transcribe state, preloads the speech model on mount so the
 // first record is instant, mirrors the supervisor engine status, and listens on
 // the module event bus for the capture clip → transcribe hand-off.
