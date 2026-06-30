@@ -75,6 +75,13 @@ export const PAGE_SECTIONS = {
       { id: 'music', label: 'Music' },
     ],
   },
+  overlay: {
+    default: 'capture',
+    sections: [
+      { id: 'capture', label: 'Capture' },
+      { id: 'voice',   label: 'Voice' },
+    ],
+  },
 };
 
 // Old rail-tab ids → addresses, so every pre-rework `host:open-settings`

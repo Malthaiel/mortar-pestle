@@ -2,8 +2,7 @@ import React, { Suspense } from 'react';
 import SidebarPill from '@host/components/SidebarPill.jsx';
 import { LazyErrorBoundary, lazyChunkError } from '@host/components/LazyErrorBoundary.jsx';
 import SttProvider from './SttProvider.jsx';
-import CaptureSettingsTab from './CaptureSettingsTab.jsx';
-import SttSettingsTab from './SttSettingsTab.jsx';
+import OverlaySettingsTab from './OverlaySettingsTab.jsx';
 import OverlayNav from './OverlayNav.jsx';
 
 // Studio-tier Overlay hub (Overlay epic, sub-plan 1 — Module Merge). The single
@@ -79,8 +78,9 @@ export default {
         );
       },
     });
-    // Two independent settings surfaces, kept as-is — merging the UIs is needless.
-    api.slots.registerSettingsTab({ id: 'capture-settings', label: 'Capture', render: CaptureSettingsTab });
-    api.slots.registerSettingsTab({ id: 'stt-settings', label: 'Voice', render: SttSettingsTab });
+    // ONE settings tab — the drawer surfaces only the FIRST registerSettingsTab
+    // per module (SettingsDrawer pagesByModuleId), so Capture + Voice are combined
+    // into a sectioned page (OverlaySettingsTab) rather than two dropped siblings.
+    api.slots.registerSettingsTab({ id: 'overlay-settings', label: 'Overlay', render: OverlaySettingsTab });
   },
 };
