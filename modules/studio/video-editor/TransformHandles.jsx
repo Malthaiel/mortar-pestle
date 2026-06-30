@@ -3,7 +3,7 @@ import { computeLayerQuad } from './color/glDisplay.js';
 import { setXformDraft, clearXformDraft } from './transformDraft.js';
 
 // On-preview transform handles (Compositing & Titles SF6). Pointer-only (no
-// HTML5 DnD — project_iskariel_no_html5_dnd): drag the box to MOVE, the corners
+// HTML5 DnD — project_mortar_pestle_no_html5_dnd): drag the box to MOVE, the corners
 // to SCALE (uniform, from center), the top stem to ROTATE. The live gesture
 // writes the shared xformDraft so the GL loop previews it per tick; pointerup
 // commits ONE setClipTransform op (one undo entry) and clears the draft. The box
