@@ -62,3 +62,12 @@ jobs:
             The installer is not yet code-signed — Windows SmartScreen may warn; click More info → Run anyway.
           releaseDraft: false
           prerelease: false
+
+      # tauri-action skips updater-JSON when the bundle name has spaces / `&`
+      # (productName "Mortar & Pestle" → "Signature not found for the updater
+      # JSON"). Rebuild latest.json from the published .exe + .exe.sig so the
+      # in-app updater endpoint resolves. Idempotent (no-op if already present).
+      - name: Ensure updater latest.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/ensure-latest-json.mjs
