@@ -195,6 +195,13 @@ pub fn run() {
             // attaches to the correct root.
             commands::vaults::init_active_vault(app.handle());
 
+            // D5: one-shot sessions migration — pulse root is resolved (above) and
+            // the watcher isn't up yet, so the strips won't storm events. Idempotent
+            // (no-op once sessions.json exists); a count-mismatch aborts losslessly.
+            if let Err(e) = commands::sessions::migrate_from_markdown(app.handle()) {
+                log::error!("sessions migration failed (daily logs left intact): {e:?}");
+            }
+
             // Sub-feature 5 — notify watcher emits Tauri events 1:1 with
             // the Fastify SSE event names. Vault-root-missing is non-fatal:
             // log and continue in degraded mode (no live updates, app
@@ -590,11 +597,12 @@ pub fn run() {
             commands::daily::daily_get_unorganized,
             commands::daily::daily_toggle_task,
             commands::daily::daily_toggle_routine,
-            commands::daily::daily_append_session,
-            commands::daily::daily_update_session,
             commands::daily::daily_update_plan_block,
-            commands::daily::daily_delete_session,
-            commands::daily::daily_update_session_note,
+            commands::sessions::sessions_get_range,
+            commands::sessions::sessions_append,
+            commands::sessions::sessions_update,
+            commands::sessions::sessions_delete,
+            commands::sessions::sessions_update_note,
             commands::daily::daily_append_freeform_note,
             commands::daily::pulse_note_delete,
             commands::reference::reference_get_vault_log,

@@ -1364,15 +1364,25 @@ export const api = {
   today: async () => rememberMtime(await readCall('daily_get_today')),
   toggleTask: (rawLine) => writerCall({ command: 'daily_toggle_task', args: { rawLine } }),
   appendSession: (ds, session) =>
-    writerCall({ command: 'daily_append_session', args: { ds, session } }),
+    writerCall({ command: 'sessions_append', args: { ds, session } }),
   updateSession: (ds, oldSessionId, newSession) =>
-    writerCall({ command: 'daily_update_session', args: { ds, oldSessionId, newSession } }),
+    writerCall({ command: 'sessions_update', args: { ds, oldSessionId, newSession } }),
   updatePlanBlock: (ds, oldBlock, newBlock) =>
     writerCall({ command: 'daily_update_plan_block', args: { ds, oldBlock, newBlock } }),
   deleteSession: (ds, sessionId) =>
-    writerCall({ command: 'daily_delete_session', args: { ds, sessionId } }),
+    writerCall({ command: 'sessions_delete', args: { ds, sessionId } }),
   updateSessionNote: (ds, sessionId, note) =>
-    writerCall({ command: 'daily_update_session_note', args: { ds, sessionId, note } }),
+    writerCall({ command: 'sessions_update_note', args: { ds, sessionId, note } }),
+  // Sessions for a list of dates (non-today calendar columns) — backed by the
+  // sessions.json range IPC (D5). Returns { [ds]: { exists, sessions } }.
+  days: async (list) => {
+    if (!list || !list.length) return {};
+    const sorted = [...list].sort();
+    const raw = await readCall('sessions_get_range', { from: sorted[0], to: sorted[sorted.length - 1] });
+    const out = {};
+    for (const [ds, sessions] of Object.entries(raw)) out[ds] = { exists: true, sessions };
+    return out;
+  },
   recentNotes: (limit = 30) => readCall('daily_get_recent_notes', { limit }),
   freeformNote: (text) => writerCall({ command: 'daily_append_freeform_note', args: { text } }),
   routine: () => readCall('daily_get_routine'),

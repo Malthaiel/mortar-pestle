@@ -12,7 +12,7 @@ import PulseNav from '@host/components/PulseSidebar.jsx';
 import SidebarPill from '@host/components/SidebarPill.jsx';
 import RailStat from '@host/components/sidebar/RailStat.jsx';
 import { useManifestData } from '@host/lib/manifestReader.js';
-import { invoke } from '@host/api.js';
+import { invoke, api } from '@host/api.js';
 
 function PulseRail({ accent }) {
   const manifest = useManifestData();
@@ -23,13 +23,16 @@ function PulseRail({ accent }) {
   useEffect(() => {
     const iso = new Date().toISOString().slice(0, 10);
     const path = `Pulse/Daily Logs/${iso}.md`;
-    invoke('vault_read_file', { path })
-      .then(result => {
-        const text = typeof result === 'string' ? result : result?.content || '';
+    // Words from the daily-log body; sessions from the sessions.json store (D5).
+    Promise.all([
+      invoke('vault_read_file', { path })
+        .then(r => (typeof r === 'string' ? r : r?.content || ''))
+        .catch(() => ''),
+      api.today().then(d => (d?.sessions || []).length).catch(() => 0),
+    ])
+      .then(([text, sessions]) => {
         const body = text.replace(/^---[\s\S]*?---\n/, '');
         const words = (body.match(/\S+/g) || []).length;
-        const sessionsBlock = (text.match(/##\s+Sessions\s+([\s\S]*?)(?=\n##\s|$)/) || [])[1] || '';
-        const sessions = (sessionsBlock.match(/^###\s/gm) || []).length;
         setToday({ words, sessions });
       })
       .catch(() => setToday({ words: 0, sessions: 0 }));

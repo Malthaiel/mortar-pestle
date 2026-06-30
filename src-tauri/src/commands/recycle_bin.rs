@@ -80,9 +80,12 @@ pub enum RestoreStrategy {
     /// generic single-file blob-move path.
     GameClip,
     /// A block of lines removed from inside a still-living markdown file (a
-    /// Planner session or a Pulse quick note). Restores by re-inserting the
-    /// saved text under its section heading — no blob is moved.
+    /// Pulse quick note / frontmatter value). Restores by re-inserting the saved
+    /// text under its section heading — no blob is moved.
     RecordBlock,
+    /// A Planner session removed from the `sessions.json` store (D5). Restores by
+    /// re-inserting the session into the store + regenerating `## Session Notes`.
+    SessionRecord,
 }
 
 /// Restore-specific data, discriminated by `kind`. The envelope never changes
@@ -157,6 +160,14 @@ pub enum Payload {
         file_rel: String,
         section_heading: String,
         line_hint: Option<u32>,
+    },
+    /// A Planner session removed from `sessions.json` (D5). The serialized session
+    /// is the blob `record` (preview + self-heal); restore re-inserts it into the
+    /// store for `ds`, regenerates `## Session Notes`, and emits `day`.
+    #[serde(rename_all = "camelCase")]
+    SessionRecord {
+        ds: String,
+        session: crate::commands::sessions::StoredSession,
     },
 }
 
@@ -828,7 +839,7 @@ pub fn recycle_bin_read(app: AppHandle, id: String) -> Result<BinPreview, VaultE
                 tree: None,
             })
         }
-        RestoreStrategy::RecordBlock => {
+        RestoreStrategy::RecordBlock | RestoreStrategy::SessionRecord => {
             let bytes = fs::read(blob.join("record")).map_err(|e| VaultError::Io(e.to_string()))?;
             let src = String::from_utf8_lossy(&bytes);
             Ok(BinPreview {
@@ -896,6 +907,9 @@ pub fn recycle_bin_restore(
 
     // Record surfaces (a block removed from inside a living file) restore by
     // re-inserting text into the host file, never via the blob-move path below.
+    if let Payload::SessionRecord { .. } = &t.payload {
+        return restore_session(&app, items, idx, &t);
+    }
     if let Payload::RecordBlock { .. } = &t.payload {
         return restore_record(&app, items, idx, &t, conflict.as_deref());
     }
@@ -923,6 +937,7 @@ pub fn recycle_bin_restore(
             (root.clone(), clip_rel.clone(), blob_root.join("content"), false, Vec::new(), None)
         }
         Payload::RecordBlock { .. } => unreachable!("record payloads return early via restore_record"),
+        Payload::SessionRecord { .. } => unreachable!("session records return early via restore_session"),
     };
 
     let target = resolve_target(&root_opt, &original_rel)?;
@@ -1086,6 +1101,50 @@ fn restore_record(
         _ => return Err(VaultError::Invalid("restore_record on non-record payload".into())),
     };
 
+    // Legacy divert (D5): pre-migration session deletes are RecordBlock tombstones
+    // targeting `## Sessions` in a daily log. Sessions now live in sessions.json, so
+    // route the parsed session(s) into the store instead of re-inserting dead markdown.
+    let sh = section_heading.trim();
+    if sh == "## Sessions" || sh == "## Session" || sh == "### Sessions" {
+        let ds = file_rel.rsplit('/').next().unwrap_or("").trim_end_matches(".md").to_string();
+        let store_path = crate::commands::sessions::sessions_file(app)?;
+        let block = String::from_utf8_lossy(&record);
+        let wrapped = format!("## Sessions\n{block}");
+        for s in crate::parsers::sessions::parse_sessions(&wrapped) {
+            let _ = crate::commands::sessions::insert_inner(
+                &store_path,
+                &ds,
+                crate::commands::sessions::StoredSession {
+                    task: s.task,
+                    category: s.category,
+                    start: s.start,
+                    end: s.end,
+                    dur_min: s.dur_min,
+                    notes: s.notes,
+                    kind: s.kind,
+                    created_at: String::new(),
+                },
+            );
+        }
+        let _ = crate::commands::sessions::regen_session_notes(&store_path, &ds);
+        {
+            use tauri::Emitter;
+            let _ = app.emit("day", ds.clone());
+            if ds == crate::parsers::daily::today_str() {
+                let _ = app.emit("today", String::new());
+            }
+        }
+        items.remove(idx);
+        write_index_unlocked(app, &items)?;
+        let _ = fs::remove_dir_all(&blob_root);
+        return Ok(RestoreOut {
+            status: "restored".into(),
+            conflict_kind: None,
+            suggested_name: None,
+            restored_rel: Some(format!("sessions.json \u{00b7} {ds}")),
+        });
+    }
+
     let target = resolve_target(&root_opt, &file_rel)?;
     if !target.exists() {
         if choice.is_none() {
@@ -1145,6 +1204,42 @@ fn restore_record(
         conflict_kind: None,
         suggested_name: None,
         restored_rel: Some(file_rel),
+    })
+}
+
+/// Restore a session-record tombstone: re-insert the saved session into the
+/// `sessions.json` store for `ds`, regenerate `## Session Notes`, and emit `day`.
+/// The store is append-only on restore, so there is no host-file conflict.
+fn restore_session(
+    app: &AppHandle,
+    mut items: Vec<Tombstone>,
+    idx: usize,
+    t: &Tombstone,
+) -> Result<RestoreOut, VaultError> {
+    let (ds, session) = match &t.payload {
+        Payload::SessionRecord { ds, session } => (ds.clone(), session.clone()),
+        _ => return Err(VaultError::Invalid("restore_session on non-session payload".into())),
+    };
+    let store_path = crate::commands::sessions::sessions_file(app)?;
+    crate::commands::sessions::insert_inner(&store_path, &ds, session)?;
+    let _ = crate::commands::sessions::regen_session_notes(&store_path, &ds);
+    // App-config writes are invisible to the watcher → emit so the planner reloads.
+    {
+        use tauri::Emitter;
+        let _ = app.emit("day", ds.clone());
+        if ds == crate::parsers::daily::today_str() {
+            let _ = app.emit("today", String::new());
+        }
+    }
+    let blob_root = blobs_dir(app)?.join(&t.id);
+    items.remove(idx);
+    write_index_unlocked(app, &items)?;
+    let _ = fs::remove_dir_all(&blob_root);
+    Ok(RestoreOut {
+        status: "restored".into(),
+        conflict_kind: None,
+        suggested_name: None,
+        restored_rel: Some(format!("sessions.json \u{00b7} {ds}")),
     })
 }
 

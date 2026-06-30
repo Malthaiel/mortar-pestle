@@ -21,10 +21,7 @@ use crate::parsers::quick_notes;
 use crate::parsers::routine::{
     read_routine_for_today, toggle_routine_task, RoutineItem, RoutineWriteOut,
 };
-use crate::parsers::sessions::{
-    append_freeform_note, append_session, delete_session, read_recent_notes, update_session,
-    update_session_note_text, OkOut, RecentNote, SessionInput,
-};
+use crate::parsers::sessions::{append_freeform_note, OkOut, RecentNote};
 use crate::parsers::tasks::{toggle_today_task, TasksOut};
 use serde::Serialize;
 
@@ -39,8 +36,16 @@ pub struct RecentNotesOut {
 }
 
 #[tauri::command]
-pub fn daily_get_today() -> DailyNote {
-    read_daily_note(&today_str())
+pub fn daily_get_today(app: AppHandle) -> DailyNote {
+    let ds = today_str();
+    let mut note = read_daily_note(&ds);
+    // Sessions live in sessions.json (D5), not the daily-note markdown.
+    if let Ok(path) = crate::commands::sessions::sessions_file(&app) {
+        note.sessions = crate::commands::sessions::get_range_inner(&path, &ds, &ds)
+            .remove(&ds)
+            .unwrap_or_default();
+    }
+    note
 }
 
 #[tauri::command]
@@ -51,11 +56,12 @@ pub fn daily_get_routine() -> RoutineOut {
 }
 
 #[tauri::command]
-pub fn daily_get_recent_notes(limit: Option<u32>) -> RecentNotesOut {
+pub fn daily_get_recent_notes(app: AppHandle, limit: Option<u32>) -> RecentNotesOut {
     let limit = limit.unwrap_or(30).clamp(1, 120);
-    RecentNotesOut {
-        notes: read_recent_notes(limit),
-    }
+    let notes = crate::commands::sessions::sessions_file(&app)
+        .map(|p| crate::commands::sessions::recent_notes_inner(&p, limit))
+        .unwrap_or_default();
+    RecentNotesOut { notes }
 }
 
 #[tauri::command]
@@ -90,25 +96,6 @@ pub fn daily_toggle_routine(
 }
 
 #[tauri::command]
-pub fn daily_append_session(
-    ds: String,
-    session: SessionInput,
-    base_mtime: Option<f64>,
-) -> Result<OkOut, VaultError> {
-    append_session(&ds, session, base_mtime)
-}
-
-#[tauri::command]
-pub fn daily_update_session(
-    ds: String,
-    old_session_id: String,
-    new_session: SessionInput,
-    base_mtime: Option<f64>,
-) -> Result<OkOut, VaultError> {
-    update_session(&ds, &old_session_id, new_session, base_mtime)
-}
-
-#[tauri::command]
 pub fn daily_update_plan_block(
     ds: String,
     old_block: PlanBlockInput,
@@ -116,43 +103,6 @@ pub fn daily_update_plan_block(
     base_mtime: Option<f64>,
 ) -> Result<OkOut, VaultError> {
     update_plan_block(&ds, old_block, new_block, base_mtime)
-}
-
-#[tauri::command]
-pub fn daily_delete_session(
-    app: AppHandle,
-    ds: String,
-    session_id: String,
-    base_mtime: Option<f64>,
-) -> Result<OkOut, VaultError> {
-    let out = delete_session(&ds, &session_id, base_mtime)?;
-    if out.ok {
-        if let (Some(block), Some(hint), Some(heading)) =
-            (out.removed_block.as_ref(), out.line_hint, out.heading.as_ref())
-        {
-            // Capture the drained session block to the recycling bin (Planner
-            // source). Best-effort — the session is already gone as the user asked.
-            let _ = recycle_bin::trash_record(
-                &app,
-                recycle_bin::Source::Planner,
-                recycle_bin::RestoreStrategy::RecordBlock,
-                record_label(block.lines().next().unwrap_or("")),
-                Some(format!("{ds} · {heading}")),
-                block.as_bytes(),
-                recycle_bin::Payload::RecordBlock {
-                    root: Some("pulse".into()),
-                    file_rel: format!("Pulse/Daily Logs/{ds}.md"),
-                    section_heading: heading.clone(),
-                    line_hint: Some(hint),
-                },
-            );
-        }
-    }
-    Ok(OkOut {
-        ok: out.ok,
-        error: out.error,
-        mtime: out.mtime,
-    })
 }
 
 // ── Pulse quick-note soft-delete (routes through the recycling bin) ──────────
@@ -225,16 +175,6 @@ pub fn pulse_note_delete(
     lines.remove(line_idx);
     atomic_write(&abs, lines.join("\n").as_bytes())?;
     Ok(NoteDeleteOut { ok: true, reason: None })
-}
-
-#[tauri::command]
-pub fn daily_update_session_note(
-    ds: String,
-    session_id: String,
-    note: String,
-    base_mtime: Option<f64>,
-) -> Result<OkOut, VaultError> {
-    update_session_note_text(&ds, &session_id, &note, base_mtime)
 }
 
 #[tauri::command]
