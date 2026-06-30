@@ -24,23 +24,6 @@
         "visible": true
       },
       {
-        "label": "overlay-capture",
-        "title": "Mortar & Pestle Overlay — Capture",
-        "url": "index.html#/overlay/capture",
-        "width": 360,
-        "height": 140,
-        "x": 480,
-        "y": 40,
-        "decorations": false,
-        "transparent": true,
-        "alwaysOnTop": true,
-        "skipTaskbar": true,
-        "resizable": false,
-        "focus": false,
-        "shadow": false,
-        "visible": false
-      },
-      {
         "label": "overlay-scrim",
         "title": "Mortar & Pestle Overlay — Scrim",
         "url": "index.html#/overlay/scrim",

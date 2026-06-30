@@ -33,7 +33,6 @@ import { DownloadsProvider } from './downloads/DownloadsProvider.jsx';
 import DownloadsPanel from './downloads/DownloadsPanel.jsx';
 import DownloadsManager from './downloads/DownloadsManager.jsx';
 import { VaultProvider, useVaults } from './hooks/useVaults.jsx';
-import OverlayCaptureView from './overlays/OverlayCaptureView.jsx';
 import OverlayScrimView from './overlays/OverlayScrimView.jsx';
 import OverlayHostView from './overlays/OverlayHostView.jsx';
 
@@ -62,7 +61,6 @@ export default function App() {
   // name are set in every window (the /player popout is a separate webview).
   // Overlay windows render standalone (no app chrome, no vault context) — keyed
   // off their URL hash, the same self-identifying pattern as the /player popout.
-  if (hash.startsWith('#/overlay/capture')) return <OverlayCaptureView/>;
   if (hash.startsWith('#/overlay/scrim')) return <OverlayScrimView/>;
   if (hash.startsWith('#/overlay/host')) return <OverlayHostView/>;
   return (
