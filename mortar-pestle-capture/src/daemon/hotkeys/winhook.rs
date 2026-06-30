@@ -1,7 +1,7 @@
 //! Windows global capture hotkeys via a WH_KEYBOARD_LL low-level keyboard hook — the
 //! Windows arm of `hotkeys` (Game Capture SF6), replacing the Linux ashpd
 //! GlobalShortcuts portal. Reuses the STT winhook threading model
-//! ([[project-iskariel-winhook-hold-to-talk]]): a captureless `extern "system"`
+//! ([[project-mortar-pestle-winhook-hold-to-talk]]): a captureless `extern "system"`
 //! callback the OS invokes under a hard ~300 ms budget does the MINIMUM (debounce the
 //! held-key auto-repeat, post an edge to a channel). It passes keys through via
 //! `CallNextHookEx`, EXCEPT it swallows the held `C` while the overlay is shown so the
