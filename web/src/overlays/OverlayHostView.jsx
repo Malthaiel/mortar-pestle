@@ -7,9 +7,18 @@
 // host-local screen-anchored toast. Capture is panel #1; the STT, Scrim, and
 // Browser panels land in later Overlay sub-plans.
 import { useEffect, useRef, useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { paintAccent } from '@host/themes/applyTheme.js';
 import { THEME_BY_ID } from '@host/themes/registry.js';
+import SttProvider from '@modules/studio/overlay/SttProvider.jsx';
 import CaptureHudPanel from './CaptureHudPanel.jsx';
+import SttOverlayPanel from './SttOverlayPanel.jsx';
+
+// Minimal module-api shim for the host-mounted SttProvider. It only needs
+// invoke (all stt_* calls are cross-window-safe Tauri invokes) and events.on
+// (the clip→transcribe module-bus handoff, which the host doesn't have).
+// ponytail: events.on stubbed — no clip→transcribe handoff in the overlay host.
+const hostApi = { invoke, events: { on: () => () => {} } };
 
 // Make the host webview see-through except its panels (the window is
 // transparent:true; without a transparent html/body the webview paints opaque).
@@ -41,16 +50,19 @@ export default function OverlayHostView() {
   // to the panel instead of the viewport.
   const [toast, setToast] = useState(null);
   const toastTimer = useRef(null);
-  const showToast = (msg) => {
+  const showToast = (msg, ms = 2200) => {
     setToast(msg);
     clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(null), 2200);
+    toastTimer.current = setTimeout(() => setToast(null), ms);
   };
   useEffect(() => () => clearTimeout(toastTimer.current), []);
 
   return (
     <div style={{ position: 'fixed', inset: 0, overflow: 'hidden' }}>
       <CaptureHudPanel showToast={showToast} />
+      <SttProvider api={hostApi}>
+        <SttOverlayPanel showToast={showToast} />
+      </SttProvider>
       {toast && (
         <div className="video-cinema overlay-toast candy-btn">
           <span className="candy-face">{toast}</span>
