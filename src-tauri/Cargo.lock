@@ -2681,7 +2681,7 @@ dependencies = [
 
 [[package]]
 name = "mortar-pestle"
-version = "0.0.42"
+version = "0.0.21"
 dependencies = [
  "argon2",
  "axum",

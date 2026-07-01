@@ -1,6 +1,6 @@
 {
   "name": "mortar-pestle",
-  "version": "0.0.42",
+  "version": "0.0.21",
   "private": true,
   "description": "Mortar & Pestle — personal operating system for thinking, planning, and producing",
   "scripts": {
