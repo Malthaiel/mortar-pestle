@@ -60,6 +60,20 @@ export default function OverlayHostView() {
     });
     return () => { un.then((f) => f()).catch(() => {}); };
   }, []);
+
+  // Close path: lib.rs no longer hides the window itself (it only emits
+  // visible=false) so the CSS fade-out below can play first. Once the ~180ms
+  // scale+fade has run, tell Rust to actually hide the window — this makes the
+  // close use the SAME easing as the open (before, close rode Windows' DWM
+  // window-hide fade, which never matched the CSS entry animation). A re-open
+  // during the fade flips visible back true and cancels the pending hide.
+  const wasVisible = useRef(false);
+  useEffect(() => {
+    if (visible) { wasVisible.current = true; return undefined; }
+    if (!wasVisible.current) return undefined; // never shown yet — nothing to hide
+    const t = setTimeout(() => { invoke('hide_overlay_host').catch(() => {}); }, 200);
+    return () => clearTimeout(t);
+  }, [visible]);
   // Host-local toast — a fixed bottom-right candy chip. Lives here (not inside a
   // panel) because a panel is CSS-transformed, which would re-anchor position:fixed
   // to the panel instead of the viewport.
@@ -73,7 +87,12 @@ export default function OverlayHostView() {
   useEffect(() => () => clearTimeout(toastTimer.current), []);
 
   return (
-    <div style={{ position: 'fixed', inset: 0, overflow: 'hidden', opacity: visible ? 1 : 0, transition: 'opacity 180ms ease' }}>
+    <div style={{
+      position: 'fixed', inset: 0, overflow: 'hidden',
+      opacity: visible ? 1 : 0,
+      transform: visible ? 'scale(1)' : 'scale(0.96)',
+      transition: 'opacity 180ms cubic-bezier(0.32, 0.72, 0, 1), transform 180ms cubic-bezier(0.32, 0.72, 0, 1)',
+    }}>
       <SttProvider api={hostApi}>
         <OverlayStudioPanel showToast={showToast} />
       </SttProvider>

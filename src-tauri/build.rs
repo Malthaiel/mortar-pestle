@@ -4,6 +4,7 @@ fn main() {
       tauri_build::AppManifest::new().commands(&[
         "ping",
         "media_server_port",
+        "hide_overlay_host",
         "vedit_project_list",
         "vedit_project_read",
         "vedit_project_save",

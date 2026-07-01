@@ -32,6 +32,19 @@ fn media_server_port() -> Option<u16> {
     media_server::port()
 }
 
+/// Hide the in-game overlay-host window. Called by the overlay frontend AFTER its
+/// CSS scale+fade-out completes, so the close animation plays before the window
+/// actually disappears — the `overlay` hotkey handler now only emits
+/// `overlay-host-visible=false` and defers the real hide to this command, giving
+/// open and close matching easing. No-op if the window is already gone.
+#[tauri::command]
+fn hide_overlay_host(app: tauri::AppHandle) {
+    use tauri::Manager;
+    if let Some(win) = app.get_webview_window("overlay-host") {
+        let _ = win.hide();
+    }
+}
+
 /// Sub-feature 6 — one-shot byte-faithful migration of legacy sidebar order
 /// from the vault cache to Tauri AppConfig. Idempotent: gated on dest-exists.
 /// Errors are logged and swallowed; sidebar persistence is non-critical and
@@ -477,7 +490,14 @@ pub fn run() {
                                         // screenshotted / inspected); tap again to dismiss. Was hold-to-show.
                                         if show {
                                             if win.is_visible().unwrap_or(false) {
-                                                let _ = win.hide();
+                                                // Defer the actual hide to the frontend so the CSS
+                                                // scale+fade-out plays first; it invokes
+                                                // `hide_overlay_host` once the ~180ms transition ends,
+                                                // so close uses the same easing as open (was: Windows'
+                                                // DWM window-hide fade, which never matched).
+                                                // ponytail: a second Shift+C tap mid-fade reads
+                                                // is_visible=true and re-emits false (idempotent)
+                                                // rather than re-opening — fine for a tap toggle.
                                                 now_visible = Some(false);
                                             } else {
                                                 // SF9 — harden before showing: topmost, capture-excluded,
@@ -573,6 +593,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::ping,
             media_server_port,
+            hide_overlay_host,
             commands::video_editor::vedit_project_list,
             commands::video_editor::vedit_project_read,
             commands::video_editor::vedit_project_save,

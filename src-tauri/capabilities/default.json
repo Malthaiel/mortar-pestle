@@ -20,6 +20,7 @@
     "updater:default",
     "allow-ping",
     "allow-media-server-port",
+    "allow-hide-overlay-host",
     "allow-vedit-project-list",
     "allow-vedit-project-read",
     "allow-vedit-project-save",

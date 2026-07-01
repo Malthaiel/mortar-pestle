@@ -5,6 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>Focus — Pomodoro Timer</title>
+    <script>
+      // Overlay windows are transparent:true. Paint the root transparent BEFORE
+      // first paint (this runs at head-parse, ahead of React + useTransparentRoot's
+      // effect) so the WebView2 default-white never flashes on Shift+C open — worse
+      // in dev, where show does a location.reload(). Hash-scoped so the opaque main
+      // app window (same index.html) is untouched.
+      if (location.hash.indexOf('#/overlay') === 0) {
+        var s = document.createElement('style');
+        s.textContent = 'html,body,#root{background:transparent !important}';
+        document.head.appendChild(s);
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

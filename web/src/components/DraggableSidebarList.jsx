@@ -41,7 +41,7 @@ function computeSlotY(dropIdx, sourceIdx, positions, heights) {
   return positions[dropIdx] - heights[sourceIdx];
 }
 
-function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, slotY, isHorizontal = false, releasing = false, glideMs = 160, containerRef }) {
+function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, slotY, isHorizontal = false, releasing = false, glideMs = 160, containerRef, grow = false }) {
   const hostRef = useRef(null);
   const cloneRef = useRef(null);
   const modeRef = useRef('slot-snap');
@@ -49,6 +49,9 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
   // cursor-mode RAF reads this each frame and bails so its writes don't
   // fight the CSS transition that animates the clone into its final slot.
   const releaseRef = useRef(false);
+  // Resting (content) height of the list container captured at lift, so the
+  // drop-release effect can animate the grow-to-contain min-height back down.
+  const growBaseRef = useRef(0);
 
   // useLayoutEffect (not useEffect) so the clone is inserted into the DOM
   // synchronously after React's commit, BEFORE the browser paints. Otherwise
@@ -136,6 +139,11 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
 
     let rafId = null;
     let cancelled = false;
+    // Hoisted so the cleanup below can reset them (assigned in the cursor branch).
+    // growEl = the list container (grows to contain the tile); cardEl = its parent
+    // .candy-card (pulled up so the panel can grow from the TOP too).
+    let growEl = null;
+    let cardEl = null;
     if (mode === 'cursor') {
       // Capture cursor at lift time. The tile starts at its rail origin and
       // chases the cursor delta with exponential smoothing — each frame the
@@ -154,7 +162,16 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
       // ponytail: if a tile is taller than its container, min > max and the clamp
       // just pins it to the top/left edge — fine for these short lists.
       const cb = containerRef?.current?.getBoundingClientRect();
-      const R = 0.18;
+      // Grow-to-contain (vertical only): the content-height card grows to keep the
+      // dragged tile inside it, in the direction of drag, with exponential resistance
+      // on the stretch (below). Bottom: grow the list min-height (card extends down,
+      // Studio fixed). Top: pad the list top + pull the card up by the same amount, so
+      // the top edge (Studio) rises while the tiles and card bottom stay put — a true
+      // mirror of the bottom, with Studio always above the tile.
+      growEl = (grow && !isHorizontal && cb) ? (containerRef?.current || null) : null;
+      cardEl = growEl ? growEl.parentElement : null;
+      const baseH = cb ? cb.height : 0;
+      growBaseRef.current = baseH;
       let curX = originRect.left;
       let curY = originRect.top;
       const loop = () => {
@@ -162,19 +179,48 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
         const c = cursorRef.current;
         let targetX = isHorizontal ? originRect.left + (c.x - ic.x) : originRect.left;
         let targetY = isHorizontal ? originRect.top : originRect.top + (c.y - ic.y);
-        if (cb) {
-          if (isHorizontal) {
+        if (isHorizontal) {
+          // Dock: unchanged linear rubber-band both edges.
+          if (cb) {
+            const RH = 0.18;
             const min = cb.left, max = cb.right - originRect.width;
-            if (targetX < min) targetX = min - (min - targetX) * R;
-            else if (targetX > max) targetX = max + (targetX - max) * R;
-          } else {
-            const min = cb.top, max = cb.bottom - originRect.height;
-            if (targetY < min) targetY = min - (min - targetY) * R;
-            else if (targetY > max) targetY = max + (targetY - max) * R;
+            if (targetX < min) targetX = min - (min - targetX) * RH;
+            else if (targetX > max) targetX = max + (targetX - max) * RH;
           }
+        } else if (cb && grow) {
+          // Overlay (growToContain): inside the panel the tile follows freely; past
+          // either PANEL edge it stretches the card with exponential resistance —
+          // d = C·(1−e^(−x/C)): ~1:1 just past the edge, asymptotic to C px far out
+          // (firm, hard cap). The card then grows to contain the tile at that resisted
+          // position (below), so a tile never leaves the panel — the panel expands.
+          // ponytail: C=80 is the "firm" feel; raise for looser, lower for a harder wall.
+          const EDGE_GIVE = 80;
+          const resist = (x) => EDGE_GIVE * (1 - Math.exp(-x / EDGE_GIVE));
+          const tileBottom = targetY + originRect.height;
+          if (tileBottom > cb.bottom) targetY = cb.bottom - originRect.height + resist(tileBottom - cb.bottom);
+          else if (targetY < cb.top)  targetY = cb.top - resist(cb.top - targetY);
+        } else if (cb) {
+          // Non-grow vertical consumers (right sidebar): original linear rubber-band
+          // both edges, no card growth — unchanged from before the overlay grow.
+          const R = 0.18;
+          const min = cb.top, max = cb.bottom - originRect.height;
+          if (targetY < min) targetY = min - (min - targetY) * R;
+          else if (targetY > max) targetY = max + (targetY - max) * R;
         }
         curX += (targetX - curX) * CHASE_RATE;
         curY += (targetY - curY) * CHASE_RATE;
+        if (growEl) {
+          // Grow the card to contain the (resisted) tile position — instant follow, no
+          // transition during drag. Bottom → min-height (card extends down). Top → list
+          // padding-top + an equal upward pull on the card, so the top edge (Studio)
+          // rises while the tiles and card bottom stay fixed. The two are mutually
+          // exclusive (a tile drags up OR down), so they never fight.
+          const overBottom = Math.max(0, (curY + originRect.height) - cb.bottom);
+          const overTop = Math.max(0, cb.top - curY);
+          growEl.style.minHeight = overBottom > 0 ? `${baseH + overBottom}px` : '';
+          growEl.style.paddingTop = overTop > 0 ? `${overTop}px` : '';
+          if (cardEl) cardEl.style.marginTop = overTop > 0 ? `${-overTop}px` : '';
+        }
         clone.style.transform = `translate3d(${curX}px, ${curY}px, 0)`;
         rafId = requestAnimationFrame(loop);
       };
@@ -193,6 +239,10 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
       if (rafId !== null) cancelAnimationFrame(rafId);
       try { clone.remove(); } catch { /* already removed */ }
       cloneRef.current = null;
+      // Drop the grow-to-contain overrides so the container + card return to rest
+      // (only touched when we actually grew — never stomps a consumer's own styles).
+      if (growEl) { growEl.style.minHeight = ''; growEl.style.paddingTop = ''; growEl.style.transition = ''; }
+      if (cardEl) { cardEl.style.marginTop = ''; cardEl.style.transition = ''; }
     };
   }, [sourceElement, originRect.left, originRect.top, originRect.width, originRect.height, originDisplay, cursorRef, isHorizontal]);
 
@@ -230,8 +280,25 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
     clone.style.transition = `transform ${glideMs}ms cubic-bezier(0.32, 0.72, 0, 1)`;
     void clone.offsetWidth;
     clone.style.transform = `translate3d(${cx}px, ${cy}px, 0)`;
-    clone.classList.remove('is-dragging');
-  }, [releasing, slotY, originRect.left, originRect.top, isHorizontal, glideMs]);
+    // Keep .is-dragging (accent) on the clone through the glide so the accent never
+    // blinks off between pickup and drop — it stops for the whole ~160ms glide if we
+    // strip it here, then the re-hovered source pops it back ("accent stops, then
+    // comes back"). The press-depth releases when the clone is swapped for the source.
+    // Snap the grown card back to content height over the same glide, so the card
+    // shrink and the clone settle finish together (transition to the captured
+    // resting px, not '' — an auto/none target won't animate).
+    const gc = containerRef?.current;
+    if (gc && (gc.style.minHeight || gc.style.paddingTop)) {
+      const ease = `${glideMs}ms cubic-bezier(0.32, 0.72, 0, 1)`;
+      gc.style.transition = `min-height ${ease}, padding-top ${ease}`;
+      if (gc.style.minHeight) gc.style.minHeight = `${growBaseRef.current}px`;
+      if (gc.style.paddingTop) {
+        gc.style.paddingTop = '0px';
+        const card = gc.parentElement;
+        if (card) { card.style.transition = `margin-top ${ease}`; card.style.marginTop = '0px'; }
+      }
+    }
+  }, [releasing, slotY, originRect.left, originRect.top, isHorizontal, glideMs, containerRef]);
 
   return (
     <div
@@ -263,6 +330,10 @@ export default function DraggableSidebarList({
   // so every sidebar consumer is byte-identical). On release, a drop near the
   // bar's left edge / centre / right edge snaps into that magnet zone.
   snapZones = null,
+  // Opt-in grow-to-contain (the overlay panel passes it): past a panel edge the
+  // card expands to keep the dragged tile inside, with exponential resistance.
+  // Off elsewhere (dock/right sidebar) so their drag geometry is unchanged.
+  growToContain = false,
   className,
   style,
 }) {
@@ -355,9 +426,18 @@ export default function DraggableSidebarList({
       const dy = e.clientY - drag.sy;
       if (Math.sqrt(dx * dx + dy * dy) > MOVE_THRESHOLD) {
         clearHold();
-        dRef.current = null;
-        window.removeEventListener('pointermove', onMove);
-        window.removeEventListener('pointerup', onUp);
+        if (dragFromInteractive) {
+          // Dock: a move during the hold cancels (keeps tap=nav; a deliberate still
+          // hold is the drag intent). Unchanged.
+          dRef.current = null;
+          window.removeEventListener('pointermove', onMove);
+          window.removeEventListener('pointerup', onUp);
+        } else {
+          // Reorder lists (overlay / right sidebar): movement STARTS the drag right
+          // away — no need to wait out the hold timer / full press-down. beginDrag
+          // flips dRef to 'drag' and the existing listeners carry the rest.
+          beginDrag(drag.idx, itemRefs.current[drag.idx]?.getBoundingClientRect(), e.clientX, e.clientY);
+        }
       }
       return;
     }
@@ -376,7 +456,9 @@ export default function DraggableSidebarList({
         });
       }
     }
-  }, [clearHold, calcDropIndex]);
+    // beginDrag is referenced in the hold branch but intentionally omitted from deps
+    // (defined below; captured by closure like onUp — reading it at call time is safe).
+  }, [clearHold, calcDropIndex, dragFromInteractive]);
 
   // ── Window up ────────────────────────────────────────────────────────────
   const onUp = useCallback((e) => {
@@ -478,6 +560,15 @@ export default function DraggableSidebarList({
     const positions = itemRefs.current.map(e => e ? e.getBoundingClientRect()[startProp] : 0);
     const heights   = itemRefs.current.map(e => e ? e.getBoundingClientRect()[sizeProp]  : 0);
 
+    // Container flex `gap` on the active axis. The source-collapse + drop-gap math
+    // is height-only, so a flex gap leaves a one-gap surplus where the source lifts
+    // and a one-gap deficit where it lands → siblings snap by one gap-width on drop.
+    // Capture it so the render can cancel the surplus (−gap on the source) and pad
+    // the deficit (+gap on the drop slot). 0 for margin-spaced consumers (dock/
+    // sidebar) → a no-op there.
+    const gcs = containerRef.current ? window.getComputedStyle(containerRef.current) : null;
+    const flexGap = gcs ? (parseFloat(isHorizontal ? gcs.columnGap : gcs.rowGap) || 0) : 0;
+
     dRef.current = { phase: 'drag', idx };
     mouseRef.current = { x: cx, y: cy };
 
@@ -496,6 +587,7 @@ export default function DraggableSidebarList({
       originDisplay,
       positions,
       heights,
+      flexGap,
     });
     playReorderPickup();
   }, [onDragActiveChange, startProp, sizeProp]);
@@ -533,8 +625,9 @@ export default function DraggableSidebarList({
   const flexDir = direction === 'vertical' ? 'column' : 'row';
 
   // Destination gap matches the dragged item's actual size on the active axis
-  // so the slot visually equals what's about to drop into it.
-  const gapSize = dragState?.originRect?.[sizeProp] ?? gapSizeProp;
+  // (+ one flex gap, which the inserted item brings in the final layout) so the
+  // slot equals the item's true footprint and neighbours don't snap on drop.
+  const gapSize = (dragState?.originRect?.[sizeProp] ?? gapSizeProp) + (dragState?.flexGap ?? 0);
 
   return (
     <>
@@ -549,6 +642,7 @@ export default function DraggableSidebarList({
           releasing={!!dragState.releasing}
           glideMs={dragState.glideMs ?? 160}
           containerRef={containerRef}
+          grow={growToContain}
         />
       )}
       <div ref={containerRef} data-dragging={dragState?.dragging ? 'true' : undefined} className={className} style={{ display: 'flex', flexDirection: flexDir, ...style }}>
@@ -594,11 +688,19 @@ export default function DraggableSidebarList({
                 // the same 160ms easing, so flex-weighted siblings (e.g. the
                 // planner slot with flexWeight:2) grow into the freed space
                 // smoothly instead of snapping. Post-drop snap-back is instant.
-                transition: dragState?.dragging && !isDragged
+                // The SOURCE transitions its margin too (not just !isDragged): its
+                // −flexGap compensation must ease in with the SAME easing as the
+                // collapse keyframe + the drop-gap, or it lands instantly at t=0 and
+                // shoves neighbours by one gap on pickup (the pickup-snap bug).
+                transition: dragState?.dragging
                   ? 'margin 160ms cubic-bezier(0.32, 0.72, 0, 1)'
                   : 'none',
                 [marginStart]: isDrop ? gapSize : 0,
-                [marginEnd]:   isDropAfter ? gapSize : 0,
+                // Source slot cancels one flex gap so its collapse doesn't leave a
+                // one-gap surplus where it lifted (siblings stay put on drop). Pairs
+                // with the +flexGap in gapSize above to keep the lift itself reflow-
+                // free. No-op when the container has no flex gap.
+                [marginEnd]:   isDragged ? -(dragState?.flexGap ?? 0) : (isDropAfter ? gapSize : 0),
                 // Source slot: hide visually + provide the from-height for
                 // the keyframe collapse. `visibility: hidden` keeps the slot
                 // invisible during the collapse so its content doesn't clip-

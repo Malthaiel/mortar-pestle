@@ -8,13 +8,17 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 // Keep a dragged panel on-screen. Without this, a panel dragged past the overlay
 // window edge is clipped by the host's overflow:hidden and effectively lost —
-// there's no handle left to grab it back. Clamp the top-left so a grabbable strip
-// (incl. the header) always stays inside the viewport.
-function clampPos(p) {
+// there's no handle left to grab it back. With the panel's measured size, clamp
+// all four edges so the WHOLE panel stays inside the viewport (symmetric — no
+// edge lets any part escape). Before the first drag (size unknown) fall back to
+// keeping a grabbable strip reachable so a restored off-screen position recovers.
+function clampPos(p, size) {
   const w = typeof window !== 'undefined' && window.innerWidth ? window.innerWidth : 1920;
   const h = typeof window !== 'undefined' && window.innerHeight ? window.innerHeight : 1080;
-  const maxX = Math.max(0, w - 120); // leave >=120px of the panel reachable
-  const maxY = Math.max(0, h - 48);  // keep the header row on-screen
+  const pw = size?.w || 0;
+  const ph = size?.h || 0;
+  const maxX = pw ? Math.max(0, w - pw) : Math.max(0, w - 120);
+  const maxY = ph ? Math.max(0, h - ph) : Math.max(0, h - 48);
   return { x: Math.min(Math.max(p.x, 0), maxX), y: Math.min(Math.max(p.y, 0), maxY) };
 }
 
@@ -27,11 +31,14 @@ export default function useOverlayPanelDrag(key, initial = { x: 0, y: 0 }) {
     return clampPos(initial);
   });
   const drag = useRef(null);
+  // Panel's rendered size, measured at each drag start (the panel is content-height
+  // so it changes as tiles reorder / grow). Drives the four-edge clamp.
+  const sizeRef = useRef({ w: 0, h: 0 });
 
   // Recover a panel saved off-screen (dragged onto another monitor before this
   // clamp existed) and re-clamp after a viewport / monitor-layout change.
   useEffect(() => {
-    const reclamp = () => setPos((p) => clampPos(p));
+    const reclamp = () => setPos((p) => clampPos(p, sizeRef.current));
     reclamp();
     window.addEventListener('resize', reclamp);
     return () => window.removeEventListener('resize', reclamp);
@@ -40,6 +47,10 @@ export default function useOverlayPanelDrag(key, initial = { x: 0, y: 0 }) {
   const onPointerDown = useCallback((e) => {
     if (e.target.closest('button,textarea,input,select,a,[data-no-drag]')) return;
     e.preventDefault();
+    // Measure the visible panel box (the header's card ancestor) so the clamp
+    // keeps the whole panel on-screen on all four edges.
+    const panel = e.currentTarget.closest('.candy-card') || e.currentTarget.parentElement;
+    if (panel) { const r = panel.getBoundingClientRect(); sizeRef.current = { w: r.width, h: r.height }; }
     drag.current = { px: e.clientX, py: e.clientY, ox: pos.x, oy: pos.y };
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* capture optional */ }
   }, [pos.x, pos.y]);
@@ -47,7 +58,7 @@ export default function useOverlayPanelDrag(key, initial = { x: 0, y: 0 }) {
   const onPointerMove = useCallback((e) => {
     const d = drag.current;
     if (!d) return;
-    setPos(clampPos({ x: d.ox + (e.clientX - d.px), y: d.oy + (e.clientY - d.py) }));
+    setPos(clampPos({ x: d.ox + (e.clientX - d.px), y: d.oy + (e.clientY - d.py) }, sizeRef.current));
   }, []);
 
   const end = useCallback((e) => {
@@ -55,7 +66,7 @@ export default function useOverlayPanelDrag(key, initial = { x: 0, y: 0 }) {
     drag.current = null;
     try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* already released */ }
     // Functional update reads the latest pos (the closure's pos may be stale).
-    setPos((p) => { const c = clampPos(p); try { localStorage.setItem(key, JSON.stringify(c)); } catch {} return c; });
+    setPos((p) => { const c = clampPos(p, sizeRef.current); try { localStorage.setItem(key, JSON.stringify(c)); } catch {} return c; });
   }, [key]);
 
   return {

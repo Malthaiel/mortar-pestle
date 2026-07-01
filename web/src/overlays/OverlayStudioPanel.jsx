@@ -73,7 +73,7 @@ function ViewAllModal({ section, clips, shots, history, onClose, doCopy, onDelHi
     <div className="video-cinema ov-studio-modal" onPointerDown={(e) => { if (e.target.classList.contains('ov-studio-modal')) onClose(); }}>
       <div className="candy-card ov-studio-modal-card">
         <div className="candy-center-row ov-studio-sec-head">
-          <span className="ov-studio-sec-title section-title section-title--sub">{title}</span>
+          <span className="ov-studio-sec-title section-title">{title}</span>
           <button type="button" data-no-drag className="candy-btn" data-shape="icon" data-size="small" title="Close" aria-label="Close" onClick={onClose}><span className="candy-face"><IconX/></span></button>
         </div>
         <div className={`ov-studio-modal-body${isList ? ' is-list' : ''}`}>
@@ -187,7 +187,7 @@ export default function OverlayStudioPanel({ showToast }) {
         <div className="candy-btn ov-studio-tile" data-shape="tile" aria-label="Voice section">
           <div className="candy-face">
             <div className="candy-center-row ov-studio-sec-head">
-              <span className="ov-studio-sec-title section-title section-title--sub">Voice{recording && <> · <span style={{ color: 'var(--accent)' }}>● live</span> · {mmss(elapsed)}</>}</span>
+              <span className="ov-studio-sec-title section-title">Voice{recording && <> · <span style={{ color: 'var(--accent)' }}>● live</span> · {mmss(elapsed)}</>}</span>
               <button type="button" data-no-drag className="candy-btn" data-size="small" onClick={() => setViewAll('voice')}><span className="candy-face">View all</span></button>
             </div>
             <div className="candy-center-row" style={{ gap: 10 }}>
@@ -224,7 +224,7 @@ export default function OverlayStudioPanel({ showToast }) {
         <div className="candy-btn ov-studio-tile" data-shape="tile" aria-label="Video section">
           <div className="candy-face">
             <div className="candy-center-row ov-studio-sec-head">
-              <span className="ov-studio-sec-title section-title section-title--sub">Video</span>
+              <span className="ov-studio-sec-title section-title">Video</span>
               <button type="button" data-no-drag className="candy-btn" data-size="small" onClick={() => setViewAll('video')}><span className="candy-face">View all</span></button>
             </div>
             <div className="candy-center-row" style={{ gap: 8 }}>
@@ -244,7 +244,7 @@ export default function OverlayStudioPanel({ showToast }) {
         <div className="candy-btn ov-studio-tile" data-shape="tile" aria-label="Screenshots section">
           <div className="candy-face">
             <div className="candy-center-row ov-studio-sec-head">
-              <span className="ov-studio-sec-title section-title section-title--sub">Screenshots</span>
+              <span className="ov-studio-sec-title section-title">Screenshots</span>
               <button type="button" data-no-drag className="candy-btn" data-size="small" onClick={() => setViewAll('shots')}><span className="candy-face">View all</span></button>
             </div>
             <div className="candy-center-row" style={{ gap: 8 }}>
@@ -284,7 +284,8 @@ export default function OverlayStudioPanel({ showToast }) {
             keyExtractor={(s) => s.id}
             renderItem={(s) => s.render()}
             onReorder={handleReorder}
-            style={{ gap: 6 }}
+            growToContain
+            style={{ gap: 'var(--ov-gap)' }}
           />
         </div>
       </div>

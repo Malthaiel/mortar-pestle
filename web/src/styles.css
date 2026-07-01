@@ -1302,6 +1302,11 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
   background: var(--accent);
   transform: translateY(var(--cbtn-depth));
 }
+/* Content colour constant across every state (rest / hover / press / drag) — matches
+   the overlay tile so the player + planner text (incl. nested candy-button labels)
+   never flickers grey→white→grey on press. Non-!important so the player's designed
+   INLINE colours (SF15) still win over it. */
+.candy-btn[data-shape="tile"].music-tile .candy-face :where(div, span) { color: #fff; }
 /* Waveform inversion — when the chrome goes red (hover / active / drag) the
    dim-accent bars would vanish into it; flip played -> white, unplayed -> dim
    white. :hover covers the child-press case (pointer stays on the tile). */
@@ -4849,13 +4854,16 @@ button.cal-customdays__step:hover {
 .is-dragging .candy-btn[data-shape="tile"].ov-studio-tile > .candy-face {
   background: var(--accent); color: #fff; transform: translateY(var(--cbtn-depth));
 }
-/* Content colour must NOT shift between the pressed/hover state and the picked-up
-   clone. Rule ~2039's nested white-flip keys on :hover/:active but NOT .is-dragging,
-   so the clone's nested text (trow --text-2, timestamps --text-faint) reverted to
-   its dim resting grey on the red face — the "greyer on press" shift. Re-assert
-   white for the dragging clone so pickup is colour-identical to the press it came
-   from (DESIGN.md § Anti-patterns: never recolour content on press). */
-.is-dragging .candy-btn[data-shape="tile"].ov-studio-tile .candy-face :where(div, span):not(.candy-face) { color: #fff; }
+/* Content colour is CONSTANT across EVERY state (rest, hover, press, drag) — the
+   tile's nested text is always white, never the dim resting grey (--text-2 /
+   --text-faint). Gating the flip on :hover/:active gave a grey→white→grey flicker as
+   you hovered then pressed (the press state dropped the flip). One unconditional rule
+   kills all three states (DESIGN.md § Anti-patterns: never recolour content on press).
+   Nested candy-button labels (span.candy-face) are INCLUDED — they had the same
+   grey→white→grey flip; the rule outranks the base .candy-face grey so they stay
+   white in every state (their accent-flood background on hover is unchanged, only the
+   text is pinned). Inline colours (e.g. the accent "● live" pip) still win over this. */
+.candy-btn[data-shape="tile"].ov-studio-tile .candy-face :where(div, span) { color: #fff; }
 
 /* Recent-history thumbnails + empty states */
 .ov-studio-thumbs { display: flex; gap: 8px; }
