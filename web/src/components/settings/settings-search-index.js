@@ -94,6 +94,12 @@ export const SETTINGS_SEARCH_INDEX = [
   // now points at the tab each control moved into.
   { id: 'animations.hoverPress', label: 'Hover press strength', tabId: 'appearance', anchor: 'set-hoverPressIntensity',
     keywords: ['button', 'depress', 'tactile'], settingsKey: 'hoverPressIntensity' },
+  { id: 'appearance.pressSpeed', label: 'Press speed', tabId: 'appearance', anchor: 'set-pressSpeed',
+    keywords: ['candy', 'button', 'snappy', 'fast', 'speed', 'press', 'duration', 'quick'],
+    description: 'How fast candy buttons press down and spring back, app-wide.', settingsKey: 'pressSpeed' },
+  { id: 'appearance.pressHold', label: 'Press hold', tabId: 'appearance', anchor: 'set-pressHold',
+    keywords: ['candy', 'button', 'hold', 'dwell', 'stays', 'down', 'press', 'linger', 'duration'],
+    description: 'How long a candy button stays pressed down before springing back up.', settingsKey: 'pressHold' },
   { id: 'animations.largeDepth', label: 'Large button depth', tabId: 'appearance', anchor: 'set-largeButtonDepth',
     keywords: ['shadow', 'candy', 'pill', '3d'], settingsKey: 'largeButtonDepth' },
   { id: 'animations.smallDepth', label: 'Small button depth', tabId: 'appearance', anchor: 'set-smallButtonDepth',

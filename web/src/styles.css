@@ -47,6 +47,13 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
   --candy-depth-hover-shadow: calc(var(--candy-depth) * (1 - 3 / 7 * var(--candy-press-fraction)));
   --candy-depth-hover-transform: calc(var(--candy-depth) * 2 / 7 * var(--candy-press-fraction));
 
+  /* Candy press SPEED — duration of the transform transition that drives the
+     press-down / spring-back translate on every candy button. 70ms is the app
+     default; the slider spans 40ms (fastest) → 150ms (slowest). Global slider:
+     `Settings → Appearance → Press & depth → Press speed` writes it to
+     :root via useSettings (--cbtn-press-dur). */
+  --cbtn-press-dur: 70ms;
+
   --bg:           oklch(0.985 0.004 30);
   --surface:      #ffffff;
   --surface-2:    oklch(0.975 0.005 30);
@@ -87,6 +94,11 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
   --radius-sm:    4px;
   --radius-md:    8px;
   --radius-lg:    12px;
+  /* Overlay Studio panel spacing. ONE token drives the inter-tile list gap AND
+     all four sides of the panel padding so the two can never drift (batch 1 had
+     6px vertical vs 12px horizontal). Invariant: container padding == inter-item
+     gap, equal on both axes (DESIGN.md § Spacing and density). */
+  --ov-gap:       8px;
   --cal-radius:   8px;    /* planner hour-box corner radius; matches --radius-md/block radius so a full-hour block sits flush in its box */
 
   /* 3D Button tokens · Light. Per-role face/base/text for the .btn3d utility.
@@ -660,7 +672,7 @@ button.button-10 {
     0 0.75em 0 -2px #f9c4d2,
     0 0.75em 0 0 #b18597;
   transition:
-    transform 150ms cubic-bezier(0, 0, 0.58, 1),
+    transform var(--cbtn-press-dur, 150ms) cubic-bezier(0, 0, 0.58, 1),
     background 150ms cubic-bezier(0, 0, 0.58, 1),
     box-shadow 150ms cubic-bezier(0, 0, 0.58, 1);
 }
@@ -775,7 +787,7 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
     0 var(--candy-depth) 0 -2px color-mix(in oklch, var(--cbtn-band), black 10%),
     0 var(--candy-depth) 0 0 color-mix(in oklch, var(--cbtn-band), black 22%);
   transition:
-    transform 150ms cubic-bezier(0, 0, 0.58, 1),
+    transform var(--cbtn-press-dur, 150ms) cubic-bezier(0, 0, 0.58, 1),
     color 150ms cubic-bezier(0, 0, 0.58, 1),
     background 150ms cubic-bezier(0, 0, 0.58, 1),
     border-color 150ms cubic-bezier(0, 0, 0.58, 1),
@@ -1198,7 +1210,7 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
   border: var(--cbtn-frame) solid color-mix(in oklch, var(--cbtn-band), black 22%);
   border-radius: inherit;
   transition:
-    transform 150ms cubic-bezier(0, 0, 0.58, 1),
+    transform var(--cbtn-press-dur, 150ms) cubic-bezier(0, 0, 0.58, 1),
     color 150ms cubic-bezier(0, 0, 0.58, 1),
     background 150ms cubic-bezier(0, 0, 0.58, 1),
     border-color 150ms cubic-bezier(0, 0, 0.58, 1);
@@ -2082,7 +2094,7 @@ body[data-anim-button-depth="off"] .candy-btn:is(:active, .is-pressed, [data-can
     0 var(--candy-depth) 0 -2px color-mix(in oklch, #141310, black 10%),
     0 var(--candy-depth) 0 0 color-mix(in oklch, #141310, black 22%);
   transition:
-    transform 150ms cubic-bezier(0, 0, 0.58, 1),
+    transform var(--cbtn-press-dur, 150ms) cubic-bezier(0, 0, 0.58, 1),
     box-shadow 150ms cubic-bezier(0, 0, 0.58, 1);
 }
 .planner-ring-button:hover {
@@ -2173,7 +2185,7 @@ body[data-anim-button-depth="off"] .candy-btn:is(:active, .is-pressed, [data-can
     0 var(--candy-depth) 0 -2px color-mix(in oklch, var(--surface), black 10%),
     0 var(--candy-depth) 0 0 color-mix(in oklch, var(--surface), black 22%);
   transition:
-    transform 150ms cubic-bezier(0, 0, 0.58, 1),
+    transform var(--cbtn-press-dur, 150ms) cubic-bezier(0, 0, 0.58, 1),
     color 150ms cubic-bezier(0, 0, 0.58, 1),
     background 150ms cubic-bezier(0, 0, 0.58, 1),
     border-color 150ms cubic-bezier(0, 0, 0.58, 1),
@@ -2434,7 +2446,7 @@ body[data-anim-button-depth="off"] .candy-btn:is(:active, .is-pressed, [data-can
   border-radius: inherit;
   overflow: hidden;
   transition:
-    transform 150ms cubic-bezier(0, 0, 0.58, 1),
+    transform var(--cbtn-press-dur, 150ms) cubic-bezier(0, 0, 0.58, 1),
     background 150ms cubic-bezier(0, 0, 0.58, 1),
     border-color 150ms cubic-bezier(0, 0, 0.58, 1);
 }
@@ -2591,7 +2603,7 @@ body[data-music-tile-depth="small"] .button-music-tile {
     0 var(--candy-depth) 0 -2px color-mix(in oklch, var(--surface), black 10%),
     0 var(--candy-depth) 0 0 color-mix(in oklch, var(--surface), black 22%);
   transition:
-    transform 150ms cubic-bezier(0, 0, 0.58, 1),
+    transform var(--cbtn-press-dur, 150ms) cubic-bezier(0, 0, 0.58, 1),
     box-shadow 150ms cubic-bezier(0, 0, 0.58, 1);
 }
 .button-planner-calendar[data-collapsed="true"] { cursor: pointer; }
@@ -2698,7 +2710,7 @@ button.status-candy {
     0 var(--candy-depth) 0 -2px color-mix(in oklch, var(--surface), black 10%),
     0 var(--candy-depth) 0 0 color-mix(in oklch, var(--surface), black 22%);
   transition:
-    transform 150ms cubic-bezier(0, 0, 0.58, 1),
+    transform var(--cbtn-press-dur, 150ms) cubic-bezier(0, 0, 0.58, 1),
     box-shadow 150ms cubic-bezier(0, 0, 0.58, 1);
 }
 button.status-candy:hover {
@@ -2798,7 +2810,7 @@ button.candy-select {
     0 var(--candy-depth) 0 -2px color-mix(in oklch, var(--surface), black 10%),
     0 var(--candy-depth) 0 0 color-mix(in oklch, var(--surface), black 22%);
   transition:
-    transform 150ms cubic-bezier(0, 0, 0.58, 1),
+    transform var(--cbtn-press-dur, 150ms) cubic-bezier(0, 0, 0.58, 1),
     box-shadow 150ms cubic-bezier(0, 0, 0.58, 1);
 }
 button.candy-select:hover {
@@ -2899,7 +2911,7 @@ button.rating-dot {
     0 var(--candy-depth) 0 -2px color-mix(in oklch, var(--surface), black 10%),
     0 var(--candy-depth) 0 0 color-mix(in oklch, var(--surface), black 22%);
   transition:
-    transform 120ms cubic-bezier(0, 0, 0.58, 1),
+    transform var(--cbtn-press-dur, 150ms) cubic-bezier(0, 0, 0.58, 1),
     background 100ms ease,
     border-color 100ms ease,
     box-shadow 120ms cubic-bezier(0, 0, 0.58, 1);
@@ -2958,7 +2970,7 @@ button.rating-dot:disabled {
     0 var(--candy-depth) 0 -2px color-mix(in oklch, var(--surface), black 10%),
     0 var(--candy-depth) 0 0 color-mix(in oklch, var(--surface), black 22%);
   transition:
-    transform 150ms cubic-bezier(0, 0, 0.58, 1),
+    transform var(--cbtn-press-dur, 150ms) cubic-bezier(0, 0, 0.58, 1),
     background 120ms ease,
     box-shadow 150ms cubic-bezier(0, 0, 0.58, 1);
 }
@@ -3022,7 +3034,7 @@ button.rating-dot:disabled {
     0 var(--candy-depth) 0 -2px color-mix(in oklch, var(--surface), black 10%),
     0 var(--candy-depth) 0 0 color-mix(in oklch, var(--surface), black 22%);
   transition:
-    transform 150ms cubic-bezier(0, 0, 0.58, 1),
+    transform var(--cbtn-press-dur, 150ms) cubic-bezier(0, 0, 0.58, 1),
     box-shadow 150ms cubic-bezier(0, 0, 0.58, 1),
     border-color 150ms cubic-bezier(0, 0, 0.58, 1),
     background 150ms cubic-bezier(0, 0, 0.58, 1);
@@ -3112,7 +3124,7 @@ button.button-misc-chip {
     0 var(--candy-depth) 0 -2px color-mix(in oklch, var(--surface), black 10%),
     0 var(--candy-depth) 0 0 color-mix(in oklch, var(--surface), black 22%);
   transition:
-    transform 150ms cubic-bezier(0, 0, 0.58, 1),
+    transform var(--cbtn-press-dur, 150ms) cubic-bezier(0, 0, 0.58, 1),
     color 150ms cubic-bezier(0, 0, 0.58, 1),
     background 150ms cubic-bezier(0, 0, 0.58, 1),
     border-color 150ms cubic-bezier(0, 0, 0.58, 1),
@@ -3223,7 +3235,7 @@ button.button-misc-row {
     0 var(--candy-depth) 0 -2px color-mix(in oklch, var(--surface), black 10%),
     0 var(--candy-depth) 0 0 color-mix(in oklch, var(--surface), black 22%);
   transition:
-    transform 150ms cubic-bezier(0, 0, 0.58, 1),
+    transform var(--cbtn-press-dur, 150ms) cubic-bezier(0, 0, 0.58, 1),
     background 150ms cubic-bezier(0, 0, 0.58, 1),
     box-shadow 150ms cubic-bezier(0, 0, 0.58, 1);
 }
@@ -3283,7 +3295,7 @@ button.button-misc-keycap {
     0 var(--candy-depth) 0 -2px color-mix(in oklch, var(--surface), black 10%),
     0 var(--candy-depth) 0 0 color-mix(in oklch, var(--surface), black 22%);
   transition:
-    transform 150ms cubic-bezier(0, 0, 0.58, 1),
+    transform var(--cbtn-press-dur, 150ms) cubic-bezier(0, 0, 0.58, 1),
     box-shadow 150ms cubic-bezier(0, 0, 0.58, 1);
 }
 button.button-misc-keycap:hover {
@@ -3329,7 +3341,7 @@ button.button-misc-swatch {
     0 var(--candy-depth) 0 -2px color-mix(in oklch, var(--surface), black 22%),
     0 var(--candy-depth) 0 0 color-mix(in oklch, var(--surface), black 28%);
   transition:
-    transform 150ms cubic-bezier(0, 0, 0.58, 1),
+    transform var(--cbtn-press-dur, 150ms) cubic-bezier(0, 0, 0.58, 1),
     box-shadow 150ms cubic-bezier(0, 0, 0.58, 1);
 }
 button.button-misc-swatch:hover {
@@ -3372,7 +3384,7 @@ button.button-misc-cta {
     0 var(--candy-depth) 0 -2px color-mix(in oklch, var(--surface), black 10%),
     0 var(--candy-depth) 0 0 color-mix(in oklch, var(--surface), black 22%);
   transition:
-    transform 150ms cubic-bezier(0, 0, 0.58, 1),
+    transform var(--cbtn-press-dur, 150ms) cubic-bezier(0, 0, 0.58, 1),
     border-color 150ms cubic-bezier(0, 0, 0.58, 1),
     box-shadow 150ms cubic-bezier(0, 0, 0.58, 1);
 }
@@ -3435,7 +3447,7 @@ button.button-misc-card {
     0 var(--candy-depth) 0 -2px color-mix(in oklch, var(--surface), black 10%),
     0 var(--candy-depth) 0 0 color-mix(in oklch, var(--surface), black 22%);
   transition:
-    transform 150ms cubic-bezier(0, 0, 0.58, 1),
+    transform var(--cbtn-press-dur, 150ms) cubic-bezier(0, 0, 0.58, 1),
     box-shadow 150ms cubic-bezier(0, 0, 0.58, 1);
 }
 button.button-misc-card:hover {
@@ -4098,7 +4110,7 @@ button.cal-daycell {
     0 var(--candy-depth) 0 -2px color-mix(in oklch, var(--surface), black 10%),
     0 var(--candy-depth) 0 0 color-mix(in oklch, var(--surface), black 22%);
   transition:
-    transform 150ms cubic-bezier(0, 0, 0.58, 1),
+    transform var(--cbtn-press-dur, 150ms) cubic-bezier(0, 0, 0.58, 1),
     background 150ms cubic-bezier(0, 0, 0.58, 1),
     border-color 150ms cubic-bezier(0, 0, 0.58, 1),
     box-shadow 150ms cubic-bezier(0, 0, 0.58, 1);
@@ -4212,10 +4224,10 @@ button.cal-customdays__step:hover {
 
 .docs-title-row {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 .docs-title {
   margin: 0;
@@ -4225,6 +4237,33 @@ button.cal-customdays__step:hover {
   line-height: 1.15;
   color: var(--text);
   font-family: var(--font-body);
+  /* Truncate long titles instead of overlapping the header actions. */
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Header actions (PageView: Organize / Links), pinned right, never shrink. */
+.docs-title-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+/* Click-to-rename affordance (PageView vault pages). */
+.docs-title.is-editable { cursor: text; border-radius: var(--radius-sm); transition: color 120ms ease; }
+.docs-title.is-editable:hover { color: var(--accent); }
+/* Inline rename input — sized/typed like the h1 it replaces. */
+.docs-title-input {
+  min-width: 0;
+  flex: 1;
+  background: var(--surface-2);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+  margin: -3px -9px; /* keep the text baseline aligned with the h1 it replaces */
+  outline: none;
 }
 
 .docs-updated-chip {
@@ -4296,7 +4335,7 @@ button.cal-customdays__step:hover {
     0 var(--candy-depth) 0 -2px color-mix(in oklch, var(--surface), black 10%),
     0 var(--candy-depth) 0 0 color-mix(in oklch, var(--surface), black 22%);
   transition:
-    transform 150ms cubic-bezier(0, 0, 0.58, 1),
+    transform var(--cbtn-press-dur, 150ms) cubic-bezier(0, 0, 0.58, 1),
     box-shadow 150ms cubic-bezier(0, 0, 0.58, 1);
 }
 .docs-pn-card:hover {
@@ -4345,7 +4384,7 @@ button.cal-customdays__step:hover {
     0 var(--candy-depth) 0 -2px color-mix(in oklch, var(--surface), black 10%),
     0 var(--candy-depth) 0 0 color-mix(in oklch, var(--surface), black 22%);
   transition:
-    transform 150ms cubic-bezier(0, 0, 0.58, 1),
+    transform var(--cbtn-press-dur, 150ms) cubic-bezier(0, 0, 0.58, 1),
     box-shadow 150ms cubic-bezier(0, 0, 0.58, 1);
 }
 .release-card:hover {
@@ -4761,10 +4800,11 @@ button.cal-customdays__step:hover {
    One draggable panel; its three sections (Voice / Video / Screenshots) are
    content-height candy tiles reordered by DraggableSidebarList. Promoted from
    the "Overlay Studio Panel" prototype. */
-/* padding-bottom matches the tile list's inter-tile gap (6px) so the gap below
-   the last tile equals the gaps between tiles (the 10.5px shadow-band reserve is
-   on every tile incl. the last, so it cancels out of the comparison). */
-.ov-studio-panel { width: 400px; display: flex; flex-direction: column; gap: 8px; padding: 12px 12px 6px; }
+/* --ov-gap drives BOTH the four-side padding and the column gap (and the tile
+   list's inter-tile gap in OverlayStudioPanel.jsx) so horizontal == vertical and
+   nothing can drift. The 10.5px shadow-band reserve is on every tile incl. the
+   last, so it cancels out of the last-tile vs inter-tile comparison. */
+.ov-studio-panel { width: 400px; display: flex; flex-direction: column; gap: var(--ov-gap); padding: var(--ov-gap); }
 .ov-studio-head { justify-content: space-between; cursor: move; padding: 2px 4px 4px; }
 /* Panel + section titles use the shared .section-title standard (applied in
    OverlayStudioPanel.jsx). These rules keep only the overlay-specific bits — the
@@ -4809,6 +4849,13 @@ button.cal-customdays__step:hover {
 .is-dragging .candy-btn[data-shape="tile"].ov-studio-tile > .candy-face {
   background: var(--accent); color: #fff; transform: translateY(var(--cbtn-depth));
 }
+/* Content colour must NOT shift between the pressed/hover state and the picked-up
+   clone. Rule ~2039's nested white-flip keys on :hover/:active but NOT .is-dragging,
+   so the clone's nested text (trow --text-2, timestamps --text-faint) reverted to
+   its dim resting grey on the red face — the "greyer on press" shift. Re-assert
+   white for the dragging clone so pickup is colour-identical to the press it came
+   from (DESIGN.md § Anti-patterns: never recolour content on press). */
+.is-dragging .candy-btn[data-shape="tile"].ov-studio-tile .candy-face :where(div, span):not(.candy-face) { color: #fff; }
 
 /* Recent-history thumbnails + empty states */
 .ov-studio-thumbs { display: flex; gap: 8px; }

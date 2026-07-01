@@ -190,7 +190,19 @@ export function useGlobalTactileSound() {
 // the seg-option / music-tile / anim-off / self-managed suppressions so
 // non-pressing shapes still don't press.
 let active = null;
-const MIN_HOLD_MS = 150;   // match .candy-face transition (styles.css)
+const DEFAULT_HOLD_MS = 70;   // fallback dwell (matches the app default setting)
+
+// How long the candy face dwells at full depth before easing back up (ms). Read
+// from persisted settings at press time (mirrors soundEnabled() in this file),
+// so the global press handler picks up the Appearance → Press hold slider live
+// without React wiring. Falls back to DEFAULT_HOLD_MS when unset.
+function pressHoldMs() {
+  try {
+    const raw = JSON.parse(localStorage.getItem('focus_settings') || '{}');
+    const v = Number(raw.pressHold);
+    return Number.isFinite(v) && v >= 0 ? v : DEFAULT_HOLD_MS;
+  } catch { return DEFAULT_HOLD_MS; }
+}
 
 function releasePressHold() {
   if (!active) return;
@@ -228,7 +240,7 @@ function onCandyPressDown(e) {
   }
   releasePressHold();                                                 // cancel any overlapping press (rapid clicks)
   candy.setAttribute('data-candy-pressed', '');
-  active = { el: candy, timer: setTimeout(onHoldTimer, MIN_HOLD_MS), stillDown: true };
+  active = { el: candy, timer: setTimeout(onHoldTimer, pressHoldMs()), stillDown: true };
   window.addEventListener('pointerup', onHoldUp, true);
   window.addEventListener('pointercancel', onHoldCancel, true);
 }

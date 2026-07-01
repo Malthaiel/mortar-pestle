@@ -287,6 +287,16 @@ export const SETTINGS_DEFAULTS = {
   // redeclares --candy-depth + --candy-depth-small per level.
   largeButtonDepth: '7',
   smallButtonDepth: '5',
+  // Candy-button press SPEED — duration (ms) of the transform transition that
+  // drives the press-down / spring-back translate on every candy button.
+  // 70 = app default; slider spans 40 (fastest) → 150 (slowest). Written to
+  // :root --cbtn-press-dur; styles.css candy-family transforms consume it.
+  pressSpeed: 70,
+  // Candy-button press HOLD — how long (ms) the button dwells at full depth
+  // before easing back up (independent of press speed). Same 40–150 slider
+  // range as press speed. Read at press time by useTactileSound's global
+  // candy-press handler. Default 70.
+  pressHold: 70,
   // Music tile candy wrap depth bucket. 'large' → --candy-depth (drives off
   // largeButtonDepth). 'small' → --candy-depth-small (drives off
   // smallButtonDepth). Written to body[data-music-tile-depth]; styles.css
@@ -884,6 +894,13 @@ export function useSettings(pageKey = 'pulse') {
     if (!body) return;
     body.setAttribute('data-surface-depth', globalSettings.surfaceDepth || 'medium');
   }, [globalSettings.surfaceDepth]);
+
+  // Candy press speed → :root --cbtn-press-dur (ms). Global; the candy-family
+  // transform transitions in styles.css consume it. 150 = slowest (default /
+  // slider max); lower = snappier press.
+  useEffect(() => {
+    document.documentElement.style.setProperty('--cbtn-press-dur', (globalSettings.pressSpeed || 70) + 'ms');
+  }, [globalSettings.pressSpeed]);
 
   // Page transition variant. data-page-tx-style drives which enter keyframes
   // play on route change (styles.css § Page transitions). On/off is the separate

@@ -23,15 +23,15 @@ export default function ToolkitToggleButton({ accent, expanded, onToggle, lockMo
     >
       <span
         className="candy-face"
-        style={{ justifyContent: expanded ? 'flex-start' : 'center', padding: expanded ? '0 14px' : '0' }}
+        style={{ justifyContent: 'center', padding: expanded ? '0 14px' : '0' }}
       >
-        <span className="brand-mark" aria-hidden/>
+        {!expanded && <span className="brand-mark" aria-hidden/>}
         {expanded && (
           <span style={{
-            flex: 1, minWidth: 0,
+            minWidth: 0,
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            textAlign: 'left',
-          }}>Toolkit</span>
+            textAlign: 'center',
+          }}>{`VERSION ${import.meta.env.PACKAGE_VERSION || '0.0.0'}`}</span>
         )}
       </span>
     </button>

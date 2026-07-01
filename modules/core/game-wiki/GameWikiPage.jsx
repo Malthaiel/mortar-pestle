@@ -14,6 +14,7 @@ import remarkGfm from 'remark-gfm';
 import { api } from '@host/api.js';
 import { navigate } from '@host/router.js';
 import { encodePagePath } from '@host/components/SidebarBrowser.jsx';
+import PageTitleHeader from '@host/components/PageTitleHeader.jsx';
 import { getGameWikiIndex, resolveTarget } from './gamewikiIndex.js';
 import ScrimViewer from './ScrimViewer.jsx';
 import ScrimListLanding from './ScrimListLanding.jsx';
@@ -74,9 +75,10 @@ const MD_COMPONENTS = {
   },
 };
 
-function Shell({ children, accent }) {
+function Shell({ children, accent, header }) {
   return (
     <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+      {header}
       <div className="gamewiki-reader gamewiki-md" style={{ maxWidth: 820, margin: '0 auto', padding: '20px 28px 64px', '--accent': accent }}>
         {children}
       </div>
@@ -122,8 +124,10 @@ export default function GameWikiPage({ rest, accent }) {
   if (err) return <Shell accent={accent}><p style={{ color: 'var(--error)' }}>Couldn’t open this page: {err}</p></Shell>;
   if (raw == null) return <Shell accent={accent}><p style={{ opacity: 0.6 }}>Loading…</p></Shell>;
 
+  // Read-only title header (Game Wiki is read-only for end users — no rename).
+  const pageTitle = rest.split('/').pop() || rest;
   return (
-    <Shell accent={accent}>
+    <Shell accent={accent} header={<PageTitleHeader title={pageTitle} accent={accent} />}>
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>{body}</ReactMarkdown>
     </Shell>
   );

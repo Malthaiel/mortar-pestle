@@ -21,7 +21,6 @@ const TAGLINES = [
 
 export default function SidebarToggleButton({ accent, expanded, onToggle, showTagline }) {
   const tagline = useMemo(() => TAGLINES[Math.floor(Math.random() * TAGLINES.length)], []);
-  const version = import.meta.env.PACKAGE_VERSION || '0.0.0';
 
 
   const tooltip = expanded ? 'Collapse sidebar' : 'Expand sidebar';
@@ -56,7 +55,7 @@ export default function SidebarToggleButton({ accent, expanded, onToggle, showTa
           }}>
             <span style={{
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>Mortar &amp; Pestle <span style={{ textTransform: 'none', fontSize: '0.82em', fontWeight: 500 }}>v{version}</span></span>
+            }}>Mortar &amp; Pestle</span>
             {showTagline && (
               <span style={{
                 fontSize: 9.5, fontStyle: 'italic',

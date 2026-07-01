@@ -780,6 +780,12 @@ function AppearanceTab({ settings, setSetting, setPreviewAccent, accent, resolve
         <StackedRow label="Hover press strength" anchor="set-hoverPressIntensity" hint="How far candy buttons (brand pills, dock icons, transport, tabs, every chip) depress when hovered. 100% = full press, off = no movement.">
           <Seg value={settings.hoverPressIntensity || '50'} options={HOVER_PRESS_OPTIONS} onChange={v => setSetting('hoverPressIntensity', v)} accent={accent}/>
         </StackedRow>
+        <StackedRow label="Press speed" anchor="set-pressSpeed" hint="How fast candy buttons press down and spring back, app-wide. 150ms is the slowest; drag lower for a snappier, quicker press.">
+          <Slider value={settings.pressSpeed || 70} min={40} max={150} step={10} unit="ms" onChange={v => setSetting('pressSpeed', v)} accent={accent}/>
+        </StackedRow>
+        <StackedRow label="Press hold" anchor="set-pressHold" hint="How long a candy button stays pressed down before springing back up (separate from press speed). Higher = a longer, more deliberate press dwell.">
+          <Slider value={settings.pressHold ?? 70} min={40} max={150} step={10} unit="ms" onChange={v => setSetting('pressHold', v)} accent={accent}/>
+        </StackedRow>
         <StackedRow label="Large button depth" anchor="set-largeButtonDepth" hint="Brand pills, Planner start, Settings tabs, form primitives, chips, segments, rows, CTAs. Default 7px.">
           <Seg value={settings.largeButtonDepth || '7'} options={DEPTH_OPTIONS} onChange={v => setSetting('largeButtonDepth', v)} accent={accent}/>
         </StackedRow>

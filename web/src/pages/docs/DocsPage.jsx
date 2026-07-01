@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../api.js';
 import { navigate } from '../../router.js';
 import { useDocsManifest } from './useDocsManifest.js';
-import DocsHeader from './DocsHeader.jsx';
+import PageTitleHeader from '../../components/PageTitleHeader.jsx';
 import DocsPrevNext from './DocsPrevNext.jsx';
 import DocsReleasesTab from './DocsReleasesTab.jsx';
 import { readSectionPage } from '../../hooks/useSectionMemory.js';
@@ -105,9 +105,15 @@ export default function DocsPage({ route, accent }) {
   return (
     <div className="docs-page">
       <div className="docs-main">
-        <DocsHeader
+        <PageTitleHeader
           title={current?.title || ''}
-          category={current?.category.label || ''}
+          breadcrumb={<>
+            <span>Docs</span>
+            {current?.category.label && <>
+              <span className="docs-breadcrumb-sep">›</span>
+              <span>{current.category.label}</span>
+            </>}
+          </>}
           mtime={mtime}
           accent={accent}
         />

@@ -9,6 +9,8 @@ import { STATUS_DOT_COLOR, resolveDot } from '../util/media-status.js';
 import { StatChip, FrontmatterChip, FilterChip } from '../components/ui/index.js';
 import PageMinimap from '../components/PageMinimap.jsx';
 import PageLinksPanel from '../components/PageLinksPanel.jsx';
+import PageTitleHeader from '../components/PageTitleHeader.jsx';
+import { encodePagePath } from '../components/SidebarBrowser.jsx';
 import { useContextMenu } from '../context-menu/useContextMenu.js';
 import { buildWikilinkMenu, buildExternalLinkMenu, openExternalUrl } from '../context-menu/defaultMenus.js';
 import { openConcierge } from '../agents/concierge/ConciergeProvider.jsx';
@@ -172,6 +174,25 @@ export default function PageView({ path, accent }) {
   const planner = usePlanner();
 
   const filePath = path && path.endsWith('.md') ? path : path + '.md';
+
+  // Title header: display the on-disk filename stem; clicking it renames the
+  // file (mirrors useVaultTree.renameNode — renamePath + manifest regen + follow
+  // the open page to its new path).
+  const pageName = (filePath.split('/').pop() || '').replace(/\.md$/, '');
+  const onRenamePage = (newName) => {
+    const parent = filePath.split('/').slice(0, -1).join('/');
+    const to = parent ? `${parent}/${newName}.md` : `${newName}.md`;
+    if (to === filePath) return;
+    api.renamePath(filePath, to, undefined)
+      .then(async () => {
+        try {
+          const out = await api.vaults.list();
+          if (out?.activeId) await api.vaults.generateManifest(out.activeId);
+        } catch { /* manifest is best-effort; the tree is disk-accurate */ }
+        navigate('/page/' + encodePagePath(to.replace(/\.md$/, '')));
+      })
+      .catch((err) => console.warn('rename failed:', err));
+  };
 
   const dailyDs = useMemo(() => dailyLogDsFromPath(path), [path]);
   const isDailyLog = !!dailyDs;
@@ -487,19 +508,25 @@ export default function PageView({ path, accent }) {
   const detail = (
     <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {!loading && !notFound && !error && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '8px 20px 0', flexShrink: 0 }}>
-          {!rawUnavailable && raw && (
+        <PageTitleHeader
+          title={pageName}
+          editable
+          accent={accent}
+          onRename={onRenamePage}
+          actions={<>
+            {!rawUnavailable && raw && (
+              <FilterChip
+                onClick={() => openConcierge({ recipe: 'organize-md', target: filePath })}
+                accent={accent}
+              >✦ Organize with Concierge</FilterChip>
+            )}
             <FilterChip
-              onClick={() => openConcierge({ recipe: 'organize-md', target: filePath })}
+              onClick={() => setShowLinks(v => !v)}
+              active={showLinks}
               accent={accent}
-            >✦ Organize with Concierge</FilterChip>
-          )}
-          <FilterChip
-            onClick={() => setShowLinks(v => !v)}
-            active={showLinks}
-            accent={accent}
-          >⇄ Links</FilterChip>
-        </div>
+            >⇄ Links</FilterChip>
+          </>}
+        />
       )}
       {!loading && !notFound && mode === 'live' && saveState === 'saving' && (
         <div style={{
