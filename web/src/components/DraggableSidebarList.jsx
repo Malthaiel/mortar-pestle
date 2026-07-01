@@ -27,19 +27,31 @@ const SHIFT_THRESHOLD_FRACTION = 0.2;
 // lift cancels source's collapse exactly via marginTop on the next item, so
 // positions[i] for i != sourceIdx continues to match the rendered top during
 // steady state — the slot math works off cached coordinates without re-reading.
-function computeSlotY(dropIdx, sourceIdx, positions, heights) {
+// `gap` = the container's flex gap on the active axis. Removing the source from
+// ABOVE a target position removes its height PLUS one gap, and re-appending
+// after the last item adds one gap — height-only math left every gap-spaced
+// down-move one gap too low (the clone settled eating the gap to the tile
+// below, then snapped up at the swap; invisible to the margin-spaced
+// consumers, whose flexGap is 0).
+function computeSlotY(dropIdx, sourceIdx, positions, heights, gap = 0) {
   const N = positions.length;
   if (N === 0) return 0;
   if (dropIdx >= N) {
     // Drop after compact-last.
     if (sourceIdx === N - 1) {
+      // No-op drop of the last item past itself: it stays at its own top,
+      // which sits one gap below the previous item's bottom.
       if (N < 2) return positions[0] ?? 0;
-      return positions[N - 2] + heights[N - 2];
+      return positions[N - 2] + heights[N - 2] + gap;
     }
     return positions[N - 1] + heights[N - 1] - heights[sourceIdx];
   }
   if (dropIdx <= sourceIdx) return positions[dropIdx];
-  return positions[dropIdx] - heights[sourceIdx];
+  // Down-move: everything in (sourceIdx, dropIdx) shifts up by the source's
+  // occupied space = height + one gap; the moved tile takes the old top of
+  // the tile at dropIdx minus exactly that. Also makes the dropIdx ===
+  // sourceIdx + 1 no-op exact (returns positions[sourceIdx]).
+  return positions[dropIdx] - heights[sourceIdx] - gap;
 }
 
 function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, slotY, isHorizontal = false, releasing = false, glideMs = 160, containerRef, grow = false }) {
@@ -575,7 +587,11 @@ export default function DraggableSidebarList({
       clearHold();
       itemRefs.current.forEach(el => { if (el) el.style.pointerEvents = ''; });
       dRef.current = null;
-      setDragState(prev => prev ? { ...prev, releasing: true, glideMs } : null);
+      // Pin dropIdx to the slot the drop actually commits to. The throttled
+      // (60ms) move handler can leave dragState.dropIdx one update stale at
+      // release, in which case the clone would glide to the OLD slot and then
+      // snap to the real one when the source appears.
+      setDragState(prev => prev ? { ...prev, dropIdx: to, releasing: true, glideMs } : null);
 
       setTimeout(() => {
         // Commit the swap synchronously so the hit-test below reads the new order in
@@ -698,7 +714,7 @@ export default function DraggableSidebarList({
           originRect={dragState.originRect}
           originDisplay={dragState.originDisplay}
           cursorRef={mouseRef}
-          slotY={computeSlotY(dragState.dropIdx, dragState.idx, dragState.positions, dragState.heights)}
+          slotY={computeSlotY(dragState.dropIdx, dragState.idx, dragState.positions, dragState.heights, dragState.flexGap ?? 0)}
           isHorizontal={isHorizontal}
           releasing={!!dragState.releasing}
           glideMs={dragState.glideMs ?? 160}
