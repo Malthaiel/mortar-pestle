@@ -877,7 +877,7 @@ function ShipReleaseModal({ accent, queue, latestVersion, tag, onClose, onShippe
                 rows={2}
                 value={summary}
                 disabled={busy}
-                placeholder="1–2 sentences for the collapsed card — what arrived and why it matters."
+                placeholder="1–2 plain, friendly sentences for the collapsed card — what arrived, in words anyone understands (no jargon)."
                 onChange={(e) => setSummary(e.target.value)}
                 style={{
                   width: '100%', resize: 'vertical', outline: 'none',

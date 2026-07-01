@@ -137,9 +137,13 @@ export function mergeQueue(entries) {
   return { surfaces, areas, sections };
 }
 
-// Schema-perfect release block (two-tier 0.x format: required Summary meta line,
-// `### Area` → `#### Section` groups). `**Area:**` lines are queue-only metadata —
-// in Releases.md areas are structural. No trailing newline (caller adds separators).
+// Release block in the plain "what's new" format: required Summary meta line +
+// `### Area` groups with flat, label-less bullets (no `#### Section` headings —
+// those read as jargon to end users; see Releases.md § Schema). The queue keeps
+// its internal section grouping for count chips; here the sections are emitted in
+// canonical order but flattened into one bullet list per area. `**Area:**` lines
+// are queue-only metadata — in Releases.md areas are structural. No trailing
+// newline (caller adds separators).
 export function composeReleaseBlock({ date, version, tag = 'Early Stage', surfaces = [], plans = [], summary = '', areas = [] }) {
   const lines = [`## ${date} — v${version}`, `**Tag:** ${tag} · **Released:** ${date}`];
   if (surfaces.length) lines.push(`**Surface:** ${surfaces.join(', ')}`);
@@ -150,8 +154,8 @@ export function composeReleaseBlock({ date, version, tag = 'Early Stage', surfac
     const names = CANONICAL_SECTIONS.filter(n => area.sections[n]?.length);
     if (!names.length) continue;
     lines.push('', `### ${area.name}`);
+    // Flatten all sections (canonical order) into one label-less bullet list.
     for (const name of names) {
-      lines.push('', `#### ${name}`);
       for (const b of area.sections[name]) lines.push(`- ${b}`);
     }
   }
