@@ -185,9 +185,9 @@ export default function OverlayStudioPanel({ showToast }) {
               <span className="ov-studio-sec-title">Voice{recording && <> · <span style={{ color: 'var(--accent)' }}>● live</span> · {mmss(elapsed)}</>}</span>
               <button type="button" data-no-drag className="candy-btn" data-size="small" onClick={() => setViewAll('voice')}><span className="candy-face">View all</span></button>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div className="candy-center-row" style={{ gap: 10 }}>
               <RecordButton recording={recording} disabled={micDisabled} onToggle={toggleDictation} />
-              <VuMeter rms={vu} active={recording} />
+              <div style={{ flex: 1, minWidth: 0 }}><VuMeter rms={vu} active={recording} /></div>
             </div>
             <TranscriptView text={text} settled={settled} busy={recording || fileBusy} placeholder={engineDown ? 'Voice engine offline' : 'Your transcript appears here'} onChange={setText} />
             <div className="candy-center-row" style={{ gap: 6, flexWrap: 'wrap' }}>

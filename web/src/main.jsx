@@ -14,10 +14,11 @@ loadAll().then(() => {
       <App />
     </StrictMode>
   );
-  // DEV-only vertical-centering verifier — tree-shaken from prod via the guard +
-  // dynamic import. Audits candy buttons in centered rows and logs any miss.
-  // See util/candyCenterAudit.js.
+  // DEV-only layout verifiers — tree-shaken from prod via the guard + dynamic
+  // import. candyCenterAudit: optical centering of candy buttons vs text.
+  // spacingAudit: vertical rhythm — row heights + shadow bands + gaps, no skips.
   if (import.meta.env.DEV) {
     import('./util/candyCenterAudit.js').then((m) => m.startCandyCenterAudit());
+    import('./util/spacingAudit.js').then((m) => m.startSpacingAudit());
   }
 });

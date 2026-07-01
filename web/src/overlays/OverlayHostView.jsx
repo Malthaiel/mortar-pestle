@@ -20,6 +20,15 @@ import OverlayStudioPanel from './OverlayStudioPanel.jsx';
 // ponytail: events.on stubbed — no clip→transcribe handoff in the overlay host.
 const hostApi = { invoke, events: { on: () => () => {} } };
 
+// Drag-anim defaults mirrored onto <body> for the overlay host (which never mounts
+// useSettings, the writer of these attrs). Keep in sync with ANIMATION_KEY_CONFIG
+// in useSettings.js. Without them DraggableSidebarList falls back to 'slot-snap'.
+const DRAG_ANIM_DEFAULTS = {
+  'drag-tile-follow': 'slot-snap',
+  'drag-tile-smoothness': 'medium',
+  'drag-drop-glide': '75',
+};
+
 // Make the host webview see-through except its panels (the window is
 // transparent:true; without a transparent html/body the webview paints opaque).
 function useTransparentRoot() {
@@ -39,11 +48,25 @@ export default function OverlayHostView() {
   // Paint the user's persisted accent ourselves (same resolution as useSettings).
   useEffect(() => {
     let accent = '#7c2d2d'; // monastic default (DESIGN.md canonical red)
+    let animations = null;
     try {
       const fs = JSON.parse(localStorage.getItem('focus_settings') || '{}');
       accent = fs.accentColor || THEME_BY_ID[fs.themePreset]?.defaultAccent || accent;
-    } catch { /* keep the default */ }
+      animations = fs.animations || null;
+    } catch { /* keep the defaults */ }
     paintAccent(document.documentElement, accent);
+    // The DraggableSidebarList drag clone is portaled to <body>, OUTSIDE the panel's
+    // .video-cinema token scope — and the overlay renders before the theme tree, so
+    // :root carries only the light base tokens. Put .video-cinema on <body> so the
+    // floating clone inherits the same dark tokens the panel uses (it sets vars only,
+    // no layout/descendant rules).
+    document.body.classList.add('video-cinema');
+    // Mirror the user's drag-anim settings onto <body> so tile pickup behaves as it
+    // does in-app (useSettings writes these from the provider tree the host never
+    // mounts → they'd otherwise fall back to 'slot-snap' regardless of the setting).
+    for (const k of ['drag-tile-follow', 'drag-tile-smoothness', 'drag-drop-glide']) {
+      document.body.setAttribute(`data-anim-${k}`, String(animations?.[k] ?? DRAG_ANIM_DEFAULTS[k]));
+    }
   }, []);
   // Host-local toast — a fixed bottom-right candy chip. Lives here (not inside a
   // panel) because a panel is CSS-transformed, which would re-anchor position:fixed

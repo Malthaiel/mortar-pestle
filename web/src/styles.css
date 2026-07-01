@@ -4725,7 +4725,7 @@ button.cal-customdays__step:hover {
    One draggable panel; its three sections (Voice / Video / Screenshots) are
    content-height candy tiles reordered by DraggableSidebarList. Promoted from
    the "Overlay Studio Panel" prototype. */
-.ov-studio-panel { width: 340px; display: flex; flex-direction: column; gap: 8px; padding: 12px; }
+.ov-studio-panel { width: 400px; display: flex; flex-direction: column; gap: 8px; padding: 12px; }
 .ov-studio-head { justify-content: space-between; cursor: move; padding: 2px 4px 4px; }
 .ov-studio-title { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-2); }
 .ov-studio-sec-head { justify-content: space-between; }
@@ -4737,11 +4737,9 @@ button.cal-customdays__step:hover {
    — but sized to content, with no --tile-px container-query dependency (the
    overlay host has no container context). */
 .candy-btn[data-shape="tile"].ov-studio-tile {
-  --candy-depth: 14px;
-  --cbtn-depth: var(--candy-depth);
   width: 100%;
   height: auto;
-  margin: 0 0 var(--cbtn-depth);   /* reserve the press-depth band below */
+  margin: 0 0 var(--cbtn-depth);   /* reserve the base tile's 10.5px press-depth band below */
 }
 .candy-btn[data-shape="tile"].ov-studio-tile > .candy-face {
   height: auto;

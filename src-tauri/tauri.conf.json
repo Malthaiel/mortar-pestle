@@ -44,7 +44,6 @@
         "label": "overlay-host",
         "title": "Mortar & Pestle Overlay",
         "url": "index.html#/overlay/host",
-        "fullscreen": true,
         "decorations": false,
         "transparent": true,
         "alwaysOnTop": true,

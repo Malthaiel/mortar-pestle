@@ -467,16 +467,38 @@ pub fn run() {
                                 "overlay" => {
                                     let show = ev.data.get("show").and_then(|v| v.as_bool()).unwrap_or(false);
                                     if let Some(win) = bridge_app.get_webview_window("overlay-host") {
+                                        // Tap-to-toggle: the daemon emits show=true on Shift+C DOWN and
+                                        // show=false on release. Toggle on the DOWN edge and ignore the
+                                        // release so a quick TAP latches the overlay open (so it can be
+                                        // screenshotted / inspected); tap again to dismiss. Was hold-to-show.
                                         if show {
-                                            // SF9 — harden before showing: topmost,
-                                            // excluded from the capture stream, and
-                                            // non-activating so the HUD's interactive
-                                            // buttons don't pull the game out of focus.
-                                            overlay::state::harden_capture_overlay(&win);
-                                            let _ = win.show();
-                                        } else {
-                                            let _ = win.hide();
+                                            if win.is_visible().unwrap_or(false) {
+                                                let _ = win.hide();
+                                            } else {
+                                                // SF9 — harden before showing: topmost, capture-excluded,
+                                                // non-activating so the panel's buttons don't pull the game
+                                                // out of focus.
+                                                overlay::state::harden_capture_overlay(&win);
+                                                // Windows: a `fullscreen: true` transparent window is not
+                                                // alpha-composited by DWM (it renders opaque grey). Size a
+                                                // *borderless* window to the monitor instead so per-pixel
+                                                // transparency holds. Best-effort — a monitor lookup miss
+                                                // just shows the window at its previous geometry.
+                                                if let Some(mon) = win.current_monitor().ok().flatten()
+                                                    .or_else(|| win.primary_monitor().ok().flatten()) {
+                                                    let _ = win.set_position(*mon.position());
+                                                    let _ = win.set_size(*mon.size());
+                                                }
+                                                // DEV: open the overlay's own devtools so its console — and
+                                                // the candy-center audit (window.candyCenterAudit()) — is
+                                                // reachable (the non-activating overlay is hard to inspect
+                                                // manually). Compiled out of release builds.
+                                                #[cfg(debug_assertions)]
+                                                win.open_devtools();
+                                                let _ = win.show();
+                                            }
                                         }
+                                        // show=false (Shift+C release) is ignored — see tap-to-toggle above.
                                     }
                                     let _ = bridge_app.emit("overlay-host-visible", &ev.data);
                                 }

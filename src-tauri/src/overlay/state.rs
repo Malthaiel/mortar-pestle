@@ -113,12 +113,15 @@ pub fn harden_capture_overlay(win: &tauri::WebviewWindow) {
     #[cfg(windows)]
     {
         use windows::Win32::UI::WindowsAndMessaging::{
-            GetWindowLongPtrW, SetWindowDisplayAffinity, SetWindowLongPtrW, GWL_EXSTYLE,
-            WDA_EXCLUDEFROMCAPTURE, WS_EX_NOACTIVATE,
+            GetWindowLongPtrW, SetWindowLongPtrW, GWL_EXSTYLE, WS_EX_NOACTIVATE,
         };
+        // Release-only: exclude the HUD from the capture stream. DEV skips it so the
+        // overlay stays screenshot-able (Snipping Tool / PrintScreen) for UI work.
+        #[cfg(not(debug_assertions))]
+        use windows::Win32::UI::WindowsAndMessaging::{SetWindowDisplayAffinity, WDA_EXCLUDEFROMCAPTURE};
         if let Ok(hwnd) = win.hwnd() {
             unsafe {
-                // Absent from the recording (monitor-fallback path).
+                #[cfg(not(debug_assertions))]
                 let _ = SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE);
                 // Clicks fire the buttons without stealing the game's focus.
                 let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
