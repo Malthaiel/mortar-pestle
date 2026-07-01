@@ -16,9 +16,9 @@ import { useManifests } from '../../module-sdk/useModuleRegistry.js';
 import { moduleIdForArea } from '../../hooks/useModuleAreas.js';
 
 const BUMP_LEVELS = ['patch', 'minor', 'major'];
-// Two-tier 0.x scheme: patch is the default ship, minor is a deliberate
-// milestone judgment, major (1.0.0) is reserved for public readiness.
-const BUMP_LABELS = { patch: 'Patch', minor: 'Minor (milestone)', major: 'Major (1.0, reserved)' };
+// 0.0.x pre-beta scheme: patch is the default ship, minor (0.1.0) is the
+// deliberate move into beta, major (1.0.0) is reserved for public release.
+const BUMP_LABELS = { patch: 'Patch', minor: 'Minor (0.1, beta)', major: 'Major (1.0, public)' };
 const CANON = ['New', 'Changed', 'Removed', 'Performance', 'Fixed', 'Migration', 'Process'];
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
