@@ -1271,9 +1271,13 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
 }
 /* Re-assert the accent flip on hover/press over the resting surface-3 above
    (which would otherwise outrank the generic flip on specificity). */
-.candy-btn[data-shape="tile"].music-tile:is(:hover, :active) > .candy-face {
+.candy-btn[data-shape="tile"].music-tile:is(:hover, :active) > .candy-face,
+.is-drop-accent .candy-btn[data-shape="tile"].music-tile > .candy-face {
   background: var(--accent);
 }
+/* Band accent for the post-drop bridge (the still cursor can't trigger the base
+   .candy-btn:hover flip at ~2039). */
+.is-drop-accent .candy-btn[data-shape="tile"].music-tile { --cbtn-band: var(--accent); }
 /* Face is pointer-transparent (base default) so the immovable base is the sole
    drag + press target. Re-enable pointer events on the interactive children;
    the chrome (title / artist / waveform gaps) keeps falling through to the base
@@ -1311,11 +1315,13 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
    dim-accent bars would vanish into it; flip played -> white, unplayed -> dim
    white. :hover covers the child-press case (pointer stays on the tile). */
 .candy-btn[data-shape="tile"].music-tile:is(:hover, :active) .music-tile-pulse-bar,
-.is-dragging .candy-btn[data-shape="tile"].music-tile .music-tile-pulse-bar {
+.is-dragging .candy-btn[data-shape="tile"].music-tile .music-tile-pulse-bar,
+.is-drop-accent .candy-btn[data-shape="tile"].music-tile .music-tile-pulse-bar {
   background: color-mix(in oklch, white, transparent 65%);
 }
 .candy-btn[data-shape="tile"].music-tile:is(:hover, :active) .music-tile-pulse-bar[data-played="true"],
-.is-dragging .candy-btn[data-shape="tile"].music-tile .music-tile-pulse-bar[data-played="true"] {
+.is-dragging .candy-btn[data-shape="tile"].music-tile .music-tile-pulse-bar[data-played="true"],
+.is-drop-accent .candy-btn[data-shape="tile"].music-tile .music-tile-pulse-bar[data-played="true"] {
   background: white;
 }
 /* Music-tile depth setting (Settings -> Animations) — "small" pins the fixed
@@ -2066,6 +2072,18 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
 [data-dragging] :where(.candy-btn, button, a, input, textarea, [data-no-drag]):not(.is-dragging) {
   pointer-events: none !important;
 }
+
+/* Post-drop accent bridge (.is-drop-accent — DraggableSidebarList tags the
+   wrapper of the tile under the cursor at drop-commit). The face's 150ms
+   background/border-color transition and the base's 150ms box-shadow (band)
+   transition would FADE the restored accent in from resting grey — that fade
+   IS the "accent blinks off then back on" drop flicker; the bridge class alone
+   can't fix it because the first painted frame still starts at grey. Paint at
+   full value instead: no transitions while bridged. Cleared on the next real
+   pointermove, when :hover takes over with identical computed values (accent),
+   so the class removal itself repaints nothing and transitions come back for
+   the next interaction. */
+.is-drop-accent :is(.candy-btn, .candy-face) { transition: none; }
 
 /* Animation gating — mirror the .candy-btn-legacy gates for the two-layer system.
    Spring press off → face doesn't slide; Button depth off → frame-only (no band /
@@ -4842,6 +4860,14 @@ button.cal-customdays__step:hover {
    above out-ranks the base .candy-btn:hover fill by specificity, so without this
    the face would keep surface-2 on hover (only the frame/border would go red). */
 .candy-btn[data-shape="tile"].ov-studio-tile:is(:hover, :active) > .candy-face { background: var(--accent); color: #fff; }
+/* Post-drop bridge — DraggableSidebarList tags the just-dropped tile's wrapper
+   with .is-drop-accent so the accent doesn't blink off between the drag clone
+   vanishing and the source being re-:hover-ed (browsers don't recompute :hover on
+   a still cursor). Mirrors the :hover flood above at rest depth; cleared on the
+   next pointermove. Band (box-shadow + border) accents too — matching the base
+   .candy-btn:hover flip (styles.css ~2039), which the still cursor can't trigger. */
+.is-drop-accent .candy-btn[data-shape="tile"].ov-studio-tile { --cbtn-band: var(--accent); }
+.is-drop-accent .candy-btn[data-shape="tile"].ov-studio-tile > .candy-face { background: var(--accent); color: #fff; }
 .candy-btn[data-shape="tile"].ov-studio-tile :where(.candy-btn, button, a, input, textarea, [data-no-drag]) { pointer-events: auto; }
 .candy-btn[data-shape="tile"].ov-studio-tile:active > .candy-face { transform: none; }
 .candy-btn[data-shape="tile"].ov-studio-tile:active:not(:has(button:active, textarea:active, [data-no-drag]:active)) > .candy-face {

@@ -1,4 +1,5 @@
 import { useRef, useState, useCallback, useEffect, useLayoutEffect } from 'react';
+import { flushSync } from 'react-dom';
 import { playReorderPickup, playReorderDrop } from '../hooks/useTactileSound.js';
 
 const HOLD_MS = 180;
@@ -349,6 +350,9 @@ export default function DraggableSidebarList({
   // handler swallows the synthetic click that follows pointerup (keeps a
   // hold-drag from also firing the item's onClick, e.g. dock nav buttons).
   const suppressClickRef = useRef(false);
+  // Holds the { el, clearOnMove } for the transient post-drop forced accent
+  // (see forceDropAccent). null when no drop-accent is active.
+  const dropAccentRef = useRef(null);
 
   // Axis configuration — vertical (default) keeps the legacy sidebar behavior;
   // horizontal swaps to X-based threshold checks and marginLeft/Right gap.
@@ -363,13 +367,50 @@ export default function DraggableSidebarList({
     if (holdTimerRef.current) { clearTimeout(holdTimerRef.current); holdTimerRef.current = null; }
   }, []);
 
+  // Remove the transient post-drop accent + its one-shot listener.
+  const clearDropAccent = useCallback(() => {
+    const d = dropAccentRef.current;
+    if (!d) return;
+    d.el.classList.remove('is-drop-accent');
+    window.removeEventListener('pointermove', d.clearOnMove);
+    dropAccentRef.current = null;
+  }, []);
+
+  // Force the transient post-drop accent onto wrapper `el`; cleared on the next
+  // real pointermove (when :hover takes back over). See accentTileUnderCursor.
+  const forceDropAccent = useCallback((el) => {
+    if (!el) return;
+    clearDropAccent();
+    el.classList.add('is-drop-accent');
+    const clearOnMove = () => clearDropAccent();
+    dropAccentRef.current = { el, clearOnMove };
+    window.addEventListener('pointermove', clearOnMove);
+  }, [clearDropAccent]);
+
+  // Bridge the :hover gap on drop. The drag clone carried the accent through the
+  // glide; when it's removed and the reordered tiles reappear under a STILL cursor,
+  // the browser won't recompute :hover without a real pointer move, so the accent
+  // would blink off. Hit-test the ACTUAL tile under the cursor (elementFromPoint)
+  // rather than assume the dragged tile lands there — React re-inserts the dragged
+  // node on a downward reorder but the displaced sibling on an upward one, so the
+  // tile under the cursor isn't always the one dragged (the up-only flash). Caller
+  // must have committed the reorder synchronously (flushSync) so this reads the new
+  // order. (memory: ":hover needs a real pointer move".)
+  const accentTileUnderCursor = useCallback(() => {
+    const { x, y } = mouseRef.current;
+    const hit = document.elementFromPoint(x, y);
+    const wrapper = hit ? itemRefs.current.find(w => w && w.contains(hit)) : null;
+    forceDropAccent(wrapper || null);
+  }, [forceDropAccent]);
+
   const cleanup = useCallback(() => {
     clearHold();
+    clearDropAccent();
     itemRefs.current.forEach(el => { if (el) el.style.pointerEvents = ''; });
     dRef.current = null;
     setDragState(null);
     onDragActiveChange?.(false);
-  }, [clearHold, onDragActiveChange]);
+  }, [clearHold, clearDropAccent, onDragActiveChange]);
 
   useEffect(() => cleanup, [cleanup]);
 
@@ -475,6 +516,11 @@ export default function DraggableSidebarList({
 
     if (drag.phase === 'drag') {
       e.preventDefault();
+      // True release point — the last pointermove can lag it by one event, and
+      // the post-drop accent hit-test (accentTileUnderCursor) reads these coords
+      // ~160ms later. calcDropIndex below reads them too, so both use the same
+      // ground truth.
+      mouseRef.current = { x: e.clientX, y: e.clientY };
       // A real lift occurred (not a tap). Swallow the synthetic click the
       // browser fires after pointerup so a hold-drag — even one with no net
       // index change — never also triggers the item's onClick (e.g. a dock
@@ -501,10 +547,13 @@ export default function DraggableSidebarList({
       const glideMs = ({ off: 0, '25': 480, '50': 240, '75': 160, '100': 120 })[glideBucket] ?? 160;
 
       if (glideMs === 0) {
-        cleanup();
-        if (typeof from === 'number' && typeof to === 'number' && from !== to) {
-          onReorder(from, to);
-        }
+        flushSync(() => {
+          cleanup();
+          if (typeof from === 'number' && typeof to === 'number' && from !== to) {
+            onReorder(from, to);
+          }
+        });
+        accentTileUnderCursor();
         return;
       }
 
@@ -522,14 +571,19 @@ export default function DraggableSidebarList({
       setDragState(prev => prev ? { ...prev, releasing: true, glideMs } : null);
 
       setTimeout(() => {
-        setDragState(null);
+        // Commit the swap synchronously so the hit-test below reads the new order in
+        // the same frame the clone is removed (no un-accented paint in between).
+        flushSync(() => {
+          setDragState(null);
+          if (typeof from === 'number' && typeof to === 'number' && from !== to) {
+            onReorder(from, to);
+          }
+        });
         onDragActiveChange?.(false);
-        if (typeof from === 'number' && typeof to === 'number' && from !== to) {
-          onReorder(from, to);
-        }
+        accentTileUnderCursor();
       }, glideMs);
     }
-  }, [clearHold, calcDropIndex, calcSnapIndex, snapZones, isHorizontal, cleanup, onReorder, onMove, onDragActiveChange]);
+  }, [clearHold, calcDropIndex, calcSnapIndex, snapZones, isHorizontal, cleanup, onReorder, onMove, onDragActiveChange, accentTileUnderCursor]);
 
   // ── Start drag ───────────────────────────────────────────────────────────
   const beginDrag = useCallback((idx, or, cx, cy) => {
