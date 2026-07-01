@@ -2074,16 +2074,21 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
 }
 
 /* Post-drop accent bridge (.is-drop-accent — DraggableSidebarList tags the
-   wrapper of the tile under the cursor at drop-commit). The face's 150ms
-   background/border-color transition and the base's 150ms box-shadow (band)
-   transition would FADE the restored accent in from resting grey — that fade
-   IS the "accent blinks off then back on" drop flicker; the bridge class alone
-   can't fix it because the first painted frame still starts at grey. Paint at
-   full value instead: no transitions while bridged. Cleared on the next real
-   pointermove, when :hover takes over with identical computed values (accent),
-   so the class removal itself repaints nothing and transitions come back for
-   the next interaction. */
-.is-drop-accent :is(.candy-btn, .candy-face) { transition: none; }
+   wrapper of the tile under the cursor at drop-commit, and swaps the drag
+   clone onto this class at glide start). The face's 150ms background/border-
+   color transition and the base's 150ms box-shadow (band) transition would
+   FADE the restored accent in from resting grey — that fade IS the "accent
+   blinks off then back on" drop flicker; the bridge class alone can't fix it
+   because the first painted frame still starts at grey. So while bridged,
+   colour has NO transition (omitted from the list = instant). transform is
+   the one property that KEEPS its transition: the clone relies on it to ease
+   its face back up (press release) during the glide — a blanket transition:
+   none here made the release an instant snap. Cleared on the next real
+   pointermove, when :hover takes over with identical computed values
+   (accent), so the class removal itself repaints nothing. */
+.is-drop-accent :is(.candy-btn, .candy-face) {
+  transition: transform var(--cbtn-press-dur, 150ms) cubic-bezier(0, 0, 0.58, 1);
+}
 
 /* Animation gating — mirror the .candy-btn-legacy gates for the two-layer system.
    Spring press off → face doesn't slide; Button depth off → frame-only (no band /

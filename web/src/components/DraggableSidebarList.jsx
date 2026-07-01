@@ -281,10 +281,17 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
     clone.style.transition = `transform ${glideMs}ms cubic-bezier(0.32, 0.72, 0, 1)`;
     void clone.offsetWidth;
     clone.style.transform = `translate3d(${cx}px, ${cy}px, 0)`;
-    // Keep .is-dragging (accent) on the clone through the glide so the accent never
-    // blinks off between pickup and drop — it stops for the whole ~160ms glide if we
-    // strip it here, then the re-hovered source pops it back ("accent stops, then
-    // comes back"). The press-depth releases when the clone is swapped for the source.
+    // Swap is-dragging → is-drop-accent for the glide. The bridge class carries
+    // the same accent (band + face flood, both tile types) but NOT the pressed
+    // face transform, so the face eases back up over --cbtn-press-dur during
+    // the glide — the same release a normal click shows. History: removing
+    // is-dragging bare killed the accent mid-glide (the old flicker), so
+    // dca4b97 kept it through the whole glide — which made the swap-to-source
+    // an instant pressed→unpressed SNAP. The bridge class is the missing third
+    // state: accent yes, press no. (Its CSS keeps the transform transition
+    // alive and only strips the colour transitions — see styles.css.)
+    clone.classList.remove('is-dragging');
+    clone.classList.add('is-drop-accent');
     // Snap the grown card back to content height over the same glide, so the card
     // shrink and the clone settle finish together (transition to the captured
     // resting px, not '' — an auto/none target won't animate).
