@@ -8,7 +8,8 @@
     "build": "vite build",
     "build:watch": "vite build --watch",
     "preview": "vite preview",
-    "check-themes": "node scripts/check-theme-contrast.mjs"
+    "check-themes": "node scripts/check-theme-contrast.mjs",
+    "check-drag": "node scripts/check-drag-math.mjs"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",

@@ -17,8 +17,12 @@ loadAll().then(() => {
   // DEV-only layout verifiers — tree-shaken from prod via the guard + dynamic
   // import. candyCenterAudit: optical centering of candy buttons vs text.
   // spacingAudit: vertical rhythm — row heights + shadow bands + gaps, no skips.
+  // dragAudit: drives one synthetic reorder on a DraggableSidebarList and
+  // measures the drop invariants (settle position, accent bridge, press-
+  // release ease) numerically.
   if (import.meta.env.DEV) {
     import('./util/candyCenterAudit.js').then((m) => m.startCandyCenterAudit());
     import('./util/spacingAudit.js').then((m) => m.startSpacingAudit());
+    import('./util/dragAudit.js').then((m) => m.startDragAudit());
   }
 });

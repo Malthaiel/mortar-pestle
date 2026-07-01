@@ -1,6 +1,29 @@
 import { useRef, useState, useCallback, useEffect, useLayoutEffect } from 'react';
 import { flushSync } from 'react-dom';
 import { playReorderPickup, playReorderDrop } from '../hooks/useTactileSound.js';
+import { computeSlotY } from './dragMath.js';
+
+// ── Drop-sequence invariants (the drop-flicker saga, 2026-07-01) ─────────────
+// The drop is a multi-frame pipeline: clone glides to slot (glideMs) → commit
+// (reorder + clone removal in one flushSync) → bridge (until the next real
+// pointermove). Four invariants, each broken once before being written down:
+//  1. ACCENT CONTINUITY — an accent-painted element sits under the cursor on
+//     every painted frame: the clone (.is-dragging, → .is-drop-accent at glide
+//     start) through the glide, then the bridged real tile (.is-drop-accent
+//     via accentTileUnderCursor) after commit. :hover can't cover the swap (no
+//     recompute without a real pointer move) and colour transitions must not
+//     fade the restore in (the bridge CSS transitions transform ONLY). [997f927]
+//  2. PRESS RELEASES ON THE CLONE — the real tile is never pressed, so the
+//     clone eases its face up during the glide (the is-dragging →
+//     is-drop-accent swap drops the pressed-face rule). A pressed clone
+//     swapped for an unpressed tile is an instant snap. [251a0cf]
+//  3. CLONE LANDS PIXEL-EXACT — computeSlotY (dragMath.js) must equal the
+//     landed tile's real top INCLUDING the container's flex gap. Exhaustive
+//     check: `npm run check-drag`; live: `window.dragAudit()`. [97612e8]
+//  4. GLIDE TARGETS THE COMMITTED SLOT — dropIdx is pinned to `to` at release;
+//     the mid-drag dropIdx is 60ms-throttled and can be one update stale. [97612e8]
+// Touching this sequence or the candy tile CSS → run window.dragAudit() in the
+// affected webview and paste its numbers (Close the Loop § browser-verify).
 
 const HOLD_MS = 180;
 // MOVE_THRESHOLD: cursor displacement (px) during the 180ms hold that aborts
@@ -20,39 +43,6 @@ const CURSOR_OFFSET = 4;
 // item keeps a midpoint trigger so dropping at the top of the rail stays
 // reachable inside its bounds.
 const SHIFT_THRESHOLD_FRACTION = 0.2;
-
-// Compute the Y coordinate where the dragged clone should sit (slot-snap mode),
-// given current dropIdx and the layout captured at lift time. `positions[i]` =
-// original top of items[i]; `heights[i]` = its height. The gap-stays-at-source
-// lift cancels source's collapse exactly via marginTop on the next item, so
-// positions[i] for i != sourceIdx continues to match the rendered top during
-// steady state — the slot math works off cached coordinates without re-reading.
-// `gap` = the container's flex gap on the active axis. Removing the source from
-// ABOVE a target position removes its height PLUS one gap, and re-appending
-// after the last item adds one gap — height-only math left every gap-spaced
-// down-move one gap too low (the clone settled eating the gap to the tile
-// below, then snapped up at the swap; invisible to the margin-spaced
-// consumers, whose flexGap is 0).
-function computeSlotY(dropIdx, sourceIdx, positions, heights, gap = 0) {
-  const N = positions.length;
-  if (N === 0) return 0;
-  if (dropIdx >= N) {
-    // Drop after compact-last.
-    if (sourceIdx === N - 1) {
-      // No-op drop of the last item past itself: it stays at its own top,
-      // which sits one gap below the previous item's bottom.
-      if (N < 2) return positions[0] ?? 0;
-      return positions[N - 2] + heights[N - 2] + gap;
-    }
-    return positions[N - 1] + heights[N - 1] - heights[sourceIdx];
-  }
-  if (dropIdx <= sourceIdx) return positions[dropIdx];
-  // Down-move: everything in (sourceIdx, dropIdx) shifts up by the source's
-  // occupied space = height + one gap; the moved tile takes the old top of
-  // the tile at dropIdx minus exactly that. Also makes the dropIdx ===
-  // sourceIdx + 1 no-op exact (returns positions[sourceIdx]).
-  return positions[dropIdx] - heights[sourceIdx] - gap;
-}
 
 function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, slotY, isHorizontal = false, releasing = false, glideMs = 160, containerRef, grow = false }) {
   const hostRef = useRef(null);
@@ -722,7 +712,7 @@ export default function DraggableSidebarList({
           grow={growToContain}
         />
       )}
-      <div ref={containerRef} data-dragging={dragState?.dragging ? 'true' : undefined} className={className} style={{ display: 'flex', flexDirection: flexDir, ...style }}>
+      <div ref={containerRef} data-drag-list="" data-dragging={dragState?.dragging ? 'true' : undefined} className={className} style={{ display: 'flex', flexDirection: flexDir, ...style }}>
         {items.map((item, i) => {
           const isDragged = dragState?.idx === i;
           const isDrop    = dragState?.dragging && dragState?.dropIdx === i && !isDragged;
