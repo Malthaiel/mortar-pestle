@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { IconSearch } from '../../components/icons.jsx';
-import { useReleases, latestPublishedVersion, bumpVersion, inferBumpLevel } from '../../hooks/useReleases.js';
+import { useReleases, latestPublishedVersion, bumpVersion, inferBumpLevel, maxSemver } from '../../hooks/useReleases.js';
 import {
   useReleaseQueue, mergeQueue, parseReleaseQueue,
   composeReleaseBlock, composeFullReleases, composeQueueRetaining,
@@ -19,13 +19,13 @@ const BUMP_LEVELS = ['patch', 'minor', 'major'];
 // Two-tier 0.x scheme: patch is the default ship, minor is a deliberate
 // milestone judgment, major (1.0.0) is reserved for public readiness.
 const BUMP_LABELS = { patch: 'Patch', minor: 'Minor (milestone)', major: 'Major (1.0, reserved)' };
-const CANON = ['New', 'Changed', 'Removed', 'Performance', 'Fixed', 'Migration', 'Known Issues', 'Process'];
+const CANON = ['New', 'Changed', 'Removed', 'Performance', 'Fixed', 'Migration', 'Process'];
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
 // Section heading + bullet-dot color by type (accent for the neutral ones).
 const sectionColor = (name, accent) => ({
   New: accent, Changed: accent, Removed: 'var(--text)', Performance: '#8b5cf6',
-  Fixed: '#2a9d4a', Migration: '#c78a1a', 'Known Issues': '#c78a1a',
+  Fixed: '#2a9d4a', Migration: '#c78a1a',
   Process: 'var(--text-faint)',
 }[name] || accent);
 
@@ -192,18 +192,30 @@ export default function DocsReleasesTab({ accent }) {
   };
 
   // Bump base + carried Tag come from the newest published release.
-  const latestVersion = (releases[0]?.version || '').match(/(\d+\.\d+\.\d+)/)?.[1] || '0.0.0';
+  // Ground the bump base in the code version (PACKAGE_VERSION) so a release
+  // never ships below the current app — Releases.md can lag the code (0.7.0 docs
+  // vs 0.8.2 code); max() picks the code. See useReleases.js::maxSemver.
+  const latestVersion = maxSemver(
+    (releases[0]?.version || '').match(/(\d+\.\d+\.\d+)/)?.[1] || '0.0.0',
+    import.meta.env.PACKAGE_VERSION,
+  );
   const tag = releases[0]?.tag || 'Early Stage';
 
   return (
     <div style={pageStyle}>
-      <ReleaseQueuePanel
-        accent={accentColor}
-        queue={queue}
-        latestVersion={latestVersion}
-        tag={tag}
-        onShipped={() => { reloadReleases(); queue.reload(); }}
-      />
+      {/* Release Queue panel + Ship Release button — creator-only. Hidden from
+          public/end-user builds; the git tie-in (release.rs) needs the source
+          repo + credentials that only the dev window has. VITE_DEV_TOOLS=1
+          re-enables it in a prod build for debugging. */}
+      {(import.meta.env.DEV || import.meta.env.VITE_DEV_TOOLS === '1') && (
+        <ReleaseQueuePanel
+          accent={accentColor}
+          queue={queue}
+          latestVersion={latestVersion}
+          tag={tag}
+          onShipped={() => { reloadReleases(); queue.reload(); }}
+        />
+      )}
 
       {loading ? (
         <div style={{ color: 'var(--text-faint)', fontSize: 13 }}>Loading release history…</div>
@@ -607,7 +619,7 @@ function ShipReleaseModal({ accent, queue, latestVersion, tag, onClose, onShippe
         .map(e => ({ ...e, area: areaByKey[keyOf(e)] ?? e.area ?? 'General' }));
       if (!sel.length) { setError('Nothing selected to ship.'); setBusy(false); return; }
       const m2 = mergeQueue(sel);
-      const base = latestPublishedVersion(rel.content) || latestVersion;
+      const base = maxSemver(latestPublishedVersion(rel.content), import.meta.env.PACKAGE_VERSION);
       const v2 = bumpVersion(base, effectiveLevel);
       const d2 = new Date().toISOString().slice(0, 10);
       const b2 = composeReleaseBlock({

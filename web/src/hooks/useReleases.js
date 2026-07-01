@@ -4,7 +4,7 @@ import { api } from '../api.js';
 const RELEASES_PATH = 'Mortar & Pestle/Releases.md';
 
 // Canonical Releases.md section order (mirrors useReleaseQueue.js). Drives parse + render.
-const CANONICAL_SECTIONS = ['New', 'Changed', 'Removed', 'Performance', 'Fixed', 'Migration', 'Known Issues', 'Process'];
+const CANONICAL_SECTIONS = ['New', 'Changed', 'Removed', 'Performance', 'Fixed', 'Migration', 'Process'];
 
 export function parseReleases(raw) {
   if (!raw) return [];
@@ -161,6 +161,20 @@ export function bumpVersion(base, level) {
   if (level === 'major') return `${maj + 1}.0.0`;
   if (level === 'minor') return `${maj}.${min + 1}.0`;
   return `${maj}.${min}.${pat + 1}`; // patch
+}
+
+// The higher of two "X.Y.Z" versions, compared per-segment. Unparseable sides
+// fall back to 0.0.0. Grounds the Ship Release base in the code version so a
+// release never ships *below* the current app version (Releases.md can lag the
+// code — e.g. 0.7.0 docs vs 0.8.2 code — max() picks the code).
+export function maxSemver(a, b) {
+  const pa = String(a || '0.0.0').split('.').map(n => parseInt(n, 10) || 0);
+  const pb = String(b || '0.0.0').split('.').map(n => parseInt(n, 10) || 0);
+  const fmt = (p) => `${p[0] || 0}.${p[1] || 0}.${p[2] || 0}`;
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0) ? fmt(pa) : fmt(pb);
+  }
+  return fmt(pa);
 }
 
 // Patch is the default for every ship under the two-tier 0.x scheme; minor is a

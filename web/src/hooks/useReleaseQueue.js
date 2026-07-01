@@ -4,7 +4,7 @@ import { api } from '../api.js';
 const QUEUE_PATH = 'Mortar & Pestle/Release Queue.md';
 
 // Canonical Releases.md section order (mirrors useReleases.js). Drives parse + compose.
-const CANONICAL_SECTIONS = ['New', 'Changed', 'Removed', 'Performance', 'Fixed', 'Migration', 'Known Issues', 'Process'];
+const CANONICAL_SECTIONS = ['New', 'Changed', 'Removed', 'Performance', 'Fixed', 'Migration', 'Process'];
 // Allowed Surface tokens in schema order; unknown tokens sort last.
 const SURFACE_ORDER = ['host', 'tauri', 'vault', 'sdk', 'web', 'infra', 'docs'];
 // Suggested Area palette (Releases.md schema). Free-form names are allowed;
