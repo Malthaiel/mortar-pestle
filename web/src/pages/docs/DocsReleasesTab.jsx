@@ -54,9 +54,11 @@ function buildSearchIndex(releases) {
       ].join(' ').toLowerCase(),
     });
     for (const area of (r.areas || [])) {
-      for (const section of CANON) {
-        const items = area.sections?.[section];
+      // Flat bullets (new plain format) carry no section label.
+      const buckets = [['_flat', area.flat], ...CANON.map(s => [s, area.sections?.[s]])];
+      for (const [section, items] of buckets) {
         if (!items?.length) continue;
+        const label = section === '_flat' ? '' : section;
         items.forEach((text, i) => {
           const name = plainText((text.match(/^\*\*(.+?)\*\*/) || [])[1] || text.split(/\s+/).slice(0, 6).join(' '));
           rows.push({
@@ -66,9 +68,9 @@ function buildSearchIndex(releases) {
             version: r.version,
             versionLabel,
             area: area.name,
-            section,
+            section: label,
             name,
-            hay: [name, plainText(text), area.name, section, r.version, ...(r.was ? [r.was] : [])]
+            hay: [name, plainText(text), area.name, label, r.version, ...(r.was ? [r.was] : [])]
               .join('').toLowerCase(),
           });
         });
@@ -1013,6 +1015,15 @@ export function AreaGroup({ area, version, accent, headerLink = true }) {
         display: 'flex', flexDirection: 'column', gap: 14,
         paddingLeft: area.synthetic ? 0 : 10,
       }}>
+        {/* Flat bullets: new plain format (### Area + bullets, no #### section) — rendered label-less. */}
+        {area.flat?.length > 0 && (
+          <Section
+            title={null}
+            items={area.flat}
+            color={accent}
+            bulletIdPrefix={`${version}|${area.name}|_flat`}
+          />
+        )}
         {names.map(n => (
           <Section
             key={n}
@@ -1030,14 +1041,16 @@ export function AreaGroup({ area, version, accent, headerLink = true }) {
 function Section({ title, items, color, bulletIdPrefix }) {
   return (
     <div>
-      <div style={{
-        fontSize: 9, fontFamily: 'var(--font-mono)',
-        letterSpacing: '0.08em', textTransform: 'uppercase',
-        color, fontWeight: 600,
-        marginBottom: 8,
-      }}>
-        {title}
-      </div>
+      {title && (
+        <div style={{
+          fontSize: 9, fontFamily: 'var(--font-mono)',
+          letterSpacing: '0.08em', textTransform: 'uppercase',
+          color, fontWeight: 600,
+          marginBottom: 8,
+        }}>
+          {title}
+        </div>
+      )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
         {items.map((item, i) => (
           <div
@@ -1185,7 +1198,7 @@ function ReleasesResultsView({ results, selected, accent, onHover, onPick }) {
                   fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.04em',
                   color: 'var(--text-faint)', flexShrink: 0,
                 }}>
-                  {row.versionLabel} · {row.area} · {row.section}
+                  {row.versionLabel} · {row.area}{row.section ? ` · ${row.section}` : ''}
                 </span>
               </>
             )}

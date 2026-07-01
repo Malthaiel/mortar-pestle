@@ -39,7 +39,7 @@ function parseReleaseChunk(chunk) {
 
   const getArea = (name, synthetic = false) => {
     let area = areas.find(a => a.name === name);
-    if (!area) { area = { name, synthetic, sections: {} }; areas.push(area); }
+    if (!area) { area = { name, synthetic, sections: {}, flat: [] }; areas.push(area); }
     return area;
   };
   const openSection = (area, name) => {
@@ -100,18 +100,23 @@ function parseReleaseChunk(chunk) {
       continue;
     }
 
-    if (currentArea && currentSection && trimmed.startsWith('- ')) {
-      currentArea.sections[currentSection].push(trimmed.slice(2).trim());
+    if (trimmed.startsWith('- ')) {
+      const text = trimmed.slice(2).trim();
+      if (currentArea && currentSection) currentArea.sections[currentSection].push(text);
+      else if (currentArea) currentArea.flat.push(text); // flat bullet under ### Area, no #### section
     } else if (currentArea && currentSection) {
-      // Continuation of a bullet (indented or wrapped)
+      // Continuation of a sectioned bullet (indented or wrapped)
       const arr = currentArea.sections[currentSection];
       if (arr.length) arr[arr.length - 1] += ' ' + trimmed;
+    } else if (currentArea && currentArea.flat.length) {
+      // Continuation of a flat bullet
+      currentArea.flat[currentArea.flat.length - 1] += ' ' + trimmed;
     }
-    // Pre-section prose is intentionally dropped — summaries live in **Summary:**.
+    // Pre-area prose is intentionally dropped — summaries live in **Summary:**.
   }
 
   // Drop areas that collected no bullets (e.g. a stray header with nothing under it).
-  const filledAreas = areas.filter(a => CANONICAL_SECTIONS.some(n => a.sections[n]?.length));
+  const filledAreas = areas.filter(a => a.flat.length || CANONICAL_SECTIONS.some(n => a.sections[n]?.length));
 
   // Aggregate canonical map across areas, in area order — keeps WhatsNewOverlay,
   // useLastSeenVersion and section-count consumers working unchanged.
@@ -124,6 +129,13 @@ function parseReleaseChunk(chunk) {
     if (merged.length) sections[name] = merged;
   }
 
+  // Flat bullets (new plain "what's new" format: `### Area` + bullets, no `#### Section`),
+  // in area order. Feeds `features` (WhatsNewOverlay) when there are no #### New items.
+  const flat = [];
+  for (const area of filledAreas) {
+    if (area.flat?.length) flat.push(...area.flat);
+  }
+
   return {
     version,                        // bare semver — matches PACKAGE_VERSION
     versionLabel,                   // display string with the v prefix
@@ -133,10 +145,10 @@ function parseReleaseChunk(chunk) {
     was,
     wasLabel,
     summary,
-    areas: filledAreas,             // [{ name, synthetic, sections }]
+    areas: filledAreas,             // [{ name, synthetic, sections, flat }]
     sections,                       // aggregate { New: [...], ... } across areas
     narrative: '',                  // legacy alias; always empty
-    features: sections.New || [],   // legacy aliases (WhatsNewOverlay, useLastSeenVersion)
+    features: (sections.New?.length ? sections.New : flat), // WhatsNewOverlay/useLastSeenVersion; flat = new plain format
     fixes: sections.Fixed || [],
     issues: sections['Known Issues'] || [],
   };
