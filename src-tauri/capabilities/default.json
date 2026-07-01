@@ -267,6 +267,7 @@
     "allow-capture-screenshot",
     "allow-capture-clip-delete",
     "allow-capture-list-clips",
+    "allow-capture-list-screenshots",
     "allow-capture-rebind-hotkeys",
     "allow-capture-open-kde-settings",
     "allow-set-capture-config",

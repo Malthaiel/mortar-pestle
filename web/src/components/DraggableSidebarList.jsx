@@ -41,7 +41,7 @@ function computeSlotY(dropIdx, sourceIdx, positions, heights) {
   return positions[dropIdx] - heights[sourceIdx];
 }
 
-function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, slotY, isHorizontal = false, releasing = false, glideMs = 160 }) {
+function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, slotY, isHorizontal = false, releasing = false, glideMs = 160, containerRef }) {
   const hostRef = useRef(null);
   const cloneRef = useRef(null);
   const modeRef = useRef('slot-snap');
@@ -65,8 +65,9 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
     //   'cursor'    — clone anchors at the rail origin; cursor delta from the
     //                 lift point translates it on the active axis (no jump
     //                 to cursor center on pickup)
-    //   'slot-snap' — clone snaps to slot with a 160ms CSS transition (default)
-    const mode = document.body?.getAttribute('data-anim-drag-tile-follow') || 'slot-snap';
+    //   'slot-snap' — clone snaps to slot with a 160ms CSS transition
+    // Absent attr defaults to 'cursor' (matches ANIMATION_KEY_CONFIG in useSettings).
+    const mode = document.body?.getAttribute('data-anim-drag-tile-follow') || 'cursor';
     modeRef.current = mode;
 
     const clone = sourceElement.cloneNode(true);
@@ -146,13 +147,32 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
       const ic = { x: cursorRef.current.x, y: cursorRef.current.y };
       const smoothnessBucket = document.body?.getAttribute('data-anim-drag-tile-smoothness') || 'medium';
       const CHASE_RATE = ({ none: 1.0, light: 0.35, medium: 0.18, heavy: 0.08 })[smoothnessBucket] ?? 0.18;
+      // Rubber-band bounds: keep the tile inside its list container. The container
+      // doesn't move during a pointer drag, so measure it once. Past an edge only R
+      // of the overage passes to the target, so the tile resists leaving the panel
+      // and the release glide springs it back to a valid slot.
+      // ponytail: if a tile is taller than its container, min > max and the clamp
+      // just pins it to the top/left edge — fine for these short lists.
+      const cb = containerRef?.current?.getBoundingClientRect();
+      const R = 0.18;
       let curX = originRect.left;
       let curY = originRect.top;
       const loop = () => {
         if (cancelled || releaseRef.current) return;
         const c = cursorRef.current;
-        const targetX = isHorizontal ? originRect.left + (c.x - ic.x) : originRect.left;
-        const targetY = isHorizontal ? originRect.top : originRect.top + (c.y - ic.y);
+        let targetX = isHorizontal ? originRect.left + (c.x - ic.x) : originRect.left;
+        let targetY = isHorizontal ? originRect.top : originRect.top + (c.y - ic.y);
+        if (cb) {
+          if (isHorizontal) {
+            const min = cb.left, max = cb.right - originRect.width;
+            if (targetX < min) targetX = min - (min - targetX) * R;
+            else if (targetX > max) targetX = max + (targetX - max) * R;
+          } else {
+            const min = cb.top, max = cb.bottom - originRect.height;
+            if (targetY < min) targetY = min - (min - targetY) * R;
+            else if (targetY > max) targetY = max + (targetY - max) * R;
+          }
+        }
         curX += (targetX - curX) * CHASE_RATE;
         curY += (targetY - curY) * CHASE_RATE;
         clone.style.transform = `translate3d(${curX}px, ${curY}px, 0)`;
@@ -528,9 +548,10 @@ export default function DraggableSidebarList({
           isHorizontal={isHorizontal}
           releasing={!!dragState.releasing}
           glideMs={dragState.glideMs ?? 160}
+          containerRef={containerRef}
         />
       )}
-      <div ref={containerRef} className={className} style={{ display: 'flex', flexDirection: flexDir, ...style }}>
+      <div ref={containerRef} data-dragging={dragState?.dragging ? 'true' : undefined} className={className} style={{ display: 'flex', flexDirection: flexDir, ...style }}>
         {items.map((item, i) => {
           const isDragged = dragState?.idx === i;
           const isDrop    = dragState?.dragging && dragState?.dropIdx === i && !isDragged;

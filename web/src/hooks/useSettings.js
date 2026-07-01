@@ -39,7 +39,10 @@ export const ANIMATION_KEYS = [
 // and round-trip through the body data-attr as their literal string value.
 export const ANIMATION_KEY_CONFIG = {
   'drag-tile-follow': {
-    default: 'slot-snap',
+    // 'cursor' (the picked-up tile follows the pointer) is the app default — the
+    // clearest "I grabbed this" affordance. 'slot-snap' parks the clone at origin
+    // and only hops between slots, which reads as "nothing lifts" in short lists.
+    default: 'cursor',
     values: ['off', 'cursor', 'slot-snap'],
   },
   // Chase-rate bucket for the 'cursor' drag-tile-follow mode. The picked-up

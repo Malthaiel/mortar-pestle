@@ -9,8 +9,8 @@
 // panels land in later Overlay sub-plans.
 import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { paintAccent } from '@host/themes/applyTheme.js';
-import { THEME_BY_ID } from '@host/themes/registry.js';
+import { listen } from '@tauri-apps/api/event';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import SttProvider from '@modules/studio/overlay/SttProvider.jsx';
 import OverlayStudioPanel from './OverlayStudioPanel.jsx';
 
@@ -19,15 +19,6 @@ import OverlayStudioPanel from './OverlayStudioPanel.jsx';
 // (the clip→transcribe module-bus handoff, which the host doesn't have).
 // ponytail: events.on stubbed — no clip→transcribe handoff in the overlay host.
 const hostApi = { invoke, events: { on: () => () => {} } };
-
-// Drag-anim defaults mirrored onto <body> for the overlay host (which never mounts
-// useSettings, the writer of these attrs). Keep in sync with ANIMATION_KEY_CONFIG
-// in useSettings.js. Without them DraggableSidebarList falls back to 'slot-snap'.
-const DRAG_ANIM_DEFAULTS = {
-  'drag-tile-follow': 'slot-snap',
-  'drag-tile-smoothness': 'medium',
-  'drag-drop-glide': '75',
-};
 
 // Make the host webview see-through except its panels (the window is
 // transparent:true; without a transparent html/body the webview paints opaque).
@@ -43,30 +34,31 @@ function useTransparentRoot() {
 
 export default function OverlayHostView() {
   useTransparentRoot();
-  // The overlay renders before the provider tree, so the theme system never
-  // paints --accent here → candy hover (var(--accent)) would read transparent.
-  // Paint the user's persisted accent ourselves (same resolution as useSettings).
+  // The floating drag clone is portaled to <body>, OUTSIDE the panel's
+  // .video-cinema token scope. Put .video-cinema on <body> so the clone inherits
+  // the same dark tokens the panel uses (it sets CSS vars only — no layout rules).
+  // Accent, fonts, and every data-anim-* attr are painted by useSettings, which
+  // runs inside the SttProvider mounted below (child effects fire before this
+  // parent effect). A prior version re-derived them here by hand and CLOBBERED the
+  // themed accent with a stale default read from a stripped localStorage key —
+  // deleted; the provider is now the single source of truth for the overlay too.
   useEffect(() => {
-    let accent = '#7c2d2d'; // monastic default (DESIGN.md canonical red)
-    let animations = null;
-    try {
-      const fs = JSON.parse(localStorage.getItem('focus_settings') || '{}');
-      accent = fs.accentColor || THEME_BY_ID[fs.themePreset]?.defaultAccent || accent;
-      animations = fs.animations || null;
-    } catch { /* keep the defaults */ }
-    paintAccent(document.documentElement, accent);
-    // The DraggableSidebarList drag clone is portaled to <body>, OUTSIDE the panel's
-    // .video-cinema token scope — and the overlay renders before the theme tree, so
-    // :root carries only the light base tokens. Put .video-cinema on <body> so the
-    // floating clone inherits the same dark tokens the panel uses (it sets vars only,
-    // no layout/descendant rules).
     document.body.classList.add('video-cinema');
-    // Mirror the user's drag-anim settings onto <body> so tile pickup behaves as it
-    // does in-app (useSettings writes these from the provider tree the host never
-    // mounts → they'd otherwise fall back to 'slot-snap' regardless of the setting).
-    for (const k of ['drag-tile-follow', 'drag-tile-smoothness', 'drag-drop-glide']) {
-      document.body.setAttribute(`data-anim-${k}`, String(animations?.[k] ?? DRAG_ANIM_DEFAULTS[k]));
-    }
+    return () => document.body.classList.remove('video-cinema');
+  }, []);
+
+  // Fade the overlay in on show / out on hide. The lib.rs bridge emits the real
+  // resulting visibility (a bool) as `overlay-host-visible`; on mount we also read
+  // the window's actual visibility, which covers the dev reload-on-show path (the
+  // DOM remounts already-visible, after the emit has fired). Opacity 0→1 mirrors
+  // Windows' own DWM window-hide fade, which had no matching entry animation.
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    getCurrentWindow().isVisible().then((v) => setVisible(!!v)).catch(() => {});
+    const un = listen('overlay-host-visible', (e) => {
+      if (typeof e?.payload === 'boolean') setVisible(e.payload);
+    });
+    return () => { un.then((f) => f()).catch(() => {}); };
   }, []);
   // Host-local toast — a fixed bottom-right candy chip. Lives here (not inside a
   // panel) because a panel is CSS-transformed, which would re-anchor position:fixed
@@ -81,7 +73,7 @@ export default function OverlayHostView() {
   useEffect(() => () => clearTimeout(toastTimer.current), []);
 
   return (
-    <div style={{ position: 'fixed', inset: 0, overflow: 'hidden' }}>
+    <div style={{ position: 'fixed', inset: 0, overflow: 'hidden', opacity: visible ? 1 : 0, transition: 'opacity 180ms ease' }}>
       <SttProvider api={hostApi}>
         <OverlayStudioPanel showToast={showToast} />
       </SttProvider>

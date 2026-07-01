@@ -72,6 +72,16 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
      DM Sans offline instead of the system fallback. */
   --font-sans:    var(--font-body);
 
+  /* Section/panel title treatment — the shared default for headers/titles.
+     Consumed by .section-title (and the overlay titles). Larger, bold, and
+     high-contrast so headings actually read as headings. --title-color tracks
+     --text so it's near-white in the dark overlay yet theme-correct app-wide
+     (a literal #fff would vanish on light surfaces). */
+  --title-size:      14px;
+  --title-size-sub:  12.5px;
+  --title-weight:    700;
+  --title-color:     var(--text);
+
   --density:      1;
   --space-scale:  1;
   --radius-sm:    4px;
@@ -226,6 +236,20 @@ body {
 /* Headings track --font-heading (Settings → Appearance → Fonts → Headings).
    No base h1–h6 font-family rule existed before; headings inherited body. */
 h1, h2, h3, h4, h5, h6 { font-family: var(--font-heading); }
+
+/* Shared section/panel title — the app-wide default treatment for headers and
+   titles (larger, bold, high-contrast heading font). Add .section-title to any
+   title element; add .section-title--sub for the smaller sub-title size. New
+   titles adopt this; existing ad-hoc titles can migrate to it over time. */
+.section-title {
+  font-family: var(--font-heading);
+  font-size: var(--title-size);
+  font-weight: var(--title-weight);
+  color: var(--title-color);
+  letter-spacing: .02em;
+  line-height: 1.2;
+}
+.section-title.section-title--sub { font-size: var(--title-size-sub); }
 
 /* Scrollbar — button-style solid fill.
    A constant thin flat thumb (no gloss, gradient, or grow): neutral grey at
@@ -2013,6 +2037,18 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
    band-desync bug on candy-btns nested inside another candy-btn's face. */
 .candy-face :where(div, span):not(.candy-face) { transition: color 150ms cubic-bezier(0, 0, 0.58, 1); }
 .candy-btn:is(:hover, :active, .is-active, .is-selected, .is-primary, .is-danger) .candy-face :where(div, span) { color: #fff; }
+
+/* While a DraggableSidebarList reorder is in flight ([data-dragging] on the list
+   container), kill pointer events on every sibling control so no other tile lights
+   its accent-hover wash mid-drag (hovering a tile's nested button bubbles :hover to
+   the tile too, so suppressing the tiles alone isn't enough). !important beats the
+   resting `pointer-events: auto` re-enable on tile children. Drop targeting is
+   coord-based (calcDropIndex) so nothing breaks, and the picked-up clone is
+   portaled to <body> outside the container — it keeps its .is-dragging accent. The
+   opening slot-gap stays the drop-target indicator. */
+[data-dragging] :where(.candy-btn, button, a, input, textarea, [data-no-drag]):not(.is-dragging) {
+  pointer-events: none !important;
+}
 
 /* Animation gating — mirror the .candy-btn-legacy gates for the two-layer system.
    Spring press off → face doesn't slide; Button depth off → frame-only (no band /
@@ -4725,11 +4761,16 @@ button.cal-customdays__step:hover {
    One draggable panel; its three sections (Voice / Video / Screenshots) are
    content-height candy tiles reordered by DraggableSidebarList. Promoted from
    the "Overlay Studio Panel" prototype. */
-.ov-studio-panel { width: 400px; display: flex; flex-direction: column; gap: 8px; padding: 12px; }
+/* padding-bottom matches the tile list's inter-tile gap (6px) so the gap below
+   the last tile equals the gaps between tiles (the 10.5px shadow-band reserve is
+   on every tile incl. the last, so it cancels out of the comparison). */
+.ov-studio-panel { width: 400px; display: flex; flex-direction: column; gap: 8px; padding: 12px 12px 6px; }
 .ov-studio-head { justify-content: space-between; cursor: move; padding: 2px 4px 4px; }
-.ov-studio-title { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-2); }
+/* Panel + section titles use the shared .section-title standard (applied in
+   OverlayStudioPanel.jsx). These rules keep only the overlay-specific bits — the
+   uppercase panel-title look; type/size/weight/colour come from .section-title. */
+.ov-studio-title { text-transform: uppercase; letter-spacing: .06em; }
 .ov-studio-sec-head { justify-content: space-between; }
-.ov-studio-sec-title { font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; color: var(--text-muted); }
 
 /* Content-height candy tile (rides data-shape="tile"). Mirrors the .music-tile
    machinery — pointer-transparent face so the immovable base is the drag+press
@@ -4751,9 +4792,11 @@ button.cal-customdays__step:hover {
   gap: 10px;
   text-align: left;
 }
-/* Container tile — no accent flip on hover (accent is for lit buttons; a big
-   readable tile would lose legibility under a full red wash). */
-.candy-btn[data-shape="tile"].ov-studio-tile:is(:hover, :active) > .candy-face { background: var(--surface-2); }
+/* Hover floods the whole tile face with accent — matches the .music-tile sidebar
+   widget (styles.css ~1238). Must restate accent explicitly: the resting rule
+   above out-ranks the base .candy-btn:hover fill by specificity, so without this
+   the face would keep surface-2 on hover (only the frame/border would go red). */
+.candy-btn[data-shape="tile"].ov-studio-tile:is(:hover, :active) > .candy-face { background: var(--accent); color: #fff; }
 .candy-btn[data-shape="tile"].ov-studio-tile :where(.candy-btn, button, a, input, textarea, [data-no-drag]) { pointer-events: auto; }
 .candy-btn[data-shape="tile"].ov-studio-tile:active > .candy-face { transform: none; }
 .candy-btn[data-shape="tile"].ov-studio-tile:active:not(:has(button:active, textarea:active, [data-no-drag]:active)) > .candy-face {

@@ -405,6 +405,70 @@ fn is_video_file(path: &std::path::Path) -> bool {
     )
 }
 
+/// `capture_list_screenshots` — metadata-only scan of `captures_dir()` for PNG
+/// screenshots (the portal grab saves PNGs; clip posters are `.jpg`, so a PNG-only
+/// predicate never picks those up), newest-first. Mirrors `capture_list_clips`:
+/// recurses one level into per-game subfolders and never throws on a missing dir
+/// (returns empty). Reuses [`ClipMeta`] with `poster` set to the image itself, so
+/// the UI thumbnail renders the shot directly. NOTE: Game Capture is stubbed on
+/// Windows v1, so this is empty there until the capture engine lands.
+#[tauri::command]
+pub fn capture_list_screenshots() -> Result<Vec<ClipMeta>, VaultError> {
+    let root = PathBuf::from(captures_dir());
+    let mut shots = Vec::new();
+    collect_screenshots(&root, &mut shots);
+    if let Ok(entries) = std::fs::read_dir(&root) {
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.is_dir() {
+                collect_screenshots(&p, &mut shots);
+            }
+        }
+    }
+    shots.sort_by(|a, b| b.mtime.cmp(&a.mtime));
+    Ok(shots)
+}
+
+/// Push every PNG directly under `dir` into `out` as [`ClipMeta`] (poster = the
+/// image itself so the thumbnail shows the shot). Missing dir skipped silently.
+fn collect_screenshots(dir: &std::path::Path, out: &mut Vec<ClipMeta>) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let is_png = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.eq_ignore_ascii_case("png"))
+            .unwrap_or(false);
+        if !is_png {
+            continue;
+        }
+        let Ok(meta) = entry.metadata() else { continue };
+        let size_bytes = meta.len();
+        let mtime = meta
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+        let name = path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or_default()
+            .to_string();
+        let path_str = path.to_string_lossy().into_owned();
+        out.push(ClipMeta {
+            poster: Some(path_str.clone()),
+            path: path_str,
+            name,
+            size_bytes,
+            mtime,
+        });
+    }
+}
+
 /// Derive the `capture-saved` Tauri payload from the engine's `saved` event
 /// `data` (the bridge in `lib.rs` calls this). The wire payload omits
 /// `name`/`sizeBytes`/`mtime`; this enriches it with those, derived from the

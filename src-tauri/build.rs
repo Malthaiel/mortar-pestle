@@ -247,6 +247,7 @@ fn main() {
         "capture_screenshot",
         "capture_clip_delete",
         "capture_list_clips",
+        "capture_list_screenshots",
         "capture_rebind_hotkeys",
         "capture_open_kde_settings",
         "set_capture_config",

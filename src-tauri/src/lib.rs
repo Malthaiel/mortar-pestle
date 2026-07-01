@@ -466,6 +466,10 @@ pub fn run() {
                                 // to the overlay's own UI via `overlay-host-visible`.
                                 "overlay" => {
                                     let show = ev.data.get("show").and_then(|v| v.as_bool()).unwrap_or(false);
+                                    // Track the resulting visibility so the overlay UI can fade in on
+                                    // show / out on hide (open was previously instant — no entry anim,
+                                    // while close rode Windows' own DWM window-hide fade).
+                                    let mut now_visible: Option<bool> = None;
                                     if let Some(win) = bridge_app.get_webview_window("overlay-host") {
                                         // Tap-to-toggle: the daemon emits show=true on Shift+C DOWN and
                                         // show=false on release. Toggle on the DOWN edge and ignore the
@@ -474,6 +478,7 @@ pub fn run() {
                                         if show {
                                             if win.is_visible().unwrap_or(false) {
                                                 let _ = win.hide();
+                                                now_visible = Some(false);
                                             } else {
                                                 // SF9 — harden before showing: topmost, capture-excluded,
                                                 // non-activating so the panel's buttons don't pull the game
@@ -494,13 +499,27 @@ pub fn run() {
                                                 // reachable (the non-activating overlay is hard to inspect
                                                 // manually). Compiled out of release builds.
                                                 #[cfg(debug_assertions)]
-                                                win.open_devtools();
+                                                {
+                                                    win.open_devtools();
+                                                    // HMR does NOT reach the occluded overlay webview, so
+                                                    // reload on every show to guarantee it runs fresh code.
+                                                    // The single highest-leverage debuggability fix — without
+                                                    // it, overlay edits require a manual console reload and
+                                                    // stale code silently masquerades as a live bug.
+                                                    let _ = win.eval("location.reload()");
+                                                }
                                                 let _ = win.show();
+                                                now_visible = Some(true);
                                             }
                                         }
                                         // show=false (Shift+C release) is ignored — see tap-to-toggle above.
                                     }
-                                    let _ = bridge_app.emit("overlay-host-visible", &ev.data);
+                                    // Emit the REAL resulting visibility (a bool), not the raw hotkey edge,
+                                    // so the overlay root can fade in on show / out on hide. No-op if the
+                                    // release edge (show=false) toggled nothing.
+                                    if let Some(v) = now_visible {
+                                        let _ = bridge_app.emit("overlay-host-visible", v);
+                                    }
                                 }
                                 other => {
                                     log::debug!("capture bridge: ignoring engine event {other}");
@@ -798,6 +817,7 @@ pub fn run() {
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::capture_screenshot,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::capture_clip_delete,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::capture_list_clips,
+            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::capture_list_screenshots,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::capture_rebind_hotkeys,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::capture_open_kde_settings,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::set_capture_config,

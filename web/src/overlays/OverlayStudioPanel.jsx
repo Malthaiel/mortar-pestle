@@ -66,21 +66,23 @@ function Thumb({ poster, glyph }) {
 // Fullscreen candy layer INSIDE the overlay webview (not AppWindow — host has no
 // providers). Rendered as a sibling of the CSS-transformed panel so position:fixed
 // anchors to the viewport, not the panel.
-function ViewAllModal({ section, clips, history, onClose, doCopy, onDelHistory }) {
+function ViewAllModal({ section, clips, shots, history, onClose, doCopy, onDelHistory }) {
   const title = section === 'voice' ? 'Voice · transcripts' : section === 'video' ? 'Video · clips' : 'Screenshots';
   const isList = section === 'voice';
   return (
     <div className="video-cinema ov-studio-modal" onPointerDown={(e) => { if (e.target.classList.contains('ov-studio-modal')) onClose(); }}>
       <div className="candy-card ov-studio-modal-card">
         <div className="candy-center-row ov-studio-sec-head">
-          <span className="ov-studio-sec-title">{title}</span>
+          <span className="ov-studio-sec-title section-title section-title--sub">{title}</span>
           <button type="button" data-no-drag className="candy-btn" data-shape="icon" data-size="small" title="Close" aria-label="Close" onClick={onClose}><span className="candy-face"><IconX/></span></button>
         </div>
         <div className={`ov-studio-modal-body${isList ? ' is-list' : ''}`}>
           {section === 'video' && (clips.length
             ? clips.map((c) => <Thumb key={c.path} poster={c.poster} glyph="▶" />)
             : <div className="ov-studio-empty">No clips yet</div>)}
-          {section === 'shots' && <div className="ov-studio-empty">Screenshot history coming soon</div>}
+          {section === 'shots' && (shots.length
+            ? shots.map((s) => <Thumb key={s.path} poster={s.poster} glyph="🖼" />)
+            : <div className="ov-studio-empty">No screenshots yet</div>)}
           {section === 'voice' && (history.length
             ? history.map((r) => (
               <div className="candy-center-row ov-studio-trow" key={r.id}>
@@ -143,6 +145,8 @@ export default function OverlayStudioPanel({ showToast }) {
   const [recordingVid, setRecordingVid] = useState(false);
   const [clips, setClips] = useState([]);
   const refreshClips = useCallback(() => { invoke('capture_list_clips').then((cs) => { if (Array.isArray(cs)) setClips(cs); }).catch(() => {}); }, []);
+  const [shots, setShots] = useState([]);
+  const refreshShots = useCallback(() => { invoke('capture_list_screenshots').then((ss) => { if (Array.isArray(ss)) setShots(ss); }).catch(() => {}); }, []);
 
   useEffect(() => {
     let un = null;
@@ -157,12 +161,13 @@ export default function OverlayStudioPanel({ showToast }) {
 
   useEffect(() => {
     refreshClips();
+    refreshShots();
     const subs = [
       listen('capture-saved', () => { showToast('Clip saved ✓'); refreshClips(); }),
-      listen('capture-screenshot-saved', () => showToast('Screenshot saved')),
+      listen('capture-screenshot-saved', () => { showToast('Screenshot saved'); refreshShots(); }),
     ];
     return () => subs.forEach((p) => p.then((un) => un()).catch(() => {}));
-  }, [refreshClips, showToast]);
+  }, [refreshClips, refreshShots, showToast]);
 
   const clip = async () => {
     try { await invoke('capture_save_replay', { windowSecs: CLIP_SECS }); showToast(`Clipped last ${CLIP_SECS}s`); }
@@ -182,7 +187,7 @@ export default function OverlayStudioPanel({ showToast }) {
         <div className="candy-btn ov-studio-tile" data-shape="tile" aria-label="Voice section">
           <div className="candy-face">
             <div className="candy-center-row ov-studio-sec-head">
-              <span className="ov-studio-sec-title">Voice{recording && <> · <span style={{ color: 'var(--accent)' }}>● live</span> · {mmss(elapsed)}</>}</span>
+              <span className="ov-studio-sec-title section-title section-title--sub">Voice{recording && <> · <span style={{ color: 'var(--accent)' }}>● live</span> · {mmss(elapsed)}</>}</span>
               <button type="button" data-no-drag className="candy-btn" data-size="small" onClick={() => setViewAll('voice')}><span className="candy-face">View all</span></button>
             </div>
             <div className="candy-center-row" style={{ gap: 10 }}>
@@ -219,7 +224,7 @@ export default function OverlayStudioPanel({ showToast }) {
         <div className="candy-btn ov-studio-tile" data-shape="tile" aria-label="Video section">
           <div className="candy-face">
             <div className="candy-center-row ov-studio-sec-head">
-              <span className="ov-studio-sec-title">Video</span>
+              <span className="ov-studio-sec-title section-title section-title--sub">Video</span>
               <button type="button" data-no-drag className="candy-btn" data-size="small" onClick={() => setViewAll('video')}><span className="candy-face">View all</span></button>
             </div>
             <div className="candy-center-row" style={{ gap: 8 }}>
@@ -239,13 +244,15 @@ export default function OverlayStudioPanel({ showToast }) {
         <div className="candy-btn ov-studio-tile" data-shape="tile" aria-label="Screenshots section">
           <div className="candy-face">
             <div className="candy-center-row ov-studio-sec-head">
-              <span className="ov-studio-sec-title">Screenshots</span>
+              <span className="ov-studio-sec-title section-title section-title--sub">Screenshots</span>
               <button type="button" data-no-drag className="candy-btn" data-size="small" onClick={() => setViewAll('shots')}><span className="candy-face">View all</span></button>
             </div>
             <div className="candy-center-row" style={{ gap: 8 }}>
               <button type="button" data-no-drag className="candy-btn" data-size="small" onClick={screenshot}><span className="candy-face">📷 Screenshot</span></button>
             </div>
-            <div className="ov-studio-empty">Screenshot history coming soon</div>
+            {shots.length ? (
+              <div className="ov-studio-thumbs">{shots.slice(0, 3).map((s) => <Thumb key={s.path} poster={s.poster} glyph="🖼" />)}</div>
+            ) : <div className="ov-studio-empty">No screenshots yet</div>}
           </div>
         </div>
       ),
@@ -269,7 +276,7 @@ export default function OverlayStudioPanel({ showToast }) {
       <div className="video-cinema" style={{ position: 'absolute', top: 0, left: 0, background: 'transparent', padding: 0, ...dragStyle }}>
         <div className="candy-card ov-studio-panel">
           <div className="candy-center-row ov-studio-head" {...dragProps} style={{ touchAction: 'none' }}>
-            <span className="ov-studio-title">Studio</span>
+            <span className="ov-studio-title section-title">Studio</span>
             <span className="stt-grip" aria-hidden="true">⠿</span>
           </div>
           <DraggableSidebarList
@@ -282,7 +289,7 @@ export default function OverlayStudioPanel({ showToast }) {
         </div>
       </div>
       {viewAll && (
-        <ViewAllModal section={viewAll} clips={clips} history={history} onClose={() => setViewAll(null)} doCopy={doCopy} onDelHistory={delHistory} />
+        <ViewAllModal section={viewAll} clips={clips} shots={shots} history={history} onClose={() => setViewAll(null)} doCopy={doCopy} onDelHistory={delHistory} />
       )}
     </>
   );

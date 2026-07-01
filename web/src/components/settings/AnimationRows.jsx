@@ -307,7 +307,7 @@ function AnimVisual({ animKey, value, accent }) {
         animation: 'preview-pulse 1.4s ease-in-out infinite',
       }}/>;
     case 'drag-tile-follow': {
-      const mode = value ?? 'slot-snap';
+      const mode = value ?? 'cursor';
       const baseStyle = {
         width: 36, height: 18, borderRadius: 4,
         background: `color-mix(in oklch, ${a} 40%, transparent)`,
