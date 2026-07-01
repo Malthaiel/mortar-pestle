@@ -4,15 +4,15 @@
 // capture daemon's `overlay` hotkey → lib.rs bridge → window.show/hide). Renders
 // BEFORE the provider tree (App.jsx hash short-circuit on #/overlay/host), so it
 // has no Vault/Notification/Stt context — it owns its own transparent root and a
-// host-local screen-anchored toast. Capture is panel #1; the STT, Scrim, and
-// Browser panels land in later Overlay sub-plans.
+// host-local screen-anchored toast. The merged Overlay Studio panel (Voice +
+// Video + Screenshots, reorderable tiles) is the sole panel; Scrim and Browser
+// panels land in later Overlay sub-plans.
 import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { paintAccent } from '@host/themes/applyTheme.js';
 import { THEME_BY_ID } from '@host/themes/registry.js';
 import SttProvider from '@modules/studio/overlay/SttProvider.jsx';
-import CaptureHudPanel from './CaptureHudPanel.jsx';
-import SttOverlayPanel from './SttOverlayPanel.jsx';
+import OverlayStudioPanel from './OverlayStudioPanel.jsx';
 
 // Minimal module-api shim for the host-mounted SttProvider. It only needs
 // invoke (all stt_* calls are cross-window-safe Tauri invokes) and events.on
@@ -59,9 +59,8 @@ export default function OverlayHostView() {
 
   return (
     <div style={{ position: 'fixed', inset: 0, overflow: 'hidden' }}>
-      <CaptureHudPanel showToast={showToast} />
       <SttProvider api={hostApi}>
-        <SttOverlayPanel showToast={showToast} />
+        <OverlayStudioPanel showToast={showToast} />
       </SttProvider>
       {toast && (
         <div className="video-cinema overlay-toast candy-btn">

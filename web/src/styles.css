@@ -4720,3 +4720,69 @@ button.cal-customdays__step:hover {
 .capture-hud:active:has(.acts > .candy-btn:active) > .candy-face { transform: none !important; }
 /* Host-local screen-anchored toast (bottom-right), transient. */
 .overlay-toast { position: fixed; right: 16px; bottom: 16px; z-index: 10; pointer-events: none; }
+
+/* === Overlay Studio panel (Overlay epic — merged Capture HUD + STT) ===
+   One draggable panel; its three sections (Voice / Video / Screenshots) are
+   content-height candy tiles reordered by DraggableSidebarList. Promoted from
+   the "Overlay Studio Panel" prototype. */
+.ov-studio-panel { width: 340px; display: flex; flex-direction: column; gap: 8px; padding: 12px; }
+.ov-studio-head { justify-content: space-between; cursor: move; padding: 2px 4px 4px; }
+.ov-studio-title { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-2); }
+.ov-studio-sec-head { justify-content: space-between; }
+.ov-studio-sec-title { font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; color: var(--text-muted); }
+
+/* Content-height candy tile (rides data-shape="tile"). Mirrors the .music-tile
+   machinery — pointer-transparent face so the immovable base is the drag+press
+   target, interactive children re-enabled, the face slides only on a chrome press
+   — but sized to content, with no --tile-px container-query dependency (the
+   overlay host has no container context). */
+.candy-btn[data-shape="tile"].ov-studio-tile {
+  --candy-depth: 14px;
+  --cbtn-depth: var(--candy-depth);
+  width: 100%;
+  height: auto;
+  margin: 0 0 var(--cbtn-depth);   /* reserve the press-depth band below */
+}
+.candy-btn[data-shape="tile"].ov-studio-tile > .candy-face {
+  height: auto;
+  padding: 12px;
+  background: var(--surface-2);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  text-align: left;
+}
+/* Container tile — no accent flip on hover (accent is for lit buttons; a big
+   readable tile would lose legibility under a full red wash). */
+.candy-btn[data-shape="tile"].ov-studio-tile:is(:hover, :active) > .candy-face { background: var(--surface-2); }
+.candy-btn[data-shape="tile"].ov-studio-tile :where(.candy-btn, button, a, input, textarea, [data-no-drag]) { pointer-events: auto; }
+.candy-btn[data-shape="tile"].ov-studio-tile:active > .candy-face { transform: none; }
+.candy-btn[data-shape="tile"].ov-studio-tile:active:not(:has(button:active, textarea:active, [data-no-drag]:active)) > .candy-face {
+  transform: translateY(var(--cbtn-depth));
+}
+/* Dragging clone (DraggableSidebarList clones the slot + adds .is-dragging). The
+   clone is appended to <body>, outside .video-cinema, but --accent is painted on
+   the document root by OverlayHostView, so the picked-up tile still reads red. */
+.is-dragging .candy-btn[data-shape="tile"].ov-studio-tile { --cbtn-band: var(--accent); }
+.is-dragging .candy-btn[data-shape="tile"].ov-studio-tile > .candy-face {
+  background: var(--accent); color: #fff; transform: translateY(var(--cbtn-depth));
+}
+
+/* Recent-history thumbnails + empty states */
+.ov-studio-thumbs { display: flex; gap: 8px; }
+.ov-studio-thumb { width: 80px; height: 46px; border-radius: var(--radius-sm); background: var(--surface-3); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; color: var(--text-faint); overflow: hidden; }
+.ov-studio-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.ov-studio-empty { font-family: var(--font-mono); font-size: 10px; letter-spacing: .04em; color: var(--text-faint); padding: 8px; border: 1px dashed var(--border); border-radius: var(--radius-sm); text-align: center; }
+
+/* Recent transcript rows */
+.ov-studio-trow { justify-content: flex-start; gap: 8px; padding: 5px 8px; border-radius: var(--radius-sm); background: var(--surface-2); }
+.ov-studio-trow-text { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-2); font-size: 12.5px; }
+.ov-studio-trow-ts { font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); }
+
+/* View-all popup — a fullscreen candy layer inside the overlay webview */
+.ov-studio-modal { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; background: color-mix(in oklch, black 55%, transparent); }
+.ov-studio-modal-card { width: min(80vw, 900px); max-height: 80vh; display: flex; flex-direction: column; gap: 12px; padding: 16px; overflow: hidden; }
+.ov-studio-modal-body { overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+.ov-studio-modal-body.is-list { display: flex; flex-direction: column; gap: 6px; }
+.ov-studio-modal-body .ov-studio-thumb { width: 100%; height: 100px; }
