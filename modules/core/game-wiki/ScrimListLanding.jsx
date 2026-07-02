@@ -9,7 +9,7 @@ import { navigate } from '@host/router.js';
 import { encodePagePath } from '@host/components/SidebarBrowser.jsx';
 import { IconPlus } from '@host/components/icons.jsx';
 import { candyGap } from '@host/util/candy.js';
-import { emptyScrim, serializeScrim } from './scrimSchema.js';
+import { newScrimContent } from './scrimSchema.js';
 
 const SCRIM_DIR = 'Deadlock/Coaching/Scrim';
 
@@ -20,17 +20,6 @@ const cardBox = {
   background: 'color-mix(in oklch, var(--text) 4%, transparent)',
   borderRadius: 12, padding: 14, marginBottom: 16,
 };
-
-// Browser runtime — new Date() is available here (unlike the workflow sandbox).
-function todayParts() {
-  const d = new Date();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  const yyyy = d.getFullYear();
-  return { iso: `${yyyy}-${mm}-${dd}`, short: `${mm}-${dd}-${String(yyyy).slice(2)}` };
-}
-
-const sanitize = (name) => name.replace(/[/\\:*?"<>|]/g, '').replace(/\s+/g, ' ').trim();
 
 // "(06-16-26) Reliquary VS The Mafia" -> { date, title }
 function parseTitle(base) {
@@ -62,14 +51,11 @@ export default function ScrimListLanding({ accent }) {
 
   const create = async () => {
     if (busy) return;
-    const team1 = sanitize(t1) || 'Team 1';
-    const team2 = sanitize(t2) || 'Team 2';
-    const { iso, short } = todayParts();
-    let base = `(${short}) ${team1} VS ${team2}`;
+    const { base, content } = newScrimContent({ team1: t1, team2: t2 });
     const existing = new Set((scrims || []).map((s) => s.base));
-    if (existing.has(base)) { let n = 2; while (existing.has(`${base} (${n})`)) n++; base = `${base} (${n})`; }
-    const path = `${SCRIM_DIR}/${base}.md`;
-    const content = serializeScrim(emptyScrim({ team1, team2, coachedTeam: team1, date: iso }));
+    let uniq = base;
+    if (existing.has(uniq)) { let n = 2; while (existing.has(`${base} (${n})`)) n++; uniq = `${base} (${n})`; }
+    const path = `${SCRIM_DIR}/${uniq}.md`;
     setBusy(true);
     try {
       await api.savePage(path, content, 0, 'gamewiki');

@@ -11,10 +11,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { api, invoke } from '@host/api.js';
 import { IconFolder, IconPlayCircle, IconPlus, IconPlay, IconPause, IconRotateCw } from '@host/components/icons.jsx';
+import CandySelect from '@host/components/ui/CandySelect.jsx';
 import { candyGap } from '@host/util/candy.js';
 import { parseScrim, serializeScrim, mergeScrim, appendMatch, getNotes, ensureNotes } from './scrimSchema.js';
 import MatchViewPopup from './MatchViewPopup.jsx';
-import { sidecarPath, renderSummary, setMatchDataBody, MATCH_DATA_PLACEHOLDER, clock } from './matchData.js';
+import { sidecarPath, renderSummary, setMatchDataBody, MATCH_DATA_PLACEHOLDER, clock, extractMeta, fmtLocalTime } from './matchData.js';
 import { compileNotes, renderCoachingSummary, setCoachingSummaryBody, parseTimedNote, formatTimedBullet, sortByTimeAsc, secFromClock } from './noteCompile.js';
 import { setCommsTranscriptBody, renderCommsSummary } from './commsCompile.js';
 import CommsTranscriptView from './CommsTranscriptView.jsx';
@@ -121,7 +122,7 @@ function Scoreboard({ path }) {
 // Count-up game clock beside the Notes header (sub-plan 5): start/pause + reset + readout.
 function TimerControls({ sw }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+    <div className="candy-center-row" style={{ gap: 4 }}>
       <button className="candy-btn" data-shape="icon" onClick={sw.toggle} title={sw.running ? 'Pause timer' : 'Start timer'} style={{ width: 26, height: 26 }}>
         <span className="candy-face">{sw.running ? <IconPause size={12} /> : <IconPlay size={12} />}</span>
       </button>
@@ -166,7 +167,7 @@ function NotesEditor({ team, bullets, onChange, onCommit, storageKey }) {
           {untimedCount > 0 && firstUntimed > 0 && k === firstUntimed && (
             <div style={{ fontSize: 10, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: 0.5, margin: '6px 0 2px' }}>Untimed</div>
           )}
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: candyGap(4, true) }}>
+          <div className="candy-center-row" style={{ gap: 6, marginBottom: candyGap(4, true) }}>
             <RetagButton label={row.classification} onPick={(c) => onRetag(row, c)} allowClear />
             <div className="candy-btn" data-shape="field" style={{ flex: 1, minWidth: 0 }}>
               <input
@@ -291,7 +292,7 @@ function AutoClassificationView({ sidecarPath: scPath, team }) {
   );
 }
 
-export default function ScrimViewer({ path, accent }) {
+export default function ScrimViewer({ path, accent, overlay = false }) {
   const [scrim, setScrim] = useState(null);
   const [err, setErr] = useState(null);
   const [saveState, setSaveState] = useState('idle'); // idle | saving | saved | error
@@ -306,6 +307,11 @@ export default function ScrimViewer({ path, accent }) {
   const [aiConfigured, setAiConfigured] = useState(true); // an Anthropic key or claude CLI is available
   const classifyRef = useRef(false); // Classify double-fire guard
   const { settings } = useSettings();
+  // Overlay mode: which match the header picker focuses + a live-dictation flag.
+  const [focusedN, setFocusedN] = useState(null);
+  const [dictating, setDictating] = useState(false);
+  const matchFocusRef = useRef(null); // fresh focusedN for event-listener closures
+  useEffect(() => { matchFocusRef.current = focusedN; }, [focusedN]);
 
   const scrimRef = useRef(null);
   const runningRef = useRef(false); // Run Process double-fire guard
@@ -425,10 +431,32 @@ export default function ScrimViewer({ path, accent }) {
       // 2) summary + pointer → ### Match Data, compiled notes → ### Coaching Summary
       //    (both disk-owned; one merged write/save; retry once on conflict)
       const body = renderSummary(data, scPath.split('/').pop());
+      // Auto-fill from the deadlock-api payload (paste-Match-ID → fill Score + Time):
+      // this match's Time from start_time, and the series Score as the coached team's
+      // W–L across all fetched matches. Both are non-opaque editable fields, so
+      // mergeScrim keeps them; overwrite on each run.
+      const autoTime = fmtLocalTime(extractMeta(data).startTime);
+      const deriveScore = async (scrimObj, coached) => {
+        let w = 0, l = 0, any = false;
+        for (const mm of scrimObj.matches || []) {
+          const { coachedSide } = sideFromTeamFields(mm.fields, coached);
+          if (coachedSide == null) continue; // Amber/Sapphire not set → can't tell the side
+          let winner = null;
+          if (mm.n === m.n) winner = extractMeta(data).winningTeam;
+          else { try { const sr = await api.getRawFileMeta(sidecarPath(path, mm.n), 'gamewiki'); winner = extractMeta(JSON.parse(sr.content)).winningTeam; } catch { winner = null; } }
+          if (winner == null) continue; // unfetched match → skip
+          any = true; if (winner === coachedSide) w++; else l++;
+        }
+        return any ? `${w}-${l}` : null;
+      };
       const writeMd = async () => {
         const r = await api.getRawFileMeta(path, 'gamewiki').catch(() => null);
         const fresh = r ? parseScrim(r.content) : scrimRef.current;
-        const base = mergeScrim(scrimRef.current, fresh);
+        let base = mergeScrim(scrimRef.current, fresh);
+        const coached = base.frontmatter?.['Coached Team'] || base.frontmatter?.['Team 1'] || '';
+        if (autoTime) base = { ...base, matches: base.matches.map((mm) => (mm.n === m.n ? { ...mm, fields: { ...mm.fields, Time: autoTime } } : mm)) };
+        const score = await deriveScore(base, coached);
+        if (score != null) base = { ...base, scrim: { ...base.scrim, Score: score } };
         const notes = getNotes(base.matches.find((mm) => mm.n === m.n));
         const summaryBody = renderCoachingSummary(compileNotes(notes?.bullets || []));
         const merged = setCoachingSummaryBody(setMatchDataBody(base, m.n, body), m.n, summaryBody);
@@ -688,6 +716,88 @@ export default function ScrimViewer({ path, accent }) {
     };
   }, [path, doSave]);
 
+  // ── Overlay mode: focused-match live capture (dictate → note, screenshot →
+  //    scoreboard) routed to the focused match. All gated on `overlay`; the in-app
+  //    page never sets a live target or listens. Single writer: these route through
+  //    applyEdit so ScrimViewer's own state updates + saves (no stale 2nd writer). ──
+  const appendNoteToFocused = useCallback((text) => {
+    const mn = matchFocusRef.current; const t = String(text || '').trim();
+    if (mn == null || !t) return;
+    applyEdit((p) => {
+      const coached = p.frontmatter?.['Coached Team'] || p.frontmatter?.['Team 1'] || '';
+      return { ...p, matches: (p.matches || []).map((m) => {
+        if (m.n !== mn) return m;
+        const has = (m.subsections || []).some((s) => s.kind === 'notes' && s.team === coached);
+        const next = [...(getNotes(m, coached)?.bullets || []), t];
+        if (has) return { ...m, subsections: m.subsections.map((s) => (s.kind === 'notes' && s.team === coached ? { ...s, bullets: next } : s)) };
+        const subs = [...(m.subsections || [])];
+        const fo = subs.findIndex((s) => s.kind === 'opaque');
+        const note = { kind: 'notes', team: coached, bullets: next };
+        if (fo === -1) subs.push(note); else subs.splice(fo, 0, note);
+        return { ...m, subsections: subs };
+      }) };
+    });
+    flushSave();
+  }, [applyEdit, flushSave]);
+
+  const setFocusedScoreboardIfEmpty = useCallback((pth) => {
+    const mn = matchFocusRef.current; if (mn == null || !pth) return;
+    applyEdit((p) => ({ ...p, matches: (p.matches || []).map((m) => (
+      m.n === mn && !String(m.fields?.['Scoreboard'] || '').trim() ? { ...m, fields: { ...m.fields, Scoreboard: pth } } : m
+    )) }));
+    flushSave();
+  }, [applyEdit, flushSave]);
+
+  // Dictate button — its OWN stt_start_dictation session (client Channel), distinct
+  // from the hotkey PTT path (dictation_committed → overlay-dictation-committed), so
+  // they never double-append. The final transcript becomes a note on the focused match.
+  const toggleDictate = useCallback(() => {
+    if (dictating) { invoke('stt_stop_dictation').catch(() => {}); return; }
+    const model = settings?.stt?.defaultModel || 'base.en';
+    const segs = [];
+    const ch = new Channel();
+    ch.onmessage = (ev) => {
+      switch (ev.kind) {
+        case 'segment': segs.push(ev.text ?? ''); break;
+        case 'final': { const t = (ev.text ?? segs.join(' ')).replace(/\s+/g, ' ').trim(); if (t) appendNoteToFocused(t); setDictating(false); break; }
+        case 'error': setDictating(false); break;
+        case 'done': setDictating(false); break;
+        default: break;
+      }
+    };
+    setDictating(true);
+    invoke('stt_start_dictation', { model, useGpu: null, onEvent: ch }).catch(() => setDictating(false));
+  }, [dictating, settings, appendNoteToFocused]);
+
+  const takeScoreboardShot = useCallback(() => { invoke('capture_screenshot').catch(() => {}); }, []);
+
+  // Default / correct the focused match once the scrim loads (overlay only).
+  useEffect(() => {
+    if (!overlay || !scrim) return;
+    const ns = (scrim.matches || []).map((m) => m.n);
+    if (focusedN == null || !ns.includes(focusedN)) setFocusedN(ns[0] ?? null);
+  }, [overlay, scrim, focusedN]);
+
+  // Publish the Rust live-target so the hotkey dictation reroute targets the focused
+  // match (refresh on focus change; clear on unmount).
+  useEffect(() => {
+    if (!overlay || !path || focusedN == null) return;
+    const coached = scrimRef.current?.frontmatter?.['Coached Team'] || scrimRef.current?.frontmatter?.['Team 1'] || '';
+    invoke('overlay_go_live', { target: { scrimPath: path, matchN: focusedN, coachedTeam: coached } }).catch(() => {});
+  }, [overlay, path, focusedN]);
+  useEffect(() => {
+    if (!overlay) return undefined;
+    return () => { invoke('overlay_go_offline').catch(() => {}); };
+  }, [overlay]);
+
+  useEffect(() => {
+    if (!overlay) return undefined;
+    const unsubs = [];
+    listen('overlay-dictation-committed', (e) => appendNoteToFocused(e.payload?.text)).then((u) => unsubs.push(u)).catch(() => {});
+    listen('capture-screenshot-saved', (e) => setFocusedScoreboardIfEmpty(e.payload?.path)).then((u) => unsubs.push(u)).catch(() => {});
+    return () => unsubs.forEach((u) => u && u());
+  }, [overlay, appendNoteToFocused, setFocusedScoreboardIfEmpty]);
+
   if (err) return <div style={wrap}><div style={inner}><p style={{ color: 'var(--error)' }}>Couldn’t open this scrim: {err}</p></div></div>;
   if (!scrim) return <div style={wrap}><div style={inner}><p style={{ color: 'var(--text-muted)' }}>Loading…</p></div></div>;
 
@@ -716,14 +826,19 @@ export default function ScrimViewer({ path, accent }) {
   const addMatch = () => { applyEdit((p) => appendMatch(p)); flushSave(); };
 
   return (
-    <div style={wrap}>
-      <div style={{ ...inner, '--accent': accent }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
-          <div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>{(fm['Team 1'] || '?')} VS {(fm['Team 2'] || '?')}</div>
+    <div style={overlay ? { minHeight: 0 } : wrap}>
+      <div style={overlay ? { padding: '2px 4px', fontFamily: 'var(--font-mono)', '--accent': accent } : { ...inner, '--accent': accent }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: overlay ? 10 : 16 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: overlay ? 16 : 22, fontWeight: 700, color: 'var(--text)', ...(overlay ? { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } : null) }}>{(fm['Team 1'] || '?')} VS {(fm['Team 2'] || '?')}</div>
             <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>{fm['Status'] || 'draft'}</div>
           </div>
-          <SaveTag state={saveState} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+            {overlay && scrim.matches.length > 0 && (
+              <CandySelect value={focusedN} options={scrim.matches.map((m) => ({ value: m.n, label: `Match ${m.n}` }))} onChange={setFocusedN} title="Focused match" />
+            )}
+            <SaveTag state={saveState} />
+          </div>
         </div>
 
         <div style={card}>
@@ -733,6 +848,7 @@ export default function ScrimViewer({ path, accent }) {
             <EditField label="Team 2" value={fm['Team 2']} onChange={(v) => setFm('Team 2', v)} onCommit={flushSave} />
             <EditField label="Coached Team" value={fm['Coached Team']} onChange={(v) => setFm('Coached Team', v)} onCommit={flushSave} />
             <EditField label="Date" value={fm['Date']} onChange={(v) => setFm('Date', v)} onCommit={flushSave} placeholder="YYYY-MM-DD" />
+            <EditField label="Scheduled" value={fm['Scheduled']} onChange={(v) => setFm('Scheduled', v)} onCommit={flushSave} placeholder="e.g. 7:00 PM" />
           </div>
         </div>
 
@@ -747,6 +863,7 @@ export default function ScrimViewer({ path, accent }) {
         </div>
 
         {scrim.matches.map((m, idx) => {
+          if (overlay && m.n !== focusedN) return null; // overlay shows only the focused match
           const matchData = (m.subsections.find((s) => s.kind === 'opaque' && s.heading === 'Match Data') || {}).body;
           const populated = matchData && matchData !== MATCH_DATA_PLACEHOLDER;
           const summaryBody = (m.subsections.find((s) => s.kind === 'opaque' && s.heading === 'Coaching Summary') || {}).body;
@@ -765,11 +882,18 @@ export default function ScrimViewer({ path, accent }) {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                 <div style={sectionTitle}>Match {m.n}</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <button className="candy-btn" data-shape="chip"
-                    onClick={() => invoke('overlay_go_live', { target: { scrimPath: path, matchN: m.n, coachedTeam } }).catch(() => {})}
-                    title="Go Live — open the in-game scrim-notes overlay on this match (capture notes while you play)">
-                    <span className="candy-face" style={{ color: 'var(--accent)' }}>● Go Live</span>
-                  </button>
+                  {overlay && (
+                    <>
+                      <button className="candy-btn" data-shape="chip" onClick={toggleDictate}
+                        title="Dictate a note — speech-to-text appended to this match">
+                        <span className="candy-face" style={dictating ? { color: 'var(--accent)' } : undefined}>{dictating ? '● listening…' : '🎙 Dictate'}</span>
+                      </button>
+                      <button className="candy-btn" data-shape="chip" onClick={takeScoreboardShot}
+                        title="Capture a scoreboard screenshot for this match">
+                        <span className="candy-face">📷 Scoreboard</span>
+                      </button>
+                    </>
+                  )}
                   {populated && (
                     <button className="candy-btn" data-shape="chip" onClick={() => setMatchPopup({ n: m.n })} title="Open the full match view">
                       <span className="candy-face">View Full Match</span>

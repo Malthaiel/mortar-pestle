@@ -174,12 +174,28 @@ export function emptyScrim({ team1 = '', team2 = '', coachedTeam = '', date = ''
       'Team 2': team2,
       'Coached Team': coached,
       'Date': date,
+      'Scheduled': '',
       'Status': 'draft',
     },
     scrim: { 'Score': '', 'VOD Review': '' },
     matches: [emptyMatch(1, coached, enemy)],
     extraBlocks: [],
   };
+}
+
+// Build a new-scrim skeleton for "+ New Scrim". ScrimListLanding and the overlay
+// scrim picker share this; the caller dedups the filename + writes it. Browser
+// runtime — new Date() is available here (unlike the workflow sandbox).
+const sanitizeTeam = (name) => String(name || '').replace(/[/\\:*?"<>|]/g, '').replace(/\s+/g, ' ').trim();
+export function newScrimContent({ team1, team2 } = {}) {
+  const t1 = sanitizeTeam(team1) || 'Team 1';
+  const t2 = sanitizeTeam(team2) || 'Team 2';
+  const d = new Date();
+  const p2 = (x) => String(x).padStart(2, '0');
+  const iso = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
+  const short = `${p2(d.getMonth() + 1)}-${p2(d.getDate())}-${String(d.getFullYear()).slice(2)}`;
+  const base = `(${short}) ${t1} VS ${t2}`;
+  return { base, content: serializeScrim(emptyScrim({ team1: t1, team2: t2, coachedTeam: t1, date: iso })) };
 }
 
 export function appendMatch(scrim) {

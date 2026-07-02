@@ -87,6 +87,15 @@ export default function OverlayHostView() {
   };
   useEffect(() => () => clearTimeout(toastTimer.current), []);
 
+  // Bridge ScrimViewer's agentic:notify toasts (Run Process / Extract Comms / errors)
+  // to the host-local toast — the bare overlay host has no NotificationProvider, so
+  // those dispatched CustomEvents would otherwise no-op.
+  useEffect(() => {
+    const onNotify = (e) => { const d = e.detail || {}; showToast(d.message || d.title || '', d.duration || 2200); };
+    window.addEventListener('agentic:notify', onNotify);
+    return () => window.removeEventListener('agentic:notify', onNotify);
+  }, []);
+
   return (
     <div style={{
       position: 'fixed', inset: 0, overflow: 'hidden',

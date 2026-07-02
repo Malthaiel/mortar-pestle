@@ -55,6 +55,14 @@ export function clock(s) {
   return `${Math.floor(v / 60)}:${String(v % 60).padStart(2, '0')}`;
 }
 
+// Unix seconds (match_info.start_time) → local wall-clock time-of-day ("7:42 PM").
+// '' for missing/zero/NaN, so an auto-fill of a gap is a no-op rather than "Invalid Date".
+export function fmtLocalTime(unixS) {
+  const n = Number(unixS);
+  if (!Number.isFinite(n) || n <= 0) return '';
+  return new Date(n * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
 // Structured view-model from raw deadlock-api metadata. Tolerant: any absent field
 // becomes a null/0/empty, never a throw — schema drift degrades to a gap.
 export function extractMatch(raw) {
@@ -103,6 +111,7 @@ export function extractMeta(raw) {
     durationS: mi.duration_s ?? null,
     winningTeam: mi.winning_team,
     winningSide: mi.winning_team == null ? null : sideName(mi.winning_team),
+    startTime: mi.start_time ?? null,
     gameMode: mi.game_mode ?? null,
     matchMode: mi.match_mode ?? null,
     badge0: mi.average_badge_team0 ?? 0,
