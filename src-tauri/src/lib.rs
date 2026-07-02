@@ -500,35 +500,10 @@ pub fn run() {
                                                 // rather than re-opening — fine for a tap toggle.
                                                 now_visible = Some(false);
                                             } else {
-                                                // SF9 — harden before showing: topmost, capture-excluded,
-                                                // non-activating so the panel's buttons don't pull the game
-                                                // out of focus.
-                                                overlay::state::harden_capture_overlay(&win);
-                                                // Windows: a `fullscreen: true` transparent window is not
-                                                // alpha-composited by DWM (it renders opaque grey). Size a
-                                                // *borderless* window to the monitor instead so per-pixel
-                                                // transparency holds. Best-effort — a monitor lookup miss
-                                                // just shows the window at its previous geometry.
-                                                if let Some(mon) = win.current_monitor().ok().flatten()
-                                                    .or_else(|| win.primary_monitor().ok().flatten()) {
-                                                    let _ = win.set_position(*mon.position());
-                                                    let _ = win.set_size(*mon.size());
-                                                }
-                                                // DEV: open the overlay's own devtools so its console — and
-                                                // the candy-center audit (window.candyCenterAudit()) — is
-                                                // reachable (the non-activating overlay is hard to inspect
-                                                // manually). Compiled out of release builds.
-                                                #[cfg(debug_assertions)]
-                                                {
-                                                    win.open_devtools();
-                                                    // HMR does NOT reach the occluded overlay webview, so
-                                                    // reload on every show to guarantee it runs fresh code.
-                                                    // The single highest-leverage debuggability fix — without
-                                                    // it, overlay edits require a manual console reload and
-                                                    // stale code silently masquerades as a live bug.
-                                                    let _ = win.eval("location.reload()");
-                                                }
-                                                let _ = win.show();
+                                                // Harden + monitor-size + (DEV) devtools/reload + show —
+                                                // factored into overlay::state so Shift+C and the scrim
+                                                // Go-Live (overlay_go_live) surface the host identically.
+                                                overlay::state::show_overlay_host(&win);
                                                 now_visible = Some(true);
                                             }
                                         }

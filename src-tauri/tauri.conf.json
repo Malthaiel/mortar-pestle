@@ -24,23 +24,6 @@
         "visible": true
       },
       {
-        "label": "overlay-scrim",
-        "title": "Mortar & Pestle Overlay — Scrim",
-        "url": "index.html#/overlay/scrim",
-        "width": 380,
-        "height": 520,
-        "x": 980,
-        "y": 40,
-        "decorations": false,
-        "transparent": true,
-        "alwaysOnTop": true,
-        "skipTaskbar": true,
-        "resizable": false,
-        "focus": false,
-        "shadow": false,
-        "visible": false
-      },
-      {
         "label": "overlay-host",
         "title": "Mortar & Pestle Overlay",
         "url": "index.html#/overlay/host",

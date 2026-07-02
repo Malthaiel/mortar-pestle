@@ -1,7 +1,7 @@
 //! Cross-window live-target state for the in-game scrim-notes overlay (B).
 //!
 //! The "active scrim/match" the live overlay captures into is set from the
-//! ScrimViewer's **Go Live** button and read by the `overlay-scrim` window and
+//! ScrimViewer's **Go Live** button and read by the Scrim overlay panel and
 //! the host-side STT dictation reroute (`lib.rs`). `localStorage` is per-webview
 //! on WebKitGTK, so cross-window state CANNOT live there — it lives here in Rust
 //! behind a process-lifetime `OnceLock<Mutex<…>>` (mirrors
@@ -49,37 +49,34 @@ pub fn current_live_target() -> Option<LiveTarget> {
     lock().clone()
 }
 
-/// `overlay_go_live` — mark a scrim/match live: store the target, show the
-/// scrim overlay window, and push `overlay-live-target` so an already-mounted
-/// overlay updates immediately. A window shown for the first time re-pulls via
-/// `overlay_get_live_target` on mount, so the emit-before-listen race is covered.
+/// `overlay_go_live` — mark a scrim/match live: store the target, surface the
+/// unified overlay-host window (the Scrim panel gates itself on the live target),
+/// and push `overlay-live-target` so an already-mounted panel updates immediately.
+/// The host is shown ONLY when not already visible, so a match-switch (which
+/// re-fires this) never re-shows/reloads it and wipes panel state. A freshly-shown
+/// host re-pulls via `overlay_get_live_target` on mount, covering the emit-before-
+/// listen race. Interactive (draggable panel) — NOT click-through, unlike the
+/// removed standalone scrim window.
 #[tauri::command]
 pub fn overlay_go_live(app: AppHandle, target: LiveTarget) -> Result<(), VaultError> {
     *lock() = Some(target.clone());
-    if let Some(win) = app.get_webview_window("overlay-scrim") {
-        let _ = win.show();
-        // SF4 — float over the game: click-through (the scrim is a read-only
-        // transcript/notes display, so clicks pass through to the focused game) +
-        // topmost. `set_ignore_cursor_events` is the cross-platform input-passthrough
-        // and the Windows keep-above mechanic; on Linux/Wayland keep-above still comes
-        // from the KWin rule (the always-on-top hint is ignored there, so this is a
-        // harmless no-op). Exclusive-fullscreen games hide all overlays — borderless-
-        // windowed is required (documented limit; SF4 detect-warn is a refinement).
-        let _ = win.set_ignore_cursor_events(true);
-        let _ = win.set_always_on_top(true);
+    if let Some(win) = app.get_webview_window("overlay-host") {
+        if !win.is_visible().unwrap_or(false) {
+            show_overlay_host(&win);
+            let _ = app.emit("overlay-host-visible", true);
+        }
     }
     let _ = app.emit("overlay-live-target", Some(&target));
     Ok(())
 }
 
-/// `overlay_go_offline` — clear the live target, hide the scrim overlay, and
-/// push a null `overlay-live-target` (the overlay returns to its idle state).
+/// `overlay_go_offline` — clear the live target and push a null
+/// `overlay-live-target`; the Scrim panel unmounts on the cleared target. The host
+/// window is deliberately NOT hidden here — Shift+C (the capture `overlay` chord)
+/// owns host visibility, and the Studio panel may still be in use.
 #[tauri::command]
 pub fn overlay_go_offline(app: AppHandle) -> Result<(), VaultError> {
     *lock() = None;
-    if let Some(win) = app.get_webview_window("overlay-scrim") {
-        let _ = win.hide();
-    }
     let _ = app.emit("overlay-live-target", Option::<LiveTarget>::None);
     Ok(())
 }
@@ -89,6 +86,33 @@ pub fn overlay_go_offline(app: AppHandle) -> Result<(), VaultError> {
 #[tauri::command]
 pub fn overlay_get_live_target() -> Result<Option<LiveTarget>, VaultError> {
     Ok(current_live_target())
+}
+
+/// Show the overlay-host window hardened for floating over a game: topmost +
+/// non-activating + capture-excluded (`harden_capture_overlay`), sized to the
+/// current monitor (a transparent *fullscreen* window renders opaque grey on the
+/// Windows DWM, so a borderless monitor-sized window is used instead), then shown.
+/// DEV reloads the webview on show — Vite HMR doesn't reach the occluded overlay
+/// webview, so this guarantees fresh code. Shared by the capture `overlay` hotkey
+/// bridge (`lib.rs`) and `overlay_go_live` so Shift+C and Go-Live surface the host
+/// identically.
+pub fn show_overlay_host(win: &tauri::WebviewWindow) {
+    harden_capture_overlay(win);
+    // Windows: a `fullscreen: true` transparent window is not alpha-composited by
+    // DWM (renders opaque grey); size a borderless monitor-sized window instead.
+    // Best-effort — a monitor lookup miss just shows it at its previous geometry.
+    if let Some(mon) = win.current_monitor().ok().flatten()
+        .or_else(|| win.primary_monitor().ok().flatten())
+    {
+        let _ = win.set_position(*mon.position());
+        let _ = win.set_size(*mon.size());
+    }
+    #[cfg(debug_assertions)]
+    {
+        win.open_devtools();
+        let _ = win.eval("location.reload()");
+    }
+    let _ = win.show();
 }
 
 /// SF9 (Game Capture) — harden the in-game **capture** HUD (`overlay-capture`)

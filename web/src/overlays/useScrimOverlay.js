@@ -1,39 +1,20 @@
-// Overlay B — the persistent live scrim-notes panel, rendered in the always-on-top
-// `overlay-scrim` window (hash #/overlay/scrim). Shown by the ScrimViewer's "Go
-// Live" button (Rust `overlay_go_live` → window.show + `overlay-live-target`),
-// it captures timestamped, classified notes straight into the active scrim's `.md`
-// — typed or push-to-talk dictated — so they're waiting when the coach later
-// reviews in the ScrimViewer.
-//
-// Standalone, transparent, over-the-game webview: no app chrome / theme context,
-// so it's self-contained inline-styled (legibility over arbitrary game pixels).
-// It REUSES the shared scrim LOGIC (scrimSchema / noteCompile / useStopwatch /
-// classColors) — only the presentation differs from the candy-styled ScrimViewer.
-// Writes go through the SAME save discipline (read-fresh → mergeScrim → savePage
-// with a CONFLICT retry-once), so the overlay and the main window share the file
-// safely via the mtime guard.
+// Live scrim-notes overlay logic — extracted from the former standalone
+// OverlayScrimView so the candy ScrimOverlayPanel (a draggable host panel) is a
+// pure view. Everything here is cross-window-safe Tauri invoke/listen + the shared
+// scrim schema/logic; nothing is React-context-bound, so it runs in the provider-
+// less overlay host. Writes go through the SAME read-fresh -> mergeScrim -> savePage
+// discipline (CONFLICT retry-once) the ScrimViewer uses, so the overlay and the
+// main window share the scrim .md safely via the mtime guard.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { api } from '../api.js';
 import { parseScrim, serializeScrim, mergeScrim, getNotes } from '@modules/core/game-wiki/scrimSchema.js';
-import { parseTimedNote, formatTimedBullet, sortByTimeAsc, CLASSIFICATIONS } from '@modules/core/game-wiki/noteCompile.js';
+import { parseTimedNote, formatTimedBullet, sortByTimeAsc } from '@modules/core/game-wiki/noteCompile.js';
 import { clock } from '@modules/core/game-wiki/matchData.js';
 import { useStopwatch } from '@modules/core/game-wiki/useStopwatch.js';
-import { classColor } from '@modules/core/game-wiki/classColors.js';
 
 const SAVE_DEBOUNCE_MS = 600;
-const ACCENT = '#6fa8d9';
-
-function useTransparentRoot() {
-  useEffect(() => {
-    const html = document.documentElement, body = document.body;
-    const prev = [html.style.background, body.style.background];
-    html.style.background = 'transparent';
-    body.style.background = 'transparent';
-    return () => { html.style.background = prev[0]; body.style.background = prev[1]; };
-  }, []);
-}
 
 // Replace the coached team's notes bullets on match `n` (creating the notes
 // subsection before the first opaque section if absent) — mirrors ScrimViewer's
@@ -55,9 +36,7 @@ function setTeamNotes(scrim, n, team, bullets) {
   };
 }
 
-export default function OverlayScrimView() {
-  useTransparentRoot();
-
+export function useScrimOverlay() {
   const [target, setTarget] = useState(null); // { scrimPath, matchN, coachedTeam }
   const [scrim, setScrim] = useState(null);
   const [matchN, setMatchN] = useState(null);
@@ -197,33 +176,8 @@ export default function OverlayScrimView() {
 
   useEffect(() => () => { clearTimeout(saveTimer.current); clearTimeout(flashTimer.current); }, []);
 
-  // ── Render ────────────────────────────────────────────────────────────────
-  const panel = {
-    position: 'fixed', inset: 0, padding: 8, display: 'flex', flexDirection: 'column',
-    fontFamily: 'var(--font-mono, ui-monospace, monospace)', color: '#eef2f6',
-  };
-  const box = {
-    flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column',
-    background: 'rgba(16,20,26,0.84)', border: `1px solid ${ACCENT}55`, borderRadius: 14,
-    padding: 12, backdropFilter: 'blur(7px)', boxShadow: '0 12px 34px rgba(0,0,0,0.55)',
-  };
-  const inputStyle = {
-    width: '100%', boxSizing: 'border-box', background: 'rgba(255,255,255,0.06)', color: '#eef2f6',
-    border: '1px solid rgba(255,255,255,0.14)', borderRadius: 8, padding: '6px 8px',
-    font: '13px/1.3 var(--font-mono, ui-monospace, monospace)', outline: 'none',
-  };
-
-  if (!target) {
-    return (
-      <div style={panel}><div style={box}>
-        <div style={{ fontWeight: 700, fontSize: 13, letterSpacing: 0.5, color: ACCENT }}>▣ SCRIM</div>
-        <div style={{ fontSize: 12, opacity: 0.7, marginTop: 8 }}>Not live. Open a scrim and click <b>Go Live</b> on a match.</div>
-      </div></div>
-    );
-  }
-
-  const ordered = sortByTimeAsc(bullets.map((b, i) => ({ ...parseTimedNote(b), _i: i })), (x) => x.atSec).ordered;
-  const matches = scrim?.matches || [];
+  // ── Derived rows + row handlers (edits map back to the ORIGINAL bullet index) ──
+  const rows = sortByTimeAsc(bullets.map((b, i) => ({ ...parseTimedNote(b), _i: i })), (x) => x.atSec).ordered;
 
   const onText = (row, raw) => {
     const m = /^\[(\d{1,2}):([0-5]\d)\]\s*/.exec(raw);
@@ -234,72 +188,19 @@ export default function OverlayScrimView() {
   const onRetag = (row, c) => writeBullets(bullets.map((b, j) => (j === row._i ? formatTimedBullet({ atSec: row.atSec, classification: c || null, text: row.text }) : b)));
   const onDelete = (row) => writeBullets(bullets.filter((_, j) => j !== row._i));
 
-  return (
-    <div style={panel}><div style={box}>
-      {/* Header: title · match selector · go offline */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-        <span style={{ fontWeight: 700, fontSize: 13, letterSpacing: 0.5, color: ACCENT }}>▣ SCRIM</span>
-        <select
-          value={matchN ?? ''}
-          onChange={(e) => {
-            const n = Number(e.target.value);
-            setMatchN(n); matchRef.current = n;
-            const t = targetRef.current;
-            if (t) invoke('overlay_go_live', { target: { scrimPath: t.scrimPath, matchN: n, coachedTeam: t.coachedTeam } }).catch(() => {});
-          }}
-          style={{ ...inputStyle, width: 'auto', padding: '3px 6px', cursor: 'pointer' }}
-        >
-          {matches.map((m) => <option key={m.n} value={m.n}>Match {m.n}</option>)}
-        </select>
-        <span style={{ flex: 1, fontSize: 11, color: 'rgba(255,255,255,0.6)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{coachedTeam}</span>
-        <button onClick={() => invoke('overlay_go_offline').catch(() => {})} title="Go offline (hide overlay)"
-          style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#eef2f6', borderRadius: 6, cursor: 'pointer', padding: '2px 7px', fontSize: 12 }}>✕</button>
-      </div>
+  // Switch the live match: update local + Rust target (re-fires overlay_go_live,
+  // which is a no-op re-show while the host is already visible — see state.rs).
+  const selectMatch = (n) => {
+    setMatchN(n); matchRef.current = n;
+    const t = targetRef.current;
+    if (t) invoke('overlay_go_live', { target: { scrimPath: t.scrimPath, matchN: n, coachedTeam: t.coachedTeam } }).catch(() => {});
+  };
+  const goOffline = () => invoke('overlay_go_offline').catch(() => {});
 
-      {/* Timer */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-        <button onClick={sw.toggle} title={sw.running ? 'Pause' : 'Start'}
-          style={{ background: sw.running ? `${ACCENT}33` : 'rgba(255,255,255,0.08)', border: `1px solid ${ACCENT}66`, color: '#eef2f6', borderRadius: 8, cursor: 'pointer', padding: '4px 10px', fontSize: 12, fontWeight: 600 }}>
-          {sw.running ? '⏸' : '▶'}
-        </button>
-        <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 18, fontWeight: 700, color: sw.running ? ACCENT : 'rgba(255,255,255,0.6)', minWidth: 58, textAlign: 'center' }}>{clock(sw.elapsedSec)}</span>
-        <button onClick={sw.reset} title="Reset timer"
-          style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.18)', color: '#eef2f6', borderRadius: 8, cursor: 'pointer', padding: '4px 10px', fontSize: 12 }}>↺</button>
-        <span style={{ flex: 1, textAlign: 'right', fontSize: 11, color: dictating ? ACCENT : 'rgba(255,255,255,0.45)' }}>
-          {dictating ? '🎙 listening…' : (flash || `${bullets.length} note${bullets.length === 1 ? '' : 's'}`)}
-        </span>
-      </div>
-
-      {/* Notes list */}
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 5 }}>
-        {ordered.map((row) => (
-          <div key={row._i} style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
-            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', minWidth: 38, fontVariantNumeric: 'tabular-nums' }}>{row.at || '—'}</span>
-            <select value={row.classification || ''} onChange={(e) => onRetag(row, e.target.value)} title="Classification"
-              style={{ ...inputStyle, width: 'auto', padding: '3px 4px', color: row.classification ? classColor(row.classification) : 'rgba(255,255,255,0.5)', cursor: 'pointer' }}>
-              <option value="">tag</option>
-              {CLASSIFICATIONS.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <input style={{ ...inputStyle, flex: 1, minWidth: 0 }} value={row.text}
-              onChange={(e) => onText(row, e.target.value)} placeholder="note…" />
-            <button onClick={() => onDelete(row)} title="Remove"
-              style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: '0 2px' }}>×</button>
-          </div>
-        ))}
-        {ordered.length === 0 && !dictating && (
-          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', padding: '8px 2px' }}>No notes yet — type below or hold your dictation key.</div>
-        )}
-      </div>
-
-      {/* Note input (shows the live transcript while dictating) */}
-      <input
-        style={{ ...inputStyle, marginTop: 8, opacity: dictating ? 0.8 : 1 }}
-        value={dictating ? liveText : draft}
-        readOnly={dictating}
-        placeholder={dictating ? 'listening…' : (sw.running ? `Add a note…  (stamped @ ${clock(sw.elapsedSec)})` : 'Add a note…')}
-        onChange={(e) => setDraft(e.target.value)}
-        onKeyDown={(e) => { if (e.key === 'Enter' && !dictating) { e.preventDefault(); addNote(draft); setDraft(''); } }}
-      />
-    </div></div>
-  );
+  return {
+    target, matches: scrim?.matches || [], matchN, selectMatch, coachedTeam, goOffline,
+    sw, rows, notesCount: bullets.length,
+    dictating, liveText, draft, setDraft, addNote,
+    onText, onRetag, onDelete, flash,
+  };
 }

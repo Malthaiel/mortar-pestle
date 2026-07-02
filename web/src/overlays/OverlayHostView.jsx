@@ -13,6 +13,7 @@ import { listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import SttProvider from '@modules/studio/overlay/SttProvider.jsx';
 import OverlayStudioPanel from './OverlayStudioPanel.jsx';
+import ScrimOverlayPanel from './ScrimOverlayPanel.jsx';
 
 // Minimal module-api shim for the host-mounted SttProvider. It only needs
 // invoke (all stt_* calls are cross-window-safe Tauri invokes) and events.on
@@ -96,6 +97,7 @@ export default function OverlayHostView() {
       <SttProvider api={hostApi}>
         <OverlayStudioPanel showToast={showToast} />
       </SttProvider>
+      <ScrimOverlayPanel />
       {toast && (
         <div className="video-cinema overlay-toast candy-btn">
           <span className="candy-face">{toast}</span>
