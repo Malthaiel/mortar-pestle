@@ -10,6 +10,7 @@ pub mod asset_protocol;
 // Windows); only the WebKit content-filter FFI (`blocker::ffi`) is Linux-only.
 #[cfg(any(target_os = "linux", target_os = "windows"))]
 pub mod blocker;
+pub mod broadcast;
 #[cfg(any(target_os = "linux", target_os = "windows"))]
 pub mod capture;
 pub mod commands;
@@ -313,6 +314,46 @@ pub fn run() {
             // STT (speech-to-text) — supervisor owns the model/worker lifecycle,
             // mirroring capture's adopt/spawn/respawn + RunEvent::Exit reap.
             stt::supervisor::start(app.handle().clone());
+
+            // Broadcast (SP1 SF5) — third instance of the supervision pattern.
+            // The engine is the GPL mortar-pestle-broadcast sidecar (libobs);
+            // supervisor emits `broadcast-engine-status`, and the bridge below
+            // re-emits engine events as `broadcast-state` / `broadcast-saved` /
+            // `broadcast-error` for the SP2 module UI to listen() to.
+            broadcast::supervisor::start(app.handle().clone());
+            if let Some(client) = broadcast::supervisor::client() {
+                let bridge_app = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    use tauri::Emitter;
+                    use tokio::sync::broadcast::error::RecvError;
+                    let mut rx = client.subscribe();
+                    loop {
+                        match rx.recv().await {
+                            Ok(ev) => match ev.event.as_str() {
+                                // StateSnapshot — the sole UI truth.
+                                "state_changed" => {
+                                    let _ = bridge_app.emit("broadcast-state", &ev.data);
+                                }
+                                "saved" => {
+                                    let _ = bridge_app.emit("broadcast-saved", &ev.data);
+                                }
+                                "error" => {
+                                    let _ = bridge_app.emit("broadcast-error", &ev.data);
+                                }
+                                other => {
+                                    log::debug!("broadcast bridge: unrouted event '{other}'");
+                                }
+                            },
+                            // Lagged: drop the gap, keep going (snapshot events are
+                            // self-contained — the next one supersedes the missed).
+                            Err(RecvError::Lagged(n)) => {
+                                log::debug!("broadcast bridge lagged {n} events");
+                            }
+                            Err(RecvError::Closed) => break,
+                        }
+                    }
+                });
+            }
 
             // STT engine → Tauri event bridge (Phase 5 SF5 relay). UI-driven
             // dictation uses a per-call Channel, but a GLOBAL push-to-talk session
@@ -866,6 +907,12 @@ pub fn run() {
                 // (SF6 swaps the libc signals for proc_util::terminate_pid).
                 #[cfg(any(target_os = "linux", target_os = "windows"))]
                 stt::supervisor::shutdown();
+                // Broadcast reap — terminate the spawned libobs engine (no-op when
+                // adopted/down; the daemon saves its collection on pipe shutdown,
+                // and a forceful kill is recoverable — collections autosave on
+                // every mutation).
+                #[cfg(any(target_os = "linux", target_os = "windows"))]
+                broadcast::supervisor::shutdown();
             }
         });
 }

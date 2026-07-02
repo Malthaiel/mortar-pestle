@@ -1,0 +1,29 @@
+[package]
+name = "mortar-pestle-broadcast"
+version = "0.1.0"
+edition = "2021"
+description = "Broadcast engine: libobs embedded behind a supervised NDJSON named-pipe daemon. GPL-2.0-only - see LICENSE and the README license boundary."
+license = "GPL-2.0-only"
+publish = false
+
+[dependencies]
+# Async runtime + logging + NDJSON protocol types — same set as the capture/stt daemons.
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "time", "io-util"] }
+log = "0.4"
+env_logger = "0.11"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Windows-only v1 (Overview: no Linux cfg-gating spend this epic).
+[target.'cfg(target_os = "windows")'.dependencies]
+# Raw FFI for SetDefaultDllDirectories/AddDllDirectory (payload DLL search) —
+# windows-sys is the repo's raw-binding convention (capture/stt winhook precedent).
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_System_LibraryLoader",
+    # COM (MTA) init before obs_startup — win-dshow/win-wasapi expect a
+    # COM-initialized process (obs64 does this in main; capture engine precedent).
+    "Win32_System_Com",
+    # GetLocalTime — recording filename stem (capture GameNamer precedent).
+    "Win32_System_SystemInformation",
+] }

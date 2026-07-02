@@ -1,0 +1,4 @@
+/target/
+# OBS runtime payload + download cache — staged by scripts/fetch-obs.ps1, never committed.
+/obs/
+/obs-cache/
