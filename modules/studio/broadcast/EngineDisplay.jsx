@@ -42,7 +42,7 @@ function chained(id, op) {
   return next;
 }
 
-export default function EngineDisplay({ api, alive, id = 'preview' }) {
+export default function EngineDisplay({ api, alive, id = 'preview', children }) {
   const holderRef = useRef(null);
   const createdRef = useRef(false);
   const rafRef = useRef(0);
@@ -125,5 +125,9 @@ export default function EngineDisplay({ api, alive, id = 'preview' }) {
     };
   }, [alive, syncBounds]);
 
-  return <div ref={holderRef} className="bcast-preview-region" />;
+  // SP3: children = the PreviewInteract event layer. It draws nothing (the
+  // native region occludes all DOM); it exists to catch the pointer events
+  // that fall through the HTTRANSPARENT child window. position:relative so
+  // the layer's inset:0 tracks the region exactly.
+  return <div ref={holderRef} className="bcast-preview-region" style={{ position: 'relative' }}>{children}</div>;
 }

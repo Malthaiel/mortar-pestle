@@ -125,6 +125,26 @@ fn need_u64(args: &Value, key: &str) -> Result<u64, ProtoError> {
         .ok_or_else(|| ProtoError::bad_request(format!("missing number arg '{key}'")))
 }
 
+fn need_i64(args: &Value, key: &str) -> Result<i64, ProtoError> {
+    args.get(key)
+        .and_then(Value::as_i64)
+        .ok_or_else(|| ProtoError::bad_request(format!("missing number arg '{key}'")))
+}
+
+fn need_bool(args: &Value, key: &str) -> Result<bool, ProtoError> {
+    args.get(key)
+        .and_then(Value::as_bool)
+        .ok_or_else(|| ProtoError::bad_request(format!("missing bool arg '{key}'")))
+}
+
+fn opt_str(args: &Value, key: &str) -> Option<String> {
+    args.get(key).and_then(Value::as_str).map(str::to_owned)
+}
+
+fn opt_i64(args: &Value, key: &str) -> Option<i64> {
+    args.get(key).and_then(Value::as_i64)
+}
+
 async fn dispatch(req: Request, cmd_tx: &mpsc::Sender<Cmd>) -> Response {
     let id = req.id;
 
@@ -163,6 +183,10 @@ async fn dispatch(req: Request, cmd_tx: &mpsc::Sender<Cmd>) -> Response {
                 id: need_str(&args, "id")?,
                 name: need_str(&args, "name")?,
                 settings: args.get("settings").cloned().unwrap_or(Value::Null),
+                transform: args.get("transform").cloned().unwrap_or(Value::Null),
+                crop: args.get("crop").cloned().unwrap_or(Value::Null),
+                visible: args.get("visible").and_then(Value::as_bool),
+                locked: args.get("locked").and_then(Value::as_bool),
                 reply: tx,
             })
         })(),
@@ -174,9 +198,151 @@ async fn dispatch(req: Request, cmd_tx: &mpsc::Sender<Cmd>) -> Response {
                 scene: need_str(&args, "scene")?,
                 name: need_str(&args, "name")?,
                 settings: args.get("settings").cloned().unwrap_or(Value::Null),
+                replace: args.get("replace").and_then(Value::as_bool).unwrap_or(false),
                 reply: tx,
             })
         })(),
+        "rename_scene" => (|| {
+            Ok(Cmd::RenameScene { name: need_str(&args, "name")?, new_name: need_str(&args, "new_name")?, reply: tx })
+        })(),
+        "rename_item" => (|| {
+            Ok(Cmd::RenameItem {
+                scene: need_str(&args, "scene")?,
+                item: need_i64(&args, "item")?,
+                new_name: need_str(&args, "new_name")?,
+                reply: tx,
+            })
+        })(),
+        "duplicate_scene" => need_str(&args, "name").map(|name| Cmd::DuplicateScene { name, reply: tx }),
+        "reorder_scenes" => (|| {
+            let order = args
+                .get("order")
+                .and_then(Value::as_array)
+                .ok_or_else(|| ProtoError::bad_request("missing array arg 'order'"))?
+                .iter()
+                .map(|v| v.as_str().map(str::to_owned))
+                .collect::<Option<Vec<_>>>()
+                .ok_or_else(|| ProtoError::bad_request("'order' must be scene names"))?;
+            Ok(Cmd::ReorderScenes { order, reply: tx })
+        })(),
+        "remove_item" => (|| {
+            Ok(Cmd::RemoveItem { scene: need_str(&args, "scene")?, item: need_i64(&args, "item")?, reply: tx })
+        })(),
+        "set_item_visible" => (|| {
+            Ok(Cmd::SetItemVisible {
+                scene: need_str(&args, "scene")?,
+                item: need_i64(&args, "item")?,
+                visible: need_bool(&args, "visible")?,
+                reply: tx,
+            })
+        })(),
+        "set_item_locked" => (|| {
+            Ok(Cmd::SetItemLocked {
+                scene: need_str(&args, "scene")?,
+                item: need_i64(&args, "item")?,
+                locked: need_bool(&args, "locked")?,
+                reply: tx,
+            })
+        })(),
+        "reorder_items" => (|| {
+            let order = args
+                .get("order")
+                .and_then(Value::as_array)
+                .ok_or_else(|| ProtoError::bad_request("missing array arg 'order'"))?
+                .iter()
+                .map(|v| {
+                    let item = v.get("item").and_then(Value::as_i64)?;
+                    let group = v.get("group").and_then(Value::as_i64);
+                    Some((item, group))
+                })
+                .collect::<Option<Vec<_>>>()
+                .ok_or_else(|| ProtoError::bad_request("'order' entries need {item, group?}"))?;
+            Ok(Cmd::ReorderItems { scene: need_str(&args, "scene")?, order, reply: tx })
+        })(),
+        "create_group" => (|| {
+            Ok(Cmd::CreateGroup { scene: need_str(&args, "scene")?, name: need_str(&args, "name")?, reply: tx })
+        })(),
+        "ungroup" => (|| {
+            Ok(Cmd::Ungroup { scene: need_str(&args, "scene")?, item: need_i64(&args, "item")?, reply: tx })
+        })(),
+        "add_existing" => (|| {
+            Ok(Cmd::AddExisting {
+                scene: need_str(&args, "scene")?,
+                source_name: need_str(&args, "source_name")?,
+                reply: tx,
+            })
+        })(),
+        "transform_commit" => (|| {
+            Ok(Cmd::TransformCommit {
+                scene: need_str(&args, "scene")?,
+                item: need_i64(&args, "item")?,
+                transform: args.get("transform").cloned().unwrap_or(Value::Null),
+                crop: args.get("crop").cloned().unwrap_or(Value::Null),
+                reply: tx,
+            })
+        })(),
+        "set_transform" => (|| {
+            Ok(Cmd::SetTransform {
+                scene: need_str(&args, "scene")?,
+                item: need_i64(&args, "item")?,
+                transform: args.get("transform").cloned().unwrap_or(Value::Null),
+                crop: args.get("crop").cloned().unwrap_or(Value::Null),
+                reply: tx,
+            })
+        })(),
+        "select_item" => (|| {
+            Ok(Cmd::SelectItem { scene: need_str(&args, "scene")?, item: opt_i64(&args, "item"), reply: tx })
+        })(),
+        "hover_item" => Ok(Cmd::HoverItem {
+            scene: opt_str(&args, "scene"),
+            item: opt_i64(&args, "item"),
+            reply: tx,
+        }),
+        "set_snap_guides" => (|| {
+            let guides = args
+                .get("guides")
+                .and_then(Value::as_array)
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|g| {
+                            let axis = match g.get("axis").and_then(Value::as_str)? {
+                                "v" => 0u8,
+                                "h" => 1u8,
+                                _ => return None,
+                            };
+                            let pos = g.get("pos").and_then(Value::as_f64)? as f32;
+                            Some((axis, pos))
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            Ok(Cmd::SetSnapGuides { guides, reply: tx })
+        })(),
+        "get_source_settings" => (|| {
+            Ok(Cmd::GetSourceSettings { scene: need_str(&args, "scene")?, item: need_i64(&args, "item")?, reply: tx })
+        })(),
+        "get_properties" => (|| {
+            Ok(Cmd::GetProperties { scene: need_str(&args, "scene")?, item: need_i64(&args, "item")?, reply: tx })
+        })(),
+        "click_property_button" => (|| {
+            Ok(Cmd::ClickPropertyButton {
+                scene: need_str(&args, "scene")?,
+                item: need_i64(&args, "item")?,
+                prop: need_str(&args, "prop")?,
+                reply: tx,
+            })
+        })(),
+        "list_input_types" => Ok(Cmd::ListInputTypes { reply: tx }),
+        "screenshot" => Ok(Cmd::Screenshot {
+            scene: opt_str(&args, "scene"),
+            item: opt_i64(&args, "item"),
+            picker: opt_str(&args, "picker"),
+            width: need_u64(&args, "width").unwrap_or(320) as u32,
+            reply: tx,
+        }),
+        "picker_open" => need_str(&args, "kind").map(|kind| Cmd::PickerOpen { kind, reply: tx }),
+        "picker_close" => Ok(Cmd::PickerClose { reply: tx }),
+        "load_browser_module" => Ok(Cmd::LoadBrowserModule { reply: tx }),
         "start_record" => Ok(Cmd::StartRecord { reply: tx }),
         "stop_record" => Ok(Cmd::StopRecord { reply: tx }),
         "display_create" => (|| {

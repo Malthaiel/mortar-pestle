@@ -878,6 +878,7 @@ pub fn run() {
             overlay::state::overlay_go_offline,
             overlay::state::overlay_get_live_target,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::broadcast::broadcast_get_state,
+            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::broadcast::broadcast_request,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::broadcast::broadcast_start_record,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::broadcast::broadcast_stop_record,
             #[cfg(target_os = "windows")] commands::broadcast::broadcast_display_create,

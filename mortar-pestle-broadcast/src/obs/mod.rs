@@ -6,8 +6,12 @@
 
 use std::ffi::{c_char, c_int, CStr, CString};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::bindings as ffi;
+
+pub mod overlay;
+pub mod screenshot;
 
 /// v1 bundled module allowlist (Engine Foundation § detail pass) — loaded via
 /// libobs's safe-module list so `obs_load_all_modules` skips everything else
@@ -128,11 +132,27 @@ impl ObsCore {
             // Dev diagnostic override: comma list of modules, or "none" to skip
             // module loading entirely. Default = the v1 allowlist.
             let module_override = std::env::var("MORTAR_PESTLE_BROADCAST_MODULES").ok();
-            let modules: Vec<&str> = match module_override.as_deref() {
+            let mut modules: Vec<&str> = match module_override.as_deref() {
                 Some("none") => vec![],
                 Some(list) => list.split(',').filter(|s| !s.is_empty()).collect(),
                 None => V1_MODULES.to_vec(),
             };
+            // CEF boot gate (SP3 spike finding): obs_load_sources restores a
+            // persisted browser_source as a DEAD placeholder if obs-browser
+            // registers after collection load — so when the saved collection
+            // references one, boot-load the module. Collections without
+            // browser sources keep the fast CEF-free boot; the first-ever
+            // browser source in a session arrives via load_browser_module.
+            if !modules.is_empty() && !modules.contains(&"obs-browser") {
+                let collection = app_config_dir().join("scenes").join("default.json");
+                if std::fs::read_to_string(&collection)
+                    .map(|s| s.contains("\"browser_source\""))
+                    .unwrap_or(false)
+                {
+                    log::info!("collection references browser_source — boot-loading obs-browser");
+                    modules.push("obs-browser");
+                }
+            }
             // An EMPTY safe list means "load everything in the path" (obs.h:571)
             // — so "none" must skip the load calls, not pass an empty list.
             if modules.is_empty() {
@@ -154,6 +174,39 @@ impl ObsCore {
         unsafe {
             CStr::from_ptr(ffi::obs_get_version_string()).to_string_lossy().into_owned()
         }
+    }
+
+    /// CEF late-load (SP3 locked #10): obs-browser is NOT in V1_MODULES — load
+    /// it on first browser-source creation so every boot doesn't pay CEF init.
+    /// Idempotent. Paths are cwd-relative (the bin/64bit cwd contract, same
+    /// resolution obs_startup's compiled-in default path uses). Spike risk
+    /// documented in the sub-plan: the second obs_post_load_modules() re-runs
+    /// post-load for already-loaded modules — none of the v1 allowlist defines
+    /// obs_module_post_load, and CEF REQUIRES it (browser source registers
+    /// there). Fallback if flaky: add "obs-browser" to V1_MODULES and let this
+    /// return loaded=true unconditionally.
+    pub fn load_browser_module(&self) -> Result<(), String> {
+        static LOADED: AtomicBool = AtomicBool::new(false);
+        if LOADED.load(Ordering::SeqCst) {
+            return Ok(());
+        }
+        unsafe {
+            let bin = cstring("../../obs-plugins/64bit/obs-browser.dll");
+            let data = cstring("../../data/obs-plugins/obs-browser");
+            let mut module: *mut ffi::obs_module_t = std::ptr::null_mut();
+            let rc = ffi::obs_open_module(&mut module, bin.as_ptr(), data.as_ptr());
+            // MODULE_SUCCESS = 0 (obs-module.h).
+            if rc != 0 {
+                return Err(format!("obs_open_module(obs-browser) rc={rc}"));
+            }
+            if !ffi::obs_init_module(module) {
+                return Err("obs_init_module(obs-browser) failed".into());
+            }
+            ffi::obs_post_load_modules();
+        }
+        LOADED.store(true, Ordering::SeqCst);
+        log::info!("obs-browser late-loaded");
+        Ok(())
     }
 }
 

@@ -291,6 +291,7 @@
     "allow-overlay-go-offline",
     "allow-overlay-get-live-target",
     "allow-broadcast-get-state",
+    "allow-broadcast-request",
     "allow-broadcast-start-record",
     "allow-broadcast-stop-record",
     "allow-broadcast-display-create",

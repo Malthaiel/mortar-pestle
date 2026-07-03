@@ -89,7 +89,8 @@ impl ProtoError {
 }
 
 /// The sole UI truth (Overview cross-cutting contract #1) — mirror of the
-/// engine's `StateSnapshot`.
+/// engine's `StateSnapshot`, proto v2 (SP3): canvas block + per-item identity
+/// (item_id), flags, transform/crop, engine-computed corners, group children.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StateSnapshot {
     /// Protocol version, bumped on breaking wire changes.
@@ -97,6 +98,7 @@ pub struct StateSnapshot {
     /// idle | recording | finalizing | error
     pub state: String,
     pub current_scene: Option<String>,
+    pub canvas: CanvasInfo,
     pub scenes: Vec<SceneInfo>,
     pub recording: RecordingInfo,
     pub obs_version: String,
@@ -105,13 +107,22 @@ pub struct StateSnapshot {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CanvasInfo {
+    pub width: u32,
+    pub height: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SceneInfo {
     pub name: String,
+    /// Wire order = engine enum order (BOTTOM→TOP of the render stack).
     pub sources: Vec<SourceInfo>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SourceInfo {
+    /// Scene-item id — the addressing key for every item verb.
+    pub item_id: i64,
     pub name: String,
     /// libobs source type id (e.g. "monitor_capture").
     pub id: String,
@@ -122,6 +133,40 @@ pub struct SourceInfo {
     /// on program.
     pub showing: bool,
     pub active: bool,
+    pub visible: bool,
+    pub locked: bool,
+    pub selected: bool,
+    pub is_group: bool,
+    pub is_scene: bool,
+    pub transform: Transform,
+    pub crop: Crop,
+    /// Item box corners in canvas units (TL, TR, BR, BL), engine-computed.
+    pub corners: [[f32; 2]; 4],
+    #[serde(default)]
+    pub children: Vec<SourceInfo>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Transform {
+    pub pos_x: f32,
+    pub pos_y: f32,
+    pub rot: f32,
+    pub scale_x: f32,
+    pub scale_y: f32,
+    pub alignment: u32,
+    pub bounds_type: i32,
+    pub bounds_alignment: u32,
+    pub bounds_x: f32,
+    pub bounds_y: f32,
+    pub crop_to_bounds: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Crop {
+    pub left: i32,
+    pub top: i32,
+    pub right: i32,
+    pub bottom: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

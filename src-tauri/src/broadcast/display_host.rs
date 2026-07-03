@@ -32,18 +32,25 @@ use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::Graphics::Gdi::HBRUSH;
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DestroyWindow, RegisterClassExW, SetWindowPos, HWND_TOP,
-    SWP_NOACTIVATE, SWP_SHOWWINDOW, WNDCLASSEXW, WS_CHILD, WS_CLIPSIBLINGS,
-    WS_EX_NOPARENTNOTIFY, WS_VISIBLE,
+    CreateWindowExW, DefWindowProcW, DestroyWindow, RegisterClassExW, SetWindowPos, HTTRANSPARENT,
+    HWND_TOP, SWP_NOACTIVATE, SWP_SHOWWINDOW, WM_NCHITTEST, WNDCLASSEXW, WS_CHILD,
+    WS_CLIPSIBLINGS, WS_EX_NOPARENTNOTIFY, WS_VISIBLE,
 };
 
 /// display id → child HWND (as isize; HWND is not Send). TABS idiom.
 static HOSTS: Mutex<Option<HashMap<String, isize>>> = Mutex::new(None);
 
-/// The host window procedure — pure DefWindowProc passthrough. Exists only
-/// because `WNDPROC` requires the "system" ABI and windows-rs declares
-/// `DefWindowProcW` as a plain fn item.
+/// The host window procedure. HTTRANSPARENT on WM_NCHITTEST (SP3): hit-testing
+/// falls through to the underlying same-thread sibling — the WebView2 child —
+/// so DOM pointer events fire on the holder div and JS owns all transform
+/// interaction math; the engine draws the visuals. The host child never used
+/// mouse input, so nothing regresses. Documented fallback if the WebView2
+/// child-window stack ever breaks the fall-through: forward WM_MOUSE* via
+/// MapWindowPoints + PostMessageW instead.
 unsafe extern "system" fn host_wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
+    if msg == WM_NCHITTEST {
+        return LRESULT(HTTRANSPARENT as isize);
+    }
     unsafe { DefWindowProcW(hwnd, msg, wp, lp) }
 }
 

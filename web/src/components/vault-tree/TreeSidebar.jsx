@@ -42,6 +42,12 @@ function NodeBody({ node, controller, accent, open, animateOnMount = true }) {
 }
 
 function TreeNode({ node, controller, accent, topLevel = false }) {
+  // In-place rename swap (SP3 Broadcast inline-rename primitive): a node in
+  // rename mode renders its own pill instead of the row/header. Absent for
+  // every existing surface.
+  if (node.renaming && node.renderRename) {
+    return node.renderRename();
+  }
   if (node.isFolder) {
     const open = controller.isOpen(node.id);
     const count = (node.children || []).length;
@@ -50,7 +56,10 @@ function TreeNode({ node, controller, accent, topLevel = false }) {
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         <CandyHeader label={node.label} open={open} onToggle={() => controller.toggle(node)}
           accent={accent} onContextMenu={node.onContextMenu}
-          leadIcon={node.leadIcon} trailing={node.trailing}/>
+          leadIcon={node.leadIcon} trailing={node.trailing}
+          onActivate={node.onActivate} activeFill={node.activeFill}
+          onDoubleClick={node.onDoubleClick}
+          onMouseEnter={node.onMouseEnter} onMouseLeave={node.onMouseLeave}/>
         <Collapsible open={open} count={count}>
           {mounted && <NodeBody node={node} controller={controller} accent={accent}
             open={open} animateOnMount={!topLevel}/>}
@@ -61,7 +70,9 @@ function TreeNode({ node, controller, accent, topLevel = false }) {
   return (
     <TreeRow label={node.label} selected={!!node.active} accent={accent}
       onClick={node.onActivate} onContextMenu={node.onContextMenu}
-      suffix={node.suffix} leadIcon={node.leadIcon} trailing={node.trailing}/>
+      suffix={node.suffix} leadIcon={node.leadIcon} trailing={node.trailing}
+      onDoubleClick={node.onDoubleClick}
+      onMouseEnter={node.onMouseEnter} onMouseLeave={node.onMouseLeave}/>
   );
 }
 

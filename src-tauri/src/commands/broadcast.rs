@@ -46,6 +46,18 @@ pub async fn broadcast_get_state() -> Result<Option<StateSnapshot>, VaultError> 
     }
 }
 
+/// `broadcast_request` — SP3 passthrough: forwards ANY engine op verbatim
+/// (`{op, args}` → NDJSON request → reply data). The engine is our own local
+/// sidecar behind our own webview, so per-verb Tauri commands added zero
+/// safety at ~5 registration edits each; every SP3+ scene-graph/query verb
+/// rides this instead. Display/record/restart stay bespoke — they compose
+/// display_host / the supervisor, not just the pipe.
+#[tauri::command]
+pub async fn broadcast_request(op: String, args: Option<Value>) -> Result<Option<Value>, VaultError> {
+    let client = require_client()?;
+    client.request(&op, args.unwrap_or(Value::Null)).await.map_err(map_err)
+}
+
 /// `broadcast_start_record` — engine op `start_record`. Data is `{path}`, not
 /// a snapshot; UI truth arrives via the `broadcast-state` event push.
 #[tauri::command]

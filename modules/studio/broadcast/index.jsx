@@ -3,6 +3,7 @@ import SidebarPill from '@host/components/SidebarPill.jsx';
 import { LazyErrorBoundary, lazyChunkError } from '@host/components/LazyErrorBoundary.jsx';
 import { registerModuleKeybinds } from '@host/keybinds/registry.js';
 import BroadcastSettingsTab from './BroadcastSettingsTab.jsx';
+import BroadcastSidebar from './BroadcastSidebar.jsx';
 
 // Studio-tier Broadcast module (Broadcast epic, sub-plan 2 — Module Shell &
 // Preview). The OBS-parity studio surface: SP2 ships the live child-HWND
@@ -42,6 +43,9 @@ export default {
         />
       ),
       isActive: (route) => route.page === 'tools' && route.sub === 'broadcast',
+      // SP3: the combined scene/source tree (scenes = folders, sources =
+      // children, groups = sub-folders) — the module's secondary sidebar.
+      renderSecondary: ({ accent }) => <BroadcastSidebar api={api} accent={accent} />,
       order: 47,
     });
     api.slots.registerRoute({

@@ -8,14 +8,37 @@
   min-height: 0;
 }
 
+/* SP3: preview + inspector row — flex siblings (occlusion law: nothing may
+   overlay the native region; the inspector RESIZES the preview instead). */
+.bcast-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  min-width: 0;
+}
+
 /* Preview area — flex center; the region div computes the aspect fit. */
 .bcast-preview-area {
   flex: 1;
   min-height: 0;
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 16px;
+}
+
+/* In-layout inspector pane (SP3). Static candy-surface band, no motion. */
+.bcast-inspector {
+  width: 340px;
+  flex-shrink: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 14px 16px;
+  border-left: 1px solid var(--border);
+  overflow: hidden;
 }
 
 /* The native region's DOM anchor: pure-CSS 16:9 fit inside the area; the
@@ -49,4 +72,47 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ── SP3 tree rows ─────────────────────────────────────────────────────── */
+
+/* Interactive span inside a row button's candy-face (nested-clickable rule:
+   the face is pointer-events:none, spans re-enable via inline style). */
+.bcast-rowtoggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+.bcast-rowtoggle:hover {
+  opacity: 1 !important;
+}
+
+/* Program marker on the active scene row. */
+.bcast-programdot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+  flex-shrink: 0;
+  margin-left: 2px;
+}
+
+/* Inline rename pill — swaps in for a tree row (approved rename-in-row
+   primitive); geometry matches the NAV_H row pills. */
+.bcast-rename {
+  min-height: 26px;
+  box-sizing: border-box;
+  padding: 0 11px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  width: 100%;
+  max-width: 220px;
 }

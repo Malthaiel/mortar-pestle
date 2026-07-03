@@ -136,13 +136,23 @@ const FACE = {
 // active. `leadIcon`/`trailing` are optional adornments (a tab-group count, etc.);
 // both default undefined so the vault renders exactly as before. `suffix` overrides
 // the SuffixCtx-derived "/" when a surface wants explicit control.
-export function CandyHeader({ label, open, onToggle, accent, onContextMenu, leadIcon, trailing, suffix }) {
+//
+// `onActivate` (optional, SP3 Broadcast): split-click for surfaces where a folder
+// row's click means something OTHER than expand (a Broadcast scene row = program
+// switch) — when present, the BUTTON fires onActivate and the caret becomes its
+// own stopPropagation target firing onToggle (nested-clickable span rule). Absent
+// → byte-identical to before. `activeFill` forces the solid is-active fill
+// independently of `open` (a program scene reads active even collapsed).
+export function CandyHeader({ label, open, onToggle, accent, onContextMenu, leadIcon, trailing, suffix, onActivate, activeFill, onDoubleClick, onMouseEnter, onMouseLeave }) {
   const showSuffix = useContext(SuffixCtx);
   const sfx = suffix != null ? suffix : (showSuffix ? '/' : '');
+  const filled = activeFill != null ? activeFill : open;
   return (
     <button
-      type="button" data-own-press onClick={onToggle} onContextMenu={onContextMenu}
-      className={`candy-btn${open ? ' is-active' : ''}`}
+      type="button" data-own-press onClick={onActivate || onToggle} onContextMenu={onContextMenu}
+      onDoubleClick={onDoubleClick}
+      onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}
+      className={`candy-btn${filled ? ' is-active' : ''}`}
       data-shape="row"
       style={{
         '--cbtn-depth': 'var(--candy-depth-nav)',
@@ -154,7 +164,17 @@ export function CandyHeader({ label, open, onToggle, accent, onContextMenu, lead
       }}
     >
       <span className="candy-face" style={FACE}>
-        <Caret open={open}/>
+        {onActivate ? (
+          <span
+            role="button" tabIndex={-1}
+            style={{ display: 'inline-flex', pointerEvents: 'auto', cursor: 'pointer' }}
+            onClick={(e) => { e.stopPropagation(); onToggle(e); }}
+          >
+            <Caret open={open}/>
+          </span>
+        ) : (
+          <Caret open={open}/>
+        )}
         {leadIcon}
         <Label text={label} suffix={sfx}/>
         {trailing}
@@ -169,13 +189,15 @@ export function CandyHeader({ label, open, onToggle, accent, onContextMenu, lead
 // row data-current-file for the Reveal-current scroll. `leadIcon` (favicon),
 // `trailing` (count / running-dot), and `suffix` are optional; all default
 // undefined so the vault renders exactly as before.
-export function TreeRow({ node, label, selected, accent, onClick, onContextMenu, noSuffix, suffix, leadIcon, trailing }) {
+export function TreeRow({ node, label, selected, accent, onClick, onContextMenu, noSuffix, suffix, leadIcon, trailing, onDoubleClick, onMouseEnter, onMouseLeave }) {
   const showSuffix = useContext(SuffixCtx);
   const text = label != null ? label : (node?.title || node?.name);
   const sfx = suffix != null ? suffix : ((showSuffix && !noSuffix) ? '.md' : '');
   return (
     <button
       type="button" data-own-press onClick={onClick} onContextMenu={onContextMenu}
+      onDoubleClick={onDoubleClick}
+      onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}
       data-current-file={selected ? 'true' : undefined}
       className={`candy-btn${selected ? ' is-active' : ''}`}
       data-shape="row"

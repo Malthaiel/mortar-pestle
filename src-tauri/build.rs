@@ -272,6 +272,7 @@ fn main() {
         "overlay_go_offline",
         "overlay_get_live_target",
         "broadcast_get_state",
+        "broadcast_request",
         "broadcast_start_record",
         "broadcast_stop_record",
         "broadcast_display_create",

@@ -17,9 +17,11 @@ use tokio::sync::{broadcast, oneshot};
 
 use crate::bindings as ffi;
 use crate::daemon::protocol::{
-    Event, ProtoError, RecordingInfo, SceneInfo, SourceInfo, StateSnapshot, PROTO_VERSION,
+    CanvasInfo, Crop, Event, ProtoError, RecordingInfo, SceneInfo, SourceInfo, StateSnapshot,
+    Transform, PROTO_VERSION,
 };
-use crate::obs::{app_config_dir, ObsCore};
+use crate::obs::overlay::{self, M4};
+use crate::obs::{app_config_dir, screenshot, ObsCore};
 
 pub type Reply = oneshot::Sender<Result<Value, ProtoError>>;
 
@@ -28,14 +30,50 @@ pub enum Cmd {
     CreateScene { name: String, reply: Reply },
     RemoveScene { name: String, reply: Reply },
     SetCurrentScene { name: String, reply: Reply },
-    CreateSource { scene: String, id: String, name: String, settings: Value, reply: Reply },
+    CreateSource {
+        scene: String,
+        id: String,
+        name: String,
+        settings: Value,
+        transform: Value,
+        crop: Value,
+        visible: Option<bool>,
+        locked: Option<bool>,
+        reply: Reply,
+    },
     RemoveSource { scene: String, name: String, reply: Reply },
-    SetSourceSettings { scene: String, name: String, settings: Value, reply: Reply },
+    SetSourceSettings { scene: String, name: String, settings: Value, replace: bool, reply: Reply },
     StartRecord { reply: Reply },
     StopRecord { reply: Reply },
     DisplayCreate { id: String, hwnd: u64, width: u32, height: u32, reply: Reply },
     DisplayResize { id: String, width: u32, height: u32, reply: Reply },
     DisplayDestroy { id: String, reply: Reply },
+    // --- SP3 mutating (finish) ---
+    RenameScene { name: String, new_name: String, reply: Reply },
+    RenameItem { scene: String, item: i64, new_name: String, reply: Reply },
+    DuplicateScene { name: String, reply: Reply },
+    ReorderScenes { order: Vec<String>, reply: Reply },
+    RemoveItem { scene: String, item: i64, reply: Reply },
+    SetItemVisible { scene: String, item: i64, visible: bool, reply: Reply },
+    SetItemLocked { scene: String, item: i64, locked: bool, reply: Reply },
+    ReorderItems { scene: String, order: Vec<(i64, Option<i64>)>, reply: Reply },
+    CreateGroup { scene: String, name: String, reply: Reply },
+    Ungroup { scene: String, item: i64, reply: Reply },
+    AddExisting { scene: String, source_name: String, reply: Reply },
+    TransformCommit { scene: String, item: i64, transform: Value, crop: Value, reply: Reply },
+    // --- SP3 ephemeral (finish_ephemeral) ---
+    SetTransform { scene: String, item: i64, transform: Value, crop: Value, reply: Reply },
+    SelectItem { scene: String, item: Option<i64>, reply: Reply },
+    HoverItem { scene: Option<String>, item: Option<i64>, reply: Reply },
+    SetSnapGuides { guides: Vec<(u8, f32)>, reply: Reply },
+    GetSourceSettings { scene: String, item: i64, reply: Reply },
+    GetProperties { scene: String, item: i64, reply: Reply },
+    ClickPropertyButton { scene: String, item: i64, prop: String, reply: Reply },
+    ListInputTypes { reply: Reply },
+    Screenshot { scene: Option<String>, item: Option<i64>, picker: Option<String>, width: u32, reply: Reply },
+    PickerOpen { kind: String, reply: Reply },
+    PickerClose { reply: Reply },
+    LoadBrowserModule { reply: Reply },
     Shutdown { reply: Reply },
 }
 
@@ -57,6 +95,10 @@ struct Engine {
     /// Never persisted, never in StateSnapshot: a respawned engine starts
     /// with zero displays and the app re-creates them on its alive edge.
     displays: Vec<(String, *mut ffi::obs_display_t)>,
+    /// Monitor-picker temp sources: (monitor id, label, PRIVATE source ptr).
+    /// Private → never saved by obs_save_sources, so the autosave path can't
+    /// leak them into the collection. inc_showing held while open (WGC gate).
+    picker: Vec<(String, String, *mut ffi::obs_source)>,
     recording: Option<RecordingRun>,
     finalizing: bool,
     last_error: Option<ProtoError>,
@@ -69,6 +111,10 @@ fn cstring(s: &str) -> CString {
 
 fn collection_path() -> PathBuf {
     app_config_dir().join("scenes").join("default.json")
+}
+
+fn scene_order_path() -> PathBuf {
+    app_config_dir().join("scenes").join("scene_order.json")
 }
 
 fn captures_dir() -> PathBuf {
@@ -114,6 +160,7 @@ pub fn spawn(
                 current: None,
                 desktop_audio: std::ptr::null_mut(),
                 displays: Vec::new(),
+                picker: Vec::new(),
                 recording: None,
                 finalizing: false,
                 last_error: None,
@@ -154,17 +201,144 @@ impl Engine {
                 let r = self.set_current_scene(&name);
                 self.finish(reply, r);
             }
-            Cmd::CreateSource { scene, id, name, settings, reply } => {
-                let r = self.create_source(&scene, &id, &name, &settings);
+            Cmd::CreateSource { scene, id, name, settings, transform, crop, visible, locked, reply } => {
+                let r = self.create_source(&scene, &id, &name, &settings, &transform, &crop, visible, locked);
                 self.finish(reply, r);
             }
             Cmd::RemoveSource { scene, name, reply } => {
                 let r = self.remove_source(&scene, &name);
                 self.finish(reply, r);
             }
-            Cmd::SetSourceSettings { scene, name, settings, reply } => {
-                let r = self.set_source_settings(&scene, &name, &settings);
+            Cmd::SetSourceSettings { scene, name, settings, replace, reply } => {
+                let r = self.set_source_settings(&scene, &name, &settings, replace);
                 self.finish(reply, r);
+            }
+            Cmd::RenameScene { name, new_name, reply } => {
+                let r = self.rename_scene(&name, &new_name);
+                self.finish(reply, r);
+            }
+            Cmd::RenameItem { scene, item, new_name, reply } => {
+                let r = self.rename_item(&scene, item, &new_name);
+                self.finish(reply, r);
+            }
+            Cmd::DuplicateScene { name, reply } => {
+                let r = self.duplicate_scene(&name);
+                self.finish(reply, r);
+            }
+            Cmd::ReorderScenes { order, reply } => {
+                let r = self.reorder_scenes(&order);
+                self.finish(reply, r);
+            }
+            Cmd::RemoveItem { scene, item, reply } => {
+                let r = self.with_item(&scene, item, |it| {
+                    unsafe { ffi::obs_sceneitem_remove(it) };
+                    Ok(json!({}))
+                });
+                self.finish(reply, r);
+            }
+            Cmd::SetItemVisible { scene, item, visible, reply } => {
+                let r = self.with_item(&scene, item, |it| {
+                    unsafe { ffi::obs_sceneitem_set_visible(it, visible) };
+                    Ok(json!({}))
+                });
+                self.finish(reply, r);
+            }
+            Cmd::SetItemLocked { scene, item, locked, reply } => {
+                let r = self.with_item(&scene, item, |it| {
+                    unsafe { ffi::obs_sceneitem_set_locked(it, locked) };
+                    Ok(json!({}))
+                });
+                self.finish(reply, r);
+            }
+            Cmd::ReorderItems { scene, order, reply } => {
+                let r = self.reorder_items(&scene, &order);
+                self.finish(reply, r);
+            }
+            Cmd::CreateGroup { scene, name, reply } => {
+                let r = self.create_group(&scene, &name);
+                self.finish(reply, r);
+            }
+            Cmd::Ungroup { scene, item, reply } => {
+                let r = self.with_item(&scene, item, |it| unsafe {
+                    if !ffi::obs_sceneitem_is_group(it) {
+                        return Err(ProtoError::bad_request("item is not a group"));
+                    }
+                    ffi::obs_sceneitem_group_ungroup(it);
+                    Ok(json!({}))
+                });
+                self.finish(reply, r);
+            }
+            Cmd::AddExisting { scene, source_name, reply } => {
+                let r = self.add_existing(&scene, &source_name);
+                self.finish(reply, r);
+            }
+            Cmd::TransformCommit { scene, item, transform, crop, reply } => {
+                let r = self.with_item(&scene, item, |it| {
+                    unsafe { apply_transform_patch(it, &transform, &crop) };
+                    Ok(json!({}))
+                });
+                self.finish(reply, r);
+            }
+            Cmd::SetTransform { scene, item, transform, crop, reply } => {
+                let r = self.with_item(&scene, item, |it| {
+                    unsafe { apply_transform_patch(it, &transform, &crop) };
+                    Ok(json!({}))
+                });
+                self.finish_ephemeral(reply, r);
+            }
+            Cmd::SelectItem { scene, item, reply } => {
+                let r = self.select_item(&scene, item);
+                self.finish_ephemeral(reply, r);
+            }
+            Cmd::HoverItem { scene, item, reply } => {
+                if let Ok(mut st) = overlay::OVERLAY.lock() {
+                    st.hover = match (scene, item) {
+                        (Some(s), Some(i)) => Some((s, i)),
+                        _ => None,
+                    };
+                }
+                self.finish_ephemeral(reply, Ok(json!({})));
+            }
+            Cmd::SetSnapGuides { guides, reply } => {
+                if let Ok(mut st) = overlay::OVERLAY.lock() {
+                    st.guides = guides;
+                }
+                self.finish_ephemeral(reply, Ok(json!({})));
+            }
+            Cmd::GetSourceSettings { scene, item, reply } => {
+                let r = self.get_source_settings(&scene, item);
+                self.finish_ephemeral(reply, r);
+            }
+            Cmd::GetProperties { scene, item, reply } => {
+                let r = self.get_properties(&scene, item);
+                self.finish_ephemeral(reply, r);
+            }
+            Cmd::ClickPropertyButton { scene, item, prop, reply } => {
+                let r = self.click_property_button(&scene, item, &prop);
+                self.finish_ephemeral(reply, r);
+            }
+            Cmd::ListInputTypes { reply } => {
+                let r = self.list_input_types();
+                self.finish_ephemeral(reply, r);
+            }
+            Cmd::Screenshot { scene, item, picker, width, reply } => {
+                let r = self.screenshot(scene.as_deref(), item, picker.as_deref(), width);
+                self.finish_ephemeral(reply, r);
+            }
+            Cmd::PickerOpen { kind, reply } => {
+                let r = self.picker_open(&kind);
+                self.finish_ephemeral(reply, r);
+            }
+            Cmd::PickerClose { reply } => {
+                self.picker_close();
+                self.finish_ephemeral(reply, Ok(json!({})));
+            }
+            Cmd::LoadBrowserModule { reply } => {
+                let r = match self.core.load_browser_module() {
+                    Ok(()) => Ok(json!({ "loaded": true })),
+                    Err(e) => Ok(json!({ "loaded": false, "error": e })),
+                };
+                self.finish_ephemeral(reply, r);
             }
             Cmd::StartRecord { reply } => {
                 let r = self.start_record();
@@ -254,10 +428,12 @@ impl Engine {
                 RecordingInfo { active: false, path: None, elapsed_ns: 0 },
             ),
         };
+        let (cw, ch) = self.canvas_size();
         StateSnapshot {
             version: PROTO_VERSION,
             state: state.into(),
             current_scene: self.current.clone(),
+            canvas: CanvasInfo { width: cw, height: ch },
             scenes,
             recording: rec,
             obs_version: self.core.version_string(),
@@ -318,19 +494,27 @@ impl Engine {
         Ok(json!({}))
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn create_source(
         &mut self,
         scene: &str,
         id: &str,
         name: &str,
         settings: &Value,
+        transform: &Value,
+        crop: &Value,
+        visible: Option<bool>,
+        locked: Option<bool>,
     ) -> Result<Value, ProtoError> {
         let scene_ptr = self
             .find_scene(scene)
             .ok_or_else(|| ProtoError::bad_request(format!("no scene '{scene}'")))?;
+        // obs_source_create does NOT dedupe names, and duplicates break name
+        // addressing — auto-suffix and reply the final name (v2 contract).
+        let final_name = unsafe { free_name(name) };
         unsafe {
             let cid = cstring(id);
-            let cname = cstring(name);
+            let cname = cstring(&final_name);
             let data = data_from_value(settings);
             let src = ffi::obs_source_create(cid.as_ptr(), cname.as_ptr(), data, std::ptr::null_mut());
             ffi::obs_data_release(data);
@@ -366,10 +550,20 @@ impl Engine {
                     ffi::obs_data_release(fix);
                 }
             }
-            ffi::obs_scene_add(scene_ptr, src);
+            let item = ffi::obs_scene_add(scene_ptr, src);
             ffi::obs_source_release(src); // the scene item holds its own ref
+            if item.is_null() {
+                return Err(ProtoError::internal("obs_scene_add returned null"));
+            }
+            apply_transform_patch(item, transform, crop);
+            if let Some(v) = visible {
+                ffi::obs_sceneitem_set_visible(item, v);
+            }
+            if let Some(l) = locked {
+                ffi::obs_sceneitem_set_locked(item, l);
+            }
+            Ok(json!({ "item": ffi::obs_sceneitem_get_id(item), "name": final_name }))
         }
-        Ok(json!({}))
     }
 
     fn remove_source(&mut self, scene: &str, name: &str) -> Result<Value, ProtoError> {
@@ -392,6 +586,7 @@ impl Engine {
         _scene: &str,
         name: &str,
         settings: &Value,
+        replace: bool,
     ) -> Result<Value, ProtoError> {
         unsafe {
             let c = cstring(name);
@@ -400,11 +595,371 @@ impl Engine {
                 return Err(ProtoError::bad_request(format!("no source '{name}'")));
             }
             let data = data_from_value(settings);
-            ffi::obs_source_update(src, data);
+            if replace {
+                // Whole-settings restore (undo path): replace, don't merge —
+                // a merge would leave ghost keys from the undone edit behind.
+                ffi::obs_source_reset_settings(src, data);
+            } else {
+                ffi::obs_source_update(src, data);
+            }
             ffi::obs_data_release(data);
             ffi::obs_source_release(src);
         }
         Ok(json!({}))
+    }
+
+    // --- SP3 scene-graph verbs ------------------------------------------------
+
+    /// Every item verb resolves through this ONE helper — find_sceneitem_by_id
+    /// does not recurse into groups, so a hand-rolled deep find is the single
+    /// place group addressing can go wrong (risk ledger #6).
+    fn with_item<F>(&self, scene: &str, id: i64, f: F) -> Result<Value, ProtoError>
+    where
+        F: FnOnce(*mut ffi::obs_sceneitem_t) -> Result<Value, ProtoError>,
+    {
+        let scene_ptr = self
+            .find_scene(scene)
+            .ok_or_else(|| ProtoError::bad_request(format!("no scene '{scene}'")))?;
+        let item = unsafe { find_item_deep(scene_ptr, id) }
+            .ok_or_else(|| ProtoError::bad_request(format!("no item {id} in '{scene}'")))?;
+        f(item)
+    }
+
+    fn rename_scene(&mut self, name: &str, new_name: &str) -> Result<Value, ProtoError> {
+        if new_name.trim().is_empty() {
+            return Err(ProtoError::bad_request("empty name"));
+        }
+        let scene = self
+            .find_scene(name)
+            .ok_or_else(|| ProtoError::bad_request(format!("no scene '{name}'")))?;
+        if name != new_name && unsafe { name_taken(new_name) } {
+            return Err(ProtoError::bad_request(format!("name '{new_name}' is taken")));
+        }
+        unsafe {
+            let c = cstring(new_name);
+            ffi::obs_source_set_name(ffi::obs_scene_get_source(scene), c.as_ptr());
+        }
+        if let Some(entry) = self.scenes.iter_mut().find(|(n, _)| n == name) {
+            entry.0 = new_name.into();
+        }
+        if self.current.as_deref() == Some(name) {
+            self.current = Some(new_name.into());
+        }
+        Ok(json!({}))
+    }
+
+    fn rename_item(&mut self, scene: &str, item: i64, new_name: &str) -> Result<Value, ProtoError> {
+        if new_name.trim().is_empty() {
+            return Err(ProtoError::bad_request("empty name"));
+        }
+        self.with_item(scene, item, |it| unsafe {
+            let src = ffi::obs_sceneitem_get_source(it);
+            if src.is_null() {
+                return Err(ProtoError::internal("item has no source"));
+            }
+            let cur = CStr::from_ptr(ffi::obs_source_get_name(src)).to_string_lossy().into_owned();
+            if cur != new_name && name_taken(new_name) {
+                return Err(ProtoError::bad_request(format!("name '{new_name}' is taken")));
+            }
+            let c = cstring(new_name);
+            ffi::obs_source_set_name(src, c.as_ptr());
+            Ok(json!({}))
+        })
+    }
+
+    fn duplicate_scene(&mut self, name: &str) -> Result<Value, ProtoError> {
+        let scene = self
+            .find_scene(name)
+            .ok_or_else(|| ProtoError::bad_request(format!("no scene '{name}'")))?;
+        let new_name = unsafe { free_name(name) };
+        let dup = unsafe {
+            let c = cstring(&new_name);
+            // DUP_REFS: new items reference the same sources (OBS "Duplicate").
+            ffi::obs_scene_duplicate(scene, c.as_ptr(), ffi::obs_scene_duplicate_type_OBS_SCENE_DUP_REFS)
+        };
+        if dup.is_null() {
+            return Err(ProtoError::internal("obs_scene_duplicate returned null"));
+        }
+        self.scenes.push((new_name.clone(), dup));
+        Ok(json!({ "name": new_name }))
+    }
+
+    fn reorder_scenes(&mut self, order: &[String]) -> Result<Value, ProtoError> {
+        if order.len() != self.scenes.len()
+            || !order.iter().all(|n| self.scenes.iter().any(|(sn, _)| sn == n))
+        {
+            return Err(ProtoError::bad_request("order set mismatch"));
+        }
+        self.scenes.sort_by_key(|(n, _)| order.iter().position(|o| o == n).unwrap_or(usize::MAX));
+        Ok(json!({}))
+    }
+
+    fn reorder_items(&mut self, scene: &str, order: &[(i64, Option<i64>)]) -> Result<Value, ProtoError> {
+        let scene_ptr = self
+            .find_scene(scene)
+            .ok_or_else(|| ProtoError::bad_request(format!("no scene '{scene}'")))?;
+        unsafe {
+            let mut infos: Vec<ffi::obs_sceneitem_order_info> = Vec::with_capacity(order.len());
+            for (item_id, group_id) in order {
+                let item = find_item_deep(scene_ptr, *item_id)
+                    .ok_or_else(|| ProtoError::bad_request(format!("no item {item_id} in '{scene}'")))?;
+                let group = match group_id {
+                    Some(g) => find_item_deep(scene_ptr, *g)
+                        .ok_or_else(|| ProtoError::bad_request(format!("no group {g} in '{scene}'")))?,
+                    None => std::ptr::null_mut(),
+                };
+                infos.push(ffi::obs_sceneitem_order_info { group, item });
+            }
+            if !ffi::obs_scene_reorder_items2(scene_ptr, infos.as_mut_ptr(), infos.len()) {
+                return Err(ProtoError::bad_request("order set mismatch (stale snapshot?)"));
+            }
+        }
+        Ok(json!({}))
+    }
+
+    fn create_group(&mut self, scene: &str, name: &str) -> Result<Value, ProtoError> {
+        let scene_ptr = self
+            .find_scene(scene)
+            .ok_or_else(|| ProtoError::bad_request(format!("no scene '{scene}'")))?;
+        let final_name = unsafe { free_name(name) };
+        unsafe {
+            let c = cstring(&final_name);
+            let item = ffi::obs_scene_add_group(scene_ptr, c.as_ptr());
+            if item.is_null() {
+                return Err(ProtoError::internal("obs_scene_add_group returned null"));
+            }
+            Ok(json!({ "item": ffi::obs_sceneitem_get_id(item), "name": final_name }))
+        }
+    }
+
+    fn add_existing(&mut self, scene: &str, source_name: &str) -> Result<Value, ProtoError> {
+        let scene_ptr = self
+            .find_scene(scene)
+            .ok_or_else(|| ProtoError::bad_request(format!("no scene '{scene}'")))?;
+        unsafe {
+            let c = cstring(source_name);
+            let src = ffi::obs_get_source_by_name(c.as_ptr());
+            if src.is_null() {
+                return Err(ProtoError::bad_request(format!("no source '{source_name}'")));
+            }
+            // Direct self-nesting guard (A into A). Deeper cycles are excluded
+            // by the UI (Scene ▸ lists other scenes only) — documented limit.
+            if src == ffi::obs_scene_get_source(scene_ptr) {
+                ffi::obs_source_release(src);
+                return Err(ProtoError::bad_request("cannot nest a scene into itself"));
+            }
+            let item = ffi::obs_scene_add(scene_ptr, src);
+            ffi::obs_source_release(src);
+            if item.is_null() {
+                return Err(ProtoError::internal("obs_scene_add returned null"));
+            }
+            Ok(json!({ "item": ffi::obs_sceneitem_get_id(item) }))
+        }
+    }
+
+    /// Deselect-all + select target. `selected` rides snapshots, so respawn
+    /// reconciles; the overlay renderer reads the flag straight off the items.
+    fn select_item(&mut self, scene: &str, item: Option<i64>) -> Result<Value, ProtoError> {
+        let scene_ptr = self
+            .find_scene(scene)
+            .ok_or_else(|| ProtoError::bad_request(format!("no scene '{scene}'")))?;
+        unsafe {
+            unsafe extern "C" fn deselect(
+                _s: *mut ffi::obs_scene_t,
+                it: *mut ffi::obs_sceneitem_t,
+                param: *mut std::ffi::c_void,
+            ) -> bool {
+                unsafe {
+                    ffi::obs_sceneitem_select(it, false);
+                    if ffi::obs_sceneitem_is_group(it) {
+                        ffi::obs_sceneitem_group_enum_items(it, Some(deselect), param);
+                    }
+                }
+                true
+            }
+            ffi::obs_scene_enum_items(scene_ptr, Some(deselect), std::ptr::null_mut());
+            if let Some(id) = item {
+                let it = find_item_deep(scene_ptr, id)
+                    .ok_or_else(|| ProtoError::bad_request(format!("no item {id} in '{scene}'")))?;
+                ffi::obs_sceneitem_select(it, true);
+            }
+        }
+        Ok(json!({}))
+    }
+
+    fn get_source_settings(&self, scene: &str, item: i64) -> Result<Value, ProtoError> {
+        self.with_item(scene, item, |it| unsafe {
+            let src = ffi::obs_sceneitem_get_source(it);
+            if src.is_null() {
+                return Err(ProtoError::internal("item has no source"));
+            }
+            Ok(json!({
+                "id": cstr_owned(ffi::obs_source_get_id(src)),
+                "name": cstr_owned(ffi::obs_source_get_name(src)),
+                "settings": source_settings_json(src),
+            }))
+        })
+    }
+
+    fn get_properties(&self, scene: &str, item: i64) -> Result<Value, ProtoError> {
+        self.with_item(scene, item, |it| unsafe {
+            let src = ffi::obs_sceneitem_get_source(it);
+            if src.is_null() {
+                return Err(ProtoError::internal("item has no source"));
+            }
+            let props = ffi::obs_source_properties(src);
+            let list = if props.is_null() {
+                Vec::new()
+            } else {
+                let l = props_to_json(props);
+                ffi::obs_properties_destroy(props);
+                l
+            };
+            Ok(json!({ "props": list, "settings": source_settings_json(src) }))
+        })
+    }
+
+    fn click_property_button(&self, scene: &str, item: i64, prop: &str) -> Result<Value, ProtoError> {
+        self.with_item(scene, item, |it| unsafe {
+            let src = ffi::obs_sceneitem_get_source(it);
+            if src.is_null() {
+                return Err(ProtoError::internal("item has no source"));
+            }
+            let props = ffi::obs_source_properties(src);
+            if props.is_null() {
+                return Err(ProtoError::bad_request("source has no properties"));
+            }
+            let c = cstring(prop);
+            let p = ffi::obs_properties_get(props, c.as_ptr());
+            if p.is_null() {
+                ffi::obs_properties_destroy(props);
+                return Err(ProtoError::bad_request(format!("no property '{prop}'")));
+            }
+            let refresh = ffi::obs_property_button_clicked(p, src as *mut std::ffi::c_void);
+            ffi::obs_properties_destroy(props);
+            Ok(json!({ "refresh": refresh }))
+        })
+    }
+
+    fn list_input_types(&self) -> Result<Value, ProtoError> {
+        let mut types = Vec::new();
+        unsafe {
+            let mut idx = 0usize;
+            loop {
+                let mut id: *const std::os::raw::c_char = std::ptr::null();
+                let mut unversioned: *const std::os::raw::c_char = std::ptr::null();
+                if !ffi::obs_enum_input_types2(idx, &mut id, &mut unversioned) {
+                    break;
+                }
+                idx += 1;
+                if id.is_null() {
+                    continue;
+                }
+                let caps = ffi::obs_get_source_output_flags(id);
+                if caps & ffi::OBS_SOURCE_CAP_DISABLED != 0 {
+                    continue;
+                }
+                let display = ffi::obs_source_get_display_name(id);
+                types.push(json!({
+                    "id": cstr_owned(id),
+                    "display_name": if display.is_null() { cstr_owned(id) } else { cstr_owned(display) },
+                    "caps": caps,
+                }));
+            }
+        }
+        Ok(json!({ "types": types }))
+    }
+
+    fn screenshot(
+        &self,
+        scene: Option<&str>,
+        item: Option<i64>,
+        picker: Option<&str>,
+        width: u32,
+    ) -> Result<Value, ProtoError> {
+        // Resolve target: picker temp / scene item / whole program.
+        let (src, src_w, src_h) = unsafe {
+            if let Some(mid) = picker {
+                let (_, _, p) = self
+                    .picker
+                    .iter()
+                    .find(|(id, _, _)| id == mid)
+                    .ok_or_else(|| ProtoError::bad_request(format!("no picker source '{mid}'")))?;
+                (*p, ffi::obs_source_get_width(*p), ffi::obs_source_get_height(*p))
+            } else if let (Some(sc), Some(it_id)) = (scene, item) {
+                let scene_ptr = self
+                    .find_scene(sc)
+                    .ok_or_else(|| ProtoError::bad_request(format!("no scene '{sc}'")))?;
+                let it = find_item_deep(scene_ptr, it_id)
+                    .ok_or_else(|| ProtoError::bad_request(format!("no item {it_id} in '{sc}'")))?;
+                let s = ffi::obs_sceneitem_get_source(it);
+                (s, ffi::obs_source_get_width(s), ffi::obs_source_get_height(s))
+            } else {
+                (std::ptr::null_mut(), 0, 0)
+            }
+        };
+        let (cw, ch) = self.canvas_size();
+        let (src_w, src_h) = if src_w == 0 || src_h == 0 { (cw, ch) } else { (src_w, src_h) };
+        let out_w = width.clamp(64, 640);
+        let out_h = ((out_w as u64 * src_h as u64) / src_w.max(1) as u64).max(1) as u32;
+        let png = unsafe { screenshot::capture(src, src_w, src_h, out_w, out_h) }
+            .map_err(ProtoError::internal)?;
+        use base64::Engine as _;
+        let b64 = base64::engine::general_purpose::STANDARD.encode(&png);
+        Ok(json!({ "png": b64, "w": out_w, "h": out_h }))
+    }
+
+    /// Temp PRIVATE monitor_capture per real monitor, inc_showing held (WGC
+    /// init gate). Idempotent upsert: close first.
+    fn picker_open(&mut self, kind: &str) -> Result<Value, ProtoError> {
+        if kind != "monitor" {
+            return Err(ProtoError::bad_request(format!("unknown picker kind '{kind}'")));
+        }
+        self.picker_close();
+        let monitors = unsafe { enumerate_monitors() };
+        let mut out = Vec::new();
+        unsafe {
+            for (mid, label) in monitors {
+                let settings = data_from_value(&json!({ "monitor_id": mid, "method": 2 }));
+                let cid = cstring("monitor_capture");
+                let cname = cstring(&format!("__picker {mid}"));
+                let src = ffi::obs_source_create_private(cid.as_ptr(), cname.as_ptr(), settings);
+                ffi::obs_data_release(settings);
+                if src.is_null() {
+                    log::warn!("picker: monitor_capture create failed for {mid}");
+                    continue;
+                }
+                ffi::obs_source_inc_showing(src);
+                out.push(json!({ "id": mid, "label": label }));
+                self.picker.push((mid.clone(), label, src));
+            }
+        }
+        log::info!("picker_open: {} monitor temp source(s)", self.picker.len());
+        Ok(json!({ "monitors": out }))
+    }
+
+    fn picker_close(&mut self) {
+        let n = self.picker.len();
+        for (_, _, src) in self.picker.drain(..) {
+            unsafe {
+                ffi::obs_source_dec_showing(src);
+                ffi::obs_source_release(src);
+            }
+        }
+        if n > 0 {
+            log::info!("picker_close: released {n} temp source(s)");
+        }
+    }
+
+    fn canvas_size(&self) -> (u32, u32) {
+        unsafe {
+            let mut ovi: ffi::obs_video_info = std::mem::zeroed();
+            if ffi::obs_get_video_info(&mut ovi) {
+                (ovi.base_width, ovi.base_height)
+            } else {
+                (1920, 1080)
+            }
+        }
     }
 
     /// Fresh-box guard: with no persisted collection the program is empty —
@@ -619,6 +1174,12 @@ impl Engine {
             ffi::obs_data_array_release(arr);
             ffi::obs_data_release(root);
         }
+        // Scene ORDER sidecar — obs_save_sources order is not ours to control,
+        // and the UI's scene list order is user-meaningful (reorder_scenes).
+        let names: Vec<&str> = self.scenes.iter().map(|(n, _)| n.as_str()).collect();
+        if let Ok(json) = serde_json::to_string(&names) {
+            let _ = std::fs::write(scene_order_path(), json);
+        }
     }
 
     fn load_collection(&mut self) {
@@ -655,6 +1216,16 @@ impl Engine {
             }
             ffi::obs_enum_scenes(Some(collect), &mut self.scenes as *mut _ as *mut std::ffi::c_void);
 
+            // Apply the persisted scene order (sidecar); unknown names keep
+            // their enum order at the end.
+            if let Ok(txt) = std::fs::read_to_string(scene_order_path()) {
+                if let Ok(order) = serde_json::from_str::<Vec<String>>(&txt) {
+                    self.scenes.sort_by_key(|(n, _)| {
+                        order.iter().position(|o| o == n).unwrap_or(usize::MAX)
+                    });
+                }
+            }
+
             let key_cur = cstring("current_scene");
             let cur = ffi::obs_data_get_string(root, key_cur.as_ptr());
             let cur = if cur.is_null() { String::new() } else { CStr::from_ptr(cur).to_string_lossy().into_owned() };
@@ -674,6 +1245,7 @@ impl Engine {
         for (_, d) in self.displays.drain(..) {
             unsafe { ffi::obs_display_destroy(d) };
         }
+        self.picker_close();
         if self.recording.is_some() {
             let _ = self.stop_record();
         }
@@ -751,6 +1323,9 @@ unsafe extern "C" fn draw_main(_param: *mut std::ffi::c_void, cx: u32, cy: u32) 
         gs_ortho(0.0, ovi.base_width as f32, 0.0, ovi.base_height as f32, -100.0, 100.0);
         gs_set_viewport(0, 0, cx as i32, cy as i32);
         ffi::obs_render_main_texture();
+        // SP3: selection box + handles + hover outline + snap guides, drawn
+        // in the same canvas ortho so they track the preview scale for free.
+        overlay::draw_overlay(ovi.base_width, ovi.base_height, cx);
         gs_projection_pop();
         gs_viewport_pop();
     }
@@ -763,26 +1338,497 @@ unsafe fn data_from_value(v: &Value) -> *mut ffi::obs_data {
     unsafe { ffi::obs_data_create_from_json(c.as_ptr()) }
 }
 
+/// v2 enumeration: wire order = obs_scene_enum_items order (BOTTOM→TOP of
+/// the render stack); group children nest under `children` with corners
+/// composed through the group's draw transform (canvas space either way).
 unsafe fn enum_scene_sources(scene: *mut ffi::obs_scene) -> Vec<SourceInfo> {
+    struct EnumCtx {
+        out: Vec<SourceInfo>,
+        parent: Option<M4>,
+    }
     unsafe extern "C" fn collect(
         _scene: *mut ffi::obs_scene,
         item: *mut ffi::obs_scene_item,
         param: *mut std::ffi::c_void,
     ) -> bool {
-        let out = unsafe { &mut *(param as *mut Vec<SourceInfo>) };
-        let src = unsafe { ffi::obs_sceneitem_get_source(item) };
-        if !src.is_null() {
-            let name = unsafe { CStr::from_ptr(ffi::obs_source_get_name(src)) }.to_string_lossy().into_owned();
-            let id = unsafe { CStr::from_ptr(ffi::obs_source_get_id(src)) }.to_string_lossy().into_owned();
-            let width = unsafe { ffi::obs_source_get_width(src) };
-            let height = unsafe { ffi::obs_source_get_height(src) };
-            let showing = unsafe { ffi::obs_source_showing(src) };
-            let active = unsafe { ffi::obs_source_active(src) };
-            out.push(SourceInfo { name, id, width, height, showing, active });
+        unsafe {
+            let ctx = &mut *(param as *mut EnumCtx);
+            let src = ffi::obs_sceneitem_get_source(item);
+            if src.is_null() {
+                return true;
+            }
+            let is_group = ffi::obs_sceneitem_is_group(item);
+            let id = CStr::from_ptr(ffi::obs_source_get_id(src)).to_string_lossy().into_owned();
+
+            let mut ti: ffi::obs_transform_info = std::mem::zeroed();
+            ffi::obs_sceneitem_get_info2(item, &mut ti);
+            let mut cr: ffi::obs_sceneitem_crop = std::mem::zeroed();
+            ffi::obs_sceneitem_get_crop(item, &mut cr);
+
+            let children = if is_group {
+                let mut sub = EnumCtx {
+                    out: Vec::new(),
+                    parent: Some(overlay::item_draw_transform(item)),
+                };
+                ffi::obs_sceneitem_group_enum_items(
+                    item,
+                    Some(collect),
+                    &mut sub as *mut EnumCtx as *mut std::ffi::c_void,
+                );
+                sub.out
+            } else {
+                Vec::new()
+            };
+
+            ctx.out.push(SourceInfo {
+                item_id: ffi::obs_sceneitem_get_id(item),
+                name: CStr::from_ptr(ffi::obs_source_get_name(src)).to_string_lossy().into_owned(),
+                is_scene: id == "scene",
+                id,
+                width: ffi::obs_source_get_width(src),
+                height: ffi::obs_source_get_height(src),
+                showing: ffi::obs_source_showing(src),
+                active: ffi::obs_source_active(src),
+                visible: ffi::obs_sceneitem_visible(item),
+                locked: ffi::obs_sceneitem_locked(item),
+                selected: ffi::obs_sceneitem_selected(item),
+                is_group,
+                transform: Transform {
+                    pos_x: ti.pos.__bindgen_anon_1.__bindgen_anon_1.x,
+                    pos_y: ti.pos.__bindgen_anon_1.__bindgen_anon_1.y,
+                    rot: ti.rot,
+                    scale_x: ti.scale.__bindgen_anon_1.__bindgen_anon_1.x,
+                    scale_y: ti.scale.__bindgen_anon_1.__bindgen_anon_1.y,
+                    alignment: ti.alignment,
+                    bounds_type: ti.bounds_type,
+                    bounds_alignment: ti.bounds_alignment,
+                    bounds_x: ti.bounds.__bindgen_anon_1.__bindgen_anon_1.x,
+                    bounds_y: ti.bounds.__bindgen_anon_1.__bindgen_anon_1.y,
+                    crop_to_bounds: ti.crop_to_bounds,
+                },
+                crop: Crop { left: cr.left, top: cr.top, right: cr.right, bottom: cr.bottom },
+                corners: overlay::item_corners(item, ctx.parent.as_ref()),
+                children,
+            });
+            true
         }
-        true
     }
-    let mut out = Vec::new();
-    unsafe { ffi::obs_scene_enum_items(scene, Some(collect), &mut out as *mut _ as *mut std::ffi::c_void) };
-    out
+    let mut ctx = EnumCtx { out: Vec::new(), parent: None };
+    unsafe { ffi::obs_scene_enum_items(scene, Some(collect), &mut ctx as *mut EnumCtx as *mut std::ffi::c_void) };
+    ctx.out
+}
+
+/// Deep item lookup — obs_scene_find_sceneitem_by_id does NOT recurse into
+/// groups, so this is the one place group addressing lives (risk #6: every
+/// item verb routes through with_item → here).
+unsafe fn find_item_deep(scene: *mut ffi::obs_scene, id: i64) -> Option<*mut ffi::obs_sceneitem_t> {
+    struct FindCtx {
+        id: i64,
+        found: Option<*mut ffi::obs_sceneitem_t>,
+    }
+    unsafe extern "C" fn cb(
+        _s: *mut ffi::obs_scene_t,
+        item: *mut ffi::obs_sceneitem_t,
+        param: *mut std::ffi::c_void,
+    ) -> bool {
+        unsafe {
+            let ctx = &mut *(param as *mut FindCtx);
+            if ffi::obs_sceneitem_get_id(item) == ctx.id {
+                ctx.found = Some(item);
+                return false;
+            }
+            if ffi::obs_sceneitem_is_group(item) {
+                ffi::obs_sceneitem_group_enum_items(item, Some(cb), param);
+                if ctx.found.is_some() {
+                    return false;
+                }
+            }
+            true
+        }
+    }
+    let mut ctx = FindCtx { id, found: None };
+    unsafe { ffi::obs_scene_enum_items(scene, Some(cb), &mut ctx as *mut FindCtx as *mut std::ffi::c_void) };
+    ctx.found
+}
+
+unsafe fn name_taken(name: &str) -> bool {
+    unsafe {
+        let c = cstring(name);
+        let s = ffi::obs_get_source_by_name(c.as_ptr());
+        if s.is_null() {
+            false
+        } else {
+            ffi::obs_source_release(s);
+            true
+        }
+    }
+}
+
+/// First free "<base>" / "<base> N" (N from 2) — obs_source_create doesn't
+/// dedupe and duplicates break name addressing.
+unsafe fn free_name(base: &str) -> String {
+    unsafe {
+        if !name_taken(base) {
+            return base.to_owned();
+        }
+        for i in 2u32.. {
+            let candidate = format!("{base} {i}");
+            if !name_taken(&candidate) {
+                return candidate;
+            }
+        }
+        unreachable!()
+    }
+}
+
+fn cstr_owned(p: *const std::os::raw::c_char) -> String {
+    if p.is_null() {
+        String::new()
+    } else {
+        unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned()
+    }
+}
+
+/// Partial-overlay transform/crop patch: read get_info2/get_crop, overlay the
+/// JSON-present fields, write back. Used by create_source, set_transform, and
+/// transform_commit alike.
+unsafe fn apply_transform_patch(item: *mut ffi::obs_sceneitem_t, transform: &Value, crop: &Value) {
+    unsafe {
+        if transform.is_object() {
+            let mut ti: ffi::obs_transform_info = std::mem::zeroed();
+            ffi::obs_sceneitem_get_info2(item, &mut ti);
+            let f = |k: &str| transform.get(k).and_then(Value::as_f64).map(|v| v as f32);
+            if let Some(v) = f("pos_x") {
+                ti.pos.__bindgen_anon_1.__bindgen_anon_1.x = v;
+            }
+            if let Some(v) = f("pos_y") {
+                ti.pos.__bindgen_anon_1.__bindgen_anon_1.y = v;
+            }
+            if let Some(v) = f("rot") {
+                ti.rot = v;
+            }
+            if let Some(v) = f("scale_x") {
+                ti.scale.__bindgen_anon_1.__bindgen_anon_1.x = v;
+            }
+            if let Some(v) = f("scale_y") {
+                ti.scale.__bindgen_anon_1.__bindgen_anon_1.y = v;
+            }
+            if let Some(v) = transform.get("alignment").and_then(Value::as_u64) {
+                ti.alignment = v as u32;
+            }
+            if let Some(v) = transform.get("bounds_type").and_then(Value::as_i64) {
+                ti.bounds_type = v as ffi::obs_bounds_type;
+            }
+            if let Some(v) = transform.get("bounds_alignment").and_then(Value::as_u64) {
+                ti.bounds_alignment = v as u32;
+            }
+            if let Some(v) = f("bounds_x") {
+                ti.bounds.__bindgen_anon_1.__bindgen_anon_1.x = v;
+            }
+            if let Some(v) = f("bounds_y") {
+                ti.bounds.__bindgen_anon_1.__bindgen_anon_1.y = v;
+            }
+            if let Some(v) = transform.get("crop_to_bounds").and_then(Value::as_bool) {
+                ti.crop_to_bounds = v;
+            }
+            ffi::obs_sceneitem_set_info2(item, &ti);
+        }
+        if crop.is_object() {
+            let mut cr: ffi::obs_sceneitem_crop = std::mem::zeroed();
+            ffi::obs_sceneitem_get_crop(item, &mut cr);
+            let g = |k: &str| crop.get(k).and_then(Value::as_i64).map(|v| v as i32);
+            if let Some(v) = g("left") {
+                cr.left = v;
+            }
+            if let Some(v) = g("top") {
+                cr.top = v;
+            }
+            if let Some(v) = g("right") {
+                cr.right = v;
+            }
+            if let Some(v) = g("bottom") {
+                cr.bottom = v;
+            }
+            ffi::obs_sceneitem_set_crop(item, &cr);
+        }
+    }
+}
+
+/// Source settings as a JSON Value, defaults folded in (form seeding + undo
+/// capture want the complete picture, not just explicitly-set keys).
+unsafe fn source_settings_json(src: *mut ffi::obs_source) -> Value {
+    unsafe {
+        let data = ffi::obs_source_get_settings(src);
+        if data.is_null() {
+            return json!({});
+        }
+        let js = ffi::obs_data_get_json_with_defaults(data);
+        let v = if js.is_null() {
+            json!({})
+        } else {
+            serde_json::from_str(&CStr::from_ptr(js).to_string_lossy()).unwrap_or_else(|_| json!({}))
+        };
+        ffi::obs_data_release(data);
+        v
+    }
+}
+
+/// Monitor list via a throwaway PRIVATE monitor_capture's own "monitor_id"
+/// property list (first_real_monitor_id generalized — plugin-enumerated, so
+/// ordering matches the OBS UI: primary first). Returns (id, label) pairs.
+unsafe fn enumerate_monitors() -> Vec<(String, String)> {
+    unsafe {
+        let cid = cstring("monitor_capture");
+        let cname = cstring("__picker_probe");
+        let probe = ffi::obs_source_create_private(cid.as_ptr(), cname.as_ptr(), std::ptr::null_mut());
+        if probe.is_null() {
+            return Vec::new();
+        }
+        let mut out = Vec::new();
+        let props = ffi::obs_source_properties(probe);
+        if !props.is_null() {
+            let key = cstring("monitor_id");
+            let p = ffi::obs_properties_get(props, key.as_ptr());
+            if !p.is_null() {
+                let count = ffi::obs_property_list_item_count(p);
+                for i in 0..count {
+                    let sv = ffi::obs_property_list_item_string(p, i);
+                    let nv = ffi::obs_property_list_item_name(p, i);
+                    if sv.is_null() {
+                        continue;
+                    }
+                    let ids = CStr::from_ptr(sv).to_string_lossy();
+                    if ids == "DUMMY" || ids.is_empty() {
+                        continue;
+                    }
+                    out.push((ids.into_owned(), cstr_owned(nv)));
+                }
+            }
+            ffi::obs_properties_destroy(props);
+        }
+        ffi::obs_source_release(probe);
+        out
+    }
+}
+
+/// obs_properties → PropSpec JSON list (recursing groups). The wire shape the
+/// PropertiesForm renders; omitted keys = null-absent.
+unsafe fn props_to_json(props: *mut ffi::obs_properties_t) -> Vec<Value> {
+    unsafe {
+        let mut out = Vec::new();
+        let mut p = ffi::obs_properties_first(props);
+        while !p.is_null() {
+            let ty = ffi::obs_property_get_type(p);
+            let type_name = match ty {
+                ffi::obs_property_type_OBS_PROPERTY_BOOL => "bool",
+                ffi::obs_property_type_OBS_PROPERTY_INT => "int",
+                ffi::obs_property_type_OBS_PROPERTY_FLOAT => "float",
+                ffi::obs_property_type_OBS_PROPERTY_TEXT => "text",
+                ffi::obs_property_type_OBS_PROPERTY_PATH => "path",
+                ffi::obs_property_type_OBS_PROPERTY_LIST => "list",
+                ffi::obs_property_type_OBS_PROPERTY_COLOR => "color",
+                ffi::obs_property_type_OBS_PROPERTY_BUTTON => "button",
+                ffi::obs_property_type_OBS_PROPERTY_FONT => "font",
+                ffi::obs_property_type_OBS_PROPERTY_EDITABLE_LIST => "editable_list",
+                ffi::obs_property_type_OBS_PROPERTY_FRAME_RATE => "frame_rate",
+                ffi::obs_property_type_OBS_PROPERTY_GROUP => "group",
+                ffi::obs_property_type_OBS_PROPERTY_COLOR_ALPHA => "color_alpha",
+                _ => "invalid",
+            };
+            let mut spec = serde_json::Map::new();
+            spec.insert("name".into(), Value::String(cstr_owned(ffi::obs_property_name(p))));
+            spec.insert("label".into(), Value::String(cstr_owned(ffi::obs_property_description(p))));
+            spec.insert("type".into(), Value::String(type_name.into()));
+            spec.insert("enabled".into(), Value::Bool(ffi::obs_property_enabled(p)));
+            spec.insert("visible".into(), Value::Bool(ffi::obs_property_visible(p)));
+            let long_desc = cstr_owned(ffi::obs_property_long_description(p));
+            if !long_desc.is_empty() {
+                spec.insert("long_desc".into(), Value::String(long_desc));
+            }
+            match ty {
+                ffi::obs_property_type_OBS_PROPERTY_INT => {
+                    spec.insert("min".into(), json!(ffi::obs_property_int_min(p)));
+                    spec.insert("max".into(), json!(ffi::obs_property_int_max(p)));
+                    spec.insert("step".into(), json!(ffi::obs_property_int_step(p)));
+                    spec.insert(
+                        "number_type".into(),
+                        Value::String(
+                            if ffi::obs_property_int_type(p) == ffi::obs_number_type_OBS_NUMBER_SLIDER {
+                                "slider".into()
+                            } else {
+                                "scroller".to_string()
+                            },
+                        ),
+                    );
+                    let suffix = cstr_owned(ffi::obs_property_int_suffix(p));
+                    if !suffix.is_empty() {
+                        spec.insert("suffix".into(), Value::String(suffix));
+                    }
+                }
+                ffi::obs_property_type_OBS_PROPERTY_FLOAT => {
+                    spec.insert("min".into(), json!(ffi::obs_property_float_min(p)));
+                    spec.insert("max".into(), json!(ffi::obs_property_float_max(p)));
+                    spec.insert("step".into(), json!(ffi::obs_property_float_step(p)));
+                    spec.insert(
+                        "number_type".into(),
+                        Value::String(
+                            if ffi::obs_property_float_type(p) == ffi::obs_number_type_OBS_NUMBER_SLIDER {
+                                "slider".into()
+                            } else {
+                                "scroller".to_string()
+                            },
+                        ),
+                    );
+                    let suffix = cstr_owned(ffi::obs_property_float_suffix(p));
+                    if !suffix.is_empty() {
+                        spec.insert("suffix".into(), Value::String(suffix));
+                    }
+                }
+                ffi::obs_property_type_OBS_PROPERTY_TEXT => {
+                    let tt = ffi::obs_property_text_type(p);
+                    spec.insert(
+                        "text_type".into(),
+                        Value::String(
+                            match tt {
+                                ffi::obs_text_type_OBS_TEXT_PASSWORD => "password",
+                                ffi::obs_text_type_OBS_TEXT_MULTILINE => "multiline",
+                                ffi::obs_text_type_OBS_TEXT_INFO => "info",
+                                _ => "default",
+                            }
+                            .into(),
+                        ),
+                    );
+                    if tt == ffi::obs_text_type_OBS_TEXT_INFO {
+                        spec.insert(
+                            "info_type".into(),
+                            Value::String(
+                                match ffi::obs_property_text_info_type(p) {
+                                    ffi::obs_text_info_type_OBS_TEXT_INFO_WARNING => "warning",
+                                    ffi::obs_text_info_type_OBS_TEXT_INFO_ERROR => "error",
+                                    _ => "normal",
+                                }
+                                .into(),
+                            ),
+                        );
+                    }
+                }
+                ffi::obs_property_type_OBS_PROPERTY_PATH => {
+                    spec.insert(
+                        "path_type".into(),
+                        Value::String(
+                            match ffi::obs_property_path_type(p) {
+                                ffi::obs_path_type_OBS_PATH_FILE_SAVE => "file_save",
+                                ffi::obs_path_type_OBS_PATH_DIRECTORY => "directory",
+                                _ => "file",
+                            }
+                            .into(),
+                        ),
+                    );
+                    let filter = cstr_owned(ffi::obs_property_path_filter(p));
+                    if !filter.is_empty() {
+                        spec.insert("filter".into(), Value::String(filter));
+                    }
+                    let dp = cstr_owned(ffi::obs_property_path_default_path(p));
+                    if !dp.is_empty() {
+                        spec.insert("default_path".into(), Value::String(dp));
+                    }
+                }
+                ffi::obs_property_type_OBS_PROPERTY_LIST => {
+                    let format = ffi::obs_property_list_format(p);
+                    spec.insert(
+                        "list_type".into(),
+                        Value::String(
+                            match ffi::obs_property_list_type(p) {
+                                ffi::obs_combo_type_OBS_COMBO_TYPE_EDITABLE => "editable",
+                                ffi::obs_combo_type_OBS_COMBO_TYPE_RADIO => "radio",
+                                _ => "list",
+                            }
+                            .into(),
+                        ),
+                    );
+                    let fmt_name = match format {
+                        ffi::obs_combo_format_OBS_COMBO_FORMAT_INT => "int",
+                        ffi::obs_combo_format_OBS_COMBO_FORMAT_FLOAT => "float",
+                        ffi::obs_combo_format_OBS_COMBO_FORMAT_BOOL => "bool",
+                        _ => "string",
+                    };
+                    spec.insert("format".into(), Value::String(fmt_name.into()));
+                    let mut items = Vec::new();
+                    for i in 0..ffi::obs_property_list_item_count(p) {
+                        let value = match format {
+                            ffi::obs_combo_format_OBS_COMBO_FORMAT_INT => {
+                                json!(ffi::obs_property_list_item_int(p, i))
+                            }
+                            ffi::obs_combo_format_OBS_COMBO_FORMAT_FLOAT => {
+                                json!(ffi::obs_property_list_item_float(p, i))
+                            }
+                            ffi::obs_combo_format_OBS_COMBO_FORMAT_BOOL => {
+                                json!(ffi::obs_property_list_item_bool(p, i))
+                            }
+                            _ => Value::String(cstr_owned(ffi::obs_property_list_item_string(p, i))),
+                        };
+                        items.push(json!({
+                            "name": cstr_owned(ffi::obs_property_list_item_name(p, i)),
+                            "value": value,
+                            "disabled": ffi::obs_property_list_item_disabled(p, i),
+                        }));
+                    }
+                    spec.insert("items".into(), Value::Array(items));
+                }
+                ffi::obs_property_type_OBS_PROPERTY_EDITABLE_LIST => {
+                    spec.insert(
+                        "editable_list_type".into(),
+                        Value::String(
+                            match ffi::obs_property_editable_list_type(p) {
+                                ffi::obs_editable_list_type_OBS_EDITABLE_LIST_TYPE_FILES => "files",
+                                ffi::obs_editable_list_type_OBS_EDITABLE_LIST_TYPE_FILES_AND_URLS => {
+                                    "files_and_urls"
+                                }
+                                _ => "strings",
+                            }
+                            .into(),
+                        ),
+                    );
+                    let filter = cstr_owned(ffi::obs_property_editable_list_filter(p));
+                    if !filter.is_empty() {
+                        spec.insert("filter".into(), Value::String(filter));
+                    }
+                }
+                ffi::obs_property_type_OBS_PROPERTY_BUTTON => {
+                    let bt = ffi::obs_property_button_type(p);
+                    spec.insert(
+                        "button_type".into(),
+                        Value::String(
+                            if bt == ffi::obs_button_type_OBS_BUTTON_URL { "url" } else { "default" }.into(),
+                        ),
+                    );
+                    let url = cstr_owned(ffi::obs_property_button_url(p));
+                    if !url.is_empty() {
+                        spec.insert("url".into(), Value::String(url));
+                    }
+                }
+                ffi::obs_property_type_OBS_PROPERTY_GROUP => {
+                    spec.insert(
+                        "group_type".into(),
+                        Value::String(
+                            if ffi::obs_property_group_type(p) == ffi::obs_group_type_OBS_GROUP_CHECKABLE {
+                                "checkable".into()
+                            } else {
+                                "normal".to_string()
+                            },
+                        ),
+                    );
+                    let content = ffi::obs_property_group_content(p);
+                    let children = if content.is_null() { Vec::new() } else { props_to_json(content) };
+                    spec.insert("children".into(), Value::Array(children));
+                }
+                _ => {}
+            }
+            out.push(Value::Object(spec));
+            if !ffi::obs_property_next(&mut p) {
+                break;
+            }
+        }
+        out
+    }
 }

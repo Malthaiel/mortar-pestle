@@ -13,8 +13,25 @@ import { getLiveKeybinds } from '@host/keybinds/registry.js';
 import useBroadcastState from './useBroadcastState.js';
 import EngineDisplay from './EngineDisplay.jsx';
 import ComposerBar from './ComposerBar.jsx';
+import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
+import Inspector from './Inspector.jsx';
+import PreviewInteract from './PreviewInteract.jsx';
 import { KEYBIND_ENTRIES } from './index.jsx';
+import { pushUndo, runRedo, runUndo } from './broadcastUndo.js';
+import { updateBroadcastUi, useBroadcastUi, verb } from './broadcastStore.js';
+import { toCanvas } from './canvasMath.js';
 import './broadcast.css';
+
+// Delight (b): OS file drop onto the preview → matching source at the drop
+// point. Window-level Tauri event (occlusion-free — no DOM involved); the
+// native child may dead-zone OLE drops over the region (spike; WM_DROPFILES
+// forward on the host child is the documented fallback if it does).
+const DROP_TYPES = {
+  png: 'image_source', jpg: 'image_source', jpeg: 'image_source', gif: 'image_source',
+  webp: 'image_source', bmp: 'image_source',
+  mp4: 'ffmpeg_source', mkv: 'ffmpeg_source', mov: 'ffmpeg_source', webm: 'ffmpeg_source',
+  mp3: 'ffmpeg_source', wav: 'ffmpeg_source', flac: 'ffmpeg_source', ogg: 'ffmpeg_source',
+};
 
 // Module-local by host convention (video-editor keybinds.js carries the same).
 function isEditableTarget(target) {
@@ -25,6 +42,7 @@ function isEditableTarget(target) {
 
 export default function BroadcastPage({ api, accent }) {
   const { snapshot, error, engine, alive } = useBroadcastState(api);
+  const ui = useBroadcastUi();
   const [busy, setBusy] = useState(false);
   const recording = alive && !!snapshot?.recording?.active;
 
@@ -55,29 +73,91 @@ export default function BroadcastPage({ api, accent }) {
       if (matchChord(e, kb[def.id] ?? def.default)) {
         e.preventDefault();
         toggleRef.current();
+        return;
+      }
+      // SP3 scene-graph undo/redo — page-scoped, hardcoded chords (video-editor
+      // precedent; hotkey registry work stays SP10).
+      const meta = e.metaKey || e.ctrlKey;
+      if (meta && !e.altKey && (e.key === 'z' || e.key === 'Z')) {
+        e.preventDefault();
+        if (e.shiftKey) runRedo(api);
+        else runUndo(api);
       }
     };
     window.addEventListener('keydown', onKeydown);
     return () => window.removeEventListener('keydown', onKeydown);
-  }, []);
+  }, [api]);
+
+  // OS file drop → source at drop position (delight b).
+  const snapRef = useRef(snapshot);
+  snapRef.current = snapshot;
+  useEffect(() => {
+    let un = null;
+    getCurrentWebviewWindow().onDragDropEvent((event) => {
+      if (event.payload.type !== 'drop') return;
+      const snap = snapRef.current;
+      const sceneName = snap?.current_scene;
+      if (!sceneName) return;
+      const el = document.querySelector('.bcast-preview-region');
+      if (!el) return;
+      const dpr = window.devicePixelRatio || 1;
+      const cx = event.payload.position.x / dpr;
+      const cy = event.payload.position.y / dpr;
+      const rect = el.getBoundingClientRect();
+      if (cx < rect.left || cx > rect.right || cy < rect.top || cy > rect.bottom) return;
+      const canvas = snap.canvas || { width: 1920, height: 1080 };
+      const [px, py] = toCanvas(cx, cy, rect, canvas);
+      for (const path of event.payload.paths || []) {
+        const ext = path.split('.').pop()?.toLowerCase();
+        const typeId = DROP_TYPES[ext];
+        if (!typeId) continue;
+        const stem = path.split(/[\\/]/).pop().replace(/\.[^.]+$/, '');
+        const settings = typeId === 'image_source'
+          ? { file: path }
+          : { local_file: path, is_local_file: true };
+        verb(api, 'create_source', {
+          scene: sceneName, id: typeId, name: stem, settings,
+          transform: { pos_x: Math.round(px), pos_y: Math.round(py) },
+        }).then((r) => {
+          pushUndo({
+            label: `Drop ${r.name}`,
+            undo: [{ op: 'remove_item', args: { scene: sceneName, item: r.item } }],
+            redo: [{ op: 'create_source', args: { scene: sceneName, id: typeId, name: r.name, settings, transform: { pos_x: Math.round(px), pos_y: Math.round(py) } }, remap: r.item }],
+          });
+          updateBroadcastUi({ selection: { scene: sceneName, itemId: r.item } });
+          verb(api, 'select_item', { scene: sceneName, item: r.item }).catch(() => {});
+        }).catch((e) => console.warn('[broadcast] drop create_source', e));
+      }
+    }).then((u) => { un = u; });
+    return () => { if (un) un(); };
+  }, [api]);
 
   const failed = engine?.state === 'failed';
   const starting = engine?.state === 'spawning' || engine?.state === 'up' || engine?.state === 'adopting';
 
   return (
     <div className="bcast-page">
-      <div className="bcast-preview-area">
-        {failed ? (
-          <EmptyState
-            message="Broadcast engine crash-looped."
-            ctaLabel="Restart engine"
-            ctaOnClick={() => api.invoke('broadcast_restart_engine').catch(() => {})}
-            accent={accent}
-          />
-        ) : !alive ? (
-          <EmptyState message={starting ? 'Broadcast engine is starting…' : 'Broadcast engine is down.'} />
-        ) : (
-          <EngineDisplay api={api} alive={alive} />
+      {/* SP3: preview + in-layout inspector (flex siblings — no DOM overlay
+          may cover the native region; the preview shrinks via bounds sync). */}
+      <div className="bcast-main">
+        <div className="bcast-preview-area">
+          {failed ? (
+            <EmptyState
+              message="Broadcast engine crash-looped."
+              ctaLabel="Restart engine"
+              ctaOnClick={() => api.invoke('broadcast_restart_engine').catch(() => {})}
+              accent={accent}
+            />
+          ) : !alive ? (
+            <EmptyState message={starting ? 'Broadcast engine is starting…' : 'Broadcast engine is down.'} />
+          ) : (
+            <EngineDisplay api={api} alive={alive}>
+              <PreviewInteract api={api} snapshot={snapshot} />
+            </EngineDisplay>
+          )}
+        </div>
+        {alive && ui.inspectorOpen && (
+          <Inspector api={api} snapshot={snapshot} selection={ui.selection} accent={accent} />
         )}
       </div>
       <ComposerBar
