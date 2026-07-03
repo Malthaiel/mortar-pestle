@@ -14,6 +14,7 @@ import useBroadcastState from './useBroadcastState.js';
 import EngineDisplay from './EngineDisplay.jsx';
 import ComposerBar from './ComposerBar.jsx';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { listen } from '@tauri-apps/api/event';
 import Inspector from './Inspector.jsx';
 import PreviewInteract from './PreviewInteract.jsx';
 import { KEYBIND_ENTRIES } from './index.jsx';
@@ -92,22 +93,20 @@ export default function BroadcastPage({ api, accent }) {
   const snapRef = useRef(snapshot);
   snapRef.current = snapshot;
   useEffect(() => {
-    let un = null;
-    getCurrentWebviewWindow().onDragDropEvent((event) => {
-      if (event.payload.type !== 'drop') return;
+    const handleDrop = (paths, position) => {
       const snap = snapRef.current;
       const sceneName = snap?.current_scene;
       if (!sceneName) return;
       const el = document.querySelector('.bcast-preview-region');
       if (!el) return;
       const dpr = window.devicePixelRatio || 1;
-      const cx = event.payload.position.x / dpr;
-      const cy = event.payload.position.y / dpr;
+      const cx = position.x / dpr;
+      const cy = position.y / dpr;
       const rect = el.getBoundingClientRect();
       if (cx < rect.left || cx > rect.right || cy < rect.top || cy > rect.bottom) return;
       const canvas = snap.canvas || { width: 1920, height: 1080 };
       const [px, py] = toCanvas(cx, cy, rect, canvas);
-      for (const path of event.payload.paths || []) {
+      for (const path of paths) {
         const ext = path.split('.').pop()?.toLowerCase();
         const typeId = DROP_TYPES[ext];
         if (!typeId) continue;
@@ -128,8 +127,20 @@ export default function BroadcastPage({ api, accent }) {
           verb(api, 'select_item', { scene: sceneName, item: r.item }).catch(() => {});
         }).catch((e) => console.warn('[broadcast] drop create_source', e));
       }
+    };
+    let un = null;
+    let unHost = null;
+    getCurrentWebviewWindow().onDragDropEvent((event) => {
+      if (event.payload.type !== 'drop') return;
+      handleDrop(event.payload.paths || [], event.payload.position);
     }).then((u) => { un = u; });
-    return () => { if (un) un(); };
+    // OLE drops dead-zone over the native region (drop targets resolve by
+    // hit-test, which never crosses to the WebView2 process) — the host child
+    // carries its own IDropTarget and relays drops as this event, same
+    // physical-px main-window coordinates as onDragDropEvent.
+    listen('broadcast://host-drop', (e) => handleDrop(e.payload.paths || [], e.payload.position))
+      .then((u) => { unHost = u; });
+    return () => { if (un) un(); if (unHost) unHost(); };
   }, [api]);
 
   const failed = engine?.state === 'failed';
@@ -140,7 +151,20 @@ export default function BroadcastPage({ api, accent }) {
       {/* SP3: preview + in-layout inspector (flex siblings — no DOM overlay
           may cover the native region; the preview shrinks via bounds sync). */}
       <div className="bcast-main">
-        <div className="bcast-preview-area">
+        <div
+          className="bcast-preview-area"
+          onPointerDown={(e) => {
+            // Letterbox click = deselect. The region is an exact-fit aspect
+            // box, so clicks outside every source but inside the canvas hit
+            // PreviewInteract — clicks on the letterbox around it land HERE
+            // and previously did nothing.
+            if (e.target !== e.currentTarget) return;
+            const sceneName = snapRef.current?.current_scene;
+            if (!sceneName) return;
+            updateBroadcastUi({ selection: null });
+            verb(api, 'select_item', { scene: sceneName, item: null }).catch(() => {});
+          }}
+        >
           {failed ? (
             <EmptyState
               message="Broadcast engine crash-looped."

@@ -24,34 +24,218 @@
 //! entries, same map); stored as `isize` because `HWND` is not `Send`.
 
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicIsize, Ordering};
+use std::sync::{Mutex, OnceLock};
 
-use tauri::{AppHandle, Manager};
-use windows::core::w;
-use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
-use windows::Win32::Graphics::Gdi::HBRUSH;
+use tauri::{AppHandle, Emitter, Manager};
+use windows::core::{implement, w, Ref, BOOL};
+use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, POINTL, WPARAM};
+use windows::Win32::Graphics::Gdi::{MapWindowPoints, HBRUSH};
+use windows::Win32::System::Com::{IDataObject, DVASPECT_CONTENT, FORMATETC, TYMED_HGLOBAL};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows::Win32::System::Ole::{
+    IDropTarget, IDropTarget_Impl, RegisterDragDrop, ReleaseStgMedium, RevokeDragDrop, CF_HDROP,
+    DROPEFFECT, DROPEFFECT_COPY,
+};
+use windows::Win32::System::SystemServices::MODIFIERKEYS_FLAGS;
+use windows::Win32::UI::Shell::{DragQueryFileW, HDROP};
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DestroyWindow, RegisterClassExW, SetWindowPos, HTTRANSPARENT,
-    HWND_TOP, SWP_NOACTIVATE, SWP_SHOWWINDOW, WM_NCHITTEST, WNDCLASSEXW, WS_CHILD,
-    WS_CLIPSIBLINGS, WS_EX_NOPARENTNOTIFY, WS_VISIBLE,
+    CreateWindowExW, DefWindowProcW, DestroyWindow, EnumChildWindows, GetClassNameW, IsWindow,
+    PostMessageW, RegisterClassExW, SendMessageW, SetWindowPos, HWND_TOP, SWP_NOACTIVATE,
+    SWP_SHOWWINDOW, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEHWHEEL,
+    WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SETCURSOR, WNDCLASSEXW,
+    WS_CHILD, WS_CLIPSIBLINGS, WS_EX_NOPARENTNOTIFY, WS_EX_TRANSPARENT, WS_VISIBLE,
 };
 
 /// display id → child HWND (as isize; HWND is not Send). TABS idiom.
 static HOSTS: Mutex<Option<HashMap<String, isize>>> = Mutex::new(None);
 
-/// The host window procedure. HTTRANSPARENT on WM_NCHITTEST (SP3): hit-testing
-/// falls through to the underlying same-thread sibling — the WebView2 child —
-/// so DOM pointer events fire on the holder div and JS owns all transform
-/// interaction math; the engine draws the visuals. The host child never used
-/// mouse input, so nothing regresses. Documented fallback if the WebView2
-/// child-window stack ever breaks the fall-through: forward WM_MOUSE* via
-/// MapWindowPoints + PostMessageW instead.
-unsafe extern "system" fn host_wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
-    if msg == WM_NCHITTEST {
-        return LRESULT(HTTRANSPARENT as isize);
+/// Main-window HWND (set in `ensure`) + cached WebView2 input child, both as
+/// isize (HWND is not Send). The cache re-resolves lazily whenever the stored
+/// window dies — WebView2 recreates its input window freely.
+static MAIN_HWND: AtomicIsize = AtomicIsize::new(0);
+static FORWARD_TARGET: AtomicIsize = AtomicIsize::new(0);
+
+/// AppHandle for the WM_DROPFILES relay (wndprocs have no userdata channel
+/// worth the ceremony for one emit). Set once in `ensure`.
+static APP: OnceLock<AppHandle> = OnceLock::new();
+
+unsafe extern "system" fn find_webview_input(hwnd: HWND, lp: LPARAM) -> BOOL {
+    let mut class = [0u16; 64];
+    let n = unsafe { GetClassNameW(hwnd, &mut class) } as usize;
+    if String::from_utf16_lossy(&class[..n]) == "Chrome_RenderWidgetHostHWND" {
+        unsafe { *(lp.0 as *mut isize) = hwnd.0 as isize };
+        return BOOL(0);
     }
-    unsafe { DefWindowProcW(hwnd, msg, wp, lp) }
+    BOOL(1)
+}
+
+/// The WebView2 descendant that accepts WM_MOUSE* input (Chromium's "legacy
+/// window"). None until the webview exists; cached after first resolve.
+fn forward_target() -> Option<HWND> {
+    let cached = FORWARD_TARGET.load(Ordering::Relaxed);
+    if cached != 0 && unsafe { IsWindow(Some(HWND(cached as *mut _))) }.as_bool() {
+        return Some(HWND(cached as *mut _));
+    }
+    let main = MAIN_HWND.load(Ordering::Relaxed);
+    if main == 0 {
+        return None;
+    }
+    let mut found: isize = 0;
+    unsafe {
+        let _ = EnumChildWindows(
+            Some(HWND(main as *mut _)),
+            Some(find_webview_input),
+            LPARAM(&mut found as *mut isize as isize),
+        );
+    }
+    if found == 0 {
+        return None;
+    }
+    FORWARD_TARGET.store(found, Ordering::Relaxed);
+    Some(HWND(found as *mut _))
+}
+
+/// The host window procedure — a mouse RELAY (SP3 pointer-input fix).
+///
+/// Neither `HTTRANSPARENT` on WM_NCHITTEST nor the `WS_EX_TRANSPARENT`
+/// ex-style lets input fall through to the WebView2 sibling: the system's
+/// mouse targeting honors either only among same-thread windows, and
+/// WebView2's input windows live on the msedgewebview2 process's threads —
+/// so this child receives all pointer input over the preview regardless
+/// (verified live 2026-07-03: DOM saw one edge `pointerenter`, then silence
+/// inside the region).
+///
+/// So the host relays: mouse messages are re-posted to the WebView2 input
+/// child with coordinates mapped into its client space; Chromium then
+/// synthesizes normal DOM pointer events on whatever lies at that point —
+/// PreviewInteract's surface. WM_SETCURSOR is SENT through so the
+/// DOM-computed cursor (move/resize) actually renders. Wheel lParam is
+/// screen coords — retargeted unchanged. OLE drops hit the same cross-thread
+/// wall, so the window carries its own [`HostDropTarget`]. `WS_EX_TRANSPARENT`
+/// stays on the window: harmless to the relay, honored by API-level
+/// WindowFromPoint callers.
+unsafe extern "system" fn host_wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
+    match msg {
+        WM_MOUSEMOVE | WM_LBUTTONDOWN | WM_LBUTTONUP | WM_RBUTTONDOWN | WM_RBUTTONUP
+        | WM_MBUTTONDOWN | WM_MBUTTONUP => {
+            if let Some(target) = forward_target() {
+                let mut pts = [POINT {
+                    x: (lp.0 & 0xFFFF) as u16 as i16 as i32,
+                    y: ((lp.0 >> 16) & 0xFFFF) as u16 as i16 as i32,
+                }];
+                unsafe { MapWindowPoints(Some(hwnd), Some(target), &mut pts) };
+                let packed = ((pts[0].y as u32 & 0xFFFF) << 16) | (pts[0].x as u32 & 0xFFFF);
+                unsafe {
+                    let _ = PostMessageW(Some(target), msg, wp, LPARAM(packed as i32 as isize));
+                }
+            }
+            LRESULT(0)
+        }
+        WM_MOUSEWHEEL | WM_MOUSEHWHEEL => {
+            if let Some(target) = forward_target() {
+                unsafe {
+                    let _ = PostMessageW(Some(target), msg, wp, lp);
+                }
+            }
+            LRESULT(0)
+        }
+        WM_SETCURSOR => {
+            if let Some(target) = forward_target() {
+                let r = unsafe {
+                    SendMessageW(target, WM_SETCURSOR, Some(WPARAM(target.0 as usize)), Some(lp))
+                };
+                if r.0 != 0 {
+                    return r;
+                }
+            }
+            unsafe { DefWindowProcW(hwnd, msg, wp, lp) }
+        }
+        _ => unsafe { DefWindowProcW(hwnd, msg, wp, lp) },
+    }
+}
+
+/// OLE drop target for the host child. OLE resolves drop targets from the
+/// window under the cursor — this child, same cross-thread wall as the mouse
+/// (verified 2026-07-03: WRY's target fires `leave` at the region edge and
+/// the legacy DragAcceptFiles shim never engages because the top-level
+/// carries an `OleDropTargetInterface` prop). So the host carries its own
+/// target and relays drops as `broadcast://host-drop` in onDragDropEvent's
+/// coordinate convention (physical px, main-window client space).
+#[implement(IDropTarget)]
+struct HostDropTarget;
+
+impl IDropTarget_Impl for HostDropTarget_Impl {
+    fn DragEnter(
+        &self,
+        _pdataobj: Ref<'_, IDataObject>,
+        _grfkeystate: MODIFIERKEYS_FLAGS,
+        _pt: &POINTL,
+        pdweffect: *mut DROPEFFECT,
+    ) -> windows::core::Result<()> {
+        unsafe { *pdweffect = DROPEFFECT_COPY };
+        Ok(())
+    }
+
+    fn DragOver(
+        &self,
+        _grfkeystate: MODIFIERKEYS_FLAGS,
+        _pt: &POINTL,
+        pdweffect: *mut DROPEFFECT,
+    ) -> windows::core::Result<()> {
+        unsafe { *pdweffect = DROPEFFECT_COPY };
+        Ok(())
+    }
+
+    fn DragLeave(&self) -> windows::core::Result<()> {
+        Ok(())
+    }
+
+    fn Drop(
+        &self,
+        pdataobj: Ref<'_, IDataObject>,
+        _grfkeystate: MODIFIERKEYS_FLAGS,
+        pt: &POINTL,
+        pdweffect: *mut DROPEFFECT,
+    ) -> windows::core::Result<()> {
+        unsafe { *pdweffect = DROPEFFECT_COPY };
+        let Some(data) = pdataobj.as_ref() else {
+            return Ok(());
+        };
+        let fmt = FORMATETC {
+            cfFormat: CF_HDROP.0,
+            ptd: std::ptr::null_mut(),
+            dwAspect: DVASPECT_CONTENT.0 as u32,
+            lindex: -1,
+            tymed: TYMED_HGLOBAL.0 as u32,
+        };
+        let mut medium = unsafe { data.GetData(&fmt) }?;
+        let mut paths = Vec::new();
+        unsafe {
+            let hdrop = HDROP(medium.u.hGlobal.0 as *mut _);
+            let count = DragQueryFileW(hdrop, 0xFFFF_FFFF, None);
+            for i in 0..count {
+                let len = DragQueryFileW(hdrop, i, None) as usize;
+                let mut buf = vec![0u16; len + 1];
+                let n = DragQueryFileW(hdrop, i, Some(&mut buf)) as usize;
+                paths.push(String::from_utf16_lossy(&buf[..n]));
+            }
+            ReleaseStgMedium(&mut medium);
+        }
+        // pt is SCREEN px; the frontend expects main-window client physical px.
+        let main = MAIN_HWND.load(Ordering::Relaxed);
+        let mut pts = [POINT { x: pt.x, y: pt.y }];
+        if main != 0 {
+            unsafe { MapWindowPoints(None, Some(HWND(main as *mut _)), &mut pts) };
+        }
+        if let Some(app) = APP.get() {
+            let _ = app.emit(
+                "broadcast://host-drop",
+                serde_json::json!({ "paths": paths, "position": { "x": pts[0].x, "y": pts[0].y } }),
+            );
+        }
+        Ok(())
+    }
 }
 
 /// Register the host window class once. Null `hbrBackground` is deliberate:
@@ -119,10 +303,12 @@ pub async fn ensure(app: &AppHandle, id: &str, x: f64, y: f64, w: f64, h: f64) -
             destroy_stored(&id);
             let main = app2.get_webview_window("main").ok_or("no main window")?;
             let parent = main.hwnd().map_err(|e| format!("main hwnd: {e}"))?;
+            MAIN_HWND.store(parent.0 as isize, Ordering::Relaxed);
+            let _ = APP.set(app2.clone());
             let hwnd = unsafe {
                 let hinstance = GetModuleHandleW(None).map_err(|e| format!("GetModuleHandleW: {e}"))?;
                 CreateWindowExW(
-                    WS_EX_NOPARENTNOTIFY,
+                    WS_EX_NOPARENTNOTIFY | WS_EX_TRANSPARENT,
                     w!("MPBroadcastDisplay"),
                     None,
                     WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
@@ -141,6 +327,10 @@ pub async fn ensure(app: &AppHandle, id: &str, x: f64, y: f64, w: f64, h: f64) -
             // controller is a sibling child and the region must float above it.
             unsafe {
                 let _ = SetWindowPos(hwnd, Some(HWND_TOP), px, py, pw, ph, SWP_NOACTIVATE | SWP_SHOWWINDOW);
+                let target: IDropTarget = HostDropTarget.into();
+                if let Err(e) = RegisterDragDrop(hwnd, &target) {
+                    log::warn!("display_host: RegisterDragDrop failed: {e:?}");
+                }
             }
             let raw = hwnd.0 as isize;
             if let Ok(mut g) = HOSTS.lock() {
@@ -184,6 +374,7 @@ fn destroy_stored(id: &str) {
     let raw = HOSTS.lock().ok().and_then(|mut g| g.as_mut().and_then(|m| m.remove(id)));
     if let Some(raw) = raw {
         unsafe {
+            let _ = RevokeDragDrop(HWND(raw as *mut std::ffi::c_void));
             let _ = DestroyWindow(HWND(raw as *mut std::ffi::c_void));
         }
     }

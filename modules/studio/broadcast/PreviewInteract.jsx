@@ -14,8 +14,8 @@
 
 import React, { useEffect, useRef } from 'react';
 import {
-  HANDLE_SCREEN_PX, SNAP_SCREEN_PX, aabb, handleAt, handleCursor, hitTest,
-  scaleOf, snapMove, toCanvas,
+  HANDLE_SCREEN_PX, SNAP_SCREEN_PX, aabb, handleAt, handleCenters, handleCursor,
+  hitTest, scaleOf, snapMove, toCanvas,
 } from './canvasMath.js';
 import { getBroadcastUi, updateBroadcastUi, verb } from './broadcastStore.js';
 import { pushUndo } from './broadcastUndo.js';
@@ -162,20 +162,25 @@ export default function PreviewInteract({ api, snapshot }) {
           send('set_transform', { scene: g.scene, item: g.itemId, transform: g.lastT });
           send('set_snap_guides', { guides });
         } else if (g.mode === 'scale') {
-          // Alignment point (pos) stays fixed; ratio per axis from the
-          // pointer's distance to it (locked design — OBS feel without the
-          // alignment-math port).
-          const px = g.startT.pos_x;
-          const py = g.startT.pos_y;
-          const sx0 = g.startPt[0] - px;
-          const sy0 = g.startPt[1] - py;
+          // Opposite-anchor scaling (2026-07-03, replaced the alignment-point
+          // model — axes collinear with the anchor divided by ~0 and blew up):
+          // the handle opposite the grabbed one stays pinned; per-axis ratio =
+          // pointer→anchor over handle→anchor, and pos maps through the same
+          // scale-about-anchor, which pins the anchor pixel for ANY alignment.
+          const hc = handleCenters(g.corners);
+          const h0 = hc[g.handle];
+          const anchor = g.handle < 4 ? hc[(g.handle + 2) % 4] : hc[4 + ((g.handle - 4 + 2) % 4)];
           const horiz = g.handle === 5 || g.handle === 7 || g.handle <= 3;
           const vert = g.handle === 4 || g.handle === 6 || g.handle <= 3;
-          const fx = horiz && Math.abs(sx0) > 1 ? (p[0] - px) / sx0 : 1;
-          const fy = vert && Math.abs(sy0) > 1 ? (p[1] - py) / sy0 : 1;
+          const fx = horiz && Math.abs(h0[0] - anchor[0]) > 1
+            ? Math.max(0.01, (p[0] - anchor[0]) / (h0[0] - anchor[0])) : 1;
+          const fy = vert && Math.abs(h0[1] - anchor[1]) > 1
+            ? Math.max(0.01, (p[1] - anchor[1]) / (h0[1] - anchor[1])) : 1;
           g.lastT = {
-            scale_x: Math.max(0.01, g.startT.scale_x * fx),
-            scale_y: Math.max(0.01, g.startT.scale_y * fy),
+            scale_x: g.startT.scale_x * fx,
+            scale_y: g.startT.scale_y * fy,
+            pos_x: anchor[0] + (g.startT.pos_x - anchor[0]) * fx,
+            pos_y: anchor[1] + (g.startT.pos_y - anchor[1]) * fy,
           };
           send('set_transform', { scene: g.scene, item: g.itemId, transform: g.lastT });
         } else if (g.mode === 'crop') {
