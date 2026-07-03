@@ -34,7 +34,7 @@ fn main() {
             env_logger::Builder::from_default_env().init();
             let root = arm_payload();
             log::info!("payload: {}", root.display());
-            match obs::ObsCore::init(&root) {
+            match obs::ObsCore::init(&root, &obs::VideoCfg::default()) {
                 Ok(core) => {
                     println!("obs {} up (payload {})", core.version_string(), root.display());
                     // Diagnostic: linger before shutdown (module background

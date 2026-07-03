@@ -29,6 +29,12 @@ const V1_MODULES: &[&str] = &[
     "text-freetype2",
     "win-wasapi",
     "win-dshow",
+    // SP4: hardware encoder modules. Each self-gates on its vendor's runtime
+    // at load (no NVIDIA → obs-nvenc logs and registers nothing) — load
+    // failure is non-fatal by libobs design, so shipping all three is safe.
+    "obs-nvenc",
+    "obs-qsv11",
+    "obs-amf",
 ];
 
 /// libobs log levels (util/base.h): LOG_ERROR=100 .. LOG_DEBUG=400.
@@ -63,6 +69,52 @@ pub fn app_config_dir() -> PathBuf {
     Path::new(&base).join("dev.malthaiel.mortar-pestle").join("broadcast")
 }
 
+/// Video geometry from the profile's `[Video]` section (SP4) — base canvas,
+/// output (encoded) size, and FPS. Applied at init and re-applied by
+/// `set_output_settings` via [`reset_video`] when the engine is fully idle.
+#[derive(Debug, Clone, Copy)]
+pub struct VideoCfg {
+    pub base_w: u32,
+    pub base_h: u32,
+    pub out_w: u32,
+    pub out_h: u32,
+    pub fps: u32,
+}
+
+impl Default for VideoCfg {
+    fn default() -> Self {
+        VideoCfg { base_w: 1920, base_h: 1080, out_w: 1920, out_h: 1080, fps: 60 }
+    }
+}
+
+/// obs_reset_video with the shared ovi recipe (NV12 / 709 / partial /
+/// bicubic). Fails with OBS_VIDEO_CURRENTLY_ACTIVE while any output runs —
+/// callers gate on idle.
+pub fn reset_video(cfg: &VideoCfg) -> Result<(), String> {
+    unsafe {
+        let graphics_module = cstring("libobs-d3d11");
+        let mut ovi: ffi::obs_video_info = std::mem::zeroed();
+        ovi.graphics_module = graphics_module.as_ptr();
+        ovi.fps_num = cfg.fps.max(1);
+        ovi.fps_den = 1;
+        ovi.base_width = cfg.base_w.max(2);
+        ovi.base_height = cfg.base_h.max(2);
+        ovi.output_width = cfg.out_w.max(2);
+        ovi.output_height = cfg.out_h.max(2);
+        ovi.output_format = ffi::video_format_VIDEO_FORMAT_NV12;
+        ovi.adapter = 0;
+        ovi.gpu_conversion = true;
+        ovi.colorspace = ffi::video_colorspace_VIDEO_CS_709;
+        ovi.range = ffi::video_range_type_VIDEO_RANGE_PARTIAL;
+        ovi.scale_type = ffi::obs_scale_type_OBS_SCALE_BICUBIC;
+        let vr = ffi::obs_reset_video(&mut ovi);
+        if vr != ffi::OBS_VIDEO_SUCCESS as c_int {
+            return Err(format!("obs_reset_video failed: {vr}"));
+        }
+    }
+    Ok(())
+}
+
 pub struct ObsCore {
     _not_send: std::marker::PhantomData<*const ()>,
 }
@@ -70,8 +122,8 @@ pub struct ObsCore {
 impl ObsCore {
     /// Full frontend-less init per docs.obsproject.com/frontends:
     /// startup → reset_video → reset_audio → module paths → load → post_load.
-    /// 1080p60 NV12 defaults (config-store-overridable, SF3+).
-    pub fn init(payload_root: &Path) -> Result<Self, String> {
+    /// Video geometry comes from the profile (SP4); NV12 recipe fixed.
+    pub fn init(payload_root: &Path, video: &VideoCfg) -> Result<Self, String> {
         unsafe {
             // COM before OBS: win-dshow/win-wasapi assume an initialized COM
             // process; without it, shutdown corrupts the heap (0xC0000374).
@@ -94,25 +146,9 @@ impl ObsCore {
                 return Err("obs_startup returned false".into());
             }
 
-            let graphics_module = cstring("libobs-d3d11");
-            let mut ovi: ffi::obs_video_info = std::mem::zeroed();
-            ovi.graphics_module = graphics_module.as_ptr();
-            ovi.fps_num = 60;
-            ovi.fps_den = 1;
-            ovi.base_width = 1920;
-            ovi.base_height = 1080;
-            ovi.output_width = 1920;
-            ovi.output_height = 1080;
-            ovi.output_format = ffi::video_format_VIDEO_FORMAT_NV12;
-            ovi.adapter = 0;
-            ovi.gpu_conversion = true;
-            ovi.colorspace = ffi::video_colorspace_VIDEO_CS_709;
-            ovi.range = ffi::video_range_type_VIDEO_RANGE_PARTIAL;
-            ovi.scale_type = ffi::obs_scale_type_OBS_SCALE_BICUBIC;
-            let vr = ffi::obs_reset_video(&mut ovi);
-            if vr != ffi::OBS_VIDEO_SUCCESS as c_int {
+            if let Err(e) = reset_video(video) {
                 ffi::obs_shutdown();
-                return Err(format!("obs_reset_video failed: {vr}"));
+                return Err(e);
             }
 
             let mut oai: ffi::obs_audio_info = std::mem::zeroed();

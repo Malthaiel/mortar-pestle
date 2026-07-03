@@ -4,6 +4,8 @@
 //! so the supervisor adopts the incumbent.
 
 pub mod engine;
+pub mod namer;
+pub mod profile;
 pub mod protocol;
 pub mod socket;
 
@@ -38,7 +40,7 @@ pub fn run(payload_root: std::path::PathBuf) -> i32 {
             }
         };
 
-        let _engine = engine::spawn(payload_root, cmd_rx, events.clone(), init_tx);
+        let _engine = engine::spawn(payload_root, cmd_tx.clone(), cmd_rx, events.clone(), init_tx);
         match init_rx.await {
             Ok(Ok(())) => {}
             Ok(Err(e)) => {

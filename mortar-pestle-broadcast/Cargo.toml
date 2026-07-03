@@ -29,4 +29,6 @@ windows-sys = { version = "0.61", features = [
     "Win32_System_Com",
     # GetLocalTime — recording filename stem (capture GameNamer precedent).
     "Win32_System_SystemInformation",
+    # %game token: foreground-window walk (namer.rs GameNamer port).
+    "Win32_UI_WindowsAndMessaging",
 ] }

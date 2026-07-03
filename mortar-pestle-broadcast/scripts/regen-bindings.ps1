@@ -9,6 +9,9 @@ $out     = Join-Path $crate "src\bindings.rs"
 
 bindgen $wrapper -o $out `
     --allowlist-function "obs_.*" `
+    --allowlist-function "proc_handler_.*" `
+    --allowlist-function "signal_handler_.*" `
+    --allowlist-function "calldata_.*" `
     --allowlist-function "base_set_log_handler" `
     --allowlist-function "base_get_log_handler" `
     --allowlist-function "blog" `

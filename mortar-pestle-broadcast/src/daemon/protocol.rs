@@ -27,6 +27,23 @@
 //! width clamped ≤ 640 to stay under the 1 MiB line caps), `picker_open` /
 //! `picker_close` (temp monitor sources for live thumbs),
 //! `load_browser_module` (CEF late-load, idempotent).
+//!
+//! SP4 (proto v3) — recording & replay. Output config's persistence-of-record
+//! is the engine-side OBS-format profile (`profiles/Default/basic.ini`); the
+//! app never parses the INI, it goes through these ops:
+//! `get_output_settings` → `{profile: {section: {key: value}}}` (strings,
+//! disk truth); `set_output_settings` {patch: same shape} — `[Video]` keys
+//! apply via obs_reset_video ONLY when fully idle (else `busy`);
+//! `list_encoders` → {encoders: [{id, display_name, codec}]};
+//! `get_encoder_properties` {encoder_id} → {props, settings} (PropSpec wire
+//! shape, same renderer as source properties); `set_encoder_settings`
+//! {encoder_id, settings} → merged into recordEncoder.json.
+//! `pause_record` {paused}, `split_record` (manual split; muxer proc),
+//! `start_replay` / `stop_replay` (arm/disarm the replay_buffer output),
+//! `save_replay` (proc "save"; completion arrives as the `replay_saved`
+//! {path} event). New events: `replay_saved` {path}; `saved` gains
+//! `auto_remux: bool`. Snapshot: `recording.paused`, `replay.armed`,
+//! `caps.encoders` (boot-enumerated video encoder types).
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -99,9 +116,34 @@ pub struct StateSnapshot {
     pub canvas: CanvasInfo,
     pub scenes: Vec<SceneInfo>,
     pub recording: RecordingInfo,
+    pub replay: ReplayInfo,
+    pub caps: CapsInfo,
     pub obs_version: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_error: Option<ProtoError>,
+}
+
+/// Replay-buffer arm state — orthogonal to `state` (a replay can be armed
+/// while idle OR recording; the shared encoder session serves both).
+#[derive(Debug, Clone, Serialize)]
+pub struct ReplayInfo {
+    pub armed: bool,
+}
+
+/// Boot-enumerated engine capabilities (SF1 accept: caps reflect in
+/// get_state). Video encoder types only; audio is ffmpeg_aac by decision.
+#[derive(Debug, Clone, Serialize)]
+pub struct CapsInfo {
+    pub encoders: Vec<EncoderInfo>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct EncoderInfo {
+    /// libobs encoder type id (e.g. "obs_x264", "jim_nvenc").
+    pub id: String,
+    pub display_name: String,
+    /// Codec name as libobs reports it (h264 / hevc / av1).
+    pub codec: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -179,9 +221,11 @@ pub struct Crop {
 #[derive(Debug, Clone, Serialize)]
 pub struct RecordingInfo {
     pub active: bool,
+    pub paused: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
+    /// Pause-adjusted: wall time minus accumulated pause spans.
     pub elapsed_ns: u64,
 }
 
-pub const PROTO_VERSION: u32 = 2;
+pub const PROTO_VERSION: u32 = 3;

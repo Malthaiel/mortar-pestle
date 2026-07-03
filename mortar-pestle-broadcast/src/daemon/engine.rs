@@ -16,12 +16,14 @@ use serde_json::{json, Value};
 use tokio::sync::{broadcast, oneshot};
 
 use crate::bindings as ffi;
+use crate::daemon::namer;
+use crate::daemon::profile::{record_encoder_path, Profile};
 use crate::daemon::protocol::{
-    CanvasInfo, Crop, Event, ProtoError, RecordingInfo, SceneInfo, SourceInfo, StateSnapshot,
-    Transform, PROTO_VERSION,
+    CanvasInfo, CapsInfo, Crop, EncoderInfo, Event, ProtoError, RecordingInfo, ReplayInfo,
+    SceneInfo, SourceInfo, StateSnapshot, Transform, PROTO_VERSION,
 };
 use crate::obs::overlay::{self, M4};
-use crate::obs::{app_config_dir, screenshot, ObsCore};
+use crate::obs::{app_config_dir, screenshot, ObsCore, VideoCfg};
 
 pub type Reply = oneshot::Sender<Result<Value, ProtoError>>;
 
@@ -70,19 +72,73 @@ pub enum Cmd {
     GetProperties { scene: String, item: i64, reply: Reply },
     ClickPropertyButton { scene: String, item: i64, prop: String, reply: Reply },
     ListInputTypes { reply: Reply },
+    // --- SP4 output config (ephemeral reads; set_output_settings pushes state) ---
+    ListEncoders { reply: Reply },
+    GetOutputSettings { reply: Reply },
+    SetOutputSettings { patch: Value, reply: Reply },
+    GetEncoderProperties { encoder_id: String, reply: Reply },
+    SetEncoderSettings { settings: Value, reply: Reply },
     Screenshot { scene: Option<String>, item: Option<i64>, picker: Option<String>, width: u32, reply: Reply },
     PickerOpen { kind: String, reply: Reply },
     PickerClose { reply: Reply },
     LoadBrowserModule { reply: Reply },
+    // --- SP4 record/replay verbs ---
+    PauseRecord { paused: bool, reply: Reply },
+    SplitRecord { reply: Reply },
+    /// INTERNAL: posted by the muxer's file_changed signal callback (split
+    /// rollover) — never arrives from the socket, carries no reply.
+    FileChanged { path: String },
     Shutdown { reply: Reply },
+}
+
+/// Signal-callback context: libobs signals fire on output/muxer threads,
+/// which may ONLY post back to the engine thread — never call obs_* there.
+struct SignalCtx {
+    tx: mpsc::Sender<Cmd>,
+}
+
+/// `file_changed(string next_file)` — ffmpeg_muxer mux.c:104, mp4_output
+/// mp4-output.c:333 (verified both, OBS 32.1.2).
+unsafe extern "C" fn on_file_changed(param: *mut std::ffi::c_void, cd: *mut ffi::calldata_t) {
+    unsafe {
+        let ctx = &*(param as *const SignalCtx);
+        let key = c"next_file";
+        let mut s: *const std::os::raw::c_char = std::ptr::null();
+        if ffi::calldata_get_string(cd, key.as_ptr(), &mut s) && !s.is_null() {
+            let path = CStr::from_ptr(s).to_string_lossy().into_owned();
+            let _ = ctx.tx.send(Cmd::FileChanged { path });
+        }
+    }
 }
 
 struct RecordingRun {
     output: *mut ffi::obs_output,
-    venc: *mut ffi::obs_encoder,
-    aenc: *mut ffi::obs_encoder,
     path: String,
     started: Instant,
+    paused_at: Option<Instant>,
+    paused_total: Duration,
+    /// file_changed signal context (Box::into_raw) — disconnected + reboxed
+    /// in stop_record. Null if the connect was skipped.
+    sig_ctx: *mut SignalCtx,
+}
+
+impl RecordingRun {
+    /// Wall time minus accumulated (and in-flight) pause spans.
+    fn elapsed(&self) -> Duration {
+        let gross = self.started.elapsed();
+        let paused = self.paused_total + self.paused_at.map_or(Duration::ZERO, |t| t.elapsed());
+        gross.saturating_sub(paused)
+    }
+}
+
+/// One encode session shared by every output (record + replay) — the OBS
+/// SimpleOutput model. Doubling a 1080p60 encode for a second output is the
+/// failure this prevents; the honest consequence (surfaced in the UI) is that
+/// encoder/video settings are locked while ANY consumer is active.
+struct EncoderSet {
+    venc: *mut ffi::obs_encoder,
+    /// (mixer/track index, encoder) — one ffmpeg_aac per enabled RecTracks bit.
+    aencs: Vec<(u32, *mut ffi::obs_encoder)>,
 }
 
 struct Engine {
@@ -103,6 +159,14 @@ struct Engine {
     finalizing: bool,
     last_error: Option<ProtoError>,
     events: broadcast::Sender<Event>,
+    // --- SP4 ---
+    profile: Profile,
+    mic: *mut ffi::obs_source,
+    encoders: Option<EncoderSet>,
+    /// Boot-enumerated video encoder types (h264/hevc/av1) for snapshot caps.
+    caps_encoders: Vec<EncoderInfo>,
+    /// Self-sender for libobs signal callbacks (they post Cmds, never call obs).
+    cmd_tx: mpsc::Sender<Cmd>,
 }
 
 fn cstring(s: &str) -> CString {
@@ -140,6 +204,7 @@ fn local_timestamp_stem() -> String {
 /// libobs fails to come up (the daemon then exits nonzero).
 pub fn spawn(
     payload_root: PathBuf,
+    cmd_tx: mpsc::Sender<Cmd>,
     cmd_rx: mpsc::Receiver<Cmd>,
     events: broadcast::Sender<Event>,
     init_done: oneshot::Sender<Result<(), String>>,
@@ -147,7 +212,9 @@ pub fn spawn(
     std::thread::Builder::new()
         .name("obs-engine".into())
         .spawn(move || {
-            let core = match ObsCore::init(&payload_root) {
+            // Profile before libobs: obs_reset_video geometry comes from it.
+            let profile = Profile::load();
+            let core = match ObsCore::init(&payload_root, &video_cfg_from(&profile)) {
                 Ok(c) => c,
                 Err(e) => {
                     let _ = init_done.send(Err(e));
@@ -165,10 +232,17 @@ pub fn spawn(
                 finalizing: false,
                 last_error: None,
                 events,
+                profile,
+                mic: std::ptr::null_mut(),
+                encoders: None,
+                caps_encoders: Vec::new(),
+                cmd_tx,
             };
+            eng.caps_encoders = unsafe { enumerate_encoder_types() };
             eng.load_collection();
             eng.ensure_default_scene();
             eng.ensure_desktop_audio();
+            eng.ensure_mic();
             let _ = init_done.send(Ok(()));
             eng.push_state();
 
@@ -321,6 +395,31 @@ impl Engine {
                 let r = self.list_input_types();
                 self.finish_ephemeral(reply, r);
             }
+            Cmd::ListEncoders { reply } => {
+                let r = Ok(json!({ "encoders": self.caps_encoders }));
+                self.finish_ephemeral(reply, r);
+            }
+            Cmd::GetOutputSettings { reply } => {
+                let r = Ok(json!({ "profile": self.profile.to_json() }));
+                self.finish_ephemeral(reply, r);
+            }
+            Cmd::SetOutputSettings { patch, reply } => {
+                let r = self.set_output_settings(&patch);
+                let ok = r.is_ok();
+                self.finish_ephemeral(reply, r);
+                if ok {
+                    // Video geometry may have moved the canvas — full push.
+                    self.push_state();
+                }
+            }
+            Cmd::GetEncoderProperties { encoder_id, reply } => {
+                let r = self.get_encoder_properties(&encoder_id);
+                self.finish_ephemeral(reply, r);
+            }
+            Cmd::SetEncoderSettings { settings, reply } => {
+                let r = self.set_encoder_settings(&settings);
+                self.finish_ephemeral(reply, r);
+            }
             Cmd::Screenshot { scene, item, picker, width, reply } => {
                 let r = self.screenshot(scene.as_deref(), item, picker.as_deref(), width);
                 self.finish_ephemeral(reply, r);
@@ -347,6 +446,33 @@ impl Engine {
             Cmd::StopRecord { reply } => {
                 let r = self.stop_record();
                 self.finish(reply, r);
+            }
+            Cmd::PauseRecord { paused, reply } => {
+                let r = self.pause_record(paused);
+                let ok = r.is_ok();
+                self.finish_ephemeral(reply, r);
+                if ok {
+                    // Both edges must reach the UI (paused flag + frozen elapsed);
+                    // no collection state changed, so skip the autosave.
+                    self.push_state();
+                }
+            }
+            Cmd::SplitRecord { reply } => {
+                let r = self.split_record();
+                self.finish_ephemeral(reply, r);
+            }
+            Cmd::FileChanged { path } => {
+                // Split rollover (muxer thread → posted here). The finished
+                // segment is a complete file — announce it like a save.
+                if let Some(run) = self.recording.as_mut() {
+                    let finished = std::mem::replace(&mut run.path, path);
+                    let auto_remux = self.profile.get_bool("Video", "AutoRemux", false);
+                    let _ = self.events.send(Event {
+                        event: "saved".into(),
+                        data: json!({ "path": finished, "auto_remux": auto_remux }),
+                    });
+                    self.push_state();
+                }
             }
             Cmd::DisplayCreate { id, hwnd, width, height, reply } => {
                 let r = self.display_create(&id, hwnd, width, height);
@@ -413,19 +539,21 @@ impl Engine {
                 sources: unsafe { enum_scene_sources(*scene) },
             })
             .collect();
+        let idle_rec = || RecordingInfo { active: false, paused: false, path: None, elapsed_ns: 0 };
         let (state, rec) = match (&self.recording, self.finalizing) {
             (Some(run), _) => (
                 "recording",
                 RecordingInfo {
                     active: true,
+                    paused: run.paused_at.is_some(),
                     path: Some(run.path.clone()),
-                    elapsed_ns: run.started.elapsed().as_nanos() as u64,
+                    elapsed_ns: run.elapsed().as_nanos() as u64,
                 },
             ),
-            (None, true) => ("finalizing", RecordingInfo { active: false, path: None, elapsed_ns: 0 }),
+            (None, true) => ("finalizing", idle_rec()),
             (None, false) => (
                 if self.last_error.is_some() { "error" } else { "idle" },
-                RecordingInfo { active: false, path: None, elapsed_ns: 0 },
+                idle_rec(),
             ),
         };
         let (cw, ch) = self.canvas_size();
@@ -436,9 +564,16 @@ impl Engine {
             canvas: CanvasInfo { width: cw, height: ch },
             scenes,
             recording: rec,
+            replay: ReplayInfo { armed: self.replay_armed() },
+            caps: CapsInfo { encoders: self.caps_encoders.clone() },
             obs_version: self.core.version_string(),
             last_error: self.last_error.clone(),
         }
+    }
+
+    /// S3 wires the replay-buffer output; until then nothing can be armed.
+    fn replay_armed(&self) -> bool {
+        false
     }
 
     // --- scenes/sources -----------------------------------------------------
@@ -990,7 +1125,30 @@ impl Engine {
                 }
             }
             ffi::obs_set_output_source(1, src);
+            // SP4 fixed track map (full matrix UI is SP6): desktop → track 1.
+            // Set on adopt too — collections predating SP4 have no mixer mask.
+            ffi::obs_source_set_audio_mixers(src, 0b01);
             self.desktop_audio = src; // owned ref either way; released in teardown
+        }
+    }
+
+    /// Mic twin of ensure_desktop_audio (same adopt-don't-duplicate contract,
+    /// runs after load_collection): "Mic/Aux" on channel 2, track 2 only.
+    fn ensure_mic(&mut self) {
+        unsafe {
+            let name = cstring("Mic/Aux");
+            let mut src = ffi::obs_get_source_by_name(name.as_ptr());
+            if src.is_null() {
+                let id = cstring("wasapi_input_capture");
+                src = ffi::obs_source_create(id.as_ptr(), name.as_ptr(), std::ptr::null_mut(), std::ptr::null_mut());
+                if src.is_null() {
+                    log::warn!("mic source creation failed");
+                    return;
+                }
+            }
+            ffi::obs_set_output_source(2, src);
+            ffi::obs_source_set_audio_mixers(src, 0b10);
+            self.mic = src;
         }
     }
 
@@ -1051,11 +1209,140 @@ impl Engine {
         }
     }
 
-    // --- recording ----------------------------------------------------------
+    // --- recording (SP4: profile-driven) --------------------------------------
+
+    /// Create the shared encode session from the current profile, if absent.
+    /// Reused by record and (S3) replay — never build a second 1080p60 encode.
+    fn ensure_encoders(&mut self) -> Result<(), ProtoError> {
+        if self.encoders.is_some() {
+            return Ok(());
+        }
+        let mode_adv = self.profile.get_or("Output", "Mode", "Simple").eq_ignore_ascii_case("advanced");
+        let (venc_id, venc_settings) = if mode_adv {
+            // Advanced: AdvOut.RecEncoder is a libobs id, settings come from
+            // recordEncoder.json verbatim (libobs folds its own defaults).
+            let id = self.profile.get_or("AdvOut", "RecEncoder", "obs_x264").to_string();
+            let v = std::fs::read_to_string(record_encoder_path())
+                .ok()
+                .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+                .unwrap_or(Value::Null);
+            (id, v)
+        } else {
+            self.simple_encoder_plan()
+        };
+        let tracks = {
+            let t = self.profile.get_u32("SimpleOutput", "RecTracks", 3) & 0x3F;
+            if t == 0 { 1 } else { t }
+        };
+        unsafe {
+            let cid = cstring(&venc_id);
+            let cname = cstring("bcast_venc");
+            let vdata = data_from_value(&venc_settings);
+            let venc = ffi::obs_video_encoder_create(cid.as_ptr(), cname.as_ptr(), vdata, std::ptr::null_mut());
+            ffi::obs_data_release(vdata);
+            if venc.is_null() {
+                return Err(ProtoError::internal(format!("encoder '{venc_id}' create failed")));
+            }
+            ffi::obs_encoder_set_video(venc, ffi::obs_get_video());
+
+            let mut aencs: Vec<(u32, *mut ffi::obs_encoder)> = Vec::new();
+            for i in 0..6u32 {
+                if tracks & (1 << i) == 0 {
+                    continue;
+                }
+                let adata = data_from_value(&json!({ "bitrate": 160 }));
+                let aid = cstring("ffmpeg_aac");
+                let aname = cstring(&format!("bcast_aenc_t{}", i + 1));
+                let aenc = ffi::obs_audio_encoder_create(aid.as_ptr(), aname.as_ptr(), adata, i as usize, std::ptr::null_mut());
+                ffi::obs_data_release(adata);
+                if aenc.is_null() {
+                    ffi::obs_encoder_release(venc);
+                    for (_, a) in aencs {
+                        ffi::obs_encoder_release(a);
+                    }
+                    return Err(ProtoError::internal("ffmpeg_aac encoder create failed"));
+                }
+                ffi::obs_encoder_set_audio(aenc, ffi::obs_get_audio());
+                aencs.push((i, aenc));
+            }
+            log::info!("encoder session up: {venc_id} + {} audio track(s)", aencs.len());
+            self.encoders = Some(EncoderSet { venc, aencs });
+        }
+        Ok(())
+    }
+
+    /// Release the shared encoders when the last consumer stopped. Idle
+    /// settings changes also route here so the next start builds fresh.
+    fn drop_encoders_if_idle(&mut self) {
+        if self.recording.is_some() || self.finalizing || self.replay_armed() {
+            return;
+        }
+        if let Some(e) = self.encoders.take() {
+            unsafe {
+                ffi::obs_encoder_release(e.venc);
+                for (_, a) in e.aencs {
+                    ffi::obs_encoder_release(a);
+                }
+            }
+            log::info!("encoder session released");
+        }
+    }
+
+    /// OBS SimpleOutput quality→settings port: HQ=CRF16, standard=CRF23,
+    /// resolution-eased by CalcCRF; Lossless = x264 qp0 in-container (the
+    /// utvideo-AVI branch is deliberately not mirrored — one pipeline,
+    /// multi-track intact; parity-table note).
+    fn simple_encoder_plan(&self) -> (String, Value) {
+        let quality = self.profile.get_or("SimpleOutput", "RecQuality", "HQ").to_string();
+        let family = self.profile.get_or("SimpleOutput", "RecEncoder", "x264").to_string();
+        if quality == "Lossless" {
+            return (
+                "obs_x264".into(),
+                json!({ "rate_control": "CRF", "crf": 0, "preset": "ultrafast", "keyint_sec": 2 }),
+            );
+        }
+        let base = if quality == "HQ" { 16 } else { 23 };
+        let crf = calc_crf(
+            base,
+            self.profile.get_u32("Video", "OutputCX", 1920),
+            self.profile.get_u32("Video", "OutputCY", 1080),
+        );
+        let id = self.resolve_encoder_id(&family);
+        let settings = match family.as_str() {
+            "nvenc" => json!({ "rate_control": "CQP", "cqp": crf, "keyint_sec": 2 }),
+            "qsv" => json!({ "rate_control": "ICQ", "icq_quality": crf, "keyint_sec": 2 }),
+            "amd" => json!({ "rate_control": "CQP", "cqp": crf, "keyint_sec": 2 }),
+            _ => json!({ "rate_control": "CRF", "crf": crf, "preset": "veryfast", "keyint_sec": 2 }),
+        };
+        (id, settings)
+    }
+
+    /// Simple-family → first REGISTERED libobs id (never hardcode one nvenc
+    /// variant — ids move across OBS releases; enumeration is truth).
+    fn resolve_encoder_id(&self, family: &str) -> String {
+        let candidates: &[&str] = match family {
+            "nvenc" => &["obs_nvenc_h264_tex", "jim_nvenc", "ffmpeg_nvenc"],
+            "qsv" => &["obs_qsv11_v2", "obs_qsv11"],
+            "amd" => &["h264_texture_amf", "amd_amf_h264"],
+            _ => &["obs_x264"],
+        };
+        for c in candidates {
+            if self.caps_encoders.iter().any(|e| e.id == *c) {
+                return (*c).to_string();
+            }
+        }
+        if family != "x264" {
+            log::warn!("simple encoder family '{family}' not available — falling back to obs_x264");
+        }
+        "obs_x264".into()
+    }
 
     fn start_record(&mut self) -> Result<Value, ProtoError> {
         if self.recording.is_some() {
             return Err(ProtoError::busy("already recording"));
+        }
+        if self.finalizing {
+            return Err(ProtoError::busy("finalizing previous recording"));
         }
         if self.current.is_none() {
             return Err(ProtoError::bad_request("no current scene"));
@@ -1063,47 +1350,53 @@ impl Engine {
         let dir = captures_dir();
         std::fs::create_dir_all(&dir)
             .map_err(|e| ProtoError::internal(format!("captures dir: {e}")))?;
-        let path = dir.join(format!("Broadcast {}.mp4", local_timestamp_stem()));
+
+        let format = self.profile.get_or("SimpleOutput", "RecFormat2", "hybrid_mp4").to_string();
+        let (out_id, ext) = container_for(&format);
+        let template = self
+            .profile
+            .get_or("Output", "FilenameFormatting", "%CCYY-%MM-%DD %hh-%mm-%ss")
+            .to_string();
+        let stem = sanitize_filename(&namer::format_filename(&template));
+        let stem = if stem.is_empty() { format!("Broadcast {}", local_timestamp_stem()) } else { stem };
+        let path = unique_path(&dir, &stem, ext);
         let path_str = path.to_string_lossy().into_owned();
 
+        self.ensure_encoders()?;
+        let (venc, aencs) = {
+            let e = self.encoders.as_ref().unwrap();
+            (e.venc, e.aencs.clone())
+        };
+
+        // Auto-split thresholds ride the output settings (OBS muxer keys;
+        // identical on ffmpeg_muxer and mp4_output).
+        let mut out_settings_v = json!({ "path": path_str });
+        if self.profile.get_bool("AdvOut", "RecSplitFile", false) {
+            let (t, s) = match self.profile.get_or("AdvOut", "RecSplitFileType", "Time") {
+                "Size" => (0, self.profile.get_u32("AdvOut", "RecSplitFileSize", 2048)),
+                "Manual" => (0, 0),
+                _ => (self.profile.get_u32("AdvOut", "RecSplitFileTime", 15).saturating_mul(60), 0),
+            };
+            let o = out_settings_v.as_object_mut().unwrap();
+            o.insert("split_file".into(), json!(true));
+            o.insert("max_time_sec".into(), json!(t));
+            o.insert("max_size_mb".into(), json!(s));
+        }
+
         unsafe {
-            // x264 CBR 12 Mbps, 2s keyint (SP1 gate spec: deterministic CPU encode).
-            let venc_settings = data_from_value(&json!({
-                "rate_control": "CBR", "bitrate": 12000, "keyint_sec": 2, "preset": "veryfast",
-            }));
-            let venc_id = cstring("obs_x264");
-            let venc_name = cstring("rec_venc");
-            let venc = ffi::obs_video_encoder_create(venc_id.as_ptr(), venc_name.as_ptr(), venc_settings, std::ptr::null_mut());
-            ffi::obs_data_release(venc_settings);
-            if venc.is_null() {
-                return Err(ProtoError::internal("obs_x264 encoder create failed"));
-            }
-            ffi::obs_encoder_set_video(venc, ffi::obs_get_video());
-
-            let aenc_settings = data_from_value(&json!({ "bitrate": 160 }));
-            let aenc_id = cstring("ffmpeg_aac");
-            let aenc_name = cstring("rec_aenc");
-            let aenc = ffi::obs_audio_encoder_create(aenc_id.as_ptr(), aenc_name.as_ptr(), aenc_settings, 0, std::ptr::null_mut());
-            ffi::obs_data_release(aenc_settings);
-            if aenc.is_null() {
-                ffi::obs_encoder_release(venc);
-                return Err(ProtoError::internal("ffmpeg_aac encoder create failed"));
-            }
-            ffi::obs_encoder_set_audio(aenc, ffi::obs_get_audio());
-
-            // Hybrid MP4 ("mp4_output", obs-ffmpeg) — the locked default container.
-            let out_settings = data_from_value(&json!({ "path": path_str }));
-            let out_id = cstring("mp4_output");
+            let out_settings = data_from_value(&out_settings_v);
+            let out_id_c = cstring(out_id);
             let out_name = cstring("rec_out");
-            let output = ffi::obs_output_create(out_id.as_ptr(), out_name.as_ptr(), out_settings, std::ptr::null_mut());
+            let output = ffi::obs_output_create(out_id_c.as_ptr(), out_name.as_ptr(), out_settings, std::ptr::null_mut());
             ffi::obs_data_release(out_settings);
             if output.is_null() {
-                ffi::obs_encoder_release(venc);
-                ffi::obs_encoder_release(aenc);
-                return Err(ProtoError::internal("mp4_output create failed"));
+                self.drop_encoders_if_idle();
+                return Err(ProtoError::internal(format!("{out_id} create failed")));
             }
             ffi::obs_output_set_video_encoder(output, venc);
-            ffi::obs_output_set_audio_encoder(output, aenc, 0);
+            for (slot, (_, aenc)) in aencs.iter().enumerate() {
+                ffi::obs_output_set_audio_encoder(output, *aenc, slot);
+            }
 
             if !ffi::obs_output_start(output) {
                 let err = ffi::obs_output_get_last_error(output);
@@ -1113,12 +1406,36 @@ impl Engine {
                     CStr::from_ptr(err).to_string_lossy().into_owned()
                 };
                 ffi::obs_output_release(output);
-                ffi::obs_encoder_release(venc);
-                ffi::obs_encoder_release(aenc);
+                self.drop_encoders_if_idle();
                 return Err(ProtoError::internal(msg));
             }
 
-            self.recording = Some(RecordingRun { output, venc, aenc, path: path_str.clone(), started: Instant::now() });
+            // Split-rollover tracking: connect file_changed (fires on the
+            // muxer thread; callback only posts Cmd::FileChanged back here).
+            let sig_ctx = {
+                let sh = ffi::obs_output_get_signal_handler(output);
+                if sh.is_null() {
+                    std::ptr::null_mut()
+                } else {
+                    let ctx = Box::into_raw(Box::new(SignalCtx { tx: self.cmd_tx.clone() }));
+                    ffi::signal_handler_connect(
+                        sh,
+                        c"file_changed".as_ptr(),
+                        Some(on_file_changed),
+                        ctx as *mut std::ffi::c_void,
+                    );
+                    ctx
+                }
+            };
+
+            self.recording = Some(RecordingRun {
+                output,
+                path: path_str.clone(),
+                started: Instant::now(),
+                paused_at: None,
+                paused_total: Duration::ZERO,
+                sig_ctx,
+            });
         }
         self.last_error = None;
         Ok(json!({ "path": path_str }))
@@ -1138,16 +1455,182 @@ impl Engine {
                 std::thread::sleep(Duration::from_millis(50));
             }
             let still_active = ffi::obs_output_active(run.output);
+            if !run.sig_ctx.is_null() {
+                let sh = ffi::obs_output_get_signal_handler(run.output);
+                if !sh.is_null() {
+                    ffi::signal_handler_disconnect(
+                        sh,
+                        c"file_changed".as_ptr(),
+                        Some(on_file_changed),
+                        run.sig_ctx as *mut std::ffi::c_void,
+                    );
+                }
+                drop(Box::from_raw(run.sig_ctx));
+            }
             ffi::obs_output_release(run.output);
-            ffi::obs_encoder_release(run.venc);
-            ffi::obs_encoder_release(run.aenc);
             self.finalizing = false;
+            self.drop_encoders_if_idle();
             if still_active {
                 return Err(ProtoError::internal("output did not finalize within 15s"));
             }
         }
-        let _ = self.events.send(Event { event: "saved".into(), data: json!({ "path": path }) });
+        let auto_remux = self.profile.get_bool("Video", "AutoRemux", false);
+        let _ = self
+            .events
+            .send(Event { event: "saved".into(), data: json!({ "path": path, "auto_remux": auto_remux }) });
         Ok(json!({ "path": path }))
+    }
+
+    /// Pause/resume the active recording (idempotent). The elapsed clock
+    /// freezes across the span — both the engine (paused_total) and the UI
+    /// chip (re-anchor on the paused edge) account for it.
+    fn pause_record(&mut self, paused: bool) -> Result<Value, ProtoError> {
+        let run = self.recording.as_mut().ok_or_else(|| ProtoError::bad_request("not recording"))?;
+        if paused == run.paused_at.is_some() {
+            return Ok(json!({}));
+        }
+        unsafe {
+            if !ffi::obs_output_can_pause(run.output) {
+                return Err(ProtoError::bad_request("this output cannot pause"));
+            }
+            if !ffi::obs_output_pause(run.output, paused) {
+                return Err(ProtoError::internal("obs_output_pause refused"));
+            }
+        }
+        if paused {
+            run.paused_at = Some(Instant::now());
+        } else if let Some(t) = run.paused_at.take() {
+            run.paused_total += t.elapsed();
+        }
+        Ok(json!({}))
+    }
+
+    /// Manual split — the muxer's `split_file` proc. Only meaningful when the
+    /// output was started with file splitting enabled; the proc reports that
+    /// via its out param and we surface an honest error instead of a no-op.
+    fn split_record(&mut self) -> Result<Value, ProtoError> {
+        let run = self.recording.as_ref().ok_or_else(|| ProtoError::bad_request("not recording"))?;
+        if run.paused_at.is_some() {
+            return Err(ProtoError::busy("cannot split while paused"));
+        }
+        unsafe {
+            let ph = ffi::obs_output_get_proc_handler(run.output);
+            if ph.is_null() {
+                return Err(ProtoError::internal("output has no proc handler"));
+            }
+            let mut cd: ffi::calldata_t = std::mem::zeroed();
+            let called = ffi::proc_handler_call(ph, c"split_file".as_ptr(), &mut cd);
+            let mut enabled = false;
+            let _ = ffi::calldata_get_data(
+                &cd,
+                c"split_file_enabled".as_ptr(),
+                &mut enabled as *mut bool as *mut std::ffi::c_void,
+                std::mem::size_of::<bool>(),
+            );
+            calldata_free_rs(&mut cd);
+            if !called || !enabled {
+                return Err(ProtoError::bad_request(
+                    "file splitting is not enabled on this recording (set it before starting)",
+                ));
+            }
+        }
+        Ok(json!({}))
+    }
+
+    // --- output settings (SP4) -------------------------------------------------
+
+    /// Merge a `{section: {key: value}}` patch into the profile. Video /
+    /// encoder sections are locked while any output is active (shared encode
+    /// session — the UI surfaces the disarm affordance); [Output] keys
+    /// (filename template, mode) are always accepted.
+    fn set_output_settings(&mut self, patch: &Value) -> Result<Value, ProtoError> {
+        let touches = |sec: &str| {
+            patch
+                .get(sec)
+                .and_then(Value::as_object)
+                .map(|o| !o.is_empty())
+                .unwrap_or(false)
+        };
+        let active = self.recording.is_some() || self.finalizing || self.replay_armed();
+        if active && (touches("Video") || touches("SimpleOutput") || touches("AdvOut")) {
+            return Err(ProtoError::busy(
+                "stop recording / disarm replay before changing output settings",
+            ));
+        }
+        self.profile.apply_patch(patch);
+        self.profile
+            .save()
+            .map_err(|e| ProtoError::internal(format!("profile save: {e}")))?;
+        if touches("Video") {
+            // Fully idle here (guard above) — geometry/fps re-apply is safe.
+            crate::obs::reset_video(&video_cfg_from(&self.profile)).map_err(ProtoError::internal)?;
+        }
+        self.drop_encoders_if_idle();
+        Ok(json!({ "profile": self.profile.to_json() }))
+    }
+
+    /// Encoder props for the advanced output page — the SAME PropSpec wire
+    /// shape as source get_properties, rendered by the same form.
+    fn get_encoder_properties(&self, id: &str) -> Result<Value, ProtoError> {
+        unsafe {
+            let cid = cstring(id);
+            let props = ffi::obs_get_encoder_properties(cid.as_ptr());
+            if props.is_null() {
+                return Err(ProtoError::bad_request(format!("no encoder '{id}'")));
+            }
+            let list = props_to_json(props);
+            ffi::obs_properties_destroy(props);
+
+            let base = ffi::obs_encoder_defaults(cid.as_ptr());
+            if base.is_null() {
+                return Ok(json!({ "props": list, "settings": {} }));
+            }
+            let file = record_encoder_path();
+            if file.exists() {
+                let cpath = cstring(&file.to_string_lossy());
+                let over = ffi::obs_data_create_from_json_file(cpath.as_ptr());
+                if !over.is_null() {
+                    ffi::obs_data_apply(base, over);
+                    ffi::obs_data_release(over);
+                }
+            }
+            let js = ffi::obs_data_get_json_with_defaults(base);
+            let settings = if js.is_null() {
+                json!({})
+            } else {
+                serde_json::from_str(&CStr::from_ptr(js).to_string_lossy()).unwrap_or_else(|_| json!({}))
+            };
+            ffi::obs_data_release(base);
+            Ok(json!({ "props": list, "settings": settings }))
+        }
+    }
+
+    /// Merge advanced encoder settings into recordEncoder.json (OBS's own
+    /// per-profile filename, written through obs_data for format fidelity).
+    fn set_encoder_settings(&mut self, settings: &Value) -> Result<Value, ProtoError> {
+        let file = record_encoder_path();
+        if let Some(dir) = file.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        unsafe {
+            let cpath = cstring(&file.to_string_lossy());
+            let existing = if file.exists() {
+                let d = ffi::obs_data_create_from_json_file(cpath.as_ptr());
+                if d.is_null() { ffi::obs_data_create() } else { d }
+            } else {
+                ffi::obs_data_create()
+            };
+            let patch = data_from_value(settings);
+            ffi::obs_data_apply(existing, patch);
+            ffi::obs_data_release(patch);
+            let ok = ffi::obs_data_save_json(existing, cpath.as_ptr());
+            ffi::obs_data_release(existing);
+            if !ok {
+                return Err(ProtoError::internal("recordEncoder.json save failed"));
+            }
+        }
+        self.drop_encoders_if_idle();
+        Ok(json!({}))
     }
 
     // --- persistence (SF3) ----------------------------------------------------
@@ -1249,12 +1732,17 @@ impl Engine {
         if self.recording.is_some() {
             let _ = self.stop_record();
         }
+        self.drop_encoders_if_idle();
         self.save_collection();
         unsafe {
             ffi::obs_set_output_source(0, std::ptr::null_mut());
             ffi::obs_set_output_source(1, std::ptr::null_mut());
+            ffi::obs_set_output_source(2, std::ptr::null_mut());
             if !self.desktop_audio.is_null() {
                 ffi::obs_source_release(self.desktop_audio);
+            }
+            if !self.mic.is_null() {
+                ffi::obs_source_release(self.mic);
             }
             for (_, scene) in self.scenes.drain(..) {
                 ffi::obs_scene_release(scene);
@@ -1262,6 +1750,109 @@ impl Engine {
         }
         // self.core drops here → obs_shutdown.
     }
+}
+
+// --- SP4 free helpers --------------------------------------------------------
+
+/// `[Video]` profile section → the obs_reset_video geometry.
+fn video_cfg_from(p: &Profile) -> VideoCfg {
+    VideoCfg {
+        base_w: p.get_u32("Video", "BaseCX", 1920),
+        base_h: p.get_u32("Video", "BaseCY", 1080),
+        out_w: p.get_u32("Video", "OutputCX", 1920),
+        out_h: p.get_u32("Video", "OutputCY", 1080),
+        fps: p.get_u32("Video", "FPSCommon", 60),
+    }
+}
+
+/// RecFormat2 → (libobs output type id, file extension). Frontend mapping
+/// port: hybrid containers are the obs-outputs muxers, everything else rides
+/// ffmpeg_muxer with the extension selecting the format.
+fn container_for(fmt: &str) -> (&'static str, &'static str) {
+    match fmt {
+        "mkv" => ("ffmpeg_muxer", "mkv"),
+        "mp4" => ("ffmpeg_muxer", "mp4"),
+        "mov" => ("ffmpeg_muxer", "mov"),
+        "hybrid_mov" => ("mov_output", "mov"),
+        _ => ("mp4_output", "mp4"), // hybrid_mp4 (default) + unknowns
+    }
+}
+
+/// SimpleOutput::CalcCRF port (CROSS_DIST_CUTOFF 2000): the quality CRF eases
+/// down (better) as the output diagonal shrinks below 2000 px.
+fn calc_crf(base: i32, out_w: u32, out_h: u32) -> i32 {
+    const CROSS_DIST_CUTOFF: f64 = 2000.0;
+    let dist = ((out_w as f64).powi(2) + (out_h as f64).powi(2)).sqrt();
+    let reduction = (1.0 - (dist.min(CROSS_DIST_CUTOFF) / CROSS_DIST_CUTOFF)) * 10.0;
+    base - reduction as i32
+}
+
+/// One safe Windows filename component: template output may carry user-typed
+/// separators/reserved chars; %game is pre-sanitized but the rest is not.
+fn sanitize_filename(name: &str) -> String {
+    let mapped: String = name
+        .chars()
+        .map(|c| match c {
+            '<' | '>' | ':' | '"' | '|' | '?' | '*' | '/' | '\\' => '-',
+            c if c.is_control() => ' ',
+            c => c,
+        })
+        .collect();
+    mapped.trim().trim_matches('.').trim().to_string()
+}
+
+/// First free `<stem>.<ext>` / `<stem> (n).<ext>` (capture clip_mp4_path
+/// dedupe precedent).
+fn unique_path(dir: &std::path::Path, stem: &str, ext: &str) -> PathBuf {
+    let first = dir.join(format!("{stem}.{ext}"));
+    if !first.exists() {
+        return first;
+    }
+    for i in 2u32.. {
+        let p = dir.join(format!("{stem} ({i}).{ext}"));
+        if !p.exists() {
+            return p;
+        }
+    }
+    unreachable!()
+}
+
+/// Boot-time video encoder enumeration (h264/hevc/av1, non-deprecated,
+/// non-internal) — snapshot caps + simple-family resolution both read this.
+unsafe fn enumerate_encoder_types() -> Vec<EncoderInfo> {
+    let mut out = Vec::new();
+    unsafe {
+        let mut idx = 0usize;
+        loop {
+            let mut id: *const std::os::raw::c_char = std::ptr::null();
+            if !ffi::obs_enum_encoder_types(idx, &mut id) {
+                break;
+            }
+            idx += 1;
+            if id.is_null() {
+                continue;
+            }
+            if ffi::obs_get_encoder_type(id) != ffi::obs_encoder_type_OBS_ENCODER_VIDEO {
+                continue;
+            }
+            let caps = ffi::obs_get_encoder_caps(id);
+            if caps & (ffi::OBS_ENCODER_CAP_DEPRECATED | ffi::OBS_ENCODER_CAP_INTERNAL) != 0 {
+                continue;
+            }
+            let codec = cstr_owned(ffi::obs_get_encoder_codec(id));
+            if !matches!(codec.as_str(), "h264" | "hevc" | "av1") {
+                continue;
+            }
+            let display = ffi::obs_encoder_get_display_name(id);
+            out.push(EncoderInfo {
+                id: cstr_owned(id),
+                display_name: if display.is_null() { cstr_owned(id) } else { cstr_owned(display) },
+                codec,
+            });
+        }
+    }
+    log::info!("encoder types: {}", out.iter().map(|e| e.id.as_str()).collect::<Vec<_>>().join(", "));
+    out
 }
 
 /// First non-sentinel entry of a source's "monitor_id" list property —
@@ -1305,6 +1896,22 @@ unsafe extern "C" {
     fn gs_projection_pop();
     fn gs_ortho(left: f32, right: f32, top: f32, bottom: f32, znear: f32, zfar: f32);
     fn gs_set_viewport(x: i32, y: i32, width: i32, height: i32);
+    // libobs base allocator — calldata stacks are balloc'd; calldata_free is
+    // a static inline (no export), so its one-line body is ported below.
+    fn bfree(ptr: *mut std::ffi::c_void);
+}
+
+/// calldata_free port (callback/calldata.h static inline): free the heap
+/// stack a proc/signal wrote into a zero-initialized calldata.
+unsafe fn calldata_free_rs(cd: &mut ffi::calldata_t) {
+    unsafe {
+        if !cd.fixed && !cd.stack.is_null() {
+            bfree(cd.stack as *mut std::ffi::c_void);
+        }
+    }
+    cd.stack = std::ptr::null_mut();
+    cd.size = 0;
+    cd.capacity = 0;
 }
 
 /// Display draw callback — runs on OBS's internal graphics thread; body is

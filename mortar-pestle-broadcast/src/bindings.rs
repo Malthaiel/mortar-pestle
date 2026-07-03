@@ -383,21 +383,136 @@ pub struct calldata {
     pub fixed: bool,
 }
 pub type calldata_t = calldata;
+unsafe extern "C" {
+    pub fn calldata_get_data(
+        data: *const calldata_t,
+        name: *const ::std::os::raw::c_char,
+        out: *mut ::std::os::raw::c_void,
+        size: usize,
+    ) -> bool;
+}
+unsafe extern "C" {
+    pub fn calldata_set_data(
+        data: *mut calldata_t,
+        name: *const ::std::os::raw::c_char,
+        in_: *const ::std::os::raw::c_void,
+        new_size: usize,
+    );
+}
+unsafe extern "C" {
+    pub fn calldata_get_string(
+        data: *const calldata_t,
+        name: *const ::std::os::raw::c_char,
+        str_: *mut *const ::std::os::raw::c_char,
+    ) -> bool;
+}
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct signal_handler {
     _unused: [u8; 0],
 }
 pub type signal_handler_t = signal_handler;
+pub type global_signal_callback_t = ::std::option::Option<
+    unsafe extern "C" fn(
+        arg1: *mut ::std::os::raw::c_void,
+        arg2: *const ::std::os::raw::c_char,
+        arg3: *mut calldata_t,
+    ),
+>;
 pub type signal_callback_t = ::std::option::Option<
     unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void, arg2: *mut calldata_t),
 >;
+unsafe extern "C" {
+    pub fn signal_handler_create() -> *mut signal_handler_t;
+}
+unsafe extern "C" {
+    pub fn signal_handler_destroy(handler: *mut signal_handler_t);
+}
+unsafe extern "C" {
+    pub fn signal_handler_add(
+        handler: *mut signal_handler_t,
+        signal_decl: *const ::std::os::raw::c_char,
+    ) -> bool;
+}
+unsafe extern "C" {
+    pub fn signal_handler_connect(
+        handler: *mut signal_handler_t,
+        signal: *const ::std::os::raw::c_char,
+        callback: signal_callback_t,
+        data: *mut ::std::os::raw::c_void,
+    );
+}
+unsafe extern "C" {
+    pub fn signal_handler_connect_ref(
+        handler: *mut signal_handler_t,
+        signal: *const ::std::os::raw::c_char,
+        callback: signal_callback_t,
+        data: *mut ::std::os::raw::c_void,
+    );
+}
+unsafe extern "C" {
+    pub fn signal_handler_disconnect(
+        handler: *mut signal_handler_t,
+        signal: *const ::std::os::raw::c_char,
+        callback: signal_callback_t,
+        data: *mut ::std::os::raw::c_void,
+    );
+}
+unsafe extern "C" {
+    pub fn signal_handler_connect_global(
+        handler: *mut signal_handler_t,
+        callback: global_signal_callback_t,
+        data: *mut ::std::os::raw::c_void,
+    );
+}
+unsafe extern "C" {
+    pub fn signal_handler_disconnect_global(
+        handler: *mut signal_handler_t,
+        callback: global_signal_callback_t,
+        data: *mut ::std::os::raw::c_void,
+    );
+}
+unsafe extern "C" {
+    pub fn signal_handler_remove_current();
+}
+unsafe extern "C" {
+    pub fn signal_handler_signal(
+        handler: *mut signal_handler_t,
+        signal: *const ::std::os::raw::c_char,
+        params: *mut calldata_t,
+    );
+}
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct proc_handler {
     _unused: [u8; 0],
 }
 pub type proc_handler_t = proc_handler;
+pub type proc_handler_proc_t = ::std::option::Option<
+    unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void, arg2: *mut calldata_t),
+>;
+unsafe extern "C" {
+    pub fn proc_handler_create() -> *mut proc_handler_t;
+}
+unsafe extern "C" {
+    pub fn proc_handler_destroy(handler: *mut proc_handler_t);
+}
+unsafe extern "C" {
+    pub fn proc_handler_add(
+        handler: *mut proc_handler_t,
+        decl_string: *const ::std::os::raw::c_char,
+        proc_: proc_handler_proc_t,
+        data: *mut ::std::os::raw::c_void,
+    );
+}
+unsafe extern "C" {
+    #[doc = " Calls a function in a procedure handler.  Returns false if the named\n procedure is not found."]
+    pub fn proc_handler_call(
+        handler: *mut proc_handler_t,
+        name: *const ::std::os::raw::c_char,
+        params: *mut calldata_t,
+    ) -> bool;
+}
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct media_frames_per_second {

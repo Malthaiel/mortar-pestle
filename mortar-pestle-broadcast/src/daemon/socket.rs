@@ -333,6 +333,18 @@ async fn dispatch(req: Request, cmd_tx: &mpsc::Sender<Cmd>) -> Response {
             })
         })(),
         "list_input_types" => Ok(Cmd::ListInputTypes { reply: tx }),
+        "list_encoders" => Ok(Cmd::ListEncoders { reply: tx }),
+        "get_output_settings" => Ok(Cmd::GetOutputSettings { reply: tx }),
+        "set_output_settings" => Ok(Cmd::SetOutputSettings {
+            patch: args.get("patch").cloned().unwrap_or(Value::Null),
+            reply: tx,
+        }),
+        "get_encoder_properties" => need_str(&args, "encoder_id")
+            .map(|encoder_id| Cmd::GetEncoderProperties { encoder_id, reply: tx }),
+        "set_encoder_settings" => Ok(Cmd::SetEncoderSettings {
+            settings: args.get("settings").cloned().unwrap_or(Value::Null),
+            reply: tx,
+        }),
         "screenshot" => Ok(Cmd::Screenshot {
             scene: opt_str(&args, "scene"),
             item: opt_i64(&args, "item"),
@@ -345,6 +357,8 @@ async fn dispatch(req: Request, cmd_tx: &mpsc::Sender<Cmd>) -> Response {
         "load_browser_module" => Ok(Cmd::LoadBrowserModule { reply: tx }),
         "start_record" => Ok(Cmd::StartRecord { reply: tx }),
         "stop_record" => Ok(Cmd::StopRecord { reply: tx }),
+        "pause_record" => need_bool(&args, "paused").map(|paused| Cmd::PauseRecord { paused, reply: tx }),
+        "split_record" => Ok(Cmd::SplitRecord { reply: tx }),
         "display_create" => (|| {
             Ok(Cmd::DisplayCreate {
                 id: need_str(&args, "id")?,
