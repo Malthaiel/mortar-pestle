@@ -27,6 +27,8 @@
 
 pub mod carriage;
 pub mod client;
+#[cfg(windows)]
+pub mod display_host;
 pub mod supervisor;
 
 use std::path::PathBuf;
@@ -150,16 +152,16 @@ async fn drain_to_log<R>(
 /// The sidecar's stdout/stderr log sink. Windows:
 /// `%LOCALAPPDATA%\mortar-pestle\logs\mortar-pestle-broadcast.log`; Linux:
 /// `~/.local/state/mortar-pestle/mortar-pestle-broadcast.log`. `None` if the
-/// base env var is unset.
+/// base env var is unset. `pub(crate)`: the settings tab's "Open log" reads it.
 #[cfg(windows)]
-fn engine_log_path() -> Option<PathBuf> {
+pub(crate) fn engine_log_path() -> Option<PathBuf> {
     std::env::var_os("LOCALAPPDATA").map(|base| {
         PathBuf::from(base).join("mortar-pestle").join("logs").join("mortar-pestle-broadcast.log")
     })
 }
 
 #[cfg(not(windows))]
-fn engine_log_path() -> Option<PathBuf> {
+pub(crate) fn engine_log_path() -> Option<PathBuf> {
     std::env::var_os("HOME").map(|home| {
         PathBuf::from(home).join(".local/state/mortar-pestle/mortar-pestle-broadcast.log")
     })

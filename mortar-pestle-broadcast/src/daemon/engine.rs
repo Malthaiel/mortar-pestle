@@ -33,6 +33,9 @@ pub enum Cmd {
     SetSourceSettings { scene: String, name: String, settings: Value, reply: Reply },
     StartRecord { reply: Reply },
     StopRecord { reply: Reply },
+    DisplayCreate { id: String, hwnd: u64, width: u32, height: u32, reply: Reply },
+    DisplayResize { id: String, width: u32, height: u32, reply: Reply },
+    DisplayDestroy { id: String, reply: Reply },
     Shutdown { reply: Reply },
 }
 
@@ -50,6 +53,10 @@ struct Engine {
     scenes: Vec<(String, *mut ffi::obs_scene)>,
     current: Option<String>,
     desktop_audio: *mut ffi::obs_source,
+    /// (id, display) — ephemeral preview swapchains on app-owned HWNDs.
+    /// Never persisted, never in StateSnapshot: a respawned engine starts
+    /// with zero displays and the app re-creates them on its alive edge.
+    displays: Vec<(String, *mut ffi::obs_display_t)>,
     recording: Option<RecordingRun>,
     finalizing: bool,
     last_error: Option<ProtoError>,
@@ -106,12 +113,14 @@ pub fn spawn(
                 scenes: Vec::new(),
                 current: None,
                 desktop_audio: std::ptr::null_mut(),
+                displays: Vec::new(),
                 recording: None,
                 finalizing: false,
                 last_error: None,
                 events,
             };
             eng.load_collection();
+            eng.ensure_default_scene();
             eng.ensure_desktop_audio();
             let _ = init_done.send(Ok(()));
             eng.push_state();
@@ -165,6 +174,18 @@ impl Engine {
                 let r = self.stop_record();
                 self.finish(reply, r);
             }
+            Cmd::DisplayCreate { id, hwnd, width, height, reply } => {
+                let r = self.display_create(&id, hwnd, width, height);
+                self.finish_ephemeral(reply, r);
+            }
+            Cmd::DisplayResize { id, width, height, reply } => {
+                let r = self.display_resize(&id, width, height);
+                self.finish_ephemeral(reply, r);
+            }
+            Cmd::DisplayDestroy { id, reply } => {
+                let r = self.display_destroy(&id);
+                self.finish_ephemeral(reply, r);
+            }
             Cmd::Shutdown { reply } => {
                 let _ = reply.send(Ok(json!({})));
                 return true;
@@ -185,6 +206,21 @@ impl Engine {
         let _ = reply.send(r);
         self.save_collection();
         self.push_state();
+    }
+
+    /// `finish` minus autosave/state-push, for verbs that touch no collection
+    /// state — display_resize arrives at rAF rate during layout drags; the
+    /// full path would rewrite the collection JSON and spam identical
+    /// state_changed events dozens of times per second.
+    fn finish_ephemeral(&mut self, reply: Reply, r: Result<Value, ProtoError>) {
+        if let Err(e) = &r {
+            self.last_error = Some(e.clone());
+            let _ = self.events.send(Event {
+                event: "error".into(),
+                data: serde_json::to_value(e).unwrap(),
+            });
+        }
+        let _ = reply.send(r);
     }
 
     fn push_state(&self) {
@@ -371,6 +407,16 @@ impl Engine {
         Ok(json!({}))
     }
 
+    /// Fresh-box guard: with no persisted collection the program is empty —
+    /// the preview renders black and start_record errors "no current scene".
+    fn ensure_default_scene(&mut self) {
+        if self.scenes.is_empty() {
+            if let Err(e) = self.create_scene("Scene") {
+                log::warn!("default scene create failed: {}", e.message);
+            }
+        }
+    }
+
     /// Desktop Audio is a REGULAR persisted source (round-trips through the
     /// collection like everything else): reuse the loaded one by name, create
     /// it only on a fresh start. Runs AFTER load_collection — creating it
@@ -390,6 +436,63 @@ impl Engine {
             }
             ffi::obs_set_output_source(1, src);
             self.desktop_audio = src; // owned ref either way; released in teardown
+        }
+    }
+
+    // --- displays (SP2) -------------------------------------------------------
+    // Ephemeral preview swapchains bound to app-owned HWNDs. obs_display_create
+    // and _destroy enter the graphics context themselves (obs-display.c), so
+    // they are engine-thread-safe; the registered draw callback fires on OBS's
+    // internal graphics thread. The engine trusts the app's u64 — a garbage or
+    // stale HWND fails the D3D11 swapchain create and surfaces as a clean
+    // internal error.
+
+    fn display_create(&mut self, id: &str, hwnd: u64, width: u32, height: u32) -> Result<Value, ProtoError> {
+        self.remove_display(id); // upsert: replace an existing id
+        let init = ffi::gs_init_data {
+            window: ffi::gs_window { hwnd: hwnd as *mut std::ffi::c_void },
+            cx: width.max(1),
+            cy: height.max(1),
+            num_backbuffers: 0,
+            format: ffi::gs_color_format_GS_BGRA,
+            zsformat: ffi::gs_zstencil_format_GS_ZS_NONE,
+            adapter: 0,
+        };
+        // Background color is never visible: the region is exact-fit (the app
+        // sizes it to the canvas aspect), so no letterbox bars are drawn.
+        let d = unsafe { ffi::obs_display_create(&init, 0x000000) };
+        if d.is_null() {
+            return Err(ProtoError::internal("obs_display_create failed (swapchain on hwnd)"));
+        }
+        unsafe { ffi::obs_display_add_draw_callback(d, Some(draw_main), std::ptr::null_mut()) };
+        self.displays.push((id.into(), d));
+        Ok(json!({}))
+    }
+
+    fn display_resize(&mut self, id: &str, width: u32, height: u32) -> Result<Value, ProtoError> {
+        let d = self
+            .displays
+            .iter()
+            .find(|(n, _)| n == id)
+            .map(|(_, d)| *d)
+            .ok_or_else(|| ProtoError::bad_request(format!("no display '{id}'")))?;
+        // Deferred-safe: only stashes next_cx/cy; the actual gs_resize happens
+        // in the render path on the graphics thread.
+        unsafe { ffi::obs_display_resize(d, width.max(1), height.max(1)) };
+        Ok(json!({}))
+    }
+
+    /// Idempotent by design: after an engine respawn the app tears down ids
+    /// this (new) engine never had — missing is Ok, not bad_request.
+    fn display_destroy(&mut self, id: &str) -> Result<Value, ProtoError> {
+        self.remove_display(id);
+        Ok(json!({}))
+    }
+
+    fn remove_display(&mut self, id: &str) {
+        if let Some(i) = self.displays.iter().position(|(n, _)| n == id) {
+            let (_, d) = self.displays.remove(i);
+            unsafe { ffi::obs_display_destroy(d) };
         }
     }
 
@@ -567,6 +670,10 @@ impl Engine {
     }
 
     fn teardown(&mut self) {
+        // Displays first: their swapchains must die before ObsCore drops.
+        for (_, d) in self.displays.drain(..) {
+            unsafe { ffi::obs_display_destroy(d) };
+        }
         if self.recording.is_some() {
             let _ = self.stop_record();
         }
@@ -613,6 +720,39 @@ unsafe fn first_real_monitor_id(src: *mut ffi::obs_source) -> Option<String> {
         }
         ffi::obs_properties_destroy(props);
         found
+    }
+}
+
+// libobs graphics API — exported by obs.dll but outside the bindgen allowlist
+// (`obs_.*` only; see scripts/regen-bindings.ps1). Hand-declared, matching
+// graphics/graphics.h signatures (vsnprintf-extern precedent in obs/mod.rs).
+unsafe extern "C" {
+    fn gs_viewport_push();
+    fn gs_viewport_pop();
+    fn gs_projection_push();
+    fn gs_projection_pop();
+    fn gs_ortho(left: f32, right: f32, top: f32, bottom: f32, znear: f32, zfar: f32);
+    fn gs_set_viewport(x: i32, y: i32, width: i32, height: i32);
+}
+
+/// Display draw callback — runs on OBS's internal graphics thread; body is
+/// pure gs calls + obs_render_main_texture. The region is exact-fit (app
+/// sizes it to the canvas aspect), so there is no letterbox math here —
+/// ortho over the full base canvas, viewport over the full display. param is
+/// null: one static fn serves every display, no Rust context lifetime.
+unsafe extern "C" fn draw_main(_param: *mut std::ffi::c_void, cx: u32, cy: u32) {
+    unsafe {
+        let mut ovi: ffi::obs_video_info = std::mem::zeroed();
+        if !ffi::obs_get_video_info(&mut ovi) {
+            return;
+        }
+        gs_viewport_push();
+        gs_projection_push();
+        gs_ortho(0.0, ovi.base_width as f32, 0.0, ovi.base_height as f32, -100.0, 100.0);
+        gs_set_viewport(0, 0, cx as i32, cy as i32);
+        ffi::obs_render_main_texture();
+        gs_projection_pop();
+        gs_viewport_pop();
     }
 }
 

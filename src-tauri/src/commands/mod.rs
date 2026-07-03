@@ -1,5 +1,7 @@
 pub mod anime_download;
 pub mod anime_search;
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+pub mod broadcast;
 // Windows port: the browser is a per-OS module — `browser.rs` drives WebKitGTK
 // on Linux, `browser_windows.rs` drives WebView2 child webviews on Windows. Both
 // expose the SAME `browser_*` command names, so the handler/build/capabilities

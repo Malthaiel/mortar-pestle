@@ -2,6 +2,14 @@
 //! (capture/stt precedent). The app side keeps its own MIT mirror of these
 //! shapes in `src-tauri/src/broadcast/client.rs`; changes are made twice,
 //! never shared (license boundary — see README).
+//!
+//! Op vocabulary: SP1 — `hello`, `get_state`, `create_scene`, `remove_scene`,
+//! `set_current_scene`, `create_source`, `remove_source`,
+//! `set_source_settings`, `start_record`, `stop_record`, `shutdown`.
+//! SP2 — `display_create` {id, hwnd:u64, width, height},
+//! `display_resize` {id, width, height}, `display_destroy` {id} (idempotent).
+//! Display verbs are ephemeral: no collection autosave, no state_changed push,
+//! and displays never appear in [`StateSnapshot`].
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

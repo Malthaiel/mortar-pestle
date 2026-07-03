@@ -15,10 +15,14 @@
 //! boundary, protocol changes are made twice, once on each side, and no crate
 //! crosses the boundary. Broadcast ids are **u64** (unlike stt's string ids).
 //!
-//! ## SP1 op / event vocabulary
-//! Requests: `hello`, `get_state`, `create_scene`, `remove_scene`,
+//! ## Op / event vocabulary
+//! SP1 requests: `hello`, `get_state`, `create_scene`, `remove_scene`,
 //! `set_current_scene`, `create_source`, `remove_source`,
 //! `set_source_settings`, `start_record`, `stop_record`, `shutdown`.
+//! SP2 requests: `display_create` {id, hwnd:u64, width, height},
+//! `display_resize` {id, width, height}, `display_destroy` {id}
+//! (idempotent; display verbs are ephemeral — no autosave, no state push,
+//! displays never appear in [`StateSnapshot`]).
 //! Events: `state_changed` (data = [`StateSnapshot`]), `saved` ({path}),
 //! `error` ([`ProtoError`]).
 //!

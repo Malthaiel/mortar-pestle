@@ -142,6 +142,39 @@ pub fn start(app: AppHandle) {
     tauri::async_runtime::spawn(supervise(sup, app));
 }
 
+/// User-requested restart (SP2 settings "Restart engine" / crash-loop CTA).
+/// Three arms:
+/// - live spawned child → terminate it; the wait-task observes the exit and
+///   respawns through the normal loop (generation stays valid);
+/// - crash-loop latched (`terminal`, the supervise loop has returned) → clear
+///   the latch + counters and relaunch the supervise loop;
+/// - adopted / down-mid-backoff → no-op (down auto-heals; an adopted engine
+///   is not ours to kill).
+pub fn restart(app: AppHandle) {
+    let Some(sup) = cell().get() else { return };
+    let (pid, terminal) = {
+        let g = lock(&sup.inner);
+        (g.spawned_pid, g.terminal)
+    };
+    if let Some(pid) = pid {
+        log::info!("broadcast supervisor: restart requested — terminating pid {pid}");
+        #[cfg(unix)]
+        signal_term(pid);
+        #[cfg(not(unix))]
+        crate::commands::proc_util::terminate_pid(pid);
+        return;
+    }
+    if terminal {
+        log::info!("broadcast supervisor: restart requested — clearing crash-loop latch");
+        {
+            let mut g = lock(&sup.inner);
+            g.terminal = false;
+            g.crash_count = 0;
+        }
+        tauri::async_runtime::spawn(supervise(sup, app));
+    }
+}
+
 impl Supervisor {
     /// Snapshot the current status for an `EngineStatus` emit / a command read.
     fn status(&self, state: &str, message: impl Into<String>) -> EngineStatus {

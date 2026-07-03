@@ -1,0 +1,16 @@
+{
+  "id": "broadcast",
+  "name": "Broadcast",
+  "description": "Broadcast — OBS-parity studio: live preview + record (scenes/sources land in SP3).",
+  "version": "0.1.0",
+  "entry": "./index.jsx",
+  "slots": ["route", "left-sidebar", "settings-tab"],
+  "permissions": [],
+  "requires": [],
+  "license": "proprietary",
+  "tier": "studio",
+  "platforms": ["windows"],
+  "routeBase": "/tools/broadcast",
+  "iconKey": "IconBroadcast",
+  "setupRequired": false
+}

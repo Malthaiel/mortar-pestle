@@ -877,6 +877,15 @@ pub fn run() {
             overlay::state::overlay_go_live,
             overlay::state::overlay_go_offline,
             overlay::state::overlay_get_live_target,
+            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::broadcast::broadcast_get_state,
+            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::broadcast::broadcast_start_record,
+            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::broadcast::broadcast_stop_record,
+            #[cfg(target_os = "windows")] commands::broadcast::broadcast_display_create,
+            #[cfg(target_os = "windows")] commands::broadcast::broadcast_display_bounds,
+            #[cfg(target_os = "windows")] commands::broadcast::broadcast_display_destroy,
+            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::broadcast::broadcast_restart_engine,
+            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::broadcast::broadcast_open_log,
+            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::broadcast::broadcast_paths,
         ])
         .on_window_event(|_window, event| {
             if let WindowEvent::Focused(focused) = event {

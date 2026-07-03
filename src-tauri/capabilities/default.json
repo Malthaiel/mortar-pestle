@@ -289,6 +289,15 @@
     "allow-stt-open-kde-settings",
     "allow-overlay-go-live",
     "allow-overlay-go-offline",
-    "allow-overlay-get-live-target"
+    "allow-overlay-get-live-target",
+    "allow-broadcast-get-state",
+    "allow-broadcast-start-record",
+    "allow-broadcast-stop-record",
+    "allow-broadcast-display-create",
+    "allow-broadcast-display-bounds",
+    "allow-broadcast-display-destroy",
+    "allow-broadcast-restart-engine",
+    "allow-broadcast-open-log",
+    "allow-broadcast-paths"
   ]
 }

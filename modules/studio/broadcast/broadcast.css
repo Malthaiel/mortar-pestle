@@ -1,0 +1,52 @@
+/* Broadcast module (SP2). Bar clones .stt-controlbar (the composer-surface
+   reference); extra bottom padding clears the candy depth shadow. */
+
+.bcast-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+/* Preview area — flex center; the region div computes the aspect fit. */
+.bcast-preview-area {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+/* The native region's DOM anchor: pure-CSS 16:9 fit inside the area; the
+   page background around it IS the letterbox (the engine never draws bars).
+   Black backing shows only for the frames before the swapchain's first
+   present. */
+.bcast-preview-region {
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  max-height: 100%;
+  margin: auto;
+  min-width: 0;
+  min-height: 0;
+  background: #000;
+}
+
+.bcast-controlbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px 13px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.bcast-lasterror {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

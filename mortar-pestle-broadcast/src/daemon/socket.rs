@@ -119,6 +119,12 @@ fn need_str(args: &Value, key: &str) -> Result<String, ProtoError> {
         .ok_or_else(|| ProtoError::bad_request(format!("missing string arg '{key}'")))
 }
 
+fn need_u64(args: &Value, key: &str) -> Result<u64, ProtoError> {
+    args.get(key)
+        .and_then(Value::as_u64)
+        .ok_or_else(|| ProtoError::bad_request(format!("missing number arg '{key}'")))
+}
+
 async fn dispatch(req: Request, cmd_tx: &mpsc::Sender<Cmd>) -> Response {
     let id = req.id;
 
@@ -173,6 +179,24 @@ async fn dispatch(req: Request, cmd_tx: &mpsc::Sender<Cmd>) -> Response {
         })(),
         "start_record" => Ok(Cmd::StartRecord { reply: tx }),
         "stop_record" => Ok(Cmd::StopRecord { reply: tx }),
+        "display_create" => (|| {
+            Ok(Cmd::DisplayCreate {
+                id: need_str(&args, "id")?,
+                hwnd: need_u64(&args, "hwnd")?,
+                width: need_u64(&args, "width")? as u32,
+                height: need_u64(&args, "height")? as u32,
+                reply: tx,
+            })
+        })(),
+        "display_resize" => (|| {
+            Ok(Cmd::DisplayResize {
+                id: need_str(&args, "id")?,
+                width: need_u64(&args, "width")? as u32,
+                height: need_u64(&args, "height")? as u32,
+                reply: tx,
+            })
+        })(),
+        "display_destroy" => need_str(&args, "id").map(|id| Cmd::DisplayDestroy { id, reply: tx }),
         other => Err(ProtoError {
             code: "not_implemented".into(),
             message: format!("unknown op '{other}'"),
