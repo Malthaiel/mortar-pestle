@@ -1877,6 +1877,19 @@ export function subscribeBrowserTabsRequest(handler) {
   return () => { p.then(fn => fn()).catch(() => {}); };
 }
 
+// Overlay-attached browser tab (Browser Overlay Panel). Rust emits
+// `overlay-browser-attached {tabId}` when a tab's live webview reparents into
+// the overlay host, and `overlay-browser-detached {}` when it returns home;
+// the main-window chrome suppresses its own native-view sync while attached.
+// The handler receives the attached tab id, or null on detach.
+export function subscribeBrowserOverlayAttached(handler) {
+  const ps = [
+    tauriListen('overlay-browser-attached', evt => handler(evt.payload?.tabId ?? null)),
+    tauriListen('overlay-browser-detached', () => handler(null)),
+  ];
+  return () => { for (const p of ps) { p.then(fn => fn()).catch(() => {}); } };
+}
+
 // SF5 vault-sync pulse: ≥3 events within 1.5s → broadcast for brand pill.
 let _recentEventTimes = [];
 function _maybePulse() {

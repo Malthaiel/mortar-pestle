@@ -5,9 +5,9 @@
 // BEFORE the provider tree (App.jsx hash short-circuit on #/overlay/host), so it
 // has no Vault/Notification/Stt context — it owns its own transparent root and a
 // host-local screen-anchored toast. Panels: the merged Overlay Studio panel (Voice
-// + Video + Screenshots, reorderable tiles), the Scrim panel, and the Concierge
-// chat (summoned by AgentsOverlayLauncher); the Browser panel lands in a later
-// Overlay sub-plan.
+// + Video + Screenshots, reorderable tiles), the Scrim panel, the Concierge
+// chat (summoned by AgentsOverlayLauncher), and the Browser panel (the in-app
+// browser 1-1, live tab webview reparented in; summoned by BrowserOverlayLauncher).
 import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
@@ -17,6 +17,8 @@ import OverlayStudioPanel from './OverlayStudioPanel.jsx';
 import ScrimOverlayPanel from './ScrimOverlayPanel.jsx';
 import ConciergeProvider from '@host/agents/concierge/ConciergeProvider.jsx';
 import AgentsOverlayLauncher from './AgentsOverlayLauncher.jsx';
+import OverlayBrowserPanel from './OverlayBrowserPanel.jsx';
+import BrowserOverlayLauncher from './BrowserOverlayLauncher.jsx';
 
 // Minimal module-api shim for the host-mounted SttProvider. It only needs
 // invoke (all stt_* calls are cross-window-safe Tauri invokes) and events.on
@@ -110,6 +112,8 @@ export default function OverlayHostView() {
         <OverlayStudioPanel showToast={showToast} />
       </SttProvider>
       <ScrimOverlayPanel />
+      <OverlayBrowserPanel visible={visible} />
+      <BrowserOverlayLauncher />
       {/* Concierge over the game. Providerless — every dep (useSettings, useAgentChat,
           the api singleton) is a plain hook/singleton; agent-chunk is emitted app-
           globally so the host webview receives its own stream with no bridge. The

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { subscribeBrowserOverlayAttached } from '@host/api.js';
 import { useTabStore } from './useTabStore.js';
 import * as store from './tabStore.js';
 import NewTabPage from './NewTabPage.jsx';
@@ -36,7 +37,18 @@ import LoadingScreen from './LoadingScreen.jsx';
 let _rustSeeded = false;
 const _nativeTabs = new Set();
 
-export default function BrowserPage({ api, accent, rest }) {
+// Overlay attach/detach invokes flow through one FIFO chain — Tauri command
+// tasks can interleave (invoke order ≠ call order), and a stale attach landing
+// after a newer attach/detach would strand the live webview in the wrong window.
+let _ovOps = Promise.resolve();
+function ovOp(api, cmd, args) {
+  const run = () => api.invoke(cmd, args);
+  const p = _ovOps.then(run, run);
+  _ovOps = p.catch(() => {});
+  return p;
+}
+
+export default function BrowserPage({ api, accent, rest, inOverlay = false, syncRef }) {
   const holderRef = useRef(null);
   const { tabs, activeId } = useTabStore();
   const active = tabs.find(t => t.id === activeId) || tabs[0] || null;
@@ -60,6 +72,22 @@ export default function BrowserPage({ api, accent, rest }) {
   const isVaultRoute = rest === 'vault' || rest.startsWith('vault/');
   const isHistoryRoute = rest === 'history';
 
+  // Browser Overlay Panel state. Main window: while the active tab's webview is
+  // reparented into the overlay host, this chrome must not drive the native
+  // view (switch/bounds/visibility) — the overlay realm owns it; the detached
+  // event re-runs the gated effects, which re-assert. Overlay realm (inOverlay):
+  // only mounted while the panel is open+shown, so it always drives, and its
+  // unmount sends the webview home.
+  const [ovAttached, setOvAttached] = useState(false);
+  const ovAttachedRef = useRef(false);
+  ovAttachedRef.current = ovAttached;
+  useEffect(() => {
+    if (inOverlay) return undefined;
+    api.invoke('browser_overlay_attached').then((id) => setOvAttached(!!id)).catch(() => {});
+    return subscribeBrowserOverlayAttached((id) => setOvAttached(!!id));
+  }, [api, inOverlay]);
+  const driveNative = inOverlay || !ovAttached;
+
   const syncBounds = useCallback(() => {
     const el = holderRef.current;
     if (!el) return;
@@ -72,6 +100,14 @@ export default function BrowserPage({ api, accent, rest }) {
       height: Math.round(r.height - inset),
     }).catch(() => {});
   }, [api]);
+
+  // Expose syncBounds to the overlay panel (drag/resize pump): a translate()
+  // move changes the holder's viewport rect without firing its ResizeObserver.
+  useEffect(() => {
+    if (!syncRef) return undefined;
+    syncRef.current = syncBounds;
+    return () => { syncRef.current = null; };
+  }, [syncRef, syncBounds]);
 
   const navigateActive = useCallback((url) => {
     if (!active || !url) return;
@@ -137,9 +173,19 @@ export default function BrowserPage({ api, accent, rest }) {
   }, [activeLoading, activeCommitted, activeKey]);
 
   useEffect(() => {
-    if (!ready || !activeKey) return;
+    if (!ready || !activeKey || !driveNative) return;
     let cancelled = false;
     (async () => {
+      // Overlay realm: pull the live webview into the overlay window before
+      // driving it. Gated on activeUrl so a New-Tab tab (no native view yet)
+      // never latch-attaches — by the first navigate the view exists and the
+      // reparent is physical. Same-id re-attach is a Rust no-op (DEV reloads
+      // the host webview on every show).
+      if (inOverlay && activeUrl && !activeCrashed) {
+        try { await ovOp(api, 'browser_overlay_attach', { id: activeKey }); }
+        catch (e) { console.error('[browser] overlay attach', e); }
+        if (cancelled) return;
+      }
       try { await api.invoke('browser_switch_tab', { id: activeKey }); } catch { /* tab may be gone */ }
       if (cancelled) return;
       if (activeUrl && !activeCrashed && !isVaultRoute && !isHistoryRoute && revealReady) {
@@ -151,11 +197,11 @@ export default function BrowserPage({ api, accent, rest }) {
       }
     })();
     return () => { cancelled = true; };
-  }, [ready, activeKey, activeUrl, activeCrashed, popup, isVaultRoute, isHistoryRoute, revealReady, api, syncBounds]);
+  }, [ready, activeKey, activeUrl, activeCrashed, popup, isVaultRoute, isHistoryRoute, revealReady, api, syncBounds, driveNative, inOverlay]);
 
   // Keep the active native view aligned on resize/layout while a URL is loaded.
   useEffect(() => {
-    if (!ready || !activeUrl) return;
+    if (!ready || !activeUrl || !driveNative) return;
     const onResize = () => syncBounds();
     window.addEventListener('resize', onResize);
     const ro = new ResizeObserver(syncBounds);
@@ -166,10 +212,17 @@ export default function BrowserPage({ api, accent, rest }) {
       ro.disconnect();
       cancelAnimationFrame(raf);
     };
-  }, [ready, activeUrl, syncBounds]);
+  }, [ready, activeUrl, syncBounds, driveNative]);
 
-  // Hide the native view when leaving the browser route entirely.
-  useEffect(() => () => { api.invoke('browser_set_visible', { visible: false }).catch(() => {}); }, [api]);
+  // Hide the native view when leaving the browser route entirely. Overlay realm
+  // sends the attached webview home instead; a suppressed main chrome must SKIP
+  // the hide — browser_set_visible targets the active webview, which is the
+  // overlay's live view while attached.
+  useEffect(() => () => {
+    if (inOverlay) { ovOp(api, 'browser_overlay_detach').catch(() => {}); return; }
+    if (ovAttachedRef.current) return;
+    api.invoke('browser_set_visible', { visible: false }).catch(() => {});
+  }, [api, inOverlay]);
 
   // Mirror the active tab's URL into the editable address bar.
   useEffect(() => { setDraft(activeUrl ?? ''); setHint(''); setConfirmClear(false); }, [activeKey, activeUrl]);
@@ -335,6 +388,9 @@ export default function BrowserPage({ api, accent, rest }) {
           browser_set_bounds). When the active tab has no URL, the New-Tab Page
           renders here instead and the native view is hidden. */}
       <div ref={holderRef} style={{ flex: '1 1 auto', minHeight: 0, position: 'relative', background: 'var(--bg)' }}>
+        {!inOverlay && ovAttached && activeUrl && !activeCrashed && (
+          <div style={ovNoticeStyle}>This tab is showing in the game overlay.</div>
+        )}
         {!activeUrl && <NewTabPage api={api} accent={accent} onNavigate={navigateActive} />}
         {activeUrl && activeCrashed && (
           <CrashedNotice reason={activeCrashed} accent={accent} onReload={reloadCrashed} />
@@ -392,6 +448,19 @@ const inputStyle = {
   background: 'var(--bg)',
   color: 'var(--text)',
   font: 'inherit',
+};
+
+// Fills the holder while the active tab's webview lives in the overlay host
+// (the reparent leaves this window with nothing to show in the region).
+const ovNoticeStyle = {
+  position: 'absolute',
+  inset: 0,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontSize: 13,
+  color: 'var(--text-muted)',
+  background: 'var(--bg)',
 };
 
 const hintStyle = {

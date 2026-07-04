@@ -4935,3 +4935,20 @@ button.cal-customdays__step:hover {
 .ov-scrim-notes { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; }
 .ov-scrim-note { display: flex; gap: 6px; align-items: center; }
 .ov-scrim-empty { font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); padding: 8px 2px; }
+
+/* === Overlay Browser panel (Overlay epic sub-plan 5 — the in-app browser as a
+   draggable/resizable host panel; the live tab webview reparents in and always
+   paints over the holder region). Width/height are inline (useOverlayPanelResize);
+   mirrors the .ov-scrim-* panel above. */
+.ov-browser-panel { display: flex; flex-direction: column; gap: var(--ov-gap); padding: var(--ov-gap); position: relative; }
+.ov-browser-head { justify-content: space-between; cursor: move; gap: 8px; padding: 2px 4px 4px; }
+.ov-browser-title { text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+.ov-browser-body { flex: 1; min-height: 0; display: flex; gap: var(--ov-gap); }
+.ov-browser-side { flex: 0 0 220px; min-height: 0; overflow-y: auto; }
+.ov-browser-main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+/* Same standalone-chip squaring as .ov-agents-chip (data-shape="icon" sizing is
+   .dock-root-scoped, which the host chips aren't inside). */
+.ov-browser-chip > .candy-face { padding: 8px; gap: 0; }
+/* Corner grip — two hairline edges, no glow (house rule). */
+.ov-resize-handle { position: absolute; right: 3px; bottom: 3px; width: 12px; height: 12px; cursor: nwse-resize; border-right: 2px solid var(--text-faint); border-bottom: 2px solid var(--text-faint); border-radius: 0 0 4px 0; opacity: .7; touch-action: none; }
+.ov-resize-handle:hover { opacity: 1; }
