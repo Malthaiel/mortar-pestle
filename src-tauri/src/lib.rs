@@ -346,7 +346,26 @@ pub fn run() {
                                     let _ = bridge_app.emit("broadcast-state", &ev.data);
                                 }
                                 "saved" => {
+                                    // Broadcast-specific signal (unchanged), then run the
+                                    // shared Captures pipeline off-thread so the bridge keeps
+                                    // draining while poster extract + auto-remux await ffmpeg.
                                     let _ = bridge_app.emit("broadcast-saved", &ev.data);
+                                    let app2 = bridge_app.clone();
+                                    let data = ev.data.clone();
+                                    tauri::async_runtime::spawn(async move {
+                                        commands::broadcast::on_saved(app2, data).await;
+                                    });
+                                }
+                                "replay_saved" => {
+                                    // Replay clip saved: fire the chime/toast signal, then the
+                                    // same shared Captures pipeline (poster + capture-saved +
+                                    // auto-remux) as a record `saved`.
+                                    let _ = bridge_app.emit("broadcast-replay-saved", &ev.data);
+                                    let app2 = bridge_app.clone();
+                                    let data = ev.data.clone();
+                                    tauri::async_runtime::spawn(async move {
+                                        commands::broadcast::on_saved(app2, data).await;
+                                    });
                                 }
                                 "error" => {
                                     let _ = bridge_app.emit("broadcast-error", &ev.data);

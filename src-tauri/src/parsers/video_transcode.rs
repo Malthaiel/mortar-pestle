@@ -259,6 +259,48 @@ fn build_transcode_argv(
     args
 }
 
+/// Build the ffmpeg argv for a container remux that KEEPS EVERY TRACK
+/// (`-map 0 -c copy`). Distinct from [`build_transcode_argv`], which single-maps
+/// `0:a:{n}` and would silently DROP a Broadcast recording's 2nd audio track
+/// (desktop → track 1, mic → track 2). Used by the auto-remux runner (mkv → mp4,
+/// SP4 S4) and the SP4 S6 remux utility. Stream-copy only — no re-encode.
+pub(crate) fn build_remux_argv(abs: &str, out_path: &Path) -> Vec<String> {
+    vec![
+        "-hide_banner".into(),
+        "-loglevel".into(),
+        "error".into(),
+        "-y".into(),
+        "-i".into(),
+        // `\\?\`-strip: ffmpeg rejects the Windows verbatim path form.
+        crate::tool_path::native_str(abs),
+        "-map".into(),
+        "0".into(),
+        "-c".into(),
+        "copy".into(),
+        "-movflags".into(),
+        "+faststart".into(),
+        out_path.display().to_string(),
+    ]
+}
+
+#[cfg(test)]
+mod remux_argv_tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn remux_keeps_all_tracks() {
+        let args = build_remux_argv("in.mkv", Path::new("out.mp4"));
+        // -map 0 selects ALL streams — the reason this exists vs build_transcode_argv.
+        assert!(args.windows(2).any(|w| w[0] == "-map" && w[1] == "0"));
+        // must NOT single-map one audio stream (the track-2-dropping trap).
+        assert!(!args.iter().any(|a| a.starts_with("0:a:")));
+        assert!(args.windows(2).any(|w| w[0] == "-c" && w[1] == "copy"));
+        assert!(args.iter().any(|a| a == "+faststart"));
+        assert_eq!(args.last().unwrap(), "out.mp4");
+    }
+}
+
 /// pub(crate): the editor remux lane (parsers/editor_proxy.rs) reuses this
 /// spawn (same argv builder) without the player lane's kill-prior semantics.
 /// `proxy` is the editor lane's 1080p re-encode recipe; the player lane
