@@ -89,8 +89,9 @@ impl ProtoError {
 }
 
 /// The sole UI truth (Overview cross-cutting contract #1) — mirror of the
-/// engine's `StateSnapshot`, proto v2 (SP3): canvas block + per-item identity
-/// (item_id), flags, transform/crop, engine-computed corners, group children.
+/// engine's `StateSnapshot`, proto v3 (SP4): canvas + per-item identity,
+/// flags, transform/crop, engine-computed corners, group children, plus
+/// record pause state, replay arm state, and boot-enumerated encoder caps.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StateSnapshot {
     /// Protocol version, bumped on breaking wire changes.
@@ -101,6 +102,12 @@ pub struct StateSnapshot {
     pub canvas: CanvasInfo,
     pub scenes: Vec<SceneInfo>,
     pub recording: RecordingInfo,
+    /// SP4: replay-buffer arm state (default-absent on a pre-v3 engine).
+    #[serde(default)]
+    pub replay: ReplayInfo,
+    /// SP4: boot-enumerated video encoder capabilities.
+    #[serde(default)]
+    pub caps: CapsInfo,
     pub obs_version: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_error: Option<ProtoError>,
@@ -172,9 +179,34 @@ pub struct Crop {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RecordingInfo {
     pub active: bool,
+    /// SP4: this flag + the pause-adjusted elapsed both freeze across a pause.
+    #[serde(default)]
+    pub paused: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
     pub elapsed_ns: u64,
+}
+
+/// SP4 mirror — replay-buffer arm state (engine `ReplayInfo`).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ReplayInfo {
+    #[serde(default)]
+    pub armed: bool,
+}
+
+/// SP4 mirror — boot-enumerated encoder caps (engine `CapsInfo`).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CapsInfo {
+    #[serde(default)]
+    pub encoders: Vec<EncoderInfo>,
+}
+
+/// One video encoder type (engine `EncoderInfo`): libobs id + display + codec.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EncoderInfo {
+    pub id: String,
+    pub display_name: String,
+    pub codec: String,
 }
 
 // ===========================================================================
