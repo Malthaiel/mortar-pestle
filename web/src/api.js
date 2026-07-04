@@ -3,7 +3,7 @@
 // the Tauri shell rather than silently falling back to a host that no longer
 // exists.
 
-import { listen as tauriListen } from '@tauri-apps/api/event';
+import { listen as tauriListen, emit as tauriEmit } from '@tauri-apps/api/event';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { formatEventBullet } from './util/events.js';
 import { parseNutritionLog } from './util/nutritionTotals.js';
@@ -1854,6 +1854,26 @@ export function subscribeBuildEvents(handler) {
 // module's tab store merges the partial into that tab.
 export function subscribeBrowserTabEvents(handler) {
   const p = tauriListen('browser-tab-update', evt => handler(evt.payload));
+  return () => { p.then(fn => fn()).catch(() => {}); };
+}
+
+// Cross-window browser tab-store sync (main window ⇄ overlay-host). Each
+// webview runs its own tabStore singleton; structural mutations broadcast the
+// persisted slices app-globally, and a fresh instance can request a snapshot
+// (the overlay-live-target push+pull pattern, at the JS level). `src` lets the
+// emitter ignore its own echo.
+export function emitBrowserTabsSync(payload) {
+  return tauriEmit('browser-tabs-sync', payload);
+}
+export function subscribeBrowserTabsSync(handler) {
+  const p = tauriListen('browser-tabs-sync', evt => handler(evt.payload));
+  return () => { p.then(fn => fn()).catch(() => {}); };
+}
+export function emitBrowserTabsRequest(payload) {
+  return tauriEmit('browser-tabs-request', payload);
+}
+export function subscribeBrowserTabsRequest(handler) {
+  const p = tauriListen('browser-tabs-request', evt => handler(evt.payload));
   return () => { p.then(fn => fn()).catch(() => {}); };
 }
 

@@ -54,6 +54,11 @@ use windows::core::{Interface, BOOL, PCWSTR, PWSTR};
 static TABS: Mutex<Option<HashMap<String, Webview>>> = Mutex::new(None);
 /// The active tab id (the one `browser_set_bounds`/`set_visible` act on).
 static ACTIVE: Mutex<Option<String>> = Mutex::new(None);
+/// The tab whose webview is reparented into the `overlay-host` window (the
+/// in-game browser panel). `None` ⇒ every tab is a child of `main`. Also the
+/// serialization point for attach/detach (the guard is held across the
+/// blocking reparent on purpose).
+static OVERLAY_ATTACHED: Mutex<Option<String>> = Mutex::new(None);
 
 // ── shared allow-list helpers ────────────────────────────────────────────────
 // SECURITY-CRITICAL nav/host gate — now shared with the Linux WebKitGTK driver
@@ -390,7 +395,98 @@ pub fn browser_close_tab(id: String) -> Result<(), String> {
     if a.as_deref() == Some(id.as_str()) {
         *a = None;
     }
+    // Closing the overlay-attached tab destroys its webview — clear the slot
+    // SILENTLY (no detached emit): the overlay chrome attaches the neighbor tab
+    // right after, and a transient detached would flicker main-window
+    // suppression. The close-then-close-panel path is covered by
+    // `overlay_detach_impl`, which always emits.
+    let mut ov = OVERLAY_ATTACHED.lock().map_err(|_| "overlay lock")?;
+    if ov.as_deref() == Some(id.as_str()) {
+        *ov = None;
+    }
     Ok(())
+}
+
+// ── in-game overlay browser panel (reparent the LIVE tab webview) ────────────
+// The overlay panel shows the *same* WebView2 instance the main window uses:
+// attach = `Webview::reparent` (SetParent under the hood) into `overlay-host`,
+// detach = reparent back to `main`. Playback/session state ride along untouched.
+// THREADING: `reparent` BLOCKS on the event loop (send_user_message + rx.recv),
+// and sync commands run ON the main thread — so attach/detach MUST be `async fn`
+// (worker-thread execution), and must never run inside `run_on_main_thread`.
+// The inverse of the `add_child` discipline above.
+
+/// Clone the webview handle for `id` out of the registry (lock not held across
+/// the subsequent blocking dispatch).
+fn tab_webview(id: &str) -> Option<Webview> {
+    TABS.lock()
+        .ok()
+        .and_then(|t| t.as_ref().and_then(|m| m.get(id).cloned()))
+}
+
+/// Hide `id`'s webview, then reparent it under `window_label`. Hide FIRST so the
+/// view never paints at stale coords in the new window (both are event-loop
+/// messages, processed in order; the chrome re-bounds + re-shows afterwards).
+/// A missing webview (e.g. a New-Tab Page tab) warns and is Ok — "attached"
+/// means the overlay owns the active browser surface, webview or not.
+fn reparent_tab(app: &AppHandle, id: &str, window_label: &str) -> Result<(), String> {
+    let Some(wv) = tab_webview(id) else {
+        log::warn!("browser(win): reparent of missing tab {id} (New-Tab Page?) — skipped");
+        return Ok(());
+    };
+    let win = app
+        .get_webview_window(window_label)
+        .ok_or_else(|| format!("no {window_label} window"))?;
+    let _ = wv.hide();
+    wv.reparent(&win.as_ref().window())
+        .map_err(|e| format!("reparent to {window_label}: {e}"))
+}
+
+/// Move tab `id`'s live webview into the overlay-host window. Idempotent for
+/// the already-attached id (the DEV host webview reloads on every Shift+C).
+/// Any previously-attached tab is sent home first. The guard is held across the
+/// whole body on purpose — attach/detach serialize process-wide.
+#[tauri::command]
+pub async fn browser_overlay_attach(app: AppHandle, id: String) -> Result<(), String> {
+    let mut attached = OVERLAY_ATTACHED.lock().map_err(|_| "overlay lock")?;
+    if attached.as_deref() == Some(id.as_str()) {
+        return Ok(());
+    }
+    if let Some(prev) = attached.take() {
+        let _ = reparent_tab(&app, &prev, "main");
+    }
+    reparent_tab(&app, &id, "overlay-host")?;
+    *attached = Some(id.clone());
+    let _ = app.emit("overlay-browser-attached", serde_json::json!({ "tabId": id }));
+    Ok(())
+}
+
+/// Send the overlay-attached tab (if any) back to `main`, hidden; the main
+/// chrome re-asserts bounds/visibility on the `overlay-browser-detached` event.
+#[tauri::command]
+pub async fn browser_overlay_detach(app: AppHandle) -> Result<(), String> {
+    overlay_detach_impl(&app)
+}
+
+/// Detach body, callable from `lib.rs` (the `hide_overlay_host` safety hook, so
+/// a dead host webview can never strand a tab in the hidden window). ALWAYS
+/// emits `overlay-browser-detached` — `browser_close_tab` clears the slot
+/// silently, so the unconditional emit is what un-wedges main-window
+/// suppression in the close-tab-then-close-panel sequence.
+pub fn overlay_detach_impl(app: &AppHandle) -> Result<(), String> {
+    let mut attached = OVERLAY_ATTACHED.lock().map_err(|_| "overlay lock")?;
+    if let Some(prev) = attached.take() {
+        let _ = reparent_tab(app, &prev, "main");
+    }
+    let _ = app.emit("overlay-browser-detached", serde_json::json!({}));
+    Ok(())
+}
+
+/// The currently overlay-attached tab id (pull-on-mount for both chromes —
+/// event-only state dies on a webview reload, mirroring `overlay_get_live_target`).
+#[tauri::command]
+pub fn browser_overlay_attached() -> Result<Option<String>, String> {
+    Ok(OVERLAY_ATTACHED.lock().map_err(|_| "overlay lock")?.clone())
 }
 
 #[tauri::command]

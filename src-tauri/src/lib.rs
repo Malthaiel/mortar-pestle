@@ -44,6 +44,17 @@ fn hide_overlay_host(app: tauri::AppHandle) {
     if let Some(win) = app.get_webview_window("overlay-host") {
         let _ = win.hide();
     }
+    // Safety net: never strand a reparented browser tab inside the hidden
+    // window (a crashed/hung host webview can't run its own detach). Spawned,
+    // never inline — this command runs sync on the main thread and the detach
+    // reparent blocks on the event loop.
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
+    {
+        let app2 = app.clone();
+        tauri::async_runtime::spawn(async move {
+            let _ = commands::browser::overlay_detach_impl(&app2);
+        });
+    }
 }
 
 /// Sub-feature 6 — one-shot byte-faithful migration of legacy sidebar order
@@ -646,6 +657,9 @@ pub fn run() {
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::browser::browser_clear_cookies,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::browser::browser_cache_size,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::browser::browser_cookie_sites,
+            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::browser::browser_overlay_attach,
+            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::browser::browser_overlay_detach,
+            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::browser::browser_overlay_attached,
             #[cfg(any(target_os = "linux", target_os = "windows"))] blocker::commands::blocker_get_state,
             #[cfg(any(target_os = "linux", target_os = "windows"))] blocker::commands::blocker_set_enabled,
             #[cfg(any(target_os = "linux", target_os = "windows"))] blocker::commands::blocker_set_site_allowed,

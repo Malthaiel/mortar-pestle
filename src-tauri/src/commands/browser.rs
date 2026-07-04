@@ -878,3 +878,30 @@ pub fn browser_set_visible(app: AppHandle, visible: bool) -> Result<(), String> 
         }
     })
 }
+
+// ── in-game overlay browser panel — Windows-only (see browser_windows.rs) ────
+// The WebKitGTK driver embeds tab views in the MAIN window's GTK overlay; there
+// is no reparent-into-another-window path here. Same command names so lib.rs /
+// build.rs / capabilities stay cfg-free; the overlay chrome degrades gracefully.
+
+#[tauri::command]
+pub fn browser_overlay_attach(_id: String) -> Result<(), String> {
+    Err("in-game overlay browser: Windows only".into())
+}
+
+#[tauri::command]
+pub fn browser_overlay_detach() -> Result<(), String> {
+    Ok(())
+}
+
+#[tauri::command]
+pub fn browser_overlay_attached() -> Result<Option<String>, String> {
+    Ok(None)
+}
+
+/// Detach body for the `lib.rs` `hide_overlay_host` safety hook — no-op on
+/// Linux (nothing ever attaches), but the symbol must exist for the cfg-free
+/// call site.
+pub fn overlay_detach_impl(_app: &AppHandle) -> Result<(), String> {
+    Ok(())
+}

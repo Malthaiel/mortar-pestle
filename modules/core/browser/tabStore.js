@@ -10,7 +10,11 @@
 // canBack, canForward }; `url === null` means a New-Tab Page (no native view).
 
 import { readModuleBag, writeModuleSetting } from '@host/module-sdk/index.js';
-import { subscribeBrowserTabEvents } from '@host/api.js';
+import {
+  subscribeBrowserTabEvents,
+  emitBrowserTabsSync, subscribeBrowserTabsSync,
+  emitBrowserTabsRequest, subscribeBrowserTabsRequest,
+} from '@host/api.js';
 
 const PID = 'browser';
 const RECENT_CAP = 12;
@@ -67,10 +71,11 @@ function persistOpen() {
     id: t.id, url: t.url, title: t.title, favicon: t.favicon, folderId: t.folderId ?? null,
   })));
   writeModuleSetting(PID, 'activeId', _activeId);
+  queueBroadcast();
 }
-function persistFolders() { writeModuleSetting(PID, 'tabFolders', _folders); }
-function persistPinned() { writeModuleSetting(PID, 'pinned', _pinned); }
-function persistRecent() { writeModuleSetting(PID, 'recent', _recent); }
+function persistFolders() { writeModuleSetting(PID, 'tabFolders', _folders); queueBroadcast(); }
+function persistPinned() { writeModuleSetting(PID, 'pinned', _pinned); queueBroadcast(); }
+function persistRecent() { writeModuleSetting(PID, 'recent', _recent); queueBroadcast(); }
 function persistHistory() { writeModuleSetting(PID, 'history', _history); }
 
 function boot() {
@@ -101,6 +106,64 @@ function boot() {
   recompute();
 }
 
+// ── cross-window sync (main window ⇄ overlay-host) ───────────────────────────
+// Each webview runs its own copy of this singleton. Structural mutations
+// broadcast the persisted slices app-globally (debounced, tagged with a
+// per-realm src so the emitter skips its own echo); a fresh instance pulls a
+// snapshot via a request/reply handshake — the overlay-live-target push+pull
+// pattern at the JS level. Receivers apply WITHOUT re-persisting (the sender
+// already wrote the shared bag), so no broadcast loops.
+const _src = 'w' + Math.random().toString(36).slice(2, 10);
+let _bcastTimer = null;
+function queueBroadcast() {
+  if (_bcastTimer) return;
+  _bcastTimer = setTimeout(() => {
+    _bcastTimer = null;
+    emitBrowserTabsSync({
+      src: _src,
+      openTabs: _tabs.map(t => ({
+        id: t.id, url: t.url, title: t.title, favicon: t.favicon, folderId: t.folderId ?? null,
+      })),
+      activeId: _activeId,
+      folders: _folders,
+      pinned: _pinned,
+      recent: _recent,
+    }).catch(() => {});
+  }, 120);
+}
+function applySync(p) {
+  if (!p || p.src === _src || !Array.isArray(p.openTabs)) return;
+  const local = new Map(_tabs.map(t => [t.id, t]));
+  _tabs = p.openTabs.map(t => {
+    const prev = local.get(t.id);
+    return {
+      id: t.id,
+      url: t.url ?? null,
+      title: t.title || '',
+      favicon: t.favicon || null,
+      folderId: t.folderId ?? null,
+      // Runtime flags are not persisted/synced — keep the local ones (the Rust
+      // browser-tab-update stream reaches every realm and refreshes them).
+      loading: prev ? prev.loading : false,
+      canBack: prev ? prev.canBack : false,
+      canForward: prev ? prev.canForward : false,
+      ...(prev && prev.committed !== undefined ? { committed: prev.committed } : {}),
+      ...(prev && prev.crashed ? { crashed: prev.crashed } : {}),
+    };
+  });
+  if (_tabs.length === 0) {
+    _tabs = [freshTab(null)];
+    _activeId = _tabs[0].id;
+  } else {
+    _activeId = _tabs.some(t => t.id === p.activeId) ? p.activeId : _tabs[0].id;
+  }
+  if (Array.isArray(p.folders)) _folders = p.folders;
+  if (Array.isArray(p.pinned)) _pinned = p.pinned;
+  if (Array.isArray(p.recent)) _recent = p.recent;
+  recompute();
+  subs.forEach(fn => { try { fn(); } catch (e) { console.error('[browser/tabStore]', e); } });
+}
+
 // ── store API for useSyncExternalStore ───────────────────────────────────────
 export function subscribe(fn) {
   boot();
@@ -110,6 +173,11 @@ export function subscribe(fn) {
     subscribeBrowserTabEvents((payload) => {
       if (payload && payload.tabId) setTabMeta(payload.tabId, payload);
     });
+    subscribeBrowserTabsSync(applySync);
+    subscribeBrowserTabsRequest((p) => { if (p && p.src !== _src) queueBroadcast(); });
+    // Pull a snapshot from any already-running realm (covers per-webview
+    // localStorage platforms + a store that mutated after our boot() read).
+    emitBrowserTabsRequest({ src: _src }).catch(() => {});
   }
   subs.add(fn);
   return () => subs.delete(fn);
