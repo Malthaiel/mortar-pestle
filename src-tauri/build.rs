@@ -1,4 +1,21 @@
 fn main() {
+  // Feedback Board Supabase creds are baked via option_env! (see commands/feedback.rs).
+  // A release built without them ships the board dead — fail loud instead. Debug/dev is
+  // unaffected: it keeps the runtime std::env::var fallback.
+  println!("cargo:rerun-if-env-changed=MORTAR_PESTLE_SUPABASE_URL");
+  println!("cargo:rerun-if-env-changed=MORTAR_PESTLE_SUPABASE_ANON_KEY");
+  if std::env::var("PROFILE").as_deref() == Ok("release") {
+    let missing: Vec<&str> = ["MORTAR_PESTLE_SUPABASE_URL", "MORTAR_PESTLE_SUPABASE_ANON_KEY"]
+      .into_iter()
+      .filter(|k| std::env::var(k).map(|v| v.trim().is_empty()).unwrap_or(true))
+      .collect();
+    if !missing.is_empty() {
+      panic!(
+        "Release build missing Supabase config (Feedback Board would ship dead): {}",
+        missing.join(", ")
+      );
+    }
+  }
   tauri_build::try_build(
     tauri_build::Attributes::new().app_manifest(
       tauri_build::AppManifest::new().commands(&[
