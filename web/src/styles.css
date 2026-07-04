@@ -4823,6 +4823,11 @@ button.cal-customdays__step:hover {
 .capture-hud:active:has(.acts > .candy-btn:active) > .candy-face { transform: none !important; }
 /* Host-local screen-anchored toast (bottom-right), transient. */
 .overlay-toast { position: fixed; right: 16px; bottom: 16px; z-index: 10; pointer-events: none; }
+/* Agents launcher chip — the Overlay Host's Concierge summon. The compact
+   data-shape="icon" sizing is scoped to .dock-root, which the host chip isn't
+   inside, so it otherwise renders as a wide muted pill that's easy to miss
+   (2026-07-04 gate). Square the face padding so it reads as a proper icon button. */
+.ov-agents-chip > .candy-face { padding: 8px; gap: 0; }
 
 /* === Overlay Studio panel (Overlay epic — merged Capture HUD + STT) ===
    One draggable panel; its three sections (Voice / Video / Screenshots) are

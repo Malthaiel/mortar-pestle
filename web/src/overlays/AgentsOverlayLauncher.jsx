@@ -53,7 +53,7 @@ export default function AgentsOverlayLauncher({ visible }) {
   return (
     <button
       type="button"
-      className={`video-cinema candy-btn${open ? ' is-active' : ''}`}
+      className={`video-cinema candy-btn ov-agents-chip${open ? ' is-active' : ''}`}
       data-shape="icon"
       title="Concierge"
       aria-label="Concierge"
@@ -61,7 +61,7 @@ export default function AgentsOverlayLauncher({ visible }) {
       onClick={toggle}
       style={{ position: 'fixed', left: 16, bottom: 16, zIndex: 30 }}
     >
-      <span className="candy-face"><IconSparkles size={16} /></span>
+      <span className="candy-face"><IconSparkles size={18} /></span>
     </button>
   );
 }
