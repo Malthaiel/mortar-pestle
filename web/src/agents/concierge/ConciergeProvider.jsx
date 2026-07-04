@@ -76,7 +76,7 @@ export default function ConciergeProvider({ children }) {
           target={recipeReq.target}
           recipeNonce={recipeReq.nonce}
           onRecipeConsumed={() => setRecipeReq((r) => ({ ...r, recipe: null, target: null }))}
-          onClose={() => setOpen(false)}
+          onClose={closeConcierge}
         />
       )}
     </>

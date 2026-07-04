@@ -80,6 +80,7 @@ export const PAGE_SECTIONS = {
     sections: [
       { id: 'capture', label: 'Capture' },
       { id: 'voice',   label: 'Voice' },
+      { id: 'agents',  label: 'Agents' },
     ],
   },
 };

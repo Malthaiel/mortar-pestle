@@ -152,6 +152,10 @@ export const AGENTS_DEFAULT = {
   magnetRadius: 80,
   snapCorners: false,
   dragSmoothness: 'medium',
+  // Overlay Agents surface — reopen the over-game Concierge to its last open/closed
+  // state on each overlay show. Off = the launcher always starts closed. Read in the
+  // providerless overlay host by AgentsOverlayLauncher; toggled in Overlay settings.
+  overlayRemember: true,
   // SF10 — pending overrides moved to Tauri-backed JSON at
   // <app_config>/design-pending.json (see useLiveOverrides.js +
   // design_pending_get/set commands). The dormant localStorage array was

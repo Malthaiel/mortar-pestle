@@ -25,6 +25,7 @@ import { insertTranscriptToDailyLog } from '@modules/studio/overlay/insertToDail
 import DraggableSidebarList from '@host/components/DraggableSidebarList.jsx';
 import { applyOrder } from '@host/hooks/useSidebarOrder.js';
 import { api, mediaHttpUrl } from '@host/api.js';
+import { openConcierge } from '@host/agents/concierge/ConciergeProvider.jsx';
 import useOverlayPanelDrag from './useOverlayPanelDrag.js';
 import '@modules/studio/overlay/stt.css'; // reused .stt-vu / .stt-transcript chrome (the host never mounts SttPage)
 
@@ -198,7 +199,7 @@ export default function OverlayStudioPanel({ showToast }) {
             <div className="candy-center-row" style={{ gap: 6, flexWrap: 'wrap' }}>
               <button type="button" data-no-drag className="candy-btn" data-size="small" disabled={!canSend} onClick={sendNote}><span className="candy-face">Note</span></button>
               <button type="button" data-no-drag className="candy-btn" data-size="small" disabled={!canSend} onClick={sendTask}><span className="candy-face">Task</span></button>
-              <button type="button" data-no-drag className="candy-btn" data-size="small" disabled={!canSend} title="Copy for Claude" onClick={() => doCopy(text)}><span className="candy-face">Claude</span></button>
+              <button type="button" data-no-drag className="candy-btn" data-size="small" disabled={!canSend} title="Ask Concierge — send transcript" onClick={() => openConcierge({ prefill: text })}><span className="candy-face">Claude</span></button>
               <span style={{ flex: 1 }} />
               <button type="button" data-no-drag className={`candy-btn${autoCopy ? ' is-active' : ''}`} data-shape="chip" data-size="small" title="Auto-copy on final" aria-pressed={autoCopy} onClick={toggleAutoCopy}><span className="candy-face">Auto-copy</span></button>
             </div>

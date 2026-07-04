@@ -4,9 +4,10 @@
 // capture daemon's `overlay` hotkey → lib.rs bridge → window.show/hide). Renders
 // BEFORE the provider tree (App.jsx hash short-circuit on #/overlay/host), so it
 // has no Vault/Notification/Stt context — it owns its own transparent root and a
-// host-local screen-anchored toast. The merged Overlay Studio panel (Voice +
-// Video + Screenshots, reorderable tiles) is the sole panel; Scrim and Browser
-// panels land in later Overlay sub-plans.
+// host-local screen-anchored toast. Panels: the merged Overlay Studio panel (Voice
+// + Video + Screenshots, reorderable tiles), the Scrim panel, and the Concierge
+// chat (summoned by AgentsOverlayLauncher); the Browser panel lands in a later
+// Overlay sub-plan.
 import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
@@ -14,6 +15,8 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import SttProvider from '@modules/studio/overlay/SttProvider.jsx';
 import OverlayStudioPanel from './OverlayStudioPanel.jsx';
 import ScrimOverlayPanel from './ScrimOverlayPanel.jsx';
+import ConciergeProvider from '@host/agents/concierge/ConciergeProvider.jsx';
+import AgentsOverlayLauncher from './AgentsOverlayLauncher.jsx';
 
 // Minimal module-api shim for the host-mounted SttProvider. It only needs
 // invoke (all stt_* calls are cross-window-safe Tauri invokes) and events.on
@@ -107,6 +110,13 @@ export default function OverlayHostView() {
         <OverlayStudioPanel showToast={showToast} />
       </SttProvider>
       <ScrimOverlayPanel />
+      {/* Concierge over the game. Providerless — every dep (useSettings, useAgentChat,
+          the api singleton) is a plain hook/singleton; agent-chunk is emitted app-
+          globally so the host webview receives its own stream with no bridge. The
+          launcher summons it; on dual-open with the (occluded) main window both would
+          render the same reply — accepted, documented in the plan. */}
+      <ConciergeProvider />
+      <AgentsOverlayLauncher visible={visible} />
       {toast && (
         <div className="video-cinema overlay-toast candy-btn">
           <span className="candy-face">{toast}</span>
