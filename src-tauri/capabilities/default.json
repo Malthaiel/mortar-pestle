@@ -302,6 +302,7 @@
     "allow-broadcast-display-destroy",
     "allow-broadcast-restart-engine",
     "allow-broadcast-open-log",
-    "allow-broadcast-paths"
+    "allow-broadcast-paths",
+    "allow-broadcast-remux-start"
   ]
 }
