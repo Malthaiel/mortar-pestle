@@ -49,14 +49,16 @@ export function libraryAbs(rel) {
   return LIBRARY_ROOT_FOR_MEDIA ? `${LIBRARY_ROOT_FOR_MEDIA}/${rel}` : rel;
 }
 let _mediaBaseUrl = null;
+let _mediaToken = null;
 let _mediaBaseUrlPromise = null;
 async function mediaBaseUrl() {
   if (_mediaBaseUrl) return _mediaBaseUrl;
   if (!_mediaBaseUrlPromise) {
     _mediaBaseUrlPromise = invoke('media_server_port')
-      .then((port) => {
-        if (typeof port === 'number' && port > 0) {
-          _mediaBaseUrl = `http://127.0.0.1:${port}`;
+      .then((info) => {
+        if (info && typeof info.port === 'number' && info.port > 0) {
+          _mediaBaseUrl = `http://127.0.0.1:${info.port}`;
+          _mediaToken = info.token;
           if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
             window.dispatchEvent(new CustomEvent('agentic:media-server-ready', { detail: { baseUrl: _mediaBaseUrl } }));
           }
@@ -112,7 +114,7 @@ export function mediaHttpUrl(p, opts) {
     return null;
   }
   const abs = absFromInput(p, opts && opts.library ? LIBRARY_ROOT_FOR_MEDIA : undefined);
-  return `${_mediaBaseUrl}/media?path=${encodeURIComponent(abs)}`;
+  return `${_mediaBaseUrl}/media?path=${encodeURIComponent(abs)}&t=${_mediaToken}`;
 }
 // Rewrite an `mortar-pestle-asset://localhost/<rest>` URL (as returned by Rust
 // video_start_transcode / video_extract_subs) into the equivalent loopback

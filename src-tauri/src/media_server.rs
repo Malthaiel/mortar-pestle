@@ -43,9 +43,14 @@ use crate::commands::media::is_under_allowed_root;
 use crate::parsers::video_transcode::{snapshot_for_serve, EntryStatus};
 
 static SERVER_PORT: OnceLock<u16> = OnceLock::new();
+static SERVER_TOKEN: OnceLock<String> = OnceLock::new();
 
 pub fn port() -> Option<u16> {
     SERVER_PORT.get().copied()
+}
+
+pub fn token() -> Option<String> {
+    SERVER_TOKEN.get().cloned()
 }
 
 /// Bind to a kernel-assigned port on 127.0.0.1 and run the router until exit.
@@ -60,6 +65,7 @@ pub async fn run() -> std::io::Result<()> {
     let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
     let listener = TcpListener::bind(addr).await?;
     let local = listener.local_addr()?;
+    let _ = SERVER_TOKEN.set(uuid::Uuid::new_v4().simple().to_string());
     let _ = SERVER_PORT.set(local.port());
     log::info!("media server listening on http://{}", local);
     axum::serve(listener, app).await
@@ -68,11 +74,20 @@ pub async fn run() -> std::io::Result<()> {
 #[derive(Deserialize)]
 struct MediaQuery {
     path: String,
+    t: Option<String>,
 }
 
 async fn handle_media(Query(q): Query<MediaQuery>, headers: HeaderMap) -> Response<Body> {
     use std::fs;
     use std::path::PathBuf;
+
+    // Access token: /media serves any path under an allowed root, so unlike the
+    // hash routes it needs its own capability token (minted per-session in run()).
+    // Reject before touching the filesystem.
+    let ok = matches!((token(), q.t.as_deref()), (Some(t), Some(qt)) if t == qt);
+    if !ok {
+        return status(StatusCode::FORBIDDEN, "bad or missing token");
+    }
 
     // Strip a Windows `\\?\` verbatim prefix. The Library vault path reaches the
     // frontend already canonicalized (with `\\?\`), and in a verbatim path

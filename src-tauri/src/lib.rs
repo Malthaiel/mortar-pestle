@@ -28,9 +28,18 @@ pub mod stt;
 pub mod tool_path;
 pub mod watcher;
 
+#[derive(serde::Serialize)]
+struct MediaServerInfo {
+    port: u16,
+    token: String,
+}
+
 #[tauri::command]
-fn media_server_port() -> Option<u16> {
-    media_server::port()
+fn media_server_port() -> Option<MediaServerInfo> {
+    match (media_server::port(), media_server::token()) {
+        (Some(port), Some(token)) => Some(MediaServerInfo { port, token }),
+        _ => None,
+    }
 }
 
 /// Hide the in-game overlay-host window. Called by the overlay frontend AFTER its
