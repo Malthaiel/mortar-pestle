@@ -1,20 +1,21 @@
-//! Sanity tests for Sub-feature 2 vault file IO + renderer against the real
-//! vault at /home/malthaiel/Documents/Citadel.
+//! Sanity tests for the Rust vault IO + markdown renderer.
 //!
-//! These verify that the Rust IO commands and the markdown renderer produce
-//! sensible output for known-stable vault content. They are NOT full parity
-//! tests against the Node server (full Node-vs-Rust HTML diff is deferred —
-//! see Update Queue entry).
+//! The real-vault smoke tests read `AGENTIC_VAULT_ROOT` (the first-precedence
+//! vault root; see commands::vault::vault_root). They self-skip when it is
+//! unset — so they run as no-ops in CI and as real checks when a vault root is
+//! provided. The pure-function tests below always run.
 //!
-//! Marked `#[ignore]` so `cargo test` in CI without the vault skips them.
-//! Run locally with:
-//!   cargo test -p mortar-pestle --test vault_io_sanity -- --ignored --nocapture
+//! Run the smoke tests against a real vault:
+//!   AGENTIC_VAULT_ROOT=<path-to-vault> cargo test --manifest-path src-tauri/Cargo.toml --test vault_io_sanity -- --nocapture
 
 use app_lib::render;
 
 #[test]
-#[ignore]
 fn render_claude_md_smoke() {
+    let Ok(_root) = std::env::var("AGENTIC_VAULT_ROOT") else {
+        eprintln!("skip render_claude_md_smoke: AGENTIC_VAULT_ROOT unset");
+        return;
+    };
     let out = render::render_path("CLAUDE").expect("render CLAUDE.md");
     assert!(out.html.contains("<h2"), "expected H2 headings in rendered CLAUDE.md");
     assert!(out.mtime > 0.0);
@@ -27,8 +28,11 @@ fn render_claude_md_smoke() {
 }
 
 #[test]
-#[ignore]
 fn render_handles_nonexistent() {
+    let Ok(_root) = std::env::var("AGENTIC_VAULT_ROOT") else {
+        eprintln!("skip render_handles_nonexistent: AGENTIC_VAULT_ROOT unset");
+        return;
+    };
     let err = render::render_path("does-not-exist-xyz-12345").unwrap_err();
     match err {
         render::RenderError::NotFound(_) => {}
@@ -37,8 +41,11 @@ fn render_handles_nonexistent() {
 }
 
 #[test]
-#[ignore]
 fn render_rejects_traversal() {
+    let Ok(_root) = std::env::var("AGENTIC_VAULT_ROOT") else {
+        eprintln!("skip render_rejects_traversal: AGENTIC_VAULT_ROOT unset");
+        return;
+    };
     let err = render::render_path("../etc/passwd").unwrap_err();
     match err {
         render::RenderError::Invalid(_) => {}
