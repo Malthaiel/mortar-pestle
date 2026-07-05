@@ -920,6 +920,7 @@ pub fn run() {
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::broadcast::broadcast_restart_engine,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::broadcast::broadcast_open_log,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::broadcast::broadcast_paths,
+            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::broadcast::broadcast_remux_start,
         ])
         .on_window_event(|_window, event| {
             if let WindowEvent::Focused(focused) = event {

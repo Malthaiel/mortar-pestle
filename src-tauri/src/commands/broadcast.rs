@@ -253,15 +253,13 @@ pub async fn on_saved(app: AppHandle, data: Value) {
     }
 }
 
-/// Remux `mkv_path` (ALL tracks) → sibling `.mp4`, bin the source mkv, and emit a
-/// fresh `capture-saved` (with poster) for the mp4. Writes through a `.partial` so a
-/// crash never leaves a truncated `.mp4` masquerading as complete.
-async fn auto_remux_mkv(app: &AppHandle, mkv_path: &str) -> Result<(), String> {
-    let src = std::path::PathBuf::from(mkv_path);
-    let out_mp4 = src.with_extension("mp4");
-    let partial = src.with_extension("mp4.partial");
-
-    let args = crate::parsers::video_transcode::build_remux_argv(mkv_path, &partial);
+/// Stream-copy remux `input` → `out_mp4` through a sibling `.partial`, renamed on
+/// success so a crash never leaves a truncated `.mp4` masquerading as complete.
+/// Keeps EVERY track (`build_remux_argv` = `-map 0 -c copy`). Shared by the S4
+/// auto-remux runner and the S6 `broadcast_remux_start` command.
+async fn remux_to_partial(input: &str, out_mp4: &std::path::Path) -> Result<(), String> {
+    let partial = out_mp4.with_extension("mp4.partial");
+    let args = crate::parsers::video_transcode::build_remux_argv(input, &partial);
     let out = tokio::process::Command::new(crate::tool_path::resolve("ffmpeg"))
         .args(&args)
         .stdin(std::process::Stdio::null())
@@ -277,7 +275,16 @@ async fn auto_remux_mkv(app: &AppHandle, mkv_path: &str) -> Result<(), String> {
             String::from_utf8_lossy(&out.stderr).trim()
         ));
     }
-    std::fs::rename(&partial, &out_mp4).map_err(|e| format!("rename partial→mp4: {e}"))?;
+    std::fs::rename(&partial, out_mp4).map_err(|e| format!("rename partial→mp4: {e}"))?;
+    Ok(())
+}
+
+/// Remux `mkv_path` (ALL tracks) → sibling `.mp4`, bin the source mkv, and emit a
+/// fresh `capture-saved` (with poster) for the mp4.
+async fn auto_remux_mkv(app: &AppHandle, mkv_path: &str) -> Result<(), String> {
+    let src = std::path::PathBuf::from(mkv_path);
+    let out_mp4 = src.with_extension("mp4");
+    remux_to_partial(mkv_path, &out_mp4).await?;
 
     // Bin the source mkv (root `captures`, restorable) — mirrors capture_clip_delete.
     let root = std::fs::canonicalize(crate::commands::vault::captures_dir())
@@ -313,4 +320,23 @@ async fn auto_remux_mkv(app: &AppHandle, mkv_path: &str) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+// ── SP4 S6 — remux utility command ────────────────────────────────────────────
+
+/// `broadcast_remux_start` — SP4 S6 remux utility (the RemuxWindow's backend).
+/// Stream-copy remux `input` (any container) → an MP4 keeping every audio track,
+/// through a `.partial` renamed on success. `output` defaults to the sibling
+/// `.mp4` when omitted (the RemuxWindow always passes a concrete, distinct-from-
+/// input path). Awaits completion — a `-c copy` remux is near-instant, so the
+/// window shows a plain running→done state with no progress stream. Host-composing
+/// (owns ffmpeg + the shared argv builder), not an engine passthrough — the engine
+/// has no part in an offline file remux.
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+#[tauri::command]
+pub async fn broadcast_remux_start(input: String, output: Option<String>) -> Result<(), VaultError> {
+    let out = output
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::PathBuf::from(&input).with_extension("mp4"));
+    remux_to_partial(&input, &out).await.map_err(VaultError::Io)
 }
