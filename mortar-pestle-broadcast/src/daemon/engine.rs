@@ -1434,6 +1434,15 @@ impl Engine {
             o.insert("split_file".into(), json!(true));
             o.insert("max_time_sec".into(), json!(t));
             o.insert("max_size_mb".into(), json!(s));
+            // Segments AFTER the first are named by libobs from these keys
+            // (mp4_output::generate_filename reads directory/format/extension/
+            // allow_spaces; the first file uses `path` above). Omitting them made
+            // the muxer build a NULL next-filename, fail to reopen, and UAF-crash
+            // on finalise (mp4-output.c:473). Mirrors start_replay's proven config.
+            o.insert("directory".into(), json!(dir.to_string_lossy()));
+            o.insert("format".into(), json!(namer::expand_game(&template)));
+            o.insert("extension".into(), json!(ext));
+            o.insert("allow_spaces".into(), json!(true));
         }
 
         unsafe {

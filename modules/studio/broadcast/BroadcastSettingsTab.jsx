@@ -132,7 +132,7 @@ export default function BroadcastSettingsTab({ accent, initialSection, onNavigat
   const splitMode = splitOn ? rawSplitType : (rawSplitType === 'Manual' ? 'Manual' : 'off');
   const setSplit = (mode) => {
     if (mode === 'off') applyPatch({ AdvOut: { RecSplitFile: 'false' } });
-    else if (mode === 'Manual') applyPatch({ AdvOut: { RecSplitFile: 'false', RecSplitFileType: 'Manual' } });
+    else if (mode === 'Manual') applyPatch({ AdvOut: { RecSplitFile: 'true', RecSplitFileType: 'Manual' } });
     else applyPatch({ AdvOut: { RecSplitFile: 'true', RecSplitFileType: mode } });
   };
 
