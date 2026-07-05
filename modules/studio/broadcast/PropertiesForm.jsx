@@ -259,13 +259,18 @@ function CommitText({ value, password, accent, onCommit }) {
 }
 
 /// `omit`: property names a bespoke panel already renders above the form.
-export default function PropertiesForm({ api, sceneName, node, accent, omit }) {
+/// Optional `fetch`/`commit`/`onButton` swap the default scene-item wiring for
+/// another PropSpec source (SP4 advanced-encoder page: get/set_encoder_properties).
+/// Each defaults to the scene-item behavior; PropRow is untouched. `fetch()`
+/// resolves `{props, settings}`; `commit(key,val)` resolves a promise (refetch
+/// runs after); `onButton(propName)` resolves a promise.
+export default function PropertiesForm({ api, sceneName, node, accent, omit, fetch: fetchProp, commit: commitProp, onButton }) {
   const [props, setProps] = useState(null);   // PropSpec[] | null loading
   const [settings, setSettings] = useState({});
   const aliveRef = useRef(true);
 
   const refetch = () => {
-    verb(api, 'get_properties', { scene: sceneName, item: node.item_id })
+    (fetchProp ? fetchProp() : verb(api, 'get_properties', { scene: sceneName, item: node.item_id }))
       .then((r) => {
         if (!aliveRef.current) return;
         setProps(r?.props || []);
@@ -286,6 +291,10 @@ export default function PropertiesForm({ api, sceneName, node, accent, omit }) {
   }, [api, sceneName, node.item_id]);
 
   const commit = (key, val) => {
+    if (commitProp) {
+      commitProp(key, val).then(refetch).catch((e) => console.warn('[broadcast] commit', e));
+      return;
+    }
     const before = { ...settings };
     verb(api, 'set_source_settings', { scene: sceneName, name: node.name, settings: { [key]: val } })
       .then(() => {
@@ -300,7 +309,7 @@ export default function PropertiesForm({ api, sceneName, node, accent, omit }) {
   };
 
   const clickButton = (propName) => {
-    verb(api, 'click_property_button', { scene: sceneName, item: node.item_id, prop: propName })
+    (onButton ? onButton(propName) : verb(api, 'click_property_button', { scene: sceneName, item: node.item_id, prop: propName }))
       .then(() => refetch()) // always — cheaper than trusting the flag
       .catch((e) => console.warn('[broadcast] click_property_button', e));
   };
