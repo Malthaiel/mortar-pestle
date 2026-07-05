@@ -165,7 +165,9 @@ pub async fn coaching_extract_audio(video: String) -> Result<String, VaultError>
         "-loglevel".into(),
         "error".into(),
         "-i".into(),
-        canonical.to_string_lossy().into_owned(),
+        // `\\?\`-strip: canonicalize() hands ffmpeg a Windows verbatim path it
+        // rejects as "Invalid argument". Mirrors video_transcode.rs:206/410.
+        crate::tool_path::native_str(&canonical.to_string_lossy()),
         "-vn".into(),
         "-ac".into(),
         "1".into(),
