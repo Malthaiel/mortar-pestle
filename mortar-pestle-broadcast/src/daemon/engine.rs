@@ -170,7 +170,9 @@ struct Engine {
 }
 
 fn cstring(s: &str) -> CString {
-    CString::new(s).unwrap_or_default()
+    // Interior NULs can arrive via protocol JSON; strip them rather than blanking
+    // the whole name (unwrap_or_default would) — the daemon must never panic.
+    CString::new(s.replace('\0', "")).unwrap_or_default()
 }
 
 fn collection_path() -> PathBuf {
@@ -2078,7 +2080,9 @@ unsafe fn free_name(base: &str) -> String {
         if !name_taken(base) {
             return base.to_owned();
         }
-        for i in 2u32.. {
+        // u64: a u32 counter overflow-panics in debug / wraps into an infinite loop
+        // in release if the suffix space is ever exhausted.
+        for i in 2u64.. {
             let candidate = format!("{base} {i}");
             if !name_taken(&candidate) {
                 return candidate;

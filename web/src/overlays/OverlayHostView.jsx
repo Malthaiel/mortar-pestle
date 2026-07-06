@@ -8,7 +8,7 @@
 // + Video + Screenshots, reorderable tiles), the Scrim panel, the Concierge
 // chat (summoned by AgentsOverlayLauncher), and the Browser panel (the in-app
 // browser 1-1, live tab webview reparented in; summoned by BrowserOverlayLauncher).
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -85,11 +85,13 @@ export default function OverlayHostView() {
   // to the panel instead of the viewport.
   const [toast, setToast] = useState(null);
   const toastTimer = useRef(null);
-  const showToast = (msg, ms = 2200) => {
+  // Stable identity — showToast sits in child-effect dep arrays (Studio panel), so a
+  // per-render closure would tear down + re-register those listeners every render.
+  const showToast = useCallback((msg, ms = 2200) => {
     setToast(msg);
     clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(null), ms);
-  };
+  }, []);
   useEffect(() => () => clearTimeout(toastTimer.current), []);
 
   // Bridge ScrimViewer's agentic:notify toasts (Run Process / Extract Comms / errors)

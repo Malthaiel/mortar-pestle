@@ -256,16 +256,24 @@ function BrowserPanel({ api, sceneName, node, accent }) {
 
 function TextPanel({ api, sceneName, node, accent }) {
   const { settings } = useSettings2(api, sceneName, node);
+  // Local state + sync (the BrowserPanel pattern above) — the previous
+  // key-remount approach rebuilt the textarea on every commit, dropping focus
+  // and the user's vertical resize.
+  const [text, setText] = useState(settings.text || '');
+  useEffect(() => { setText(settings.text || ''); }, [settings.text]);
+  const commitText = (v) => {
+    if (v !== (settings.text || '')) commitSetting(api, sceneName, node, { ...settings }, { text: v }, `${node.name}: text`);
+  };
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <SectionHeader title="Text" />
       <textarea
         className="candy-input"
-        defaultValue={settings.text || ''}
-        key={node.item_id + (settings.text || '')}
+        value={text}
         rows={3}
         placeholder="text…"
-        onBlur={(e) => { if (e.target.value !== (settings.text || '')) commitSetting(api, sceneName, node, { ...settings }, { text: e.target.value }, `${node.name}: text`); }}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={(e) => commitText(e.target.value)}
         onKeyDown={(e) => e.stopPropagation()}
         style={{ resize: 'vertical', fontSize: 13 }}
       />

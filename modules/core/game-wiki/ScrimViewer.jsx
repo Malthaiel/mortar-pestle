@@ -792,10 +792,14 @@ export default function ScrimViewer({ path, accent, overlay = false }) {
 
   useEffect(() => {
     if (!overlay) return undefined;
-    const unsubs = [];
-    listen('overlay-dictation-committed', (e) => appendNoteToFocused(e.payload?.text)).then((u) => unsubs.push(u)).catch(() => {});
-    listen('capture-screenshot-saved', (e) => setFocusedScoreboardIfEmpty(e.payload?.path)).then((u) => unsubs.push(u)).catch(() => {});
-    return () => unsubs.forEach((u) => u && u());
+    // Keep the registration promises and chain unlisten onto them — pushing into a
+    // plain array misses any listener that resolves after cleanup already ran
+    // (fast unmount / effect churn), leaving it attached → double-appended notes.
+    const subs = [
+      listen('overlay-dictation-committed', (e) => appendNoteToFocused(e.payload?.text)),
+      listen('capture-screenshot-saved', (e) => setFocusedScoreboardIfEmpty(e.payload?.path)),
+    ];
+    return () => subs.forEach((p) => p.then((u) => u()).catch(() => {}));
   }, [overlay, appendNoteToFocused, setFocusedScoreboardIfEmpty]);
 
   if (err) return <div style={wrap}><div style={inner}><p style={{ color: 'var(--error)' }}>Couldn’t open this scrim: {err}</p></div></div>;

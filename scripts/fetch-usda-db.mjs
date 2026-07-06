@@ -37,9 +37,12 @@ async function run() {
   } catch (e) {
     throw new FetchFail(`fetch threw: ${e.message}`);
   }
-  if (!res.ok || !res.body) {
+  if (!res.ok) {
     try { await res.body?.cancel(); } catch { /* release the connection */ }
     throw new FetchFail(`HTTP ${res.status} — upload the usda-db-v1 Release asset first (SP10)`);
+  }
+  if (!res.body) {
+    throw new FetchFail('response OK but had no body — retry the fetch');
   }
 
   const expected = Number(res.headers.get('content-length')) || 0;

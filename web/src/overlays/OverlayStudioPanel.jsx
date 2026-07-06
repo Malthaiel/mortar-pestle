@@ -150,14 +150,15 @@ export default function OverlayStudioPanel({ showToast }) {
   const refreshShots = useCallback(() => { invoke('capture_list_screenshots').then((ss) => { if (Array.isArray(ss)) setShots(ss); }).catch(() => {}); }, []);
 
   useEffect(() => {
-    let un = null;
     invoke('get_capture_state').then((s) => { if (s && typeof s.recording === 'boolean') setRecordingVid(s.recording); }).catch(() => {});
-    listen('capture-state', (e) => {
+    // Chain the unlisten onto the registration promise — a plain `un` variable is
+    // still null if we unmount before `listen` resolves, orphaning the listener.
+    const p = listen('capture-state', (e) => {
       const d = e.payload; if (!d) return;
       if (typeof d.state === 'string') { if (typeof d.recording === 'boolean') setRecordingVid(d.recording); }
       else if (d.code || d.message) { showToast('Save failed'); }
-    }).then((u) => { un = u; }).catch(() => {});
-    return () => { if (un) un(); };
+    });
+    return () => { p.then((un) => un()).catch(() => {}); };
   }, [showToast]);
 
   useEffect(() => {
