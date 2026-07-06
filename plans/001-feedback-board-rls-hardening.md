@@ -246,67 +246,51 @@ Run each block below in the SQL editor / `psql`. Each is wrapped in
 the `authenticated` role with a simulated JWT — the exact surface a malicious
 anon-key client has.
 
-**2a — role self-escalation is now REJECTED:**
-```sql
-begin;
-set local role authenticated;
-select set_config('request.jwt.claims',
-  '{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated"}', true);
--- id matches the JWT sub, so only `role` can block this:
-insert into profiles (id, handle, role)
-  values ('11111111-1111-1111-1111-111111111111','attacker','dev');
-rollback;
-```
-Expected: `ERROR: new row violates row-level security policy for table "profiles"`.
-(Before the fix this returned `INSERT 0 1`.)
+**Why NOT synthetic-insert blocks** (this is the trap the first draft fell into):
+`profiles.id` has a foreign key to `auth.users`, so inserting a profile with a
+made-up UUID fails with `ERROR: 23503 ... "profiles_id_fkey"` **before** any RLS
+`WITH CHECK` is evaluated — a fabricated-id insert dies on the FK first and can
+never exercise the policy. A true *live* insert-escalation test needs a real
+`auth.users` row that has no profile yet, which isn't feasible solo without
+deleting a real profile inside a rollback. So prove the fix by **reading back the
+applied policy definitions** (no data, no `auth.users` row needed); the existing
+`supabase/rls_proof.sql` already live-tests the (already-safe) UPDATE path and
+the normal-ops positive controls.
 
-**2b — a legitimate user profile still inserts (positive control):**
+**2a — the insert role-pin and the badge-forgery check are in force:**
 ```sql
-begin;
-set local role authenticated;
-select set_config('request.jwt.claims',
-  '{"sub":"22222222-2222-2222-2222-222222222222","role":"authenticated"}', true);
-insert into profiles (id, handle, role)
-  values ('22222222-2222-2222-2222-222222222222','legituser','user');
-rollback;
+select policyname, with_check
+from pg_policies
+where tablename in ('profiles','comments')
+  and policyname in ('profiles_insert','comments_update_own');
 ```
-Expected: `INSERT 0 1` (success).
+Expected two rows:
+- `profiles_insert` → `((id = auth.uid()) AND (role = 'user'::text))`
+- `comments_update_own` → `((author_id = auth.uid()) AND (is_official = false))`
 
-**2c — official-badge forgery is now REJECTED:**
+**2b — the role-value constraint exists:**
 ```sql
-begin;
-set local role authenticated;
-select set_config('request.jwt.claims',
-  '{"sub":"33333333-3333-3333-3333-333333333333","role":"authenticated"}', true);
-insert into profiles (id, handle, role)
-  values ('33333333-3333-3333-3333-333333333333','forger','user');
-insert into posts (id, author_id, category, title)
-  values ('44444444-4444-4444-4444-444444444444',
-          '33333333-3333-3333-3333-333333333333','bug','test title');
-insert into comments (id, post_id, author_id, body, is_official)
-  values ('55555555-5555-5555-5555-555555555555',
-          '44444444-4444-4444-4444-444444444444',
-          '33333333-3333-3333-3333-333333333333','hi', false);
--- forge the official badge on my own comment:
-update comments set is_official = true
-  where id = '55555555-5555-5555-5555-555555555555';
-rollback;
+select conname, pg_get_constraintdef(oid) as def
+from pg_constraint
+where conrelid = 'profiles'::regclass and conname = 'role_valid';
 ```
-Expected: the three inserts succeed, then the UPDATE raises
-`ERROR: new row violates row-level security policy "comments_update_own" for table "comments"`.
-(Before the fix the UPDATE returned `UPDATE 1`.)
+Expected one row: `def` = `CHECK ((role = ANY (ARRAY['user'::text, 'dev'::text])))`.
 
-If block 2a or 2c returns success instead of the expected ERROR, the migration
-did not apply — STOP and report.
+If 2a's `profiles_insert` `with_check` lacks `role = 'user'`, or its
+`comments_update_own` lacks `is_official = false`, or 2b returns no row, the
+migration did not apply — STOP and report.
 
 ## Test plan
 
-There is no automated test harness for SQL in this repo; the RLS simulation
-in Step 2 **is** the test and must be run and its expected results confirmed:
+There is no automated test harness for SQL in this repo; the Step-2 policy
+read-back **is** the test and must be run and its expected results confirmed:
 
-- 2a: dev-role INSERT rejected (the escalation fix).
-- 2b: user-role INSERT succeeds (no false-positive lockout of normal signup).
-- 2c: `is_official=true` self-UPDATE rejected (the forgery fix).
+- 2a: `profiles_insert` `with_check` pins `role = 'user'`; `comments_update_own`
+  `with_check` pins `is_official = false` (the escalation + forgery fixes, at the
+  policy level).
+- 2b: the `role_valid` CHECK constraint exists.
+- Runtime behavior of the (already-safe) UPDATE path + normal-ops controls is
+  covered by the committed `supabase/rls_proof.sql`.
 
 Record the observed output of each block in your report.
 
@@ -316,9 +300,8 @@ ALL must hold:
 
 - [ ] `supabase/migrations/0003_rls_hardening.sql` exists with the Step-1 body.
 - [ ] Migration applied cleanly (CLI `db push` exit 0, or SQL-editor run with no error).
-- [ ] Step 2a returns the RLS-violation ERROR (dev-role insert blocked).
-- [ ] Step 2b returns `INSERT 0 1` (user-role insert still works).
-- [ ] Step 2c's UPDATE returns the RLS-violation ERROR (badge forgery blocked).
+- [ ] Step 2a shows `profiles_insert` `with_check` pins `role = 'user'` and `comments_update_own` `with_check` pins `is_official = false`.
+- [ ] Step 2b shows the `role_valid` CHECK constraint.
 - [ ] `git status` shows only `supabase/migrations/0003_rls_hardening.sql` added — no other file modified.
 - [ ] `plans/README.md` status row updated (if that file exists).
 

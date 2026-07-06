@@ -12,10 +12,10 @@ Run the **P0** block first; run **002 before any test plan (020–024)**; the re
 
 | Plan | Title | Cat | Pri | Eff | Risk | Depends | Status |
 |------|-------|-----|-----|-----|------|---------|--------|
-| 001 | Feedback Board RLS — block role self-escalation + badge forgery | security | P0 | S | LOW | — | TODO |
-| 002 | Verification baseline + CI verify job (+ pin actions, WCAG gate) | tests/dx | P0 | M | LOW | — | TODO |
-| 003 | Strip `\\?\` verbatim path before ffmpeg/opener (coaching) | bug | P0 | S | LOW | — | TODO |
-| 004 | Token-gate the media server `/media` route | security | P0 | S | LOW | — | TODO |
+| 001 | Feedback Board RLS — block role self-escalation + badge forgery | security | P0 | S | LOW | — | DONE (0003 applied + policy read-back verified; proof recipe corrected to pg_policies) |
+| 002 | Verification baseline + CI verify job (+ pin actions, WCAG gate) | tests/dx | P0 | M | LOW | — | DONE (verify.mjs green; npm spawn needed shell:true) |
+| 003 | Strip `\\?\` verbatim path before ffmpeg/opener (coaching) | bug | P0 | S | LOW | — | DONE (Step 1 landed + compiles; Step 2 opener probe + GUI Extract-Comms deferred) |
+| 004 | Token-gate the media server `/media` route | security | P0 | S | LOW | — | DONE (code landed + compiles; Step 5 GUI playback/403 deferred) |
 | 006 | Add repo-root CLAUDE.md + .env.example | dx | P1 | S | LOW | — | TODO |
 | 007 | Delete dead endpoint-adapter + redirect SDK machinery | tech-debt | P1 | S | LOW | — | TODO |
 | 018 | Correct the stale README Status section | docs | P1 | S | LOW | — | TODO |
