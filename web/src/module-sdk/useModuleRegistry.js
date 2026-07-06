@@ -9,7 +9,6 @@ const getSettingsTab       = () => getSnapshot().settingsTab;
 const getRoutes            = () => getSnapshot().routes;
 const getProviders         = () => getSnapshot().providers;
 const getOverlays          = () => getSnapshot().overlays;
-const getRedirects         = () => getSnapshot().redirects;
 const getManifests         = () => getSnapshot().manifests;
 const getPageSidebar       = () => getSnapshot().pageSidebar;
 
@@ -59,14 +58,6 @@ export function useManifests() {
 // enabled-filter — page sidebars aren't modules and carry no moduleId.
 export function usePageSidebars() {
   return useSyncExternalStore(subscribe, getPageSidebar);
-}
-
-// Returns the array of redirect entries: { moduleId, fromPattern, toFn }.
-// Consumed once at the top of MainApp via a useEffect that fires the first
-// non-null toFn() result for the current route. Re-renders when modules
-// register/unregister redirects.
-export function useRouterRedirects() {
-  return useSyncExternalStore(subscribe, getRedirects);
 }
 
 // Active left-sidebar module based on prefix-matching the current hash path

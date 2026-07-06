@@ -2,7 +2,6 @@ import * as registry from './registry.js';
 import * as hostIcons from '../components/icons.jsx';
 import { navigate, useHashRoute } from '../router.js';
 import { invoke, subscribeEvents } from '../api.js';
-import { mapEndpoint } from './endpoint-adapter.js';
 
 const _eventBus = new Map();
 export const sharedEvents = {
@@ -58,8 +57,6 @@ export function writeModuleSetting(moduleId, key, value) {
   } catch {}
 }
 
-const _warnedEndpointRoutes = new Set();
-
 export function createApi(moduleId) {
   return {
     /** Invoke a Rust Tauri command directly. Throws if not running inside the Tauri shell — desktop-only by design. */
@@ -73,18 +70,6 @@ export function createApi(moduleId) {
       registerOverlay: (Component) => registry.registerOverlay(moduleId, Component),
     },
     vault: {
-      /** Deprecated: use api.invoke(commandName, args) instead. Kept for one release cycle as a thin adapter mapping (method, path) → Tauri command. Unmapped routes throw — no HTTP surface exists post-SF12. */
-      endpoint: (method, path, body) => {
-        const pathOnly = String(path).split('?')[0];
-        const key = `${method} ${pathOnly}`;
-        if (!_warnedEndpointRoutes.has(key)) {
-          _warnedEndpointRoutes.add(key);
-          console.warn(`[Module SDK] api.vault.endpoint is deprecated; use api.invoke(commandName, args) instead. (caller: ${key})`);
-        }
-        const mapped = mapEndpoint(method, path, body);
-        if (mapped) return invoke(mapped.command, mapped.args);
-        throw new Error(`[Module SDK] Endpoint not migrated: ${key}. Use api.invoke directly.`);
-      },
       /** Subscribes to vault invalidation events. Tauri-event-backed inside the desktop shell via `@tauri-apps/api/event::listen` (per SF5); falls back to EventSource('/events') for browser-tab dev. Returns a sync unsub function. */
       subscribe: (eventName, handler) => subscribeEvents((name, data) => {
         if (name === eventName) handler(data);
@@ -107,7 +92,6 @@ export function createApi(moduleId) {
     router: {
       navigate,
       useHashRoute,
-      registerRedirect: (fromPattern, toFn) => registry.registerRedirect(moduleId, fromPattern, toFn),
     },
     events: sharedEvents,
     dirty: {

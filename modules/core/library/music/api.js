@@ -38,8 +38,7 @@ export const musicApi = {
     _api.invoke('music_write_playlist', { title, tracks, originalPath: originalPath || null, coverPath: coverPath || null }),
   savePlaylistCover: (title, bytes, ext) => _api.invoke('music_save_playlist_cover', { title, bytes, ext }),
   deletePlaylist:    (path) => _api.invoke('music_delete_playlist', { path }),
-  // /api/reveal stays on the deprecated endpoint adapter until SF11 lands tauri-plugin-opener.
-  revealInFiles:    (path) => _api.vault.endpoint('POST', '/api/reveal', { path }),
+  revealInFiles:    (path) => _api.invoke('reveal_in_files', { path }),
 };
 
 export function subscribeManifest(handler) {

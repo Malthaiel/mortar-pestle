@@ -16,8 +16,8 @@ Run the **P0** block first; run **002 before any test plan (020–024)**; the re
 | 002 | Verification baseline + CI verify job (+ pin actions, WCAG gate) | tests/dx | P0 | M | LOW | — | DONE (verify.mjs green; npm spawn needed shell:true) |
 | 003 | Strip `\\?\` verbatim path before ffmpeg/opener (coaching) | bug | P0 | S | LOW | — | DONE (Step 1 landed + compiles; Step 2 opener probe + GUI Extract-Comms deferred) |
 | 004 | Token-gate the media server `/media` route | security | P0 | S | LOW | — | DONE (code landed + compiles; Step 5 GUI playback/403 deferred) |
-| 006 | Add repo-root CLAUDE.md + .env.example | dx | P1 | S | LOW | — | TODO |
-| 007 | Delete dead endpoint-adapter + redirect SDK machinery | tech-debt | P1 | S | LOW | — | TODO |
+| 006 | Add repo-root CLAUDE.md + .env.example | dx | P1 | S | LOW | — | DONE (d355427; verify.mjs green; 22 env vars; .gitignore !.env.example negation; courier drift caught: proxy.rs 2nd loopback surface + stale --tests + sha1/sha2 no inline comment) |
+| 007 | Delete dead endpoint-adapter + redirect SDK machinery | tech-debt | P1 | S | LOW | — | DONE (endpoint-adapter.js deleted + vault.endpoint/registerRedirect/_redirects/useRouterRedirects removed; music revealInFiles → direct invoke; npm web build green; courier factual nit: MainApp exists at App.jsx:93 but doesn't consume the hook) |
 | 018 | Correct the stale README Status section | docs | P1 | S | LOW | — | TODO |
 | 009 | Move full-vault manifest regen off the boot path | perf | P1 | M | MED | — | TODO |
 | 010 | Parallelize + lazy-load module boot (xterm/react-markdown) | perf | P1 | M | MED | — | TODO |

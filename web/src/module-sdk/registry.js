@@ -5,7 +5,6 @@ const _pageSidebar = new Map();   // keyed by pageKey (route.page) — non-modul
 const _routes = [];
 const _providers = [];
 const _overlays = [];
-const _redirects = [];
 let _manifests = {};
 
 const _subscribers = new Set();
@@ -19,7 +18,6 @@ function computeSnapshot() {
     routes: [..._routes],
     providers: [..._providers],
     overlays: [..._overlays],
-    redirects: [..._redirects],
     manifests: _manifests,
   };
 }
@@ -109,17 +107,5 @@ export function registerOverlay(moduleId, Component) {
 
 export function setManifests(map) {
   _manifests = { ...map };
-  notify();
-}
-
-export function registerRedirect(moduleId, fromPattern, toFn) {
-  const okFrom = typeof fromPattern === 'string' || fromPattern instanceof RegExp;
-  if (!okFrom) {
-    throw new Error(`[${moduleId}] registerRedirect: fromPattern must be a string prefix or RegExp`);
-  }
-  if (typeof toFn !== 'function') {
-    throw new Error(`[${moduleId}] registerRedirect: toFn must be a function returning string | null`);
-  }
-  _redirects.push({ moduleId, fromPattern, toFn });
   notify();
 }
