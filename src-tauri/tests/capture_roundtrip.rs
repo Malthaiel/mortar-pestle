@@ -246,7 +246,7 @@ fn state_snapshot_full_golden_roundtrips() {
         r#""rateControl":"cbr","keyintSec":2,"container":"mp4","#,
         r#""audio":{"track":"system","sampleRate":48000,"channels":2}},"#,
         r#""last_error":null,"#,
-        r#""capabilities":{"screenshot":false,"save_replay":false,"arm":false}}"#
+        r#""capabilities":{"screenshot":false,"save_replay":false,"arm":false},"armed":false}"#
     );
 
     let snap: StateSnapshot = assert_byte_roundtrip(GOLDEN);
@@ -262,4 +262,5 @@ fn state_snapshot_full_golden_roundtrips() {
     assert_eq!(snap.config.audio.sample_rate, 48_000);
     assert!(snap.hotkeys.shortcuts.is_empty());
     assert!(!snap.capabilities.arm);
+    assert!(!snap.armed);
 }
