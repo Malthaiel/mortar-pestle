@@ -35,7 +35,7 @@ npm run tauri build    # NSIS installer in src-tauri/target/release/bundle/nsis/
 
 ## Status
 
-Windows is the primary platform. Four subsystems are stubbed in the current Windows build and are being ported: **Game Capture**, **in-app browser**, **STT / voice dictation**, and **in-game overlay**.
+Windows is the primary platform; the **in-app browser** and **STT / voice dictation** are live on Windows. The **in-game overlay** is mixed: the overlay host window plus its Capture and Speech-to-Text panels are live, while the Browser and Scrim overlay panels are still in progress. The one subsystem not yet ported is **Game Capture** — its capture engine (PipeWire / NVENC-GL / KWin) is Linux-only and being ported; a new **Broadcast** (libobs) scene/source compositor with a live preview has also landed.
 
 ## License
 
