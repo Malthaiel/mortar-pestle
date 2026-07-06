@@ -29,6 +29,8 @@ src-tauri/resources/usda_foods.db
 
 # Secrets — never commit. Tauri updater private key + signing material live in CI secrets.
 .env.*
+# .env.example is the public template — ship it; real .env files stay ignored above.
+!.env.example
 *.key
 *.pem
 tauri-signing-key*
