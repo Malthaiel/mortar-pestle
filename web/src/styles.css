@@ -4838,7 +4838,7 @@ button.cal-customdays__step:hover {
    nothing can drift. The 10.5px shadow-band reserve is on every tile incl. the
    last, so it cancels out of the last-tile vs inter-tile comparison. */
 .ov-studio-panel { width: 400px; display: flex; flex-direction: column; gap: var(--ov-gap); padding: var(--ov-gap); }
-.ov-studio-head { justify-content: space-between; cursor: move; padding: 2px 4px 4px; }
+.ov-studio-head { justify-content: space-between; cursor: move; padding: 2px 4px 0; } /* bottom 0: kill 4px slack so painted bottom = box bottom → band 0, panel head→body visible 8 (was 12, band −4) */
 /* Panel + section titles use the shared .section-title standard (applied in
    OverlayStudioPanel.jsx). These rules keep only the overlay-specific bits — the
    uppercase panel-title look; type/size/weight/colour come from .section-title. */

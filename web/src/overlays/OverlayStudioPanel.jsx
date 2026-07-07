@@ -197,7 +197,8 @@ export default function OverlayStudioPanel({ showToast }) {
               <div style={{ flex: 1, minWidth: 0 }}><VuMeter rms={vu} active={recording} /></div>
             </div>
             <TranscriptView text={text} settled={settled} busy={recording || fileBusy} placeholder={engineDown ? 'Voice engine offline' : 'Your transcript appears here'} onChange={setText} />
-            <div className="candy-center-row" style={{ gap: 6, flexWrap: 'wrap' }}>
+            {/* marginTop: -4px (candy-face gap 12→8 raw) + -2.4px (.stt-transcript line-height 1.6 bottom half-leading slack) → transcript→actions visible 8 (was 14.4); 2.4px is font-derived, stable */}
+            <div className="candy-center-row" style={{ gap: 6, flexWrap: 'wrap', marginTop: 'calc(-4px - 2.4px)' }}>
               <button type="button" data-no-drag className="candy-btn" data-size="small" disabled={!canSend} onClick={sendNote}><span className="candy-face">Note</span></button>
               <button type="button" data-no-drag className="candy-btn" data-size="small" disabled={!canSend} onClick={sendTask}><span className="candy-face">Task</span></button>
               <button type="button" data-no-drag className="candy-btn" data-size="small" disabled={!canSend} title="Ask Concierge — send transcript" onClick={() => openConcierge({ prefill: text })}><span className="candy-face">Claude</span></button>
