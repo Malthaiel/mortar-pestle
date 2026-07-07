@@ -64,13 +64,13 @@ const card = {
   borderRadius: 12, padding: '14px 16px', marginBottom: 14,
 };
 const sectionTitle = { fontSize: 15, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase', color: 'var(--text)' };
-const labelStyle = { fontSize: 12, fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase', color: 'var(--text)', marginBottom: 2 };
+const labelStyle = { fontSize: 12, fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase', color: 'var(--text)', marginBottom: 8 };
 const valueStyle = { fontSize: 14, color: 'var(--text)', wordBreak: 'break-word' };
 const removeBtn = { border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: '0 4px', flexShrink: 0 };
 
 function EditField({ label, value, onChange, onCommit, placeholder, right }) {
   return (
-    <div style={{ marginBottom: candyGap(6, true) }}>
+    <div style={{ marginBottom: candyGap(8, true) }}>
       <div style={labelStyle}>{label}</div>
       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
         <div className="candy-btn" data-shape="field" style={{ flex: 1, minWidth: 0 }}>
@@ -157,8 +157,8 @@ function NotesEditor({ team, bullets, onChange, onCommit, storageKey }) {
   const { ordered, untimedCount } = sortByTimeAsc(bullets.map((b, i) => ({ ...parseTimedNote(b), _i: i })), (x) => x.atSec);
   const firstUntimed = ordered.length - untimedCount;
   return (
-    <div style={{ marginTop: 10 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+    <div style={{ marginTop: 8, marginBottom: candyGap(8, true) }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
         <div style={{ ...labelStyle, marginBottom: 0 }}>Notes{team ? ` (${team})` : ''}</div>
         <TimerControls sw={sw} />
       </div>
@@ -202,7 +202,7 @@ function TeamNotes({ team, bullets, onChange, onCommit, storageKey }) {
   const [opened, setOpened] = useState(false);
   if (!opened && bullets.length === 0) {
     return (
-      <button className="candy-btn" data-shape="row" onClick={() => setOpened(true)} style={{ width: '100%', marginTop: 10 }}>
+      <button className="candy-btn" data-shape="row" onClick={() => setOpened(true)} style={{ width: '100%', marginTop: 8, marginBottom: candyGap(8) }}>
         <span className="candy-face" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconPlus size={14} /> Create Notes{team ? ` · ${team}` : ''}</span>
       </button>
     );
@@ -883,18 +883,18 @@ export default function ScrimViewer({ path, accent, overlay = false }) {
           const hasEnemyAuto = !!(enemyAutoBody && enemyAutoBody.trim());
           return (
             <div key={m.n} style={card}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <div style={{ marginBottom: candyGap(8) }}>
                 <div style={sectionTitle}>Match {m.n}</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div className="candy-chip-row" style={{ marginTop: 4 }}>
                   {overlay && (
                     <>
                       <button className="candy-btn" data-shape="chip" onClick={toggleDictate}
                         title="Dictate a note — speech-to-text appended to this match">
-                        <span className="candy-face" style={dictating ? { color: 'var(--accent)' } : undefined}>{dictating ? '● listening…' : '🎙 Dictate'}</span>
+                        <span className="candy-face" style={dictating ? { color: 'var(--accent)' } : undefined}>{dictating ? '● listening…' : 'Dictate'}</span>
                       </button>
                       <button className="candy-btn" data-shape="chip" onClick={takeScoreboardShot}
                         title="Capture a scoreboard screenshot for this match">
-                        <span className="candy-face">📷 Scoreboard</span>
+                        <span className="candy-face">Scoreboard</span>
                       </button>
                     </>
                   )}
@@ -914,7 +914,7 @@ export default function ScrimViewer({ path, accent, overlay = false }) {
                     <span className="candy-face">{commsN === m.n ? (commsPhase || 'Working…') : 'Extract Comms'}</span>
                   </button>
                   {commsN === m.n && (
-                    <button onClick={cancelComms} title="Cancel transcription" style={removeBtn}>×</button>
+                    <button className="candy-btn" data-shape="chip" onClick={cancelComms} title="Cancel transcription"><span className="candy-face">×</span></button>
                   )}
                   <button className="candy-btn" data-shape="chip"
                     disabled={runningN === m.n || commsN === m.n}
@@ -946,19 +946,19 @@ export default function ScrimViewer({ path, accent, overlay = false }) {
                   onChange={(b) => setNotes(idx, enemyTeam, b)} onCommit={flushSave} storageKey={`gw-sw:${path}:m${m.n}:${enemyTeam}`} />
               )}
               {hasSummary && (
-                <div style={{ marginTop: 10 }}>
+                <div style={{ marginTop: 8 }}>
                   <CoachingSummaryView body={summaryBody} />
                 </div>
               )}
-              <div style={{ marginTop: 10 }}>
+              <div style={{ marginTop: 8 }}>
                 <div style={labelStyle}>Comms Transcript</div>
                 {hasComms
                   ? <CommsTranscriptView key={commsBody} sidecarPath={sidecarPath(path, m.n, 'comms')} />
                   : <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Not yet extracted — click <strong>Extract Comms</strong>.</div>}
               </div>
-              <div style={{ marginTop: 10 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                  <div style={{ ...labelStyle, marginBottom: 0 }}>Auto Classification</div>
+              <div style={{ marginTop: 8 }}>
+                <div style={labelStyle}>Auto Classification</div>
+                <div className="candy-chip-row">
                   <button className="candy-btn" data-shape="chip"
                     disabled={!populated || coachedSide == null || !aiConfigured || classifyingN === m.n || runningN === m.n || commsN === m.n}
                     onClick={() => classify(idx, coachedSide, coachedTeam)}
@@ -980,16 +980,16 @@ export default function ScrimViewer({ path, accent, overlay = false }) {
                     <span className="candy-face">Classify {enemyTeam || 'enemy'}</span>
                   </button>
                 </div>
-                {!populated && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Pull match data first (Run Process), then Classify.</div>}
-                {populated && coachedSide == null && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Fill the <strong>Amber</strong> / <strong>Sapphire</strong> fields above with each team so the sides resolve.</div>}
+                {!populated && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: candyGap(4) }}>Pull match data first (Run Process), then Classify.</div>}
+                {populated && coachedSide == null && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: candyGap(4) }}>Fill the <strong>Amber</strong> / <strong>Sapphire</strong> fields above with each team so the sides resolve.</div>}
                 {hasAuto && (
-                  <div style={{ marginTop: 4 }}>
+                  <div style={{ marginTop: candyGap(4) }}>
                     <div style={{ ...labelStyle, color: 'var(--accent)', marginBottom: 2 }}>{coachedTeam || 'Coached'}</div>
                     <AutoClassificationView key={autoBody} sidecarPath={sidecarPath(path, m.n, 'autoclass')} team={coachedTeam} />
                   </div>
                 )}
                 {hasEnemyAuto && (
-                  <div style={{ marginTop: 8 }}>
+                  <div style={{ marginTop: candyGap(4) }}>
                     <div style={{ ...labelStyle, color: 'var(--text-muted)', marginBottom: 2 }}>{enemyTeam} · enemy</div>
                     <AutoClassificationView key={enemyAutoBody} sidecarPath={sidecarPath(path, m.n, 'autoclass')} team={enemyTeam} />
                   </div>

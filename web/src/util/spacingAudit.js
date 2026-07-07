@@ -32,13 +32,52 @@ function shadowDown(cs) {
   return m ? Math.max(0, parseFloat(m[2])) : 0;
 }
 
-// Lowest painted pixel of `el`: its border-box bottom plus its own shadow, OR
-// that of any candy button inside it — buttons sit on the row's baseline and their
-// bands overhang below the row's border-box, which the row's own rect never sees.
+// Whether `el`'s OWN box paints at its border-box bottom — a visible background,
+// bottom border, or downward box-shadow. A transparent container (e.g. a
+// display:grid wrapping candy fields, or a plain <div> wrapper) does NOT paint
+// there: its rect.bottom is invisible, so the row's real painted bottom is its
+// last candy control's shadow, not the container edge. Without this distinction a
+// container whose last child has a marginBottom trapped inside it (CSS grid tracks
+// size to the item margin box; block children's marginBottom sits inside the
+// parent's content box) reports a false 0 gap to the next sibling — the audit
+// measures container-bottom → next, but the visible gap lives between the last
+// child's shadow and the (invisible) container edge.
+function hasPaintedBox(cs, ownShadow) {
+  if (ownShadow > 0) return true;
+  const bg = cs.backgroundColor;
+  if (bg && bg !== 'transparent' && bg !== 'rgba(0, 0, 0, 0)') return true;
+  if (cs.backgroundImage && cs.backgroundImage !== 'none') return true;
+  const bw = parseFloat(cs.borderBottomWidth);
+  if (bw > 0 && cs.borderBottomStyle !== 'none' &&
+      cs.borderBottomColor !== 'rgba(0, 0, 0, 0)' && cs.borderBottomColor !== 'transparent') return true;
+  return false;
+}
+
+// Lowest painted pixel of `el` — recursive. A leaf (no in-flow element kids) paints
+// its own box at rect.bottom + shadow (text/bg/img fill the line-box). A container
+// paints its own box ONLY if it has a visible bg/border/shadow; otherwise its painted
+// bottom is the lowest painted pixel of its in-flow descendants. A transparent
+// container's rect.bottom can sit BELOW its content — a grid track sizes to the
+// item margin box (trapped marginBottom) OR a flex row's height is set by one child
+// while a lower-painted sibling sits above its edge. Using rect.bottom there
+// under-counts (the false 0 grid gap); using only .candy-btn descendants over-counts
+// when a non-candy text child paints lower than the candy control (the page header
+// and scrim-head both did this). Recursing into ALL in-flow kids gets the true
+// lowest painted pixel in every direction.
 function visualBottom(el) {
-  let low = el.getBoundingClientRect().bottom + shadowDown(getComputedStyle(el));
-  for (const btn of el.querySelectorAll('.candy-btn')) {
-    const b = btn.getBoundingClientRect().bottom + shadowDown(getComputedStyle(btn));
+  const cs = getComputedStyle(el);
+  const r = el.getBoundingClientRect();
+  const ownShadow = shadowDown(cs);
+  const inFlowKids = [];
+  for (const c of el.children) {
+    if (c.getBoundingClientRect().height <= 0) continue;
+    const p = getComputedStyle(c).position;
+    if (p !== 'absolute' && p !== 'fixed') inFlowKids.push(c);
+  }
+  if (inFlowKids.length === 0) return r.bottom + ownShadow;
+  let low = hasPaintedBox(cs, ownShadow) ? r.bottom + ownShadow : -Infinity;
+  for (const child of inFlowKids) {
+    const b = visualBottom(child);
     if (b > low) low = b;
   }
   return low;
@@ -48,13 +87,32 @@ const isVStack = (cs) =>
   (cs.display.includes('flex') && cs.flexDirection.startsWith('column')) ||
   (cs.display.includes('grid') && cs.gridTemplateColumns === 'none');
 
+// Plain block-flow container whose children stack vertically and at least one
+// child is (or holds) a candy control — its band overhangs the margin gap to
+// the next block child, which the flex/grid vstack filter above misses. Catches
+// the case-2 "gap directly below a candy control" defect in mixed candy+flat
+// sections wrapped in a plain <div> (e.g. ScrimViewer Auto Classification).
+const isCandyBlock = (el, cs) => {
+  if (cs.display.includes('flex') || cs.display.includes('grid') || cs.display.includes('inline')) return false;
+  // Only in-flow (static/relative) children form a vertical stack; absolute/fixed
+  // children overlap geometrically (e.g. overlay panels at the same top/left), so
+  // the gap math false-flags. Filter them out before counting.
+  const kids = [...el.children]
+    .filter((c) => c.getBoundingClientRect().height > 0)
+    .filter((c) => !['absolute', 'fixed'].includes(getComputedStyle(c).position));
+  if (kids.length < 2) return false;
+  return kids.some((k) => k.matches?.('.candy-btn') || k.querySelector?.('.candy-btn'));
+};
+
 export function spacingAudit(root = document.body, { quiet = false } = {}) {
   const flags = [];
   const stacks = [];
   for (const cont of [root, ...root.querySelectorAll('*')]) {
     const cs = getComputedStyle(cont);
-    if (!isVStack(cs)) continue;
-    const kids = [...cont.children].filter((c) => c.getBoundingClientRect().height > 0);
+    if (!isVStack(cs) && !isCandyBlock(cont, cs)) continue;
+    const kids = [...cont.children]
+      .filter((c) => c.getBoundingClientRect().height > 0)
+      .filter((c) => !['absolute', 'fixed'].includes(getComputedStyle(c).position));
     if (kids.length < 2) continue;
     const cssGap = parseFloat(cs.rowGap) || 0;
     const rows = kids.map((k, i) => {

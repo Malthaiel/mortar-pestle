@@ -4862,7 +4862,7 @@ button.cal-customdays__step:hover {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 10px;
+  gap: 12px;
   text-align: left;
 }
 /* Hover floods the whole tile face with accent — matches the .music-tile sidebar
