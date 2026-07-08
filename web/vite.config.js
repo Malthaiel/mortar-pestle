@@ -2,12 +2,45 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import aosComponentId from './vite-plugins/aos-component-id.js';
 import moduleSizes from './vite-plugins/module-sizes.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(path.resolve(__dirname, 'package.json'), 'utf-8'));
+
+// DEV audit sink (Spacing Correctness System, Move 7) — the audit→chat bridge.
+// Each webview POSTs its latest spacing/candy-center audit to /__audit; we merge it
+// into web/.audit/<label>.json (per-label: a shared file gets clobbered cross-window).
+// Claude reads that file instead of the user pasting console output. serve-only, no deps.
+function auditSink() {
+  const dir = path.resolve(__dirname, '.audit');
+  return {
+    name: 'audit-sink',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use('/__audit', (req, res) => {
+        if (req.method !== 'POST') { res.statusCode = 405; return res.end(); }
+        let body = '';
+        req.on('data', (c) => { body += c; });          // Vite doesn't pre-parse bodies
+        req.on('end', () => {
+          try {
+            const msg = JSON.parse(body || '{}');
+            const label = String(msg.label || 'main').replace(/[^a-z0-9-]/gi, '') || 'main';
+            const file = path.join(dir, `${label}.json`);
+            let prior = {};
+            try { prior = JSON.parse(readFileSync(file, 'utf-8')); } catch { /* first write */ }
+            const kind = String(msg.kind || 'spacing').replace(/[^a-z]/gi, '') || 'spacing';
+            const merged = { ...prior, label, nonce: msg.nonce, ts: msg.ts, route: msg.route, [kind]: msg.data };
+            mkdirSync(dir, { recursive: true });
+            writeFileSync(file, JSON.stringify(merged, null, 2));
+            res.statusCode = 204; res.end();
+          } catch { res.statusCode = 400; res.end(); }
+        });
+      });
+    },
+  };
+}
 
 // SF1 of Design Mode — inject component-identity attrs on JSX. Default on; opt out with AOS_DESIGN=0.
 const aosDesignEnabled = process.env.AOS_DESIGN !== '0';
@@ -21,7 +54,7 @@ const targetOs = process.env.VITE_TARGET_OS
     : process.platform === 'darwin' ? 'macos' : 'linux');
 
 export default defineConfig({
-  plugins: [aosComponentId({ enabled: aosDesignEnabled }), react(), moduleSizes()],
+  plugins: [aosComponentId({ enabled: aosDesignEnabled }), react(), moduleSizes(), auditSink()],
   define: {
     'import.meta.env.PACKAGE_VERSION': JSON.stringify(pkg.version),
     'import.meta.env.VITE_TARGET_OS': JSON.stringify(targetOs),
@@ -53,6 +86,11 @@ export default defineConfig({
     port: 5173,
     fs: {
       allow: ['..'],
+    },
+    // Don't feed the audit sink's own writes back to the HMR watcher (a non-imported
+    // JSON wouldn't trigger a reload anyway, but keep chokidar clean).
+    watch: {
+      ignored: ['**/.audit/**'],
     },
   },
   build: {

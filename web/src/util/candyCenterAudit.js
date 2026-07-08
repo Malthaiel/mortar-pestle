@@ -15,6 +15,8 @@
 //
 // Never shipped to prod: imported only behind import.meta.env.DEV in main.jsx.
 
+import { postAudit } from './auditBridge.js';
+
 const TOL = 0.75; // px — absorbs sub-pixel rounding; a real depth/2 miss is >= 1.5px
 
 const center = (r) => r.top + r.height / 2;
@@ -66,6 +68,15 @@ export function candyCenterAudit(root = document.body, { quiet = false } = {}) {
   } else if (!quiet) {
     console.info('%ccandy-center audit — 0 offenders', 'color:#27ae60');
   }
+  // DEV-only bridge — mirror offender count + serializable list (strip DOM nodes).
+  postAudit('center', {
+    count: offenders.length,
+    offenders: offenders.map((o) => ({
+      delta: o.delta,
+      btn: o.btn.className || o.btn.tagName.toLowerCase(),
+      sibling: o.sibling.className || o.sibling.tagName.toLowerCase(),
+    })),
+  });
   return offenders;
 }
 

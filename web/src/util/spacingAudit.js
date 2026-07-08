@@ -20,6 +20,8 @@
 // Run `spacingAudit()` in any webview console, including the overlay host, or
 // `copy(spacingAudit())` to grab the whole report as JSON.
 
+import { postAudit } from './auditBridge.js';
+
 const TOL = 1.0; // px — absorbs sub-pixel rounding
 
 // Downward box-shadow offset (px) — the candy depth band. First shadow layer's
@@ -143,7 +145,9 @@ export function spacingAudit(root = document.body, { quiet = false } = {}) {
     for (const f of flags) out.push(`  ! ${f.cls}: band ${f.band}px overruns its ${f.gap}px gap (overlap ${f.overlap}px)`);
     console.log(out.join('\n'));
   }
-  return { flags: flags.map(({ el, ...rest }) => rest), stacks };
+  const result = { flags: flags.map(({ el, ...rest }) => rest), stacks };
+  postAudit('spacing', result); // DEV-only bridge — Claude reads web/.audit/<label>.json
+  return result;
 }
 
 let timer = null;

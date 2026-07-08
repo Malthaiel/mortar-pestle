@@ -27,6 +27,10 @@ src-tauri/resources/usda_foods.db
 # No-undo-net backups taken before bulk edits.
 .bak/
 
+# DEV audit→chat bridge sink (Spacing Correctness System). Runtime scratch written
+# by the Vite /__audit middleware; never committed.
+web/.audit/
+
 # Secrets — never commit. Tauri updater private key + signing material live in CI secrets.
 .env.*
 # .env.example is the public template — ship it; real .env files stay ignored above.
