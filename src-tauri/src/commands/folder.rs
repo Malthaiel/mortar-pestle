@@ -8,9 +8,9 @@
 //! mutations. (The former Knowledge/Infrastructure card-view readers and the
 //! `.view.json` config subsystem were removed with the folder-view feature.)
 //!
-//! Path safety: `resolve_root_path` canonicalizes the joined path and asserts
-//! containment under the canonical vault root + root subdir — stricter than
-//! Node's `startsWith` check.
+//! Path safety: `resolve_root_path_in` canonicalizes the joined path and asserts
+//! containment under the canonical vault root (`canon_target.starts_with(canon_root)`),
+//! rejecting `..`/absolute/symlink escapes — mirrors `commands::vault::resolve_in`.
 
 use std::collections::HashMap;
 use std::fs;
@@ -114,13 +114,13 @@ fn resolve_root_path_in(rel: &str, root: &str, canon_root: &Path) -> Option<Path
         let canon_parent = fs::canonicalize(parent).ok()?;
         canon_parent.join(target.file_name()?)
     };
-    let canon_base = fs::canonicalize(&base).ok()?;
-    if canon_target != canon_base
-        && !canon_target
-            .strip_prefix(&canon_base)
-            .map(|_| true)
-            .unwrap_or(false)
-    {
+    // Containment is anchored on the vault ROOT, not on `base`
+    // (= canon_root.join(root)): a `..`/absolute component in the caller-supplied
+    // `root` or `rel` moves `base` outside the vault, and canonicalizing that moved
+    // base would wrongly accept the escape. `fs::canonicalize` already resolved any
+    // symlinks in `canon_target`, so symlink escapes are caught too. Mirrors
+    // `commands::vault::resolve_in`'s `canon.starts_with(&root)` gate.
+    if !canon_target.starts_with(canon_root) {
         return None;
     }
     Some(canon_target)
@@ -508,4 +508,46 @@ fn mtime_ms(t: SystemTime) -> f64 {
     t.duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs_f64() * 1000.0)
         .unwrap_or(0.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    // A `..` in the slug (`root`) must not escape the vault root.
+    #[test]
+    fn rejects_parent_traversal_in_slug() {
+        let tmp = TempDir::new().unwrap();
+        let root = fs::canonicalize(tmp.path()).unwrap();
+        let outside = root.parent().unwrap().join("outside_vault_005a");
+        fs::create_dir_all(&outside).unwrap();
+        let escaped = resolve_root_path_in("", "../outside_vault_005a", &root);
+        let _ = fs::remove_dir_all(&outside);
+        assert!(escaped.is_none(), "slug `..` traversal must be rejected");
+    }
+
+    // A `..` in the `rel` (path) must not escape the vault root either.
+    #[test]
+    fn rejects_parent_traversal_in_rel() {
+        let tmp = TempDir::new().unwrap();
+        let root = fs::canonicalize(tmp.path()).unwrap();
+        fs::create_dir_all(root.join("Area")).unwrap();
+        let outside = root.parent().unwrap().join("outside_vault_005b");
+        fs::create_dir_all(&outside).unwrap();
+        let escaped = resolve_root_path_in("../../outside_vault_005b", "Area", &root);
+        let _ = fs::remove_dir_all(&outside);
+        assert!(escaped.is_none(), "rel `..` traversal must be rejected");
+    }
+
+    // A legitimate in-vault folder still resolves (no false rejection).
+    #[test]
+    fn accepts_in_vault_path() {
+        let tmp = TempDir::new().unwrap();
+        let root = fs::canonicalize(tmp.path()).unwrap();
+        fs::create_dir_all(root.join("Area")).unwrap();
+        let ok = resolve_root_path_in("", "Area", &root)
+            .expect("legit in-vault folder must resolve");
+        assert!(ok.starts_with(&root));
+    }
 }
