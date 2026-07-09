@@ -492,13 +492,14 @@ export default function ScrimViewer({ path, accent, overlay = false }) {
   // disables (with a hint) when the speech engine is down. stt_status returns null when the
   // sidecar is unreachable. Feature-detect only — no import from modules/studio/stt/.
   useEffect(() => {
-    let unlisten = null;
     const probe = () => invoke('stt_status')
       .then((s) => { if (mountedRef.current) setSttUp(s != null); })
       .catch(() => { if (mountedRef.current) setSttUp(false); });
     probe();
-    listen('stt-engine-status', probe).then((un) => { unlisten = un; }).catch(() => {});
-    return () => { if (unlisten) unlisten(); };
+    // Chain unlisten onto the registration promise — a plain `unlisten` var is
+    // still null if we unmount before `listen` resolves, orphaning the listener.
+    const sub = listen('stt-engine-status', probe);
+    return () => { sub.then((un) => un()).catch(() => {}); };
   }, []);
 
   // AI backend availability — the Classify (AI) button disables (with a hint) when neither

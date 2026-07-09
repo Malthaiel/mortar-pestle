@@ -128,19 +128,21 @@ export default function BroadcastPage({ api, accent }) {
         }).catch((e) => console.warn('[broadcast] drop create_source', e));
       }
     };
-    let un = null;
-    let unHost = null;
-    getCurrentWebviewWindow().onDragDropEvent((event) => {
-      if (event.payload.type !== 'drop') return;
-      handleDrop(event.payload.paths || [], event.payload.position);
-    }).then((u) => { un = u; });
-    // OLE drops dead-zone over the native region (drop targets resolve by
-    // hit-test, which never crosses to the WebView2 process) — the host child
-    // carries its own IDropTarget and relays drops as this event, same
-    // physical-px main-window coordinates as onDragDropEvent.
-    listen('broadcast://host-drop', (e) => handleDrop(e.payload.paths || [], e.payload.position))
-      .then((u) => { unHost = u; });
-    return () => { if (un) un(); if (unHost) unHost(); };
+    // Keep the registration promises and chain unlisten onto them — a plain
+    // `un` variable is still null if we unmount before `listen` resolves,
+    // orphaning the listener (dev StrictMode remount / fast route flick).
+    const subs = [
+      getCurrentWebviewWindow().onDragDropEvent((event) => {
+        if (event.payload.type !== 'drop') return;
+        handleDrop(event.payload.paths || [], event.payload.position);
+      }),
+      // OLE drops dead-zone over the native region (drop targets resolve by
+      // hit-test, which never crosses to the WebView2 process) — the host child
+      // carries its own IDropTarget and relays drops as this event, same
+      // physical-px main-window coordinates as onDragDropEvent.
+      listen('broadcast://host-drop', (e) => handleDrop(e.payload.paths || [], e.payload.position)),
+    ];
+    return () => subs.forEach((p) => p.then((f) => f()).catch(() => {}));
   }, [api]);
 
   const failed = engine?.state === 'failed';
