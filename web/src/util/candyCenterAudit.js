@@ -27,7 +27,9 @@ const center = (r) => r.top + r.height / 2;
 function lipDepth(cs) {
   const sh = cs.boxShadow;
   if (!sh || sh === 'none') return 0;
-  const m = sh.match(/(-?[\d.]+)px\s+(-?[\d.]+)px/); // first layer: offset-x offset-y
+  const first = sh.split(/,(?![^(]*\))/)[0];
+  if (/\binset\b/.test(first)) return 0; // inset paints inward, no downward lip (Move 5)
+  const m = first.match(/(-?[\d.]+)px\s+(-?[\d.]+)px/); // offset-x offset-y
   return m ? parseFloat(m[2]) : 0;
 }
 
