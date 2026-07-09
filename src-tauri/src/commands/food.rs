@@ -144,3 +144,36 @@ pub async fn usda_food(app: AppHandle, fdc_id: i64) -> Result<FoodDetail, String
     .await
     .map_err(|e| e.to_string())?
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    // Read-only smoke test guarding the bundled-SQLite read path across rusqlite/
+    // libsqlite3-sys bumps (plan 019): open the real DB the way `open_ro` does and
+    // exercise a plain SELECT plus an FTS5 MATCH (FTS5 is a compile-time SQLite
+    // feature, so a bad bundle would fail here). Skips if the 90 MB DB is absent.
+    #[test]
+    fn usda_db_opens_readonly() {
+        let db = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/usda_foods.db");
+        if !db.exists() {
+            eprintln!("skip: {} not present (run scripts/build_fdc_db.py)", db.display());
+            return;
+        }
+        let conn = Connection::open_with_flags(&db, OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .expect("open usda_foods.db read-only");
+        let n: i64 = conn
+            .query_row("SELECT COUNT(*) FROM foods", [], |r| r.get(0))
+            .expect("SELECT COUNT(*) FROM foods");
+        assert!(n > 0, "foods table should be non-empty");
+        let hit: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM foods_fts WHERE foods_fts MATCH ?1",
+                rusqlite::params!["milk*"],
+                |r| r.get(0),
+            )
+            .expect("FTS5 MATCH query should run");
+        assert!(hit > 0, "FTS5 MATCH 'milk*' should find rows");
+    }
+}
