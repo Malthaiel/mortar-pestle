@@ -7,9 +7,9 @@
 // Polling lives in the Rust worker (qBittorrent is async); this provider is
 // purely event-driven. Registered via index.jsx so it wraps the whole app.
 
-import { createContext, useContext, useCallback, useEffect, useRef, useState } from 'react';
-import { listen } from '@tauri-apps/api/event';
+import { createContext, useContext, useCallback, useEffect, useRef } from 'react';
 import { videoApi } from './api.js';
+import { useJobQueue } from './useJobQueue.js';
 
 const Ctx = createContext(null);
 
@@ -18,36 +18,16 @@ export function useAnimeDownloads() {
 }
 
 export function AnimeDownloadProvider({ children }) {
-  const [jobs, setJobs] = useState([]);
-
-  // Hydrate in-flight jobs on a provider remount mid-run.
-  useEffect(() => {
-    let cancelled = false;
-    videoApi.animeDownloadStatus()
-      .then(j => { if (!cancelled) setJobs((j || []).filter(x => x.state !== 'done' && x.state !== 'cancelled')); })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, []);
-
-  useEffect(() => {
-    const upsert = (job) => setJobs(prev => {
-      const i = prev.findIndex(j => j.id === job.id);
-      if (i === -1) return [...prev, job];
-      const next = prev.slice();
-      next[i] = job;
-      return next;
-    });
-    const pProgress = listen('anime-download-progress', (e) => { if (e.payload && e.payload.id) upsert(e.payload); });
-    const pDone = listen('anime-download-done', (e) => {
-      // Direct Knowledge/*.md writes don't trip the manifest watcher — tell the
-      // library to re-list directly.
-      window.dispatchEvent(new CustomEvent('video-library-changed', { detail: e.payload || {} }));
-    });
-    return () => {
-      pProgress.then(f => f()).catch(() => {});
-      pDone.then(f => f()).catch(() => {});
-    };
-  }, []);
+  // Hydrate covers a provider remount mid-run. Direct Knowledge/*.md writes
+  // don't trip the manifest watcher, so onDone re-broadcasts
+  // `video-library-changed` so the Downloaded tab re-lists.
+  const jobs = useJobQueue({
+    statusFn: () => videoApi.animeDownloadStatus(),
+    progressEvent: 'anime-download-progress',
+    doneEvent: 'anime-download-done',
+    isActive: (x) => x.state !== 'done' && x.state !== 'cancelled',
+    onDone: (p) => window.dispatchEvent(new CustomEvent('video-library-changed', { detail: p })),
+  });
 
   // Terminal toast: fire one app-wide notification per job that finishes or
   // fails, so feedback survives navigation (the download runs in Rust and
