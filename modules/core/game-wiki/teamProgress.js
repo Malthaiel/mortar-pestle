@@ -166,6 +166,8 @@ export function renderTeamPage(agg, stamp = '') {
       ['soul lead', (r) => r.soulLead ?? '—'],
       ['callouts/min', (r) => (r.calloutRate == null ? '—' : r.calloutRate)],
       ['silent deaths', (r) => (r.silentDeaths == null ? '—' : r.silentDeaths)],
+      ['jumbled fights', (r) => (r.commsJumbled == null ? '—' : `${Math.round(r.commsJumbled * 100)}%`)],
+      ['missed/fight', (r) => (r.commsMissed == null ? '—' : r.commsMissed)],
     ];
     L.push(`| ${cols.map((c) => c[0]).join(' | ')} |`);
     L.push(`| ${cols.map(() => '---').join(' | ')} |`);

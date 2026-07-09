@@ -46,7 +46,7 @@ export const sideName = (t) => (t in TEAM_NAMES ? TEAM_NAMES[t] : `Team ${t}`);
 // — but a sibling dotfile is simpler than a per-scrim subfolder here anyway.)
 export function sidecarPath(scrimPath, matchN, kind = 'matchdata') {
   const base = String(scrimPath).replace(/\.md$/, '').split('/').pop();
-  const prefix = kind === 'comms' ? 'commstranscript' : kind === 'autoclass' ? 'autoclass' : 'matchdata';
+  const prefix = kind === 'comms' ? 'commstranscript' : kind === 'autoclass' ? 'autoclass' : kind === 'tfcomms' ? 'tfcomms' : 'matchdata';
   return `${SCRIM_DIR}/.${prefix}.${base} — Match ${matchN}.json`;
 }
 

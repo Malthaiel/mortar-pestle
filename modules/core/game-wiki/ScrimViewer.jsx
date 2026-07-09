@@ -24,6 +24,8 @@ import { matchClusters, enrollPrint, parseVoiceprints, DEFAULT_THRESHOLD } from 
 import { auditSilentDeaths } from './deathAudit.js';
 import { buildTranscriptBlock, generateReport } from './vodReport.js';
 import VodReportView from './VodReportView.jsx';
+import { buildFights, judgeTeamfights, summarize } from './teamfightComms.js';
+import TeamfightCommsView from './TeamfightCommsView.jsx';
 import { matchMetrics, sumMatchMetrics, aggregateTeam, renderTeamPage, openHomework, teamSidecarPath, teamPagePath, normIssue } from './teamProgress.js';
 import CommsTranscriptView from './CommsTranscriptView.jsx';
 import { useSettings } from '@host/hooks/useSettings.js';
@@ -479,6 +481,9 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
   const [vodPhase, setVodPhase] = useState(''); // status label while extracting the VOD Review
   const [reporting, setReporting] = useState(false); // Generate Report (Claude) in flight (sub-plan 11)
   const [vodReportOpen, setVodReportOpen] = useState(false); // VodReportView popup open
+  const [reviewingN, setReviewingN] = useState(null); // match.n with an in-flight Review Comms (sub-plan 13)
+  const [tfOpen, setTfOpen] = useState(null); // { n } → TeamfightCommsView popup open for that match
+  const [tfReady, setTfReady] = useState(() => new Set()); // match.ns with a cached .tfcomms review
   const [sttUp, setSttUp] = useState(true); // speech engine reachable (stt_status non-null)
   const [matchPopup, setMatchPopup] = useState(null); // { n } of the match whose full view is open
   const [review, setReview] = useState(null); // { idx, teamName, items } — active merge-review modal
@@ -515,6 +520,7 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
   const vodRef = useRef(false); // Extract VOD Comms double-fire guard (sub-plan 11)
   const vodCancelledRef = useRef(false); // set on VOD cancel → the terminal handler skips the write
   const reportRef = useRef(false); // Generate Report double-fire guard (sub-plan 11)
+  const tfRef = useRef(false); // Review Comms double-fire guard (sub-plan 13)
   const saveTimer = useRef(null);
   const savingRef = useRef(false);
   const pendingRef = useRef(false);
@@ -1000,6 +1006,7 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
 
         const perMatch = [];
         let segTotal = 0, durTotalS = 0, silentTotal = 0, haveComms = false;
+        let tfFights = 0, tfJumbled = 0, tfMissed = 0, haveTf = false; // sub-plan 13 comms review
         for (const m of sc.matches || []) {
           const { coachedSide } = sideFromTeamFields(m.fields, coached);
           if (coachedSide == null) continue;
@@ -1015,12 +1022,19 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
             const offsetS = Number(m.fields['Comms Offset']) || 0;
             silentTotal += auditSilentDeaths(extractSpatial(raw).deaths, segs, { side: coachedSide, offsetS }).silent.length;
           } catch { /* no comms for this match */ }
+          try {
+            const tf = JSON.parse((await api.getRawFileMeta(sidecarPath(pagePath, m.n, 'tfcomms'), 'gamewiki')).content);
+            const s = tf.summary || summarize(tf.fights || []);
+            if (s.fights) { haveTf = true; tfFights += s.fights; tfJumbled += (s.jumbled || 0); tfMissed += (s.missed || 0); }
+          } catch { /* no comms review for this match */ }
         }
         if (!perMatch.length && !report) continue;
         const metrics = {
           ...sumMatchMetrics(perMatch),
           calloutRate: haveComms && durTotalS > 0 ? Math.round((segTotal / (durTotalS / 60)) * 10) / 10 : null,
           silentDeaths: haveComms ? silentTotal : null,
+          commsJumbled: haveTf && tfFights ? Math.round((tfJumbled / tfFights) * 100) / 100 : null,
+          commsMissed: haveTf && tfFights ? Math.round((tfMissed / tfFights) * 100) / 100 : null,
         };
         scrims.push({ date: fm['Date'] || '', report, metrics });
       }
@@ -1092,6 +1106,65 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
       reportRef.current = false; setReporting(false);
     }
   }, [path, settings, applyEdit, flushSave, updateTeamProgress]);
+
+  // Review Comms (sub-plan 13) — cluster the coached team's in-game comms around each teamfight
+  // (a death cluster), score jumble, have Claude judge each callout good/wrong/late + flag the calls
+  // that were missed (with a should've-said line), cache the .tfcomms sidecar, open TeamfightCommsView.
+  // Re-runnable. Mirrors classify()/generateVodReport backend resolution. Feeds sub-plan 12's Comms
+  // trend via updateTeamProgress (jumbled share + missed/fight).
+  const reviewComms = useCallback(async (idx, side, coachedTeam) => {
+    if (tfRef.current) return;
+    const m = scrimRef.current?.matches?.[idx];
+    if (!m) return;
+    let raw, segments;
+    try { raw = JSON.parse((await api.getRawFileMeta(sidecarPath(path, m.n), 'gamewiki')).content); }
+    catch { notify('error', 'No match data', 'Run Process first — the review needs the match data.'); return; }
+    try { segments = parseSegments((await api.getRawFileMeta(sidecarPath(path, m.n, 'comms'), 'gamewiki')).content); }
+    catch { notify('error', 'No comms', 'Extract Comms first — the review reads that transcript.'); return; }
+
+    const offsetS = Number(m.fields['Comms Offset']) || 0;
+    const fights = buildFights(extractSpatial(raw).deaths, segments, { side, offsetS });
+    if (!fights.length) { notify('info', 'No teamfights', 'No death clusters found to review in this match.'); return; }
+
+    tfRef.current = true; setReviewingN(m.n);
+    try {
+      const ag = settings?.agents || {};
+      let backend = ag.authBackend;
+      if (!backend) backend = (await invoke('design_get_api_key').catch(() => false)) ? 'api-key' : 'claude-cli';
+      const agents = { authBackend: backend, model: ag.model || 'opus', claudeCliPath: ag.claudeCliPath || '' };
+
+      const judged = await judgeTeamfights(invoke, { fights, coachedTeam, roster: coachedRoster }, agents);
+      const report = { generated: new Date().toISOString().slice(0, 10), model: agents.model, fights: judged, summary: summarize(judged) };
+      await api.savePage(sidecarPath(path, m.n, 'tfcomms'), JSON.stringify(report), null, 'gamewiki');
+      setTfReady((s) => new Set(s).add(m.n));
+      setTfOpen({ n: m.n });
+      // regenerate this team's cross-scrim page (best-effort — the Comms trend now has jumble/missed).
+      updateTeamProgress(coachedTeam).catch(() => {});
+      const missed = judged.reduce((a, f) => a + (f.missed || []).length, 0);
+      notify('success', 'Comms reviewed', `${judged.length} teamfight${judged.length === 1 ? '' : 's'} · ${missed} missed call${missed === 1 ? '' : 's'}.`);
+    } catch (e) {
+      const msg = {
+        AUTH: ['AI backend not configured', 'Add an Anthropic API key or Claude CLI in Settings → Agents.'],
+        NETWORK: ['Network error', e?.message || 'Could not reach the model.'],
+        UPSTREAM: ['Model error', e?.message || 'The model returned an unexpected response.'],
+      }[e?.code] || ['Review failed', e?.message || String(e)];
+      notify('error', msg[0], msg[1]);
+    } finally {
+      tfRef.current = false; setReviewingN(null);
+    }
+  }, [path, settings, coachedRoster, updateTeamProgress]);
+
+  // Which matches already have a cached .tfcomms review → drives the "Open Review" chip without a
+  // regenerate. Probed on load (a cheap metadata read per match); reviewComms adds to it on generate.
+  useEffect(() => {
+    let cancelled = false;
+    const matches = scrim?.matches || [];
+    if (!matches.length) { setTfReady(new Set()); return undefined; }
+    Promise.all(matches.map((m) =>
+      api.getRawFileMeta(sidecarPath(path, m.n, 'tfcomms'), 'gamewiki').then(() => m.n).catch(() => null)
+    )).then((ns) => { if (!cancelled) setTfReady(new Set(ns.filter((n) => n != null))); });
+    return () => { cancelled = true; };
+  }, [path, scrim?.matches?.length]);
 
   // Reassign a whole speaker cluster to a roster name (Speakers panel or an inline transcript
   // relabel). On an explicit name (not a clear) this ENROLLS/retrains the voiceprint from the
@@ -1652,6 +1725,31 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
                 )}
               </div>
               )}
+              {/* Teamfight Comms Review (sub-plan 13) — Claude judges each fight's callouts. */}
+              {!slim && (
+              <div style={{ marginTop: 8 }}>
+                <div style={labelStyle}>Teamfight Comms</div>
+                <div className="candy-chip-row">
+                  <button className="candy-btn" data-shape="chip"
+                    disabled={!populated || !hasComms || coachedSide == null || !aiConfigured || reviewingN === m.n || runningN === m.n || commsN === m.n || classifyingN === m.n}
+                    onClick={() => reviewComms(idx, coachedSide, coachedTeam)}
+                    title={!populated ? 'Run Process first — the review needs the match data'
+                      : !hasComms ? 'Extract Comms first — the review reads that transcript'
+                        : coachedSide == null ? 'Fill the Amber/Sapphire team fields so the coached side resolves'
+                          : !aiConfigured ? 'Configure an AI backend in Settings → Agents (API key or Claude CLI)'
+                            : 'Review Comms — Claude judges each teamfight’s callouts (good / missed / wrong / late)'}
+                    style={reviewingN === m.n ? { opacity: 0.6, cursor: 'progress' } : undefined}>
+                    <span className="candy-face">{reviewingN === m.n ? 'Asking Claude…' : 'Review Comms'}</span>
+                  </button>
+                  {tfReady.has(m.n) && reviewingN !== m.n && (
+                    <button className="candy-btn" data-shape="chip" onClick={() => setTfOpen({ n: m.n })} title="Open the teamfight comms review">
+                      <span className="candy-face">Open Review</span>
+                    </button>
+                  )}
+                </div>
+                {populated && !hasComms && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: candyGap(8) }}>Extract Comms first, then Review Comms.</div>}
+              </div>
+              )}
             </div>
           );
         })}
@@ -1670,6 +1768,14 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
             sidecarPath={scrimSidecarPath(path, 'vodreport')}
             accent={accent}
             onClose={() => setVodReportOpen(false)}
+          />
+        )}
+
+        {tfOpen && (
+          <TeamfightCommsView
+            sidecarPath={sidecarPath(path, tfOpen.n, 'tfcomms')}
+            accent={accent}
+            onClose={() => setTfOpen(null)}
           />
         )}
 
