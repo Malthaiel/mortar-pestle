@@ -39,9 +39,10 @@ export const sideName = (t) => (t in TEAM_NAMES ? TEAM_NAMES[t] : `Team ${t}`);
 // `…/Scrim/(06-16-26) A VS B` (+ match 1) → `…/Scrim/.matchdata.(06-16-26) A VS B — Match 1.json`
 // (`kind: 'comms'` → `.commstranscript.…`, sub-plan 4; `kind: 'autoclass'` →
 // `.autoclass.…` review-state sidecar, sub-plan 5).
-// Loose dot-prefixed sibling (not a subfolder): vault_write_file resolves a new file's
-// parent by canonicalizing it, so it can't create a missing subdir — but Scrim/ already
-// exists, and scan_dir hides the dotfile from the tree/landing all the same.
+// Loose dot-prefixed sibling (not a subfolder): keeps the sidecar out of the Scrim/ tree —
+// scan_dir hides the dotfile from the tree/landing. (vault_write_file DOES create missing
+// parent dirs — atomic_write create_dir_all's + resolve_in re-appends a not-yet-existing tail
+// — but a sibling dotfile is simpler than a per-scrim subfolder here anyway.)
 export function sidecarPath(scrimPath, matchN, kind = 'matchdata') {
   const base = String(scrimPath).replace(/\.md$/, '').split('/').pop();
   const prefix = kind === 'comms' ? 'commstranscript' : kind === 'autoclass' ? 'autoclass' : 'matchdata';
