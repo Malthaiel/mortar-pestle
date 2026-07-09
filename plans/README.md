@@ -25,7 +25,7 @@ Run the **P0** block first; run **002 before any test plan (020–024)**; the re
 | 014 | Fix the Tauri `listen()` unlisten leak (4 sites) | bug | P1 | S | LOW | — | TODO |
 | 020 | Credentials crypto roundtrip + idle-lock tests | tests | P1 | S | LOW | 002 | DONE |
 | 021 | Recycle-bin restore characterization tests | tests | P1 | M | LOW | 002 | DONE (primitives; e2e restore deferred to 023) |
-| 022 | Restore planner daily-writer test coverage | tests | P1 | M | LOW | 002 | TODO |
+| 022 | Restore planner daily-writer test coverage | tests | P1 | M | LOW | 002 | DONE |
 | 005 | Prune stale 7878 grant + fix `vault_get_folder` containment | security | P2 | S | LOW | — | TODO |
 | 008 | Minimal ESLint (react-hooks) + document the real boundary | dx | P2 | M | MED | — | TODO |
 | 012 | Coalesce manifest patches + frontend diff-apply | perf | P2 | M-L | MED | — | TODO |
