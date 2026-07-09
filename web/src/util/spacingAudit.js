@@ -417,6 +417,9 @@ export function startSpacingAudit() {
   // Boot the audit loud-once, then the audit-of-the-audit once (Move 9): its
   // {pass,failures} lands in web/.audit/<label>.json under `selftest`, so the
   // selfTest gate after any spacingAudit.js edit is a file Read, not a console run.
+  // Move 12: record WebView2 CSS support for the .text-trim fork (13a vs 13b),
+  // read from web/.audit/<label>.json under `caps` instead of a console probe.
+  postAudit('caps', { textBoxTrim: CSS.supports('text-box-trim', 'trim-both') && CSS.supports('text-box-edge', 'cap alphabetic') });
   const first = () => setTimeout(() => { spacingAudit(); spacingAuditSelfTest(); }, 700);
   if (document.readyState === 'complete') first();
   else window.addEventListener('load', first, { once: true });
