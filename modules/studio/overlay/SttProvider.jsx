@@ -128,9 +128,9 @@ export default function SttProvider({ api, children }) {
 
   // --- supervisor engine status (drives the live indicator + unavailable state) ---
   useEffect(() => {
-    let unlisten = null;
-    listen('stt-engine-status', (e) => { if (aliveRef.current && e.payload) setEngine(e.payload); })
-      .then((un) => { unlisten = un; }).catch(() => {});
+    // Chain unlisten onto the registration promise — a plain `unlisten` var is
+    // still null if we unmount before `listen` resolves, orphaning the listener.
+    const sub = listen('stt-engine-status', (e) => { if (aliveRef.current && e.payload) setEngine(e.payload); });
     // Initial liveness — stt_status degrades to null when the engine is down.
     api.invoke('stt_status')
       .then((s) => {
@@ -138,7 +138,7 @@ export default function SttProvider({ api, children }) {
         setEngine((cur) => cur ?? (s == null ? { state: 'down', message: 'engine not running' } : { state: 'running' }));
       })
       .catch(() => {});
-    return () => { if (unlisten) unlisten(); };
+    return () => { sub.then((un) => un()).catch(() => {}); };
   }, [api]);
 
   // --- global STT relay: hotkey-driven dictation while unfocused ---
