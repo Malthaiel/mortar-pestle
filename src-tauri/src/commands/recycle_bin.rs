@@ -229,7 +229,7 @@ fn is_cross_device(e: &std::io::Error) -> bool {
 /// on a different device than app-config). Strict order: the source is only
 /// unlinked after the copy fully succeeds, so a mid-copy failure leaves the
 /// source intact and cleans up the partial destination.
-fn move_path(src: &Path, dst: &Path) -> Result<(), VaultError> {
+pub fn move_path(src: &Path, dst: &Path) -> Result<(), VaultError> {
     if let Some(parent) = dst.parent() {
         fs::create_dir_all(parent).map_err(|e| VaultError::Io(e.to_string()))?;
     }
@@ -252,7 +252,7 @@ fn move_path(src: &Path, dst: &Path) -> Result<(), VaultError> {
     }
 }
 
-fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), VaultError> {
+pub fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), VaultError> {
     fs::create_dir_all(dst).map_err(|e| VaultError::Io(e.to_string()))?;
     for entry in fs::read_dir(src).map_err(|e| VaultError::Io(e.to_string()))? {
         let entry = entry.map_err(|e| VaultError::Io(e.to_string()))?;
@@ -275,17 +275,17 @@ fn new_id() -> String {
 fn now_rfc3339() -> String {
     chrono::Utc::now().to_rfc3339()
 }
-fn leaf_name(rel: &str) -> String {
+pub fn leaf_name(rel: &str) -> String {
     rel.rsplit('/').next().unwrap_or(rel).to_string()
 }
-fn parent_dir(rel: &str) -> Option<String> {
+pub fn parent_dir(rel: &str) -> Option<String> {
     rel.rfind('/')
         .map(|i| rel[..i].to_string())
         .filter(|s| !s.is_empty())
 }
 
 /// Recursive (file count, total bytes) for a folder being trashed.
-fn dir_stats(dir: &Path) -> (u32, u64) {
+pub fn dir_stats(dir: &Path) -> (u32, u64) {
     let mut count = 0u32;
     let mut size = 0u64;
     if let Ok(entries) = fs::read_dir(dir) {
@@ -306,7 +306,7 @@ fn dir_stats(dir: &Path) -> (u32, u64) {
 
 /// `Name (restored).ext` — used when the original path is occupied and the user
 /// chooses Rename.
-fn suggested_rename(label: &str) -> String {
+pub fn suggested_rename(label: &str) -> String {
     match label.rsplit_once('.') {
         Some((stem, ext)) if !stem.is_empty() => format!("{stem} (restored).{ext}"),
         _ => format!("{label} (restored)"),
@@ -317,7 +317,7 @@ fn suggested_rename(label: &str) -> String {
 /// `parent_missing` conflict case, where `vault::resolve_in` would error on
 /// `canonicalize`). `rel` was produced by `resolve_in` at delete time, so it is
 /// already normalized; the traversal check is belt-and-suspenders.
-fn resolve_target(root_opt: &Option<String>, rel: &str) -> Result<PathBuf, VaultError> {
+pub fn resolve_target(root_opt: &Option<String>, rel: &str) -> Result<PathBuf, VaultError> {
     if rel.split('/').any(|c| c == "..") {
         return Err(VaultError::Invalid("Restore path traversal".into()));
     }

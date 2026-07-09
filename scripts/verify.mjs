@@ -29,6 +29,7 @@ const steps = [
       '--test', 'stt_roundtrip',
       '--test', 'capture_roundtrip',
       '--test', 'vault_io_sanity',
+      '--test', 'recycle_bin',
       '--test', 'transcode_integration', // all #[ignore] → compiles, runs 0
     ],
   },
