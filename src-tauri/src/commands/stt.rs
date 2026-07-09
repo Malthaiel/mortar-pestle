@@ -41,8 +41,8 @@ use tauri_plugin_opener::OpenerExt;
 
 use crate::commands::downloads_history::{now_ms, record as record_history, HistoryRecord};
 use crate::stt::client::{
-    CachedModelInfo, Final, HotkeysSnapshot, ModelLoaded, Progress, ProtoError, Segment, SttClient,
-    SttError, Vu,
+    CachedModelInfo, Diarization, Final, HotkeysSnapshot, ModelLoaded, Progress, ProtoError,
+    Segment, SttClient, SttError, Vu,
 };
 use crate::stt::supervisor;
 
@@ -77,11 +77,39 @@ pub enum SttEvent {
     Progress { pct: f64 },
     /// `vu` engine event — input RMS level during dictation (Phase 2 SF1), ~20–30 Hz.
     Vu { rms: f64 },
+    /// `diarization` engine event — the terminal batch result of `diarize_file`
+    /// (sub-plan 6 SF2). camelCase for the frontend, like `Segment`.
+    Diarization {
+        #[serde(rename = "numSpeakers")]
+        num_speakers: i32,
+        segments: Vec<DiarSpanOut>,
+        clusters: Vec<DiarClusterOut>,
+    },
     /// An engine `error` event OR a turn-level relay error.
     Error { code: String, message: String },
     /// Relay terminator — always the last event for a streaming command (the
     /// claude.rs `Done` analog). `ok = false` when ended by an error / disconnect.
     Done { ok: bool },
+}
+
+/// Frontend-facing diarization span (camelCase). The client mirror carries snake_case
+/// wire bytes; this is the re-cased shape the ScrimViewer / `diarize.js` consume.
+#[derive(Clone, Serialize)]
+pub struct DiarSpanOut {
+    #[serde(rename = "t0Ms")]
+    t0_ms: u64,
+    #[serde(rename = "t1Ms")]
+    t1_ms: u64,
+    #[serde(rename = "clusterId")]
+    cluster_id: i32,
+}
+
+/// Frontend-facing cluster mean embedding (camelCase key; the vector stays raw f32).
+#[derive(Clone, Serialize)]
+pub struct DiarClusterOut {
+    #[serde(rename = "clusterId")]
+    cluster_id: i32,
+    embedding: Vec<f32>,
 }
 
 // ── Helpers (capture.rs idiom) ───────────────────────────────────────────────
@@ -229,6 +257,96 @@ pub async fn stt_transcribe_file(path: String, on_event: Channel<SttEvent>) -> R
                     break;
                 }
                 // echo / unknown — ignore (mirrors claude.rs's `_ => {}` default arm).
+                _ => {}
+            },
+            // Fell behind the bus — drop the gap and keep listening.
+            Err(RecvError::Lagged(_n)) => {}
+            // Client torn down mid-stream.
+            Err(RecvError::Closed) => {
+                let _ = on_event.send(SttEvent::Error {
+                    code: "disconnected".into(),
+                    message: "stt engine disconnected".into(),
+                });
+                let _ = on_event.send(SttEvent::Done { ok: false });
+                break;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// `stt_diarize_file` — offline speaker-diarize the audio at `path`, relaying model-fetch
+/// `progress` over `on_event` until the terminal `diarization` batch (or `error`).
+/// `max_speakers` caps the cluster count to the roster size (>0 forces exactly that many;
+/// <=0 = auto-threshold). Independent of the loaded whisper model — the sidecar owns its
+/// own diarization ONNX models — so unlike `stt_transcribe_file` there is NO pre-load step.
+/// Mirrors `stt_transcribe_file`'s relay shape; the single `diarization` event carries the
+/// full result (speaker count + start-sorted spans + per-cluster mean embeddings).
+#[tauri::command]
+pub async fn stt_diarize_file(
+    path: String,
+    max_speakers: i32,
+    on_event: Channel<SttEvent>,
+) -> Result<(), String> {
+    use tokio::sync::broadcast::error::RecvError;
+
+    let client = require_client()?;
+
+    // Subscribe BEFORE the request so no early progress / the terminal event is missed.
+    let mut rx = client.subscribe();
+
+    let args = serde_json::json!({ "path": path, "max_speakers": max_speakers });
+    client
+        .request("diarize_file", args)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Relay `progress` until the terminal `diarization` / `error`, mirroring
+    // `stt_transcribe_file`'s recv()/Lagged/Closed handling.
+    loop {
+        match rx.recv().await {
+            Ok(ev) => match ev.event.as_str() {
+                "progress" => {
+                    if let Ok(p) = serde_json::from_value::<Progress>(ev.data) {
+                        let _ = on_event.send(SttEvent::Progress { pct: p.pct });
+                    }
+                }
+                "diarization" => {
+                    if let Ok(d) = serde_json::from_value::<Diarization>(ev.data) {
+                        let _ = on_event.send(SttEvent::Diarization {
+                            num_speakers: d.num_speakers,
+                            segments: d
+                                .segments
+                                .into_iter()
+                                .map(|s| DiarSpanOut {
+                                    t0_ms: s.t0_ms,
+                                    t1_ms: s.t1_ms,
+                                    cluster_id: s.cluster_id,
+                                })
+                                .collect(),
+                            clusters: d
+                                .clusters
+                                .into_iter()
+                                .map(|c| DiarClusterOut {
+                                    cluster_id: c.cluster_id,
+                                    embedding: c.embedding,
+                                })
+                                .collect(),
+                        });
+                    }
+                    let _ = on_event.send(SttEvent::Done { ok: true });
+                    break;
+                }
+                "error" => {
+                    let (code, message) = serde_json::from_value::<ProtoError>(ev.data)
+                        .map(|e| (e.code, e.message))
+                        .unwrap_or_else(|_| ("internal".into(), "stt engine error".into()));
+                    let _ = on_event.send(SttEvent::Error { code, message });
+                    let _ = on_event.send(SttEvent::Done { ok: false });
+                    break;
+                }
+                // echo / segment / final / model_loaded / vu / unknown — not relevant to
+                // a diarize pass; ignore (mirrors claude.rs's `_ => {}` default arm).
                 _ => {}
             },
             // Fell behind the bus — drop the gap and keep listening.

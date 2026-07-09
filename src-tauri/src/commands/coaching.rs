@@ -139,8 +139,13 @@ fn prune_comms_cache(dir: &Path) {
 /// atomically on success. The cache key is the recording's canonical path + mtime, so a
 /// re-extract of the same file is a no-op fast-path (the heavy, re-runnable pass is STT,
 /// not extraction). Mirrors `video_transcode::extract_subs_sync`.
+///
+/// `track` (sub-plan 6 SF2) optionally selects a single 0-based audio stream via
+/// `-map 0:a:<track>` — the OBS isolated-track layout carries mic / Discord comms on
+/// separate streams. Omitted / negative = the previous whole-audio downmix (sub-plan 4
+/// callers are byte-identical: `track: None` folds into the cache key exactly as before).
 #[tauri::command]
-pub async fn coaching_extract_audio(video: String) -> Result<String, VaultError> {
+pub async fn coaching_extract_audio(video: String, track: Option<i32>) -> Result<String, VaultError> {
     if video.is_empty() {
         return Err(VaultError::Invalid("path required".into()));
     }
@@ -153,14 +158,17 @@ pub async fn coaching_extract_audio(video: String) -> Result<String, VaultError>
     let dir = comms_cache_dir()?;
     prune_comms_cache(&dir);
 
-    let hash = compute_hash(&canonical.to_string_lossy(), None, mtime_ms_for(&canonical));
+    // Fold the selected track into the cache key (compute_hash's `audio` slot) so
+    // different tracks of one file don't collide. `None` → the pre-SF2 key verbatim.
+    let sel = track.filter(|t| *t >= 0);
+    let hash = compute_hash(&canonical.to_string_lossy(), sel.map(|t| t as i64), mtime_ms_for(&canonical));
     let out_path = dir.join(format!("{hash}.wav"));
     if out_path.exists() {
         return Ok(out_path.to_string_lossy().into_owned());
     }
     let partial = out_path.with_extension("wav.part");
 
-    let args: Vec<String> = vec![
+    let mut args: Vec<String> = vec![
         "-hide_banner".into(),
         "-loglevel".into(),
         "error".into(),
@@ -168,6 +176,13 @@ pub async fn coaching_extract_audio(video: String) -> Result<String, VaultError>
         // `\\?\`-strip: canonicalize() hands ffmpeg a Windows verbatim path it
         // rejects as "Invalid argument". Mirrors video_transcode.rs:206/410.
         crate::tool_path::native_str(&canonical.to_string_lossy()),
+    ];
+    // Optional single-track select — must precede the output options.
+    if let Some(t) = sel {
+        args.push("-map".into());
+        args.push(format!("0:a:{t}"));
+    }
+    args.extend([
         "-vn".into(),
         "-ac".into(),
         "1".into(),
@@ -177,7 +192,7 @@ pub async fn coaching_extract_audio(video: String) -> Result<String, VaultError>
         "wav".into(),
         "-y".into(),
         partial.display().to_string(),
-    ];
+    ]);
 
     let output = TokioCommand::new(crate::tool_path::resolve("ffmpeg"))
         .args(&args)

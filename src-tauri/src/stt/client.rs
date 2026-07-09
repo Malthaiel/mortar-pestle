@@ -258,6 +258,47 @@ pub struct DictationCommitted {
     pub text: String,
 }
 
+// ---------------------------------------------------------------------------
+// Scrim Coaching sub-plan 6 (SF2) speaker-diarization payloads — byte-identical
+// mirror of mortar-pestle-stt's protocol.rs (`DiarizeFileArgs` / `DiarSegment` /
+// `DiarCluster` / `Diarization`). `diarize_file {path, max_speakers}` answers with
+// ONE terminal `diarization` event (a batch, not streamed). snake_case, no
+// `rename_all`, like every STT payload. The drift gate (tests/stt_roundtrip.rs) pins
+// these; do NOT edit to "fix" a mismatch — fix the drifted side.
+// ---------------------------------------------------------------------------
+
+/// `diarize_file` request `args`. `path` = absolute audio path; `max_speakers` caps the
+/// cluster count to the roster size (>0 forces exactly that many; <=0 = auto-threshold).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiarizeFileArgs {
+    pub path: String,
+    pub max_speakers: i32,
+}
+
+/// One diarization span in the `diarization` event: millisecond bounds + the 0-based
+/// speaker cluster id (the host maps clusters → player names via voiceprints, SF3).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiarSegment {
+    pub t0_ms: u64,
+    pub t1_ms: u64,
+    pub cluster_id: i32,
+}
+
+/// One detected cluster's mean voiceprint embedding (the host cosine-match key, SF3).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiarCluster {
+    pub cluster_id: i32,
+    pub embedding: Vec<f32>,
+}
+
+/// `diarization` event `data` — the terminal result of one `diarize_file`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Diarization {
+    pub num_speakers: i32,
+    pub segments: Vec<DiarSegment>,
+    pub clusters: Vec<DiarCluster>,
+}
+
 // ===========================================================================
 // Async NDJSON client.
 // ===========================================================================

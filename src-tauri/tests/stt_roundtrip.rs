@@ -38,10 +38,10 @@
 //! gate imports the client `EchoPayload` and the golden bytes still hold.
 
 use app_lib::stt::client::{
-    CachedModelInfo, DeleteModelArgs, DictationCommitted, DictationStarted, DownloadComplete,
-    DownloadModelArgs, EchoPayload, Event, Final, HotkeysSnapshot, LoadModelArgs, ModelLoaded,
-    Progress, ProtoError, Request, Response, Segment, Shortcut, StartDictationArgs,
-    StopDictationArgs, TranscribeFileArgs, Vu,
+    CachedModelInfo, DeleteModelArgs, DiarCluster, DiarSegment, Diarization, DiarizeFileArgs,
+    DictationCommitted, DictationStarted, DownloadComplete, DownloadModelArgs, EchoPayload, Event,
+    Final, HotkeysSnapshot, LoadModelArgs, ModelLoaded, Progress, ProtoError, Request, Response,
+    Segment, Shortcut, StartDictationArgs, StopDictationArgs, TranscribeFileArgs, Vu,
 };
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -423,4 +423,36 @@ fn dictation_committed_golden_roundtrips() {
     assert_eq!(d.text, "hello world");
     let made = DictationCommitted { text: "hello world".into() };
     assert_eq!(serde_json::to_string(&made).unwrap(), GOLDEN);
+}
+
+// ── Scrim Coaching sub-plan 6 (SF2) diarization payloads ─────────────────────
+// Goldens lifted verbatim from the engine's `protocol::tests::diarize_wire_shapes`;
+// the client mirror must produce byte-identical bytes (the cross-crate drift gate).
+
+#[test]
+fn diarize_wire_shapes() {
+    // Request args: declaration order path, max_speakers; i32 → bare int.
+    const ARGS: &str = r#"{"path":"/a/b.wav","max_speakers":5}"#;
+    let a: DiarizeFileArgs = assert_byte_roundtrip(ARGS);
+    assert_eq!(a.path, "/a/b.wav");
+    assert_eq!(a.max_speakers, 5);
+    let made = DiarizeFileArgs { path: "/a/b.wav".into(), max_speakers: 5 };
+    assert_eq!(serde_json::to_string(&made).unwrap(), ARGS);
+
+    // One span: bare u64 bounds + i32 cluster id.
+    const SEG: &str = r#"{"t0_ms":100,"t1_ms":2500,"cluster_id":2}"#;
+    let s: DiarSegment = assert_byte_roundtrip(SEG);
+    assert_eq!(s.cluster_id, 2);
+
+    // A cluster: embedding is a bare f32 array on the wire.
+    const CL: &str = r#"{"cluster_id":0,"embedding":[0.5,-0.25]}"#;
+    let c: DiarCluster = assert_byte_roundtrip(CL);
+    assert_eq!(c.embedding, vec![0.5, -0.25]);
+
+    // The terminal event payload nests the two.
+    const D: &str = r#"{"num_speakers":2,"segments":[{"t0_ms":0,"t1_ms":500,"cluster_id":0}],"clusters":[{"cluster_id":0,"embedding":[1.0]}]}"#;
+    let d: Diarization = assert_byte_roundtrip(D);
+    assert_eq!(d.num_speakers, 2);
+    assert_eq!(d.segments.len(), 1);
+    assert_eq!(d.clusters[0].embedding, vec![1.0]);
 }
