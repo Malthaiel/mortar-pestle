@@ -8,6 +8,7 @@ import { convertFileSrc } from '@tauri-apps/api/core';
 import { formatEventBullet } from './util/events.js';
 import { parseNutritionLog } from './util/nutritionTotals.js';
 import { parseWorkoutLog, parseCardioLog } from './util/fitnessLog.js';
+import { isAbsolutePath } from './util/paths.js';
 
 const __tauriInvoke = () =>
   typeof window !== 'undefined' && window.__TAURI_INTERNALS__
@@ -78,7 +79,7 @@ function absFromInput(p, base) {
   // drive-rooted (`C:\…` / `C:/…`), and UNC (`\\server\…`). Only a relative path
   // is joined against the media root. (Game Capture clips are the one consumer
   // that passes an absolute path — and on Windows it has a drive letter, not `/`.)
-  if (p.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(p) || p.startsWith('\\\\')) return p;
+  if (isAbsolutePath(p)) return p;
   return `${base || VAULT_ROOT_FOR_MEDIA}/${p}`;
 }
 export function mediaUrl(p, opts) {

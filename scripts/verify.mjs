@@ -35,6 +35,8 @@ const steps = [
   },
   { name: 'web: theme contrast (WCAG AA)', cmd: NPM, args: ['--prefix', 'web', 'run', 'check-themes'] },
   { name: 'web: drag math',                cmd: NPM, args: ['--prefix', 'web', 'run', 'check-drag'] },
+  { name: 'web: planner time/frame math',  cmd: NPM, args: ['--prefix', 'web', 'run', 'check-time'] },
+  { name: 'web: path marshalling',         cmd: NPM, args: ['--prefix', 'web', 'run', 'check-path'] },
   {
     name: 'js syntax check (pure utils)',
     cmd: process.execPath, // node
