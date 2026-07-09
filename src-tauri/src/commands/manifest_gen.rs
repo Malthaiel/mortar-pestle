@@ -12,6 +12,8 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
 use std::time::UNIX_EPOCH;
 
 use serde::Serialize;
@@ -237,9 +239,52 @@ fn content_manifest_file() -> std::path::PathBuf {
         .join("Infrastructure/.cache/vault_manifest.json")
 }
 
-/// Read-modify-write the manifest. `mutate` returns the entry-count delta
-/// (`vault_file_count` is adjusted by it), or `None` to abort without writing.
-fn patch_manifest_doc(mutate: impl FnOnce(&mut Vec<serde_json::Value>) -> Option<i64>) {
+type Mutation = Box<dyn FnOnce(&mut Vec<serde_json::Value>) -> Option<i64> + Send>;
+
+static PENDING: Mutex<Vec<Mutation>> = Mutex::new(Vec::new());
+static FLUSH_SCHEDULED: AtomicBool = AtomicBool::new(false);
+
+// How long to accumulate patches before one read-modify-write. A bulk in-app op
+// (a MAL/CSV import writing hundreds of cards, a rapid rename sweep) fires many
+// patches back-to-back; this window collapses them into a single rewrite → a
+// single watcher `manifest` event instead of N. Kept ≥ the watcher's 200 ms
+// debounce so the file settles before the event fires.
+const MANIFEST_FLUSH_MS: u64 = 300;
+
+/// Enqueue a manifest mutation; schedule one delayed flush if none is pending.
+/// `mutate` returns the entry-count delta (`vault_file_count` is adjusted by the
+/// batch total), or `None` to contribute no change. The mutation runs at flush
+/// time against the file's *final* content, which is correct — an upsert closure
+/// reading the on-disk file sees its settled state. Best-effort by design: if the
+/// app exits inside a flush window, pending patches drop and the next Python
+/// `manifest_rebuild.py` reconciles.
+fn patch_manifest_doc(
+    mutate: impl FnOnce(&mut Vec<serde_json::Value>) -> Option<i64> + Send + 'static,
+) {
+    PENDING
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .push(Box::new(mutate));
+    if FLUSH_SCHEDULED.swap(true, Ordering::SeqCst) {
+        return; // a flush is already scheduled; it will drain what we just pushed
+    }
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(MANIFEST_FLUSH_MS)).await;
+        FLUSH_SCHEDULED.store(false, Ordering::SeqCst);
+        flush_manifest_patches();
+    });
+}
+
+/// Drain PENDING and apply every queued mutation in ONE read-modify-write.
+/// Closures compose: applying them in insertion order to one freshly-read `doc`
+/// yields the same result as running each with its own read-modify-write, so the
+/// Python-owned rich fields (type, domain, headings, outbound_links, …) survive
+/// exactly as they do under single writes.
+fn flush_manifest_patches() {
+    let batch: Vec<Mutation> = std::mem::take(&mut *PENDING.lock().unwrap_or_else(|e| e.into_inner()));
+    if batch.is_empty() {
+        return;
+    }
     let path = content_manifest_file();
     let Ok(text) = fs::read_to_string(&path) else { return };
     let Ok(mut doc) = serde_json::from_str::<serde_json::Value>(&text) else {
@@ -249,10 +294,15 @@ fn patch_manifest_doc(mutate: impl FnOnce(&mut Vec<serde_json::Value>) -> Option
     let Some(entries) = doc.get_mut("entries").and_then(|e| e.as_array_mut()) else {
         return;
     };
-    let Some(delta) = mutate(entries) else { return };
-    if delta != 0 {
+    let mut total_delta: i64 = 0;
+    for mutate in batch {
+        if let Some(d) = mutate(entries) {
+            total_delta += d;
+        }
+    }
+    if total_delta != 0 {
         if let Some(n) = doc.get("vault_file_count").and_then(|v| v.as_i64()) {
-            doc["vault_file_count"] = serde_json::Value::from((n + delta).max(0));
+            doc["vault_file_count"] = serde_json::Value::from((n + total_delta).max(0));
         }
     }
     match serde_json::to_string(&doc) {

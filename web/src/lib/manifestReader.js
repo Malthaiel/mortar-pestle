@@ -15,6 +15,7 @@ import { invoke, subscribeEvents } from '../api.js';
 const MANIFEST_PATH = 'Infrastructure/.cache/vault_manifest.json';
 
 let _cache = null;
+let _lastText = null; // raw JSON text the current _cache was parsed from
 let _loadPromise = null;
 const _subs = new Set();
 let _watching = false;
@@ -27,7 +28,9 @@ async function loadManifest() {
       const result = await invoke('vault_read_file', { path: MANIFEST_PATH });
       const text = typeof result === 'string' ? result : result?.content;
       if (!text) throw new Error('Empty manifest response');
+      if (text === _lastText && _cache) return _cache; // unchanged bytes → skip JSON.parse
       _cache = JSON.parse(text);
+      _lastText = text;
       return _cache;
     } finally {
       _loadPromise = null;
@@ -41,9 +44,13 @@ function ensureWatcher() {
   _watching = true;
   subscribeEvents((name) => {
     if (name !== 'manifest') return;
-    _cache = null; // invalidate; the re-fetch below repopulates
+    const prev = _cache;
+    _cache = null; // force loadManifest to re-fetch
     loadManifest()
-      .then((d) => { for (const fn of _subs) fn(d); })
+      // Only re-render consumers when the content actually changed. The
+      // text-equality guard in loadManifest returns the same object identity for
+      // a byte-identical re-fetch, so `d !== prev` is false → no wasted rebuild.
+      .then((d) => { if (d !== prev) for (const fn of _subs) fn(d); })
       .catch((err) => console.error('[manifestReader] refresh failed', err));
   });
 }
