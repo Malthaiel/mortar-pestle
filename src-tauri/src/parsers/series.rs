@@ -655,15 +655,26 @@ pub fn list_series() -> Result<Vec<SeriesSummary>, VaultError> {
             continue;
         }
         let abs = dir.join(&entry);
-        let Ok(text) = fs::read_to_string(&abs) else {
-            continue;
-        };
-        let (meta, body) = parse_frontmatter(&text);
         let stat = match fs::metadata(&abs) {
             Ok(s) => s,
             Err(_) => continue,
         };
-        let franchise = is_franchise(&meta);
+        // Cheap cached frontmatter (8KB head) decides the branch.
+        let cached = crate::parsers::frontmatter_cache::get_frontmatter(&abs);
+        let franchise = is_franchise(&cached);
+        // Franchise rollup needs the body's season sections, and a many-season
+        // franchise's frontmatter can exceed the cache's 8KB head window — so
+        // re-read it in full. Non-franchise entries never touch the body, so the
+        // cache hit means zero body reads.
+        let (meta, body) = if franchise {
+            let text = match fs::read_to_string(&abs) {
+                Ok(t) => t,
+                Err(_) => continue,
+            };
+            parse_frontmatter(&text)
+        } else {
+            (cached, String::new())
+        };
         let (status, watched_value, episodes_total, season_names, related_ids, re_watches);
         if franchise {
             let sections = parse_franchise_sections(&body);

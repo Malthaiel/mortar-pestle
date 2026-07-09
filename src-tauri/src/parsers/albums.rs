@@ -380,11 +380,11 @@ pub fn list_albums() -> Result<Vec<AlbumSummary>, VaultError> {
             continue;
         }
         let abs = dir.join(&entry);
-        let Ok(text) = fs::read_to_string(&abs) else {
-            continue;
-        };
-        let (meta, _body) = parse_frontmatter(&text);
+        // mtime-keyed cache: reads only the frontmatter head (8KB) and serves a
+        // cached parse when the card's mtime is unchanged — no body read. The
+        // album summary never uses the body, so this is a full win.
         let stat = fs::metadata(&abs)?;
+        let meta = crate::parsers::frontmatter_cache::get_frontmatter(&abs);
         let name = entry.trim_end_matches(".md").to_string();
         let tracks_present = count_present_tracks(&meta);
         out.push(AlbumSummary {
