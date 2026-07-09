@@ -12,7 +12,7 @@
 
 use std::fs;
 use std::io::Read;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -173,6 +173,29 @@ pub fn app_self_set_poll_interval(secs: u64) -> Result<(), String> {
     Ok(())
 }
 
+/// The pure 3-rename revert swap, factored out for testing. `current` is the
+/// live binary, `prev` the previous one, `tmp` a scratch path in the same dir.
+/// On success `current` ends up byte-identical to the old `prev`. On any rename
+/// failure it rolls back best-effort and returns the surfaced error.
+fn revert_swap(current: &Path, prev: &Path, tmp: &Path) -> Result<(), String> {
+    if !prev.exists() {
+        return Err("no previous binary to revert to".into());
+    }
+    if let Err(e) = fs::rename(current, tmp) {
+        return Err(format!("revert step 1 (current -> tmp): {e}"));
+    }
+    if let Err(e) = fs::rename(prev, current) {
+        let _ = fs::rename(tmp, current);
+        return Err(format!("revert step 2 (prev -> current): {e}"));
+    }
+    if let Err(e) = fs::rename(tmp, prev) {
+        let _ = fs::rename(current, prev);
+        let _ = fs::rename(tmp, current);
+        return Err(format!("revert step 3 (tmp -> prev): {e}"));
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn app_self_revert(app: AppHandle) -> Result<(), String> {
     let current = BINARY_PATH
@@ -184,25 +207,8 @@ pub fn app_self_revert(app: AppHandle) -> Result<(), String> {
         .ok_or_else(|| "no parent dir".to_string())?
         .to_path_buf();
     let prev = dir.join("mortar-pestle.prev");
-    if !prev.exists() {
-        return Err("no previous binary to revert to".into());
-    }
     let tmp = dir.join("mortar-pestle.tmp_revert");
-
-    // 3-rename atomic swap. Each rename is atomic on the same filesystem;
-    // partial failure rolls back best-effort and surfaces the original error.
-    if let Err(e) = fs::rename(&current, &tmp) {
-        return Err(format!("revert step 1 (current -> tmp): {e}"));
-    }
-    if let Err(e) = fs::rename(&prev, &current) {
-        let _ = fs::rename(&tmp, &current);
-        return Err(format!("revert step 2 (prev -> current): {e}"));
-    }
-    if let Err(e) = fs::rename(&tmp, &prev) {
-        let _ = fs::rename(&current, &prev);
-        let _ = fs::rename(&tmp, &current);
-        return Err(format!("revert step 3 (tmp -> prev): {e}"));
-    }
+    revert_swap(&current, &prev, &tmp)?;
     app.restart();
 }
 
@@ -257,7 +263,7 @@ pub fn spawn_poll(app: AppHandle) {
 mod tests {
     use super::*;
     use std::io::Write;
-    use tempfile::NamedTempFile;
+    use tempfile::{tempdir, NamedTempFile};
 
     #[test]
     fn hash_file_distinct_for_different_content() {
@@ -288,5 +294,54 @@ mod tests {
     fn prefix_handles_short_hash() {
         assert_eq!(prefix("abc"), "abc");
         assert_eq!(prefix("0123456789abcdef0123"), "0123456789abcdef");
+    }
+
+    #[test]
+    fn revert_swap_restores_prev_byte_identically() {
+        let dir = tempdir().unwrap();
+        let current = dir.path().join("mortar-pestle");
+        let prev = dir.path().join("mortar-pestle.prev");
+        let tmp = dir.path().join("mortar-pestle.tmp_revert");
+        fs::write(&current, b"NEW-broken-build").unwrap();
+        fs::write(&prev, b"OLD-good-build").unwrap();
+
+        revert_swap(&current, &prev, &tmp).unwrap();
+
+        // current now holds the old good binary, byte-for-byte.
+        assert_eq!(fs::read(&current).unwrap(), b"OLD-good-build");
+        // prev holds the swapped-out new binary.
+        assert_eq!(fs::read(&prev).unwrap(), b"NEW-broken-build");
+        // scratch file is cleaned up.
+        assert!(!tmp.exists());
+    }
+
+    #[test]
+    fn revert_swap_missing_current_preserves_prev() {
+        // Partial failure: step 1 (current -> tmp) fails because current is absent.
+        // The previous binary MUST be left untouched — no data loss.
+        let dir = tempdir().unwrap();
+        let current = dir.path().join("mortar-pestle"); // intentionally not created
+        let prev = dir.path().join("mortar-pestle.prev");
+        let tmp = dir.path().join("mortar-pestle.tmp_revert");
+        fs::write(&prev, b"OLD-good-build").unwrap();
+
+        let err = revert_swap(&current, &prev, &tmp).unwrap_err();
+        assert!(err.contains("step 1"), "expected a step-1 error, got: {err}");
+        assert_eq!(fs::read(&prev).unwrap(), b"OLD-good-build"); // untouched
+        assert!(!tmp.exists());
+        assert!(!current.exists());
+    }
+
+    #[test]
+    fn revert_swap_no_prev_is_rejected() {
+        let dir = tempdir().unwrap();
+        let current = dir.path().join("mortar-pestle");
+        let prev = dir.path().join("mortar-pestle.prev"); // absent
+        let tmp = dir.path().join("mortar-pestle.tmp_revert");
+        fs::write(&current, b"NEW").unwrap();
+
+        let err = revert_swap(&current, &prev, &tmp).unwrap_err();
+        assert!(err.contains("no previous binary"), "got: {err}");
+        assert_eq!(fs::read(&current).unwrap(), b"NEW"); // untouched
     }
 }
