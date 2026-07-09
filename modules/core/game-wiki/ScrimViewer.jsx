@@ -199,7 +199,7 @@ function NotesEditor({ bullets, onChange, onCommit, storageKey, overlay, slim, d
       {/* One compact control row: timer (slim-only — the clock keeps counting hidden,
           epoch math in useStopwatch) + Dictate. No "Notes" label — the list is self-evident. */}
       {(slim || (overlay && onDictate)) && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <div className="candy-center-row" style={{ gap: 8, marginBottom: 8 }}>
           {slim && <TimerControls sw={sw} />}
           {overlay && onDictate && (
             <button className="candy-btn" data-shape="chip" onClick={onDictate}
