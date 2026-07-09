@@ -1264,7 +1264,7 @@ export default function ScrimViewer({ path, accent, overlay = false }) {
                 {hasComms
                   ? <CommsTranscriptView key={`ct:${commsBody}:${commsRelabelKey}`} sidecarPath={sidecarPath(path, m.n, 'comms')}
                       roster={coachedRoster} onReassign={(cid, name) => reassignCluster(idx, cid, name)} />
-                  : <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Not yet extracted — click <strong>Extract Comms</strong>.</div>}
+                  : <div className="text-trim" style={{ fontSize: 12, color: 'var(--text-muted)' }}>Not yet extracted — click <strong>Extract Comms</strong>.</div>}
               </div>
               {hasComms && populated && coachedSide != null && (
                 <div style={{ marginTop: 8 }}>
@@ -1300,16 +1300,16 @@ export default function ScrimViewer({ path, accent, overlay = false }) {
                     <span className="candy-face">Classify {enemyTeam || 'enemy'}</span>
                   </button>
                 </div>
-                {!populated && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: candyGap(4) }}>Pull match data first (Run Process), then Classify.</div>}
-                {populated && coachedSide == null && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: candyGap(4) }}>Fill the <strong>Amber</strong> / <strong>Sapphire</strong> fields above with each team so the sides resolve.</div>}
+                {!populated && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: candyGap(8) }}>Pull match data first (Run Process), then Classify.</div>}
+                {populated && coachedSide == null && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: candyGap(8) }}>Fill the <strong>Amber</strong> / <strong>Sapphire</strong> fields above with each team so the sides resolve.</div>}
                 {hasAuto && (
-                  <div style={{ marginTop: candyGap(4) }}>
+                  <div style={{ marginTop: candyGap(8) }}>
                     <div style={{ ...labelStyle, color: 'var(--accent)', marginBottom: 2 }}>{coachedTeam || 'Coached'}</div>
                     <AutoClassificationView key={autoBody} sidecarPath={sidecarPath(path, m.n, 'autoclass')} team={coachedTeam} />
                   </div>
                 )}
                 {hasEnemyAuto && (
-                  <div style={{ marginTop: candyGap(4) }}>
+                  <div style={{ marginTop: candyGap(8) }}>
                     <div style={{ ...labelStyle, color: 'var(--text-muted)', marginBottom: 2 }}>{enemyTeam} · enemy</div>
                     <AutoClassificationView key={enemyAutoBody} sidecarPath={sidecarPath(path, m.n, 'autoclass')} team={enemyTeam} />
                   </div>

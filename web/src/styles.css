@@ -3633,6 +3633,20 @@ button.button-misc-card.is-expanded .card-chevron {
 }
 body[data-anim-button-depth="off"] { --candy-center-on: 0; }
 
+/* ── Text line-height slack trim ─────────────────────────────────────────── *
+ * A text row's half-leading puts its painted bottom ABOVE its box bottom →
+ * negative band → visible gap > raw gap (the Scrim-body 9.4 slack row). text-
+ * box-trim trims the half-leading of the element's OWN line boxes (NOT
+ * inherited — set it on the line-box-generating element, not a block wrapper
+ * with only block children, or it no-ops). edge:text text = the text box
+ * (ascent + descent), trims ONLY the half-leading, KEEPS the descent → band 0
+ * → gapAfterBand = raw gap. cap-alphabetic trims to the alphabetic BASELINE —
+ * it strips the descent, which then overflows the box → band flips positive →
+ * gapAfterBand drops UNDER the raw gap (empirical 9.4→3.9, not →8). trim-end =
+ * bottom only (surgical). Per-class only; probe CSS.supports first (Chromium
+ * 133+, WebView2 evergreen). See DESIGN.md § Spacing. */
+.text-trim { text-box-trim: trim-end; text-box-edge: text text; }
+
 /* ── Cinema dark-token scope (video player chrome) ──────────────────────── *
  * Wraps the in-window video modal + PiP so the candy chrome renders DARK in
  * BOTH app themes (cinematic, over black video). Re-declares ONLY the tokens
