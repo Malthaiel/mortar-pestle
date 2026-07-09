@@ -19,9 +19,9 @@ Run the **P0** block first; run **002 before any test plan (020–024)**; the re
 | 006 | Add repo-root CLAUDE.md + .env.example | dx | P1 | S | LOW | — | DONE (d355427; verify.mjs green; 22 env vars; .gitignore !.env.example negation; courier drift caught: proxy.rs 2nd loopback surface + stale --tests + sha1/sha2 no inline comment) |
 | 007 | Delete dead endpoint-adapter + redirect SDK machinery | tech-debt | P1 | S | LOW | — | DONE (endpoint-adapter.js deleted + vault.endpoint/registerRedirect/_redirects/useRouterRedirects removed; music revealInFiles → direct invoke; npm web build green; courier factual nit: MainApp exists at App.jsx:93 but doesn't consume the hook) |
 | 018 | Correct the stale README Status section | docs | P1 | S | LOW | — | DONE (Game Capture = sole Windows gap; browser/STT live; overlay mixed host+Capture+STT live / Browser+Scrim pending; Broadcast mentioned; drift on browser_windows.rs +96 re-verified as additions not regression) |
-| 009 | Move full-vault manifest regen off the boot path | perf | P1 | M | MED | — | TODO |
-| 010 | Parallelize + lazy-load module boot (xterm/react-markdown) | perf | P1 | M | MED | — | TODO |
-| 011 | Route album/series lists through the frontmatter cache | perf | P1 | M | LOW | — | TODO |
+| 009 | Move full-vault manifest regen off the boot path | perf | P1 | M | MED | — | DONE (freshness gate = count + max_mtime_ms metadata-only walk; head-bytes read in generate_for; shared md_files walker; 5 unit tests; ab747a4) |
+| 010 | Parallelize + lazy-load module boot (xterm/react-markdown) | perf | P1 | M | MED | — | DONE (Promise.all fetch + ordered register pass; GameWikiPage + TerminalRouter lazy-split into own async chunks; grep self-check clean; 19f97ed) |
+| 011 | Route album/series lists through the frontmatter cache | perf | P1 | M | LOW | — | DONE (list_albums + list_series via frontmatter_cache::get_frontmatter; franchise still full-reads body; no new list tests — global library-root racy under parallel cargo, courier-authorized fallback; existing tests + verify.mjs green; 1526ac8) |
 | 014 | Fix the Tauri `listen()` unlisten leak (4 sites) | bug | P1 | S | LOW | — | TODO |
 | 020 | Credentials crypto roundtrip + idle-lock tests | tests | P1 | S | LOW | 002 | DONE |
 | 021 | Recycle-bin restore characterization tests | tests | P1 | M | LOW | 002 | DONE (primitives; e2e restore deferred to 023) |
