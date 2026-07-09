@@ -50,6 +50,14 @@ export function sidecarPath(scrimPath, matchN, kind = 'matchdata') {
   return `${SCRIM_DIR}/.${prefix}.${base} — Match ${matchN}.json`;
 }
 
+// Scrim-level twin of sidecarPath (no per-match suffix): the VOD Review recording is one file
+// for the whole scrim, so its sidecars key off the scrim base alone (sub-plan 11).
+// `…/Scrim/(06-16-26) A VS B` → `…/Scrim/.vodcomms.(06-16-26) A VS B.json` (`kind: 'vodreport'` → `.vodreport.…`).
+export function scrimSidecarPath(scrimPath, kind) {
+  const base = String(scrimPath).replace(/\.md$/, '').split('/').pop();
+  return `${SCRIM_DIR}/.${kind}.${base}.json`;
+}
+
 // Whole seconds → m:ss ("—" for missing/NaN).
 export function clock(s) {
   if (s == null || !Number.isFinite(Number(s))) return '—';

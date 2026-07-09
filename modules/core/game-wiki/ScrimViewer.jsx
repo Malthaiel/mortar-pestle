@@ -16,12 +16,14 @@ import CandySelect from '@host/components/ui/CandySelect.jsx';
 import { candyGap } from '@host/util/candy.js';
 import { parseScrim, serializeScrim, mergeScrim, appendMatch, getNotes, ensureNotes } from './scrimSchema.js';
 import MatchViewPopup from './MatchViewPopup.jsx';
-import { sidecarPath, renderSummary, setMatchDataBody, MATCH_DATA_PLACEHOLDER, clock, extractMeta, fmtLocalTime, extractSpatial } from './matchData.js';
+import { sidecarPath, scrimSidecarPath, renderSummary, setMatchDataBody, MATCH_DATA_PLACEHOLDER, clock, extractMeta, fmtLocalTime, extractSpatial } from './matchData.js';
 import { compileNotes, renderCoachingSummary, setCoachingSummaryBody, parseTimedNote, formatTimedBullet, sortByTimeAsc, secFromClock } from './noteCompile.js';
 import { setCommsTranscriptBody, renderCommsSummary, parseSegments, parseCommsSidecar, buildCommsSidecar } from './commsCompile.js';
 import { alignDiarization, mergeTranscripts, labelForCluster, speakerColor } from './diarize.js';
 import { matchClusters, enrollPrint, parseVoiceprints, DEFAULT_THRESHOLD } from './voiceprints.js';
 import { auditSilentDeaths } from './deathAudit.js';
+import { buildTranscriptBlock, generateReport } from './vodReport.js';
+import VodReportView from './VodReportView.jsx';
 import CommsTranscriptView from './CommsTranscriptView.jsx';
 import { useSettings } from '@host/hooks/useSettings.js';
 import { buildMomentsDigest, classifyMoments, reconcile, renderAutoClassification, setAutoClassificationBody, sideFromTeamFields, mergedItemToBullet } from './autoClassify.js';
@@ -472,6 +474,10 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
   const [runningN, setRunningN] = useState(null); // match.n with an in-flight Run Process
   const [commsN, setCommsN] = useState(null); // match.n with an in-flight Extract Comms
   const [commsPhase, setCommsPhase] = useState(''); // status label while extracting/transcribing
+  const [vodBusy, setVodBusy] = useState(false); // scrim-level Extract VOD Comms in flight (sub-plan 11)
+  const [vodPhase, setVodPhase] = useState(''); // status label while extracting the VOD Review
+  const [reporting, setReporting] = useState(false); // Generate Report (Claude) in flight (sub-plan 11)
+  const [vodReportOpen, setVodReportOpen] = useState(false); // VodReportView popup open
   const [sttUp, setSttUp] = useState(true); // speech engine reachable (stt_status non-null)
   const [matchPopup, setMatchPopup] = useState(null); // { n } of the match whose full view is open
   const [review, setReview] = useState(null); // { idx, teamName, items } — active merge-review modal
@@ -505,6 +511,9 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
   const runningRef = useRef(false); // Run Process double-fire guard
   const commsRef = useRef(false); // Extract Comms double-fire guard
   const commsCancelledRef = useRef(false); // set on cancel → the terminal handler skips the write
+  const vodRef = useRef(false); // Extract VOD Comms double-fire guard (sub-plan 11)
+  const vodCancelledRef = useRef(false); // set on VOD cancel → the terminal handler skips the write
+  const reportRef = useRef(false); // Generate Report double-fire guard (sub-plan 11)
   const saveTimer = useRef(null);
   const savingRef = useRef(false);
   const pendingRef = useRef(false);
@@ -843,6 +852,182 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
     setCommsPhase('Cancelling…');
     invoke('stt_cancel').catch(() => {});
   }, []);
+
+  // Extract VOD Comms (sub-plan 11) — the scrim-level twin of extractComms for the post-match VOD
+  // Review recording. Same two-track diarize pipeline (mic track = coach/you, Discord track = the
+  // combined team), but scrim-scoped: source = scrim.scrim['VOD Review'], one .vodcomms sidecar for
+  // the whole scrim + a `- VOD Comms:` pointer bullet under ## Scrim (which can't hold ### subsections,
+  // so no opaque body — sidecar + KV pointer only). No speaker-blind path: the comms track is required.
+  // ponytail: the loadModel/transcribeWav/diarizeWav helpers are copied from extractComms rather than
+  // hoisting shared ones — leaving the shipped extractComms diarize gate untouched. Dedupe both onto
+  // shared component-scope helpers if a third caller ever appears.
+  const extractVodComms = useCallback(async () => {
+    if (vodRef.current) return;
+    const video = String(scrimRef.current?.scrim?.['VOD Review'] || '').trim();
+    if (!video) { notify('error', 'No VOD recording', 'Set a VOD Review (.mp4) for this scrim first.'); return; }
+    let up = false;
+    try { up = (await invoke('stt_status')) != null; } catch { up = false; }
+    if (!up) { setSttUp(false); notify('error', 'Speech engine unavailable', 'The transcription engine is not running — reopen the app and try again.'); return; }
+
+    const fmNow = scrimRef.current?.frontmatter || {};
+    const defs = loadTrackDefaults();
+    const commsIdx = trackIndex(fmNow['Comms Track'] ?? defs.comms);
+    const micIdx = trackIndex(fmNow['Mic Track'] ?? defs.mic);
+    if (commsIdx == null) { notify('error', 'No comms track', 'Set the Comms Track (the Discord audio track index) so the team voices can be separated.'); return; }
+
+    vodRef.current = true; vodCancelledRef.current = false;
+    setVodBusy(true); setVodPhase('Extracting audio…');
+    try {
+      clearTimeout(saveTimer.current);
+      if (serializeScrim(scrimRef.current) !== lastSavedRef.current) await doSave();
+
+      // transcribe_file requires a model loaded first (the sidecar does not auto-load).
+      const loadModel = () => new Promise((resolve, reject) => {
+        let settled = false;
+        const fin = (fn, v) => { if (!settled) { settled = true; fn(v); } };
+        const lch = new Channel();
+        lch.onmessage = (ev) => {
+          if (ev.kind === 'model_loaded') fin(resolve);
+          else if (ev.kind === 'error') fin(reject, new Error(ev.message || 'model load failed'));
+          else if (ev.kind === 'done' && !ev.ok) fin(reject, new Error('model load failed'));
+        };
+        invoke('stt_load_model', { name: STT_MODEL, onEvent: lch }).catch((e) => fin(reject, e));
+      });
+      const transcribeWav = (wavPath, phaseLabel) => new Promise((resolve, reject) => {
+        let settled = false;
+        const fin = (fn, v) => { if (!settled) { settled = true; fn(v); } };
+        const segments = [];
+        const ch = new Channel();
+        ch.onmessage = (ev) => {
+          switch (ev.kind) {
+            case 'segment': segments.push({ t0Ms: ev.t0Ms, t1Ms: ev.t1Ms, text: ev.text ?? '' }); break;
+            case 'progress': setVodPhase(`${phaseLabel}… ${Math.round(ev.pct ?? 0)}%`); break;
+            case 'final': fin(resolve, { segments, finalText: ev.text ?? '' }); break;
+            case 'error': fin(reject, new Error(ev.message || 'transcription failed')); break;
+            case 'done': if (!ev.ok) fin(reject, new Error('transcription ended early')); break;
+            default: break;
+          }
+        };
+        invoke('stt_transcribe_file', { path: wavPath, onEvent: ch }).catch((e) => fin(reject, e));
+      });
+      const diarizeWav = (wavPath, maxSpeakers) => new Promise((resolve, reject) => {
+        let settled = false;
+        const fin = (fn, v) => { if (!settled) { settled = true; fn(v); } };
+        const ch = new Channel();
+        ch.onmessage = (ev) => {
+          switch (ev.kind) {
+            case 'progress': setVodPhase(`Identifying speakers… ${Math.round(ev.pct ?? 0)}%`); break;
+            case 'diarization': fin(resolve, { numSpeakers: ev.numSpeakers, segments: ev.segments || [], clusters: ev.clusters || [] }); break;
+            case 'error': fin(reject, new Error(ev.message || 'diarization failed')); break;
+            case 'done': if (!ev.ok) fin(reject, new Error('diarization ended early')); break;
+            default: break;
+          }
+        };
+        invoke('stt_diarize_file', { path: wavPath, maxSpeakers, onEvent: ch }).catch((e) => fin(reject, e));
+      });
+      const cancelled = () => vodCancelledRef.current;
+      const cancelNote = () => notify('success', 'VOD comms cancelled', 'Transcription was cancelled — nothing saved.');
+
+      setVodPhase('Extracting tracks…');
+      const micWav = micIdx != null ? await invoke('coaching_extract_audio', { video, track: micIdx }) : null;
+      const commsWav = await invoke('coaching_extract_audio', { video, track: commsIdx });
+
+      setVodPhase('Loading model…'); await loadModel();
+      let micSegments = [];
+      if (micWav) { setVodPhase('Transcribing coach… 0%'); micSegments = (await transcribeWav(micWav, 'Transcribing coach')).segments; }
+      if (cancelled()) { cancelNote(); return; }
+      setVodPhase('Transcribing team… 0%');
+      const commsSegments = (await transcribeWav(commsWav, 'Transcribing team')).segments;
+      if (cancelled()) { cancelNote(); return; }
+
+      // diarize the Discord track: fixed-K = coached roster size (caps phantom clusters), else auto (0).
+      const coachedTeam = fmNow['Coached Team'] || fmNow['Team 1'] || '';
+      const store = await readTeamStore(coachedTeam);
+      const diar = await diarizeWav(commsWav, (store.roster || []).length);
+      if (cancelled()) { cancelNote(); return; }
+
+      // Auto-LABEL clusters vs saved prints (no enrollment); unmatched → generic Speaker N (no prints yet).
+      const nameMap = matchClusters(diar.clusters || [], store.prints || {}, DEFAULT_THRESHOLD);
+      const aligned = alignDiarization(commsSegments, diar.segments || []);
+      const coachName = loadYourName() || 'Coach';
+      const merged = mergeTranscripts({ micSegments, commsSegments: aligned, micSpeaker: coachName, nameMap });
+
+      const scPath = scrimSidecarPath(path, 'vodcomms');
+      setVodPhase('Saving…');
+      await api.savePage(scPath, JSON.stringify(buildCommsSidecar({ segments: merged, clusters: diar.clusters || [], micSpeaker: coachName })), null, 'gamewiki');
+      const stamp = new Date().toISOString().slice(0, 10);
+      applyEdit((p) => ({ ...p, scrim: { ...p.scrim, 'VOD Comms': `extracted ${stamp} · ${merged.length} segments` } }));
+      flushSave();
+      const voices = diar.numSpeakers ?? (diar.clusters || []).length;
+      const named = Object.values(nameMap).filter(Boolean).length;
+      notify('success', 'VOD comms extracted', `${merged.length} segments · ${voices} voice${voices === 1 ? '' : 's'}${named ? ` · ${named} auto-named` : ''}.`);
+    } catch (e) {
+      if (!vodCancelledRef.current) notify('error', 'Extract VOD Comms failed', e?.message || String(e));
+    } finally {
+      vodRef.current = false; setVodBusy(false); setVodPhase('');
+    }
+  }, [path, doSave, readTeamStore, applyEdit, flushSave]);
+
+  const cancelVod = useCallback(() => {
+    if (!vodRef.current) return;
+    vodCancelledRef.current = true;
+    setVodPhase('Cancelling…');
+    invoke('stt_cancel').catch(() => {});
+  }, []);
+
+  // Generate Report (sub-plan 11) — read the cached .vodcomms transcript, have Claude (Opus, via the
+  // generic coaching_classify_match bridge) organize it into the report JSON, reconcile the coach's
+  // checkbox state onto it, persist the .vodreport sidecar + a `- VOD Report:` pointer bullet, and
+  // open VodReportView. Re-runnable without re-transcribing. priorActionItems stays [] until sub-plan
+  // 12 (Team Progress) feeds it — the follow-up block is empty-tolerant. Mirrors classify()'s backend
+  // resolution + sidecar reconcile discipline.
+  const generateVodReport = useCallback(async () => {
+    if (reportRef.current) return;
+    const commsPath = scrimSidecarPath(path, 'vodcomms');
+    let segments;
+    try { segments = parseCommsSidecar((await api.getRawFileMeta(commsPath, 'gamewiki')).content).segments; }
+    catch { notify('error', 'No VOD comms', 'Extract VOD Comms first — the report reads that transcript.'); return; }
+    if (!segments.length) { notify('error', 'Empty transcript', 'The VOD comms transcript has no segments to report on.'); return; }
+
+    reportRef.current = true; setReporting(true);
+    try {
+      const transcriptBlock = buildTranscriptBlock(segments);
+      const fm = scrimRef.current?.frontmatter || {};
+      const coachedTeam = fm['Coached Team'] || fm['Team 1'] || '';
+      const opponent = (fm['Team 1'] === coachedTeam ? fm['Team 2'] : fm['Team 1']) || '';
+
+      // resolve backend (mirror classify: honor settings.agents, fall back to key-detect)
+      const ag = settings?.agents || {};
+      let backend = ag.authBackend;
+      if (!backend) backend = (await invoke('design_get_api_key').catch(() => false)) ? 'api-key' : 'claude-cli';
+      const agents = { authBackend: backend, model: ag.model || 'opus', claudeCliPath: ag.claudeCliPath || '' };
+
+      // prior report → carry checkbox state across regenerates. priorActionItems (cross-scrim
+      // follow-ups) come from the Team Progress sidecar in sub-plan 12 — [] for now (empty-tolerant).
+      const scPath = scrimSidecarPath(path, 'vodreport');
+      let prior = null;
+      try { prior = JSON.parse((await api.getRawFileMeta(scPath, 'gamewiki')).content); } catch { /* first run */ }
+
+      const report = await generateReport(invoke, { transcriptBlock, teams: { opponent }, coachedTeam, priorActionItems: [], prior }, agents);
+      await api.savePage(scPath, JSON.stringify(report), null, 'gamewiki');
+
+      const stamp = new Date().toISOString().slice(0, 10);
+      const n = (report.actionItems || []).length;
+      applyEdit((p) => ({ ...p, scrim: { ...p.scrim, 'VOD Report': `generated ${stamp} · ${n} item${n === 1 ? '' : 's'}` } }));
+      flushSave();
+      setVodReportOpen(true);
+      notify('success', 'Report generated', `${n} action item${n === 1 ? '' : 's'}.`);
+    } catch (e) {
+      const msg = {
+        AUTH: ['AI backend not configured', 'Add an Anthropic API key or Claude CLI in Settings → Agents.'],
+        NETWORK: ['Network error', e?.message || 'Could not reach the model.'],
+        UPSTREAM: ['Model error', e?.message || 'The model returned an unexpected response.'],
+      }[e?.code] || ['Report failed', e?.message || String(e)];
+      notify('error', msg[0], msg[1]);
+    } finally {
+      reportRef.current = false; setReporting(false);
+    }
+  }, [path, settings, applyEdit, flushSave]);
 
   // Reassign a whole speaker cluster to a roster name (Speakers panel or an inline transcript
   // relabel). On an explicit name (not a clear) this ENROLLS/retrains the voiceprint from the
@@ -1205,6 +1390,43 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
               <MiniBtn icon={IconFolder} title="Select .mp4" onClick={async () => { const p = await pickFile(MP4_FILTERS); if (p) { setScrimField('VOD Review', p); flushSave(); } }} />
               {scrim.scrim['VOD Review'] && <MiniBtn icon={IconPlayCircle} title="Open recording" onClick={() => invoke('coaching_open_path', { path: scrim.scrim['VOD Review'] }).catch(() => {})} />}
             </>} />
+          <div className="candy-chip-row" style={{ marginTop: 8 }}>
+            <button className="candy-btn" data-shape="chip"
+              disabled={vodBusy || !scrim.scrim['VOD Review'] || !sttUp}
+              onClick={extractVodComms}
+              title={!scrim.scrim['VOD Review'] ? 'Set a VOD Review (.mp4) for this scrim first'
+                : !sttUp ? 'Speech engine unavailable — reopen the app'
+                  : 'Extract VOD Comms — transcribe + split voices in the review recording'}
+              style={vodBusy ? { opacity: 0.6, cursor: 'progress' } : undefined}>
+              <span className="candy-face">{vodBusy ? (vodPhase || 'Working…') : 'Extract VOD Comms'}</span>
+            </button>
+            {vodBusy && (
+              <button className="candy-btn" data-shape="chip" onClick={cancelVod} title="Cancel">
+                <span className="candy-face">×</span>
+              </button>
+            )}
+            <button className="candy-btn" data-shape="chip"
+              disabled={reporting || !scrim.scrim['VOD Comms'] || !aiConfigured}
+              onClick={generateVodReport}
+              title={!scrim.scrim['VOD Comms'] ? 'Extract VOD Comms first — the report reads that transcript'
+                : !aiConfigured ? 'Configure an AI backend in Settings → Agents (API key or Claude CLI)'
+                  : 'Generate Report — Claude organizes the review into an action list'}
+              style={reporting ? { opacity: 0.6, cursor: 'progress' } : undefined}>
+              <span className="candy-face">{reporting ? 'Asking Claude…' : 'Generate Report'}</span>
+            </button>
+            {scrim.scrim['VOD Report'] && (
+              <button className="candy-btn" data-shape="chip" onClick={() => setVodReportOpen(true)} title="Open the generated report">
+                <span className="candy-face">Open Report</span>
+              </button>
+            )}
+          </div>
+          {!vodBusy && !reporting && (scrim.scrim['VOD Comms'] || scrim.scrim['VOD Report']) && (
+            <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 4 }}>
+              {scrim.scrim['VOD Comms'] && <span>Comms: {scrim.scrim['VOD Comms']}</span>}
+              {scrim.scrim['VOD Comms'] && scrim.scrim['VOD Report'] && <span> · </span>}
+              {scrim.scrim['VOD Report'] && <span>Report: {scrim.scrim['VOD Report']}</span>}
+            </div>
+          )}
         </div>
         </>)}
 
@@ -1376,6 +1598,14 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
             matchN={matchPopup.n}
             accent={accent}
             onClose={() => setMatchPopup(null)}
+          />
+        )}
+
+        {vodReportOpen && (
+          <VodReportView
+            sidecarPath={scrimSidecarPath(path, 'vodreport')}
+            accent={accent}
+            onClose={() => setVodReportOpen(false)}
           />
         )}
 
