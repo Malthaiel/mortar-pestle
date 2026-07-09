@@ -25,6 +25,9 @@ import SidebarPill from '@host/components/SidebarPill.jsx';
 import RailStat from '@host/components/sidebar/RailStat.jsx';
 import { useManifestData } from '@host/lib/manifestReader.js';
 import { useHashRoute } from '@host/router.js';
+import { registerModuleKeybinds } from '@host/keybinds/registry.js';
+import { useKeybindAction } from '@host/keybinds/useKeybind.js';
+import { useSettings } from '@host/hooks/useSettings.js';
 
 const ANIME_DOMAINS = new Set(['Anime']);
 
@@ -91,6 +94,17 @@ function LibraryRail({ accent }) {
 // playback and downloads keep running wherever the user goes. (The music
 // download toast stack was retired in favor of the global Downloads popup; its
 // completion notification now lives in DownloadProvider.)
+// Global music-transport keybinds. Mounted under MusicPlayerProvider (which
+// persists across navigation), so the binds fire from anywhere in the app.
+function MusicKeybinds() {
+  const { settings } = useSettings();
+  const { toggle, next, prev } = useMusicPlayer();
+  useKeybindAction('music.play-pause', settings.keybinds, toggle);
+  useKeybindAction('music.next',       settings.keybinds, next);
+  useKeybindAction('music.prev',       settings.keybinds, prev);
+  return null;
+}
+
 function LibraryRoot({ children }) {
   return (
     <VideoPlayerProvider>
@@ -100,6 +114,7 @@ function LibraryRoot({ children }) {
             <ImportProvider>
               <PlaylistProvider>
                 {children}
+                <MusicKeybinds />
               </PlaylistProvider>
             </ImportProvider>
           </DownloadProvider>
@@ -113,6 +128,11 @@ export default {
   register(api) {
     bindVideoApi(api);
     bindMusicApi(api);
+    registerModuleKeybinds([
+      { id: 'music.play-pause', group: 'Music', label: 'Play / pause',   default: { kind: 'chord', key: ' ', modifiers: ['meta', 'shift'] } },
+      { id: 'music.next',       group: 'Music', label: 'Next track',     default: { kind: 'chord', key: ']', modifiers: ['meta', 'shift'] } },
+      { id: 'music.prev',       group: 'Music', label: 'Previous track', default: { kind: 'chord', key: '[', modifiers: ['meta', 'shift'] } },
+    ]);
     const { IconLibrary } = api.ui.icons;
     api.slots.registerProvider(LibraryRoot);
     api.slots.registerLeftSidebar({

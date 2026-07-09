@@ -6,6 +6,7 @@ import { useHashRoute } from '@host/router.js';
 import { useSettings } from '@host/hooks/useSettings.js';
 import { PlannerContext, usePlanner } from '@host/hooks/usePlanner.js';
 import { registerCommandAction } from '@host/command-actions.js';
+import { useKeybindAction } from '@host/keybinds/useKeybind.js';
 import { useModuleSettings } from '@host/hooks/useSettings.js';
 import { useFrameEditing } from '@host/hooks/useFrameEditing.js';
 import { smartTitleCase } from '@host/util/titlecase.js';
@@ -771,6 +772,13 @@ export function PlannerProvider({ children }) {
     ];
     return () => unsubs.forEach(u => u());
   }, [running, phase, toggleTimer, skipPhase, resetTimer]);
+
+  // Rebindable module keybinds (registered in planner/index.jsx). settings +
+  // the three control fns are already in scope; passing settings.keybinds lets
+  // rebinds take effect without reload.
+  useKeybindAction('planner.timer-toggle', settings.keybinds, toggleTimer);
+  useKeybindAction('planner.skip-phase',   settings.keybinds, skipPhase);
+  useKeybindAction('planner.reset',        settings.keybinds, resetTimer);
 
   const value = {
     // theme / settings

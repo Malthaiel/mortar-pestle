@@ -5,6 +5,7 @@ import SettingsTab from './SettingsTab.jsx';
 import CalendarSection from './CalendarSection.jsx';
 import { bindPlannerApi } from './api.js';
 import { PLANNER_RAIL_VARIANTS, PlannerMiniRail } from './rails/index.jsx';
+import { registerModuleKeybinds } from '@host/keybinds/registry.js';
 
 // Candy-tile shell around the dock. The shell always fills the sidebar slot
 // (flex-grow:1); the wrapper's align-items:flex-start lets the candy TILE hug
@@ -49,6 +50,11 @@ function PlannerDockShell() {
 export default {
   register(api) {
     bindPlannerApi(api);
+    registerModuleKeybinds([
+      { id: 'planner.timer-toggle', group: 'Planner', label: 'Start / pause focus timer', default: { kind: 'chord', key: 'Enter',     modifiers: ['meta', 'shift'] } },
+      { id: 'planner.skip-phase',   group: 'Planner', label: 'Skip focus/break phase',    default: { kind: 'chord', key: '.',         modifiers: ['meta', 'shift'] } },
+      { id: 'planner.reset',        group: 'Planner', label: 'Reset focus timer',         default: { kind: 'chord', key: 'Backspace', modifiers: ['meta', 'shift'] } },
+    ]);
     api.slots.registerProvider(PlannerProvider);
     api.slots.registerWidget({
       id: 'planner',
