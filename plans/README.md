@@ -26,15 +26,15 @@ Run the **P0** block first; run **002 before any test plan (020–024)**; the re
 | 020 | Credentials crypto roundtrip + idle-lock tests | tests | P1 | S | LOW | 002 | DONE |
 | 021 | Recycle-bin restore characterization tests | tests | P1 | M | LOW | 002 | DONE (primitives; e2e restore deferred to 023) |
 | 022 | Restore planner daily-writer test coverage | tests | P1 | M | LOW | 002 | DONE |
-| 005 | Prune stale 7878 grant + fix `vault_get_folder` containment | security | P2 | S | LOW | — | TODO |
+| 005 | Prune stale 7878 grant + fix `vault_get_folder` containment | security | P2 | S | LOW | — | DONE (remote 7878 grant removed; resolve_root_path_in anchored on vault root via `starts_with`; module doc corrected; 3 traversal tests pass; lib compiles → caps JSON valid) |
 | 008 | Minimal ESLint (react-hooks) + document the real boundary | dx | P2 | M | MED | — | TODO |
 | 012 | Coalesce manifest patches + frontend diff-apply | perf | P2 | M-L | MED | — | TODO |
-| 013 | Radial clock RAF→ref + memoize useSettings | perf | P2 | S-M | MED | — | TODO |
-| 015 | Drain child stderr + stop swallowing status write | bug | P2 | S | LOW | — | TODO |
+| 013 | Radial clock RAF→ref + memoize useSettings | perf | P2 | S-M | MED | — | DONE (DualRingRect RAF now DOM-writes arc paths via 4 refs, setFrameTick removed; useSettings `settings` useMemo'd + resync JSON-bail on no-op write; web build green; manual smooth-anim + live-settings UI check pending a live dev window) |
+| 015 | Drain child stderr + stop swallowing status write | bug | P2 | S | LOW | — | DONE (4 library_import stderr pipes nulled; anime_download process_job now concurrent `tokio::join!` drain; set_download_status write failure logged; lib compiles; grep gates green; no automated deadlock test — structural per plan) |
 | 017 | Drag `pointercancel`/`blur` abort + ScrimViewer guard | bug | P2 | S-M | LOW-MED | — | TODO |
 | 019 | Replace unmaintained YAML stack + bump bundled SQLite | migration | P2 | S | LOW | — | TODO |
 | 023 | Self-update rotation + revert-swap tests | tests | P2 | S-M | LOW | 002 | TODO |
-| 024 | Pure-math node checks (planner time/frames + api path) | tests | P2 | S | LOW | 002 | TODO |
+| 024 | Pure-math node checks (planner time/frames + api path) | tests | P2 | S | LOW | 002 | DONE (check-planner-time.mjs 1472 cases + check-path-marshal.mjs 10 cases; isAbsolutePath extracted to util/paths.js + api.js rewired; both wired into package.json + verify.mjs; web build green) |
 | 025 | Extract the shared job-queue skeleton (music/anime/import) | tech-debt | P2 | M-L | MED | — | TODO |
 | 026 | Split api.js + video_editor.rs along their seams | tech-debt | P2 | L | MED | — | TODO |
 | 027 | CSS-ownership + persistence/notification conventions | tech-debt | P2 | L | MED | — | TODO |
