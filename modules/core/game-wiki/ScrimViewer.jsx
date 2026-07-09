@@ -1115,7 +1115,7 @@ export default function ScrimViewer({ path, accent, overlay = false }) {
   return (
     <div style={overlay ? { minHeight: 0 } : wrap}>
       <div style={overlay ? { padding: '2px 4px', fontFamily: 'var(--font-mono)', '--accent': accent } : { ...inner, '--accent': accent }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: overlay ? 10 : 16 }}>
+        <div data-spacing-intent="overlay compact head" style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: overlay ? 8 : 16 }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: overlay ? 16 : 22, fontWeight: 700, color: 'var(--text)', ...(overlay ? { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } : null) }}>{(fm['Team 1'] || '?')} VS {(fm['Team 2'] || '?')}</div>
             <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>{fm['Status'] || 'draft'}</div>
