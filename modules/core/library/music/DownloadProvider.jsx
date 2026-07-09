@@ -10,9 +10,9 @@
 // when the music DownloadToastStack was retired in favor of the global
 // Downloads popup, so completion feedback never lapses.
 
-import { createContext, useContext, useCallback, useEffect, useRef, useState } from 'react';
-import { listen } from '@tauri-apps/api/event';
+import { createContext, useContext, useCallback, useEffect, useRef } from 'react';
 import { musicApi } from './api.js';
+import { useJobQueue } from '../useJobQueue.js';
 
 const Ctx = createContext(null);
 
@@ -39,37 +39,17 @@ function terminalLine(job) {
 }
 
 export function DownloadProvider({ children }) {
-  const [jobs, setJobs] = useState([]);
-
-  // Hydrate in-flight jobs on mount (downloads don't survive an app restart per
-  // decision #4, so this is usually empty — but covers a provider remount mid-run).
-  useEffect(() => {
-    let cancelled = false;
-    musicApi.downloadStatus()
-      .then(j => { if (!cancelled) setJobs((j || []).filter(x => x.state === 'queued' || x.state === 'downloading')); })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, []);
-
-  useEffect(() => {
-    const upsert = (job) => setJobs(prev => {
-      const i = prev.findIndex(j => j.id === job.id);
-      if (i === -1) return [...prev, job];
-      const next = prev.slice();
-      next[i] = job;
-      return next;
-    });
-    const pProgress = listen('music-download-progress', (e) => { if (e.payload && e.payload.id) upsert(e.payload); });
-    const pDone = listen('music-download-done', (e) => {
-      // Manifest watcher doesn't fire on direct Knowledge/*.md writes — tell the
-      // library to re-list directly.
-      window.dispatchEvent(new CustomEvent('music-library-changed', { detail: e.payload || {} }));
-    });
-    return () => {
-      pProgress.then(f => f()).catch(() => {});
-      pDone.then(f => f()).catch(() => {});
-    };
-  }, []);
+  // Downloads don't survive an app restart (decision #4), so hydrate is usually
+  // empty — but it covers a provider remount mid-run. The manifest watcher
+  // doesn't fire on direct Knowledge/*.md writes, so onDone re-broadcasts
+  // `music-library-changed` to make AlbumBrowser re-list.
+  const jobs = useJobQueue({
+    statusFn: () => musicApi.downloadStatus(),
+    progressEvent: 'music-download-progress',
+    doneEvent: 'music-download-done',
+    isActive: (x) => x.state === 'queued' || x.state === 'downloading',
+    onDone: (p) => window.dispatchEvent(new CustomEvent('music-library-changed', { detail: p })),
+  });
 
   // Terminal notification: fire one app-wide agentic:notify per job that finishes
   // or fails, so completion feedback survives navigation. Ported from the retired

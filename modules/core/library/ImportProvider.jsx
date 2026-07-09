@@ -9,9 +9,9 @@
 // Registered (via index.jsx) so it wraps the whole app; useImportJobs() reads it
 // from the Settings Import sections.
 
-import { createContext, useContext, useCallback, useEffect, useRef, useState } from 'react';
-import { listen } from '@tauri-apps/api/event';
+import { createContext, useContext, useCallback, useEffect, useRef } from 'react';
 import { libraryImportApi } from './api.js';
+import { useJobQueue } from './useJobQueue.js';
 
 const Ctx = createContext(null);
 
@@ -39,38 +39,20 @@ function terminalLine(job) {
 const ACTIVE = new Set(['queued', 'parsing', 'importing']);
 
 export function ImportProvider({ children }) {
-  const [jobs, setJobs] = useState([]);
-
-  // Hydrate in-flight jobs on mount (covers a provider remount mid-import).
-  useEffect(() => {
-    let cancelled = false;
-    libraryImportApi.status()
-      .then(j => { if (!cancelled) setJobs((j || []).filter(x => ACTIVE.has(x.state))); })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, []);
-
-  useEffect(() => {
-    const upsert = (job) => setJobs(prev => {
-      const i = prev.findIndex(j => j.id === job.id);
-      if (i === -1) return [...prev, job];
-      const next = prev.slice();
-      next[i] = job;
-      return next;
-    });
-    const pProgress = listen('library-import-progress', (e) => { if (e.payload && e.payload.id) upsert(e.payload); });
-    const pDone = listen('library-import-done', (e) => {
-      // Manifest watcher doesn't fire on direct Library/*.md writes — tell the
-      // grids to re-list directly. Music import touches both playlists + albums;
-      // MAL import (SF6) touches the anime series — broadcast both, harmless.
-      window.dispatchEvent(new CustomEvent('music-library-changed', { detail: e.payload || {} }));
-      window.dispatchEvent(new CustomEvent('video-library-changed', { detail: e.payload || {} }));
-    });
-    return () => {
-      pProgress.then(f => f()).catch(() => {});
-      pDone.then(f => f()).catch(() => {});
-    };
-  }, []);
+  // Hydrate covers a provider remount mid-import. The manifest watcher doesn't
+  // fire on direct Library/*.md writes, so onDone re-broadcasts both
+  // library-changed events (music import touches playlists + albums; MAL import
+  // touches the anime series — both, harmless) so the grids re-list.
+  const jobs = useJobQueue({
+    statusFn: () => libraryImportApi.status(),
+    progressEvent: 'library-import-progress',
+    doneEvent: 'library-import-done',
+    isActive: (x) => ACTIVE.has(x.state),
+    onDone: (p) => {
+      window.dispatchEvent(new CustomEvent('music-library-changed', { detail: p }));
+      window.dispatchEvent(new CustomEvent('video-library-changed', { detail: p }));
+    },
+  });
 
   // One terminal notification per job that finishes/fails/cancels, so feedback
   // survives the drawer closing. Lands in the notification panel.

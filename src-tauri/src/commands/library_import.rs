@@ -22,10 +22,9 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::io::{AsyncBufReadExt, BufReader};
 
+use crate::commands::job_queue::{self, CancelAction, JobItem};
 use crate::parsers::playlists::{write_playlist, TrackRefInput};
 
-#[cfg(unix)]
-const CANCEL_GRACE_MS: u64 = 2000;
 // Polite spacing between MusicBrainz resolutions (the search backend talks to
 // the public MB API, which asks ~1 req/s).
 const MB_THROTTLE_MS: u64 = 350;
@@ -69,23 +68,8 @@ pub struct ImportJob {
     pub cancel_requested: bool,
 }
 
-struct ImportQueue {
-    jobs: Vec<ImportJob>,
-    worker_running: bool,
-}
-
-static IMPORT_STATE: Mutex<ImportQueue> = Mutex::new(ImportQueue {
-    jobs: Vec::new(),
-    worker_running: false,
-});
+static IMPORT_STATE: Mutex<job_queue::Queue<ImportJob>> = Mutex::new(job_queue::Queue::new());
 static JOB_SEQ: AtomicU64 = AtomicU64::new(1);
-
-#[cfg(unix)]
-fn send_signal(pid: u32, sig: i32) {
-    unsafe {
-        libc::kill(pid as i32, sig);
-    }
-}
 
 fn resolve_script(app: &AppHandle, name: &str) -> Option<String> {
     if let Ok(p) = app
@@ -106,8 +90,7 @@ fn resolve_script(app: &AppHandle, name: &str) -> Option<String> {
 }
 
 fn snapshot(job_id: &str) -> Option<ImportJob> {
-    let g = IMPORT_STATE.lock().unwrap();
-    g.jobs.iter().find(|j| j.id == job_id).cloned()
+    job_queue::snapshot(&IMPORT_STATE, |j| j.id == job_id)
 }
 
 fn emit_progress(app: &AppHandle, job_id: &str) {
@@ -204,40 +187,33 @@ pub async fn library_import_enqueue(
 
 #[tauri::command]
 pub fn library_import_status() -> Vec<ImportJob> {
-    let g = IMPORT_STATE.lock().unwrap();
-    g.jobs.clone()
+    job_queue::status(&IMPORT_STATE)
+}
+
+impl JobItem for ImportJob {
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn cancel_in_place(&mut self) -> CancelAction {
+        match self.state {
+            ImportState::Queued => {
+                self.state = ImportState::Cancelled;
+                CancelAction::Queued
+            }
+            ImportState::Parsing | ImportState::Importing => {
+                self.cancel_requested = true;
+                CancelAction::Active(self.child_pid)
+            }
+            _ => CancelAction::Terminal,
+        }
+    }
 }
 
 #[tauri::command]
 pub fn library_import_cancel(job_id: String) -> Result<(), String> {
-    let pid = {
-        let mut g = IMPORT_STATE.lock().unwrap();
-        let Some(job) = g.jobs.iter_mut().find(|j| j.id == job_id) else {
-            return Err("no such job".into());
-        };
-        match job.state {
-            ImportState::Queued => {
-                job.state = ImportState::Cancelled;
-                None
-            }
-            ImportState::Parsing | ImportState::Importing => {
-                job.cancel_requested = true;
-                job.child_pid
-            }
-            _ => return Err("job is not cancellable".into()),
-        }
-    };
-    if let Some(pid) = pid {
-        #[cfg(unix)]
-        {
-            send_signal(pid, libc::SIGTERM);
-            tauri::async_runtime::spawn(async move {
-                tokio::time::sleep(Duration::from_millis(CANCEL_GRACE_MS)).await;
-                send_signal(pid, libc::SIGKILL);
-            });
-        }
-        #[cfg(not(unix))]
-        crate::commands::proc_util::terminate_pid(pid);
+    // Library has no queue-position display → no recompute on a queued cancel.
+    if let Some(pid) = job_queue::cancel(&IMPORT_STATE, &job_id, |_| {})? {
+        job_queue::kill_child_graceful(pid);
     }
     Ok(())
 }

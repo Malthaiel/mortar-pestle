@@ -28,11 +28,10 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 use tokio::io::AsyncReadExt;
 
+use crate::commands::job_queue;
 use crate::commands::qbit::qbit_env;
 use crate::commands::vault::{self, atomic_write};
 
-#[cfg(unix)]
-const CANCEL_GRACE_MS: u64 = 2000;
 const POLL_INTERVAL_SECS: u64 = 5;
 const MAX_EMPTY_POLLS: u32 = 12; // ~60s for torrents to register before giving up
 const MAX_POLLS: u32 = 5000; // runaway guard (~7h at 5s)
@@ -89,23 +88,8 @@ pub struct DownloadJob {
     pub initial_status: Option<String>,
 }
 
-struct DownloadState {
-    jobs: Vec<DownloadJob>,
-    worker_running: bool,
-}
-
-static DOWNLOAD_STATE: Mutex<DownloadState> = Mutex::new(DownloadState {
-    jobs: Vec::new(),
-    worker_running: false,
-});
+static DOWNLOAD_STATE: Mutex<job_queue::Queue<DownloadJob>> = Mutex::new(job_queue::Queue::new());
 static JOB_SEQ: AtomicU64 = AtomicU64::new(1);
-
-#[cfg(unix)]
-fn send_signal(pid: u32, sig: i32) {
-    unsafe {
-        libc::kill(pid as i32, sig);
-    }
-}
 
 /// Resolve the download script: bundled resource first, dev fallback to source.
 fn resolve_script(app: &AppHandle) -> Option<String> {
@@ -127,7 +111,7 @@ fn resolve_script(app: &AppHandle) -> Option<String> {
     None
 }
 
-fn recompute_queue_positions(state: &mut DownloadState) {
+fn recompute_queue_positions(state: &mut job_queue::Queue<DownloadJob>) {
     let mut pos = 1;
     for j in state.jobs.iter_mut() {
         match j.state {
@@ -141,8 +125,7 @@ fn recompute_queue_positions(state: &mut DownloadState) {
 }
 
 fn snapshot(job_id: &str) -> Option<DownloadJob> {
-    let g = DOWNLOAD_STATE.lock().unwrap();
-    g.jobs.iter().find(|j| j.id == job_id).cloned()
+    job_queue::snapshot(&DOWNLOAD_STATE, |j| j.id == job_id)
 }
 
 fn emit_progress(app: &AppHandle, job_id: &str) {
@@ -225,8 +208,7 @@ pub async fn anime_download_enqueue(
 
 #[tauri::command]
 pub fn anime_download_status() -> Vec<DownloadJob> {
-    let g = DOWNLOAD_STATE.lock().unwrap();
-    g.jobs.clone()
+    job_queue::status(&DOWNLOAD_STATE)
 }
 
 #[tauri::command]
@@ -247,7 +229,7 @@ pub fn anime_download_cancel(job_id: String) -> Result<(), String> {
 /// cancel + SIGTERM (then SIGKILL after a grace period) the prepare child.
 /// Lenient — a no-op if the job is missing or already terminal — so
 /// `anime_uninstall` can reuse it without pre-checking state.
-fn cancel_job_inner(guard: &mut DownloadState, job_id: &str) {
+fn cancel_job_inner(guard: &mut job_queue::Queue<DownloadJob>, job_id: &str) {
     let pid = {
         let Some(job) = guard.jobs.iter_mut().find(|j| j.id == job_id) else {
             return;
@@ -268,16 +250,7 @@ fn cancel_job_inner(guard: &mut DownloadState, job_id: &str) {
     // Kill the prepare child if one is running; the poll loop checks
     // `cancel_requested` at its top, so a Downloading job stops on next tick.
     if let Some(pid) = pid {
-        #[cfg(unix)]
-        {
-            send_signal(pid, libc::SIGTERM);
-            tauri::async_runtime::spawn(async move {
-                tokio::time::sleep(Duration::from_millis(CANCEL_GRACE_MS)).await;
-                send_signal(pid, libc::SIGKILL);
-            });
-        }
-        #[cfg(not(unix))]
-        crate::commands::proc_util::terminate_pid(pid);
+        job_queue::kill_child_graceful(pid);
     }
 }
 

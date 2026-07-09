@@ -14,15 +14,12 @@
 use std::process::Stdio;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
-#[cfg(unix)]
-use std::time::Duration;
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::io::{AsyncBufReadExt, BufReader};
 
-#[cfg(unix)]
-const CANCEL_GRACE_MS: u64 = 2000;
+use crate::commands::job_queue::{self, CancelAction, JobItem};
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -75,23 +72,8 @@ pub struct DownloadJob {
     pub initial_status: Option<String>,
 }
 
-struct DownloadState {
-    jobs: Vec<DownloadJob>,
-    worker_running: bool,
-}
-
-static DOWNLOAD_STATE: Mutex<DownloadState> = Mutex::new(DownloadState {
-    jobs: Vec::new(),
-    worker_running: false,
-});
+static DOWNLOAD_STATE: Mutex<job_queue::Queue<DownloadJob>> = Mutex::new(job_queue::Queue::new());
 static JOB_SEQ: AtomicU64 = AtomicU64::new(1);
-
-#[cfg(unix)]
-fn send_signal(pid: u32, sig: i32) {
-    unsafe {
-        libc::kill(pid as i32, sig);
-    }
-}
 
 /// Resolve the download script: bundled resource first, dev fallback to the
 /// source tree (dev runs from source, not the bundle — flagged in the plan as
@@ -115,7 +97,7 @@ fn resolve_script(app: &AppHandle) -> Option<String> {
 }
 
 /// (1-based) position among queued jobs; 0 for the active one.
-fn recompute_queue_positions(state: &mut DownloadState) {
+fn recompute_queue_positions(state: &mut job_queue::Queue<DownloadJob>) {
     let mut pos = 1;
     for j in state.jobs.iter_mut() {
         match j.state {
@@ -130,8 +112,7 @@ fn recompute_queue_positions(state: &mut DownloadState) {
 }
 
 fn snapshot(job_id: &str) -> Option<DownloadJob> {
-    let g = DOWNLOAD_STATE.lock().unwrap();
-    g.jobs.iter().find(|j| j.id == job_id).cloned()
+    job_queue::snapshot(&DOWNLOAD_STATE, |j| j.id == job_id)
 }
 
 fn emit_progress(app: &AppHandle, job_id: &str) {
@@ -206,44 +187,36 @@ pub async fn music_download_enqueue(
 
 #[tauri::command]
 pub fn music_download_status() -> Vec<DownloadJob> {
-    let g = DOWNLOAD_STATE.lock().unwrap();
-    g.jobs.clone()
+    job_queue::status(&DOWNLOAD_STATE)
+}
+
+impl JobItem for DownloadJob {
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn cancel_in_place(&mut self) -> CancelAction {
+        match self.state {
+            JobState::Queued => {
+                self.state = JobState::Cancelled;
+                CancelAction::Queued
+            }
+            JobState::Downloading => {
+                self.cancel_requested = true;
+                CancelAction::Active(self.child_pid)
+            }
+            _ => CancelAction::Terminal,
+        }
+    }
 }
 
 #[tauri::command]
 pub fn music_download_cancel(job_id: String) -> Result<(), String> {
-    let pid = {
-        let mut guard = DOWNLOAD_STATE.lock().unwrap();
-        let Some(job) = guard.jobs.iter_mut().find(|j| j.id == job_id) else {
-            return Err("no such job".into());
-        };
-        match job.state {
-            JobState::Queued => {
-                job.state = JobState::Cancelled;
-                recompute_queue_positions(&mut guard);
-                None
-            }
-            JobState::Downloading => {
-                job.cancel_requested = true;
-                job.child_pid
-            }
-            _ => return Err("job is not cancellable".into()),
-        }
-    };
-    // Active job: SIGTERM the python child, SIGKILL after a grace period. The
-    // in-flight yt-dlp child may finish its current track before exiting; no new
-    // tracks start. finalize_job marks the job Cancelled when python exits.
-    if let Some(pid) = pid {
-        #[cfg(unix)]
-        {
-            send_signal(pid, libc::SIGTERM);
-            tauri::async_runtime::spawn(async move {
-                tokio::time::sleep(Duration::from_millis(CANCEL_GRACE_MS)).await;
-                send_signal(pid, libc::SIGKILL);
-            });
-        }
-        #[cfg(not(unix))]
-        crate::commands::proc_util::terminate_pid(pid);
+    // Queued → Cancelled (then renumber positions under the held lock); active →
+    // SIGTERM the yt-dlp child, SIGKILL after a grace period. The in-flight child
+    // may finish its current track before exiting; no new tracks start.
+    // finalize_job marks the job Cancelled when python exits.
+    if let Some(pid) = job_queue::cancel(&DOWNLOAD_STATE, &job_id, recompute_queue_positions)? {
+        job_queue::kill_child_graceful(pid);
     }
     Ok(())
 }
@@ -504,4 +477,56 @@ fn finalize_error(app: &AppHandle, job_id: &str, msg: &str) {
     emit_progress(app, job_id);
     emit_done(app, job_id, None);
     record_history(app, job_id);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn mk(id: &str, state: JobState) -> DownloadJob {
+        DownloadJob {
+            id: id.into(),
+            rg_mbid: String::new(),
+            title: String::new(),
+            artist: String::new(),
+            cover: None,
+            state,
+            track_index: 0,
+            track_total: 0,
+            track_title: None,
+            queue_position: -1,
+            failed: Vec::new(),
+            album_path: None,
+            error: None,
+            size_bytes: None,
+            dl_speed: None,
+            eta_secs: None,
+            save_path: None,
+            child_pid: None,
+            only_missing: false,
+            cancel_requested: false,
+            metadata_only: false,
+            initial_status: None,
+        }
+    }
+
+    // Regression guard for the shared job-queue refactor: recompute assigns 0 to
+    // the active (Downloading) job and 1,2,… to Queued jobs in order, and leaves
+    // terminal jobs untouched (the music-only `_ => {}` arm — a behavior anime
+    // deliberately diverges from by zeroing them).
+    #[test]
+    fn recompute_positions_active_zero_queued_sequential() {
+        let mut q = job_queue::Queue::new();
+        q.jobs = vec![
+            mk("a", JobState::Downloading),
+            mk("b", JobState::Queued),
+            mk("c", JobState::Queued),
+            mk("d", JobState::Done),
+        ];
+        recompute_queue_positions(&mut q);
+        assert_eq!(q.jobs[0].queue_position, 0);
+        assert_eq!(q.jobs[1].queue_position, 1);
+        assert_eq!(q.jobs[2].queue_position, 2);
+        assert_eq!(q.jobs[3].queue_position, -1);
+    }
 }
