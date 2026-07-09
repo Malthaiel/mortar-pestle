@@ -24,6 +24,7 @@ import { matchClusters, enrollPrint, parseVoiceprints, DEFAULT_THRESHOLD } from 
 import { auditSilentDeaths } from './deathAudit.js';
 import { buildTranscriptBlock, generateReport } from './vodReport.js';
 import VodReportView from './VodReportView.jsx';
+import { matchMetrics, sumMatchMetrics, aggregateTeam, renderTeamPage, openHomework, teamSidecarPath, teamPagePath, normIssue } from './teamProgress.js';
 import CommsTranscriptView from './CommsTranscriptView.jsx';
 import { useSettings } from '@host/hooks/useSettings.js';
 import { buildMomentsDigest, classifyMoments, reconcile, renderAutoClassification, setAutoClassificationBody, sideFromTeamFields, mergedItemToBullet } from './autoClassify.js';
@@ -975,6 +976,63 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
     invoke('stt_cancel').catch(() => {});
   }, []);
 
+  // Team Progress (sub-plan 12) — cross-scrim memory. Walk every scrim for this team, read each one's
+  // .vodreport (action items) + per-match .matchdata/.commstranscript sidecars, compute team-level
+  // metrics (deaths/buffs/obj/soul + callout rate + silent-death count), aggregate into the
+  // .teamprogress.<Team>.json sidecar, and regenerate the app-owned Teams/<Team>.md page. Client-side
+  // walk, no new Rust; the page is fully generated (never hand-edited) so a plain overwrite is safe.
+  // Runs after each Generate Report. Team-level metrics only — match data has no player names.
+  const updateTeamProgress = useCallback(async (team) => {
+    if (!String(team || '').trim()) return null;
+    try {
+      const res = await api.getVaultFolder('Deadlock', 'Coaching/Scrim', 'gamewiki').catch(() => null);
+      const pages = (res?.pages || []).map((p) => String(p.path || '').replace(/^\/+/, ''));
+      const scrims = [];
+      for (const pagePath of pages) {
+        let sc;
+        try { sc = parseScrim((await api.getRawFileMeta(pagePath, 'gamewiki')).content); } catch { continue; }
+        const fm = sc.frontmatter || {};
+        const coached = fm['Coached Team'] || fm['Team 1'] || '';
+        if (normIssue(coached) !== normIssue(team)) continue; // not this team's scrim
+
+        let report = null;
+        try { report = JSON.parse((await api.getRawFileMeta(scrimSidecarPath(pagePath, 'vodreport'), 'gamewiki')).content); } catch { /* no report yet */ }
+
+        const perMatch = [];
+        let segTotal = 0, durTotalS = 0, silentTotal = 0, haveComms = false;
+        for (const m of sc.matches || []) {
+          const { coachedSide } = sideFromTeamFields(m.fields, coached);
+          if (coachedSide == null) continue;
+          let raw = null;
+          try { raw = JSON.parse((await api.getRawFileMeta(sidecarPath(pagePath, m.n), 'gamewiki')).content); } catch { continue; }
+          perMatch.push(matchMetrics(raw, coachedSide));
+          try {
+            const cm = (await api.getRawFileMeta(sidecarPath(pagePath, m.n, 'comms'), 'gamewiki')).content;
+            const segs = parseSegments(cm);
+            haveComms = true;
+            segTotal += segs.filter((s) => String(s.text || '').trim()).length;
+            durTotalS += segs.length ? Math.max(...segs.map((s) => Number(s.t1Ms) || 0)) / 1000 : 0;
+            const offsetS = Number(m.fields['Comms Offset']) || 0;
+            silentTotal += auditSilentDeaths(extractSpatial(raw).deaths, segs, { side: coachedSide, offsetS }).silent.length;
+          } catch { /* no comms for this match */ }
+        }
+        if (!perMatch.length && !report) continue;
+        const metrics = {
+          ...sumMatchMetrics(perMatch),
+          calloutRate: haveComms && durTotalS > 0 ? Math.round((segTotal / (durTotalS / 60)) * 10) / 10 : null,
+          silentDeaths: haveComms ? silentTotal : null,
+        };
+        scrims.push({ date: fm['Date'] || '', report, metrics });
+      }
+      const agg = aggregateTeam({ team, scrims });
+      const stamp = new Date().toISOString().slice(0, 10);
+      agg.updated = stamp;
+      await api.savePage(teamSidecarPath(team), JSON.stringify(agg), null, 'gamewiki');
+      await api.savePage(teamPagePath(team), renderTeamPage(agg, stamp), null, 'gamewiki');
+      return agg;
+    } catch (e) { console.error('team progress update failed', e); return null; }
+  }, []);
+
   // Generate Report (sub-plan 11) — read the cached .vodcomms transcript, have Claude (Opus, via the
   // generic coaching_classify_match bridge) organize it into the report JSON, reconcile the coach's
   // checkbox state onto it, persist the .vodreport sidecar + a `- VOD Report:` pointer bullet, and
@@ -1002,13 +1060,17 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
       if (!backend) backend = (await invoke('design_get_api_key').catch(() => false)) ? 'api-key' : 'claude-cli';
       const agents = { authBackend: backend, model: ag.model || 'opus', claudeCliPath: ag.claudeCliPath || '' };
 
-      // prior report → carry checkbox state across regenerates. priorActionItems (cross-scrim
-      // follow-ups) come from the Team Progress sidecar in sub-plan 12 — [] for now (empty-tolerant).
+      // prior report → carry checkbox state across regenerates.
       const scPath = scrimSidecarPath(path, 'vodreport');
       let prior = null;
       try { prior = JSON.parse((await api.getRawFileMeta(scPath, 'gamewiki')).content); } catch { /* first run */ }
 
-      const report = await generateReport(invoke, { transcriptBlock, teams: { opponent }, coachedTeam, priorActionItems: [], prior }, agents);
+      // cross-scrim follow-up loop (sub-plan 12): the team's currently-open homework feeds the report
+      // prompt so Claude judges each prior item resolved/persisting. Empty until a team page exists.
+      let priorActionItems = [];
+      try { priorActionItems = openHomework(JSON.parse((await api.getRawFileMeta(teamSidecarPath(coachedTeam), 'gamewiki')).content)); } catch { /* no team memory yet */ }
+
+      const report = await generateReport(invoke, { transcriptBlock, teams: { opponent }, coachedTeam, priorActionItems, prior }, agents);
       await api.savePage(scPath, JSON.stringify(report), null, 'gamewiki');
 
       const stamp = new Date().toISOString().slice(0, 10);
@@ -1016,6 +1078,8 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
       applyEdit((p) => ({ ...p, scrim: { ...p.scrim, 'VOD Report': `generated ${stamp} · ${n} item${n === 1 ? '' : 's'}` } }));
       flushSave();
       setVodReportOpen(true);
+      // regenerate this team's cross-scrim page/sidecar (best-effort — never blocks the report result)
+      updateTeamProgress(coachedTeam).catch(() => {});
       notify('success', 'Report generated', `${n} action item${n === 1 ? '' : 's'}.`);
     } catch (e) {
       const msg = {
@@ -1027,7 +1091,7 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
     } finally {
       reportRef.current = false; setReporting(false);
     }
-  }, [path, settings, applyEdit, flushSave]);
+  }, [path, settings, applyEdit, flushSave, updateTeamProgress]);
 
   // Reassign a whole speaker cluster to a roster name (Speakers panel or an inline transcript
   // relabel). On an explicit name (not a clear) this ENROLLS/retrains the voiceprint from the
