@@ -134,7 +134,7 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
 
   /* Clock tokens · Light. Structural/neutral colors used by every watchface.
      Phase-aware accent + dim colors are set per-mount as inline --clock-phase-*
-     styles on the dial wrapper (see AnalogClock.jsx + watchface variants). */
+     styles on the dial wrapper (see DualRingRect.jsx). */
   --clock-tick-major:    oklch(0.55  0.01  30);
   --clock-tick-minor:    oklch(0.78  0.01  30);
   --clock-wedge-dark:    color-mix(in oklch, var(--accent, oklch(0.55 0.16 25)), black 40%);

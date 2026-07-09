@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-// Rounded-rectangle variant of DualRing. Same dual-arc semantics — outer thin
+// The planner's sole watchface: a rounded-rectangle dual-arc dial. Outer thin
 // arc = session progress (depletes once over the whole session), inner thicker
 // arc = current-minute progress (depletes once per minute then snaps back).
 // Used by the compact watchface where the dial lives inside a candy-shell

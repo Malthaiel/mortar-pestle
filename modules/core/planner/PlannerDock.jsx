@@ -410,7 +410,7 @@ function TimerWidget({
 
   // While dragging the dial to set a new duration, the readout previews the
   // drag value (MM:00) instead of the live secsLeft. Replaces the in-dial
-  // "X MIN" overlay that AnalogClock used to render.
+  // "X MIN" overlay an earlier watchface used to render in-dial.
   const displaySecs = dragMins != null ? dragMins * 60 : secsLeft;
   const mm = pad(Math.floor(Math.max(0, displaySecs) / 60));
   const ss = pad(Math.max(0, displaySecs) % 60);
