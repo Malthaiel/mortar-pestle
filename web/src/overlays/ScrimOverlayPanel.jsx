@@ -36,7 +36,7 @@ export default function ScrimOverlayPanel() {
     <div className="video-cinema" style={{ position: 'absolute', top: 0, left: 0, background: 'transparent', padding: 0, ...dragStyle }}>
       <div className="candy-card ov-scrim-panel">
         {/* Header (drag handle) — title · scrim picker · New · close */}
-        <div className="candy-center-row ov-scrim-head" {...dragProps} style={{ touchAction: 'none' }}>
+        <div className="candy-center-row ov-scrim-head" data-spacing-intent="candy-center lift" {...dragProps} style={{ touchAction: 'none' }}>
           <span className="ov-scrim-title section-title">▣ Scrim</span>
           <div style={{ flex: 1, minWidth: 0 }}>
             <CandySelect

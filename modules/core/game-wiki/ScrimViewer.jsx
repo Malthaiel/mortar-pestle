@@ -62,7 +62,7 @@ const inner = { maxWidth: 720, margin: '0 auto', padding: '20px 28px 64px', font
 const card = {
   border: '1px solid color-mix(in oklch, var(--text) 12%, transparent)',
   background: 'color-mix(in oklch, var(--text) 4%, transparent)',
-  borderRadius: 12, padding: '14px 16px', marginBottom: 14,
+  borderRadius: 12, padding: '14px 16px', marginBottom: 16,
 };
 const sectionTitle = { fontSize: 15, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase', color: 'var(--text)' };
 const labelStyle = { fontSize: 12, fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase', color: 'var(--text)', marginBottom: 8 };
@@ -891,7 +891,7 @@ export default function ScrimViewer({ path, accent, overlay = false }) {
         </div>
 
         <div style={card}>
-          <div style={{ ...sectionTitle, marginBottom: 10 }}>Matchup</div>
+          <div style={{ ...sectionTitle, marginBottom: 8 }}>Matchup</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 14 }}>
             <EditField label="Team 1" value={fm['Team 1']} onChange={(v) => setFm('Team 1', v)} onCommit={flushSave} />
             <EditField label="Team 2" value={fm['Team 2']} onChange={(v) => setFm('Team 2', v)} onCommit={flushSave} />
@@ -902,7 +902,7 @@ export default function ScrimViewer({ path, accent, overlay = false }) {
         </div>
 
         <div style={card}>
-          <div style={{ ...sectionTitle, marginBottom: 10 }}>Scrim</div>
+          <div style={{ ...sectionTitle, marginBottom: 8 }}>Scrim</div>
           <EditField label="Score" value={scrim.scrim['Score']} onChange={(v) => setScrimField('Score', v)} onCommit={flushSave} placeholder="e.g. 2-1" />
           <EditField label="VOD Review" value={scrim.scrim['VOD Review']} onChange={(v) => setScrimField('VOD Review', v)} onCommit={flushSave} placeholder="/path/to/review.mp4"
             right={<>
