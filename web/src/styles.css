@@ -4937,8 +4937,8 @@ button.cal-customdays__step:hover {
    migrated from the standalone overlay-scrim window into the host). Layout/scoping
    only — every control reuses candy primitives (CandySelect, RetagButton, the
    data-shape="field" input, icon buttons). Mirrors the .ov-studio-* panel above. */
-.ov-scrim-panel { width: 460px; display: flex; flex-direction: column; gap: var(--ov-gap); padding: var(--ov-gap); }
-.ov-scrim-body { min-width: 0; }
+.ov-scrim-panel { width: 460px; max-height: calc(100vh - 80px); display: flex; flex-direction: column; gap: var(--ov-gap); padding: var(--ov-gap); }
+.ov-scrim-body { min-width: 0; min-height: 0; overflow-y: auto; }
 .ov-scrim-head { justify-content: space-between; cursor: move; gap: 8px; padding: 2px 4px 4px; }
 .ov-scrim-title { text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
 .ov-scrim-team { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

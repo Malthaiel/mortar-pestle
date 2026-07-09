@@ -170,9 +170,13 @@ function TimerControls({ sw }) {
 // decomposes a bullet into a RetagButton (the classification) + an editable "[m:ss] text"
 // field; rows render time-ascending (untimed last) but edits map back to the ORIGINAL
 // index. When the timer runs, a new note via ENTER is stamped with the elapsed time.
-function NotesEditor({ team, bullets, onChange, onCommit, storageKey }) {
+function NotesEditor({ team, bullets, onChange, onCommit, storageKey, overlay }) {
   const [draft, setDraft] = useState('');
   const sw = useStopwatch(storageKey);
+  // Overlay: bounded scroll window (~3 rows) pinned to the newest note, so 20+ notes
+  // never grow the panel — the add-field below stays on screen.
+  const listRef = useRef(null);
+  useEffect(() => { if (overlay && listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight; }, [overlay, bullets.length]);
   const addBullet = () => {
     const t = draft.trim();
     if (!t) return;
@@ -194,6 +198,7 @@ function NotesEditor({ team, bullets, onChange, onCommit, storageKey }) {
         <div style={{ ...labelStyle, marginBottom: 0 }}>Notes{team ? ` (${team})` : ''}</div>
         <TimerControls sw={sw} />
       </div>
+      <div ref={listRef} style={overlay ? { maxHeight: 165, overflowY: 'auto', minHeight: 0 } : undefined}>
       {ordered.map((row, k) => (
         <div key={row._i}>
           {untimedCount > 0 && firstUntimed > 0 && k === firstUntimed && (
@@ -215,6 +220,7 @@ function NotesEditor({ team, bullets, onChange, onCommit, storageKey }) {
           </div>
         </div>
       ))}
+      </div>
       <div className="candy-btn" data-shape="field" style={{ width: '100%', marginTop: 2 }}>
         <input
           className="candy-face"
@@ -230,7 +236,7 @@ function NotesEditor({ team, bullets, onChange, onCommit, storageKey }) {
 
 // Collapsed-by-default per-team notes: a "Create Notes" button (mirrors "+ New Match")
 // until opened — or auto-opened once the team already has notes (e.g. after a Classify→Save).
-function TeamNotes({ team, bullets, onChange, onCommit, storageKey }) {
+function TeamNotes({ team, bullets, onChange, onCommit, storageKey, overlay }) {
   const [opened, setOpened] = useState(false);
   if (!opened && bullets.length === 0) {
     return (
@@ -239,7 +245,7 @@ function TeamNotes({ team, bullets, onChange, onCommit, storageKey }) {
       </button>
     );
   }
-  return <NotesEditor team={team} bullets={bullets} onChange={onChange} onCommit={onCommit} storageKey={storageKey} />;
+  return <NotesEditor team={team} bullets={bullets} onChange={onChange} onCommit={onCommit} storageKey={storageKey} overlay={overlay} />;
 }
 
 function SaveTag({ state }) {
@@ -1245,12 +1251,10 @@ export default function ScrimViewer({ path, accent, overlay = false }) {
               <EditField label="Scoreboard" value={m.fields['Scoreboard']} onChange={(v) => setMatchField(idx, 'Scoreboard', v)} onCommit={flushSave} placeholder="/path/to/scoreboard.png"
                 right={<MiniBtn icon={IconFolder} title="Select screenshot" onClick={async () => { const p = await pickFile(IMG_FILTERS); if (p) { setMatchField(idx, 'Scoreboard', p); flushSave(); } }} />} />
               <Scoreboard path={m.fields['Scoreboard']} />
-              <TeamNotes team={coachedTeam} bullets={getNotes(m, coachedTeam)?.bullets || []}
+              {/* Coached team only — enemy notes UI dropped by design (notes are only ever
+                  taken on the coached team); enemy notes on disk still round-trip verbatim. */}
+              <TeamNotes team={coachedTeam} bullets={getNotes(m, coachedTeam)?.bullets || []} overlay={overlay}
                 onChange={(b) => setNotes(idx, coachedTeam, b)} onCommit={flushSave} storageKey={`gw-sw:${path}:m${m.n}:${coachedTeam}`} />
-              {enemyTeam && enemyTeam !== coachedTeam && (
-                <TeamNotes team={enemyTeam} bullets={getNotes(m, enemyTeam)?.bullets || []}
-                  onChange={(b) => setNotes(idx, enemyTeam, b)} onCommit={flushSave} storageKey={`gw-sw:${path}:m${m.n}:${enemyTeam}`} />
-              )}
               {hasSummary && (
                 <div style={{ marginTop: 8 }}>
                   <CoachingSummaryView body={summaryBody} />
