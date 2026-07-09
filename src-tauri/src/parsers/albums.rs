@@ -266,6 +266,7 @@ fn meta_str(meta: &Map<String, Value>, key: &str) -> Option<String> {
     meta.get(key).and_then(|v| match v {
         Value::String(s) if !s.is_empty() => Some(s.clone()),
         Value::Null => None,
+        Value::String(_) => None,
         other => Some(other.to_string()),
     })
 }
@@ -668,6 +669,17 @@ pub fn write_notes(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn meta_str_empty_string_is_none() {
+        let mut m = Map::new();
+        m.insert("Empty".into(), Value::String(String::new()));
+        m.insert("Set".into(), Value::String("x".into()));
+        // empty string must yield None, not the literal "\"\"" from to_string()
+        assert_eq!(meta_str(&m, "Empty"), None);
+        assert_eq!(meta_str(&m, "Set"), Some("x".into()));
+        assert_eq!(meta_str(&m, "Missing"), None);
+    }
 
     #[test]
     fn normalize_dashes() {
