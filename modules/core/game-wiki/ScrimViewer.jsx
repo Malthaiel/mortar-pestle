@@ -485,7 +485,7 @@ export default function ScrimViewer({ path, accent, overlay = false }) {
   const pendingRef = useRef(false);
   const lastSavedRef = useRef(null);
   const mountedRef = useRef(true);
-  useEffect(() => () => { mountedRef.current = false; }, []);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
   const setSafeSaveState = (s) => { if (mountedRef.current) setSaveState(s); };
 
   // Probe the STT engine on mount + on every supervisor status change, so Extract Comms
