@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 
 // Rounded-rectangle variant of DualRing. Same dual-arc semantics — outer thin
 // arc = session progress (depletes once over the whole session), inner thicker
@@ -29,7 +29,11 @@ export default function DualRingRect({
   const totalSecRef = useRef(totalSec);
   const subSecRef = useRef(0);
   const lastFrameRef = useRef(performance.now());
-  const [, setFrameTick] = useState(0);
+  const outerGlowEl = useRef(null);
+  const outerArcEl = useRef(null);
+  const innerGlowEl = useRef(null);
+  const innerArcEl = useRef(null);
+  const drawRef = useRef(() => {});
 
   useEffect(() => {
     if (totalSec !== totalSecRef.current) {
@@ -45,7 +49,7 @@ export default function DualRingRect({
       const dt = (t - lastFrameRef.current) / 1000;
       lastFrameRef.current = t;
       subSecRef.current = Math.min(1, subSecRef.current + dt);
-      setFrameTick((c) => c + 1);
+      drawRef.current();
       raf = requestAnimationFrame(tick);
     };
     lastFrameRef.current = performance.now();
@@ -154,6 +158,28 @@ export default function DualRingRect({
   const outerArcPath = roundedRectArcPath(outerX, outerY, outerW, outerH, outerR, outerFraction);
   const innerArcPath = roundedRectArcPath(innerX, innerY, innerW, innerH, innerR, innerFraction);
 
+  // Per-frame the RAF loop recomputes the arc paths and writes them straight onto
+  // the <path> DOM nodes (React's escape hatch for 60fps SVG) — no per-frame
+  // render. Reassigned every render so it always closes over current geometry,
+  // dragMins, totalSec, and roundedRectArcPath. Fraction math is verbatim from
+  // the render body above.
+  drawRef.current = () => {
+    let oF, iF;
+    if (isDragMode) { oF = Math.min(1, dragMins / 60); iF = 1; }
+    else {
+      const liveRemainingSec = Math.max(0, totalSec - subSecRef.current);
+      oF = Math.min(1, liveRemainingSec / 3600);
+      const liveMinSec = liveRemainingSec % 60;
+      iF = liveMinSec === 0 && liveRemainingSec > 0 ? 1 : liveMinSec / 60;
+    }
+    const oPath = roundedRectArcPath(outerX, outerY, outerW, outerH, outerR, oF);
+    const iPath = roundedRectArcPath(innerX, innerY, innerW, innerH, innerR, iF);
+    outerGlowEl.current?.setAttribute('d', oPath);
+    outerArcEl.current?.setAttribute('d', oPath);
+    innerGlowEl.current?.setAttribute('d', iPath);
+    innerArcEl.current?.setAttribute('d', iPath);
+  };
+
   const outerHaloW = outerStrokeW * 2.2;
   const innerHaloW = innerStrokeW * 1.6;
 
@@ -233,11 +259,11 @@ export default function DualRingRect({
       {outerArcPath && (
         <>
           {glow && (
-            <path d={outerArcPath} stroke={strokeColor}
+            <path ref={outerGlowEl} d={outerArcPath} stroke={strokeColor}
               strokeWidth={outerHaloW} fill="none" strokeLinecap="round"
               opacity="0.32" filter="url(#dualRectGlow)"/>
           )}
-          <path d={outerArcPath} stroke={strokeColor}
+          <path ref={outerArcEl} d={outerArcPath} stroke={strokeColor}
             strokeWidth={outerStrokeW} fill="none" strokeLinecap="round"/>
         </>
       )}
@@ -246,11 +272,11 @@ export default function DualRingRect({
       {innerArcPath && (
         <>
           {glow && (
-            <path d={innerArcPath} stroke={strokeColor}
+            <path ref={innerGlowEl} d={innerArcPath} stroke={strokeColor}
               strokeWidth={innerHaloW} fill="none" strokeLinecap="round"
               opacity="0.30" filter="url(#dualRectGlow)"/>
           )}
-          <path d={innerArcPath} stroke={strokeColor}
+          <path ref={innerArcEl} d={innerArcPath} stroke={strokeColor}
             strokeWidth={innerStrokeW} fill="none" strokeLinecap="round"/>
         </>
       )}

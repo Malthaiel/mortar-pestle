@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { emitSidebarGroupModeChange } from './useSidebarGroupMode.js';
 import { sharedEvents, readModuleBag, writeModuleSetting } from '../module-sdk/index.js';
@@ -698,6 +698,9 @@ export function useSettings(pageKey = 'pulse') {
   // on hover, then clears on leave/commit. null = no preview (show committed).
   const [previewAccent, setPreviewAccent] = useState(null);
 
+  const globalRef = useRef(globalSettings);
+  globalRef.current = globalSettings;
+
   // Recompute when the active preset or the global themeAccent changes. Accent
   // is one global value per theme now — page changes never move it.
   useEffect(() => {
@@ -711,7 +714,14 @@ export function useSettings(pageKey = 'pulse') {
   useEffect(() => {
     const resync = e => {
       if (e?.type === 'storage' && e.key && e.key !== 'focus_settings') return;
-      setGlobalSettings(loadGlobalSettings());
+      const next = loadGlobalSettings();
+      // A local setSetting write echoes back through this same handler; skip the
+      // no-op re-render (loadGlobalSettings() always returns a fresh object).
+      // ponytail: JSON compare — cheap + correct on nested refs; only fires on
+      // user-driven settings writes, never per-frame. Deep-equal if key-order
+      // ever proves unstable.
+      if (JSON.stringify(next) === JSON.stringify(globalRef.current)) return;
+      setGlobalSettings(next);
     };
     window.addEventListener(GLOBAL_SETTINGS_EVENT, resync);
     window.addEventListener('storage', resync);
@@ -929,7 +939,10 @@ export function useSettings(pageKey = 'pulse') {
     setSmoothness(globalSettings.scrollSmoothness || 'medium');
   }, [globalSettings.scrollSmoothness]);
 
-  const settings = { ...globalSettings, accentColor: previewAccent ?? accent };
+  const settings = useMemo(
+    () => ({ ...globalSettings, accentColor: previewAccent ?? accent }),
+    [globalSettings, previewAccent, accent],
+  );
   return { settings, setSetting, setPreviewAccent, resetSettings, resolvedTheme };
 }
 
