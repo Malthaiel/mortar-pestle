@@ -2,12 +2,22 @@
 // ScrimViewer, read from the .commstranscript.… sidecar (the segments source of truth, written
 // by Extract Comms). Mirrors MatchViewPopup's sidecar-read machinery (getRawFileMeta → parse →
 // loading / missing / parse-error states) but renders inline + collapsible rather than as a
-// popup. Keyed on the ### Comms Transcript body in ScrimViewer, so a re-extract remounts it and
-// it re-reads the fresh sidecar (reload-survival: the sidecar is the durable source).
+// popup. Keyed on the ### Comms Transcript body + a relabel bump in ScrimViewer, so a re-extract
+// or a cluster relabel remounts it and it re-reads the fresh sidecar (reload-survival: the
+// sidecar is the durable source).
+//
+// SF6 (Comms Diarization): the sidecar is now the object shape { segments, clusters, micSpeaker }
+// (parseCommsSidecar still accepts the legacy bare array). Each comms segment carries a speaker
+// (name or "Speaker N") + a 0-based cluster; the mic track's segments are you (cluster null). The
+// speaker prefix renders as a per-speaker color, and — for comms segments — an inline CandySelect
+// reassigns that whole voice cluster (onReassign → ScrimViewer.reassignCluster, which retrains the
+// voiceprint + relabels every segment of the cluster). Mic segments aren't relabelable.
 
 import { useEffect, useState } from 'react';
 import { api } from '@host/api.js';
-import { parseSegments } from './commsCompile.js';
+import { parseCommsSidecar } from './commsCompile.js';
+import { speakerColor } from './diarize.js';
+import CandySelect from '@host/components/ui/CandySelect.jsx';
 
 const muted = { color: 'var(--text-muted)', fontSize: 12 };
 
@@ -17,7 +27,7 @@ function mmss(ms) {
   return `${Math.floor(v / 60)}:${String(v % 60).padStart(2, '0')}`;
 }
 
-export default function CommsTranscriptView({ sidecarPath }) {
+export default function CommsTranscriptView({ sidecarPath, roster = [], onReassign }) {
   const [state, setState] = useState({ status: 'loading' });
   const [open, setOpen] = useState(false);
 
@@ -28,19 +38,22 @@ export default function CommsTranscriptView({ sidecarPath }) {
       .then((r) => {
         if (cancelled) return;
         try { JSON.parse(r.content); } catch { setState({ status: 'parse-error' }); return; }
-        setState({ status: 'ready', segs: parseSegments(r.content) });
+        setState({ status: 'ready', vm: parseCommsSidecar(r.content) });
       })
       .catch(() => { if (!cancelled) setState({ status: 'missing' }); });
     return () => { cancelled = true; };
   }, [sidecarPath]);
 
-  const { status, segs } = state;
+  const { status, vm } = state;
   if (status === 'loading') return <div style={{ ...muted, marginTop: 4 }}>Loading transcript…</div>;
   if (status === 'missing') return <div style={{ ...muted, marginTop: 4 }}>Transcript file unavailable — re-run Extract Comms.</div>;
   if (status === 'parse-error') return <div style={{ color: 'var(--error)', fontSize: 12, marginTop: 4 }}>Couldn’t parse the stored transcript.</div>;
-  if (!segs || !segs.length) return <div style={{ ...muted, marginTop: 4 }}>Transcript is empty.</div>;
+  const segs = vm?.segments || [];
+  if (!segs.length) return <div style={{ ...muted, marginTop: 4 }}>Transcript is empty.</div>;
 
   const durationMs = segs[segs.length - 1].t1Ms || 0;
+  const hasSpeakers = segs.some((s) => s.speaker != null);
+  const relabelOptions = [{ value: '', label: 'Unknown' }, ...roster.map((n) => ({ value: n, label: n }))];
   return (
     <div style={{ marginTop: 4 }}>
       <button type="button" className="candy-btn" data-shape="chip"
@@ -55,12 +68,24 @@ export default function CommsTranscriptView({ sidecarPath }) {
           borderRadius: 8, padding: '8px 10px',
           fontFamily: 'var(--font-mono)', fontSize: 12.5, lineHeight: 1.55,
         }}>
-          {segs.map((s, i) => (
-            <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 2 }}>
-              <span style={{ color: 'var(--text-muted)', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{mmss(s.t0Ms)}</span>
-              <span style={{ color: 'var(--text)', wordBreak: 'break-word' }}>{s.text || '·'}</span>
-            </div>
-          ))}
+          {segs.map((s, i) => {
+            const canRelabel = !!onReassign && s.cluster != null; // mic (cluster null) = you, not relabelable
+            return (
+              <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 3, alignItems: 'baseline' }}>
+                <span style={{ color: 'var(--text-muted)', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{mmss(s.t0Ms)}</span>
+                {hasSpeakers && (canRelabel
+                  ? (
+                    <span style={{ flexShrink: 0, alignSelf: 'center' }}>
+                      <CandySelect compact value={roster.includes(s.speaker) ? s.speaker : ''} options={relabelOptions}
+                        onChange={(n) => onReassign(s.cluster, n)} title="Reassign this voice to a player" placeholder={s.speaker || 'Unknown'} />
+                    </span>
+                  )
+                  : <span style={{ flexShrink: 0, minWidth: 64, fontWeight: 600, color: speakerColor(s.speaker) }}>{s.speaker || '—'}</span>
+                )}
+                <span style={{ color: 'var(--text)', wordBreak: 'break-word' }}>{s.text || '·'}</span>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

@@ -54,6 +54,9 @@ export function labelForCluster(clusterId, nameMap = {}) {
 // list sorted by start time. `commsSegments` must already carry `cluster` (run
 // alignDiarization first). Ties keep mic before comms (concat order) — Array.sort is stable.
 // `nameMap` maps cluster ids → player names (SF3); absent → "Speaker N".
+// Each output segment carries `cluster` too (SF4 persists it so an inline relabel can
+// find + reassign a whole speaker cluster after reload). Mic segments are you, not a
+// diarized cluster → cluster: null.
 export function mergeTranscripts({
   micSegments = [],
   commsSegments = [],
@@ -65,14 +68,31 @@ export function mergeTranscripts({
     t1Ms: Number(s?.t1Ms) || 0,
     text: String(s?.text ?? '').trim(),
     speaker: micSpeaker,
+    cluster: null,
   }));
-  const comms = (Array.isArray(commsSegments) ? commsSegments : []).map((s) => ({
-    t0Ms: Number(s?.t0Ms) || 0,
-    t1Ms: Number(s?.t1Ms) || 0,
-    text: String(s?.text ?? '').trim(),
-    speaker: labelForCluster(s?.cluster ?? null, nameMap),
-  }));
+  const comms = (Array.isArray(commsSegments) ? commsSegments : []).map((s) => {
+    const cluster = s?.cluster ?? null;
+    return {
+      t0Ms: Number(s?.t0Ms) || 0,
+      t1Ms: Number(s?.t1Ms) || 0,
+      text: String(s?.text ?? '').trim(),
+      speaker: labelForCluster(cluster, nameMap),
+      cluster,
+    };
+  });
   return [...mic, ...comms].sort((a, b) => a.t0Ms - b.t0Ms);
+}
+
+// Stable, tolerant name → oklch color for per-speaker tinting in the transcript. The same
+// name always yields the same hue (FNV-1a hash → hue), so a speaker keeps one color across
+// segments + scrims. Empty/nullish (Unknown, before naming) → the muted token.
+export function speakerColor(name) {
+  const s = String(name ?? '').trim();
+  if (!s) return 'var(--text-muted)';
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  const hue = (h >>> 0) % 360;
+  return `oklch(0.72 0.13 ${hue})`;
 }
 
 // Mixed-track fallback: remove the given cluster ids (e.g. the game-announcer cluster) from

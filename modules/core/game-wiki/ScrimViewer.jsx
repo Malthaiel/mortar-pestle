@@ -17,7 +17,9 @@ import { parseScrim, serializeScrim, mergeScrim, appendMatch, getNotes, ensureNo
 import MatchViewPopup from './MatchViewPopup.jsx';
 import { sidecarPath, renderSummary, setMatchDataBody, MATCH_DATA_PLACEHOLDER, clock, extractMeta, fmtLocalTime, extractSpatial } from './matchData.js';
 import { compileNotes, renderCoachingSummary, setCoachingSummaryBody, parseTimedNote, formatTimedBullet, sortByTimeAsc, secFromClock } from './noteCompile.js';
-import { setCommsTranscriptBody, renderCommsSummary, parseSegments } from './commsCompile.js';
+import { setCommsTranscriptBody, renderCommsSummary, parseSegments, parseCommsSidecar, buildCommsSidecar } from './commsCompile.js';
+import { alignDiarization, mergeTranscripts, labelForCluster, speakerColor } from './diarize.js';
+import { matchClusters, enrollPrint, parseVoiceprints, DEFAULT_THRESHOLD } from './voiceprints.js';
 import { auditSilentDeaths } from './deathAudit.js';
 import CommsTranscriptView from './CommsTranscriptView.jsx';
 import { useSettings } from '@host/hooks/useSettings.js';
@@ -36,6 +38,35 @@ const SAVE_DEBOUNCE_MS = 700;
 const STT_MODEL = 'large-v3-turbo-q5_0';
 const MP4_FILTERS = [{ name: 'Video', extensions: ['mp4', 'mkv', 'mov', 'webm'] }];
 const IMG_FILTERS = [{ name: 'Image', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }];
+
+// Per-team voiceprint store (SF6, Comms Diarization): Deadlock/Coaching/Teams/<Team>/.voiceprints.json
+// — the coached team's roster + saved voiceprints, reused across that team's scrims. The
+// Teams/<Team>/ subdir is created on first write (vault_write_file → atomic_write mkdir-parents).
+const TEAMS_BASE = 'Deadlock/Coaching/Teams';
+const teamStorePath = (team) => `${TEAMS_BASE}/${String(team || '').trim()}/.voiceprints.json`;
+
+// localStorage: global track defaults (0-based OBS track indices) + your mic-track name. Remembered
+// across scrims; the track indices are overridable per scrim via the Comms/Mic Track frontmatter.
+const LS_TRACKS = 'gw-coach-tracks';   // { comms, mic }
+const LS_YOUNAME = 'gw-coach-name';    // string
+
+function loadTrackDefaults() {
+  try { const j = JSON.parse(localStorage.getItem(LS_TRACKS) || '{}'); return { comms: j.comms ?? '', mic: j.mic ?? '' }; }
+  catch { return { comms: '', mic: '' }; }
+}
+function saveTrackDefault(key, val) {
+  const d = loadTrackDefaults(); d[key] = val;
+  try { localStorage.setItem(LS_TRACKS, JSON.stringify(d)); } catch { /* private mode */ }
+}
+const loadYourName = () => { try { return localStorage.getItem(LS_YOUNAME) || ''; } catch { return ''; } };
+
+// A track field ("" / non-numeric / negative → null = "not set"); a set value routes -map 0:a:<n>.
+function trackIndex(v) {
+  const s = String(v ?? '').trim();
+  if (s === '') return null;
+  const n = Number(s);
+  return Number.isInteger(n) && n >= 0 ? n : null;
+}
 
 // Native file-open dialog → absolute path string (or null if cancelled). The path
 // is stored verbatim in the .md (never copied — multi-GB recordings stay in place).
@@ -337,6 +368,86 @@ function SilentDeathAudit({ matchSidecar, commsSidecar, side, offsetS }) {
   );
 }
 
+// Per-team roster editor (SF6 Comms Diarization) — the coached team's player names, stored in the
+// team's voiceprint store + reused across that team's scrims. Add/remove/rename rows (candy fields);
+// names seed the Speakers-panel + inline-relabel dropdowns. Renaming a row here does NOT move an
+// existing voiceprint (prints are name-keyed — re-enroll under the new name from the Speakers panel).
+function RosterEditor({ team, readStore, writeStore, onSaved }) {
+  const [roster, setRoster] = useState(null); // null = loading
+  const [draft, setDraft] = useState('');
+  const storeRef = useRef({ roster: [], prints: {} });
+  useEffect(() => {
+    let cancelled = false;
+    setRoster(null); setDraft('');
+    if (!String(team || '').trim()) { setRoster([]); return undefined; }
+    readStore(team).then((s) => { if (!cancelled) { storeRef.current = s; setRoster(s.roster || []); } })
+      .catch(() => { if (!cancelled) setRoster([]); });
+    return () => { cancelled = true; };
+  }, [team, readStore]);
+  const update = (names) => { storeRef.current = { ...storeRef.current, roster: names }; setRoster(names); };
+  const commit = () => { writeStore(team, storeRef.current).then(() => onSaved?.(storeRef.current.roster)).catch(() => {}); };
+  if (!String(team || '').trim()) return <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Set a Coached Team (below) to build its roster.</div>;
+  if (roster == null) return <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Loading roster…</div>;
+  const addName = () => { const t = draft.trim(); setDraft(''); if (!t || roster.includes(t)) return; update([...roster, t]); commit(); };
+  return (
+    <div style={{ marginBottom: candyGap(8, true) }}>
+      <div style={labelStyle}>Roster{team ? ` · ${team}` : ''}</div>
+      {roster.map((n, i) => (
+        <div key={i} className="candy-center-row" style={{ gap: 6, marginBottom: candyGap(4, true) }}>
+          <div className="candy-btn" data-shape="field" style={{ flex: 1, minWidth: 0 }}>
+            <input className="candy-face" value={n}
+              onChange={(e) => update(roster.map((x, j) => (j === i ? e.target.value : x)))}
+              onBlur={commit}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } }} />
+          </div>
+          <button onClick={() => { update(roster.filter((_, j) => j !== i)); commit(); }} title="Remove player" style={removeBtn}>×</button>
+        </div>
+      ))}
+      <div className="candy-btn" data-shape="field" style={{ width: '100%', marginTop: 2 }}>
+        <input className="candy-face" value={draft} placeholder="Add a player…"
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addName(); } }} />
+      </div>
+    </div>
+  );
+}
+
+// Speakers panel (SF6) — one row per detected voice cluster → a roster-name dropdown, auto-filled
+// where a voiceprint matched at extract time. Assigning enrolls/retrains that player's print and
+// relabels every segment of the cluster (onReassign = ScrimViewer.reassignCluster). Reads the object
+// .commstranscript sidecar; renders nothing for a legacy / no-diarization transcript.
+function SpeakersPanel({ sidecarPath: scPath, roster, onReassign }) {
+  const [vm, setVm] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    api.getRawFileMeta(scPath, 'gamewiki')
+      .then((r) => { if (!cancelled) setVm(parseCommsSidecar(r.content)); })
+      .catch(() => { if (!cancelled) setVm({ segments: [], clusters: [], micSpeaker: 'You' }); });
+    return () => { cancelled = true; };
+  }, [scPath]);
+  if (!vm) return null;
+  const clusters = vm.clusters || [];
+  if (!clusters.length) return null;
+  const options = [{ value: '', label: 'Unknown' }, ...roster.map((n) => ({ value: n, label: n }))];
+  const labelOf = (cid) => { const s = (vm.segments || []).find((x) => Number(x.cluster) === Number(cid)); return s?.speaker || labelForCluster(cid, {}); };
+  return (
+    <div style={{ marginTop: 8 }}>
+      <div style={labelStyle}>Speakers</div>
+      {clusters.map((c) => {
+        const cur = labelOf(c.clusterId);
+        const val = roster.includes(cur) ? cur : '';
+        return (
+          <div key={c.clusterId} className="candy-center-row" style={{ gap: 8, marginBottom: candyGap(4, true) }}>
+            <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', minWidth: 84, color: speakerColor(val) }}>{labelForCluster(c.clusterId, {})}</span>
+            <CandySelect value={val} options={options} onChange={(n) => onReassign(c.clusterId, n)} title="Assign this voice to a player" placeholder={cur} compact />
+          </div>
+        );
+      })}
+      {!roster.length && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: candyGap(4) }}>Add players to the roster above to name these voices.</div>}
+    </div>
+  );
+}
+
 export default function ScrimViewer({ path, accent, overlay = false }) {
   const [scrim, setScrim] = useState(null);
   const [err, setErr] = useState(null);
@@ -355,6 +466,13 @@ export default function ScrimViewer({ path, accent, overlay = false }) {
   // Overlay mode: which match the header picker focuses + a live-dictation flag.
   const [focusedN, setFocusedN] = useState(null);
   const [dictating, setDictating] = useState(false);
+  // SF6 Comms Diarization: coached-team roster (Speakers panel + inline-relabel dropdowns), your
+  // mic-track name, the global track defaults (field placeholders), + a bump key that remounts the
+  // comms views after a cluster relabel (the opaque summary text is unchanged, so its key alone won't).
+  const [coachedRoster, setCoachedRoster] = useState([]);
+  const [yourName, setYourName] = useState(loadYourName);
+  const [trackDefaults, setTrackDefaults] = useState(loadTrackDefaults);
+  const [commsRelabelKey, setCommsRelabelKey] = useState(0);
   const matchFocusRef = useRef(null); // fresh focusedN for event-listener closures
   useEffect(() => { matchFocusRef.current = focusedN; }, [focusedN]);
 
@@ -526,12 +644,41 @@ export default function ScrimViewer({ path, accent, overlay = false }) {
     }
   }, [path, doSave]);
 
-  // Extract Comms — extract the match's Scrim Recording audio (ffmpeg → 16 kHz mono WAV via
-  // coaching_extract_audio), transcribe it through the mortar-pestle-stt sidecar, persist the full
-  // segments to the .commstranscript sidecar (verbatim) + a one-line summary into the opaque
-  // ### Comms Transcript. Mirrors runProcess: flush → work → ordered opaque write behind a
-  // fresh-mtime conflict guard. Separate from Run Process (the heavy, re-runnable STT pass);
-  // mergeScrim keeps the two opaque sections from clobbering each other.
+  // Read/write the coached team's voiceprint store (SF6): roster + saved prints, per team, reused
+  // across scrims. Missing file → empty store (first run). Prints are L2-normalized (voiceprints.js).
+  const readTeamStore = useCallback(async (team) => {
+    if (!String(team || '').trim()) return { roster: [], prints: {} };
+    try { const r = await api.getRawFileMeta(teamStorePath(team), 'gamewiki'); return parseVoiceprints(r.content); }
+    catch { return { roster: [], prints: {} }; }
+  }, []);
+  const writeTeamStore = useCallback(async (team, store) => {
+    if (!String(team || '').trim()) return;
+    // The Teams/<Team>/ subdir is created on first write (vault_write_file → atomic_write mkdir-parents).
+    await api.savePage(teamStorePath(team), JSON.stringify({ roster: store.roster || [], prints: store.prints || {} }), null, 'gamewiki');
+  }, []);
+
+  // Write the opaque ### Comms Transcript summary for match n (disk-owned; merged write behind the
+  // fresh-mtime conflict guard, retry once) — shared by Extract Comms + a cluster relabel.
+  const writeCommsOpaque = useCallback(async (n, body) => {
+    const doWrite = async () => {
+      const r = await api.getRawFileMeta(path, 'gamewiki').catch(() => null);
+      const fresh = r ? parseScrim(r.content) : scrimRef.current;
+      const merged = setCommsTranscriptBody(mergeScrim(scrimRef.current, fresh), n, body);
+      const content = serializeScrim(merged);
+      await api.savePage(path, content, r?.mtime ?? null, 'gamewiki');
+      lastSavedRef.current = content; scrimRef.current = merged; setScrim(merged);
+    };
+    try { await doWrite(); } catch (e) { if (e?.code === 'CONFLICT') await doWrite(); else throw e; }
+  }, [path]);
+
+  // Extract Comms (SF6 Comms Diarization) — one click = the full pipeline. With an isolated comms
+  // track set (Coaching Setup / frontmatter), extract the mic + comms tracks, transcribe each, diarize
+  // the comms track (mortar-pestle-stt), match clusters vs the coached team's saved voiceprints
+  // (auto-LABEL only — no enrollment), align + merge into one speaker-labeled, time-ordered transcript
+  // → the object .commstranscript sidecar (speaker + cluster + per-cluster embeddings) + the opaque
+  // ### Comms Transcript. With NO comms track set it degrades to the legacy single-downmix, speaker-null
+  // transcript (old recordings). Mirrors runProcess: flush → work → ordered opaque write behind a
+  // fresh-mtime conflict guard.
   const extractComms = useCallback(async (idx) => {
     const m = scrimRef.current?.matches?.[idx];
     if (!m || commsRef.current) return;
@@ -541,6 +688,12 @@ export default function ScrimViewer({ path, accent, overlay = false }) {
     try { up = (await invoke('stt_status')) != null; } catch { up = false; }
     if (!up) { setSttUp(false); notify('error', 'Speech engine unavailable', 'The transcription engine is not running — reopen the app and try again.'); return; }
 
+    const fmNow = scrimRef.current?.frontmatter || {};
+    const defs = loadTrackDefaults();
+    const commsIdx = trackIndex(fmNow['Comms Track'] ?? defs.comms);
+    const micIdx = trackIndex(fmNow['Mic Track'] ?? defs.mic);
+    const diarizeMode = commsIdx != null; // isolated-track pipeline vs legacy single-downmix
+
     commsRef.current = true; commsCancelledRef.current = false;
     setCommsN(m.n); setCommsPhase('Extracting audio…');
     try {
@@ -548,11 +701,8 @@ export default function ScrimViewer({ path, accent, overlay = false }) {
       clearTimeout(saveTimer.current);
       if (serializeScrim(scrimRef.current) !== lastSavedRef.current) await doSave();
 
-      const wavPath = await invoke('coaching_extract_audio', { video });
-
       // transcribe_file requires a model loaded first (the sidecar does not auto-load).
-      setCommsPhase('Loading model…');
-      await new Promise((resolve, reject) => {
+      const loadModel = () => new Promise((resolve, reject) => {
         let settled = false;
         const fin = (fn, v) => { if (!settled) { settled = true; fn(v); } };
         const lch = new Channel();
@@ -563,18 +713,17 @@ export default function ScrimViewer({ path, accent, overlay = false }) {
         };
         invoke('stt_load_model', { name: STT_MODEL, onEvent: lch }).catch((e) => fin(reject, e));
       });
-
-      setCommsPhase('Transcribing… 0%');
-      const segments = [];
-      const finalText = await new Promise((resolve, reject) => {
+      // transcribe one wav → { segments:[{t0Ms,t1Ms,text}], finalText }
+      const transcribeWav = (wavPath, phaseLabel) => new Promise((resolve, reject) => {
         let settled = false;
         const fin = (fn, v) => { if (!settled) { settled = true; fn(v); } };
+        const segments = [];
         const ch = new Channel();
         ch.onmessage = (ev) => {
           switch (ev.kind) {
             case 'segment': segments.push({ t0Ms: ev.t0Ms, t1Ms: ev.t1Ms, text: ev.text ?? '' }); break;
-            case 'progress': setCommsPhase(`Transcribing… ${Math.round(ev.pct ?? 0)}%`); break;
-            case 'final': fin(resolve, ev.text ?? ''); break;
+            case 'progress': setCommsPhase(`${phaseLabel}… ${Math.round(ev.pct ?? 0)}%`); break;
+            case 'final': fin(resolve, { segments, finalText: ev.text ?? '' }); break;
             case 'error': fin(reject, new Error(ev.message || 'transcription failed')); break;
             case 'done': if (!ev.ok) fin(reject, new Error('transcription ended early')); break;
             default: break;
@@ -582,37 +731,83 @@ export default function ScrimViewer({ path, accent, overlay = false }) {
         };
         invoke('stt_transcribe_file', { path: wavPath, onEvent: ch }).catch((e) => fin(reject, e));
       });
-
-      if (commsCancelledRef.current) { notify('success', 'Comms cancelled', 'Transcription was cancelled — nothing saved.'); return; }
-      // segments are the source of truth (timestamped); fall back to the final text as one
-      // segment only if the engine emitted none (it always streams segments in practice).
-      const segs = segments.length ? segments : (finalText ? [{ t0Ms: 0, t1Ms: 0, text: finalText }] : []);
-
-      // 1) full segments → sidecar (verbatim; speaker reserved null; null mtime = overwrite)
-      setCommsPhase('Saving…');
+      // diarize one wav → { numSpeakers, segments:[{t0Ms,t1Ms,clusterId}], clusters:[{clusterId,embedding}] }
+      const diarizeWav = (wavPath, maxSpeakers) => new Promise((resolve, reject) => {
+        let settled = false;
+        const fin = (fn, v) => { if (!settled) { settled = true; fn(v); } };
+        const ch = new Channel();
+        ch.onmessage = (ev) => {
+          switch (ev.kind) {
+            case 'progress': setCommsPhase(`Identifying speakers… ${Math.round(ev.pct ?? 0)}%`); break;
+            case 'diarization': fin(resolve, { numSpeakers: ev.numSpeakers, segments: ev.segments || [], clusters: ev.clusters || [] }); break;
+            case 'error': fin(reject, new Error(ev.message || 'diarization failed')); break;
+            case 'done': if (!ev.ok) fin(reject, new Error('diarization ended early')); break;
+            default: break;
+          }
+        };
+        invoke('stt_diarize_file', { path: wavPath, maxSpeakers, onEvent: ch }).catch((e) => fin(reject, e));
+      });
+      const cancelled = () => commsCancelledRef.current;
+      const cancelNote = () => notify('success', 'Comms cancelled', 'Transcription was cancelled — nothing saved.');
       const scPath = sidecarPath(path, m.n, 'comms');
-      await api.savePage(scPath, JSON.stringify(segs.map((seg) => ({ ...seg, speaker: null }))), null, 'gamewiki');
-
-      // 2) summary + pointer → ### Comms Transcript (opaque/disk-owned; one merged write; retry once)
-      const durationS = segs.length ? (segs[segs.length - 1].t1Ms || 0) / 1000 : 0;
-      const body = renderCommsSummary({ n: m.n, segments: segs, durationS, sidecarFileName: scPath.split('/').pop() });
-      const writeMd = async () => {
-        const r = await api.getRawFileMeta(path, 'gamewiki').catch(() => null);
-        const fresh = r ? parseScrim(r.content) : scrimRef.current;
-        const merged = setCommsTranscriptBody(mergeScrim(scrimRef.current, fresh), m.n, body);
-        const content = serializeScrim(merged);
-        await api.savePage(path, content, r?.mtime ?? null, 'gamewiki');
-        lastSavedRef.current = content; scrimRef.current = merged; setScrim(merged);
+      // Persist the sidecar payload + the opaque ### Comms Transcript summary (segs = the merged list).
+      const finishOpaque = async (segs, payload) => {
+        setCommsPhase('Saving…');
+        await api.savePage(scPath, JSON.stringify(payload), null, 'gamewiki');
+        const durationS = segs.length ? Math.max(...segs.map((s) => Number(s.t1Ms) || 0)) / 1000 : 0;
+        const body = renderCommsSummary({ n: m.n, segments: segs, durationS, sidecarFileName: scPath.split('/').pop() });
+        await writeCommsOpaque(m.n, body);
       };
-      try { await writeMd(); } catch (e) { if (e?.code === 'CONFLICT') await writeMd(); else throw e; }
 
-      notify('success', 'Comms extracted', `Match ${m.fields['Match ID'] || m.n} — ${segs.length} segment${segs.length === 1 ? '' : 's'} transcribed.`);
+      if (!diarizeMode) {
+        // ── legacy single-downmix path (no isolated comms track): speaker null, unchanged behavior ──
+        const wavPath = await invoke('coaching_extract_audio', { video });
+        setCommsPhase('Loading model…'); await loadModel();
+        setCommsPhase('Transcribing… 0%');
+        const { segments, finalText } = await transcribeWav(wavPath, 'Transcribing');
+        if (cancelled()) { cancelNote(); return; }
+        const segs = segments.length ? segments : (finalText ? [{ t0Ms: 0, t1Ms: 0, text: finalText }] : []);
+        await finishOpaque(segs, segs.map((seg) => ({ ...seg, speaker: null, cluster: null })));
+        notify('success', 'Comms extracted', `Match ${m.fields['Match ID'] || m.n} — ${segs.length} segment${segs.length === 1 ? '' : 's'} transcribed.`);
+        return;
+      }
+
+      // ── isolated-track diarization pipeline ──
+      setCommsPhase('Extracting tracks…');
+      const micWav = micIdx != null ? await invoke('coaching_extract_audio', { video, track: micIdx }) : null;
+      const commsWav = await invoke('coaching_extract_audio', { video, track: commsIdx });
+
+      setCommsPhase('Loading model…'); await loadModel();
+      let micSegments = [];
+      if (micWav) { setCommsPhase('Transcribing mic… 0%'); micSegments = (await transcribeWav(micWav, 'Transcribing mic')).segments; }
+      if (cancelled()) { cancelNote(); return; }
+      setCommsPhase('Transcribing comms… 0%');
+      const commsSegments = (await transcribeWav(commsWav, 'Transcribing comms')).segments;
+      if (cancelled()) { cancelNote(); return; }
+
+      // diarize the comms track: fixed-K = coached roster size (caps phantom clusters), else auto (0).
+      const coachedTeam = fmNow['Coached Team'] || fmNow['Team 1'] || '';
+      const store = await readTeamStore(coachedTeam);
+      const diar = await diarizeWav(commsWav, (store.roster || []).length);
+      if (cancelled()) { cancelNote(); return; }
+
+      // match clusters vs saved prints (auto-LABEL only — enrollment happens on an explicit
+      // Speakers-panel assignment), align comms text to clusters, merge mic ∪ comms by time.
+      const nameMap = matchClusters(diar.clusters || [], store.prints || {}, DEFAULT_THRESHOLD);
+      const aligned = alignDiarization(commsSegments, diar.segments || []);
+      const yourName = loadYourName() || 'You';
+      const merged = mergeTranscripts({ micSegments, commsSegments: aligned, micSpeaker: yourName, nameMap });
+
+      await finishOpaque(merged, buildCommsSidecar({ segments: merged, clusters: diar.clusters || [], micSpeaker: yourName }));
+      const voices = diar.numSpeakers ?? (diar.clusters || []).length;
+      const named = Object.values(nameMap).filter(Boolean).length;
+      notify('success', 'Comms extracted', `Match ${m.fields['Match ID'] || m.n} — ${merged.length} segments · ${voices} voice${voices === 1 ? '' : 's'}${named ? ` · ${named} auto-named` : ''}.`);
     } catch (e) {
       if (!commsCancelledRef.current) notify('error', 'Extract Comms failed', e?.message || String(e));
     } finally {
       commsRef.current = false; setCommsN(null); setCommsPhase('');
     }
-  }, [path, doSave]);
+  }, [path, doSave, readTeamStore, writeCommsOpaque]);
 
   // Cancel an in-flight Extract Comms — raise the daemon cancel flag; the terminal event then
   // resolves/rejects the transcribe promise and the cancelled-flag check skips the write.
@@ -622,6 +817,49 @@ export default function ScrimViewer({ path, accent, overlay = false }) {
     setCommsPhase('Cancelling…');
     invoke('stt_cancel').catch(() => {});
   }, []);
+
+  // Reassign a whole speaker cluster to a roster name (Speakers panel or an inline transcript
+  // relabel). On an explicit name (not a clear) this ENROLLS/retrains the voiceprint from the
+  // cluster's mean embedding (the correction→retrain safety valve), then relabels every segment
+  // of that cluster in the sidecar + regenerates the opaque summary. A clear reverts to "Speaker N".
+  const reassignCluster = useCallback(async (idx, cid, name) => {
+    const m = scrimRef.current?.matches?.[idx];
+    if (!m) return;
+    try {
+      const scPath = sidecarPath(path, m.n, 'comms');
+      const r = await api.getRawFileMeta(scPath, 'gamewiki');
+      const vm = parseCommsSidecar(r.content); // { segments, clusters, micSpeaker }
+      const cl = (vm.clusters || []).find((c) => Number(c.clusterId) === Number(cid));
+      const coachedTeam = scrimRef.current?.frontmatter?.['Coached Team'] || scrimRef.current?.frontmatter?.['Team 1'] || '';
+      if (name && cl?.embedding?.length) {
+        const store = await readTeamStore(coachedTeam);
+        const prints = enrollPrint(store.prints || {}, name, cl.embedding);
+        const roster = (store.roster || []).includes(name) ? store.roster : [...(store.roster || []), name];
+        await writeTeamStore(coachedTeam, { roster, prints });
+        setCoachedRoster(roster);
+      }
+      const label = name || labelForCluster(Number(cid), {});
+      const segments = (vm.segments || []).map((s) => (Number(s.cluster) === Number(cid) ? { ...s, speaker: label } : s));
+      const payload = buildCommsSidecar({ segments, clusters: vm.clusters || [], micSpeaker: vm.micSpeaker });
+      await api.savePage(scPath, JSON.stringify(payload), null, 'gamewiki');
+      const durationS = segments.length ? Math.max(...segments.map((s) => Number(s.t1Ms) || 0)) / 1000 : 0;
+      const body = renderCommsSummary({ n: m.n, segments, durationS, sidecarFileName: scPath.split('/').pop() });
+      await writeCommsOpaque(m.n, body);
+      setCommsRelabelKey((k) => k + 1); // remount the comms views (opaque body text is unchanged)
+    } catch (e) {
+      notify('error', 'Relabel failed', e?.message || String(e));
+    }
+  }, [path, readTeamStore, writeTeamStore, writeCommsOpaque]);
+
+  // Load the coached team's roster (from its voiceprint store) for the Speakers panel + inline
+  // relabel dropdowns; refreshes when the Coached Team changes.
+  useEffect(() => {
+    let cancelled = false;
+    const team = scrim?.frontmatter?.['Coached Team'] || scrim?.frontmatter?.['Team 1'] || '';
+    if (!team) { setCoachedRoster([]); return undefined; }
+    readTeamStore(team).then((s) => { if (!cancelled) setCoachedRoster(s.roster || []); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [scrim?.frontmatter?.['Coached Team'], scrim?.frontmatter?.['Team 1'], readTeamStore]);
 
   // Classify (AI) — propose chess.com classifications for a team by reasoning over the
   // pulled match data. Reads the .matchdata sidecar → buildMomentsDigest(side) → Claude
@@ -890,6 +1128,27 @@ export default function ScrimViewer({ path, accent, overlay = false }) {
           </div>
         </div>
 
+        {!overlay && (
+          <div style={card}>
+            <div style={{ ...sectionTitle, marginBottom: 8 }}>Coaching Setup</div>
+            <RosterEditor team={fm['Coached Team'] || fm['Team 1'] || ''} readStore={readTeamStore} writeStore={writeTeamStore} onSaved={setCoachedRoster} />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 14 }}>
+              <EditField label="Comms Track" value={fm['Comms Track']} onChange={(v) => setFm('Comms Track', v)}
+                onCommit={() => { flushSave(); saveTrackDefault('comms', scrimRef.current?.frontmatter?.['Comms Track'] || ''); setTrackDefaults(loadTrackDefaults()); }}
+                placeholder={trackDefaults.comms !== '' ? `default ${trackDefaults.comms}` : 'OBS track # (e.g. 4)'} />
+              <EditField label="Mic Track" value={fm['Mic Track']} onChange={(v) => setFm('Mic Track', v)}
+                onCommit={() => { flushSave(); saveTrackDefault('mic', scrimRef.current?.frontmatter?.['Mic Track'] || ''); setTrackDefaults(loadTrackDefaults()); }}
+                placeholder={trackDefaults.mic !== '' ? `default ${trackDefaults.mic}` : 'OBS track # (e.g. 1)'} />
+            </div>
+            <EditField label="Your Name (mic track)" value={yourName} onChange={setYourName}
+              onCommit={() => { try { localStorage.setItem(LS_YOUNAME, yourName || ''); } catch { /* private mode */ } }}
+              placeholder="how your mic track is labeled (default: You)" />
+            <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>
+              Track #s are 0-based OBS audio tracks — set once, remembered for next time. Blank comms track = one un-split transcript (no speaker labels).
+            </div>
+          </div>
+        )}
+
         <div style={card}>
           <div style={{ ...sectionTitle, marginBottom: 8 }}>Matchup</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 14 }}>
@@ -996,10 +1255,15 @@ export default function ScrimViewer({ path, accent, overlay = false }) {
                   <CoachingSummaryView body={summaryBody} />
                 </div>
               )}
+              {hasComms && (
+                <SpeakersPanel key={`sp:${commsBody}:${commsRelabelKey}`} sidecarPath={sidecarPath(path, m.n, 'comms')}
+                  roster={coachedRoster} onReassign={(cid, name) => reassignCluster(idx, cid, name)} />
+              )}
               <div style={{ marginTop: 8 }}>
                 <div style={labelStyle}>Comms Transcript</div>
                 {hasComms
-                  ? <CommsTranscriptView key={commsBody} sidecarPath={sidecarPath(path, m.n, 'comms')} />
+                  ? <CommsTranscriptView key={`ct:${commsBody}:${commsRelabelKey}`} sidecarPath={sidecarPath(path, m.n, 'comms')}
+                      roster={coachedRoster} onReassign={(cid, name) => reassignCluster(idx, cid, name)} />
                   : <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Not yet extracted — click <strong>Extract Comms</strong>.</div>}
               </div>
               {hasComms && populated && coachedSide != null && (

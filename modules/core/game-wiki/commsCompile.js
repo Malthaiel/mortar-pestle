@@ -16,20 +16,61 @@ function mmss(s) {
   return `${Math.floor(v / 60)}:${String(v % 60).padStart(2, '0')}`;
 }
 
-// Parse the `.commstranscript.…` sidecar JSON into a [{ t0Ms, t1Ms, text, speaker }]
-// view-model. Tolerant: malformed/empty JSON or a non-array → [] (degrade to a gap, never
-// throw — like matchData's extractMatch). `speaker` is reserved: always null in v1, so
-// sub-plan 6 (diarization) can fill it with no migration.
-export function parseSegments(jsonStr) {
-  let raw;
-  try { raw = JSON.parse(jsonStr); } catch { return []; }
-  if (!Array.isArray(raw)) return [];
-  return raw.map((s) => ({
+// Normalize one raw segment → { t0Ms, t1Ms, text, speaker, cluster }. `cluster` (SF6
+// diarization) is the 0-based speaker-cluster id, or null (mic / pre-diarization).
+function normSeg(s) {
+  return {
     t0Ms: Number(s?.t0Ms) || 0,
     t1Ms: Number(s?.t1Ms) || 0,
     text: String(s?.text ?? '').trim(),
     speaker: s?.speaker ?? null,
-  }));
+    cluster: s?.cluster ?? null,
+  };
+}
+
+// Parse the `.commstranscript.…` sidecar JSON into a [{ t0Ms, t1Ms, text, speaker, cluster }]
+// view-model. Tolerant: malformed/empty JSON → [] (degrade to a gap, never throw — like
+// matchData's extractMatch). Accepts BOTH shapes with no migration: the legacy bare array
+// (sub-plan 4, speaker null) AND the SF6 object { segments, clusters, micSpeaker }.
+export function parseSegments(jsonStr) {
+  let raw;
+  try { raw = JSON.parse(jsonStr); } catch { return []; }
+  const arr = Array.isArray(raw) ? raw : (Array.isArray(raw?.segments) ? raw.segments : null);
+  if (!arr) return [];
+  return arr.map(normSeg);
+}
+
+// Parse the sidecar into the full SF6 view-model { segments, clusters, micSpeaker }. Tolerant
+// like parseSegments; a legacy bare array yields empty clusters + a default micSpeaker (so the
+// Speakers panel simply shows nothing to name on an old, un-diarized transcript).
+export function parseCommsSidecar(jsonStr) {
+  let raw;
+  try { raw = JSON.parse(jsonStr); } catch { return { segments: [], clusters: [], micSpeaker: 'You' }; }
+  const arr = Array.isArray(raw) ? raw : (Array.isArray(raw?.segments) ? raw.segments : []);
+  const clusters = Array.isArray(raw?.clusters)
+    ? raw.clusters.map((c) => ({ clusterId: Number(c?.clusterId), embedding: Array.isArray(c?.embedding) ? c.embedding : [] }))
+    : [];
+  return { segments: arr.map(normSeg), clusters, micSpeaker: raw?.micSpeaker ?? 'You' };
+}
+
+// Build the SF6 object-shape sidecar payload (the caller JSON.stringifies it). Segments keep
+// speaker + cluster; clusters carry the per-cluster mean embeddings so a later relabel can
+// retrain the matched voiceprint; micSpeaker labels the mic (you) track.
+export function buildCommsSidecar({ segments = [], clusters = [], micSpeaker = 'You' } = {}) {
+  return {
+    segments: (Array.isArray(segments) ? segments : []).map((s) => ({
+      t0Ms: Number(s?.t0Ms) || 0,
+      t1Ms: Number(s?.t1Ms) || 0,
+      text: String(s?.text ?? '').trim(),
+      speaker: s?.speaker ?? null,
+      cluster: s?.cluster ?? null,
+    })),
+    clusters: (Array.isArray(clusters) ? clusters : []).map((c) => ({
+      clusterId: Number(c?.clusterId),
+      embedding: Array.isArray(c?.embedding) ? c.embedding : [],
+    })),
+    micSpeaker,
+  };
 }
 
 // Render the one-line `### Comms Transcript` opaque body: a summary headline + a pointer
