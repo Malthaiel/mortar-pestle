@@ -710,12 +710,12 @@ async fn process_job(app: &AppHandle, job_id: &str) {
     }
 
     let mut stdout = String::new();
-    if let Some(mut out) = child.stdout.take() {
-        let _ = out.read_to_string(&mut stdout).await;
-    }
     let mut stderr = String::new();
-    if let Some(mut err) = child.stderr.take() {
-        let _ = err.read_to_string(&mut stderr).await;
+    if let (Some(mut out), Some(mut err)) = (child.stdout.take(), child.stderr.take()) {
+        let _ = tokio::join!(
+            out.read_to_string(&mut stdout),
+            err.read_to_string(&mut stderr),
+        );
     }
     let _ = child.wait().await;
     {
@@ -993,7 +993,9 @@ fn set_download_status(series_rel: &str, status: &str) {
     if text.ends_with('\n') {
         new.push('\n');
     }
-    let _ = atomic_write(&abs, new.as_bytes());
+    if let Err(e) = atomic_write(&abs, new.as_bytes()) {
+        log::warn!("set_download_status: failed to write {}: {e:?}", abs.display());
+    }
 }
 
 /// Persist a terminal job into the shared downloads history (best-effort). Reads

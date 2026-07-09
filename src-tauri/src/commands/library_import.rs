@@ -299,7 +299,7 @@ async fn process_music_job(app: &AppHandle, job_id: &str) {
     };
     let mut cmd = crate::commands::proc_util::python_cmd();
     cmd.arg(&script).arg("--file").arg(&file_path);
-    cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null());
     let mut child = match cmd.spawn() {
         Ok(c) => c,
         Err(e) => {
@@ -533,7 +533,7 @@ async fn spawn_album_card(
         .arg("--metadata-only")
         .arg("--status")
         .arg(status);
-    cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null());
     let mut child = cmd.spawn().ok()?;
     with_job(job_id, |j| j.child_pid = child.id());
 
@@ -587,7 +587,7 @@ async fn process_mal_job(app: &AppHandle, job_id: &str) {
     };
     let mut cmd = crate::commands::proc_util::python_cmd();
     cmd.arg(&script).arg("--file").arg(&file_path);
-    cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null());
     let mut child = match cmd.spawn() {
         Ok(c) => c,
         Err(e) => {
@@ -753,7 +753,7 @@ async fn spawn_anime_card(job_id: &str, script: &str, a: &ParsedAnime) -> Option
         .arg(&a.started)
         .arg("--finished")
         .arg(&a.finished);
-    cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null());
     let mut child = cmd.spawn().ok()?;
     with_job(job_id, |j| j.child_pid = child.id());
 
