@@ -1470,3 +1470,117 @@ pub fn creds_settings_set(
         Ok(store.settings.clone())
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // A store with one real entry, so the roundtrip proves entry secrets survive.
+    fn sample_store() -> CredStore {
+        let mut s = CredStore::new_empty();
+        s.entries.push(CredEntry {
+            id: "id-1".into(),
+            folder: None,
+            tags: vec!["email".into()],
+            title: "GitHub".into(),
+            origin: Some("https://github.com/login".into()),
+            host: Some("github.com".into()),
+            username: "octocat".into(),
+            password: "correct horse battery staple".into(),
+            notes: "2fa in authenticator".into(),
+            custom_fields: vec![],
+            created: "2026-01-01T00:00:00Z".into(),
+            updated: "2026-01-02T00:00:00Z".into(),
+        });
+        s
+    }
+
+    // seal() takes a raw 32-byte key, so tests skip Argon2 entirely and stay fast.
+    const KEY_A: [u8; KEY_LEN] = [7u8; KEY_LEN];
+    const KEY_B: [u8; KEY_LEN] = [9u8; KEY_LEN];
+    const SALT: [u8; SALT_LEN] = [3u8; SALT_LEN];
+
+    fn seal_sample(key: &[u8; KEY_LEN]) -> Vec<u8> {
+        seal(key, &SALT, ARGON_M_COST, ARGON_T_COST, ARGON_P_COST, &sample_store())
+            .expect("seal should succeed")
+    }
+
+    #[test]
+    fn seal_open_roundtrip_is_byte_identical() {
+        let store = sample_store();
+        let original = serde_json::to_vec(&store).unwrap();
+        let blob = seal(&KEY_A, &SALT, ARGON_M_COST, ARGON_T_COST, ARGON_P_COST, &store).unwrap();
+        let vf = parse_file(&blob).unwrap();
+        let decoded = open(&vf, &KEY_A).unwrap();
+        // The serialized store must survive seal->parse->open unchanged.
+        assert_eq!(original, serde_json::to_vec(&decoded).unwrap());
+    }
+
+    #[test]
+    fn open_with_wrong_key_is_bad_password() {
+        let blob = seal_sample(&KEY_A);
+        let vf = parse_file(&blob).unwrap();
+        assert!(matches!(open(&vf, &KEY_B), Err(CredError::BadPassword)));
+    }
+
+    #[test]
+    fn tampered_aad_header_byte_is_bad_password() {
+        let mut blob = seal_sample(&KEY_A);
+        // Byte 7 is the reserved flags byte: part of the AAD but NOT validated by
+        // parse_file, so parsing still succeeds and only the AEAD tag catches it.
+        blob[7] ^= 0xFF;
+        let vf = parse_file(&blob).unwrap();
+        assert!(matches!(open(&vf, &KEY_A), Err(CredError::BadPassword)));
+    }
+
+    #[test]
+    fn tampered_ciphertext_byte_is_bad_password() {
+        let mut blob = seal_sample(&KEY_A);
+        let last = blob.len() - 1; // inside the AEAD ciphertext/tag
+        blob[last] ^= 0xFF;
+        let vf = parse_file(&blob).unwrap();
+        assert!(matches!(open(&vf, &KEY_A), Err(CredError::BadPassword)));
+    }
+
+    fn unlocked_with(idle_secs: u64, last_active: Instant) -> Unlocked {
+        let mut store = CredStore::new_empty();
+        store.settings.idle_timeout_secs = idle_secs;
+        Unlocked {
+            key: Zeroizing::new([0u8; KEY_LEN]),
+            salt: vec![0u8; SALT_LEN],
+            m_cost: ARGON_M_COST,
+            t_cost: ARGON_T_COST,
+            p_cost: ARGON_P_COST,
+            store,
+            last_active,
+        }
+    }
+
+    #[test]
+    fn enforce_idle_scrubs_when_expired() {
+        // last_active 2s ago, timeout 1s -> expired. Subtraction is safe: system
+        // uptime is always >> 2s. (Use checked_sub().unwrap() if you prefer.)
+        let past = Instant::now() - Duration::from_secs(2);
+        let mut slot = Some(unlocked_with(1, past));
+        enforce_idle(&mut slot);
+        assert!(slot.is_none(), "expired session must be scrubbed to None");
+    }
+
+    #[test]
+    fn enforce_idle_keeps_fresh_session() {
+        let mut slot = Some(unlocked_with(900, Instant::now()));
+        enforce_idle(&mut slot);
+        assert!(slot.is_some(), "fresh session must be retained");
+    }
+
+    #[test]
+    fn derive_key_is_deterministic_and_salt_bound() {
+        // Wiring check on the Argon2id KDF (one run; ~real cost is acceptable).
+        let k1 = derive_key(b"master", &SALT, ARGON_M_COST, ARGON_T_COST, ARGON_P_COST).unwrap();
+        let k2 = derive_key(b"master", &SALT, ARGON_M_COST, ARGON_T_COST, ARGON_P_COST).unwrap();
+        assert_eq!(k1[..], k2[..], "same inputs -> same key");
+        let other_salt = [4u8; SALT_LEN];
+        let k3 = derive_key(b"master", &other_salt, ARGON_M_COST, ARGON_T_COST, ARGON_P_COST).unwrap();
+        assert_ne!(k1[..], k3[..], "different salt -> different key");
+    }
+}

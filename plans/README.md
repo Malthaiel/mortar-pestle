@@ -23,7 +23,7 @@ Run the **P0** block first; run **002 before any test plan (020–024)**; the re
 | 010 | Parallelize + lazy-load module boot (xterm/react-markdown) | perf | P1 | M | MED | — | TODO |
 | 011 | Route album/series lists through the frontmatter cache | perf | P1 | M | LOW | — | TODO |
 | 014 | Fix the Tauri `listen()` unlisten leak (4 sites) | bug | P1 | S | LOW | — | TODO |
-| 020 | Credentials crypto roundtrip + idle-lock tests | tests | P1 | S | LOW | 002 | TODO |
+| 020 | Credentials crypto roundtrip + idle-lock tests | tests | P1 | S | LOW | 002 | DONE |
 | 021 | Recycle-bin restore characterization tests | tests | P1 | M | LOW | 002 | TODO |
 | 022 | Restore planner daily-writer test coverage | tests | P1 | M | LOW | 002 | TODO |
 | 005 | Prune stale 7878 grant + fix `vault_get_folder` containment | security | P2 | S | LOW | — | TODO |
