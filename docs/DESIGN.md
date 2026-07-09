@@ -103,7 +103,28 @@ Letter-spacing is part of the type identity, not optional. Mono captions without
 
 ## Primitives
 
-Live under `web/src/components/ui/` and re-export via `web/src/components/ui/index.js`. Import as `from './ui/index.js'` (or `'../ui/index.js'` etc.) — never deep-import the individual files.
+Live under `web/src/components/ui/` and re-export via `web/src/components/ui/index.js`. Host-internal code imports as `from './ui/index.js'` (or `'../ui/index.js'`) — prefer the barrel over deep-importing individual files. Modules import the same barrel as `@host/components/ui/index.js` (a handful of legacy `@host/components/ui/<File>.jsx` deep imports predate this and are not retroactively rewritten).
+
+## Module ↔ host import boundary (what actually holds)
+
+Modules (`modules/**`) share a broad host surface by design, reached via the
+`@host/*` alias (`@host` → `web/src`, see `web/vite.config.js`). Host UI
+primitives (`@host/components`, incl. the `@host/components/ui/index.js`
+barrel), hooks (`@host/hooks`), utilities (`@host/util`, `@host/lib`), the
+router (`@host/router`), and the module SDK (`@host/module-sdk`) are all
+legitimately imported by modules. There is **no rule** that modules may only
+touch the SDK — as of this writing modules import `@host/*` ~274× across ~133
+files, and only ~6 of those hit `@host/module-sdk`. Any older claim that
+`web/src/*` is "forbidden in modules, enforced by lint" is inaccurate and
+should be disregarded.
+
+The one invariant that **does** hold: **no imports across module families.**
+`modules/core/A` must not import `modules/core/B`. The `library` sub-tree
+(`library`, `library/music`, `library/video`, …) is a single family sharing
+`@modules/core/library/*`; the only current cross-file `@modules` imports are
+two intra-library uses of `@modules/core/library/PosterRow.jsx`, which are fine.
+Cross-*family* imports are not allowed — extract shared code to the host
+(`web/src`) instead.
 
 ### `Button`
 

@@ -11,7 +11,8 @@
     "check-themes": "node scripts/check-theme-contrast.mjs",
     "check-drag": "node scripts/check-drag-math.mjs",
     "check-time": "node scripts/check-planner-time.mjs",
-    "check-path": "node scripts/check-path-marshal.mjs"
+    "check-path": "node scripts/check-path-marshal.mjs",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",
@@ -36,7 +37,10 @@
     "@babel/parser": "^7.29.3",
     "@babel/traverse": "^7.29.0",
     "@babel/types": "^7.29.0",
+    "@eslint/js": "^9.0.0",
     "@vitejs/plugin-react": "^4.3.4",
+    "eslint": "^9.0.0",
+    "eslint-plugin-react-hooks": "^5.0.0",
     "vite": "^6.0.5"
   }
 }
