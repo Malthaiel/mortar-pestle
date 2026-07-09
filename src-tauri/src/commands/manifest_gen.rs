@@ -174,7 +174,7 @@ fn parse_title_aliases(content: &str, stem: &str) -> (Option<String>, Vec<String
     let mut title: Option<String> = None;
     let mut aliases: Vec<String> = Vec::new();
     if let Some(fm) = extract_frontmatter(content) {
-        if let Ok(map) = serde_yml::from_str::<HashMap<String, serde_yml::Value>>(fm) {
+        if let Ok(map) = serde_yaml_ng::from_str::<HashMap<String, serde_yaml_ng::Value>>(fm) {
             // Case-insensitive keys: Citadel uses `Aliases`, native Obsidian
             // uses `aliases`. Accept both (plus `alias`/`Title`).
             for (k, v) in &map {
@@ -207,10 +207,10 @@ fn extract_frontmatter(content: &str) -> Option<&str> {
     Some(&rest[..end])
 }
 
-fn yaml_strings(v: &serde_yml::Value) -> Vec<String> {
+fn yaml_strings(v: &serde_yaml_ng::Value) -> Vec<String> {
     match v {
-        serde_yml::Value::String(s) if !s.is_empty() => vec![s.clone()],
-        serde_yml::Value::Sequence(seq) => seq
+        serde_yaml_ng::Value::String(s) if !s.is_empty() => vec![s.clone()],
+        serde_yaml_ng::Value::Sequence(seq) => seq
             .iter()
             .filter_map(|x| x.as_str().map(String::from))
             .filter(|s| !s.is_empty())

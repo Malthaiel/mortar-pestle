@@ -203,7 +203,7 @@ async function readCall(command, args) {
 // === Planner: Block Library + daily-log section helpers ===
 // Hand-rolled YAML parse/serialize for our controlled schema in
 // `Mortar & Pestle/Block Library.md`. Avoids adding a JS YAML dep; the
-// Rust side has `serde_yml` if we ever need robust round-trip.
+// Rust side has `serde_yaml_ng` if we ever need robust round-trip.
 
 const BLOCK_LIBRARY_PATH = 'Mortar & Pestle/Block Library.md';
 const RELEASES_PATH = 'Mortar & Pestle/Releases.md';
