@@ -39,8 +39,12 @@ use tokio::sync::broadcast;
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
 
 use crate::daemon::engine::EngineCmd;
+use crate::diarize;
 use crate::models::{download_model, ensure_model, ModelError};
-use crate::protocol::{DownloadComplete, Event, Final, ModelLoaded, ProtoError, Progress, Segment};
+use crate::protocol::{
+    DiarCluster, DiarSegment, Diarization, DownloadComplete, Event, Final, ModelLoaded, ProtoError,
+    Progress, Segment,
+};
 
 /// whisper consumes 16 kHz mono f32 PCM (the cross-cutting audio contract).
 const WHISPER_SAMPLE_RATE: u32 = 16_000;
@@ -135,6 +139,9 @@ fn run_worker(cmd_rx: Receiver<EngineCmd>, events: broadcast::Sender<Event>, can
                 handle_transcribe(model.as_ref(), &events, &cancel, &path)
             }
             EngineCmd::DownloadModel { name } => handle_download(&events, &cancel, &name),
+            EngineCmd::DiarizeFile { path, max_speakers } => {
+                handle_diarize(&events, &path, max_speakers)
+            }
             EngineCmd::Unload => {
                 if model.take().is_some() {
                     log::info!("whisper: model unloaded");
@@ -236,6 +243,63 @@ fn handle_download(events: &broadcast::Sender<Event>, cancel: &Arc<AtomicBool>, 
             emit_error(events, "bad_request", format!("unknown model `{n}` (not in the registry)"));
         }
         Err(ModelError::Download(msg)) => emit_error(events, "model_download_failed", msg),
+    }
+}
+
+/// `diarize_file {path, max_speakers}` (Scrim Coaching sub-plan 6 SF1): ensure both
+/// diarization models are present + SHA256-verified (fetch-on-demand, streaming `progress`
+/// exactly like `load_model`), diarize the isolated comms track, then emit ONE terminal
+/// `diarization` event (speaker count + start-sorted spans + per-cluster mean embeddings).
+/// Independent of the resident whisper model — diarization owns its own ONNX models. A
+/// model-fetch or diarize failure emits an `error` event (never a partial `diarization`).
+fn handle_diarize(events: &broadcast::Sender<Event>, path: &str, max_speakers: i32) {
+    let seg = match ensure_model(diarize::SEG_MODEL, |pct| {
+        if let Ok(data) = serde_json::to_value(Progress { pct }) {
+            let _ = events.send(Event { event: "progress".to_string(), data });
+        }
+    }) {
+        Ok(m) => m,
+        Err(ModelError::UnknownModel(n)) => {
+            emit_error(events, "bad_request", format!("unknown model `{n}`"));
+            return;
+        }
+        Err(ModelError::Download(msg)) => {
+            emit_error(events, "model_download_failed", msg);
+            return;
+        }
+    };
+    let emb = match ensure_model(diarize::EMB_MODEL, |pct| {
+        if let Ok(data) = serde_json::to_value(Progress { pct }) {
+            let _ = events.send(Event { event: "progress".to_string(), data });
+        }
+    }) {
+        Ok(m) => m,
+        Err(ModelError::UnknownModel(n)) => {
+            emit_error(events, "bad_request", format!("unknown model `{n}`"));
+            return;
+        }
+        Err(ModelError::Download(msg)) => {
+            emit_error(events, "model_download_failed", msg);
+            return;
+        }
+    };
+
+    match diarize::diarize_file(&seg.path, &emb.path, Path::new(path), max_speakers) {
+        Ok(out) => {
+            let segments = out
+                .spans
+                .iter()
+                .map(|s| DiarSegment { t0_ms: s.t0_ms, t1_ms: s.t1_ms, cluster_id: s.cluster_id })
+                .collect();
+            let clusters = out
+                .clusters
+                .into_iter()
+                .map(|c| DiarCluster { cluster_id: c.cluster_id, embedding: c.embedding })
+                .collect();
+            log::info!("diarize: {} speakers, {} spans from {path}", out.num_speakers, out.spans.len());
+            emit(events, "diarization", &Diarization { num_speakers: out.num_speakers, segments, clusters });
+        }
+        Err(e) => emit_error(events, "diarize_failed", format!("diarize {path}: {e}")),
     }
 }
 

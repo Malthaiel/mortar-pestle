@@ -11,6 +11,7 @@
 
 mod bench;
 mod daemon;
+mod diarize;
 mod mic;
 mod models;
 mod protocol;
@@ -25,7 +26,8 @@ usage: mortar-pestle-stt <command>
 
 commands:
   daemon          Long-running control daemon (Unix-socket NDJSON)
-  bench           Phase 4 perf harness: batch RTF / RSS / VRAM per model × backend (markdown table)";
+  bench           Phase 4 perf harness: batch RTF / RSS / VRAM per model × backend (markdown table)
+  diarize         Scrim-coaching SF1 gate: diarize an audio file (fetch models, print speakers/spans)";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -34,6 +36,8 @@ fn main() -> ExitCode {
         Some("daemon") => daemon::run(&args[1..]),
         // Phase 4 measurement harness (windowless, no socket).
         Some("bench") => bench::run(&args[1..]),
+        // Scrim-coaching sub-plan 6 SF1 gate harness (windowless, no socket).
+        Some("diarize") => diarize::run_cli(&args[1..]),
         _ => {
             eprintln!("{USAGE}");
             ExitCode::from(2)

@@ -32,8 +32,8 @@ use tokio::sync::mpsc;
 use crate::daemon::engine::{ControlContext, EngineCmd};
 use crate::daemon::dictation::{self, DictationSource};
 use crate::protocol::{
-    DeleteModelArgs, DownloadModelArgs, LoadModelArgs, ProtoError, Request, Response,
-    StartDictationArgs, TranscribeFileArgs,
+    DeleteModelArgs, DiarizeFileArgs, DownloadModelArgs, LoadModelArgs, ProtoError, Request,
+    Response, StartDictationArgs, TranscribeFileArgs,
 };
 
 /// Monotonic per-connection id, assigned in [`handle_client`]. Records which connection
@@ -433,6 +433,21 @@ fn dispatch(ctx: &ControlContext, conn_id: u64, req: Request) -> Response {
             Err(e) => err_response(
                 req.id,
                 ProtoError::new("bad_request", format!("invalid transcribe_file args: {e}")),
+            ),
+        },
+
+        // Scrim Coaching sub-plan 6 SF1 — diarize an isolated comms track. Forwards to the
+        // worker (serialized with transcription); the result streams back as a terminal
+        // `diarization` event on this connection.
+        "diarize_file" => match serde_json::from_value::<DiarizeFileArgs>(req.args.clone()) {
+            Ok(args) => forward(
+                ctx,
+                req.id,
+                EngineCmd::DiarizeFile { path: args.path, max_speakers: args.max_speakers },
+            ),
+            Err(e) => err_response(
+                req.id,
+                ProtoError::new("bad_request", format!("invalid diarize_file args: {e}")),
             ),
         },
 

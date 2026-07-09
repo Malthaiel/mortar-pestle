@@ -87,7 +87,41 @@ static REGISTRY: &[ModelInfo] = &[
         size_bytes: 885_098,
         multilingual: false,
     },
+    // Speaker-diarization models (Scrim Coaching sub-plan 6 SF1) — NOT speech models and
+    // NOT multilingual (`multilingual` is inapplicable; kept `false`, nothing branches on
+    // it). Fetched-on-demand + SHA256-verified through the SAME `ensure_model` path,
+    // cached as `<name>.bin` (the `.bin` extension is inert — onnxruntime reads bytes, not
+    // the suffix). Both are bare ONNX files (no tarball extraction). Loaded by
+    // `crate::diarize`, never the whisper worker. Excluded from the speech-model picker
+    // (see `is_speech_model`). SHA256 + size are the on-disk file's real values.
+    //
+    // Segmentation: pyannote-segmentation-3.0 (MIT), the bare model.onnx mirrored on HF
+    // (sherpa's GitHub release ships it only inside a .tar.bz2 — the HF copy avoids an
+    // extraction dependency).
+    ModelInfo {
+        name: "pyannote-seg-3.0",
+        url: "https://huggingface.co/csukuangfj/sherpa-onnx-pyannote-segmentation-3-0/resolve/main/model.onnx",
+        sha256: "220ad67ca923bef2fa91f2390c786097bf305bceb5e261d4af67b38e938e1079",
+        size_bytes: 5_992_913,
+        multilingual: false,
+    },
+    // Embedding: 3D-Speaker CAM++ English (Apache-2.0), from sherpa-onnx's speaker-
+    // recognition model release — a bare .onnx, `ensure_model`-fetched verbatim.
+    ModelInfo {
+        name: "campplus-sv-en",
+        url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx",
+        sha256: "357a834f702b80161e5b981182c038e18553c1f2ca752ed6cec2052365d4129b",
+        size_bytes: 29_596_978,
+        multilingual: false,
+    },
 ];
+
+/// Whether `name` is a user-selectable SPEECH model (vs an internal fetch-on-demand
+/// dependency — the Silero VAD + the two diarization models). Only speech models appear
+/// in the Settings picker (`list_cached_models`).
+fn is_speech_model(name: &str) -> bool {
+    !(name.starts_with("silero") || name.starts_with("pyannote") || name.starts_with("campplus"))
+}
 
 /// Look up a model by exact registry name. `None` ⇒ unknown name (→ `bad_request`,
 /// never a fetch attempt).
@@ -198,7 +232,7 @@ pub fn ensure_model<F: FnMut(f64)>(name: &str, mut on_progress: F) -> Result<Ens
 pub fn list_cached_models() -> Vec<CachedModelInfo> {
     REGISTRY
         .iter()
-        .filter(|m| !m.name.starts_with("silero"))
+        .filter(|m| is_speech_model(m.name))
         .map(|m| {
             let path = resolve_model_path(m.name);
             let cached = std::fs::metadata(&path).map(|md| md.len() == m.size_bytes).unwrap_or(false);

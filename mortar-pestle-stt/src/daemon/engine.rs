@@ -27,6 +27,10 @@ use crate::protocol::{Event, HotkeysSnapshot};
 pub enum EngineCmd {
     LoadModel { name: String, use_gpu: Option<bool> },
     TranscribeFile { path: String },
+    /// Scrim Coaching sub-plan 6 SF1 — offline speaker diarization of an isolated comms
+    /// track. Routed through the worker (not a side thread) so it serializes against
+    /// load/transcribe: one heavy audio op at a time, no `progress` cross-talk on the bus.
+    DiarizeFile { path: String, max_speakers: i32 },
     /// Phase 5 download-only fetch — verify + cache a model WITHOUT loading it
     /// (download ≠ activate). Routed through the worker (not a side thread) so it
     /// serializes against load/transcribe: no temp-file race, no `progress` event

@@ -152,6 +152,51 @@ pub struct Vu {
     pub rms: f64,
 }
 
+// ── Scrim Coaching sub-plan 6 (SF1) speaker-diarization payloads ───────────────
+//
+// `diarize_file {path, max_speakers}` (app → sidecar) runs offline speaker diarization on
+// an isolated comms track and answers with ONE terminal `diarization` event (a batch, not
+// streamed — it's a single ~30–60 s pass). snake_case on the wire like every payload. The
+// host client mirror + the round-trip test freeze this shape now so SF2/SF3 build against
+// it without reopening the sidecar.
+
+/// `diarize_file` request args. `path` = absolute audio-file path; `max_speakers` caps the
+/// cluster count to the roster size (>0 forces exactly that many clusters; <=0 =
+/// auto-detect via threshold clustering).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiarizeFileArgs {
+    pub path: String,
+    pub max_speakers: i32,
+}
+
+/// One diarization span in the `diarization` event: millisecond bounds + the 0-based
+/// speaker cluster id (the host maps clusters → player names via voiceprints, SF3).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiarSegment {
+    pub t0_ms: u64,
+    pub t1_ms: u64,
+    pub cluster_id: i32,
+}
+
+/// One detected cluster's mean voiceprint embedding (the host cosine-match key, SF3).
+/// `embedding` is the embedder's raw f32 vector; empty clusters are omitted upstream.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiarCluster {
+    pub cluster_id: i32,
+    pub embedding: Vec<f32>,
+}
+
+/// `diarization` event data — the terminal result of one `diarize_file`. `num_speakers` is
+/// the estimated speaker count; `segments` are sorted by start time; `clusters` carries one
+/// mean embedding per speaker (a cluster too short to embed is dropped from `clusters` but
+/// still present in `segments`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Diarization {
+    pub num_speakers: i32,
+    pub segments: Vec<DiarSegment>,
+    pub clusters: Vec<DiarCluster>,
+}
+
 // ── Phase 5 model-management payloads ─────────────────────────────────────────
 //
 // `list_models` (sync) → `Response.data = { "models": [CachedModelInfo, ...] }`;
@@ -343,6 +388,44 @@ mod tests {
         assert_eq!(serde_json::to_string(&dl).unwrap(), r#"{"name":"small"}"#);
         let dc = DownloadComplete { name: "small".into() };
         assert_eq!(serde_json::to_string(&dc).unwrap(), r#"{"name":"small"}"#);
+    }
+
+    #[test]
+    fn diarize_wire_shapes() {
+        // Request args: declaration order path, max_speakers; i32 → bare int.
+        let args = DiarizeFileArgs { path: "/a/b.wav".into(), max_speakers: 5 };
+        assert_eq!(serde_json::to_string(&args).unwrap(), r#"{"path":"/a/b.wav","max_speakers":5}"#);
+
+        // One span: bare u64 bounds + i32 cluster id.
+        let seg = DiarSegment { t0_ms: 100, t1_ms: 2500, cluster_id: 2 };
+        assert_eq!(
+            serde_json::to_string(&seg).unwrap(),
+            r#"{"t0_ms":100,"t1_ms":2500,"cluster_id":2}"#
+        );
+
+        // A cluster: embedding is a bare f32 array on the wire.
+        let cl = DiarCluster { cluster_id: 0, embedding: vec![0.5, -0.25] };
+        assert_eq!(
+            serde_json::to_string(&cl).unwrap(),
+            r#"{"cluster_id":0,"embedding":[0.5,-0.25]}"#
+        );
+
+        // The terminal event payload nests the two.
+        let d = Diarization {
+            num_speakers: 2,
+            segments: vec![DiarSegment { t0_ms: 0, t1_ms: 500, cluster_id: 0 }],
+            clusters: vec![DiarCluster { cluster_id: 0, embedding: vec![1.0] }],
+        };
+        assert_eq!(
+            serde_json::to_string(&d).unwrap(),
+            r#"{"num_speakers":2,"segments":[{"t0_ms":0,"t1_ms":500,"cluster_id":0}],"clusters":[{"cluster_id":0,"embedding":[1.0]}]}"#
+        );
+
+        // Round-trip: the host client parses back what the sidecar wrote.
+        let back: Diarization = serde_json::from_str(&serde_json::to_string(&d).unwrap()).unwrap();
+        assert_eq!(back.num_speakers, 2);
+        assert_eq!(back.segments.len(), 1);
+        assert_eq!(back.clusters[0].embedding, vec![1.0]);
     }
 
     #[test]
