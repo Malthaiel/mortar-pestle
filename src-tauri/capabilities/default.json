@@ -279,6 +279,7 @@
     "allow-reset-captures-dir",
     "allow-stt-load-model",
     "allow-stt-transcribe-file",
+    "allow-stt-diarize-file",
     "allow-stt-start-dictation",
     "allow-stt-stop-dictation",
     "allow-stt-cancel",
