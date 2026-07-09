@@ -1,8 +1,9 @@
-// Dev Server control panel — Start/Stop/Restart/Status for the `mortar-pestle-dev`
-// systemd *user* service (the `cargo tauri dev` surface), with a Vite health
-// probe. Unlike the rest of the Dev tab this panel is built into the production
-// RPM (VITE_DEV_TOOLS gate in SettingsDrawer) so the stable build can revive a
-// dead dev window — you can't click a restart button inside a crashed window.
+// Dev Server control panel (Linux only) — Start/Stop/Restart/Status for the
+// `mortar-pestle-dev` systemd *user* service (the `cargo tauri dev` surface), with a
+// Vite health probe. Gated in DevTab.jsx behind `VITE_TARGET_OS === 'linux'`; on
+// Linux it is kept in the shipped build (VITE_DEV_TOOLS gate in SettingsDrawer)
+// so the stable window can revive a dead dev window — you can't click a restart
+// button inside a crashed window. Windows/macOS dev runs via `npm run tauri dev`.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { PrimaryBtn, OutlinedBtn } from '../ui/index.js';
 import { invoke } from '../../api.js';

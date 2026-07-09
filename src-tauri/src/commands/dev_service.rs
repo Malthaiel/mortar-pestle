@@ -1,9 +1,9 @@
-//! Dev-server supervisor — Start/Stop/Restart/Status for the `mortar-pestle-dev`
-//! systemd *user* service (the `cargo tauri dev` surface) plus a Vite health
-//! probe. Drives the Dev Server panel in Settings → Dev. Unlike the rest of
-//! that tab this command is compiled into the production RPM (the panel is kept
-//! via the VITE_DEV_TOOLS gate) so the stable build can revive a dead dev
-//! window — you can't click a restart button inside a crashed dev window.
+//! Dev-server supervisor (Linux only) — Start/Stop/Restart/Status for the
+//! `mortar-pestle-dev` systemd *user* service (the `cargo tauri dev` surface) plus a
+//! Vite health probe. Registered `#[cfg(target_os = "linux")]`; on Linux it is
+//! kept in the shipped build (via the VITE_DEV_TOOLS gate) so the stable window
+//! can revive a dead dev window. Windows/macOS dev runs from a terminal
+//! (`npm run tauri dev`) — DevTab.jsx renders a note there instead of this panel.
 
 use std::process::Stdio;
 use std::time::{Duration, Instant};

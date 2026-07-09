@@ -167,7 +167,7 @@ fn detect_phase(line: &str, mode: BuildMode) -> Option<BuildPhase> {
     if t.starts_with("compiling ") || t.starts_with("finished ") {
         return Some(BuildPhase::Rust);
     }
-    if matches!(mode, BuildMode::Release) && (l.contains("bundling") || l.contains(".rpm")) {
+    if matches!(mode, BuildMode::Release) && l.contains("bundling") {
         return Some(BuildPhase::Bundle);
     }
     None

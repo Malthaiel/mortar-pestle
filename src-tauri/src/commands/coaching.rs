@@ -432,8 +432,8 @@ async fn classify_via_cli(
     cli_path: &str,
 ) -> Result<String, DeadlockError> {
     use tokio::io::AsyncWriteExt;
-    // Reuse design.rs's resolver: configured path → PATH lookup → ~/.local/bin fallback
-    // (the systemd dev service's PATH omits ~/.local/bin where `claude` lives).
+    // Reuse design.rs's resolver: configured path → PATH lookup → platform
+    // fallback dirs (covers launchers whose PATH omits where `claude` is installed).
     let resolved = crate::commands::design::resolve_cli_path(cli_path);
     let alias = if matches!(model, "opus" | "sonnet" | "haiku") { model } else { "opus" };
 
