@@ -13,7 +13,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 use crate::commands::vault::{atomic_write, check_mtime, mtime_ms, pulse_vault_root, RootKind, VaultError};
-use crate::parsers::sessions::{parse_sessions, OkOut, Session};
+use crate::parsers::sessions::{OkOut, Session};
 use crate::render;
 
 pub fn today_str() -> String {
@@ -338,7 +338,7 @@ pub fn read_daily_note(ds: &str) -> DailyNote {
         ds: ds.to_string(),
         tasks: parse_tasks(&content),
         plan_blocks: parse_plan_blocks(&content),
-        sessions: parse_sessions(&content),
+        sessions: Vec::new(), // sourced from sessions.json by daily_get_today (D5)
         content,
         body_html,
         mtime,

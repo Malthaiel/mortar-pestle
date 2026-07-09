@@ -32,7 +32,12 @@ function isTypingTarget(el) {
 export default function CalendarPane({ accent, pushUndo, pivotDs, onPivotChange }) {
   const p = usePlanner();
   const { blocks } = useBlockLibrary();
-  const [viewMode, setViewMode] = useState('day');
+  // viewMode is the PROVIDER's (it drives useVault's fetch range). A local copy
+  // here silently desyncs the modal's columns from what useVault fetches, so
+  // non-today columns render empty (created/moved sessions vanish). No other
+  // component reads p.viewMode, so this is the sole owner.
+  const viewMode = p.viewMode;
+  const setViewMode = p.setViewMode;
   const [frameEditMode, setFrameEditMode] = useState(false);
   // Block Library popover (Pivot 2) — anchored below its header chip.
   const [libOpen, setLibOpen] = useState(false);
@@ -309,6 +314,7 @@ export default function CalendarPane({ accent, pushUndo, pivotDs, onPivotChange 
           onSessionCreate={p.handleSessionCreate}
           onPlanBlockMove={handlePlanBlockMove}
           onSessionResize={p.handleSessionResize}
+          onSessionRename={p.handleSessionRename}
           onSessionMove={p.handleSessionMove}
           onSessionDelete={p.handleSessionDelete}
           taskDrag={p.taskDrag}

@@ -43,13 +43,8 @@ export function useVault({ viewMode, pivotDate, customDays }) {
       dayMap.set(todayStr(), new Date());
 
       const datesNeeded = [...dayMap.keys()].filter(ds => ds !== todayStr());
-      // api.days() never shipped post-sidecar — the real range IPC lands with
-      // the sessions store (epic #11). Guard the call so the missing fn can't
-      // throw before setSessions below: that throw made committed drafts
-      // vanish until reopen and left non-today columns sessionless (epic #9).
-      const days = (datesNeeded.length && typeof api.days === 'function')
-        ? await api.days(datesNeeded)
-        : {};
+      // Sessions for non-today columns come from the sessions.json range IPC (D5).
+      const days = datesNeeded.length ? await api.days(datesNeeded) : {};
       const all = [];
       for (const ds of dayMap.keys()) {
         if (ds === todayStr()) {

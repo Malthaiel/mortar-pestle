@@ -777,12 +777,15 @@ fn convention_doc_ops(name: &str, fm: &str, subtypes: &str) -> Vec<(&'static str
     ]
 }
 
-/// A fresh today daily-log page (6 canonical H2 sections) seeded with the given
-/// Vault Activity bullet — used only when today's page doesn't exist yet.
+/// A fresh today daily-log page (canonical content H2s: Focus Block / Quick Notes /
+/// Tasks / Upcoming / Session Notes / Plan Fence) seeded with the domain-build
+/// `## Vault Activity` bullet — used only when today's page doesn't exist yet.
+/// (Vault Activity is retired vault-wide; the domain builder's residual use of it
+/// is a separate follow-up tracked in the Update Queue.)
 fn render_daily_page(ds: &str, vault_activity_bullet: &str) -> String {
     let month = ds.get(..7).unwrap_or(ds);
     format!(
-        "---\nType: Daily-Log\nDate: {ds}\nMonth: {month}\n---\n\n## Focus Block\n\n## Quick Notes\n\n## Upcoming\n\n## Sessions\n\n## Plan Fence\n\n```plan\n```\n\n## Vault Activity\n\n{vault_activity_bullet}"
+        "---\nType: Daily-Log\nDate: {ds}\nMonth: {month}\n---\n\n## Focus Block\n\n## Quick Notes\n\n## Tasks\n\n## Upcoming\n\n## Session Notes\n\n## Plan Fence\n\n```plan\n```\n\n## Vault Activity\n\n{vault_activity_bullet}"
     )
 }
 

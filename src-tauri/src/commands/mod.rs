@@ -50,6 +50,7 @@ pub mod recycle_bin;
 pub mod reference;
 pub mod release;
 pub mod self_update;
+pub mod sessions;
 pub mod sidebar;
 pub mod skills;
 #[cfg(any(target_os = "linux", target_os = "windows"))]
