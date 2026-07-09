@@ -4,10 +4,15 @@
 // points at the `gamewiki` mounted root and renders pages read-only, client-side
 // (GameWikiPage), keeping wikilink navigation inside the module.
 
+import { lazy, Suspense } from 'react';
 import GameWikiTree from './GameWikiTree.jsx';
-import GameWikiPage from './GameWikiPage.jsx';
 import SidebarPill from '@host/components/SidebarPill.jsx';
 import './game-wiki.css';
+
+// react-markdown (+ remark-gfm, ~100KB) is only needed once a page is actually
+// viewed — lazy-split it off the boot chunk (mirrors web/src/pages/GraphPage.jsx's
+// pixi.js split). GameWikiTree stays eager (light secondary-sidebar tree).
+const GameWikiPage = lazy(() => import('./GameWikiPage.jsx'));
 
 // /game-wiki → reader landing; /game-wiki/<gamewiki-relative path> → that page.
 function matchGameWiki(path) {
@@ -42,7 +47,9 @@ export default {
       match: matchGameWiki,
       render: ({ params, accent }) => (
         <div style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          <GameWikiPage rest={params.rest} accent={accent}/>
+          <Suspense fallback={null}>
+            <GameWikiPage rest={params.rest} accent={accent}/>
+          </Suspense>
         </div>
       ),
     });

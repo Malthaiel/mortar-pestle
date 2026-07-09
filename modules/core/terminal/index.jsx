@@ -7,14 +7,20 @@
 // /tools/skills/* (redirected in TerminalRouter — the registry's
 // registerRedirect is never consumed, so the rewrite lives in the view).
 
+import { lazy, Suspense } from 'react';
 import { TerminalProvider } from './TerminalProvider.jsx';
 import { SkillsProvider } from './SkillsProvider.jsx';
 import { bindSkillsApi } from './api.js';
 import TerminalSidebar from './TerminalSidebar.jsx';
-import TerminalRouter from './TerminalRouter.jsx';
 import SettingsTab from './SettingsTab.jsx';
 import SidebarPill from '@host/components/SidebarPill.jsx';
 import './terminal.css';
+
+// TerminalRouter pulls @xterm/xterm (+addon, ~200KB) via TerminalPage /
+// SkillsPage — only needed on the /tools/terminal route. Lazy-split it off boot
+// (mirrors web/src/pages/GraphPage.jsx). The providers + sidebar + settings tab
+// above register at boot and carry no xterm.
+const TerminalRouter = lazy(() => import('./TerminalRouter.jsx'));
 
 export default {
   register(api) {
@@ -57,7 +63,9 @@ export default {
         return false;
       },
       render: ({ params, accent }) => (
-        <TerminalRouter rest={params.rest} legacy={params.legacy} accent={accent} />
+        <Suspense fallback={null}>
+          <TerminalRouter rest={params.rest} legacy={params.legacy} accent={accent} />
+        </Suspense>
       ),
     });
 

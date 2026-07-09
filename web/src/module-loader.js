@@ -128,9 +128,9 @@ export async function loadAll() {
   const sorted = toposort(filtered.map(p => p.manifest));
   const byId   = new Map(filtered.map(p => [p.manifest.id, p]));
 
-  const summary = [];
-  const loadedManifests = {};
-  for (const manifest of sorted) {
+  // Resolve every entry loader up-front (throws if any is missing) — pure map
+  // lookups, no I/O yet, preserving toposort order.
+  const jobs = sorted.map((manifest) => {
     const { path } = byId.get(manifest.id);
     const entryKey = entryKeyFor(path, manifest.entry);
     const loader = entryModules[entryKey];
@@ -139,15 +139,26 @@ export async function loadAll() {
         `[${manifest.id}] entry file not found at "${entryKey}"; available: ${Object.keys(entryModules).join(', ') || '(none)'}`
       );
     }
-    const mod = await loader();
-    const entry = mod.default || mod;
+    return { manifest, loader };
+  });
+
+  // Fetch all module chunks in parallel — was a sequential await-per-module
+  // waterfall. Order-preserving: mods[i] corresponds to jobs[i].
+  const mods = await Promise.all(jobs.map((j) => j.loader()));
+
+  // Register SEQUENTIALLY in toposort order — registration order is
+  // load-bearing (provider/slot ordering); only the fetch above is parallel.
+  const summary = [];
+  const loadedManifests = {};
+  jobs.forEach(({ manifest }, i) => {
+    const entry = mods[i].default || mods[i];
     if (typeof entry?.register !== 'function') {
       throw new Error(`[${manifest.id}] module entry must default-export { register(api) }`);
     }
     entry.register(createApi(manifest.id));
     summary.push(manifest.id);
     loadedManifests[manifest.id] = manifest;
-  }
+  });
 
   setManifests(loadedManifests);
   console.info(`[module-loader] registered: ${summary.join(', ') || '(none)'}`);
