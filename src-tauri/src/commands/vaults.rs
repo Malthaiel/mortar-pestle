@@ -184,6 +184,11 @@ fn regen_manifest(entry: &VaultEntry) {
         let _ = fs::create_dir_all(&dir);
     }
     if let Some(out) = manifest_path_for(&entry.id) {
+        // Skip the full-vault re-read when nothing changed since last boot —
+        // the freshness key (count + max mtime) is a cheap metadata-only walk.
+        if crate::commands::manifest_gen::manifest_is_fresh(&entry.path, Path::new(&out)) {
+            return;
+        }
         if let Err(e) = crate::commands::manifest_gen::generate_for(&entry.path, Path::new(&out)) {
             log::warn!("manifest generation failed for vault '{}': {e:?}", entry.name);
         }

@@ -34,6 +34,10 @@ struct GenEntry {
 struct ManifestOut {
     schema_version: u32,
     vault_file_count: usize,
+    /// Max file mtime (ms since epoch) across all indexed entries — the
+    /// on-disk freshness key. `manifest_is_fresh` compares this + the count
+    /// against a metadata-only re-walk to skip a no-op regen on boot.
+    max_mtime_ms: f64,
     entries: Vec<GenEntry>,
 }
 
@@ -44,49 +48,96 @@ pub fn generate_for(vault_path: &str, out_path: &Path) -> Result<usize, VaultErr
         .map_err(|e| VaultError::Io(format!("canonicalize {vault_path}: {e}")))?;
 
     let mut entries: Vec<GenEntry> = Vec::new();
-    // Prune traversal into hidden dirs (.obsidian/.git/.trash) and Raw/ for
-    // speed; the per-file `is_excluded` still guards hidden files + OCR sidecars.
-    let walker = WalkDir::new(&root).into_iter().filter_entry(|e| {
-        if e.depth() > 0 && e.file_type().is_dir() {
-            let n = e.file_name().to_str().unwrap_or("");
-            if n.starts_with('.') || n == "Raw" {
-                return false;
-            }
-        }
-        true
-    });
-
-    for dirent in walker.filter_map(|e| e.ok()) {
-        if !dirent.file_type().is_file() {
-            continue;
-        }
-        let name = match dirent.file_name().to_str() {
-            Some(n) => n,
-            None => continue,
-        };
-        if !name.ends_with(".md") {
-            continue;
-        }
-        let rel = match dirent.path().strip_prefix(&root).ok().and_then(|r| r.to_str()) {
-            Some(r) => r.replace('\\', "/"),
-            None => continue,
-        };
-        if is_excluded(&rel, name) {
-            continue;
-        }
-        let content = fs::read_to_string(dirent.path()).unwrap_or_default();
+    let mut max_mtime = 0.0_f64;
+    for (rel, dirent) in md_files(&root) {
+        // Read only the frontmatter head (8KB) — `parse_title_aliases` uses
+        // just the leading `---`…`---` block, never the body.
+        let content = crate::parsers::frontmatter_cache::read_head(dirent.path()).unwrap_or_default();
+        let name = dirent.file_name().to_str().unwrap_or("");
         let stem = name.strip_suffix(".md").unwrap_or(name);
         let (title, aliases) = parse_title_aliases(&content, stem);
-        let mtime = dirent.metadata().ok().as_ref().and_then(mtime_iso);
+        let meta = dirent.metadata().ok();
+        let mtime = meta.as_ref().and_then(mtime_iso);
+        if let Some(mm) = meta.as_ref().and_then(mtime_ms) {
+            if mm > max_mtime {
+                max_mtime = mm;
+            }
+        }
         entries.push(GenEntry { path: rel, title, aliases, mtime });
     }
 
     let count = entries.len();
-    let out = ManifestOut { schema_version: 2, vault_file_count: count, entries };
+    let out = ManifestOut { schema_version: 2, vault_file_count: count, max_mtime_ms: max_mtime, entries };
     let text = serde_json::to_string(&out)
         .map_err(|e| VaultError::Io(format!("serialize manifest: {e}")))?;
     atomic_write(out_path, text.as_bytes())?;
     Ok(count)
+}
+
+/// Iterator over a vault's indexable `*.md` files (post-exclusion), yielding
+/// `(relative_path, DirEntry)`. Shared by `generate_for` and `manifest_is_fresh`
+/// so both apply identical exclusion rules.
+fn md_files(root: &Path) -> impl Iterator<Item = (String, walkdir::DirEntry)> + '_ {
+    // Prune traversal into hidden dirs (.obsidian/.git/.trash) and Raw/ for
+    // speed; the per-file `is_excluded` still guards hidden files + OCR sidecars.
+    WalkDir::new(root)
+        .into_iter()
+        .filter_entry(|e| {
+            if e.depth() > 0 && e.file_type().is_dir() {
+                let n = e.file_name().to_str().unwrap_or("");
+                if n.starts_with('.') || n == "Raw" {
+                    return false;
+                }
+            }
+            true
+        })
+        .filter_map(|e| e.ok())
+        .filter_map(move |dirent| {
+            if !dirent.file_type().is_file() {
+                return None;
+            }
+            let name = dirent.file_name().to_str()?;
+            if !name.ends_with(".md") {
+                return None;
+            }
+            let rel = dirent
+                .path()
+                .strip_prefix(root)
+                .ok()
+                .and_then(|r| r.to_str())?
+                .replace('\\', "/");
+            if is_excluded(&rel, name) {
+                return None;
+            }
+            Some((rel, dirent))
+        })
+}
+
+/// True iff the manifest at `out_path` already reflects the current vault
+/// contents — a metadata-only walk (no file bodies read) whose (count, max
+/// mtime) matches the manifest's stored `vault_file_count` + `max_mtime_ms`.
+/// Any structural change (add/delete → count) or edit (→ max mtime) misses.
+/// False when the manifest is absent or written by a pre-`max_mtime_ms` build.
+pub fn manifest_is_fresh(vault_path: &str, out_path: &Path) -> bool {
+    let Ok(text) = fs::read_to_string(out_path) else { return false; };
+    let Ok(doc) = serde_json::from_str::<serde_json::Value>(&text) else { return false; };
+    let (Some(stored_count), Some(stored_max)) = (
+        doc.get("vault_file_count").and_then(|v| v.as_u64()),
+        doc.get("max_mtime_ms").and_then(|v| v.as_f64()),
+    ) else { return false; };
+
+    let Ok(root) = fs::canonicalize(vault_path) else { return false; };
+    let mut count: u64 = 0;
+    let mut max_mtime = 0.0_f64;
+    for (_rel, dirent) in md_files(&root) {
+        count += 1;
+        if let Some(mm) = dirent.metadata().ok().as_ref().and_then(mtime_ms) {
+            if mm > max_mtime {
+                max_mtime = mm;
+            }
+        }
+    }
+    count == stored_count && (max_mtime - stored_max).abs() < 0.5
 }
 
 fn is_excluded(rel: &str, file_name: &str) -> bool {
@@ -108,6 +159,11 @@ fn mtime_iso(meta: &fs::Metadata) -> Option<String> {
     Utc.timestamp_opt(dur.as_secs() as i64, dur.subsec_nanos())
         .single()
         .map(|dt| dt.to_rfc3339())
+}
+
+fn mtime_ms(meta: &fs::Metadata) -> Option<f64> {
+    let dur = meta.modified().ok()?.duration_since(UNIX_EPOCH).ok()?;
+    Some(dur.as_secs_f64() * 1000.0)
 }
 
 /// Extract `title` + `aliases` from YAML frontmatter. Title falls back to the
@@ -295,4 +351,95 @@ pub fn patch_content_manifest_remove_prefix(rel: &str) {
         let removed = (before - entries.len()) as i64;
         (removed != 0).then_some(-removed)
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    /// Unique temp vault dir + a sibling manifest path, cleaned up on drop.
+    struct TempVault {
+        dir: std::path::PathBuf,
+        out: std::path::PathBuf,
+    }
+    impl TempVault {
+        fn new() -> Self {
+            let n = COUNTER.fetch_add(1, Ordering::SeqCst);
+            let base = std::env::temp_dir()
+                .join(format!("mp_manifest_gen_test_{}_{}", std::process::id(), n));
+            let dir = base.join("vault");
+            fs::create_dir_all(&dir).unwrap();
+            let out = base.join("manifest.json");
+            TempVault { dir, out }
+        }
+        fn write(&self, name: &str, body: &str) {
+            fs::write(self.dir.join(name), body).unwrap();
+        }
+        fn path(&self) -> &str {
+            self.dir.to_str().unwrap()
+        }
+    }
+    impl Drop for TempVault {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(self.dir.parent().unwrap());
+        }
+    }
+
+    fn card(title: &str) -> String {
+        format!("---\nTitle: {title}\n---\n\nbody\n")
+    }
+
+    #[test]
+    fn fresh_after_generate() {
+        let v = TempVault::new();
+        v.write("a.md", &card("A"));
+        v.write("b.md", &card("B"));
+        generate_for(v.path(), &v.out).unwrap();
+        assert!(manifest_is_fresh(v.path(), &v.out));
+    }
+
+    #[test]
+    fn stale_on_new_file() {
+        let v = TempVault::new();
+        v.write("a.md", &card("A"));
+        v.write("b.md", &card("B"));
+        generate_for(v.path(), &v.out).unwrap();
+        v.write("c.md", &card("C"));
+        assert!(!manifest_is_fresh(v.path(), &v.out));
+    }
+
+    #[test]
+    fn stale_on_edit() {
+        let v = TempVault::new();
+        v.write("a.md", &card("A"));
+        v.write("b.md", &card("B"));
+        generate_for(v.path(), &v.out).unwrap();
+        // Advance mtime past the filesystem's second-resolution floor.
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        v.write("a.md", &card("A2"));
+        assert!(!manifest_is_fresh(v.path(), &v.out));
+    }
+
+    #[test]
+    fn stale_when_missing() {
+        let v = TempVault::new();
+        v.write("a.md", &card("A"));
+        assert!(!manifest_is_fresh(v.path(), &v.dir.join("nope.json")));
+    }
+
+    #[test]
+    fn head_read_extracts_title_aliases() {
+        let v = TempVault::new();
+        v.write(
+            "song.md",
+            "---\nTitle: My Title\nAliases:\n  - Alt One\n  - Alt Two\n---\n\nbody\n",
+        );
+        generate_for(v.path(), &v.out).unwrap();
+        let text = fs::read_to_string(&v.out).unwrap();
+        assert!(text.contains("My Title"), "title missing: {text}");
+        assert!(text.contains("Alt One"), "alias missing: {text}");
+    }
 }

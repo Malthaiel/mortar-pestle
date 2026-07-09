@@ -42,7 +42,7 @@ fn state() -> &'static Mutex<CacheState> {
     })
 }
 
-fn read_head(path: &Path) -> std::io::Result<String> {
+pub(crate) fn read_head(path: &Path) -> std::io::Result<String> {
     let mut f = fs::File::open(path)?;
     let _ = f.seek(SeekFrom::Start(0));
     let mut buf = vec![0u8; HEAD_BYTES];
