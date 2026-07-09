@@ -1025,11 +1025,26 @@ pub(crate) fn build_filter_script_regions(
                 if let Some(crop) = &g.crop {
                     chain.push_str(crop);
                 }
-                chain.push_str(&format!("scale={fw}:{fh},", fw = g.fit_w, fh = g.fit_h));
-                if let Some(lut) = lut_at(ri, li) {
+                // graded layers pin the decode-side matrix/range on the fit
+                // scale so lut3d gets correctly-converted input — a bt601 or
+                // full-range source would otherwise be mis-graded as bt709/tv
+                // (mirrors the single-layer path above).
+                let lut = lut_at(ri, li);
+                let color_in = match &lut {
+                    Some(_) => {
+                        let m = layer.color_matrix.as_deref().unwrap_or("bt709");
+                        let r = layer.color_range.as_deref().unwrap_or("tv");
+                        format!(":in_color_matrix={m}:in_range={r}")
+                    }
+                    None => String::new(),
+                };
+                chain.push_str(&format!(
+                    "scale={fw}:{fh}{color_in},",
+                    fw = g.fit_w,
+                    fh = g.fit_h
+                ));
+                if let Some(lut) = &lut {
                     any_graded = true;
-                    let m = layer.color_matrix.as_deref().unwrap_or("bt709");
-                    let r = layer.color_range.as_deref().unwrap_or("tv");
                     chain.push_str(&format!(
                         "format=gbrp,lut3d=file='{p}':interp=trilinear,scale=out_color_matrix=bt709:out_range=tv,",
                         p = lut.display()
@@ -2078,7 +2093,7 @@ mod export_tests {
         let lut = vec![vec![None, Some(PathBuf::from("/tmp/x.cube"))]];
         let s = build_filter_script_regions(&sp, sp.regions.as_ref().unwrap(), &lut, None, false);
         // the SF4 grade sandwich lives INSIDE the layer chain, before format=rgba.
-        assert!(s.contains("scale=768:432,format=gbrp,lut3d=file='/tmp/x.cube':interp=trilinear,scale=out_color_matrix=bt709:out_range=tv,format=rgba,colorchannelmixer=aa=0.800000,"));
+        assert!(s.contains("scale=768:432:in_color_matrix=bt601:in_range=tv,format=gbrp,lut3d=file='/tmp/x.cube':interp=trilinear,scale=out_color_matrix=bt709:out_range=tv,format=rgba,colorchannelmixer=aa=0.800000,"));
         // graded → setparams tail on the concat output.
         assert!(s.contains("concat=n=1:v=1:a=1[catv][cona]"));
         assert!(s.contains("[catv]setparams=colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv[outv]"));
