@@ -482,6 +482,8 @@ export default function DraggableSidebarList({
           dRef.current = null;
           window.removeEventListener('pointermove', onMove);
           window.removeEventListener('pointerup', onUp);
+          window.removeEventListener('pointercancel', onAbort);
+          window.removeEventListener('blur', onAbort);
         } else {
           // Reorder lists (overlay / right sidebar): movement STARTS the drag right
           // away — no need to wait out the hold timer / full press-down. beginDrag
@@ -514,6 +516,8 @@ export default function DraggableSidebarList({
   const onUp = useCallback((e) => {
     window.removeEventListener('pointermove', onMove);
     window.removeEventListener('pointerup', onUp);
+    window.removeEventListener('pointercancel', onAbort);
+    window.removeEventListener('blur', onAbort);
     const drag = dRef.current;
     if (!drag) return;
     clearHold();
@@ -659,6 +663,19 @@ export default function DraggableSidebarList({
     playReorderPickup();
   }, [onDragActiveChange, startProp, sizeProp]);
 
+  // Abort a drag/hold that will never see a pointerup: a release outside the OS
+  // window, or a window blur mid-drag (Alt-Tab / focus-stealing dialog). Guarding
+  // on dRef.current keeps this a no-op during the post-release glide (onUp nulls
+  // dRef before the glide's setTimeout), so it respects the two-phase release.
+  const onAbort = useCallback(() => {
+    if (!dRef.current) return;
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
+    window.removeEventListener('pointercancel', onAbort);
+    window.removeEventListener('blur', onAbort);
+    cleanup(); // clearHold + clearDropAccent + restore pointerEvents + dRef=null + setDragState(null) + onDragActiveChange(false)
+  }, [onMove, onUp, cleanup]);
+
   // ── Item pointer down ────────────────────────────────────────────────────
   const onItemDown = useCallback((e, idx) => {
     if (!enabled || e.button !== 0) return;
@@ -687,7 +704,9 @@ export default function DraggableSidebarList({
     holdTimerRef.current = setTimeout(() => beginDrag(idx, r, e.clientX, e.clientY), HOLD_MS);
     window.addEventListener('pointermove', onMove, { passive: false });
     window.addEventListener('pointerup', onUp, { passive: false });
-  }, [enabled, dragFromInteractive, beginDrag, onMove, onUp]);
+    window.addEventListener('pointercancel', onAbort);
+    window.addEventListener('blur', onAbort);
+  }, [enabled, dragFromInteractive, beginDrag, onMove, onUp, onAbort]);
 
   const flexDir = direction === 'vertical' ? 'column' : 'row';
 
