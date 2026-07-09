@@ -3,7 +3,8 @@
 // deadlock_fetch_match (Rust) returns a match's full deadlock-api metadata verbatim.
 // We store that raw JSON in a dot-prefixed sibling file in the Scrim/ folder
 // (invisible to the read-only Game Wiki tree — the vault's scan_dir skips dotfiles,
-// and vault_write_file can't create a new subdir, only a new file in an existing one)
+// the dotfile lives in the existing Scrim/ folder for tree-hiding only — vault_write_file
+// now creates missing parent dirs, so this is a display choice, not a dir-creation limit)
 // and write a small human summary + a pointer into the scrim's ### Match Data. MatchViewPopup
 // reads the sidecar and renders the full match view over it. "Pull literally
 // everything": the sidecar is the untouched source of truth; everything here is
