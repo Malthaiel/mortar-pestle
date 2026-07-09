@@ -25,6 +25,8 @@
 //   direction    'up' | 'down' (default 'down') — 'up' for the bottom control bar
 //   compact      smaller trigger + menu, fills its row — for the subtitle panel
 //   disabled     disables the trigger
+//   chevron      show the ▾ indicator (default true) — false for triggers that
+//                read as a plain title (the overlay scrim picker)
 // Styling: trigger = two-layer .candy-btn[data-shape="select"]; the overlay menu
 // keeps its own .candy-select-menu / .candy-select-option classes (no portal).
 
@@ -32,7 +34,7 @@ import { useEffect, useRef, useState } from 'react';
 
 export default function CandySelect({
   value, options, onChange, title, placeholder = '',
-  direction = 'down', compact = false, disabled = false,
+  direction = 'down', compact = false, disabled = false, chevron = true,
 }) {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -125,9 +127,9 @@ export default function CandySelect({
       >
         <span className="candy-face">
           <span>{current ? current.label : placeholder}</span>
-          <span aria-hidden style={{
+          {chevron && <span aria-hidden style={{
             transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
-          }}>▾</span>
+          }}>▾</span>}
         </span>
       </button>
 

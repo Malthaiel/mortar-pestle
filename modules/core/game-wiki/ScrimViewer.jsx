@@ -8,9 +8,10 @@
 // SF5 adds file pickers + the inline scoreboard; SF7 adds "+ New Match".
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { api, invoke } from '@host/api.js';
-import { IconFolder, IconPlayCircle, IconPlus, IconPlay, IconPause, IconRotateCw } from '@host/components/icons.jsx';
+import { IconFolder, IconPlayCircle, IconPlus } from '@host/components/icons.jsx';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
 import { candyGap } from '@host/util/candy.js';
 import { parseScrim, serializeScrim, mergeScrim, appendMatch, getNotes, ensureNotes } from './scrimSchema.js';
@@ -151,16 +152,17 @@ function Scoreboard({ path }) {
   return <img src={src} alt="Scoreboard" style={{ maxWidth: '100%', borderRadius: 8, marginTop: 8, display: 'block', border: '1px solid color-mix(in oklch, var(--text) 12%, transparent)' }} />;
 }
 
-// Count-up game clock beside the Notes header (sub-plan 5): start/pause + reset + readout.
+// Count-up game clock (sub-plan 5): readout + text Start/Pause + Reset — glyph-free,
+// the clock wears the notes-label style (no running tint) per the minimalism pass.
 function TimerControls({ sw }) {
   return (
-    <div className="candy-center-row" style={{ gap: 4 }}>
-      <button className="candy-btn" data-shape="icon" onClick={sw.toggle} title={sw.running ? 'Pause timer' : 'Start timer'} style={{ width: 26, height: 26 }}>
-        <span className="candy-face">{sw.running ? <IconPause size={12} /> : <IconPlay size={12} />}</span>
+    <div className="candy-center-row" style={{ gap: 6 }}>
+      <span style={{ ...labelStyle, marginBottom: 0, fontVariantNumeric: 'tabular-nums', minWidth: 40 }}>{clock(sw.elapsedSec)}</span>
+      <button className="candy-btn" data-shape="chip" onClick={sw.toggle} title={sw.running ? 'Pause timer' : 'Start timer'}>
+        <span className="candy-face">{sw.running ? 'Pause' : 'Start'}</span>
       </button>
-      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontVariantNumeric: 'tabular-nums', color: sw.running ? 'var(--accent)' : 'var(--text-muted)', minWidth: 40, textAlign: 'center' }}>{clock(sw.elapsedSec)}</span>
-      <button className="candy-btn" data-shape="icon" onClick={sw.reset} title="Reset timer" style={{ width: 26, height: 26 }}>
-        <span className="candy-face"><IconRotateCw size={12} /></span>
+      <button className="candy-btn" data-shape="chip" onClick={sw.reset} title="Reset timer">
+        <span className="candy-face">Reset</span>
       </button>
     </div>
   );
@@ -170,7 +172,7 @@ function TimerControls({ sw }) {
 // decomposes a bullet into a RetagButton (the classification) + an editable "[m:ss] text"
 // field; rows render time-ascending (untimed last) but edits map back to the ORIGINAL
 // index. When the timer runs, a new note via ENTER is stamped with the elapsed time.
-function NotesEditor({ team, bullets, onChange, onCommit, storageKey, overlay }) {
+function NotesEditor({ bullets, onChange, onCommit, storageKey, overlay, slim, dictating, onDictate }) {
   const [draft, setDraft] = useState('');
   const sw = useStopwatch(storageKey);
   // Overlay: bounded scroll window (~3 rows) pinned to the newest note, so 20+ notes
@@ -194,10 +196,19 @@ function NotesEditor({ team, bullets, onChange, onCommit, storageKey, overlay })
   const firstUntimed = ordered.length - untimedCount;
   return (
     <div style={{ marginTop: 8, marginBottom: candyGap(8, true) }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-        <div style={{ ...labelStyle, marginBottom: 0 }}>Notes{team ? ` (${team})` : ''}</div>
-        <TimerControls sw={sw} />
-      </div>
+      {/* One compact control row: timer (slim-only — the clock keeps counting hidden,
+          epoch math in useStopwatch) + Dictate. No "Notes" label — the list is self-evident. */}
+      {(slim || (overlay && onDictate)) && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+          {slim && <TimerControls sw={sw} />}
+          {overlay && onDictate && (
+            <button className="candy-btn" data-shape="chip" onClick={onDictate}
+              title="Dictate a note — speech-to-text appended to this match">
+              <span className="candy-face" style={dictating ? { color: 'var(--accent)' } : undefined}>{dictating ? '● listening…' : 'Dictate'}</span>
+            </button>
+          )}
+        </div>
+      )}
       <div ref={listRef} style={overlay ? { maxHeight: 165, overflowY: 'auto', minHeight: 0 } : undefined}>
       {ordered.map((row, k) => (
         <div key={row._i}>
@@ -236,16 +247,16 @@ function NotesEditor({ team, bullets, onChange, onCommit, storageKey, overlay })
 
 // Collapsed-by-default per-team notes: a "Create Notes" button (mirrors "+ New Match")
 // until opened — or auto-opened once the team already has notes (e.g. after a Classify→Save).
-function TeamNotes({ team, bullets, onChange, onCommit, storageKey, overlay }) {
+function TeamNotes({ team, bullets, onChange, onCommit, storageKey, overlay, slim, dictating, onDictate }) {
   const [opened, setOpened] = useState(false);
-  if (!opened && bullets.length === 0) {
+  if (!slim && !opened && bullets.length === 0) {
     return (
       <button className="candy-btn" data-shape="row" onClick={() => setOpened(true)} style={{ width: '100%', marginTop: 8, marginBottom: candyGap(8) }}>
         <span className="candy-face" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconPlus size={14} /> Create Notes{team ? ` · ${team}` : ''}</span>
       </button>
     );
   }
-  return <NotesEditor team={team} bullets={bullets} onChange={onChange} onCommit={onCommit} storageKey={storageKey} overlay={overlay} />;
+  return <NotesEditor bullets={bullets} onChange={onChange} onCommit={onCommit} storageKey={storageKey} overlay={overlay} slim={slim} dictating={dictating} onDictate={onDictate} />;
 }
 
 function SaveTag({ state }) {
@@ -454,7 +465,7 @@ function SpeakersPanel({ sidecarPath: scPath, roster, onReassign }) {
   );
 }
 
-export default function ScrimViewer({ path, accent, overlay = false }) {
+export default function ScrimViewer({ path, accent, overlay = false, live = false, onLive }) {
   const [scrim, setScrim] = useState(null);
   const [err, setErr] = useState(null);
   const [saveState, setSaveState] = useState('idle'); // idle | saving | saved | error
@@ -472,6 +483,14 @@ export default function ScrimViewer({ path, accent, overlay = false }) {
   // Overlay mode: which match the header picker focuses + a live-dictation flag.
   const [focusedN, setFocusedN] = useState(null);
   const [dictating, setDictating] = useState(false);
+  // Slim live mode (Live chip → panel-head Exit Live): hide everything but
+  // head/notes/voice/timer while spectating in-game. State lives in
+  // ScrimOverlayPanel (live/onLive props) so the panel head can exit it.
+  const slim = overlay && live;
+  // Panel-head slot for the focused-match picker + save tag (overlay only) —
+  // the panel renders #ov-scrim-head-match, we portal controls into it.
+  const [headSlot, setHeadSlot] = useState(null);
+  useEffect(() => { if (overlay) setHeadSlot(document.getElementById('ov-scrim-head-match')); }, [overlay]);
   // SF6 Comms Diarization: coached-team roster (Speakers panel + inline-relabel dropdowns), your
   // mic-track name, the global track defaults (field placeholders), + a bump key that remounts the
   // comms views after a cluster relabel (the opaque summary text is unchanged, so its key alone won't).
@@ -1122,18 +1141,28 @@ export default function ScrimViewer({ path, accent, overlay = false }) {
   return (
     <div style={overlay ? { minHeight: 0 } : wrap}>
       <div style={overlay ? { padding: '2px 4px', fontFamily: 'var(--font-mono)', '--accent': accent } : { ...inner, '--accent': accent }}>
-        <div data-spacing-intent="overlay compact head" style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: overlay ? 8 : 16 }}>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: overlay ? 16 : 22, fontWeight: 700, color: 'var(--text)', ...(overlay ? { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } : null) }}>{(fm['Team 1'] || '?')} VS {(fm['Team 2'] || '?')}</div>
-            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>{fm['Status'] || 'draft'}</div>
+        {/* Overlay: no in-body head — the scrim picker in the panel head IS the title;
+            the match picker + save tag portal into the head's slot instead. */}
+        {!overlay && (
+          <div data-spacing-intent="overlay compact head" style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>{(fm['Team 1'] || '?')} VS {(fm['Team 2'] || '?')}</div>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>{fm['Status'] || 'draft'}</div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+              <SaveTag state={saveState} />
+            </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-            {overlay && scrim.matches.length > 0 && (
-              <CandySelect value={focusedN} options={scrim.matches.map((m) => ({ value: m.n, label: `Match ${m.n}` }))} onChange={setFocusedN} title="Focused match" />
+        )}
+        {overlay && headSlot && createPortal(
+          <>
+            {scrim.matches.length > 0 && (
+              <CandySelect value={focusedN} options={scrim.matches.map((m) => ({ value: m.n, label: `Match ${m.n}` }))} onChange={setFocusedN} title="Focused match" chevron={false} />
             )}
             <SaveTag state={saveState} />
-          </div>
-        </div>
+          </>,
+          headSlot
+        )}
 
         {!overlay && (
           <div style={card}>
@@ -1156,6 +1185,7 @@ export default function ScrimViewer({ path, accent, overlay = false }) {
           </div>
         )}
 
+        {!slim && (<>
         <div style={card}>
           <div style={{ ...sectionTitle, marginBottom: 8 }}>Matchup</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 14 }}>
@@ -1176,6 +1206,7 @@ export default function ScrimViewer({ path, accent, overlay = false }) {
               {scrim.scrim['VOD Review'] && <MiniBtn icon={IconPlayCircle} title="Open recording" onClick={() => invoke('coaching_open_path', { path: scrim.scrim['VOD Review'] }).catch(() => {})} />}
             </>} />
         </div>
+        </>)}
 
         {scrim.matches.map((m, idx) => {
           if (overlay && m.n !== focusedN) return null; // overlay shows only the focused match
@@ -1194,14 +1225,17 @@ export default function ScrimViewer({ path, accent, overlay = false }) {
           const hasEnemyAuto = !!(enemyAutoBody && enemyAutoBody.trim());
           return (
             <div key={m.n} style={card}>
+              {/* Slim hides the whole title/chip block — the head's match picker already
+                  names the match; Dictate lives in the notes control row. */}
+              {!slim && (
               <div style={{ marginBottom: candyGap(8) }}>
                 <div style={sectionTitle}>Match {m.n}</div>
                 <div className="candy-chip-row" style={{ marginTop: 4 }}>
                   {overlay && (
                     <>
-                      <button className="candy-btn" data-shape="chip" onClick={toggleDictate}
-                        title="Dictate a note — speech-to-text appended to this match">
-                        <span className="candy-face" style={dictating ? { color: 'var(--accent)' } : undefined}>{dictating ? '● listening…' : 'Dictate'}</span>
+                      <button className="candy-btn" data-shape="chip" onClick={() => onLive?.(true)}
+                        title="Live mode — just notes, voice, and the timer">
+                        <span className="candy-face">Live</span>
                       </button>
                       <button className="candy-btn" data-shape="chip" onClick={takeScoreboardShot}
                         title="Capture a scoreboard screenshot for this match">
@@ -1209,11 +1243,12 @@ export default function ScrimViewer({ path, accent, overlay = false }) {
                       </button>
                     </>
                   )}
-                  {populated && (
+                  {!slim && populated && (
                     <button className="candy-btn" data-shape="chip" onClick={() => setMatchPopup({ n: m.n })} title="Open the full match view">
                       <span className="candy-face">View Full Match</span>
                     </button>
                   )}
+                  {!slim && (
                   <button className="candy-btn" data-shape="chip"
                     disabled={commsN === m.n || runningN === m.n || !m.fields['Scrim Recording'] || !sttUp}
                     onClick={() => extractComms(idx)}
@@ -1224,9 +1259,11 @@ export default function ScrimViewer({ path, accent, overlay = false }) {
                     style={commsN === m.n ? { opacity: 0.6, cursor: 'progress' } : undefined}>
                     <span className="candy-face">{commsN === m.n ? (commsPhase || 'Working…') : 'Extract Comms'}</span>
                   </button>
-                  {commsN === m.n && (
+                  )}
+                  {!slim && commsN === m.n && (
                     <button className="candy-btn" data-shape="chip" onClick={cancelComms} title="Cancel transcription"><span className="candy-face">×</span></button>
                   )}
+                  {!slim && (
                   <button className="candy-btn" data-shape="chip"
                     disabled={runningN === m.n || commsN === m.n}
                     onClick={() => runProcess(idx)}
@@ -1234,8 +1271,11 @@ export default function ScrimViewer({ path, accent, overlay = false }) {
                     style={runningN === m.n ? { opacity: 0.6, cursor: 'progress' } : undefined}>
                     <span className="candy-face">{runningN === m.n ? 'Running…' : 'Run Process'}</span>
                   </button>
+                  )}
                 </div>
               </div>
+              )}
+              {!slim && (<>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 14 }}>
                 <EditField label="Match ID" value={m.fields['Match ID']} onChange={(v) => setMatchField(idx, 'Match ID', v)} onCommit={flushSave} placeholder="e.g. 38291042" />
                 <EditField label="Time" value={m.fields['Time']} onChange={(v) => setMatchField(idx, 'Time', v)} onCommit={flushSave} placeholder="e.g. 7:42 PM" />
@@ -1251,19 +1291,22 @@ export default function ScrimViewer({ path, accent, overlay = false }) {
               <EditField label="Scoreboard" value={m.fields['Scoreboard']} onChange={(v) => setMatchField(idx, 'Scoreboard', v)} onCommit={flushSave} placeholder="/path/to/scoreboard.png"
                 right={<MiniBtn icon={IconFolder} title="Select screenshot" onClick={async () => { const p = await pickFile(IMG_FILTERS); if (p) { setMatchField(idx, 'Scoreboard', p); flushSave(); } }} />} />
               <Scoreboard path={m.fields['Scoreboard']} />
+              </>)}
               {/* Coached team only — enemy notes UI dropped by design (notes are only ever
                   taken on the coached team); enemy notes on disk still round-trip verbatim. */}
-              <TeamNotes team={coachedTeam} bullets={getNotes(m, coachedTeam)?.bullets || []} overlay={overlay}
+              <TeamNotes team={coachedTeam} bullets={getNotes(m, coachedTeam)?.bullets || []} overlay={overlay} slim={slim}
+                dictating={dictating} onDictate={overlay ? toggleDictate : undefined}
                 onChange={(b) => setNotes(idx, coachedTeam, b)} onCommit={flushSave} storageKey={`gw-sw:${path}:m${m.n}:${coachedTeam}`} />
-              {hasSummary && (
+              {!slim && hasSummary && (
                 <div style={{ marginTop: 8 }}>
                   <CoachingSummaryView body={summaryBody} />
                 </div>
               )}
-              {hasComms && (
+              {!slim && hasComms && (
                 <SpeakersPanel key={`sp:${commsBody}:${commsRelabelKey}`} sidecarPath={sidecarPath(path, m.n, 'comms')}
                   roster={coachedRoster} onReassign={(cid, name) => reassignCluster(idx, cid, name)} />
               )}
+              {!slim && (
               <div style={{ marginTop: 8 }}>
                 <div style={labelStyle}>Comms Transcript</div>
                 {hasComms
@@ -1271,7 +1314,8 @@ export default function ScrimViewer({ path, accent, overlay = false }) {
                       roster={coachedRoster} onReassign={(cid, name) => reassignCluster(idx, cid, name)} />
                   : <div className="text-trim" style={{ fontSize: 12, color: 'var(--text-muted)' }}>Not yet extracted — click <strong>Extract Comms</strong>.</div>}
               </div>
-              {hasComms && populated && coachedSide != null && (
+              )}
+              {!slim && hasComms && populated && coachedSide != null && (
                 <div style={{ marginTop: 8 }}>
                   <div style={labelStyle}>Silent Deaths</div>
                   <SilentDeathAudit key={`${commsBody}:${matchData}`}
@@ -1281,6 +1325,7 @@ export default function ScrimViewer({ path, accent, overlay = false }) {
                     offsetS={Number(m.fields['Comms Offset']) || 0} />
                 </div>
               )}
+              {!slim && (
               <div style={{ marginTop: 8 }}>
                 <div style={labelStyle}>Auto Classification</div>
                 <div className="candy-chip-row">
@@ -1320,6 +1365,7 @@ export default function ScrimViewer({ path, accent, overlay = false }) {
                   </div>
                 )}
               </div>
+              )}
             </div>
           );
         })}
@@ -1343,9 +1389,11 @@ export default function ScrimViewer({ path, accent, overlay = false }) {
           />
         )}
 
+        {!slim && (
         <button className="candy-btn" data-shape="row" onClick={addMatch} style={{ width: '100%', marginTop: 4 }}>
           <span className="candy-face" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconPlus size={14} /> New Match</span>
         </button>
+        )}
       </div>
     </div>
   );

@@ -11,7 +11,6 @@ import useOverlayPanelDrag from './useOverlayPanelDrag.js';
 import { useScrimOverlay } from './useScrimOverlay.js';
 import ScrimViewer from '@modules/core/game-wiki/ScrimViewer.jsx';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
-import { IconPlus, IconX } from '@host/components/icons.jsx';
 
 // "(06-16-26) Reliquary VS The Mafia.md" → "Reliquary VS The Mafia" (date dropped).
 function titleOf(path) {
@@ -26,6 +25,16 @@ export default function ScrimOverlayPanel() {
   const [creating, setCreating] = useState(false);
   const [t1, setT1] = useState('');
   const [t2, setT2] = useState('');
+  // Slim live mode — owned here so the head button can flip to "Exit Live" (the
+  // slim panel itself carries no Live chip). Persisted: the overlay reopens in
+  // whichever mode it was last in (mirrors the overlay-scrim-selected pattern).
+  const [live, setLiveState] = useState(() => {
+    try { return localStorage.getItem('overlay-scrim-live') === '1'; } catch { return false; }
+  });
+  const setLive = (v) => {
+    setLiveState(v);
+    try { localStorage.setItem('overlay-scrim-live', v ? '1' : '0'); } catch { /* private mode */ }
+  };
 
   const doCreate = async () => {
     await createScrim(t1, t2).catch(() => {});
@@ -35,26 +44,41 @@ export default function ScrimOverlayPanel() {
   return (
     <div className="video-cinema" style={{ position: 'absolute', top: 0, left: 0, background: 'transparent', padding: 0, ...dragStyle }}>
       <div className="candy-card ov-scrim-panel">
-        {/* Header (drag handle) — title · scrim picker · New · close */}
+        {/* Header (drag handle) — Scrim menu · scrim picker (+ Add Scrim lives at the
+            bottom of its list) · match picker slot (portaled in by ScrimViewer) ·
+            Minimize (Exit Live while slim) */}
         <div className="candy-center-row ov-scrim-head" data-spacing-intent="candy-center lift" {...dragProps} style={{ touchAction: 'none' }}>
-          <span className="ov-scrim-title section-title">▣ Scrim</span>
-          <div style={{ flex: 1, minWidth: 0 }}>
+          <CandySelect
+            value={null}
+            options={[]}
+            onChange={() => {}}
+            placeholder="Scrim"
+            title="Scrim menu"
+            chevron={false}
+          />
+          <div style={{ minWidth: 0 }}>
             <CandySelect
               value={selectedPath}
-              options={scrims.map((s) => ({ value: s.path, label: titleOf(s.path) }))}
-              onChange={selectScrim}
+              options={[...scrims.map((s) => ({ value: s.path, label: titleOf(s.path) })), { value: '__create__', label: '+ Add Scrim' }]}
+              onChange={(v) => { if (v === '__create__') setCreating(true); else selectScrim(v); }}
               placeholder="Pick a scrim…"
               title="Scrim"
+              chevron={false}
             />
           </div>
-          <button type="button" data-no-drag className="candy-btn" data-shape="icon" data-size="small" title="New scrim" aria-label="New scrim" onClick={() => setCreating((v) => !v)}>
-            <span className="candy-face"><IconPlus size={13} /></span>
-          </button>
-          {selectedPath && (
-            <button type="button" data-no-drag className="candy-btn" data-shape="icon" data-size="small" title="Close scrim" aria-label="Close scrim" onClick={closeScrim}>
-              <span className="candy-face"><IconX size={13} /></span>
-            </button>
-          )}
+          {/* ScrimViewer portals the focused-match picker + save tag in here. */}
+          <div id="ov-scrim-head-match" style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }} />
+          <div style={{ flex: 1 }} />
+          {selectedPath && (live
+            ? (
+              <button type="button" data-no-drag className="candy-btn" data-shape="select" data-own-press title="Exit live mode — the full panel returns" onClick={() => setLive(false)}>
+                <span className="candy-face"><span>Exit Live</span></span>
+              </button>
+            ) : (
+              <button type="button" data-no-drag className="candy-btn" data-shape="select" data-own-press title="Minimize — collapse the scrim panel" onClick={closeScrim}>
+                <span className="candy-face"><span>Minimize</span></span>
+              </button>
+            ))}
         </div>
 
         {creating && (
@@ -75,8 +99,8 @@ export default function ScrimOverlayPanel() {
 
         {/* Body — the reused full editor, focused-match mode */}
         {selectedPath
-          ? <div className="ov-scrim-body"><ScrimViewer path={selectedPath} overlay /></div>
-          : !creating && <div className="ov-scrim-empty">Pick a scrim above, or + to create one.</div>}
+          ? <div className="ov-scrim-body"><ScrimViewer path={selectedPath} overlay live={live} onLive={setLive} /></div>
+          : !creating && <div className="ov-scrim-empty">Pick a scrim above (+ Add Scrim is at the bottom of the list).</div>}
       </div>
     </div>
   );
