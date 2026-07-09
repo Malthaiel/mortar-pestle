@@ -15,9 +15,10 @@ import CandySelect from '@host/components/ui/CandySelect.jsx';
 import { candyGap } from '@host/util/candy.js';
 import { parseScrim, serializeScrim, mergeScrim, appendMatch, getNotes, ensureNotes } from './scrimSchema.js';
 import MatchViewPopup from './MatchViewPopup.jsx';
-import { sidecarPath, renderSummary, setMatchDataBody, MATCH_DATA_PLACEHOLDER, clock, extractMeta, fmtLocalTime } from './matchData.js';
+import { sidecarPath, renderSummary, setMatchDataBody, MATCH_DATA_PLACEHOLDER, clock, extractMeta, fmtLocalTime, extractSpatial } from './matchData.js';
 import { compileNotes, renderCoachingSummary, setCoachingSummaryBody, parseTimedNote, formatTimedBullet, sortByTimeAsc, secFromClock } from './noteCompile.js';
-import { setCommsTranscriptBody, renderCommsSummary } from './commsCompile.js';
+import { setCommsTranscriptBody, renderCommsSummary, parseSegments } from './commsCompile.js';
+import { auditSilentDeaths } from './deathAudit.js';
 import CommsTranscriptView from './CommsTranscriptView.jsx';
 import { useSettings } from '@host/hooks/useSettings.js';
 import { buildMomentsDigest, classifyMoments, reconcile, renderAutoClassification, setAutoClassificationBody, sideFromTeamFields, mergedItemToBullet } from './autoClassify.js';
@@ -288,6 +289,50 @@ function AutoClassificationView({ sidecarPath: scPath, team }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// Silent-Death Audit (sub-plan 10) — coached-team deaths with no comms segment in the
+// ~10 s before them: a missed-callout list. Pure cross-ref of the two sidecars the match
+// already owns (.matchdata deaths × .commstranscript segments), no AI. Recording clock =
+// game clock + the match's Comms Offset field (seconds of pre-game in the recording).
+// Same sidecar-read machinery as AutoClassificationView / CommsTranscriptView.
+function SilentDeathAudit({ matchSidecar, commsSidecar, side, offsetS }) {
+  const [state, setState] = useState({ status: 'loading' });
+  useEffect(() => {
+    let cancelled = false;
+    setState({ status: 'loading' });
+    Promise.all([
+      api.getRawFileMeta(matchSidecar, 'gamewiki'),
+      api.getRawFileMeta(commsSidecar, 'gamewiki'),
+    ]).then(([md, cm]) => {
+      if (cancelled) return;
+      let raw;
+      try { raw = JSON.parse(md.content); } catch { setState({ status: 'error' }); return; }
+      const audit = auditSilentDeaths(extractSpatial(raw).deaths, parseSegments(cm.content), { side, offsetS });
+      setState({ status: 'ready', audit });
+    }).catch(() => { if (!cancelled) setState({ status: 'missing' }); });
+    return () => { cancelled = true; };
+  }, [matchSidecar, commsSidecar, side, offsetS]);
+
+  const { status, audit } = state;
+  if (status === 'loading') return <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Checking callouts…</div>;
+  if (status === 'missing') return <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Needs both match data and a comms transcript.</div>;
+  if (status === 'error') return <div style={{ fontSize: 12, color: 'var(--error)' }}>Couldn’t parse the stored match data.</div>;
+  if (!audit.total) return <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>No coached-team deaths recorded.</div>;
+  if (!audit.silent.length) return <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>All {audit.total} deaths had comms nearby.</div>;
+  return (
+    <div>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
+        {audit.silent.length} of {audit.total} deaths had no comms in the 10 s before them:
+      </div>
+      {audit.silent.map((d, i) => (
+        <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 2, fontSize: 12.5 }}>
+          <span style={{ color: 'var(--text-muted)', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{clock(d.t)}</span>
+          <span style={{ color: 'var(--text)' }}>{d.hero}</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -930,6 +975,7 @@ export default function ScrimViewer({ path, accent, overlay = false }) {
                 <EditField label="Time" value={m.fields['Time']} onChange={(v) => setMatchField(idx, 'Time', v)} onCommit={flushSave} placeholder="e.g. 7:42 PM" />
                 <EditField label="Amber" value={m.fields['Amber']} onChange={(v) => setMatchField(idx, 'Amber', v)} onCommit={flushSave} placeholder="team on Amber side" />
                 <EditField label="Sapphire" value={m.fields['Sapphire']} onChange={(v) => setMatchField(idx, 'Sapphire', v)} onCommit={flushSave} placeholder="team on Sapphire side" />
+                <EditField label="Comms Offset" value={m.fields['Comms Offset']} onChange={(v) => setMatchField(idx, 'Comms Offset', v)} onCommit={flushSave} placeholder="s of pre-game in recording" />
               </div>
               <EditField label="Scrim Recording" value={m.fields['Scrim Recording']} onChange={(v) => setMatchField(idx, 'Scrim Recording', v)} onCommit={flushSave} placeholder="/path/to/match.mp4"
                 right={<>
@@ -956,6 +1002,16 @@ export default function ScrimViewer({ path, accent, overlay = false }) {
                   ? <CommsTranscriptView key={commsBody} sidecarPath={sidecarPath(path, m.n, 'comms')} />
                   : <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Not yet extracted — click <strong>Extract Comms</strong>.</div>}
               </div>
+              {hasComms && populated && coachedSide != null && (
+                <div style={{ marginTop: 8 }}>
+                  <div style={labelStyle}>Silent Deaths</div>
+                  <SilentDeathAudit key={`${commsBody}:${matchData}`}
+                    matchSidecar={sidecarPath(path, m.n)}
+                    commsSidecar={sidecarPath(path, m.n, 'comms')}
+                    side={coachedSide}
+                    offsetS={Number(m.fields['Comms Offset']) || 0} />
+                </div>
+              )}
               <div style={{ marginTop: 8 }}>
                 <div style={labelStyle}>Auto Classification</div>
                 <div className="candy-chip-row">
