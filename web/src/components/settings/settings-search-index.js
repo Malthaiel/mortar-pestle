@@ -61,11 +61,12 @@ const ANIM_TOGGLES = [
   ['frame-reset-restore',    'Frame reset spin-restore', ['reset', 'restore', 'spin', 'undo', 'frame'], 'planner'],
 ];
 
-// 3 sound toggles (mirrors SoundsTab ROWS).
+// 4 sound toggles (mirrors SoundsTab ROWS).
 const SOUND_TOGGLES = [
   ['tactile-button-thock', 'Button thock',      ['click', 'tap', 'press']],
   ['reorder-pickup-thock', 'Drag pickup thock', ['lift', 'reorder', 'pill']],
   ['reorder-drop-thock',   'Drag drop thock',   ['release', 'reorder', 'pill']],
+  ['celebration-chime',    'Celebration chime', ['replay', 'saved', 'task', 'done', 'chime']],
 ];
 
 const animBool = (settings, key) => {

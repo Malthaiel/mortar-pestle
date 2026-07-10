@@ -308,6 +308,7 @@ fn main() {
         "broadcast_restart_engine",
         "broadcast_open_log",
         "broadcast_paths",
+        "broadcast_remux_start",
       ]),
     ),
   )

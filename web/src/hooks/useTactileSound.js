@@ -126,10 +126,10 @@ function playFilteredBurst({ freq, q, peakGain, dur }) {
 }
 
 // Two-note celebration chime — today's last open task checked off in the
-// Planner (paired with the app:confetti burst). Rides the tactile key rather
-// than its own Sounds row: a once-a-day flourish doesn't earn surface.
+// Planner (paired with the app:confetti burst) and a Broadcast replay save.
+// Own Sounds row ('celebration-chime') since SP4 made it a money moment.
 export function playCelebrationChime(opts = {}) {
-  if (!opts.force && !soundEnabled('tactile-button-thock')) return;
+  if (!opts.force && !soundEnabled('celebration-chime')) return;
   try {
     const ctx = getCtx();
     const now = ctx.currentTime;

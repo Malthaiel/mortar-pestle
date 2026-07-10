@@ -52,6 +52,33 @@ pub fn arm_dll_search(root: &Path) -> std::io::Result<()> {
             return Err(std::io::Error::last_os_error());
         }
     }
+
+    // OBS resolves its helper exes BESIDE the running engine binary via
+    // os_get_executable_path — NOT here in bin/64bit. Copy them next to
+    // current_exe() so the replay-buffer + ffmpeg-record muxer (obs-ffmpeg-mux)
+    // and the hw-encoder probes (obs-*-test) don't hit `CreateProcessW 2`.
+    // ponytail: copy-if-absent only — won't refresh a stale dest, but a dev
+    // cargo-clean and a fresh install both re-copy from a clean tree, so no drift.
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dest_dir) = exe.parent() {
+            if dest_dir != bin {
+                for name in [
+                    "obs-ffmpeg-mux.exe",
+                    "obs-nvenc-test.exe",
+                    "obs-qsv-test.exe",
+                    "obs-amf-test.exe",
+                ] {
+                    let dest = dest_dir.join(name);
+                    if !dest.exists() {
+                        if let Err(e) = std::fs::copy(bin.join(name), &dest) {
+                            log::warn!("obs helper copy {name} failed: {e}");
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // cwd = bin/64bit, exactly how obs64.exe runs: obs.dll's compiled-in data
     // path is the RELATIVE "../../data", resolved against the cwd (core
     // effect files fail to load from any other directory).

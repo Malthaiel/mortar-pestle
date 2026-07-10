@@ -83,6 +83,15 @@ export const PAGE_SECTIONS = {
       { id: 'agents',  label: 'Agents' },
     ],
   },
+  broadcast: {
+    default: 'engine',
+    sections: [
+      { id: 'engine',    label: 'Engine' },
+      { id: 'output',    label: 'Output' },
+      { id: 'recording', label: 'Recording' },
+      { id: 'replay',    label: 'Replay' },
+    ],
+  },
 };
 
 // Old rail-tab ids → addresses, so every pre-rework `host:open-settings`

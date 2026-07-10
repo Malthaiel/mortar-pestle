@@ -10,12 +10,14 @@ import {
   playTactileThock,
   playReorderPickup,
   playReorderDrop,
+  playCelebrationChime,
 } from '../../hooks/useTactileSound.js';
 
 const ROWS = [
   { key: 'tactile-button-thock', label: 'Button thock',        description: 'Subtle size-aware click on every button press. Pitch scales with button size: larger buttons play lower.', kind: 'host' },
   { key: 'reorder-pickup-thock', label: 'Drag pickup thock',   description: 'Low, rounded tap when lifting a sidebar pill to begin a drag-reorder.', kind: 'host' },
   { key: 'reorder-drop-thock',   label: 'Drag drop thock',     description: 'Crisper, slightly higher tap when releasing a sidebar pill into its new slot.', kind: 'host' },
+  { key: 'celebration-chime',    label: 'Celebration chime',   description: 'Two-note flourish when a replay is saved, or the day’s last open task is checked off in the Planner.', kind: 'host' },
 ];
 
 const PRESET_OPTIONS = [
@@ -32,6 +34,7 @@ function audition(key) {
       break;
     case 'reorder-pickup-thock': playReorderPickup({ force: true }); break;
     case 'reorder-drop-thock':   playReorderDrop({ force: true });   break;
+    case 'celebration-chime':    playCelebrationChime({ force: true }); break;
     default: break;
   }
 }

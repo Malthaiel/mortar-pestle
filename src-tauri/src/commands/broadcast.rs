@@ -185,3 +185,158 @@ pub async fn broadcast_paths(app: AppHandle) -> Result<BroadcastPaths, VaultErro
         collection_path: collection.to_string_lossy().into_owned(),
     })
 }
+
+// ── SP4 S4 — host-side post-save pipeline ─────────────────────────────────────
+//
+// A record `saved` or replay `replay_saved` engine event is handed to [`on_saved`]
+// (spawned off the lib.rs bridge so the event loop keeps draining). It mirrors the
+// capture bridge for Broadcast files: extract a sibling poster, enrich the payload,
+// and emit `capture-saved` so the shared Captures UI (tiles, posters, bin,
+// Send-to-editor) live-refreshes with zero Broadcast-specific frontend. Then, if the
+// engine flagged auto-remux on an `.mkv`, remux it to `.mp4` (ALL tracks) and bin
+// the source. The Broadcast-specific `broadcast-saved` / `broadcast-replay-saved`
+// events stay in the bridge; this handler owns only the shared Captures surface.
+
+/// Extract a `<stem>.jpg` poster beside `path` via a single-frame ffmpeg grab
+/// (mirrors the video-editor frame-grab). Best-effort: a failure is logged and the
+/// clip just lists without a thumbnail until the next Captures scan.
+async fn extract_poster(path: &str) {
+    let jpg = std::path::PathBuf::from(path).with_extension("jpg");
+    let out = tokio::process::Command::new(crate::tool_path::resolve("ffmpeg"))
+        .args(["-y", "-hide_banner", "-loglevel", "error", "-nostats", "-i"])
+        .arg(crate::tool_path::native_str(path))
+        .args(["-frames:v", "1", "-q:v", "4", "-f", "image2", "-update", "1"])
+        .arg(crate::tool_path::native_path(&jpg))
+        .output()
+        .await;
+    match out {
+        Ok(o) if o.status.success() => {}
+        Ok(o) => log::warn!(
+            "broadcast: poster extract for {path} exited non-zero: {}",
+            String::from_utf8_lossy(&o.stderr).trim()
+        ),
+        Err(e) => log::warn!("broadcast: poster ffmpeg spawn failed: {e}"),
+    }
+}
+
+/// Shared record/replay post-save handler (see module note above). `data` is the
+/// engine event body (`{path, auto_remux?, …}`).
+pub async fn on_saved(app: AppHandle, data: Value) {
+    let path = data.get("path").and_then(|v| v.as_str()).map(String::from);
+    let auto_remux = data
+        .get("auto_remux")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    if let Some(ref p) = path {
+        extract_poster(p).await;
+    }
+    // enrich_saved (capture reuse) adds name/sizeBytes/mtime; emit the shared
+    // Captures live-refresh event so the existing UI picks the clip up.
+    let enriched = crate::commands::capture::enrich_saved(data);
+    {
+        use tauri::Emitter;
+        if let Err(e) = app.emit("capture-saved", &enriched) {
+            log::warn!("broadcast: emit capture-saved failed: {e}");
+        }
+    }
+
+    // Auto-remux: engine flagged it AND the file is an mkv → mp4 (keep all tracks).
+    if auto_remux {
+        if let Some(p) = path {
+            if p.to_ascii_lowercase().ends_with(".mkv") {
+                if let Err(e) = auto_remux_mkv(&app, &p).await {
+                    log::warn!("broadcast: auto-remux failed for {p}: {e}");
+                }
+            }
+        }
+    }
+}
+
+/// Stream-copy remux `input` → `out_mp4` through a sibling `.partial`, renamed on
+/// success so a crash never leaves a truncated `.mp4` masquerading as complete.
+/// Keeps EVERY track (`build_remux_argv` = `-map 0 -c copy`). Shared by the S4
+/// auto-remux runner and the S6 `broadcast_remux_start` command.
+async fn remux_to_partial(input: &str, out_mp4: &std::path::Path) -> Result<(), String> {
+    let partial = out_mp4.with_extension("mp4.partial");
+    let args = crate::parsers::video_transcode::build_remux_argv(input, &partial);
+    let out = tokio::process::Command::new(crate::tool_path::resolve("ffmpeg"))
+        .args(&args)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .output()
+        .await
+        .map_err(|e| format!("ffmpeg spawn: {e}"))?;
+    if !out.status.success() {
+        let _ = std::fs::remove_file(&partial);
+        return Err(format!(
+            "ffmpeg remux exited non-zero: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    std::fs::rename(&partial, out_mp4).map_err(|e| format!("rename partial→mp4: {e}"))?;
+    Ok(())
+}
+
+/// Remux `mkv_path` (ALL tracks) → sibling `.mp4`, bin the source mkv, and emit a
+/// fresh `capture-saved` (with poster) for the mp4.
+async fn auto_remux_mkv(app: &AppHandle, mkv_path: &str) -> Result<(), String> {
+    let src = std::path::PathBuf::from(mkv_path);
+    let out_mp4 = src.with_extension("mp4");
+    remux_to_partial(mkv_path, &out_mp4).await?;
+
+    // Bin the source mkv (root `captures`, restorable) — mirrors capture_clip_delete.
+    let root = std::fs::canonicalize(crate::commands::vault::captures_dir())
+        .unwrap_or_else(|_| std::path::PathBuf::from(crate::commands::vault::captures_dir()));
+    match std::fs::canonicalize(&src) {
+        Ok(abs) => match abs.strip_prefix(&root) {
+            Ok(rel) => {
+                let rel = rel.to_string_lossy().replace('\\', "/");
+                if let Err(e) = crate::commands::recycle_bin::trash_clip(
+                    app,
+                    Some("captures".into()),
+                    &rel,
+                    &abs,
+                ) {
+                    log::warn!("broadcast: bin source mkv failed: {e:?}");
+                }
+            }
+            Err(_) => {
+                log::warn!("broadcast: source mkv not under captures dir, leaving on disk")
+            }
+        },
+        Err(e) => log::warn!("broadcast: canonicalize source mkv failed: {e}"),
+    }
+
+    // Poster + live-refresh for the new mp4.
+    let mp4_str = out_mp4.to_string_lossy().into_owned();
+    extract_poster(&mp4_str).await;
+    let enriched = crate::commands::capture::enrich_saved(json!({ "path": mp4_str }));
+    {
+        use tauri::Emitter;
+        if let Err(e) = app.emit("capture-saved", &enriched) {
+            log::warn!("broadcast: emit capture-saved (remux) failed: {e}");
+        }
+    }
+    Ok(())
+}
+
+// ── SP4 S6 — remux utility command ────────────────────────────────────────────
+
+/// `broadcast_remux_start` — SP4 S6 remux utility (the RemuxWindow's backend).
+/// Stream-copy remux `input` (any container) → an MP4 keeping every audio track,
+/// through a `.partial` renamed on success. `output` defaults to the sibling
+/// `.mp4` when omitted (the RemuxWindow always passes a concrete, distinct-from-
+/// input path). Awaits completion — a `-c copy` remux is near-instant, so the
+/// window shows a plain running→done state with no progress stream. Host-composing
+/// (owns ffmpeg + the shared argv builder), not an engine passthrough — the engine
+/// has no part in an offline file remux.
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+#[tauri::command]
+pub async fn broadcast_remux_start(input: String, output: Option<String>) -> Result<(), VaultError> {
+    let out = output
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::PathBuf::from(&input).with_extension("mp4"));
+    remux_to_partial(&input, &out).await.map_err(VaultError::Io)
+}

@@ -21,6 +21,8 @@ import { KEYBIND_ENTRIES } from './index.jsx';
 import { pushUndo, runRedo, runUndo } from './broadcastUndo.js';
 import { updateBroadcastUi, useBroadcastUi, verb } from './broadcastStore.js';
 import { toCanvas } from './canvasMath.js';
+import { playCelebrationChime } from '@host/hooks/useTactileSound.js';
+import { toast } from './mutations.js';
 import './broadcast.css';
 
 // Delight (b): OS file drop onto the preview → matching source at the drop
@@ -46,6 +48,21 @@ export default function BroadcastPage({ api, accent }) {
   const ui = useBroadcastUi();
   const [busy, setBusy] = useState(false);
   const recording = alive && !!snapshot?.recording?.active;
+  const paused = recording && !!snapshot?.recording?.paused;
+  const armed = alive && !!snapshot?.replay?.armed;
+
+  // Manual-split gate: RecSplitFileType isn't in the snapshot, so read it from
+  // the profile on the recording edge (a pre-record choice; a mid-session change
+  // reflects on the next record start). Split shows only in Manual mode.
+  const [splitType, setSplitType] = useState('Time');
+  useEffect(() => {
+    if (!recording) return undefined;
+    verb(api, 'get_output_settings')
+      .then((s) => setSplitType(s?.profile?.AdvOut?.RecSplitFileType || 'Time'))
+      .catch(() => {});
+    return undefined;
+  }, [api, recording]);
+  const canSplit = recording && splitType === 'Manual';
 
   const busyRef = useRef(false);
   const toggleRecord = useCallback(async () => {
@@ -62,18 +79,36 @@ export default function BroadcastPage({ api, accent }) {
     }
   }, [api, alive, recording]);
 
-  // Page-scoped keydown → record toggle (event-time resolution so a rebind in
-  // Settings applies instantly; video-editor makeEditorKeydown idiom).
-  const toggleRef = useRef(toggleRecord);
-  toggleRef.current = toggleRecord;
+  // Record/replay verbs ride the broadcast_request passthrough — NOT undoable
+  // (no pushUndo); failures surface as a toast (+ broadcast-error/last_error).
+  const runVerb = useCallback((op, args) => {
+    verb(api, op, args ?? null).catch((e) => toast('Broadcast', (e && e.message) || `${op} failed`));
+  }, [api]);
+  const onPause = useCallback(() => runVerb('pause_record', { paused: !paused }), [runVerb, paused]);
+  const onSplit = useCallback(() => runVerb('split_record'), [runVerb]);
+  const onReplayArm = useCallback(() => runVerb(armed ? 'stop_replay' : 'start_replay'), [runVerb, armed]);
+  const onReplaySave = useCallback(() => runVerb('save_replay'), [runVerb]);
+
+  // Page-scoped keydown → record/replay/pause/split (event-time chord resolution
+  // so a Settings rebind applies instantly; video-editor makeEditorKeydown idiom).
+  // Handlers ride a ref so the once-registered listener calls the latest closure;
+  // pause/split are gated to their valid states (an out-of-state chord no-ops
+  // instead of firing an engine error).
+  const handlersRef = useRef({});
+  handlersRef.current = {
+    'broadcast.record-toggle': toggleRecord,
+    'broadcast.replay-save': onReplaySave,
+    'broadcast.pause': recording ? onPause : null,
+    'broadcast.split': canSplit ? onSplit : null,
+  };
   useEffect(() => {
-    const def = KEYBIND_ENTRIES[0];
     const onKeydown = (e) => {
       if (isEditableTarget(e.target)) return;
       const kb = getLiveKeybinds();
-      if (matchChord(e, kb[def.id] ?? def.default)) {
-        e.preventDefault();
-        toggleRef.current();
+      for (const def of KEYBIND_ENTRIES) {
+        if (!matchChord(e, kb[def.id] ?? def.default)) continue;
+        const h = handlersRef.current[def.id];
+        if (h) { e.preventDefault(); h(); }
         return;
       }
       // SP3 scene-graph undo/redo — page-scoped, hardcoded chords (video-editor
@@ -128,22 +163,35 @@ export default function BroadcastPage({ api, accent }) {
         }).catch((e) => console.warn('[broadcast] drop create_source', e));
       }
     };
-    // Keep the registration promises and chain unlisten onto them — a plain
-    // `un` variable is still null if we unmount before `listen` resolves,
-    // orphaning the listener (dev StrictMode remount / fast route flick).
-    const subs = [
-      getCurrentWebviewWindow().onDragDropEvent((event) => {
-        if (event.payload.type !== 'drop') return;
-        handleDrop(event.payload.paths || [], event.payload.position);
-      }),
-      // OLE drops dead-zone over the native region (drop targets resolve by
-      // hit-test, which never crosses to the WebView2 process) — the host child
-      // carries its own IDropTarget and relays drops as this event, same
-      // physical-px main-window coordinates as onDragDropEvent.
-      listen('broadcast://host-drop', (e) => handleDrop(e.payload.paths || [], e.payload.position)),
-    ];
-    return () => subs.forEach((p) => p.then((f) => f()).catch(() => {}));
+    // dead-flag: unlisten resolves async, so an unmount that beats it (StrictMode
+    // remount, page nav) must unhook on arrival or the listener leaks → double drops.
+    let dead = false;
+    let un = null;
+    let unHost = null;
+    getCurrentWebviewWindow().onDragDropEvent((event) => {
+      if (event.payload.type !== 'drop') return;
+      handleDrop(event.payload.paths || [], event.payload.position);
+    }).then((u) => { if (dead) u(); else un = u; });
+    // OLE drops dead-zone over the native region (drop targets resolve by
+    // hit-test, which never crosses to the WebView2 process) — the host child
+    // carries its own IDropTarget and relays drops as this event, same
+    // physical-px main-window coordinates as onDragDropEvent.
+    listen('broadcast://host-drop', (e) => handleDrop(e.payload.paths || [], e.payload.position))
+      .then((u) => { if (dead) u(); else unHost = u; });
+    return () => { dead = true; if (un) un(); if (unHost) unHost(); };
   }, [api]);
+
+  // Replay saved (SP4) — the money moment: chime + toast. App-focused only
+  // until SP10 engine hotkeys; recordings land silently via capture-saved.
+  useEffect(() => {
+    let dead = false;
+    let un = null;
+    listen('broadcast-replay-saved', () => {
+      playCelebrationChime();
+      toast('Replay saved', 'The last few seconds are in your Captures.');
+    }).then((u) => { if (dead) u(); else un = u; });
+    return () => { dead = true; if (un) un(); };
+  }, []);
 
   const failed = engine?.state === 'failed';
   const starting = engine?.state === 'spawning' || engine?.state === 'up' || engine?.state === 'adopting';
@@ -189,9 +237,16 @@ export default function BroadcastPage({ api, accent }) {
       <ComposerBar
         alive={alive}
         recording={recording}
+        paused={paused}
         elapsedNs={snapshot?.recording?.elapsed_ns || 0}
         busy={busy}
         onToggleRecord={toggleRecord}
+        armed={armed}
+        canSplit={canSplit}
+        onPause={onPause}
+        onSplit={onSplit}
+        onReplayArm={onReplayArm}
+        onReplaySave={onReplaySave}
         lastError={error || snapshot?.last_error || null}
         accent={accent}
       />

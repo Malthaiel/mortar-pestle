@@ -16,9 +16,14 @@ import BroadcastSidebar from './BroadcastSidebar.jsx';
 const BroadcastPage = React.lazy(() => import('./BroadcastPage.jsx').catch(lazyChunkError('Broadcast', '[broadcast]')));
 
 export const KEYBIND_ENTRIES = [
-  // Meta+Shift+B, not an R-chord: Ctrl+R / Ctrl+Shift+R are WebView2 browser
-  // accelerators handled below JS — preventDefault can't stop a webview reload.
+  // Meta+Shift+<letter>, never an R-chord: Ctrl+R / Ctrl+Shift+R are WebView2
+  // browser accelerators handled below JS — preventDefault can't stop a webview
+  // reload. 'meta' matches Cmd (Mac) OR Ctrl (Win/Linux). Consumed by the raw
+  // keydown handler in BroadcastPage (all app-focused until SP10 engine hotkeys).
   { id: 'broadcast.record-toggle', group: 'Broadcast', label: 'Toggle recording', default: { kind: 'chord', key: 'b', modifiers: ['meta', 'shift'] } },
+  { id: 'broadcast.replay-save',   group: 'Broadcast', label: 'Save replay',        default: { kind: 'chord', key: 's', modifiers: ['meta', 'shift'] } },
+  { id: 'broadcast.pause',         group: 'Broadcast', label: 'Pause/resume recording', default: { kind: 'chord', key: 'p', modifiers: ['meta', 'shift'] } },
+  { id: 'broadcast.split',         group: 'Broadcast', label: 'Split recording',     default: { kind: 'chord', key: 'x', modifiers: ['meta', 'shift'] } },
 ];
 
 export default {

@@ -88,6 +88,13 @@ pub enum Cmd {
     /// INTERNAL: posted by the muxer's file_changed signal callback (split
     /// rollover) — never arrives from the socket, carries no reply.
     FileChanged { path: String },
+    // --- SP4 replay-buffer verbs (S3) ---
+    StartReplay { reply: Reply },
+    StopReplay { reply: Reply },
+    SaveReplay { reply: Reply },
+    /// INTERNAL: posted by the replay output's `saved` signal callback — never
+    /// arrives from the socket, carries no reply.
+    ReplaySaved,
     Shutdown { reply: Reply },
 }
 
@@ -108,6 +115,16 @@ unsafe extern "C" fn on_file_changed(param: *mut std::ffi::c_void, cd: *mut ffi:
             let path = CStr::from_ptr(s).to_string_lossy().into_owned();
             let _ = ctx.tx.send(Cmd::FileChanged { path });
         }
+    }
+}
+
+/// `saved()` (no params) — the replay_buffer output emits it after a buffer
+/// write completes. The path is fetched via the `get_last_replay` proc back
+/// on the engine thread (post a Cmd; never call obs_* on the signal thread).
+unsafe extern "C" fn on_replay_saved(param: *mut std::ffi::c_void, _cd: *mut ffi::calldata_t) {
+    unsafe {
+        let ctx = &*(param as *const SignalCtx);
+        let _ = ctx.tx.send(Cmd::ReplaySaved);
     }
 }
 
@@ -141,6 +158,15 @@ struct EncoderSet {
     aencs: Vec<(u32, *mut ffi::obs_encoder)>,
 }
 
+/// The armed replay buffer (S3): a `replay_buffer` output feeding the shared
+/// [`EncoderSet`]. Present ⇒ `replay_armed()`; dropped on stop_replay/teardown.
+struct ReplayRun {
+    output: *mut ffi::obs_output,
+    /// `saved` signal context (Box::into_raw) — disconnected + reboxed in
+    /// stop_replay. Null if the connect was skipped.
+    sig_ctx: *mut SignalCtx,
+}
+
 struct Engine {
     core: ObsCore,
     /// (name, owned scene ref)
@@ -156,6 +182,8 @@ struct Engine {
     /// leak them into the collection. inc_showing held while open (WGC gate).
     picker: Vec<(String, String, *mut ffi::obs_source)>,
     recording: Option<RecordingRun>,
+    /// Armed replay buffer, if any (S3). Shares the EncoderSet with recording.
+    replay: Option<ReplayRun>,
     finalizing: bool,
     last_error: Option<ProtoError>,
     events: broadcast::Sender<Event>,
@@ -231,6 +259,7 @@ pub fn spawn(
                 displays: Vec::new(),
                 picker: Vec::new(),
                 recording: None,
+                replay: None,
                 finalizing: false,
                 last_error: None,
                 events,
@@ -476,6 +505,29 @@ impl Engine {
                     self.push_state();
                 }
             }
+            Cmd::StartReplay { reply } => {
+                let r = self.start_replay();
+                let ok = r.is_ok();
+                self.finish_ephemeral(reply, r);
+                if ok {
+                    self.push_state();
+                }
+            }
+            Cmd::StopReplay { reply } => {
+                let r = self.stop_replay();
+                let ok = r.is_ok();
+                self.finish_ephemeral(reply, r);
+                if ok {
+                    self.push_state();
+                }
+            }
+            Cmd::SaveReplay { reply } => {
+                let r = self.save_replay();
+                self.finish_ephemeral(reply, r);
+            }
+            Cmd::ReplaySaved => {
+                self.replay_saved();
+            }
             Cmd::DisplayCreate { id, hwnd, width, height, reply } => {
                 let r = self.display_create(&id, hwnd, width, height);
                 self.finish_ephemeral(reply, r);
@@ -573,9 +625,10 @@ impl Engine {
         }
     }
 
-    /// S3 wires the replay-buffer output; until then nothing can be armed.
+    /// Armed ⇔ a live `replay_buffer` output exists. Gates the shared-encoder
+    /// idle drop and the output-settings lock.
     fn replay_armed(&self) -> bool {
-        false
+        self.replay.is_some()
     }
 
     // --- scenes/sources -----------------------------------------------------
@@ -1383,6 +1436,15 @@ impl Engine {
             o.insert("split_file".into(), json!(true));
             o.insert("max_time_sec".into(), json!(t));
             o.insert("max_size_mb".into(), json!(s));
+            // Segments AFTER the first are named by libobs from these keys
+            // (mp4_output::generate_filename reads directory/format/extension/
+            // allow_spaces; the first file uses `path` above). Omitting them made
+            // the muxer build a NULL next-filename, fail to reopen, and UAF-crash
+            // on finalise (mp4-output.c:473). Mirrors start_replay's proven config.
+            o.insert("directory".into(), json!(dir.to_string_lossy()));
+            o.insert("format".into(), json!(namer::expand_game(&template)));
+            o.insert("extension".into(), json!(ext));
+            o.insert("allow_spaces".into(), json!(true));
         }
 
         unsafe {
@@ -1537,6 +1599,167 @@ impl Engine {
             }
         }
         Ok(json!({}))
+    }
+
+    // --- replay buffer (SP4 S3) -----------------------------------------------
+
+    /// Arm the replay buffer: a `replay_buffer` output on the shared
+    /// [`EncoderSet`] keeping the last RecRBTime seconds / RecRBSize MB.
+    /// Idempotent when already armed. The filename `format` keeps its date
+    /// tokens UNexpanded — libobs stamps them at save time; only `%game` is
+    /// pre-expanded here (arm-time game ≈ save-time game).
+    fn start_replay(&mut self) -> Result<Value, ProtoError> {
+        if self.replay.is_some() {
+            return Ok(json!({}));
+        }
+        let dir = captures_dir();
+        std::fs::create_dir_all(&dir)
+            .map_err(|e| ProtoError::internal(format!("captures dir: {e}")))?;
+        let prefix = self.profile.get_or("SimpleOutput", "RecRBPrefix", "Replay").to_string();
+        let template = self
+            .profile
+            .get_or("Output", "FilenameFormatting", "%CCYY-%MM-%DD %hh-%mm-%ss")
+            .to_string();
+        let format = namer::expand_game(&format!("{prefix} {template}"));
+        let container = self.profile.get_or("SimpleOutput", "RecFormat2", "hybrid_mp4").to_string();
+        let (_out, ext) = container_for(&container);
+        let time = self.profile.get_u32("SimpleOutput", "RecRBTime", 30);
+        let size = self.profile.get_u32("SimpleOutput", "RecRBSize", 512);
+
+        self.ensure_encoders()?;
+        let (venc, aencs) = {
+            let e = self.encoders.as_ref().unwrap();
+            (e.venc, e.aencs.clone())
+        };
+
+        let settings_v = json!({
+            "directory": dir.to_string_lossy(),
+            "format": format,
+            "extension": ext,
+            "allow_spaces": true,
+            "max_time_sec": time,
+            "max_size_mb": size,
+        });
+        unsafe {
+            let settings = data_from_value(&settings_v);
+            let out_id = cstring("replay_buffer");
+            let out_name = cstring("replay_out");
+            let output = ffi::obs_output_create(out_id.as_ptr(), out_name.as_ptr(), settings, std::ptr::null_mut());
+            ffi::obs_data_release(settings);
+            if output.is_null() {
+                self.drop_encoders_if_idle();
+                return Err(ProtoError::internal("replay_buffer create failed"));
+            }
+            ffi::obs_output_set_video_encoder(output, venc);
+            for (slot, (_, aenc)) in aencs.iter().enumerate() {
+                ffi::obs_output_set_audio_encoder(output, *aenc, slot);
+            }
+            if !ffi::obs_output_start(output) {
+                let err = ffi::obs_output_get_last_error(output);
+                let msg = if err.is_null() {
+                    "obs_output_start (replay_buffer) failed".to_string()
+                } else {
+                    CStr::from_ptr(err).to_string_lossy().into_owned()
+                };
+                ffi::obs_output_release(output);
+                self.drop_encoders_if_idle();
+                return Err(ProtoError::internal(msg));
+            }
+            // `saved` fires on a libobs thread → the callback only posts a Cmd.
+            let sig_ctx = {
+                let sh = ffi::obs_output_get_signal_handler(output);
+                if sh.is_null() {
+                    std::ptr::null_mut()
+                } else {
+                    let ctx = Box::into_raw(Box::new(SignalCtx { tx: self.cmd_tx.clone() }));
+                    ffi::signal_handler_connect(
+                        sh,
+                        c"saved".as_ptr(),
+                        Some(on_replay_saved),
+                        ctx as *mut std::ffi::c_void,
+                    );
+                    ctx
+                }
+            };
+            self.replay = Some(ReplayRun { output, sig_ctx });
+        }
+        self.last_error = None;
+        log::info!("replay armed: {time}s / {size}MB → {}", dir.display());
+        Ok(json!({}))
+    }
+
+    /// Disarm: stop the replay output, disconnect `saved`, release it, and drop
+    /// the shared encoders if recording is also stopped (drop guard).
+    fn stop_replay(&mut self) -> Result<Value, ProtoError> {
+        let run = self.replay.take().ok_or_else(|| ProtoError::bad_request("replay not armed"))?;
+        unsafe {
+            ffi::obs_output_stop(run.output);
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while ffi::obs_output_active(run.output) && Instant::now() < deadline {
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            if !run.sig_ctx.is_null() {
+                let sh = ffi::obs_output_get_signal_handler(run.output);
+                if !sh.is_null() {
+                    ffi::signal_handler_disconnect(
+                        sh,
+                        c"saved".as_ptr(),
+                        Some(on_replay_saved),
+                        run.sig_ctx as *mut std::ffi::c_void,
+                    );
+                }
+                drop(Box::from_raw(run.sig_ctx));
+            }
+            ffi::obs_output_release(run.output);
+        }
+        self.drop_encoders_if_idle();
+        Ok(json!({}))
+    }
+
+    /// Fire the `save` proc (fire-and-forget): the write is async; the `saved`
+    /// signal (→ Cmd::ReplaySaved → replay_saved) announces the finished file.
+    fn save_replay(&mut self) -> Result<Value, ProtoError> {
+        let run = self.replay.as_ref().ok_or_else(|| ProtoError::bad_request("replay not armed"))?;
+        unsafe {
+            let ph = ffi::obs_output_get_proc_handler(run.output);
+            if ph.is_null() {
+                return Err(ProtoError::internal("replay output has no proc handler"));
+            }
+            let mut cd: ffi::calldata_t = std::mem::zeroed();
+            ffi::proc_handler_call(ph, c"save".as_ptr(), &mut cd);
+            calldata_free_rs(&mut cd);
+        }
+        Ok(json!({}))
+    }
+
+    /// Engine-thread half of the replay `saved` signal: read the written path
+    /// via the `get_last_replay` proc and emit it as a `replay_saved` event.
+    fn replay_saved(&mut self) {
+        let Some(run) = self.replay.as_ref() else { return };
+        let path = unsafe {
+            let ph = ffi::obs_output_get_proc_handler(run.output);
+            if ph.is_null() {
+                return;
+            }
+            let mut cd: ffi::calldata_t = std::mem::zeroed();
+            let ok = ffi::proc_handler_call(ph, c"get_last_replay".as_ptr(), &mut cd);
+            let mut s: *const std::os::raw::c_char = std::ptr::null();
+            let path = if ok && ffi::calldata_get_string(&cd, c"path".as_ptr(), &mut s) && !s.is_null() {
+                Some(CStr::from_ptr(s).to_string_lossy().into_owned())
+            } else {
+                None
+            };
+            calldata_free_rs(&mut cd);
+            path
+        };
+        if let Some(path) = path {
+            log::info!("replay saved: {path}");
+            let _ = self.events.send(Event {
+                event: "replay_saved".into(),
+                data: json!({ "path": path }),
+            });
+            self.push_state();
+        }
     }
 
     // --- output settings (SP4) -------------------------------------------------
@@ -1733,6 +1956,11 @@ impl Engine {
         self.picker_close();
         if self.recording.is_some() {
             let _ = self.stop_record();
+        }
+        // Disarm replay before the encoder drop — the idle guard blocks the
+        // release while a replay output is still alive.
+        if self.replay.is_some() {
+            let _ = self.stop_replay();
         }
         self.drop_encoders_if_idle();
         self.save_collection();
