@@ -27,7 +27,8 @@ usage: mortar-pestle-stt <command>
 commands:
   daemon          Long-running control daemon (Unix-socket NDJSON)
   bench           Phase 4 perf harness: batch RTF / RSS / VRAM per model × backend (markdown table)
-  diarize         Scrim-coaching SF1 gate: diarize an audio file (fetch models, print speakers/spans)";
+  diarize         Scrim-coaching SF1 gate: diarize an audio file (fetch models, print speakers/spans)
+  transcribe      Batch-transcription gate: transcribe an audio file with the real daemon params (print segments)";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -38,6 +39,8 @@ fn main() -> ExitCode {
         Some("bench") => bench::run(&args[1..]),
         // Scrim-coaching sub-plan 6 SF1 gate harness (windowless, no socket).
         Some("diarize") => diarize::run_cli(&args[1..]),
+        // Batch-transcription gate harness (windowless, no socket) — the diarize twin.
+        Some("transcribe") => whisper::run_cli(&args[1..]),
         _ => {
             eprintln!("{USAGE}");
             ExitCode::from(2)

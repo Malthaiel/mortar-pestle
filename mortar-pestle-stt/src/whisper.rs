@@ -336,25 +336,21 @@ fn handle_transcribe(
     run_full(ctx, events, cancel, &pcm);
 }
 
-/// Run one batch transcription: greedy `whisper_full` with timestamps on + live
-/// `progress`. On success emits `segment`s then `final`; if a cancel landed during the
-/// run, discards the output and emits `cancelled` instead (finish-then-discard).
-fn run_full(
-    ctx: &WhisperContext,
-    events: &broadcast::Sender<Event>,
-    cancel: &Arc<AtomicBool>,
-    pcm: &[f32],
-) {
-    let mut state = match ctx.create_state() {
-        Ok(s) => s,
-        Err(e) => {
-            emit_error(events, "internal", format!("create_state: {e}"));
-            return;
-        }
-    };
-
-    // Greedy batch params; whisper.cpp's own stdout prints suppressed (we emit
-    // structured events instead). Timestamps stay on so segments carry t0/t1.
+/// Greedy batch params for FILE transcription — whisper.cpp's own stdout prints
+/// suppressed (structured events instead); timestamps stay on so segments carry t0/t1.
+/// Consumed by `state.full` per speech span, so this is called once per span (cheap —
+/// pure struct setup).
+///
+/// The two anti-hallucination knobs are belt-and-braces on top of the VAD pre-pass
+/// (see [`run_full`]): `suppress_nst` drops non-speech tokens; `no_speech_thold` is
+/// whisper.cpp's own silence gate (only fires alongside a low avg logprob).
+///
+/// NOTE: whisper.cpp's BUILT-IN VAD (`params.vad`) is deliberately NOT used — it only
+/// runs in the context-level `whisper_full()` entry, and whisper-rs's `state.full()`
+/// calls `whisper_full_with_state()` directly (with a `no_state` context), so that
+/// branch is structurally unreachable from the safe API. Proven live: enabling it here
+/// changed nothing. The VAD pre-pass in [`run_full`] is the working equivalent.
+fn batch_params() -> FullParams<'static, 'static> {
     let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
     params.set_translate(false);
     params.set_print_special(false);
@@ -363,49 +359,141 @@ fn run_full(
     params.set_print_timestamps(false);
     let n_threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4) as i32;
     params.set_n_threads(n_threads);
+    params.set_suppress_nst(true);
+    params.set_no_speech_thold(0.6);
+    params
+}
 
-    // Live progress 0..=100, suppressed once cancelled (the run still finishes — we
-    // just stop bothering the client). Deliberately NO abort callback (see module hdr).
-    {
-        let events = events.clone();
-        let cancel = cancel.clone();
-        params.set_progress_callback_safe(move |pct: i32| {
-            if cancel.load(Ordering::SeqCst) {
-                return;
-            }
-            if let Ok(data) = serde_json::to_value(Progress { pct: pct as f64 }) {
-                let _ = events.send(Event { event: "progress".to_string(), data });
-            }
-        });
+/// Detect speech spans in `pcm` with the crate's own [`VadChunker`] (the dictation
+/// path's silero VAD, same cached `silero-v5.1.2` model). Silence gate for batch
+/// transcription: whisper hallucinates filler ("Thank you.") on non-speech stretches —
+/// worst on a mostly-silent mic track, which the diarizer never sees, so no app-side
+/// span filter can catch it. `Err` = model fetch/load/detect failure (loud fail — a
+/// silent no-VAD run would quietly reintroduce the spam).
+fn detect_speech_spans(pcm: &[f32]) -> Result<Vec<crate::vad::SegmentMs>, String> {
+    let vad = ensure_model("silero-v5.1.2", |_| {}).map_err(|e| match e {
+        ModelError::UnknownModel(n) => format!("VAD model: unknown model `{n}`"),
+        ModelError::Download(d) => format!("VAD model: {d}"),
+    })?;
+    let path = vad.path.to_str().ok_or("VAD model path is not valid UTF-8")?;
+    let mut chunker =
+        crate::vad::VadChunker::new(path, crate::vad::DEFAULT_THRESHOLD, crate::vad::DEFAULT_HANGOVER_MS, false)
+            .map_err(|e| format!("VAD model load: {e}"))?;
+    let spans = chunker.detect(pcm).map_err(|e| format!("VAD detect: {e}"))?;
+    log::info!(
+        "whisper: VAD found {} speech spans in {:.1}s of audio",
+        spans.len(),
+        pcm.len() as f64 / WHISPER_SAMPLE_RATE as f64
+    );
+    Ok(spans)
+}
+
+/// Transcribe ONLY the given speech spans of `pcm`, offsetting each whisper segment
+/// back to the original timeline (span start + in-span timestamp), so t0/t1 stay
+/// diarize-alignable. A fresh whisper state per span (whisper requires one per decode).
+///
+/// `is_cancelled` is checked between spans — cancel at span granularity, still never
+/// aborting a `whisper_full` mid-graph (the GGML-wedge rule; see the module header).
+/// Returns `Ok(None)` on cancel, `Ok(Some(segments))` otherwise.
+fn transcribe_spans(
+    ctx: &WhisperContext,
+    pcm: &[f32],
+    spans: &[crate::vad::SegmentMs],
+    is_cancelled: &dyn Fn() -> bool,
+    on_progress: &mut dyn FnMut(f64),
+) -> Result<Option<Vec<Segment>>, String> {
+    let mut out: Vec<Segment> = Vec::new();
+    for (i, &(t0_ms, t1_ms)) in spans.iter().enumerate() {
+        if is_cancelled() {
+            return Ok(None);
+        }
+        on_progress(i as f64 * 100.0 / spans.len().max(1) as f64);
+
+        // ms → sample indices at the 16 kHz contract rate (16 samples per ms).
+        let a = ((t0_ms as usize) * 16).min(pcm.len());
+        let b = ((t1_ms as usize) * 16).min(pcm.len());
+        if b <= a {
+            continue;
+        }
+        let mut state = ctx.create_state().map_err(|e| format!("create_state: {e}"))?;
+        state.full(batch_params(), &pcm[a..b]).map_err(|e| format!("whisper_full: {e}"))?;
+        for seg in state.as_iter() {
+            let text = seg.to_str_lossy().map(|c| c.into_owned()).unwrap_or_default();
+            out.push(Segment {
+                text,
+                t0_ms: t0_ms + (seg.start_timestamp().max(0) as u64) * 10,
+                t1_ms: t0_ms + (seg.end_timestamp().max(0) as u64) * 10,
+            });
+        }
     }
+    on_progress(100.0);
+    Ok(Some(out))
+}
 
-    let result = state.full(params, pcm);
+/// Run one batch transcription: silero VAD pre-pass ([`detect_speech_spans`]), then
+/// greedy `whisper_full` over each speech span ([`transcribe_spans`]) with timestamps
+/// mapped back to the original timeline + live `progress` (span granularity). On
+/// success emits `segment`s then `final`; if a cancel landed during the run, discards
+/// the output and emits `cancelled` instead (finish-current-span-then-discard — still
+/// never aborting a `whisper_full` mid-graph, see the module header's CANCEL note).
+fn run_full(
+    ctx: &WhisperContext,
+    events: &broadcast::Sender<Event>,
+    cancel: &Arc<AtomicBool>,
+    pcm: &[f32],
+) {
+    let spans = match detect_speech_spans(pcm) {
+        Ok(s) => s,
+        Err(e) => {
+            emit_error(events, "internal", e);
+            return;
+        }
+    };
 
-    // Finish-then-discard: a cancel during the run drops the output (model stays
-    // resident + usable — no abort, no GGML corruption). `swap` clears it for next time.
+    // Live progress 0..=100 (per-span), suppressed once cancelled.
+    let mut on_progress = |pct: f64| {
+        if cancel.load(Ordering::SeqCst) {
+            return;
+        }
+        if let Ok(data) = serde_json::to_value(Progress { pct }) {
+            let _ = events.send(Event { event: "progress".to_string(), data });
+        }
+    };
+    let is_cancelled = || cancel.load(Ordering::SeqCst);
+
+    let result = transcribe_spans(ctx, pcm, &spans, &is_cancelled, &mut on_progress);
+
+    // Finish-then-discard: a cancel drops the output at the next span boundary (model
+    // stays resident + usable — no abort, no GGML corruption). `swap` clears it for
+    // next time.
     if cancel.swap(false, Ordering::SeqCst) {
-        log::info!("whisper: transcription cancelled (run finished, output discarded)");
+        log::info!("whisper: transcription cancelled (current span finished, output discarded)");
         emit_error(events, "cancelled", "transcription cancelled".to_string());
         return;
     }
 
     match result {
-        Ok(()) => {
-            // Segments are emitted right after `full` completes (batch mode); live
-            // per-segment streaming is a trivial Phase-3 upgrade via the segment cb.
+        Ok(Some(segments)) => {
+            // Segments are emitted after the whole run completes (batch mode); live
+            // per-span streaming is a trivial upgrade now that spans decode separately.
             let mut full_text = String::new();
-            for seg in state.as_iter() {
-                let text = seg.to_str_lossy().map(|c| c.into_owned()).unwrap_or_default();
-                let t0_ms = (seg.start_timestamp().max(0) as u64) * 10;
-                let t1_ms = (seg.end_timestamp().max(0) as u64) * 10;
-                full_text.push_str(&text);
-                emit(events, "segment", &Segment { text, t0_ms, t1_ms });
+            for seg in &segments {
+                full_text.push_str(&seg.text);
+                emit(events, "segment", seg);
             }
             let final_text = full_text.trim().to_string();
-            log::info!("whisper: transcription complete ({} chars)", final_text.len());
+            log::info!(
+                "whisper: transcription complete ({} segments over {} speech spans, {} chars)",
+                segments.len(),
+                spans.len(),
+                final_text.len()
+            );
             emit(events, "final", &Final { text: final_text });
         }
-        Err(e) => emit_error(events, "internal", format!("whisper_full failed: {e}")),
+        // Cancelled mid-run but a racer already cleared the flag before our swap —
+        // still report cancelled rather than emit a truncated transcript.
+        Ok(None) => emit_error(events, "cancelled", "transcription cancelled".to_string()),
+        Err(e) => emit_error(events, "internal", e),
     }
 }
 
@@ -424,18 +512,11 @@ pub fn transcribe_pcm(ctx: &WhisperContext, pcm: &[f32]) -> Result<String, Strin
     }
     let mut state = ctx.create_state().map_err(|e| format!("create_state: {e}"))?;
 
-    // Greedy batch params — identical to the file path (`run_full`) minus the progress
-    // callback (dictation segments are short; per-segment progress is just noise).
-    let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
-    params.set_translate(false);
-    params.set_print_special(false);
-    params.set_print_progress(false);
-    params.set_print_realtime(false);
-    params.set_print_timestamps(false);
-    let n_threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4) as i32;
-    params.set_n_threads(n_threads);
-
-    state.full(params, pcm).map_err(|e| format!("whisper_full: {e}"))?;
+    // The shared greedy batch params ([`batch_params`]) with no progress callback
+    // (dictation segments are short; per-segment progress is just noise). No VAD
+    // pre-pass here — dictation input is already VAD-gated upstream by
+    // `daemon::dictation`.
+    state.full(batch_params(), pcm).map_err(|e| format!("whisper_full: {e}"))?;
 
     let mut text = String::new();
     for seg in state.as_iter() {
@@ -534,6 +615,89 @@ fn resample_linear(input: &[f32], from_rate: u32, to_rate: u32) -> Vec<f32> {
         out.push(a + (b - a) * frac);
     }
     out
+}
+
+/// `mortar-pestle-stt transcribe <audio-file> [model]` — the batch-transcription gate
+/// harness (the `diarize` CLI's whisper twin). Fetches + verifies the speech and VAD
+/// models, decodes the file, runs `whisper_full` with the REAL batch params
+/// ([`batch_params`] — the same VAD + anti-hallucination path the daemon uses), and
+/// prints one `[t0..t1] text` line per segment. No socket, no host — proves a real
+/// track transcribes clean (e.g. no silence-hallucination spam) without the app.
+pub fn run_cli(args: &[String]) -> std::process::ExitCode {
+    use std::process::ExitCode;
+
+    let Some(audio) = args.first() else {
+        eprintln!("usage: mortar-pestle-stt transcribe <audio-file> [model]");
+        return ExitCode::from(2);
+    };
+    let model = args.get(1).map(String::as_str).unwrap_or(crate::models::DEFAULT_MODEL);
+
+    let speech = match ensure_model(model, |p| eprint!("\rfetching {model}: {p:>3.0}%   ")) {
+        Ok(m) => m,
+        Err(ModelError::UnknownModel(n)) => {
+            eprintln!("\nmodel error: unknown model `{n}` (not in the registry)");
+            return ExitCode::FAILURE;
+        }
+        Err(ModelError::Download(msg)) => {
+            eprintln!("\nmodel error: {msg}");
+            return ExitCode::FAILURE;
+        }
+    };
+    eprintln!("\rmodels ready.                    ");
+
+    let pcm = match decode_to_16k_mono(Path::new(audio)) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("decode failed: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    eprintln!("decoded {:.1}s of audio", pcm.len() as f64 / WHISPER_SAMPLE_RATE as f64);
+
+    // GPU when compiled in (mirrors the daemon's auto-resolve), CPU fallback on error.
+    let ctx = match load_ctx_on(&speech.path, gpu_compiled()) {
+        Ok(c) => c,
+        Err(e) if gpu_compiled() => {
+            eprintln!("gpu load failed ({e}) — retrying on cpu");
+            match load_ctx_on(&speech.path, false) {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("model load failed: {e}");
+                    return ExitCode::FAILURE;
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("model load failed: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let spans = match detect_speech_spans(&pcm) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("vad failed: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    eprintln!("vad: {} speech spans", spans.len());
+
+    let mut on_progress = |pct: f64| eprint!("\rtranscribing: {pct:>3.0}%   ");
+    let segments = match transcribe_spans(&ctx, &pcm, &spans, &|| false, &mut on_progress) {
+        Ok(Some(s)) => s,
+        Ok(None) => unreachable!("CLI run is never cancelled"),
+        Err(e) => {
+            eprintln!("\ntranscription failed: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    eprintln!("\rtranscription done.      ");
+
+    for seg in &segments {
+        println!("[{:>8}..{:>8} ms] {}", seg.t0_ms, seg.t1_ms, seg.text.trim());
+    }
+    eprintln!("{} segments", segments.len());
+    ExitCode::SUCCESS
 }
 
 // ── Event helpers ─────────────────────────────────────────────────────────────
