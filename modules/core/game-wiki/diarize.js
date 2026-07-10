@@ -43,6 +43,16 @@ export function alignDiarization(commsSegments, diarSpans) {
   });
 }
 
+// Drop aligned comms segments no diarization span overlaps (cluster: null). Whisper
+// hallucinates filler ("Thank you.") during true silence; the diarizer heard nobody
+// there, so an unattributed row is noise, not speech. No-op when diarization produced
+// no spans at all (legacy/failed runs keep every row rather than nuking the transcript).
+export function dropUnattributed(alignedSegments, diarSpans) {
+  const segs = Array.isArray(alignedSegments) ? alignedSegments : [];
+  if (!Array.isArray(diarSpans) || diarSpans.length === 0) return segs;
+  return segs.filter((s) => s?.cluster != null);
+}
+
 // A 0-based cluster id → display label. `nameMap` (SF3 voiceprint matches) wins; otherwise
 // a stable "Speaker N" (1-based for humans). A null/negative cluster (no overlap) = Unknown.
 export function labelForCluster(clusterId, nameMap = {}) {

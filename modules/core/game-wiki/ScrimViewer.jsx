@@ -19,7 +19,7 @@ import MatchViewPopup from './MatchViewPopup.jsx';
 import { sidecarPath, scrimSidecarPath, renderSummary, setMatchDataBody, MATCH_DATA_PLACEHOLDER, clock, extractMeta, fmtLocalTime, extractSpatial } from './matchData.js';
 import { compileNotes, renderCoachingSummary, setCoachingSummaryBody, parseTimedNote, formatTimedBullet, sortByTimeAsc, secFromClock } from './noteCompile.js';
 import { setCommsTranscriptBody, renderCommsSummary, parseSegments, parseCommsSidecar, buildCommsSidecar } from './commsCompile.js';
-import { alignDiarization, mergeTranscripts, labelForCluster, speakerColor } from './diarize.js';
+import { alignDiarization, dropUnattributed, mergeTranscripts, labelForCluster, speakerColor } from './diarize.js';
 import { matchClusters, enrollPrint, parseVoiceprints, DEFAULT_THRESHOLD } from './voiceprints.js';
 import { auditSilentDeaths } from './deathAudit.js';
 import { buildTranscriptBlock, generateReport } from './vodReport.js';
@@ -740,7 +740,8 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
     const coachedTeam = fmNow['Coached Team'] || fmNow['Team 1'] || '';
     const store = await readTeamStore(coachedTeam);
     const nameMap = matchClusters(result.diarization.clusters || [], store.prints || {}, DEFAULT_THRESHOLD);
-    const aligned = alignDiarization(result.commsSegments || [], result.diarization.segments || []);
+    const diarSpans = result.diarization.segments || [];
+    const aligned = dropUnattributed(alignDiarization(result.commsSegments || [], diarSpans), diarSpans);
     const yourName = loadYourName() || 'You';
     const merged = mergeTranscripts({ micSegments: result.micSegments || [], commsSegments: aligned, micSpeaker: yourName, nameMap });
     await finishOpaque(merged, buildCommsSidecar({ segments: merged, clusters: result.diarization.clusters || [], micSpeaker: yourName }));
@@ -756,7 +757,8 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
     const coachedTeam = fmNow['Coached Team'] || fmNow['Team 1'] || '';
     const store = await readTeamStore(coachedTeam);
     const nameMap = matchClusters(result.diarization?.clusters || [], store.prints || {}, DEFAULT_THRESHOLD);
-    const aligned = alignDiarization(result.commsSegments || [], result.diarization?.segments || []);
+    const vodSpans = result.diarization?.segments || [];
+    const aligned = dropUnattributed(alignDiarization(result.commsSegments || [], vodSpans), vodSpans);
     const coachName = loadYourName() || 'Coach';
     const merged = mergeTranscripts({ micSegments: result.micSegments || [], commsSegments: aligned, micSpeaker: coachName, nameMap });
     const scPath = scrimSidecarPath(path, 'vodcomms');
@@ -796,12 +798,14 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
       // flush any pending box edit so the on-disk file is current before the final merge
       clearTimeout(saveTimer.current);
       if (serializeScrim(scrimRef.current) !== lastSavedRef.current) await doSave();
-      // fixed-K diarization = coached roster size (caps phantom clusters), else auto (0).
+      // fixed-K diarization = coached roster size (caps phantom clusters); no roster →
+      // cap at 8 (6 players + coach + margin) — uncapped auto-clustering on a long track
+      // explodes the cluster count (and the result payload).
       const coachedTeam = fmNow['Coached Team'] || fmNow['Team 1'] || '';
       const store = await readTeamStore(coachedTeam);
       await invoke('comms_job_start', {
         video, commsTrack: commsIdx, micTrack: micIdx, model: STT_MODEL,
-        maxSpeakers: (store.roster || []).length, scrimPath: path, kind: 'match', matchN: m.n,
+        maxSpeakers: (store.roster || []).length || 8, scrimPath: path, kind: 'match', matchN: m.n,
       });
     } catch (e) {
       commsRef.current = false; setCommsN(null); setCommsPhase('');
@@ -840,12 +844,13 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
     try {
       clearTimeout(saveTimer.current);
       if (serializeScrim(scrimRef.current) !== lastSavedRef.current) await doSave();
-      // fixed-K diarization = coached roster size (caps phantom clusters), else auto (0).
+      // fixed-K diarization = coached roster size (caps phantom clusters); no roster →
+      // cap at 8, same rationale as extractComms.
       const coachedTeam = fmNow['Coached Team'] || fmNow['Team 1'] || '';
       const store = await readTeamStore(coachedTeam);
       await invoke('comms_job_start', {
         video, commsTrack: commsIdx, micTrack: micIdx, model: STT_MODEL,
-        maxSpeakers: (store.roster || []).length, scrimPath: path, kind: 'vod', matchN: null,
+        maxSpeakers: (store.roster || []).length || 8, scrimPath: path, kind: 'vod', matchN: null,
       });
     } catch (e) {
       vodRef.current = false; setVodBusy(false); setVodPhase('');

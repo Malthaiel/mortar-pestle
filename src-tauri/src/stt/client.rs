@@ -364,8 +364,10 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
 const EVENT_BUS_CAP: usize = 256;
 /// Hard ceiling on a single inbound NDJSON line. Stops a wedged or hostile peer
 /// that never sends a newline from growing the read buffer without limit — over
-/// it the read errors and the connection resets (then reconnects).
-const MAX_LINE_BYTES: usize = 1024 * 1024;
+/// it the read errors and the connection resets (then reconnects). 16 MB: a real
+/// `diarization` result (hundreds of spans + per-cluster 512-dim embeddings) can
+/// exceed 1 MB, and dropping it wedged the comms job at "Identifying speakers".
+const MAX_LINE_BYTES: usize = 16 * 1024 * 1024;
 
 /// Errors surfaced to callers. The crate has no `anyhow`/`thiserror`; this is a
 /// tiny local enum stringified at the boundary (matches `VaultError` house style).
@@ -516,9 +518,19 @@ async fn connection_loop(
                         log::debug!("stt client: all handles dropped — connection task ending");
                         return;
                     }
-                    // The socket died under us — reconnect after backoff.
+                    // The socket died under us — reconnect after backoff. Publish a
+                    // synthetic `error` event so any op pumping the bus for a terminal
+                    // event (comms_job::run_op, the stt.rs relay loops) fails loudly
+                    // instead of waiting forever for an event that died with the socket.
                     ServeEnd::SocketClosed => {
                         log::warn!("stt client disconnected — will reconnect");
+                        let _ = events.send(Event {
+                            event: "error".to_string(),
+                            data: serde_json::json!({
+                                "code": "disconnected",
+                                "message": "stt engine connection reset mid-operation",
+                            }),
+                        });
                     }
                 }
             }

@@ -404,7 +404,9 @@ async fn drive(app: &AppHandle, p: &JobParams) -> Result<CommsJobResult, String>
     // 6. Diarize the comms track (isolated-track mode only).
     let mut diarization: Option<DiarOut> = None;
     if diarize_mode {
-        set_progress(app, Some("Identifying speakers"), Some(0.0));
+        // sherpa's diarize is one opaque C call — no progress events exist (the C API's
+        // callback isn't bound by the Rust wrapper), so the label carries the ETA instead.
+        set_progress(app, Some("Identifying speakers (takes a few minutes)"), None);
         let mut out: Option<DiarOut> = None;
         {
             let out = &mut out;
