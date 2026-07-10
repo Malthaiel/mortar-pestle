@@ -516,9 +516,7 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
   const scrimRef = useRef(null);
   const runningRef = useRef(false); // Run Process double-fire guard
   const commsRef = useRef(false); // Extract Comms double-fire guard
-  const commsCancelledRef = useRef(false); // set on cancel → the terminal handler skips the write
   const vodRef = useRef(false); // Extract VOD Comms double-fire guard (sub-plan 11)
-  const vodCancelledRef = useRef(false); // set on VOD cancel → the terminal handler skips the write
   const reportRef = useRef(false); // Generate Report double-fire guard (sub-plan 11)
   const tfRef = useRef(false); // Review Comms double-fire guard (sub-plan 13)
   const saveTimer = useRef(null);
@@ -713,14 +711,71 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
     try { await doWrite(); } catch (e) { if (e?.code === 'CONFLICT') await doWrite(); else throw e; }
   }, [path]);
 
-  // Extract Comms (SF6 Comms Diarization) — one click = the full pipeline. With an isolated comms
-  // track set (Coaching Setup / frontmatter), extract the mic + comms tracks, transcribe each, diarize
-  // the comms track (mortar-pestle-stt), match clusters vs the coached team's saved voiceprints
-  // (auto-LABEL only — no enrollment), align + merge into one speaker-labeled, time-ordered transcript
-  // → the object .commstranscript sidecar (speaker + cluster + per-cluster embeddings) + the opaque
-  // ### Comms Transcript. With NO comms track set it degrades to the legacy single-downmix, speaker-null
-  // transcript (old recordings). Mirrors runProcess: flush → work → ordered opaque write behind a
-  // fresh-mtime conflict guard.
+  // Post-process + persist a finished MATCH comms job (the fast, pure-JS half): match clusters
+  // vs the coached team's saved voiceprints (auto-LABEL only — enrollment happens on an explicit
+  // Speakers-panel assignment), align comms text to clusters, merge mic ∪ comms by time → the
+  // object .commstranscript sidecar + the opaque ### Comms Transcript. `diarization: null` ⇒ the
+  // legacy single-downmix run (no comms track): speaker-null transcript, unchanged behavior.
+  const finishMatchJob = useCallback(async (matchN, result) => {
+    const m = (scrimRef.current?.matches || []).find((x) => x.n === matchN);
+    if (!m) return;
+    const scPath = sidecarPath(path, matchN, 'comms');
+    // Persist the sidecar payload + the opaque ### Comms Transcript summary (segs = the merged list).
+    const finishOpaque = async (segs, payload) => {
+      setCommsPhase('Saving…');
+      await api.savePage(scPath, JSON.stringify(payload), null, 'gamewiki');
+      const durationS = segs.length ? Math.max(...segs.map((s) => Number(s.t1Ms) || 0)) / 1000 : 0;
+      const body = renderCommsSummary({ n: matchN, segments: segs, durationS, sidecarFileName: scPath.split('/').pop() });
+      await writeCommsOpaque(matchN, body);
+    };
+    const micNote = result.micSkipped ? ' · mic silent, skipped' : '';
+    if (!result.diarization) {
+      const raw = result.commsSegments || [];
+      const segs = raw.length ? raw : (result.commsFinalText ? [{ t0Ms: 0, t1Ms: 0, text: result.commsFinalText }] : []);
+      await finishOpaque(segs, segs.map((seg) => ({ ...seg, speaker: null, cluster: null })));
+      notify('success', 'Comms extracted', `Match ${m.fields['Match ID'] || matchN} — ${segs.length} segment${segs.length === 1 ? '' : 's'} transcribed.`);
+      return;
+    }
+    const fmNow = scrimRef.current?.frontmatter || {};
+    const coachedTeam = fmNow['Coached Team'] || fmNow['Team 1'] || '';
+    const store = await readTeamStore(coachedTeam);
+    const nameMap = matchClusters(result.diarization.clusters || [], store.prints || {}, DEFAULT_THRESHOLD);
+    const aligned = alignDiarization(result.commsSegments || [], result.diarization.segments || []);
+    const yourName = loadYourName() || 'You';
+    const merged = mergeTranscripts({ micSegments: result.micSegments || [], commsSegments: aligned, micSpeaker: yourName, nameMap });
+    await finishOpaque(merged, buildCommsSidecar({ segments: merged, clusters: result.diarization.clusters || [], micSpeaker: yourName }));
+    const voices = result.diarization.numSpeakers ?? (result.diarization.clusters || []).length;
+    const named = Object.values(nameMap).filter(Boolean).length;
+    notify('success', 'Comms extracted', `Match ${m.fields['Match ID'] || matchN} — ${merged.length} segments · ${voices} voice${voices === 1 ? '' : 's'}${named ? ` · ${named} auto-named` : ''}${micNote}.`);
+  }, [path, readTeamStore, writeCommsOpaque]);
+
+  // Post-process + persist a finished VOD comms job: one .vodcomms sidecar for the whole scrim
+  // + a `- VOD Comms:` pointer bullet under ## Scrim (which can't hold ### subsections).
+  const finishVodJob = useCallback(async (result) => {
+    const fmNow = scrimRef.current?.frontmatter || {};
+    const coachedTeam = fmNow['Coached Team'] || fmNow['Team 1'] || '';
+    const store = await readTeamStore(coachedTeam);
+    const nameMap = matchClusters(result.diarization?.clusters || [], store.prints || {}, DEFAULT_THRESHOLD);
+    const aligned = alignDiarization(result.commsSegments || [], result.diarization?.segments || []);
+    const coachName = loadYourName() || 'Coach';
+    const merged = mergeTranscripts({ micSegments: result.micSegments || [], commsSegments: aligned, micSpeaker: coachName, nameMap });
+    const scPath = scrimSidecarPath(path, 'vodcomms');
+    setVodPhase('Saving…');
+    await api.savePage(scPath, JSON.stringify(buildCommsSidecar({ segments: merged, clusters: result.diarization?.clusters || [], micSpeaker: coachName })), null, 'gamewiki');
+    const stamp = new Date().toISOString().slice(0, 10);
+    applyEdit((p) => ({ ...p, scrim: { ...p.scrim, 'VOD Comms': `extracted ${stamp} · ${merged.length} segments` } }));
+    flushSave();
+    const voices = result.diarization?.numSpeakers ?? (result.diarization?.clusters || []).length;
+    const named = Object.values(nameMap).filter(Boolean).length;
+    notify('success', 'VOD comms extracted', `${merged.length} segments · ${voices} voice${voices === 1 ? '' : 's'}${named ? ` · ${named} auto-named` : ''}${result.micSkipped ? ' · coach mic silent, skipped' : ''}.`);
+  }, [path, readTeamStore, applyEdit, flushSave]);
+
+  // Extract Comms (SF6 + gate-blocker 2 "reattachable job") — one click starts the RUST-owned
+  // comms job (comms_job_start: extract tracks → silence-probe mic → load model → transcribe →
+  // diarize). The job survives webview reloads/teardowns (the dev overlay reloads on every
+  // Shift+C show); the comms-job bridge effect below owns ALL completion handling
+  // (finishMatchJob), so fresh runs and re-attached runs share one path. With NO comms track
+  // set the job degrades to the legacy single-downmix, speaker-null run (old recordings).
   const extractComms = useCallback(async (idx) => {
     const m = scrimRef.current?.matches?.[idx];
     if (!m || commsRef.current) return;
@@ -734,140 +789,38 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
     const defs = loadTrackDefaults();
     const commsIdx = trackIndex(fmNow['Comms Track'] ?? defs.comms);
     const micIdx = trackIndex(fmNow['Mic Track'] ?? defs.mic);
-    const diarizeMode = commsIdx != null; // isolated-track pipeline vs legacy single-downmix
 
-    commsRef.current = true; commsCancelledRef.current = false;
+    commsRef.current = true;
     setCommsN(m.n); setCommsPhase('Extracting audio…');
     try {
-      // flush any pending box edit so the on-disk file is current before we merge
+      // flush any pending box edit so the on-disk file is current before the final merge
       clearTimeout(saveTimer.current);
       if (serializeScrim(scrimRef.current) !== lastSavedRef.current) await doSave();
-
-      // transcribe_file requires a model loaded first (the sidecar does not auto-load).
-      const loadModel = () => new Promise((resolve, reject) => {
-        let settled = false;
-        const fin = (fn, v) => { if (!settled) { settled = true; fn(v); } };
-        const lch = new Channel();
-        lch.onmessage = (ev) => {
-          if (ev.kind === 'model_loaded') fin(resolve);
-          else if (ev.kind === 'error') fin(reject, new Error(ev.message || 'model load failed'));
-          else if (ev.kind === 'done' && !ev.ok) fin(reject, new Error('model load failed'));
-        };
-        invoke('stt_load_model', { name: STT_MODEL, onEvent: lch }).catch((e) => fin(reject, e));
-      });
-      // transcribe one wav → { segments:[{t0Ms,t1Ms,text}], finalText }
-      const transcribeWav = (wavPath, phaseLabel) => new Promise((resolve, reject) => {
-        let settled = false;
-        const fin = (fn, v) => { if (!settled) { settled = true; fn(v); } };
-        const segments = [];
-        const ch = new Channel();
-        ch.onmessage = (ev) => {
-          switch (ev.kind) {
-            case 'segment': segments.push({ t0Ms: ev.t0Ms, t1Ms: ev.t1Ms, text: ev.text ?? '' }); break;
-            case 'progress': setCommsPhase(`${phaseLabel}… ${Math.round(ev.pct ?? 0)}%`); break;
-            case 'final': fin(resolve, { segments, finalText: ev.text ?? '' }); break;
-            case 'error': fin(reject, new Error(ev.message || 'transcription failed')); break;
-            case 'done': if (!ev.ok) fin(reject, new Error('transcription ended early')); break;
-            default: break;
-          }
-        };
-        invoke('stt_transcribe_file', { path: wavPath, onEvent: ch }).catch((e) => fin(reject, e));
-      });
-      // diarize one wav → { numSpeakers, segments:[{t0Ms,t1Ms,clusterId}], clusters:[{clusterId,embedding}] }
-      const diarizeWav = (wavPath, maxSpeakers) => new Promise((resolve, reject) => {
-        let settled = false;
-        const fin = (fn, v) => { if (!settled) { settled = true; fn(v); } };
-        const ch = new Channel();
-        ch.onmessage = (ev) => {
-          switch (ev.kind) {
-            case 'progress': setCommsPhase(`Identifying speakers… ${Math.round(ev.pct ?? 0)}%`); break;
-            case 'diarization': fin(resolve, { numSpeakers: ev.numSpeakers, segments: ev.segments || [], clusters: ev.clusters || [] }); break;
-            case 'error': fin(reject, new Error(ev.message || 'diarization failed')); break;
-            case 'done': if (!ev.ok) fin(reject, new Error('diarization ended early')); break;
-            default: break;
-          }
-        };
-        invoke('stt_diarize_file', { path: wavPath, maxSpeakers, onEvent: ch }).catch((e) => fin(reject, e));
-      });
-      const cancelled = () => commsCancelledRef.current;
-      const cancelNote = () => notify('success', 'Comms cancelled', 'Transcription was cancelled — nothing saved.');
-      const scPath = sidecarPath(path, m.n, 'comms');
-      // Persist the sidecar payload + the opaque ### Comms Transcript summary (segs = the merged list).
-      const finishOpaque = async (segs, payload) => {
-        setCommsPhase('Saving…');
-        await api.savePage(scPath, JSON.stringify(payload), null, 'gamewiki');
-        const durationS = segs.length ? Math.max(...segs.map((s) => Number(s.t1Ms) || 0)) / 1000 : 0;
-        const body = renderCommsSummary({ n: m.n, segments: segs, durationS, sidecarFileName: scPath.split('/').pop() });
-        await writeCommsOpaque(m.n, body);
-      };
-
-      if (!diarizeMode) {
-        // ── legacy single-downmix path (no isolated comms track): speaker null, unchanged behavior ──
-        const wavPath = await invoke('coaching_extract_audio', { video });
-        setCommsPhase('Loading model…'); await loadModel();
-        setCommsPhase('Transcribing… 0%');
-        const { segments, finalText } = await transcribeWav(wavPath, 'Transcribing');
-        if (cancelled()) { cancelNote(); return; }
-        const segs = segments.length ? segments : (finalText ? [{ t0Ms: 0, t1Ms: 0, text: finalText }] : []);
-        await finishOpaque(segs, segs.map((seg) => ({ ...seg, speaker: null, cluster: null })));
-        notify('success', 'Comms extracted', `Match ${m.fields['Match ID'] || m.n} — ${segs.length} segment${segs.length === 1 ? '' : 's'} transcribed.`);
-        return;
-      }
-
-      // ── isolated-track diarization pipeline ──
-      setCommsPhase('Extracting tracks…');
-      const micWav = micIdx != null ? await invoke('coaching_extract_audio', { video, track: micIdx }) : null;
-      const commsWav = await invoke('coaching_extract_audio', { video, track: commsIdx });
-
-      setCommsPhase('Loading model…'); await loadModel();
-      let micSegments = [];
-      if (micWav) { setCommsPhase('Transcribing mic… 0%'); micSegments = (await transcribeWav(micWav, 'Transcribing mic')).segments; }
-      if (cancelled()) { cancelNote(); return; }
-      setCommsPhase('Transcribing comms… 0%');
-      const commsSegments = (await transcribeWav(commsWav, 'Transcribing comms')).segments;
-      if (cancelled()) { cancelNote(); return; }
-
-      // diarize the comms track: fixed-K = coached roster size (caps phantom clusters), else auto (0).
+      // fixed-K diarization = coached roster size (caps phantom clusters), else auto (0).
       const coachedTeam = fmNow['Coached Team'] || fmNow['Team 1'] || '';
       const store = await readTeamStore(coachedTeam);
-      const diar = await diarizeWav(commsWav, (store.roster || []).length);
-      if (cancelled()) { cancelNote(); return; }
-
-      // match clusters vs saved prints (auto-LABEL only — enrollment happens on an explicit
-      // Speakers-panel assignment), align comms text to clusters, merge mic ∪ comms by time.
-      const nameMap = matchClusters(diar.clusters || [], store.prints || {}, DEFAULT_THRESHOLD);
-      const aligned = alignDiarization(commsSegments, diar.segments || []);
-      const yourName = loadYourName() || 'You';
-      const merged = mergeTranscripts({ micSegments, commsSegments: aligned, micSpeaker: yourName, nameMap });
-
-      await finishOpaque(merged, buildCommsSidecar({ segments: merged, clusters: diar.clusters || [], micSpeaker: yourName }));
-      const voices = diar.numSpeakers ?? (diar.clusters || []).length;
-      const named = Object.values(nameMap).filter(Boolean).length;
-      notify('success', 'Comms extracted', `Match ${m.fields['Match ID'] || m.n} — ${merged.length} segments · ${voices} voice${voices === 1 ? '' : 's'}${named ? ` · ${named} auto-named` : ''}.`);
+      await invoke('comms_job_start', {
+        video, commsTrack: commsIdx, micTrack: micIdx, model: STT_MODEL,
+        maxSpeakers: (store.roster || []).length, scrimPath: path, kind: 'match', matchN: m.n,
+      });
     } catch (e) {
-      if (!commsCancelledRef.current) notify('error', 'Extract Comms failed', e?.message || String(e));
-    } finally {
       commsRef.current = false; setCommsN(null); setCommsPhase('');
+      notify('error', 'Extract Comms failed', e?.message || String(e));
     }
-  }, [path, doSave, readTeamStore, writeCommsOpaque]);
+  }, [path, doSave, readTeamStore]);
 
-  // Cancel an in-flight Extract Comms — raise the daemon cancel flag; the terminal event then
-  // resolves/rejects the transcribe promise and the cancelled-flag check skips the write.
+  // Cancel the in-flight comms job — Rust raises the engine cancel; the terminal
+  // comms-job-done {cancelled:true} event clears the busy UI.
   const cancelComms = useCallback(() => {
     if (!commsRef.current) return;
-    commsCancelledRef.current = true;
     setCommsPhase('Cancelling…');
-    invoke('stt_cancel').catch(() => {});
+    invoke('comms_job_cancel').catch(() => {});
   }, []);
 
   // Extract VOD Comms (sub-plan 11) — the scrim-level twin of extractComms for the post-match VOD
-  // Review recording. Same two-track diarize pipeline (mic track = coach/you, Discord track = the
-  // combined team), but scrim-scoped: source = scrim.scrim['VOD Review'], one .vodcomms sidecar for
-  // the whole scrim + a `- VOD Comms:` pointer bullet under ## Scrim (which can't hold ### subsections,
-  // so no opaque body — sidecar + KV pointer only). No speaker-blind path: the comms track is required.
-  // ponytail: the loadModel/transcribeWav/diarizeWav helpers are copied from extractComms rather than
-  // hoisting shared ones — leaving the shipped extractComms diarize gate untouched. Dedupe both onto
-  // shared component-scope helpers if a third caller ever appears.
+  // Review recording: the SAME Rust-owned comms job (kind 'vod'; mic track = coach/you, Discord
+  // track = the combined team), scrim-scoped. Completion lands in finishVodJob via the bridge
+  // effect. No speaker-blind path: the comms track is required.
   const extractVodComms = useCallback(async () => {
     if (vodRef.current) return;
     const video = String(scrimRef.current?.scrim?.['VOD Review'] || '').trim();
@@ -882,105 +835,89 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
     const micIdx = trackIndex(fmNow['Mic Track'] ?? defs.mic);
     if (commsIdx == null) { notify('error', 'No comms track', 'Set the Comms Track (the Discord audio track index) so the team voices can be separated.'); return; }
 
-    vodRef.current = true; vodCancelledRef.current = false;
+    vodRef.current = true;
     setVodBusy(true); setVodPhase('Extracting audio…');
     try {
       clearTimeout(saveTimer.current);
       if (serializeScrim(scrimRef.current) !== lastSavedRef.current) await doSave();
-
-      // transcribe_file requires a model loaded first (the sidecar does not auto-load).
-      const loadModel = () => new Promise((resolve, reject) => {
-        let settled = false;
-        const fin = (fn, v) => { if (!settled) { settled = true; fn(v); } };
-        const lch = new Channel();
-        lch.onmessage = (ev) => {
-          if (ev.kind === 'model_loaded') fin(resolve);
-          else if (ev.kind === 'error') fin(reject, new Error(ev.message || 'model load failed'));
-          else if (ev.kind === 'done' && !ev.ok) fin(reject, new Error('model load failed'));
-        };
-        invoke('stt_load_model', { name: STT_MODEL, onEvent: lch }).catch((e) => fin(reject, e));
-      });
-      const transcribeWav = (wavPath, phaseLabel) => new Promise((resolve, reject) => {
-        let settled = false;
-        const fin = (fn, v) => { if (!settled) { settled = true; fn(v); } };
-        const segments = [];
-        const ch = new Channel();
-        ch.onmessage = (ev) => {
-          switch (ev.kind) {
-            case 'segment': segments.push({ t0Ms: ev.t0Ms, t1Ms: ev.t1Ms, text: ev.text ?? '' }); break;
-            case 'progress': setVodPhase(`${phaseLabel}… ${Math.round(ev.pct ?? 0)}%`); break;
-            case 'final': fin(resolve, { segments, finalText: ev.text ?? '' }); break;
-            case 'error': fin(reject, new Error(ev.message || 'transcription failed')); break;
-            case 'done': if (!ev.ok) fin(reject, new Error('transcription ended early')); break;
-            default: break;
-          }
-        };
-        invoke('stt_transcribe_file', { path: wavPath, onEvent: ch }).catch((e) => fin(reject, e));
-      });
-      const diarizeWav = (wavPath, maxSpeakers) => new Promise((resolve, reject) => {
-        let settled = false;
-        const fin = (fn, v) => { if (!settled) { settled = true; fn(v); } };
-        const ch = new Channel();
-        ch.onmessage = (ev) => {
-          switch (ev.kind) {
-            case 'progress': setVodPhase(`Identifying speakers… ${Math.round(ev.pct ?? 0)}%`); break;
-            case 'diarization': fin(resolve, { numSpeakers: ev.numSpeakers, segments: ev.segments || [], clusters: ev.clusters || [] }); break;
-            case 'error': fin(reject, new Error(ev.message || 'diarization failed')); break;
-            case 'done': if (!ev.ok) fin(reject, new Error('diarization ended early')); break;
-            default: break;
-          }
-        };
-        invoke('stt_diarize_file', { path: wavPath, maxSpeakers, onEvent: ch }).catch((e) => fin(reject, e));
-      });
-      const cancelled = () => vodCancelledRef.current;
-      const cancelNote = () => notify('success', 'VOD comms cancelled', 'Transcription was cancelled — nothing saved.');
-
-      setVodPhase('Extracting tracks…');
-      const micWav = micIdx != null ? await invoke('coaching_extract_audio', { video, track: micIdx }) : null;
-      const commsWav = await invoke('coaching_extract_audio', { video, track: commsIdx });
-
-      setVodPhase('Loading model…'); await loadModel();
-      let micSegments = [];
-      if (micWav) { setVodPhase('Transcribing coach… 0%'); micSegments = (await transcribeWav(micWav, 'Transcribing coach')).segments; }
-      if (cancelled()) { cancelNote(); return; }
-      setVodPhase('Transcribing team… 0%');
-      const commsSegments = (await transcribeWav(commsWav, 'Transcribing team')).segments;
-      if (cancelled()) { cancelNote(); return; }
-
-      // diarize the Discord track: fixed-K = coached roster size (caps phantom clusters), else auto (0).
+      // fixed-K diarization = coached roster size (caps phantom clusters), else auto (0).
       const coachedTeam = fmNow['Coached Team'] || fmNow['Team 1'] || '';
       const store = await readTeamStore(coachedTeam);
-      const diar = await diarizeWav(commsWav, (store.roster || []).length);
-      if (cancelled()) { cancelNote(); return; }
-
-      // Auto-LABEL clusters vs saved prints (no enrollment); unmatched → generic Speaker N (no prints yet).
-      const nameMap = matchClusters(diar.clusters || [], store.prints || {}, DEFAULT_THRESHOLD);
-      const aligned = alignDiarization(commsSegments, diar.segments || []);
-      const coachName = loadYourName() || 'Coach';
-      const merged = mergeTranscripts({ micSegments, commsSegments: aligned, micSpeaker: coachName, nameMap });
-
-      const scPath = scrimSidecarPath(path, 'vodcomms');
-      setVodPhase('Saving…');
-      await api.savePage(scPath, JSON.stringify(buildCommsSidecar({ segments: merged, clusters: diar.clusters || [], micSpeaker: coachName })), null, 'gamewiki');
-      const stamp = new Date().toISOString().slice(0, 10);
-      applyEdit((p) => ({ ...p, scrim: { ...p.scrim, 'VOD Comms': `extracted ${stamp} · ${merged.length} segments` } }));
-      flushSave();
-      const voices = diar.numSpeakers ?? (diar.clusters || []).length;
-      const named = Object.values(nameMap).filter(Boolean).length;
-      notify('success', 'VOD comms extracted', `${merged.length} segments · ${voices} voice${voices === 1 ? '' : 's'}${named ? ` · ${named} auto-named` : ''}.`);
+      await invoke('comms_job_start', {
+        video, commsTrack: commsIdx, micTrack: micIdx, model: STT_MODEL,
+        maxSpeakers: (store.roster || []).length, scrimPath: path, kind: 'vod', matchN: null,
+      });
     } catch (e) {
-      if (!vodCancelledRef.current) notify('error', 'Extract VOD Comms failed', e?.message || String(e));
-    } finally {
       vodRef.current = false; setVodBusy(false); setVodPhase('');
+      notify('error', 'Extract VOD Comms failed', e?.message || String(e));
     }
-  }, [path, doSave, readTeamStore, applyEdit, flushSave]);
+  }, [path, doSave, readTeamStore]);
 
   const cancelVod = useCallback(() => {
     if (!vodRef.current) return;
-    vodCancelledRef.current = true;
     setVodPhase('Cancelling…');
-    invoke('stt_cancel').catch(() => {});
+    invoke('comms_job_cancel').catch(() => {});
   }, []);
+
+  // Comms-job bridge (gate-blocker 2): follow + finish the Rust-owned comms job from ANY mount.
+  // (a) On mount, comms_job_status re-attaches — a running job restores the busy UI, a
+  // done-unconsumed one is finished right here (e.g. the job outlived a dev overlay reload or a
+  // closed window). (b) The global comms-job-progress / comms-job-done events drive live phase
+  // text + completion. comms_job_take is take-once under the Rust mutex, so with both the main
+  // window and the overlay mounted only ONE consumer post-processes; the other's take returns
+  // null and it just clears its busy UI.
+  useEffect(() => {
+    let dead = false;
+    const phaseText = (p) => `${p.phase}…${p.pct != null ? ` ${Math.round(p.pct)}%` : ''}`;
+    const showBusy = (p) => {
+      if (p.kind === 'vod') { vodRef.current = true; setVodBusy(true); setVodPhase(phaseText(p)); }
+      else { commsRef.current = true; setCommsN(p.matchN); setCommsPhase(phaseText(p)); }
+    };
+    const clearBusy = (kind) => {
+      if (kind === 'vod') { vodRef.current = false; setVodBusy(false); setVodPhase(''); }
+      else { commsRef.current = false; setCommsN(null); setCommsPhase(''); }
+    };
+    const finish = async (kind, matchN) => {
+      const result = await invoke('comms_job_take').catch(() => null);
+      if (!result) { clearBusy(kind); return; } // another mounted ScrimViewer consumed it
+      try {
+        if (kind === 'vod') await finishVodJob(result);
+        else await finishMatchJob(matchN, result);
+      } catch (e) {
+        notify('error', kind === 'vod' ? 'Extract VOD Comms failed' : 'Extract Comms failed', e?.message || String(e));
+      } finally { clearBusy(kind); }
+    };
+    (async () => {
+      const st = await invoke('comms_job_status').catch(() => null);
+      if (dead || !st || st.scrimPath !== path) return;
+      if (st.status === 'running') showBusy(st);
+      else if (st.status === 'done') { showBusy(st); await finish(st.kind, st.matchN); }
+      else {
+        // stale error/cancelled job whose done event died with the old webview
+        await invoke('comms_job_clear').catch(() => {});
+        if (st.status === 'error') notify('error', st.kind === 'vod' ? 'Extract VOD Comms failed' : 'Extract Comms failed', st.error || 'unknown error');
+      }
+    })();
+    // Chain unlisten onto the registration promises — a plain `unlisten` var is still
+    // null if we unmount before `listen` resolves, orphaning the listener.
+    const subs = [
+      listen('comms-job-progress', (e) => {
+        const p = e.payload || {};
+        if (p.scrimPath !== path || p.status !== 'running') return;
+        showBusy(p);
+      }),
+      listen('comms-job-done', (e) => {
+        const p = e.payload || {};
+        if (p.scrimPath !== path) return;
+        if (p.ok) { finish(p.kind, p.matchN); return; }
+        invoke('comms_job_clear').catch(() => {});
+        clearBusy(p.kind);
+        if (p.cancelled) notify('success', p.kind === 'vod' ? 'VOD comms cancelled' : 'Comms cancelled', 'Transcription was cancelled — nothing saved.');
+        else notify('error', p.kind === 'vod' ? 'Extract VOD Comms failed' : 'Extract Comms failed', p.error || 'unknown error');
+      }),
+    ];
+    return () => { dead = true; subs.forEach((s) => s.then((un) => un())); };
+  }, [path, finishMatchJob, finishVodJob]);
 
   // Team Progress (sub-plan 12) — cross-scrim memory. Walk every scrim for this team, read each one's
   // .vodreport (action items) + per-match .matchdata/.commstranscript sidecars, compute team-level

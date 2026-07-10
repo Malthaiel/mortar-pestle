@@ -19,6 +19,10 @@ pub mod build;
 pub mod capture;
 pub mod claude_usage;
 pub mod coaching;
+// Comms-extraction job (Scrim Coaching): stt-engine-driving, so it shares stt's
+// per-OS gate (the `crate::stt` bridge only exists on linux/windows builds).
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+pub mod comms_job;
 pub mod credentials;
 pub mod daily;
 pub mod design;
