@@ -279,6 +279,10 @@ pub(crate) fn build_remux_argv(abs: &str, out_path: &Path) -> Vec<String> {
         "copy".into(),
         "-movflags".into(),
         "+faststart".into(),
+        // Explicit muxer: the .partial staging name hides the extension, so
+        // ffmpeg can't infer the format and dies with "Invalid argument".
+        "-f".into(),
+        "mp4".into(),
         out_path.display().to_string(),
     ]
 }
@@ -297,6 +301,8 @@ mod remux_argv_tests {
         assert!(!args.iter().any(|a| a.starts_with("0:a:")));
         assert!(args.windows(2).any(|w| w[0] == "-c" && w[1] == "copy"));
         assert!(args.iter().any(|a| a == "+faststart"));
+        // .partial staging output → format must be explicit, not extension-guessed.
+        assert!(args.windows(2).any(|w| w[0] == "-f" && w[1] == "mp4"));
         assert_eq!(args.last().unwrap(), "out.mp4");
     }
 }

@@ -163,30 +163,34 @@ export default function BroadcastPage({ api, accent }) {
         }).catch((e) => console.warn('[broadcast] drop create_source', e));
       }
     };
+    // dead-flag: unlisten resolves async, so an unmount that beats it (StrictMode
+    // remount, page nav) must unhook on arrival or the listener leaks → double drops.
+    let dead = false;
     let un = null;
     let unHost = null;
     getCurrentWebviewWindow().onDragDropEvent((event) => {
       if (event.payload.type !== 'drop') return;
       handleDrop(event.payload.paths || [], event.payload.position);
-    }).then((u) => { un = u; });
+    }).then((u) => { if (dead) u(); else un = u; });
     // OLE drops dead-zone over the native region (drop targets resolve by
     // hit-test, which never crosses to the WebView2 process) — the host child
     // carries its own IDropTarget and relays drops as this event, same
     // physical-px main-window coordinates as onDragDropEvent.
     listen('broadcast://host-drop', (e) => handleDrop(e.payload.paths || [], e.payload.position))
-      .then((u) => { unHost = u; });
-    return () => { if (un) un(); if (unHost) unHost(); };
+      .then((u) => { if (dead) u(); else unHost = u; });
+    return () => { dead = true; if (un) un(); if (unHost) unHost(); };
   }, [api]);
 
   // Replay saved (SP4) — the money moment: chime + toast. App-focused only
   // until SP10 engine hotkeys; recordings land silently via capture-saved.
   useEffect(() => {
+    let dead = false;
     let un = null;
     listen('broadcast-replay-saved', () => {
       playCelebrationChime();
       toast('Replay saved', 'The last few seconds are in your Captures.');
-    }).then((u) => { un = u; });
-    return () => { if (un) un(); };
+    }).then((u) => { if (dead) u(); else un = u; });
+    return () => { dead = true; if (un) un(); };
   }, []);
 
   const failed = engine?.state === 'failed';

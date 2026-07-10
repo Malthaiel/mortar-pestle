@@ -396,12 +396,13 @@ fn collect_clips(dir: &std::path::Path, out: &mut Vec<ClipMeta>) {
     }
 }
 
-/// A capture clip file: `.mp4` (final) or `.h264` (SF1-interim ES). Mirrors the
-/// `saved` payload's tolerance — an interim `.h264` is still a listable clip.
+/// A capture clip file: `.mp4`/`.mkv`/`.mov` (Broadcast containers, SP4) or
+/// `.h264` (SF1-interim ES). Mirrors the `saved` payload's tolerance — an
+/// interim `.h264` is still a listable clip.
 fn is_video_file(path: &std::path::Path) -> bool {
     matches!(
         path.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase()).as_deref(),
-        Some("mp4") | Some("h264")
+        Some("mp4") | Some("mkv") | Some("mov") | Some("h264")
     )
 }
 

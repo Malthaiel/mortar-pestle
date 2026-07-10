@@ -73,6 +73,7 @@ export const SOUND_KEYS = [
   'tactile-button-thock',
   'reorder-pickup-thock',
   'reorder-drop-thock',
+  'celebration-chime',
 ];
 
 const ANIMATIONS_DEFAULT = Object.fromEntries(ANIMATION_KEYS.map(k => [k, defaultAnimationValue(k)]));
