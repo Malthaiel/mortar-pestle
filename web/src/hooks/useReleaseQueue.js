@@ -137,6 +137,54 @@ export function mergeQueue(entries) {
   return { surfaces, areas, sections };
 }
 
+// ponytail: deterministic heuristic — no LLM. Drafts a 1–2 sentence Summary for
+// the Ship modal's collapsed card from the selected entries' merged sections.
+// The lead bullet is already plain-voice (queue bullets follow Releases.md §
+// Bullet voice), so sentence 1 reuses its first sentence verbatim; sentence 2
+// quantifies the rest. Mechanical, not literary — the user can tweak. Empty
+// selection → '' (modal keeps its placeholder + "Summary required" gate).
+export function draftSummary(merged) {
+  const sections = (merged && merged.sections) || {};
+  const newB = sections.New || [];
+  const changedB = sections.Changed || [];
+  const perfB = sections.Performance || [];
+  const removedB = sections.Removed || [];
+  const fixedB = sections.Fixed || [];
+
+  const leadBullets = newB.length ? newB
+    : changedB.length ? changedB
+    : perfB.length ? perfB
+    : removedB;
+  const lead = leadBullets.length ? firstSentence(leadBullets[0]) : '';
+  const nonFixed = newB.length + changedB.length + perfB.length + removedB.length;
+  const fixes = fixedB.length;
+
+  if (!lead && !fixes) return '';
+  if (!lead) return `This release ships ${fixes} fix${fixes === 1 ? '' : 'es'}.`;
+
+  let s1 = lead.trim();
+  s1 = s1.charAt(0).toUpperCase() + s1.slice(1);
+  if (!/[.!?]$/.test(s1)) s1 += '.';
+
+  const more = Math.max(0, nonFixed - 1);
+  const tail = [];
+  if (more > 0) tail.push(`${more} more addition${more === 1 ? '' : 's'}`);
+  if (fixes > 0) tail.push(`${fixes} fix${fixes === 1 ? '' : 'es'}`);
+  const s2 = tail.length ? ` Also ships ${tail.join(' and ')}.` : '';
+
+  return (s1 + s2).trim();
+}
+
+// First sentence of a plain-voice bullet, stripped of list markers, capped at a
+// readable length so the collapsed card stays one line-ish.
+function firstSentence(b) {
+  const s = String(b || '').replace(/^[-*]\s+/, '').replace(/^\d+\.\s+/, '').trim();
+  const m = s.match(/^(.{1,160}?[.!?])(?:\s|$)/);
+  if (m) return m[1];
+  if (s.length <= 140) return s;
+  return s.slice(0, 140).replace(/\s+\S*$/, '') + '…';
+}
+
 // Release block in the plain "what's new" format: required Summary meta line +
 // `### Area` groups with flat, label-less bullets (no `#### Section` headings —
 // those read as jargon to end users; see Releases.md § Schema). The queue keeps

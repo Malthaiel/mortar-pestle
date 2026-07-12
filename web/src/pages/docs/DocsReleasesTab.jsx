@@ -5,7 +5,7 @@ import { useReleases, latestPublishedVersion, bumpVersion, inferBumpLevel, maxSe
 import {
   useReleaseQueue, mergeQueue, parseReleaseQueue,
   composeReleaseBlock, composeFullReleases, composeQueueRetaining,
-  AREA_PALETTE, orderAreaNames,
+  draftSummary, AREA_PALETTE, orderAreaNames,
 } from '../../hooks/useReleaseQueue.js';
 import { PrimaryBtn, OutlinedBtn } from '../../components/ui/Button.jsx';
 import { Seg } from '../../components/ui/Pill.jsx';
@@ -569,6 +569,19 @@ function ShipReleaseModal({ accent, queue, latestVersion, tag, onClose, onShippe
     .filter(e => selKeys.has(keyOf(e)))
     .map(e => ({ ...e, area: effAreaOf(e) }));
   const merged = mergeQueue(selected);
+  // Auto-draft the Summary from the selected entries' merged sections. Only
+  // fills when the field is empty OR still holds our last draft, so a manual
+  // edit is never overwritten. Re-drafts when the selection changes.
+  const lastDraft = useRef('');
+  useEffect(() => {
+    const d = draftSummary(merged);
+    if (d && (summary === '' || summary === lastDraft.current)) {
+      lastDraft.current = d;
+      setSummary(d);
+    }
+    // selKeys identity changes on every toggle; merged recomputes from it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selKeys]);
   // Bump defaults to patch (0.x scheme); minor/major are deliberate picks.
   const effectiveLevel = levelTouched ? level : inferBumpLevel(merged.sections);
   const version = bumpVersion(latestVersion, effectiveLevel);
