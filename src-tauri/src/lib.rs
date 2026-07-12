@@ -26,6 +26,10 @@ pub mod render;
 #[cfg(any(target_os = "linux", target_os = "windows"))]
 pub mod stt;
 pub mod tool_path;
+/// Win32 Job Object die-with-app safety net (KILL_ON_JOB_CLOSE). Windows-only;
+/// compiled out on Linux (the `windows` crate is a cfg(windows) dep).
+#[cfg(windows)]
+pub mod winjob;
 pub mod watcher;
 
 #[derive(serde::Serialize)]
@@ -331,6 +335,14 @@ pub fn run() {
             // Linux (Unix-socket IPC) AND Windows (named-pipe IPC).
             #[cfg(any(target_os = "linux", target_os = "windows"))]
             {
+            // Die-with-app safety net: assign the host to a KILL_ON_JOB_CLOSE
+            // job BEFORE the first sidecar spawns, so the OS reaps all 3
+            // daemons if the host is killed (Task-Manager / crash) before the
+            // explicit shutdown() path runs. Windows-only; on Linux this line
+            // compiles out and the explicit shutdown path is the sole net.
+            #[cfg(windows)]
+            winjob::init();
+
             // WI-2: load the persisted recordings-folder override into the
             // captures_dir() cache BEFORE the engine spawns, so the daemon binds
             // MORTAR_PESTLE_CAPTURES_DIR to the user's chosen dir on first launch.
@@ -946,7 +958,7 @@ pub fn run() {
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::broadcast::broadcast_paths,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::broadcast::broadcast_remux_start,
         ])
-        .on_window_event(|_window, event| {
+        .on_window_event(|window, event| {
             if let WindowEvent::Focused(focused) = event {
                 commands::self_update::record_focus_change(*focused);
                 commands::feedback::record_focus_change(*focused);
@@ -954,6 +966,20 @@ pub fn run() {
                 // fire when focus moves to a child native web view).
                 if !*focused {
                     commands::credentials::lock_if_blur_enabled();
+                }
+            } else if let WindowEvent::CloseRequested { .. } = event {
+                // Die-with-app: the hidden `overlay-host` window is created at
+                // startup and never destroyed, so Tauri (which exits only on
+                // LAST window close) never reaches RunEvent::Exit on a main-window
+                // X-click — the 3 sidecar `shutdown()` calls in the Exit arm below
+                // never ran, so the daemons outlived the host and the supervisor
+                // respawned them. exit(0) forces the app past the still-alive
+                // overlay-host and fires RunEvent::Exit, reusing the existing
+                // reap path (DRY — no mirrored shutdown here). The Win32 Job
+                // Object (winjob::init) is the belt for crash / Task-Manager
+                // kills where neither this handler nor the Exit arm can run.
+                if window.label() == "main" {
+                    window.app_handle().exit(0);
                 }
             }
         })

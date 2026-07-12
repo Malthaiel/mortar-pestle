@@ -258,6 +258,17 @@ pub fn get_captures_dir() -> String {
 /// `set_captures_dir` — choose the recordings folder. Refuses while recording/armed,
 /// creates the dir, persists it, updates the override cache, and restarts the engine
 /// so new clips land there. Existing clips stay where they are.
+///
+/// Two race/lie guards (vs the prior flip-cache-then-restart-no-matter-what):
+///   - **Adopted engine** (`supervisor::engine_is_adopted`): we don't own the
+///     daemon's process, so `restart` can't repoint it. Refuse with a "restart
+///     the app" error — do NOT flip the in-process cache (which would make the
+///     clip list scan a dir the adopted daemon isn't writing to).
+///   - **Hotkey race**: a Shift+C clip can start between `ensure_capture_idle`
+///     and the kill. `restart` re-checks idle right before killing; on `Busy`
+///     we roll back the cache flip so the clip list stays consistent with the
+///     running engine, and surface a "stop the recording" error. The persisted
+///     JSON still holds the new path for the next attempt.
 #[tauri::command]
 pub async fn set_captures_dir(app: AppHandle, path: String) -> Result<(), VaultError> {
     let path = path.trim().to_string();
@@ -265,25 +276,52 @@ pub async fn set_captures_dir(app: AppHandle, path: String) -> Result<(), VaultE
         return Err(VaultError::Invalid("path required".into()));
     }
     ensure_capture_idle().await?;
+    if supervisor::engine_is_adopted() {
+        return Err(VaultError::Invalid(
+            "The capture engine is adopted (started by another launch). Restart the Mortar & Pestle app fully, then change the recordings folder — it can't be repointed while adopted.".into(),
+        ));
+    }
     std::fs::create_dir_all(&path)
         .map_err(|e| VaultError::Io(format!("create recordings dir {path}: {e}")))?;
     let file = captures_dir_file(&app)?;
     atomic_write(&file, json!({ "path": &path }).to_string().as_bytes())?;
+    let prev = crate::commands::vault::captures_override();
     crate::commands::vault::set_captures_override(Some(path));
-    supervisor::restart();
-    Ok(())
+    match supervisor::restart().await {
+        Ok(()) => Ok(()),
+        Err(supervisor::RestartErr::Busy) => {
+            crate::commands::vault::set_captures_override(prev);
+            Err(VaultError::Invalid(
+                "A recording started just now — stop it, then change the recordings folder.".into(),
+            ))
+        }
+    }
 }
 
 /// `reset_captures_dir` — clear the override, returning to the platform default,
-/// and repoint the engine.
+/// and repoint the engine. Same adopted + hotkey-race guards as
+/// `set_captures_dir`.
 #[tauri::command]
 pub async fn reset_captures_dir(app: AppHandle) -> Result<(), VaultError> {
     ensure_capture_idle().await?;
+    if supervisor::engine_is_adopted() {
+        return Err(VaultError::Invalid(
+            "The capture engine is adopted (started by another launch). Restart the Mortar & Pestle app fully, then reset the recordings folder.".into(),
+        ));
+    }
     let file = captures_dir_file(&app)?;
     let _ = std::fs::remove_file(&file);
+    let prev = crate::commands::vault::captures_override();
     crate::commands::vault::set_captures_override(None);
-    supervisor::restart();
-    Ok(())
+    match supervisor::restart().await {
+        Ok(()) => Ok(()),
+        Err(supervisor::RestartErr::Busy) => {
+            crate::commands::vault::set_captures_override(prev);
+            Err(VaultError::Invalid(
+                "A recording started just now — stop it, then reset the recordings folder.".into(),
+            ))
+        }
+    }
 }
 
 /// `capture_open_kde_settings` — open KDE System Settings at the global-shortcuts

@@ -223,6 +223,14 @@ async fn supervise(sup: &'static Supervisor, app: AppHandle) {
     let mut backoff = RESPAWN_MIN;
 
     loop {
+        // Die-with-app race-plug: `shutdown()` may have latched `terminal` while
+        // we slept in the backoff below — bail before probing/spawning so a
+        // dying host can't orphan a freshly-spawned daemon (the Win32 Job
+        // Object would reap it anyway; this avoids the flicker).
+        if lock(&sup.inner).terminal {
+            return;
+        }
+
         // Adopt-first: never spawn a duplicate if the pipe already answers.
         if socket_alive().await {
             {
@@ -242,6 +250,12 @@ async fn supervise(sup: &'static Supervisor, app: AppHandle) {
             emit_status(sup, &app, "down", "Broadcast engine not installed");
             return;
         };
+
+        // Die-with-app race-plug: a shutdown between the loop-top check and
+        // here must not spawn a fresh daemon after we began dying.
+        if lock(&sup.inner).terminal {
+            return;
+        }
 
         let generation = sup.gen.fetch_add(1, Ordering::SeqCst) + 1;
         emit_status(sup, &app, "spawning", "Starting the Broadcast engine");

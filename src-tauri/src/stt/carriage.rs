@@ -37,24 +37,32 @@ const ENGINE_BIN_FILE: &str = "mortar-pestle-stt";
 /// would either double-log or fire on every benign resolve.
 pub fn resolve_engine_binary(app: &AppHandle) -> Option<PathBuf> {
     // 1. Bundled resource (studio bundle ships the binary in `bundle.resources`).
-    if let Ok(p) = app.path().resolve(ENGINE_BIN_FILE, tauri::path::BaseDirectory::Resource) {
-        if p.exists() {
-            return Some(p);
+    //    PROD ONLY — in dev the bundled release exe would shadow the debug
+    //    build we iterate on, so dev skips this and falls to the dev-tree (step 2).
+    if !cfg!(debug_assertions) {
+        if let Ok(p) = app.path().resolve(ENGINE_BIN_FILE, tauri::path::BaseDirectory::Resource) {
+            if p.exists() {
+                return Some(p);
+            }
         }
     }
 
-    // 2. Dev-tree fallback: release first, then debug. The dev home is per-OS
-    //    (Windows `%USERPROFILE%`, Unix `$HOME`); `cargo build` lands either profile.
-    #[cfg(windows)]
-    let dev_home = std::env::var_os("USERPROFILE");
-    #[cfg(not(windows))]
-    let dev_home = std::env::var_os("HOME");
-    if let Some(home) = dev_home {
-        let base = PathBuf::from(home).join("Code/mortar-pestle/mortar-pestle-stt/target");
-        for profile in ["release", "debug"] {
-            let dev = base.join(profile).join(ENGINE_BIN_FILE);
-            if dev.exists() {
-                return Some(dev);
+    // 2. Dev-tree fallback: release first, then debug. DEV BUILDS ONLY — prod
+    //    ships the binary in `bundle.resources`, so a missing resource there is a
+    //    packaging bug, not something to paper over with a dev-tree walk. The
+    //    caller's "stt disabled" log is the loud signal on the prod None path.
+    if cfg!(debug_assertions) {
+        #[cfg(windows)]
+        let dev_home = std::env::var_os("USERPROFILE");
+        #[cfg(not(windows))]
+        let dev_home = std::env::var_os("HOME");
+        if let Some(home) = dev_home {
+            let base = PathBuf::from(home).join("Code/mortar-pestle/mortar-pestle-stt/target");
+            for profile in ["release", "debug"] {
+                let dev = base.join(profile).join(ENGINE_BIN_FILE);
+                if dev.exists() {
+                    return Some(dev);
+                }
             }
         }
     }

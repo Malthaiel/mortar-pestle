@@ -7,7 +7,7 @@
     "frontendDist": "../web/dist",
     "devUrl": "http://127.0.0.1:5173",
     "beforeDevCommand": "npm --prefix web run dev",
-    "beforeBuildCommand": "npm --prefix web run build && node scripts/rotate-binary.mjs && node scripts/fetch-usda-db.mjs"
+    "beforeBuildCommand": "cargo build --release --manifest-path mortar-pestle-capture/Cargo.toml && cargo build --release --manifest-path mortar-pestle-stt/Cargo.toml && npm --prefix web run build && node scripts/rotate-binary.mjs && node scripts/fetch-usda-db.mjs"
   },
   "app": {
     "withGlobalTauri": false,

@@ -1,6 +1,14 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "bundle": {
+    "resources": {
+      "../mortar-pestle-capture/target/release/mortar-pestle-capture.exe": "mortar-pestle-capture.exe",
+      "../mortar-pestle-stt/target/release/mortar-pestle-stt.exe": "mortar-pestle-stt.exe",
+      "../mortar-pestle-stt/target/release/onnxruntime.dll": "onnxruntime.dll",
+      "../mortar-pestle-stt/target/release/onnxruntime_providers_shared.dll": "onnxruntime_providers_shared.dll",
+      "../mortar-pestle-stt/target/release/sherpa-onnx-c-api.dll": "sherpa-onnx-c-api.dll",
+      "../mortar-pestle-stt/target/release/sherpa-onnx-cxx-api.dll": "sherpa-onnx-cxx-api.dll"
+    },
     "targets": [
       "nsis"
     ]

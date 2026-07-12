@@ -234,7 +234,7 @@ function RecordingsSection({ snapshot }) {
     <SectionBand title="Recordings" anchor="set-capture-recordings">
       <SettingRow stacked
         label="Save recordings to"
-        hint="New clips save here; existing clips stay where they are. Changing this briefly restarts the capture engine, so it is blocked while recording.">
+        hint="New clips save here; existing clips stay where they are. Changing this briefly restarts the capture engine (if it was adopted by another launch, you'll be asked to restart the app instead), so it is blocked while recording.">
         <div style={{
           fontFamily: 'var(--font-mono)', fontSize: 11.5, color: 'var(--text)',
           wordBreak: 'break-all', background: 'var(--surface-2)',

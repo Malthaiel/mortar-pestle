@@ -103,6 +103,11 @@ struct Inner {
     /// PID of the child we spawned (and therefore must reap). `None` when
     /// adopted (not ours to kill) or down.
     spawned_pid: Option<u32>,
+    /// True when the supervisor adopted a live engine (the control socket
+    /// answered on startup) rather than spawning its own child. Latched for
+    /// the process life — an adopted engine can't be repointed live. See
+    /// [`engine_is_adopted`].
+    adopted: bool,
     /// Monotonic spawn generation — the stale-write guard key.
     generation: u64,
     /// Consecutive immediate exits (reset by any sufficiently-long run).
@@ -119,6 +124,7 @@ impl Default for Inner {
     fn default() -> Self {
         Self {
             spawned_pid: None,
+            adopted: false,
             generation: 0,
             crash_count: 0,
             terminal: false,
@@ -185,27 +191,65 @@ pub fn start(app: AppHandle) {
     tauri::async_runtime::spawn(supervise(sup, app));
 }
 
+/// True when the supervisor adopted a live engine (the control socket answered
+/// on startup) rather than spawning its own child. An adopted engine isn't
+/// ours to kill, so a captures-dir change can't repoint it live — the command
+/// layer refuses it with a "restart the app" message rather than flip the cache
+/// and lie. `false` for spawned / down / failed / never-started (all repointable:
+/// spawned ⇒ kill + respawn; the rest ⇒ the next spawn reads the new cache).
+pub fn engine_is_adopted() -> bool {
+    let Some(sup) = get() else { return false };
+    lock(&sup.inner).adopted
+}
+
+/// Why [`restart`] declined to kill. `Busy` ⇒ a recording started in the
+/// window between the command's idle-check and the kill (the caller rolls back
+/// its cache flip and surfaces a "stop the recording" error).
+pub enum RestartErr {
+    Busy,
+}
+
 /// Restart the spawned engine child so the next spawn rebinds
 /// `MORTAR_PESTLE_CAPTURES_DIR` (= `captures_dir()`) — the repoint path for a
-/// recordings-folder change (WI-2). Kills the child (Unix SIGTERM / Windows
-/// taskkill /T /F, mirroring [`shutdown`]); the live wait-task observes the exit
-/// and respawns (a >5 s run resets the crash streak, so a settings change never
-/// trips the crash-loop guard). An adopted/down engine (no `spawned_pid`) ⇒ the
-/// change applies on the next app start.
-pub fn restart() {
-    let Some(sup) = get() else { return };
+/// recordings-folder change (WI-2). Re-checks idle via the socket right before
+/// the kill: a Shift+C hotkey can start a clip between the command's
+/// `ensure_capture_idle` and this kill, and killing mid-record would lose it —
+/// [`RestartErr::Busy`] lets the caller roll back its cache flip. Kills the
+/// child (Unix SIGTERM / Windows taskkill /T /F, mirroring [`shutdown`]); the
+/// live wait-task observes the exit and respawns (a >5 s run resets the crash
+/// streak, so a settings change never trips the crash-loop guard). No
+/// `spawned_pid` (down / failed / never-started) ⇒ nothing to kill — the next
+/// spawn reads the new cache. Adopted engines are refused upstream by
+/// [`engine_is_adopted`].
+pub async fn restart() -> Result<(), RestartErr> {
+    let Some(sup) = get() else { return Ok(()) };
     let pid = lock(&sup.inner).spawned_pid;
     let Some(pid) = pid else {
         log::info!(
-            "capture supervisor: no spawned child to restart (adopted/down) — captures-dir change applies on next start"
+            "capture supervisor: no spawned child to restart (down/failed) — captures-dir change applies on next spawn"
         );
-        return;
+        return Ok(());
     };
+    // Re-check idle right before the kill — a hotkey (Shift+C) can start a clip
+    // in the window between the command's ensure_capture_idle and this kill. A
+    // get_state error ⇒ the engine isn't responding (down/failing) ⇒ killing
+    // the (dead) child is harmless, so only abort on a clean recording/armed.
+    if let Some(client) = client() {
+        if let Ok(snap) = client.get_state().await {
+            if snap.recording || snap.armed {
+                log::warn!(
+                    "capture supervisor: restart aborted — a recording started just now (pid {pid})"
+                );
+                return Err(RestartErr::Busy);
+            }
+        }
+    }
     log::info!("capture supervisor: restarting engine pid {pid} to repoint the captures dir");
     #[cfg(unix)]
     signal_term(pid);
     #[cfg(not(unix))]
     crate::commands::proc_util::terminate_pid(pid);
+    Ok(())
 }
 
 impl Supervisor {
@@ -262,11 +306,20 @@ async fn supervise(sup: &'static Supervisor, app: AppHandle) {
     let mut backoff = RESPAWN_MIN;
 
     loop {
+        // Die-with-app race-plug: `shutdown()` may have latched `terminal` while
+        // we slept in the backoff below — bail before probing/spawning so a
+        // dying host can't orphan a freshly-spawned daemon (the Win32 Job
+        // Object would reap it anyway; this avoids the flicker).
+        if lock(&sup.inner).terminal {
+            return;
+        }
+
         // Adopt-first: never spawn a duplicate if the socket already answers.
         if socket_alive().await {
             {
                 let mut g = lock(&sup.inner);
                 g.spawned_pid = None; // not ours to reap
+                g.adopted = true;
                 g.crash_count = 0;
             }
             log::info!("capture supervisor: adopted live engine (socket answered get_state)");
@@ -283,6 +336,12 @@ async fn supervise(sup: &'static Supervisor, app: AppHandle) {
             return;
         };
 
+        // Die-with-app race-plug: a shutdown between the loop-top check and
+        // here must not spawn a fresh daemon after we began dying.
+        if lock(&sup.inner).terminal {
+            return;
+        }
+
         let generation = sup.gen.fetch_add(1, Ordering::SeqCst) + 1;
         emit_status(sup, &app, "spawning", "Starting the capture engine");
         let spawned_at = Instant::now();
@@ -292,6 +351,7 @@ async fn supervise(sup: &'static Supervisor, app: AppHandle) {
                 {
                     let mut g = lock(&sup.inner);
                     g.spawned_pid = Some(pid);
+                    g.adopted = false;
                     g.generation = generation;
                 }
                 log::info!("capture supervisor: spawned engine pid {pid} (gen {generation})");

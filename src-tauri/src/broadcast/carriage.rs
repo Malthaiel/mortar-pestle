@@ -32,24 +32,34 @@ const ENGINE_BIN_FILE: &str = "mortar-pestle-broadcast";
 /// "broadcast disabled" log lives at the caller (`supervise`), which owns the
 /// spawn-vs-inert decision.
 pub fn resolve_engine_binary(app: &AppHandle) -> Option<PathBuf> {
-    // 1. Bundled resource.
-    if let Ok(p) = app.path().resolve(ENGINE_BIN_FILE, tauri::path::BaseDirectory::Resource) {
-        if p.exists() {
-            return Some(p);
+    // 1. Bundled resource. PROD ONLY — in dev the bundled release exe would
+    //    shadow the debug build we iterate on, so dev skips this and falls to
+    //    the dev-tree (step 2).
+    if !cfg!(debug_assertions) {
+        if let Ok(p) = app.path().resolve(ENGINE_BIN_FILE, tauri::path::BaseDirectory::Resource) {
+            if p.exists() {
+                return Some(p);
+            }
         }
     }
 
-    // 2. Dev-tree fallback: release first, then debug.
-    #[cfg(windows)]
-    let dev_home = std::env::var_os("USERPROFILE");
-    #[cfg(not(windows))]
-    let dev_home = std::env::var_os("HOME");
-    if let Some(home) = dev_home {
-        let base = PathBuf::from(home).join("Code/mortar-pestle/mortar-pestle-broadcast/target");
-        for profile in ["release", "debug"] {
-            let dev = base.join(profile).join(ENGINE_BIN_FILE);
-            if dev.exists() {
-                return Some(dev);
+    // 2. Dev-tree fallback: release first, then debug. DEV BUILDS ONLY — prod
+    //    does NOT bundle the broadcast engine yet (the ~2,161-file OBS tree is a
+    //    deferred sub-plan), so in prod this gate falls through to `None` and the
+    //    caller logs "broadcast disabled" — the explicit, intended prod state
+    //    (broadcast is already off in the installed app today).
+    if cfg!(debug_assertions) {
+        #[cfg(windows)]
+        let dev_home = std::env::var_os("USERPROFILE");
+        #[cfg(not(windows))]
+        let dev_home = std::env::var_os("HOME");
+        if let Some(home) = dev_home {
+            let base = PathBuf::from(home).join("Code/mortar-pestle/mortar-pestle-broadcast/target");
+            for profile in ["release", "debug"] {
+                let dev = base.join(profile).join(ENGINE_BIN_FILE);
+                if dev.exists() {
+                    return Some(dev);
+                }
             }
         }
     }
