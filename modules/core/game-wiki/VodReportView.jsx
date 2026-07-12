@@ -7,7 +7,7 @@
 // candy-btn + native checkboxes — no new primitive).
 
 import { useEffect, useState } from 'react';
-import { api } from '@host/api.js';
+import { api, invoke } from '@host/api.js';
 import AppWindow from '@host/components/ui/AppWindow.jsx';
 import { candyGap } from '@host/util/candy.js';
 import { IconTable, IconFolder } from '@host/components/icons.jsx';
@@ -106,7 +106,7 @@ export default function VodReportView({ sidecarPath, commsPath, mdPath, accent, 
         {mdPath && (
           <button type="button" data-own-press className="candy-btn" data-shape="icon"
             title="Show scrim file in folder" style={{ marginTop: 'auto', alignSelf: 'flex-start', '--accent': accent }}
-            onClick={() => api.invoke('coaching_reveal_path', { path: mdPath }).catch(() => {})}>
+            onClick={() => invoke('coaching_reveal_path', { path: mdPath }).catch((e) => console.error('coaching_reveal_path failed:', e))}>
             <span className="candy-face"><IconFolder size={16} /></span>
           </button>
         )}
