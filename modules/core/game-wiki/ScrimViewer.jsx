@@ -1708,6 +1708,8 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
         {vodReportOpen && (
           <VodReportView
             sidecarPath={scrimSidecarPath(path, 'vodreport')}
+            commsPath={scrimSidecarPath(path, 'vodcomms')}
+            mdPath={path}
             accent={accent}
             onClose={() => setVodReportOpen(false)}
           />

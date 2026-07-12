@@ -88,6 +88,29 @@ pub fn coaching_open_path(app: tauri::AppHandle, path: String) -> Result<(), Vau
         .map_err(|e| VaultError::Io(e.to_string()))
 }
 
+/// Highlight a GameWiki-vault file in the OS file manager (the "open in folder"
+/// button on the VOD Review Report). `reveal_in_files` (media.rs) can't be reused:
+/// it resolves relative paths against the *content* vault and its allowed-root gate
+/// excludes the GameWiki vault. This resolves `path` against the GameWiki vault root
+/// and gates the canonical result under it (the arg is an app-built relative scrim
+/// path, not a user pick), then reveals via the opener plugin (same as reveal_in_files).
+#[tauri::command]
+pub fn coaching_reveal_path(app: tauri::AppHandle, path: String) -> Result<(), VaultError> {
+    if path.is_empty() {
+        return Err(VaultError::Invalid("path required".into()));
+    }
+    let root = std::fs::canonicalize(crate::commands::vault::gamewiki_vault_root())
+        .map_err(|e| VaultError::Io(format!("gamewiki root: {e}")))?;
+    let canonical = std::fs::canonicalize(root.join(&path))
+        .map_err(|_| VaultError::NotFound(format!("Path not found: {path}")))?;
+    if !canonical.starts_with(&root) {
+        return Err(VaultError::Invalid("path not under the GameWiki vault".into()));
+    }
+    app.opener()
+        .reveal_item_in_dir(&canonical)
+        .map_err(|e| VaultError::Io(e.to_string()))
+}
+
 // ── Comms Extraction (audio → 16 kHz mono WAV) ───────────────────────────────
 // Deadlock Scrim Coaching sub-plan 4. A match's Scrim Recording `.mp4` carries the
 // coached team's voice comms; `coaching_extract_audio` shells system ffmpeg to a

@@ -775,6 +775,7 @@ pub fn run() {
             commands::media::open_path,
             commands::coaching::coaching_read_image,
             commands::coaching::coaching_open_path,
+            commands::coaching::coaching_reveal_path,
             commands::coaching::coaching_extract_audio,
             commands::coaching::deadlock_fetch_match,
             commands::coaching::coaching_classify_match,

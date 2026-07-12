@@ -60,6 +60,7 @@
     "allow-vault-write-file",
     "allow-coaching-read-image",
     "allow-coaching-open-path",
+    "allow-coaching-reveal-path",
     "allow-coaching-extract-audio",
     "allow-deadlock-fetch-match",
     "allow-coaching-classify-match",

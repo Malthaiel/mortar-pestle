@@ -68,6 +68,7 @@ fn main() {
         "vault_write_file",
         "coaching_read_image",
         "coaching_open_path",
+        "coaching_reveal_path",
         "coaching_extract_audio",
         "deadlock_fetch_match",
         "coaching_classify_match",

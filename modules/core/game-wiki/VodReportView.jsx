@@ -10,9 +10,17 @@ import { useEffect, useState } from 'react';
 import { api } from '@host/api.js';
 import AppWindow from '@host/components/ui/AppWindow.jsx';
 import { candyGap } from '@host/util/candy.js';
-import { IconTable } from '@host/components/icons.jsx';
+import { IconTable, IconFolder } from '@host/components/icons.jsx';
+import { parseSegments } from './commsCompile.js';
+import { speakerColor } from './diarize.js';
 
 const muted = { color: 'var(--text-muted)', fontSize: 13 };
+
+// Milliseconds → m:ss (raw-segment timestamp). "0:00" for missing/NaN. Mirrors CommsTranscriptView.
+function mmss(ms) {
+  const v = Number.isFinite(Number(ms)) ? Math.max(0, Math.floor(Number(ms) / 1000)) : 0;
+  return `${Math.floor(v / 60)}:${String(v % 60).padStart(2, '0')}`;
+}
 
 function RailButton({ active, accent, onClick, children }) {
   return (
@@ -33,9 +41,10 @@ function TimeChip({ t }) {
 
 function Empty({ children }) { return <div style={muted}>{children}</div>; }
 
-export default function VodReportView({ sidecarPath, accent, onClose }) {
+export default function VodReportView({ sidecarPath, commsPath, mdPath, accent, onClose }) {
   const [state, setState] = useState({ status: 'loading' });
   const [report, setReport] = useState(null);
+  const [segments, setSegments] = useState(null); // null = loading, [] = none/unavailable
   const [tab, setTab] = useState('tldr');
 
   useEffect(() => {
@@ -52,6 +61,18 @@ export default function VodReportView({ sidecarPath, accent, onClose }) {
       .catch(() => { if (!cancelled) setState({ status: 'missing' }); });
     return () => { cancelled = true; };
   }, [sidecarPath]);
+
+  // Raw diarized segments the report was built from (.vodcomms sidecar) — read-only here;
+  // relabeling lives in ScrimViewer's CommsTranscriptView. Missing/bad → [] (degrades to a gap).
+  useEffect(() => {
+    if (!commsPath) { setSegments([]); return; }
+    let cancelled = false;
+    setSegments(null);
+    api.getRawFileMeta(commsPath, 'gamewiki')
+      .then((r) => { if (!cancelled) setSegments(parseSegments(r.content)); })
+      .catch(() => { if (!cancelled) setSegments([]); });
+    return () => { cancelled = true; };
+  }, [commsPath]);
 
   const toggleItem = async (id) => {
     if (!report) return;
@@ -70,6 +91,7 @@ export default function VodReportView({ sidecarPath, accent, onClose }) {
     { id: 'keep', label: 'Keep Doing' },
     { id: 'debates', label: 'Debates' },
     ...(followUps.length ? [{ id: 'followups', label: `Follow-ups (${followUps.length})` }] : []),
+    { id: 'segments', label: `Segments${(segments || []).length ? ` (${segments.length})` : ''}` },
   ];
 
   return (
@@ -81,13 +103,35 @@ export default function VodReportView({ sidecarPath, accent, onClose }) {
         {TABS.map((t) => (
           <RailButton key={t.id} active={t.id === tab} accent={accent} onClick={() => setTab(t.id)}>{t.label}</RailButton>
         ))}
+        {mdPath && (
+          <button type="button" data-own-press className="candy-btn" data-shape="icon"
+            title="Show scrim file in folder" style={{ marginTop: 'auto', alignSelf: 'flex-start', '--accent': accent }}
+            onClick={() => api.invoke('coaching_reveal_path', { path: mdPath }).catch(() => {})}>
+            <span className="candy-face"><IconFolder size={16} /></span>
+          </button>
+        )}
       </div>
 
       {/* Content pane */}
       <div style={{ flex: 1, minWidth: 0, padding: '20px 24px', overflowY: 'auto' }}>
-        {status === 'loading' && <Empty>Loading report…</Empty>}
-        {status === 'missing' && <Empty>No report yet — click Generate Report on the scrim first.</Empty>}
-        {status === 'parse-error' && <div style={{ color: 'var(--error)', fontSize: 13 }}>Couldn’t parse the stored report.</div>}
+        {tab !== 'segments' && status === 'loading' && <Empty>Loading report…</Empty>}
+        {tab !== 'segments' && status === 'missing' && <Empty>No report yet — click Generate Report on the scrim first.</Empty>}
+        {tab !== 'segments' && status === 'parse-error' && <div style={{ color: 'var(--error)', fontSize: 13 }}>Couldn’t parse the stored report.</div>}
+        {tab === 'segments' && (
+          segments === null ? <Empty>Loading segments…</Empty>
+            : segments.length === 0 ? <Empty>Transcript unavailable — re-run Extract VOD Comms on the scrim.</Empty>
+            : (
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12.5, lineHeight: 1.55 }}>
+                {segments.map((s, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 3, alignItems: 'baseline' }}>
+                    <span style={{ color: 'var(--text-muted)', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{mmss(s.t0Ms)}</span>
+                    <span style={{ flexShrink: 0, minWidth: 64, fontWeight: 600, color: speakerColor(s.speaker) }}>{s.speaker || '—'}</span>
+                    <span style={{ color: 'var(--text)', wordBreak: 'break-word' }}>{s.text || '·'}</span>
+                  </div>
+                ))}
+              </div>
+            )
+        )}
         {status === 'ready' && (
           <>
             {tab === 'tldr' && (r.tldr ? <div style={{ fontSize: 14, lineHeight: 1.6 }}>{r.tldr}</div> : <Empty>No summary.</Empty>)}
