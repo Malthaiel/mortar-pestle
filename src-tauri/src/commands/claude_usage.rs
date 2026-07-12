@@ -159,7 +159,12 @@ pub async fn claude_token_stats() -> Result<TokenStats, String> {
                 if date < row.date {
                     row.date = date;
                 }
-                row.model = model;
+                // Keep the FIRST real model the session used (mirrors `date`
+                // keeping the earliest). Overwriting per message would show the
+                // LAST model — misleading for a session that switched mid-run.
+                if row.model == "unknown" && model != "unknown" {
+                    row.model = model;
+                }
             }
         }
 
