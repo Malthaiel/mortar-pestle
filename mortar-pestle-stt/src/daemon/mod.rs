@@ -23,7 +23,12 @@ use crate::protocol::Event;
 
 /// Broadcast bus capacity. Events are notifications, not a durable log; a slow client
 /// that lags just drops the gap. Every client subscribes a receiver in `handle_client`.
-const EVENT_BUS_CAPACITY: usize = 256;
+/// Sized for the batch-transcribe burst: `run_full` emits the FULL segment list
+/// back-to-back after decode (~1100 events for a 42-min scrim) while the forwarder
+/// drains at pipe speed — at 256 it lagged and silently dropped ~770 segments (the
+/// host saw a transcript with the middle 29 minutes missing). 8192 ≈ 5+ hours of
+/// speech; the host cross-checks segments against `final` text and fails loud.
+const EVENT_BUS_CAPACITY: usize = 8192;
 
 /// `mortar-pestle-stt daemon` entry. Builds the multi-thread tokio runtime + the
 /// broadcast bus, constructs the (SF1, engine-less) `ControlContext`, and blocks

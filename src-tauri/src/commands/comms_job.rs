@@ -466,6 +466,7 @@ async fn transcribe(
     segments: &mut Vec<SegOut>,
 ) -> Result<String, String> {
     set_progress(app, Some(label), Some(0.0));
+    let start_len = segments.len();
     let mut final_text = String::new();
     {
         let final_text = &mut final_text;
@@ -504,6 +505,20 @@ async fn transcribe(
         )
         .await?;
     }
+    // Transport-integrity check: the engine builds `final` by concatenating every
+    // segment it emitted, so the segments collected here must reproduce it exactly.
+    // Any mismatch means events were lost in transit (a 256-cap daemon bus once
+    // silently dropped ~770 of 1102 segments — 29 minutes of comms) — fail loud
+    // rather than persist a transcript with invisible holes.
+    let joined: String = segments[start_len..].iter().map(|s| s.text.as_str()).collect();
+    if joined.trim() != final_text {
+        return Err(format!(
+            "transcript incomplete: collected {} segments ({} chars) but the engine's final text is {} chars — events lost in transit, re-run the extraction",
+            segments.len() - start_len,
+            joined.trim().len(),
+            final_text.len()
+        ));
+    }
     Ok(final_text)
 }
 
@@ -532,8 +547,12 @@ where
                     return Ok(());
                 }
             }
-            // Fell behind the bus — drop the gap and keep listening.
-            Err(RecvError::Lagged(_n)) => {}
+            // Fell behind the bus — the gap may have held `segment` events, so the
+            // transcript would be silently corrupt (a 256-cap bus once ate 29 min of
+            // comms). Fail the job loudly; EVENT_BUS_CAP is sized so this never fires.
+            Err(RecvError::Lagged(n)) => {
+                return Err(format!("stt event bus overflow: dropped {n} events (transcript would be incomplete — re-run the job)"));
+            }
             Err(RecvError::Closed) => return Err("stt engine disconnected".into()),
         }
     }

@@ -360,8 +360,12 @@ const RECONNECT_MIN: Duration = Duration::from_millis(250);
 const RECONNECT_MAX: Duration = Duration::from_secs(5);
 /// One in-flight request's wait before it gives up.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
-/// Event fan-out depth. Lagged receivers drop the gap and keep going.
-const EVENT_BUS_CAP: usize = 256;
+/// Event fan-out depth. Lagged receivers drop the gap and keep going. Sized for
+/// the batch-transcribe burst: since the VAD pre-pass rework the engine emits the
+/// FULL segment list back-to-back after decode (~1100 events for a 42-min scrim),
+/// and at 256 the comms-job consumer lagged and silently lost the middle ~29 min
+/// of transcript. 8192 ≈ 5+ hours of speech; comms_job fails loud on any Lagged.
+const EVENT_BUS_CAP: usize = 8192;
 /// Hard ceiling on a single inbound NDJSON line. Stops a wedged or hostile peer
 /// that never sends a newline from growing the read buffer without limit — over
 /// it the read errors and the connection resets (then reconnects). 16 MB: a real

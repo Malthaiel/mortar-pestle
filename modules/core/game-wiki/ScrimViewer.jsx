@@ -19,7 +19,7 @@ import MatchViewPopup from './MatchViewPopup.jsx';
 import { sidecarPath, scrimSidecarPath, renderSummary, setMatchDataBody, MATCH_DATA_PLACEHOLDER, clock, extractMeta, fmtLocalTime, extractSpatial } from './matchData.js';
 import { compileNotes, renderCoachingSummary, setCoachingSummaryBody, parseTimedNote, formatTimedBullet, sortByTimeAsc, secFromClock } from './noteCompile.js';
 import { setCommsTranscriptBody, renderCommsSummary, parseSegments, parseCommsSidecar, buildCommsSidecar } from './commsCompile.js';
-import { alignDiarization, dropUnattributed, mergeTranscripts, labelForCluster, speakerColor } from './diarize.js';
+import { alignDiarization, mergeTranscripts, labelForCluster, speakerColor } from './diarize.js';
 import { matchClusters, enrollPrint, parseVoiceprints, DEFAULT_THRESHOLD } from './voiceprints.js';
 import { auditSilentDeaths } from './deathAudit.js';
 import { buildTranscriptBlock, generateReport } from './vodReport.js';
@@ -741,7 +741,7 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
     const store = await readTeamStore(coachedTeam);
     const nameMap = matchClusters(result.diarization.clusters || [], store.prints || {}, DEFAULT_THRESHOLD);
     const diarSpans = result.diarization.segments || [];
-    const aligned = dropUnattributed(alignDiarization(result.commsSegments || [], diarSpans), diarSpans);
+    const aligned = alignDiarization(result.commsSegments || [], diarSpans);
     const yourName = loadYourName() || 'You';
     const merged = mergeTranscripts({ micSegments: result.micSegments || [], commsSegments: aligned, micSpeaker: yourName, nameMap });
     await finishOpaque(merged, buildCommsSidecar({ segments: merged, clusters: result.diarization.clusters || [], micSpeaker: yourName }));
@@ -758,7 +758,7 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
     const store = await readTeamStore(coachedTeam);
     const nameMap = matchClusters(result.diarization?.clusters || [], store.prints || {}, DEFAULT_THRESHOLD);
     const vodSpans = result.diarization?.segments || [];
-    const aligned = dropUnattributed(alignDiarization(result.commsSegments || [], vodSpans), vodSpans);
+    const aligned = alignDiarization(result.commsSegments || [], vodSpans);
     const coachName = loadYourName() || 'Coach';
     const merged = mergeTranscripts({ micSegments: result.micSegments || [], commsSegments: aligned, micSpeaker: coachName, nameMap });
     const scPath = scrimSidecarPath(path, 'vodcomms');
