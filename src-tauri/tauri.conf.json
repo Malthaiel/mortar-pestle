@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Mortar & Pestle",
-  "version": "0.0.21",
+  "version": "0.0.22",
   "identifier": "dev.malthaiel.mortar-pestle",
   "build": {
     "frontendDist": "../web/dist",
