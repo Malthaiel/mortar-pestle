@@ -14,6 +14,7 @@
 
 ## Status
 
+- **Resolved**: 2026-07-13 — Branch A (ADR wins) applied. Deleted the orphan dock `@media (prefers-reduced-motion: reduce)` block at `web/src/styles.css:450-453` (commit `1cabada`); `useSettings.js` untouched. Maintainer ruling via the `/supercharge` ruling packet. The plan's "three-way contradiction" premise was already stale — `PRODUCT.md:107` self-reconciled 2026-07-11 to agree with the ADR, collapsing it to two-way (code orphan vs both docs). ADR `2026-05-21 Drop Reduced-Motion Support.md` Consequences amended to record the dock-orphan removal. Branch B (re-add) remains available via the ADR's own Reversibility recipe if compliance pressure later mandates it.
 - **Priority**: P2
 - **Effort**: S (the code change is a few lines either way; the cost is the decision, not the diff)
 - **Risk**: LOW
