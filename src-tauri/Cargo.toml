@@ -1,6 +1,6 @@
 [package]
 name = "mortar-pestle"
-version = "0.0.22"
+version = "0.0.23"
 description = "Mortar & Pestle — a personal operating system for thinking, planning, and producing"
 authors = ["Malthaiel"]
 license = "PolyForm-Noncommercial-1.0.0"
