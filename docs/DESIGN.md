@@ -105,6 +105,39 @@ Letter-spacing is part of the type identity, not optional. Mono captions without
 
 Live under `web/src/components/ui/` and re-export via `web/src/components/ui/index.js`. Host-internal code imports as `from './ui/index.js'` (or `'../ui/index.js'`) — prefer the barrel over deep-importing individual files. Modules import the same barrel as `@host/components/ui/index.js` (a handful of legacy `@host/components/ui/<File>.jsx` deep imports predate this and are not retroactively rewritten).
 
+### `Button`
+
+| Component | When |
+|---|---|
+| `PrimaryBtn` | Primary CTA only. Solid accent fill, sm/md radius. |
+| `OutlinedBtn` | Secondary action. Hairline border, transparent fill, accent text on hover. |
+| `IconBtn` | Square icon button. Sizes: `24` (extras), `28` (secondary transport / chevrons), `32` (default), `40` (primary transport). Props: `primary`, `active`, `playing`, `accent`, `disabled`, `size`, `title`. |
+| `CircleChip` | Round badge for status glyphs around a primary control. |
+| `HeaderChip` | Outlined mono-uppercase pill used in panel headers ("Today", "All", "Open ↗"). Click-to-reset / click-to-act semantics. |
+
+### `Pill`
+
+| Component | When |
+|---|---|
+| `Seg` | Segmented control (D/W/M, list/grid). Pill container, accent@14% fill on selected segment, accent text on selected. Props: `value`, `onChange`, `options`, `accent`. |
+| `FilterChip` | Toggleable filter/tag pill. Like Seg but can be multi-selected. Props: `active`, `onClick`, `accent`. |
+
+### `Stat`
+
+| Component | When |
+|---|---|
+| `Dot` | Colored dot. Props: `color`, `size` (default 6), `glow` (adds soft accent halo for "live" states). Replaces all inline `<span style={{width, height, borderRadius, background}}>`. |
+| `StatTile` | Labeled number tile (title + big number + sub-label). |
+| `FrontmatterChip` | Inline-codey rendering of a YAML frontmatter key/value. |
+
+### `Section`
+
+| Component | When |
+|---|---|
+| `SectionHeader` | Page-section header. 30px title, 32px top padding, optional subtitle, right-side action chip slot, optional accent progress sliver pinned to bottom edge. |
+| `EmptyState` | Centered icon + line + optional CTA chip pointing at a vault page. Use whenever a section can be sparse. |
+| `LoadingState` | Pulsing skeleton — never a spinner. |
+
 ## Module ↔ host import boundary (what actually holds)
 
 Modules (`modules/**`) share a broad host surface by design, reached via the
@@ -147,39 +180,6 @@ panel styles live in a host sheet, and it may import a module's CSS when it
 genuinely reuses that module's chrome (documented exception:
 `OverlayStudioPanel.jsx` imports `stt.css`). The full persistence / data-access
 / notification conventions live in the repo-root `CONVENTIONS.md`.
-
-### `Button`
-
-| Component | When |
-|---|---|
-| `PrimaryBtn` | Primary CTA only. Solid accent fill, sm/md radius. |
-| `OutlinedBtn` | Secondary action. Hairline border, transparent fill, accent text on hover. |
-| `IconBtn` | Square icon button. Sizes: `24` (extras), `28` (secondary transport / chevrons), `32` (default), `40` (primary transport). Props: `primary`, `active`, `playing`, `accent`, `disabled`, `size`, `title`. |
-| `CircleChip` | Round badge for status glyphs around a primary control. |
-| `HeaderChip` | Outlined mono-uppercase pill used in panel headers ("Today", "All", "Open ↗"). Click-to-reset / click-to-act semantics. |
-
-### `Pill`
-
-| Component | When |
-|---|---|
-| `Seg` | Segmented control (D/W/M, list/grid). Pill container, accent@14% fill on selected segment, accent text on selected. Props: `value`, `onChange`, `options`, `accent`. |
-| `FilterChip` | Toggleable filter/tag pill. Like Seg but can be multi-selected. Props: `active`, `onClick`, `accent`. |
-
-### `Stat`
-
-| Component | When |
-|---|---|
-| `Dot` | Colored dot. Props: `color`, `size` (default 6), `glow` (adds soft accent halo for "live" states). Replaces all inline `<span style={{width, height, borderRadius, background}}>`. |
-| `StatTile` | Labeled number tile (title + big number + sub-label). |
-| `FrontmatterChip` | Inline-codey rendering of a YAML frontmatter key/value. |
-
-### `Section`
-
-| Component | When |
-|---|---|
-| `SectionHeader` | Page-section header. 30px title, 32px top padding, optional subtitle, right-side action chip slot, optional accent progress sliver pinned to bottom edge. |
-| `EmptyState` | Centered icon + line + optional CTA chip pointing at a vault page. Use whenever a section can be sparse. |
-| `LoadingState` | Pulsing skeleton — never a spinner. |
 
 ## Patterns
 
