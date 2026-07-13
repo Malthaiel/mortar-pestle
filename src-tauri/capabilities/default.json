@@ -65,6 +65,7 @@
     "allow-coaching-extract-audio",
     "allow-deadlock-fetch-match",
     "allow-coaching-classify-match",
+    "allow-coaching-agent-run",
     "allow-comms-job-start",
     "allow-comms-job-status",
     "allow-comms-job-take",

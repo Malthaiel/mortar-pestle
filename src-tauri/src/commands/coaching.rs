@@ -417,7 +417,8 @@ async fn classify_via_api(system: &str, user: &str, model: &str) -> Result<Strin
     let key = classify_api_key()?;
     let body = serde_json::json!({
         "model": classify_model_id(model),
-        "max_tokens": 16000,
+        // 32k: the layered v2 analyst report (playerCards + macro + commsGrade) overflows 16k
+        "max_tokens": 32000,
         "thinking": { "type": "adaptive" },
         "output_config": { "effort": "high" },
         "system": system,
@@ -476,11 +477,61 @@ async fn classify_via_api(system: &str, user: &str, model: &str) -> Result<Strin
     Ok(text)
 }
 
+const CLASSIFY_CLI_TIMEOUT_SECS: u64 = 5 * 60; // one-shot reasoning; hung CLI = kill + loud error
+const AGENT_RUN_TIMEOUT_SECS: u64 = 20 * 60; // tool-using verify loops legitimately run long
+
 async fn classify_via_cli(
     system: &str,
     user: &str,
     model: &str,
     cli_path: &str,
+) -> Result<String, DeadlockError> {
+    // No tools, default cwd: pure reasoning over the prompt.
+    run_claude_cli(system, user, model, cli_path, None, None, CLASSIFY_CLI_TIMEOUT_SECS).await
+}
+
+/// Read-only, tool-using one-shot for the Analyst verify pass (Pass 2). Distinct from
+/// coaching_classify_match — different contract: cwd = the GameWiki `Deadlock/` folder and
+/// Read/Grep/Glob are allowed so the model can check claims against Fact/ pages. Still
+/// `--setting-sources ""` (deterministic — the brain arrives in the prompt; tools are for
+/// checking, not settings). CLI backend only: the API path has no filesystem tools.
+#[tauri::command]
+pub async fn coaching_agent_run(
+    system_prompt: String,
+    user_prompt: String,
+    model: String,
+    cli_path: String,
+) -> Result<String, DeadlockError> {
+    if user_prompt.trim().is_empty() {
+        return Err(DeadlockError::Invalid("empty agent-run prompt".into()));
+    }
+    let cwd = std::path::PathBuf::from(crate::commands::vault::gamewiki_vault_root()).join("Deadlock");
+    if !cwd.is_dir() {
+        return Err(DeadlockError::Invalid(format!("GameWiki Deadlock folder not found at {}", cwd.display())));
+    }
+    run_claude_cli(
+        &system_prompt,
+        &user_prompt,
+        &model,
+        &cli_path,
+        Some(cwd),
+        Some("Read,Grep,Glob"),
+        AGENT_RUN_TIMEOUT_SECS,
+    )
+    .await
+}
+
+/// Shared headless `claude --print` spawn: JSON envelope in/out, user prompt via stdin,
+/// optional cwd + read-only tool allowance, hard timeout (kill_on_drop reaps the child when
+/// the timed-out future is dropped), and no console flash on Windows (CREATE_NO_WINDOW).
+async fn run_claude_cli(
+    system: &str,
+    user: &str,
+    model: &str,
+    cli_path: &str,
+    cwd: Option<std::path::PathBuf>,
+    allowed_tools: Option<&str>,
+    timeout_secs: u64,
 ) -> Result<String, DeadlockError> {
     use tokio::io::AsyncWriteExt;
     // Reuse design.rs's resolver: configured path → PATH lookup → platform
@@ -489,9 +540,8 @@ async fn classify_via_cli(
     let alias = if matches!(model, "opus" | "sonnet" | "haiku") { model } else { "opus" };
 
     // --print --output-format json → one { type:"result", result, is_error } object.
-    // No --allowed-tools, no --permission-mode bypassPermissions: pure reasoning.
-    let mut child = TokioCommand::new(&resolved)
-        .arg("--print")
+    let mut cmd = TokioCommand::new(&resolved);
+    cmd.arg("--print")
         .arg("--output-format")
         .arg("json")
         .arg("--no-session-persistence")
@@ -500,7 +550,19 @@ async fn classify_via_cli(
         .arg("--system-prompt")
         .arg(system)
         .arg("--model")
-        .arg(alias)
+        .arg(alias);
+    if let Some(tools) = allowed_tools {
+        cmd.arg("--allowed-tools").arg(tools);
+    }
+    if let Some(dir) = cwd {
+        cmd.current_dir(dir);
+    }
+    #[cfg(windows)]
+    {
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    let mut child = cmd
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
@@ -522,9 +584,9 @@ async fn classify_via_cli(
         drop(stdin);
     }
 
-    let out = child
-        .wait_with_output()
+    let out = tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), child.wait_with_output())
         .await
+        .map_err(|_| DeadlockError::Network(format!("claude timed out after {timeout_secs}s (killed)")))?
         .map_err(|e| DeadlockError::Network(format!("claude wait: {e}")))?;
     if !out.status.success() {
         return Err(DeadlockError::Upstream(format!("claude exited {}", out.status)));

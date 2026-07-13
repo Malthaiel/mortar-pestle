@@ -22,7 +22,9 @@ import { setCommsTranscriptBody, renderCommsSummary, parseSegments, parseCommsSi
 import { alignDiarization, mergeTranscripts, labelForCluster, speakerColor } from './diarize.js';
 import { matchClusters, enrollPrint, parseVoiceprints, DEFAULT_THRESHOLD } from './voiceprints.js';
 import { auditSilentDeaths } from './deathAudit.js';
-import { buildTranscriptBlock, generateReport } from './vodReport.js';
+import { buildTranscriptBlock, generateReport, normalizeTranscript, transcriptHash, verifyReport } from './vodReport.js';
+import { buildMatchDigest } from './matchDigest.js';
+import { buildBrainContext, buildLexicon, lexiconStale, LEXICON_PATH } from './analystBrain.js';
 import VodReportView from './VodReportView.jsx';
 import { buildFights, judgeTeamfights, summarize } from './teamfightComms.js';
 import TeamfightCommsView from './TeamfightCommsView.jsx';
@@ -481,6 +483,7 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
   const [vodBusy, setVodBusy] = useState(false); // scrim-level Extract VOD Comms in flight (sub-plan 11)
   const [vodPhase, setVodPhase] = useState(''); // status label while extracting the VOD Review
   const [reporting, setReporting] = useState(false); // Generate Report (Claude) in flight (sub-plan 11)
+  const [reportPhase, setReportPhase] = useState(''); // pipeline phase label on the report button face (Move 15)
   const [vodReportOpen, setVodReportOpen] = useState(false); // VodReportView popup open
   const [reviewingN, setReviewingN] = useState(null); // match.n with an in-flight Review Comms (sub-plan 13)
   const [tfOpen, setTfOpen] = useState(null); // { n } → TeamfightCommsView popup open for that match
@@ -1006,7 +1009,6 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
 
     reportRef.current = true; setReporting(true);
     try {
-      const transcriptBlock = buildTranscriptBlock(segments);
       const fm = scrimRef.current?.frontmatter || {};
       const coachedTeam = fm['Coached Team'] || fm['Team 1'] || '';
       const opponent = (fm['Team 1'] === coachedTeam ? fm['Team 2'] : fm['Team 1']) || '';
@@ -1032,7 +1034,56 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
       let notesBlock = '';
       try { notesBlock = (await api.getRawFileMeta(scrimSidecarPath(path, 'vodnotes'), 'gamewiki')).content; } catch { /* no notes */ }
 
-      const report = await generateReport(invoke, { transcriptBlock, teams: { opponent }, coachedTeam, priorActionItems, notesBlock, prior }, agents);
+      // ── Analyst pipeline (Moves 6/8/9/10/11): brain + digests + normalize → draft → verify ──
+      setReportPhase('Normalizing…');
+      // lexicon, auto-refreshed when >7 days stale (no AI — folder enumeration + re-render)
+      let lexicon = '';
+      try {
+        lexicon = (await api.getRawFileMeta(LEXICON_PATH, 'gamewiki')).content;
+        if (lexiconStale(lexicon)) {
+          lexicon = await buildLexicon(api, new Date().toISOString().slice(0, 10));
+          await api.savePage(LEXICON_PATH, lexicon, null, 'gamewiki');
+        }
+      } catch { /* brain missing → buildBrainContext surfaces it loudly */ }
+      const brain = await buildBrainContext(api, { coachedTeam });
+
+      // deterministic per-match digests (matches without a data sidecar are skipped)
+      const matchDigests = [];
+      for (const m of (scrimRef.current?.matches || [])) {
+        try { matchDigests.push(buildMatchDigest(JSON.parse((await api.getRawFileMeta(sidecarPath(path, m.n), 'gamewiki')).content), { label: `Match ${m.n}` })); }
+        catch { /* no match data for this one */ }
+      }
+
+      // the coach's tagged in-game notes, compiled per match (chess.com classifications)
+      const coachNotesBlock = (scrimRef.current?.matches || []).map((m) => {
+        const bullets = getNotes(m)?.bullets || [];
+        return bullets.length ? `### Match ${m.n}\n${renderCoachingSummary(compileNotes(bullets))}` : '';
+      }).filter(Boolean).join('\n\n');
+
+      // Pass 0: lexicon-grounded transcript normalization, content-hash-cached in .vodnorm
+      const normPath = scrimSidecarPath(path, 'vodnorm');
+      const hash = transcriptHash(segments);
+      let cachedNorm = null;
+      try { const c = JSON.parse((await api.getRawFileMeta(normPath, 'gamewiki')).content); if (c.hash === hash) cachedNorm = c; } catch { /* no cache */ }
+      const norm = await normalizeTranscript(invoke, segments, lexicon, agents, { cached: cachedNorm });
+      if (!norm.discarded && !cachedNorm) {
+        api.savePage(normPath, JSON.stringify({ hash, corrections: norm.corrections, skipped: norm.skipped }), null, 'gamewiki').catch(() => {});
+      }
+      const transcriptBlock = buildTranscriptBlock(norm.segments);
+
+      // Pass 1: the grounded draft
+      setReportPhase('Analyzing…');
+      const draft = await generateReport(invoke, { transcriptBlock, teams: { opponent }, coachedTeam, priorActionItems, notesBlock, brainContext: brain.text, matchDigests, coachNotesBlock, prior }, agents);
+
+      // Pass 2: read-only tool-armed fact-check (degrades to a warning, never blocks)
+      setReportPhase('Fact-checking…');
+      const { report, ran: verified } = await verifyReport(invoke, { report: draft, matchDigests, lexicon }, agents);
+
+      report.meta.passes = [...(norm.discarded ? [] : ['normalize']), 'draft', ...(verified ? ['verify'] : [])];
+      report.meta.brainSections = brain.sections.filter((s) => s.present).map((s) => s.label);
+      report.meta.warnings = [...brain.warnings, ...(norm.warning ? [norm.warning] : []), ...report.meta.warnings];
+
+      setReportPhase('Saving…');
       await api.savePage(scPath, JSON.stringify(report), null, 'gamewiki');
 
       const stamp = new Date().toISOString().slice(0, 10);
@@ -1051,7 +1102,7 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
       }[e?.code] || ['Report failed', e?.message || String(e)];
       notify('error', msg[0], msg[1]);
     } finally {
-      reportRef.current = false; setReporting(false);
+      reportRef.current = false; setReporting(false); setReportPhase('');
     }
   }, [path, settings, applyEdit, flushSave, updateTeamProgress]);
 
@@ -1517,7 +1568,7 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
                 : !aiConfigured ? 'Configure an AI backend in Settings → Agents (API key or Claude CLI)'
                   : 'Generate Report — Claude organizes the review into an action list'}
               style={reporting ? { opacity: 0.6, cursor: 'progress' } : undefined}>
-              <span className="candy-face">{reporting ? 'Asking Claude…' : 'Generate Report'}</span>
+              <span className="candy-face">{reporting ? (reportPhase || 'Asking Claude…') : 'Generate Report'}</span>
             </button>
             {scrim.scrim['VOD Report'] && (
               <button className="candy-btn" data-shape="chip" onClick={() => setVodReportOpen(true)} title="Open the generated report">

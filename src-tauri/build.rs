@@ -73,6 +73,7 @@ fn main() {
         "coaching_extract_audio",
         "deadlock_fetch_match",
         "coaching_classify_match",
+        "coaching_agent_run",
         "comms_job_start",
         "comms_job_status",
         "comms_job_take",

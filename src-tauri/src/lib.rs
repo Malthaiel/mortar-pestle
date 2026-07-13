@@ -792,6 +792,7 @@ pub fn run() {
             commands::coaching::coaching_extract_audio,
             commands::coaching::deadlock_fetch_match,
             commands::coaching::coaching_classify_match,
+            commands::coaching::coaching_agent_run,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::comms_job::comms_job_start,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::comms_job::comms_job_status,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::comms_job::comms_job_take,

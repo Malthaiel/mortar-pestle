@@ -38,14 +38,52 @@ export function buildTranscriptBlock(segments = []) {
     .join('\n');
 }
 
+// Schema v2 (Analyst pipeline, Move 10): superset of v1 — playerCards / macro / commsGrade / meta
+// join the v1 keys. Old sidecars coerce cleanly (absent keys default); fresh reports are stamped.
+export const REPORT_SCHEMA_VERSION = 2;
+
 export const VOD_REPORT_SYSTEM_PROMPT = [
-  'You are a Deadlock scrim coach organizing a post-match VOD-review discussion into a concise,',
-  'actionable report. The transcript is speaker-labeled and timestamped [m:ss]. The coach is the',
-  'person whose lines answer questions and direct the review; the others are the coached team\'s players.',
+  'You are an elite Deadlock analyst-coach — the standard is that this report replaces a paid human coach.',
+  'You are given a post-match VOD-review transcript (speaker-labeled, timestamped [m:ss]), a deterministic',
+  'match-data digest per game (scoreboards, souls curves, item builds, deaths, objectives, damage focus),',
+  'the coach\'s tagged in-game notes, and an ANALYST BRAIN (charter, canonical lexicon, patch digest, taught',
+  'concepts, distilled corrections). The coach is the person whose lines answer questions and direct the',
+  'review; the others are the coached team\'s players.',
+  '',
+  'Hard rules:',
+  '- Canonical names ONLY: every hero, item, and ability name must match the lexicon spelling exactly.',
+  '- Every claim cites evidence — a [m:ss] transcript timestamp or a match-digest fact. No claim floats free.',
+  '- Cross-reference talk against data: when a player asserts something ("we were even in souls"), check it',
+  '  against the digest curves and say whether the data agrees.',
+  '- Comms grading = transcript claims checked against digest events, callout by callout.',
+  '- Layered depth: tldr is a 2-minute read; playerCards / macro / commsGrade carry the full analysis.',
+  '- Never invent content not present in the transcript, notes, digest, or brain.',
   '',
   'Return ONLY a single JSON object (no markdown, no code fences, no commentary) with EXACTLY these keys:',
   '{',
+  '  "schemaVersion": 2,',
   '  "tldr": string,                    // 1-3 sentence digest of the whole review',
+  '  "playerCards": [                   // one per COACHED-team player (opponents only if discussed)',
+  '    { "player": string,              // player name (transcript speaker) or hero name if unnamed',
+  '      "hero": string,                // canonical hero name from the digest',
+  '      "lane": string,                // assigned lane from the digest',
+  '      "laneVerdict": string,         // won/lost/even + why, grounded in the lane souls curve',
+  '      "soulsCurveRead": string,      // their economic arc: farm pace, spikes, droughts, vs counterpart',
+  '      "itemCritique": string,        // build-order judgement vs the game state and patch digest',
+  '      "deathAnalysis": [ { "t": string, "what": string, "why": string, "lesson": string } ],',
+  '      "drills": [string] },          // concrete practice items for this player',
+  '  ],',
+  '  "macro": {',
+  '    "tempoRead": string,             // the match\'s tempo story, grounded in swings + objectives',
+  '    "objectiveWindows": [ { "t": string, "event": string, "verdict": string, "why": string } ],',
+  '    "laneMap": string,               // which lanes won/lost and how that shaped the map',
+  '    "swings": [ { "t": string, "direction": string, "cause": string } ]',
+  '  },',
+  '  "commsGrade": {',
+  '    "overall": string,               // letter grade + one-line justification',
+  '    "callouts": [ { "t": string, "who": string, "call": string, "verdict": string, "evidence": string } ],',
+  '    "missed": [string]               // moments the data says demanded a call that never came',
+  '  },',
   '  "sections": [                      // one entry per substantial topic taught or discussed at length',
   '    { "id": string,                  // short stable kebab-case slug of the heading',
   '      "heading": string,             // name the section after the topic itself ("Tempo", "Gaining a Lead", ...)',
@@ -64,7 +102,8 @@ export const VOD_REPORT_SYSTEM_PROMPT = [
   '  "qa": [ { "q": string, "a": string, "askedBy": string, "t": string } ],  // player question -> coach answer, t = m:ss',
   '  "keepDoing": [string],             // things praised / working well',
   '  "debates": [string],               // points raised but left unresolved',
-  '  "followUps": [ { "priorItem": string, "verdict": "resolved"|"persisting"|"unclear", "evidence": string } ]',
+  '  "followUps": [ { "priorItem": string, "verdict": "resolved"|"persisting"|"unclear", "evidence": string } ],',
+  '  "meta": { "warnings": [string] }   // anything you could not verify or had to assume',
   '}',
   '',
   'Rules: every timestamp is an m:ss string copied from the transcript. Never invent content not in the',
@@ -86,9 +125,18 @@ export const VOD_REPORT_SYSTEM_PROMPT = [
 // Build the user prompt: transcript + team context + any prior action items to follow up on.
 // priorActionItems is [] until sub-plan 12 (Team Progress) feeds it — the follow-up block is
 // simply omitted when empty (empty-tolerant), so nothing to rework when D lands.
-export function buildReportPrompt({ transcriptBlock, teams = {}, coachedTeam = '', priorActionItems = [], notesBlock = '' }) {
+export function buildReportPrompt({ transcriptBlock, teams = {}, coachedTeam = '', priorActionItems = [], notesBlock = '', brainContext = '', matchDigests = [], coachNotesBlock = '' }) {
   const lines = [];
   lines.push(`Coached team: ${coachedTeam || '(unnamed)'}${teams.opponent ? ` vs ${teams.opponent}` : ''}.`);
+  if (String(brainContext).trim()) {
+    lines.push('', '=== ANALYST BRAIN ===', String(brainContext).trim());
+  }
+  for (const dg of (Array.isArray(matchDigests) ? matchDigests : [])) {
+    if (String(dg ?? '').trim()) lines.push('', '=== MATCH DATA DIGEST ===', String(dg).trim());
+  }
+  if (String(coachNotesBlock).trim()) {
+    lines.push('', 'Coach\'s tagged in-game notes (chess.com-style classifications):', String(coachNotesBlock).trim());
+  }
   if (priorActionItems.length) {
     lines.push('');
     lines.push('Prior action items from earlier scrims — judge each resolved / persisting / unclear from this review and fill "followUps":');
@@ -110,8 +158,38 @@ export function buildReportPrompt({ transcriptBlock, teams = {}, coachedTeam = '
 export function coerceReport(obj) {
   const o = obj && typeof obj === 'object' ? obj : {};
   const arr = (v) => (Array.isArray(v) ? v : []);
+  const str = (v) => String(v ?? '');
   return {
+    // absent (v1 sidecars) → 1; fresh model output says 2. The view branches on this.
+    schemaVersion: Number(o.schemaVersion) > 0 ? Math.floor(Number(o.schemaVersion)) : 1,
     tldr: typeof o.tldr === 'string' ? o.tldr : '',
+    playerCards: arr(o.playerCards).map((c) => ({
+      player: str(c?.player), hero: str(c?.hero), lane: str(c?.lane),
+      laneVerdict: str(c?.laneVerdict), soulsCurveRead: str(c?.soulsCurveRead), itemCritique: str(c?.itemCritique),
+      deathAnalysis: arr(c?.deathAnalysis).map((d) => ({ t: str(d?.t), what: str(d?.what), why: str(d?.why), lesson: str(d?.lesson) })),
+      drills: arr(c?.drills).map(String),
+    })).filter((c) => c.player || c.hero),
+    macro: {
+      tempoRead: str(o.macro?.tempoRead),
+      objectiveWindows: arr(o.macro?.objectiveWindows).map((w) => ({ t: str(w?.t), event: str(w?.event), verdict: str(w?.verdict), why: str(w?.why) })),
+      laneMap: str(o.macro?.laneMap),
+      swings: arr(o.macro?.swings).map((s) => ({ t: str(s?.t), direction: str(s?.direction), cause: str(s?.cause) })),
+    },
+    commsGrade: {
+      overall: str(o.commsGrade?.overall),
+      callouts: arr(o.commsGrade?.callouts).map((c) => ({ t: str(c?.t), who: str(c?.who), call: str(c?.call), verdict: str(c?.verdict), evidence: str(c?.evidence) })),
+      missed: arr(o.commsGrade?.missed).map(String),
+    },
+    meta: {
+      passes: arr(o.meta?.passes).map(String),
+      brainSections: arr(o.meta?.brainSections).map(String),
+      warnings: arr(o.meta?.warnings).map(String),
+      // non-auto-applied Pass-2 findings the view renders as inline flags
+      findings: arr(o.meta?.findings).map((f) => ({
+        ref: str(f?.ref), field: str(f?.field), issue: str(f?.issue), fix: str(f?.fix),
+        confidence: str(f?.confidence), evidence: str(f?.evidence),
+      })),
+    },
     sections: arr(o.sections).map((s) => ({
       id: String(s?.id || slugId(s?.heading)),
       heading: String(s?.heading ?? ''),
@@ -159,10 +237,226 @@ export function reconcileReport(fresh, prior) {
   };
 }
 
+// ── Pass 0: transcript name-normalization (Analyst pipeline, Move 9) ─────────
+// One-shot lexicon-grounded proper-noun correction of the diarized transcript before the report
+// draft reads it. An ENHANCER, never a blocker: any contract slip (parse failure after one
+// reprompt, runaway correction count, mass from-mismatch) discards the pass for this run and the
+// pipeline proceeds un-normalized with a warning for the report meta.
+
+export const NORMALIZE_SYSTEM_PROMPT = [
+  'You correct Deadlock STT transcripts. Given the canonical lexicon (with known mishears) and a',
+  'numbered transcript, output ONLY a JSON array of corrections:',
+  '  [{"i": number, "from": string, "to": string}]',
+  'where "i" is the segment number and "from" is an EXACT substring of that segment.',
+  'Correct ONLY proper nouns — hero, item, and ability names and map terms — to their canonical',
+  'lexicon spelling. Never rewrite meaning, grammar, or anything that is not a proper noun.',
+  'No corrections needed → output [].',
+].join('\n');
+
+// Numbered by ORIGINAL index (blank segments skipped in the listing, never renumbered) so a
+// correction's `i` always addresses the caller's array.
+export function buildNormalizePrompt(segments, lexicon) {
+  const lines = ['Canonical lexicon:', String(lexicon ?? '').trim() || '(empty)', '', 'Transcript segments:'];
+  (Array.isArray(segments) ? segments : []).forEach((s, i) => {
+    const text = String(s?.text ?? '').trim();
+    if (text) lines.push(`${i}\t${text}`);
+  });
+  return lines.join('\n');
+}
+
+// Strict parse: strip a fence, slice the outermost […], keep only well-formed entries.
+export function parseCorrections(text) {
+  let t = String(text ?? '').trim();
+  const fence = t.match(/^```[a-z]*\s*\n([\s\S]*?)\n```$/i);
+  if (fence) t = fence[1].trim();
+  const a = t.indexOf('[');
+  const b = t.lastIndexOf(']');
+  if (a === -1 || b === -1 || b <= a) throw new Error('no JSON array in model output');
+  const arr = JSON.parse(t.slice(a, b + 1));
+  if (!Array.isArray(arr)) throw new Error('corrections not an array');
+  return arr
+    .filter((c) => c && Number.isInteger(c.i) && typeof c.from === 'string' && c.from && typeof c.to === 'string' && c.to && c.from !== c.to)
+    .map((c) => ({ i: c.i, from: c.from, to: c.to }));
+}
+
+// Exact-substring replace within segment i (all occurrences in that segment). A miss — bad index
+// or from-string not present — is skipped and collected, never guessed at.
+export function applyCorrections(segments, corrections) {
+  const out = (Array.isArray(segments) ? segments : []).map((s) => ({ ...s }));
+  const skipped = [];
+  for (const c of (Array.isArray(corrections) ? corrections : [])) {
+    const s = out[c.i];
+    if (!s || typeof s.text !== 'string' || !s.text.includes(c.from)) { skipped.push(c); continue; }
+    s.text = s.text.split(c.from).join(c.to);
+  }
+  return { segments: out, skipped };
+}
+
+// FNV-1a over segment texts — the cache key for the .vodnorm sidecar (regenerates skip the pass
+// when the transcript hasn't changed).
+export function transcriptHash(segments) {
+  let h = 0x811c9dc5;
+  for (const s of (Array.isArray(segments) ? segments : [])) {
+    const t = `${String(s?.text ?? '')}\n`;
+    for (let i = 0; i < t.length; i++) {
+      h ^= t.charCodeAt(i);
+      h = Math.imul(h, 0x01000193);
+    }
+  }
+  return (h >>> 0).toString(16);
+}
+
+// The pass. Returns { segments, corrections, skipped, discarded, warning } — on any discard the
+// input segments come back untouched. `cached` (a prior { corrections } for this hash) short-circuits
+// the model call entirely.
+export async function normalizeTranscript(invoke, segments, lexicon, agents = {}, { cached = null } = {}) {
+  const segs = Array.isArray(segments) ? segments : [];
+  const keep = (warning) => ({ segments: segs, corrections: [], skipped: [], discarded: true, warning });
+  if (!segs.length) return { segments: segs, corrections: [], skipped: [], discarded: false, warning: null };
+
+  let corrections;
+  if (cached && Array.isArray(cached.corrections)) {
+    corrections = cached.corrections;
+  } else {
+    const base = {
+      systemPrompt: NORMALIZE_SYSTEM_PROMPT,
+      backend: agents.authBackend || 'api-key',
+      model: agents.model || 'opus',
+      cliPath: agents.claudeCliPath || '',
+    };
+    const user = buildNormalizePrompt(segs, lexicon);
+    const call = (userPrompt) => invoke('coaching_classify_match', { ...base, userPrompt });
+    try {
+      corrections = parseCorrections(await call(user));
+    } catch (err) {
+      try {
+        corrections = parseCorrections(await call(`${user}\n\nYour previous response failed to parse (${err.message}). Respond with ONLY the JSON array, nothing else.`));
+      } catch (err2) {
+        return keep(`Pass 0 discarded: unparseable corrections (${err2.message})`);
+      }
+    }
+  }
+
+  // contract-drift guards: a rewrite-everything output or mass from-mismatch = discard.
+  // Floor of 10 so a tiny transcript with a handful of legit fixes never self-discards.
+  if (corrections.length > Math.max(10, 0.3 * segs.length)) return keep(`Pass 0 discarded: ${corrections.length} corrections for ${segs.length} segments (rewrite drift)`);
+  const { segments: fixed, skipped } = applyCorrections(segs, corrections);
+  if (corrections.length && skipped.length > 0.2 * corrections.length) return keep(`Pass 0 discarded: ${skipped.length}/${corrections.length} corrections failed exact-substring match (drift)`);
+  return { segments: fixed, corrections, skipped, discarded: false, warning: null };
+}
+
+// ── Pass 2: tool-using fact-check (Analyst pipeline, Move 11) ─────────────────
+// The draft report goes to a read-only, tool-armed CLI run (coaching_agent_run: cwd = the
+// GameWiki Deadlock/ folder, Read/Grep/Glob) that checks proper nouns, stat claims, and
+// timestamps against Fact/ pages, the match digest, and the transcript. Findings with
+// confidence "exact" (spelling-level name fixes) auto-apply; everything else lands in
+// meta.findings + meta.warnings for the view to flag. Degrades like Pass 0: a failed or
+// unparseable verify run warns and ships the draft — it never fakes a verification.
+
+export const VERIFY_SYSTEM_PROMPT = [
+  'You are verifying a Deadlock match report. For every proper noun (hero/item/ability names),',
+  'stat claim, and timestamp in the draft: check it against the Fact/ pages in your working',
+  'directory (use Read/Grep/Glob), the attached match digest, and the transcript excerpts.',
+  'Output ONLY a JSON object:',
+  '  {"findings": [{"ref": string, "field": string, "issue": string, "fix": string,',
+  '                 "confidence": "exact"|"likely"|"unsure", "evidence": string}]}',
+  'where "issue" is the EXACT wrong text as it appears in the draft, "fix" is the correction,',
+  '"ref" locates it (e.g. "playerCards[2].itemCritique"), and "evidence" cites the source that',
+  'proves it (a Fact/ page path, a digest line, or a transcript timestamp).',
+  'Use "exact" ONLY for unambiguous canonical-name spelling fixes. Flag, never rewrite,',
+  'anything judgemental. No problems found → {"findings": []}.',
+].join('\n');
+
+export function buildVerifyPrompt({ report, matchDigests = [], lexicon = '' }) {
+  const lines = ['Draft report JSON:', JSON.stringify(report)];
+  if (String(lexicon).trim()) lines.push('', 'Canonical lexicon:', String(lexicon).trim());
+  for (const dg of (Array.isArray(matchDigests) ? matchDigests : [])) {
+    if (String(dg ?? '').trim()) lines.push('', '=== MATCH DATA DIGEST ===', String(dg).trim());
+  }
+  return lines.join('\n');
+}
+
+// Strict parse mirroring parseCorrections: fence-strip → outermost {} → findings array.
+export function parseFindings(text) {
+  let t = String(text ?? '').trim();
+  const fence = t.match(/^```[a-z]*\s*\n([\s\S]*?)\n```$/i);
+  if (fence) t = fence[1].trim();
+  const a = t.indexOf('{');
+  const b = t.lastIndexOf('}');
+  if (a === -1 || b === -1 || b <= a) throw new Error('no JSON object in verify output');
+  const v = JSON.parse(t.slice(a, b + 1));
+  return (Array.isArray(v?.findings) ? v.findings : [])
+    .filter((f) => f && typeof f.issue === 'string' && f.issue)
+    .map((f) => ({
+      ref: String(f.ref ?? ''), field: String(f.field ?? ''), issue: String(f.issue),
+      fix: String(f.fix ?? ''), confidence: String(f.confidence ?? 'unsure'), evidence: String(f.evidence ?? ''),
+    }));
+}
+
+// Recursive string replace across the report, skipping `id` fields (stable ids feed
+// reconcileReport — a name fix must never re-key an action item).
+function mapStrings(v, f, key = '') {
+  if (typeof v === 'string') return key === 'id' ? v : f(v);
+  if (Array.isArray(v)) return v.map((x) => mapStrings(x, f, key));
+  if (v && typeof v === 'object') {
+    const out = {};
+    for (const [k, x] of Object.entries(v)) out[k] = mapStrings(x, f, k);
+    return out;
+  }
+  return v;
+}
+
+// Auto-apply "exact" name fixes (global substring replace); everything else → meta.findings
+// + a meta.warnings line. Returns a new report; the input is untouched.
+export function applyFindings(report, findings) {
+  let out = mapStrings(report, (s) => s);
+  const flagged = [];
+  for (const f of (Array.isArray(findings) ? findings : [])) {
+    if (f.confidence === 'exact' && f.fix && f.issue !== f.fix) {
+      out = mapStrings(out, (s) => s.split(f.issue).join(f.fix));
+    } else {
+      flagged.push(f);
+    }
+  }
+  out.meta = out.meta || { passes: [], brainSections: [], warnings: [], findings: [] };
+  out.meta.findings = [...(out.meta.findings || []), ...flagged];
+  out.meta.warnings = [
+    ...(out.meta.warnings || []),
+    ...flagged.map((f) => `verify: ${f.field || f.ref || 'claim'} — ${f.issue}${f.fix ? ` → ${f.fix}` : ''}`),
+  ];
+  return out;
+}
+
+// The pass: coaching_agent_run (tool-armed CLI) → parse → apply. Reprompt-once, then degrade
+// with a warning — the draft ships un-verified rather than not at all.
+export async function verifyReport(invoke, { report, matchDigests = [], lexicon = '' }, agents = {}) {
+  const user = buildVerifyPrompt({ report, matchDigests, lexicon });
+  const call = (userPrompt) => invoke('coaching_agent_run', {
+    systemPrompt: VERIFY_SYSTEM_PROMPT,
+    userPrompt,
+    model: agents.model || 'opus',
+    cliPath: agents.claudeCliPath || '',
+  });
+  let findings;
+  try {
+    try {
+      findings = parseFindings(await call(user));
+    } catch (err) {
+      findings = parseFindings(await call(`${user}\n\nYour previous response failed to parse (${err.message}). Respond with ONLY the JSON object, nothing else.`));
+    }
+  } catch (err2) {
+    const out = mapStrings(report, (s) => s);
+    out.meta = out.meta || { passes: [], brainSections: [], warnings: [], findings: [] };
+    out.meta.warnings = [...(out.meta.warnings || []), `Pass 2 skipped: ${err2.message}`];
+    return { report: out, findings: [], ran: false };
+  }
+  return { report: applyFindings(report, findings), findings, ran: true };
+}
+
 // DI'd invoke (like autoClassify.classifyMoments) → generate + parse + reconcile. Reprompt-once on a
 // parse failure, then let a second failure throw. Opus via the alias the Rust side maps to claude-opus-4-8.
-export async function generateReport(invoke, { transcriptBlock, teams, coachedTeam, priorActionItems = [], notesBlock = '', prior = null }, agents = {}) {
-  const user = buildReportPrompt({ transcriptBlock, teams, coachedTeam, priorActionItems, notesBlock });
+export async function generateReport(invoke, { transcriptBlock, teams, coachedTeam, priorActionItems = [], notesBlock = '', brainContext = '', matchDigests = [], coachNotesBlock = '', prior = null }, agents = {}) {
+  const user = buildReportPrompt({ transcriptBlock, teams, coachedTeam, priorActionItems, notesBlock, brainContext, matchDigests, coachNotesBlock });
   const base = {
     systemPrompt: VOD_REPORT_SYSTEM_PROMPT,
     backend: agents.authBackend || 'api-key',
@@ -177,5 +471,6 @@ export async function generateReport(invoke, { transcriptBlock, teams, coachedTe
     const retry = `${user}\n\nYour previous response failed to parse (${err.message}). Respond with ONLY the JSON object, nothing else.`;
     report = parseReport(await call(retry));
   }
+  report.schemaVersion = REPORT_SCHEMA_VERSION; // stamp regardless of what the model echoed
   return prior ? reconcileReport(report, prior) : report;
 }

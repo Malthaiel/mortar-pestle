@@ -96,6 +96,13 @@ export function renderLexicon(sections, mishears = [], stamp = '') {
   return L.join('\n');
 }
 
+// `Updated:` stamp missing or older than `days` = stale → report-time auto-refresh (Move 4).
+export function lexiconStale(md, now = new Date(), days = 7) {
+  const m = String(md || '').match(/^Updated:\s*(\d{4}-\d{2}-\d{2})\s*$/m);
+  if (!m) return true;
+  return now - new Date(m[1]) > days * 86400e3;
+}
+
 export const ANALYST_PAGE_PATH = `${ANALYST_DIR}/Analyst.md`;
 export const CONCEPTS_PATH = `${ANALYST_DIR}/Concepts.md`;
 export const CORRECTIONS_PATH = `${ANALYST_DIR}/Corrections.md`;
