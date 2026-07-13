@@ -39,6 +39,21 @@ function shadowDown(cs) {
   return m ? Math.max(0, parseFloat(m[2])) : 0;
 }
 
+// Upward box-shadow offset (px) — the symmetric counterpart to shadowDown. A
+// negative offset-y first layer paints ABOVE the box; clamped to >=0 (only an
+// upward lip raises the painted top). Same inset guard + comma split. Used by
+// visualTop so the row-gap measures to the next row's first painted pixel, not
+// its border-box top (the transparent-wrapper false positive: a grid/contents
+// box whose first child sits on a marginTop reserve).
+function shadowUp(cs) {
+  const sh = cs.boxShadow;
+  if (!sh || sh === 'none') return 0;
+  const first = sh.split(/,(?![^(]*\))/)[0];
+  if (/\binset\b/.test(first)) return 0;
+  const m = first.match(/(-?[\d.]+)px\s+(-?[\d.]+)px/); // offset-x offset-y
+  return m ? Math.max(0, -parseFloat(m[2])) : 0;
+}
+
 // The Y coordinate of `el`'s OWN lowest painted pixel (excluding descendants),
 // or -Infinity if its own box paints nothing there. Sources, max wins:
 //   downward shadow → r.bottom + ownShadow
@@ -130,6 +145,67 @@ function visualBottom(el) {
   return Math.max(own, kidsLow);
 }
 
+// The Y coordinate of `el`'s OWN highest painted pixel (excluding descendants),
+// or +Infinity if its own box paints nothing there. Mirror of ownPaintedBottom,
+// min-wins. Sources:
+//   upward shadow → r.top - ownShadowUp
+//   visible top border → r.top
+//   visible background → r.top pulled DOWN by the clipped-away top band:
+//     background-clip:content-box → +paddingTop + borderTopWidth
+//     background-clip:padding-box → +borderTopWidth
+//     border-box (default) → r.top
+//     background-clip:text → contributes nothing
+// A transparent container returns +Infinity, so visualTop falls through to its
+// descendants — the marginTop:GAP first-child case resolves to the child's top.
+function ownPaintedTop(cs, r, ownShadowUp) {
+  let y = Infinity;
+  if (ownShadowUp > 0) y = Math.min(y, r.top - ownShadowUp);
+  const bw = parseFloat(cs.borderTopWidth) || 0;
+  if (bw > 0 && cs.borderTopStyle !== 'none' &&
+      cs.borderTopColor !== 'rgba(0, 0, 0, 0)' && cs.borderTopColor !== 'transparent') {
+    y = Math.min(y, r.top);
+  }
+  const bg = cs.backgroundColor;
+  const hasBg = (bg && bg !== 'transparent' && bg !== 'rgba(0, 0, 0, 0)') ||
+    (cs.backgroundImage && cs.backgroundImage !== 'none');
+  if (hasBg) {
+    for (const clip of cs.backgroundClip.split(',').map((s) => s.trim())) {
+      if (clip === 'text') continue;
+      if (clip === 'content-box') y = Math.min(y, r.top + (parseFloat(cs.paddingTop) || 0) + bw);
+      else if (clip === 'padding-box') y = Math.min(y, r.top + bw);
+      else y = Math.min(y, r.top); // border-box / initial
+    }
+  }
+  return y;
+}
+
+// Highest painted pixel of `el` (smallest Y) — recursive, the mirror of
+// visualBottom. A leaf paints its own box (ownPaintedTop), falling back to r.top
+// for a transparent text/content leaf. A container takes the min of its own
+// painted top (+Infinity when transparent) and every in-flow descendant's
+// visualTop. overflow-y non-visible clamps the descendant contribution to >=
+// r.top (a clipping box hides paint above its top; own box-shadow paints outside
+// the box and stays unclamped). This is what the row-gap measures against: a
+// transparent wrapper (display:grid/contents, no painted box) whose first child
+// is pushed down by marginTop reports the child's top, so a candy row's depth
+// lip landing in that reserved margin is NOT a bleed (the VaultTree path rows —
+// CandyHeader over a Collapsible grid wrapping TreeChildren marginTop:GAP).
+function visualTop(el) {
+  const cs = getComputedStyle(el);
+  const r = el.getBoundingClientRect();
+  const ownShadowUp = shadowUp(cs);
+  const own = ownPaintedTop(cs, r, ownShadowUp);
+  const inFlowKids = flowChildren(el);
+  if (inFlowKids.length === 0) return own < Infinity ? own : r.top - ownShadowUp;
+  let kidsHigh = Infinity;
+  for (const child of inFlowKids) {
+    const t = visualTop(child);
+    if (t < kidsHigh) kidsHigh = t;
+  }
+  if (cs.overflowY !== 'visible') kidsHigh = Math.max(kidsHigh, r.top);
+  return Math.min(own, kidsHigh);
+}
+
 const isVStack = (cs) =>
   (cs.display.includes('flex') && cs.flexDirection.startsWith('column')) ||
   (cs.display.includes('grid') && cs.gridTemplateColumns === 'none');
@@ -177,7 +253,12 @@ export function spacingAudit(root = document.body, { quiet = false, bridge = tru
       const r = k.getBoundingClientRect();
       const band = +(visualBottom(k) - r.bottom).toFixed(1);
       const next = kids[i + 1];
-      const gap = next ? +(next.getBoundingClientRect().top - r.bottom).toFixed(1) : null;       // border-box gap
+      // gap to the next row's first PAINTED pixel (visualTop), not its border-box
+      // top. A transparent wrapper (VaultTree Collapsible grid) whose first child
+      // sits on a marginTop reserve reports the child's top, so the candy depth
+      // lip landing in that margin isn't credited as an overrun. For a painted
+      // sibling (bg/border at its top) visualTop == box.top → unchanged.
+      const gap = next ? +(visualTop(next) - r.bottom).toFixed(1) : null;                       // painted-gap
       const gapAfterBand = next ? +(gap - band).toFixed(1) : null;                                // whitespace past the band
       if (gapAfterBand != null && gapAfterBand < -TOL) {
         flags.push({ el: k, cls: k.className || k.tagName.toLowerCase(), band, gap, overlap: +(-gapAfterBand).toFixed(1),
@@ -411,6 +492,26 @@ export function spacingAuditSelfTest() {
     fixtures.push({ n: 9, name: 'overflow-hidden-clip', blindSpot: true, stack, verify: (r) => {
       const row = findRow(r, 'fx9-row');
       return { pass: near(row?.band, 0), detail: `band=${row?.band} exp≈0` };
+    } });
+  }
+
+  // FX10 — transparent-wrapper gap (BLIND SPOT until Move 11): a candy row above
+  // a display:grid wrapper with no painted box, whose first child is pushed down
+  // by a marginTop that clears the candy depth. The candy lip overhangs into the
+  // reserved margin, not onto the child → visualTop(wrapper) = child.top, so
+  // gapAfterBand = marginTop - depth >= 0 → NO flag. v1 measured gap to the
+  // wrapper's border-box top (0) → false overrun (the VaultTree path rows:
+  // CandyHeader over a Collapsible grid wrapping TreeChildren marginTop:GAP).
+  {
+    const stack = mk('div', 'sst-fx10', { display: 'flex', flexDirection: 'column', gap: '0px' });
+    const btn = mk('button', 'candy-btn fx10-btn', { height: '20px' }, 'A');
+    const wrap = mk('div', 'fx10-wrap', { display: 'grid' });
+    const child = mk('div', 'fx10-child', { marginTop: '20px', height: '20px', background: '#3c9' });
+    wrap.appendChild(child); stack.append(btn, wrap); host.appendChild(stack);
+    fixtures.push({ n: 10, name: 'transparent-wrapper-gap', blindSpot: true, stack, verify: (r) => {
+      const row = findRow(r, 'fx10-btn');
+      const ok = row && row.gapAfterBand != null && row.gapAfterBand >= -TOL;
+      return { pass: !!ok, detail: `gapAfterBand=${row?.gapAfterBand} (band ${row?.band}, expect >= -${TOL})` };
     } });
   }
 
