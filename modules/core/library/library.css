@@ -1,0 +1,403 @@
+/* library.css — Library module styles. Moved out of web/src/styles.css by plan 027
+ * (CSS-ownership convention: each module owns its own <module>.css; imported
+ *  from modules/core/library/index.jsx). */
+
+/* Anime detail INFO RAIL controls — the left rail on the anime detail pages
+   stacks its controls (Personal Rating / Status / Play / Download / Add) full
+   width and normalizes the three differently-shaped widgets to ONE height
+   (33px) so they line up. Selectors out-specify the per-shape heights
+   (.status-candy 36px, select 27px, AddToLibrary 33px inline). */
+/* Controls live in a rectangle (.anime-controls-box) at the foot of the head
+ * card, laid out as a horizontal wrapping row: [Rating] [Status] [Play/D-L]. */
+.anime-rail-controls { display: flex; flex-flow: row wrap; gap: 12px; align-items: center; }
+.anime-rail-controls .candy-btn,
+.anime-rail-controls button.status-candy { height: 33px; }
+.anime-rail-controls .candy-btn[data-shape="select"] { height: 33px; }
+.anime-rail-controls .candy-btn[data-shape="icon"] { width: 33px; height: 33px; }
+.anime-rail-controls .candy-btn > .candy-face { height: 100%; }
+/* Add-to-Library split candy button sizes to content in the horizontal row. */
+.anime-rail-add > div { display: flex !important; }
+.anime-rail-add > div > button.candy-btn:first-child { flex: 0 1 auto; width: auto; }
+.anime-rail-add > div > button.candy-btn:last-child { flex: 0 0 auto; width: auto; }
+
+/* === MAL anime page clone ================================================= *
+ * Candy-aesthetic surfaces for the MyAnimeList-style detail page (owned
+ * SeriesDetail + discovery DiscoveryDetail). Authored to match the rest of the
+ * candy family: framed cards reuse the .candy-panel grammar (2px --border-2
+ * frame + the static --candy-surface-depth offset band), histogram + status
+ * bars reuse .candy-groove / .candy-groove__fill (the consumer sets fill width
+ * inline), and all colour / type come from the design tokens. Mono numerics
+ * throughout; small uppercase mono labels mirror the AnimeCredits SectionHeader
+ * (11px) and the Stat.jsx caption (9px). The histogram + Information lists are
+ * sized for the 260px rail; the trailer / characters / themes / recommendations
+ * live in the wider main column. .candy-face is pointer-events:none, so any
+ * framed card that must be clickable wraps a real candy-btn in the component —
+ * these rules only paint static surfaces. */
+
+/* Alt-titles block — synonyms / Japanese / English under the score. Each row is
+ * a small uppercase mono label + the title value, comfortably stacked. */
+.anime-alt-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.anime-alt-titles > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.anime-alt-titles > div > span:first-child {
+  font-size: 9px;
+  font-family: var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  font-weight: 600;
+}
+.anime-alt-titles > div > span:last-child {
+  font-size: 12px;
+  font-family: var(--font-body);
+  color: var(--text-2);
+  line-height: 1.3;
+}
+
+/* Clickable taxa (Genres / Themes / Demographic / Producers) render as plain value
+ * text matching the alt-titles content; the inline links reveal the accent +
+ * underline on hover so taxon discovery navigation stays available. */
+.anime-alt-titles .taxon-link { cursor: pointer; }
+.anime-alt-titles .taxon-link:hover { color: var(--accent); text-decoration: underline; }
+
+/* Header zone — unified stats panel + trailer (equal-height top row) + controls
+ * panel, all in the right column OVER the synopsis. The unified panel folds the
+ * old score square into a hero-number row; panel + trailer share --panel-h and
+ * shrink together; the controls panel spans the right column. */
+/* Unified stats panel — hero numbers (hairline-divided) over a meta rail. Replaces
+ * the old score square + two-line stat panel; content vertically centered when it's
+ * shorter than the trailer. */
+.anime-unified-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 12px;
+  padding: 14px 16px;
+  min-height: var(--panel-h);
+}
+/* HERO ROW — Score · Ranked · Popularity · Members, equal columns with hairline
+ * dividers. Null cells aren't rendered, so the adjacent-sibling border never
+ * dangles and the surviving columns redistribute evenly. */
+.anime-hero-row {
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+}
+/* No min-width:0 — cells floor at their own content (the widest of value/label),
+ * so a wide cell can never shrink below its text and overflow + un-center; the row
+ * wraps instead at very narrow widths. */
+.anime-hero-stat {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 2px;
+  padding: 0 14px;
+}
+.anime-hero-stat + .anime-hero-stat { border-left: 1px solid var(--border); }
+/* Label is the prominent line; the value reads as a smaller secondary figure
+ * beneath it (hierarchy intentionally inverted from the usual big-number layout). */
+.anime-hero-stat .hv {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.anime-hero-stat .hk {
+  font-size: 16px;
+  font-family: var(--font-mono);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.anime-hero-stat .hsub {
+  font-size: 8.5px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.anime-hero-star { color: var(--accent); font-weight: 700; }
+/* META RAIL — taxon chips then plain-text facts, split from the hero row by a top
+ * rule. row-gap carries the candy depth so wrapped chip rows clear their downward
+ * shadow; column-gap stays plain (sideways needs no clearance). Each chip is lifted
+ * half the depth inline (candyCenterOffset) so it centers against the facts. */
+.anime-meta-rail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 8px;
+  row-gap: calc(8px + var(--candy-depth));
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.anime-meta-rail .candy-btn[data-shape="chip"] > .candy-face {
+  padding: 3.5px 7.5px;
+  font-size: 8px;
+}
+.anime-meta-fact {
+  font-size: 12.5px;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.anime-controls-box {
+  padding: 11px 12px;
+}
+
+/* Score histogram — ten rows, score 1..10. Each row: [score] [groove bar]
+ * [count|pct]. The bar track is a .candy-groove; the component sets the
+ * .candy-groove__fill width inline from the per-score percentage. */
+.anime-stat-hist {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.anime-stat-hist__row {
+  display: grid;
+  grid-template-columns: 18px 1fr minmax(0, auto);
+  gap: 8px;
+  align-items: center;
+}
+.anime-stat-hist__row > span:first-child {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  text-align: right;
+  font-weight: 600;
+}
+.anime-stat-hist__row .candy-groove {
+  height: 9px;
+}
+.anime-stat-hist__row > span:last-child {
+  font-size: 9.5px;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Status breakdown — watching / completed / on-hold / dropped / plan-to-watch.
+ * Same groove pattern as the histogram with an optional leading colour Dot. */
+.anime-stat-status {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.anime-stat-status__row {
+  display: grid;
+  grid-template-columns: minmax(0, auto) 1fr minmax(0, auto);
+  gap: 8px;
+  align-items: center;
+}
+.anime-stat-status__row > span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9.5px;
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.anime-stat-status__row .candy-groove {
+  height: 8px;
+}
+.anime-stat-status__row > span:last-child {
+  font-size: 9.5px;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Characters two-up — character (img + name + role) on the left, primary voice
+ * actor (name + language + img) mirrored on the right, each a framed candy
+ * surface. The interactive halves are candy-btn in the component; these rules
+ * paint the row container + the two inner cells. */
+.anime-cv-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  align-items: stretch;
+  padding: 8px;
+  background: var(--surface-2);
+  border: 2px solid var(--border-2);
+  border-radius: var(--radius-md);
+  box-shadow:
+    0 var(--candy-surface-depth) 0 -2px var(--surface-3),
+    0 var(--candy-surface-depth) 0 0 var(--border-2);
+}
+/* Each half is a real candy button (candy press + depth) inside the row frame —
+ * its layout/typography is set on the face since there's no data-shape. */
+.anime-cv-row__char,
+.anime-cv-row__va { width: 100%; }
+.anime-cv-row__char > .candy-face,
+.anime-cv-row__va > .candy-face {
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 8px;
+  font-family: var(--font-body);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  text-align: left;
+  color: var(--text);
+}
+/* VA half mirrors the character half — portrait sits on the trailing edge. */
+.anime-cv-row__va > .candy-face {
+  flex-direction: row-reverse;
+  text-align: right;
+}
+.anime-cv-row .cv-portrait {
+  width: 52px;
+  height: 74px;
+  flex-shrink: 0;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+}
+.anime-cv-row .cv-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.anime-cv-row .cv-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.anime-cv-row .cv-sub {
+  font-size: 9px;
+  font-family: var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* OP / ED theme rows — framed surface lines, one per theme string. */
+.anime-themes {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.anime-themes__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  font-size: 12px;
+  font-family: var(--font-body);
+  color: var(--text-2);
+  line-height: 1.35;
+  background: var(--surface);
+  border: 2px solid var(--border-2);
+  border-radius: var(--radius-md);
+  box-shadow:
+    0 var(--candy-surface-depth) 0 -2px var(--surface-3),
+    0 var(--candy-surface-depth) 0 0 var(--border-2);
+}
+.anime-themes__item::before {
+  content: '';
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* Trailer card — 16:9 thumbnail with a centered play badge, candy frame. The
+ * component wraps this in a real candy-btn (the whole card opens the PV in the
+ * in-app browser), so these rules paint the static aspect box + badge only. */
+.anime-trailer-card {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: var(--surface-3);
+  border: 2px solid var(--border-2);
+  border-radius: var(--radius-md);
+  box-shadow:
+    0 var(--candy-surface-depth) 0 -2px var(--surface-3),
+    0 var(--candy-surface-depth) 0 0 var(--border-2);
+}
+/* Fill mode — match the header top-row height while keeping 16:9: height fills the
+ * stretched slot, width derives from it via the inherited aspect-ratio. */
+.anime-trailer-card.is-fill { width: calc(var(--panel-h) * 16 / 9); height: var(--panel-h); }
+/* Flat clickable wrapper for the trailer card — a plain reset button (NOT a candy
+ * button), so the card's own border + surface-depth shadow line up with the stats
+ * panel exactly. The ▶ overlay marks it playable; hover tints the border to accent. */
+.anime-trailer-btn {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.anime-trailer-btn:hover .anime-trailer-card { border-color: color-mix(in oklch, var(--accent) 55%, var(--border-2)); }
+/* Fixed reading-width wrapper for the whole anime detail page — mirrors the vault
+ * .md viewer's centered column (PageView.jsx: max-width 920 / width 100% / margin
+ * auto) so the header + episode list stay contained instead of stretching full-bleed
+ * on wide windows. Children keep their own horizontal padding for the gutters. */
+.detail-column { max-width: 1080px; width: 100%; margin: 0 auto; }
+.anime-trailer-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.anime-trailer-card::after {
+  content: '▶';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-40%, -50%);
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  font-size: 18px;
+  color: #fff;
+  background: color-mix(in oklch, var(--accent) 88%, transparent);
+  box-shadow: 0 0 0 6px color-mix(in oklch, var(--accent) 22%, transparent);
+  pointer-events: none;
+}
+
+/* Recommendations — horizontal tile row; each tile is a candy-btn in the
+ * component (mirrors RelatedCard). This rule lays out the scroll track. */
+.anime-recs-row {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  scrollbar-width: thin;
+}

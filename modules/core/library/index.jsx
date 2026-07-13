@@ -4,6 +4,7 @@
 // host are registered from here. IPC command prefixes (anime_*/music_*/video_*)
 // are unchanged — they name the domain, not the module.
 
+import './library.css';
 import { VideoPlayerProvider } from './VideoPlayerProvider.jsx';
 import { AnimeDownloadProvider } from './AnimeDownloadProvider.jsx';
 import { ImportProvider } from './ImportProvider.jsx';
