@@ -26,7 +26,7 @@
 
 use std::sync::{Mutex, OnceLock};
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::Value;
 use tauri::{AppHandle, Emitter};
 

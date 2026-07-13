@@ -2,7 +2,7 @@
 // Covers the parts that break silently — transcript formatting, tolerant parse (fenced + noisy),
 // coercion of a missing id, and checkbox reconcile across a regenerate.
 import assert from 'node:assert/strict';
-import { mmss, slugId, buildTranscriptBlock, parseReport, reconcileReport } from './vodReport.js';
+import { mmss, slugId, buildTranscriptBlock, buildReportPrompt, parseReport, reconcileReport } from './vodReport.js';
 
 // mmss
 assert.equal(mmss(0), '0:00');
@@ -30,6 +30,31 @@ assert.equal(rep.actionItems.length, 1);
 assert.equal(rep.actionItems[0].id, 'ward-river'); // id derived from text
 assert.equal(rep.actionItems[0].status, 'pending');
 assert.deepEqual(rep.keepDoing, ['early game']);
+
+// missing sections key coerces to [] (old sidecars / forgetful model)
+assert.deepEqual(rep.sections, []);
+
+// sections: id derived from heading, empty entries dropped, md + [m:ss] tokens pass through verbatim
+const secRaw = JSON.stringify({
+  tldr: 't',
+  sections: [
+    { heading: 'Gaining a Lead', md: '1. Win lane [2:05]\n2. Gank\n\n| Down | Up |\n|---|---|\n| Group | Split |' },
+    { heading: '', md: '' },
+  ],
+  actionItems: [], qa: [], keepDoing: [], debates: [], followUps: [],
+});
+const secRep = parseReport(secRaw);
+assert.equal(secRep.sections.length, 1);
+assert.equal(secRep.sections[0].id, 'gaining-a-lead');
+assert.ok(secRep.sections[0].md.includes('[2:05]'));
+assert.ok(secRep.sections[0].md.includes('| Down | Up |'));
+
+// notesBlock: included when non-empty, omitted when blank
+const withNotes = buildReportPrompt({ transcriptBlock: 'T', notesBlock: '### Convert\n- take midboss' });
+assert.ok(withNotes.includes('Player-written notes'));
+assert.ok(withNotes.includes('take midboss'));
+assert.ok(!buildReportPrompt({ transcriptBlock: 'T' }).includes('Player-written notes'));
+assert.ok(!buildReportPrompt({ transcriptBlock: 'T', notesBlock: '  ' }).includes('Player-written notes'));
 
 // parse throws on no object
 assert.throws(() => parseReport('no json here'), /no JSON object/);

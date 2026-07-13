@@ -59,6 +59,7 @@
     "allow-vault-read-file",
     "allow-vault-write-file",
     "allow-coaching-read-image",
+    "allow-coaching-read-text",
     "allow-coaching-open-path",
     "allow-coaching-reveal-path",
     "allow-coaching-extract-audio",

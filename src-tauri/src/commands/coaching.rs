@@ -70,6 +70,34 @@ pub fn coaching_read_image(path: String) -> Result<String, VaultError> {
     Ok(format!("data:{};base64,{}", mime_for(&canonical), base64_encode(&bytes)))
 }
 
+const MAX_TEXT_BYTES: u64 = 1024 * 1024; // 1 MB
+
+/// Read a user-picked text file (player-written VOD-review notes, chosen via the
+/// file dialog) and return its contents. Same trust model as `coaching_read_image`:
+/// the explicit file-pick is the grant, no allowlist widened. Extension-whitelisted
+/// to plain text so the picker grant can't be repurposed as an arbitrary-file reader.
+#[tauri::command]
+pub fn coaching_read_text(path: String) -> Result<String, VaultError> {
+    if path.is_empty() {
+        return Err(VaultError::Invalid("path required".into()));
+    }
+    let canonical = std::fs::canonicalize(PathBuf::from(&path))
+        .map_err(|_| VaultError::NotFound(format!("File not found: {path}")))?;
+    let ext = canonical.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase());
+    if !matches!(ext.as_deref(), Some("md") | Some("txt")) {
+        return Err(VaultError::Invalid("only .md / .txt notes are supported".into()));
+    }
+    let meta = std::fs::metadata(&canonical).map_err(|e| VaultError::Io(e.to_string()))?;
+    if !meta.is_file() {
+        return Err(VaultError::NotFile);
+    }
+    if meta.len() > MAX_TEXT_BYTES {
+        return Err(VaultError::Invalid("notes file too large (max 1 MB)".into()));
+    }
+    String::from_utf8(std::fs::read(&canonical).map_err(|e| VaultError::Io(e.to_string()))?)
+        .map_err(|_| VaultError::Invalid("notes file is not UTF-8 text".into()))
+}
+
 /// Open a user-picked recording (`.mp4`) in the OS default application. No allowlist
 /// gate — the path came from an explicit file-pick and a scrim recording legitimately
 /// lives outside the vault. Launches the external app only; serves nothing to the webview.

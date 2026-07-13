@@ -44,6 +44,7 @@ const SAVE_DEBOUNCE_MS = 700;
 const STT_MODEL = 'large-v3-turbo-q5_0';
 const MP4_FILTERS = [{ name: 'Video', extensions: ['mp4', 'mkv', 'mov', 'webm'] }];
 const IMG_FILTERS = [{ name: 'Image', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }];
+const NOTES_FILTERS = [{ name: 'Notes', extensions: ['md', 'txt'] }];
 
 // Per-team voiceprint store (SF6, Comms Diarization): Deadlock/Coaching/Teams/<Team>/.voiceprints.json
 // — the coached team's roster + saved voiceprints, reused across that team's scrims. The
@@ -1026,7 +1027,12 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
       let priorActionItems = [];
       try { priorActionItems = openHomework(JSON.parse((await api.getRawFileMeta(teamSidecarPath(coachedTeam), 'gamewiki')).content)); } catch { /* no team memory yet */ }
 
-      const report = await generateReport(invoke, { transcriptBlock, teams: { opponent }, coachedTeam, priorActionItems, prior }, agents);
+      // player-written notes (.vodnotes sidecar, filled by the popup's Add Notes button) —
+      // supplementary source material for the report's topic sections; missing-tolerant.
+      let notesBlock = '';
+      try { notesBlock = (await api.getRawFileMeta(scrimSidecarPath(path, 'vodnotes'), 'gamewiki')).content; } catch { /* no notes */ }
+
+      const report = await generateReport(invoke, { transcriptBlock, teams: { opponent }, coachedTeam, priorActionItems, notesBlock, prior }, agents);
       await api.savePage(scPath, JSON.stringify(report), null, 'gamewiki');
 
       const stamp = new Date().toISOString().slice(0, 10);
@@ -1048,6 +1054,26 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
       reportRef.current = false; setReporting(false);
     }
   }, [path, settings, applyEdit, flushSave, updateTeamProgress]);
+
+  // Add Notes (VOD Report Sections) — pick a player-written .md/.txt notes file, read it via
+  // coaching_read_text (the explicit file-pick is the grant), and append it under a `## <basename>`
+  // header to the .vodnotes sidecar. The next Generate/Regenerate feeds it to the report prompt.
+  const addVodNotes = useCallback(async () => {
+    const p = await pickFile(NOTES_FILTERS);
+    if (!p) return;
+    try {
+      const text = await invoke('coaching_read_text', { path: p });
+      const notesPath = scrimSidecarPath(path, 'vodnotes');
+      let existing = '';
+      try { existing = (await api.getRawFileMeta(notesPath, 'gamewiki')).content; } catch { /* first notes file */ }
+      const base = p.split(/[\\/]/).pop().replace(/\.(md|txt)$/i, '');
+      const next = `${existing.trim() ? `${existing.trimEnd()}\n\n` : ''}## ${base}\n\n${String(text).trim()}\n`;
+      await api.savePage(notesPath, next, null, 'gamewiki');
+      notify('success', 'Notes added', `${base} will feed the next report generation.`);
+    } catch (e) {
+      notify('error', 'Notes failed', e?.message || String(e));
+    }
+  }, [path]);
 
   // Review Comms (sub-plan 13) — cluster the coached team's in-game comms around each teamfight
   // (a death cluster), score jumble, have Claude judge each callout good/wrong/late + flag the calls
@@ -1712,6 +1738,8 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
             mdPath={path}
             accent={accent}
             onClose={() => setVodReportOpen(false)}
+            onRegenerate={generateVodReport}
+            onAddNotes={addVodNotes}
           />
         )}
 

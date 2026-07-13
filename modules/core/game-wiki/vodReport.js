@@ -7,9 +7,12 @@
 //
 // Report JSON shape (what Claude returns, what VodReportView renders, what the .vodreport sidecar
 // stores):
-//   { tldr, actionItems:[{id, text, count, timestamps[], player?, metric?, status}],
+//   { tldr, sections:[{id, heading, md}],
+//     actionItems:[{id, text, count, timestamps[], player?, metric?, status}],
 //     qa:[{q, a, askedBy, t}], keepDoing[], debates[], followUps:[{priorItem, verdict, evidence}] }
 //   status ∈ 'pending' | 'done' — the checkbox state, reconciled across regenerates by stable id.
+//   sections = dynamic per-scrim topic pages (taught lessons/frameworks) in GFM markdown; time
+//   references inside md are literal [m:ss] tokens the view swaps for jump chips.
 
 // Whole-second time → m:ss (standalone so the Node harness needs no matchData import).
 export function mmss(s) {
@@ -43,6 +46,12 @@ export const VOD_REPORT_SYSTEM_PROMPT = [
   'Return ONLY a single JSON object (no markdown, no code fences, no commentary) with EXACTLY these keys:',
   '{',
   '  "tldr": string,                    // 1-3 sentence digest of the whole review',
+  '  "sections": [                      // one entry per substantial topic taught or discussed at length',
+  '    { "id": string,                  // short stable kebab-case slug of the heading',
+  '      "heading": string,             // name the section after the topic itself ("Tempo", "Gaining a Lead", ...)',
+  '      "md": string }                 // full GFM markdown body: bullets, numbered steps, tables all allowed;',
+  '                                     // cite moments as literal [m:ss] tokens copied from the transcript',
+  '  ],',
   '  "actionItems": [                   // concrete things to change; DEDUPE near-identical asks',
   '    { "id": string,                  // short stable kebab-case slug of the item; REUSE a prior id if given one',
   '      "text": string,                // the action, imperative ("rotate mid after first tower")',
@@ -59,20 +68,36 @@ export const VOD_REPORT_SYSTEM_PROMPT = [
   '}',
   '',
   'Rules: every timestamp is an m:ss string copied from the transcript. Never invent content not in the',
-  'transcript. Merge duplicate action items and bump their count instead of repeating. If a section has',
+  'transcript or notes. Merge duplicate action items and bump their count instead of repeating. If a section has',
   'nothing, use an empty array (or "" for tldr). Keep it tight — this is a coach\'s cheat sheet, not a summary essay.',
+  '',
+  'Section rules:',
+  '- NEVER compress a taught framework. When the coach lays out steps, a sequence, or a plan, reproduce',
+  '  EVERY step, in order, faithful to the coach\'s wording, inside that topic\'s section. Summarizing a',
+  '  taught sequence is a failure.',
+  '- Steps live in their section only. If the coach also assigned it as homework, emit exactly ONE action',
+  '  item that references the section ("apply the <heading> plan — see the <heading> section"), never the',
+  '  steps themselves.',
+  '- Use markdown tables where the discussion is tabular (e.g. behind-in-souls vs ahead-in-souls behaviors).',
+  '- Player-written notes (when provided) are supplementary source material for sections; on any conflict',
+  '  the transcript wins.',
 ].join('\n');
 
 // Build the user prompt: transcript + team context + any prior action items to follow up on.
 // priorActionItems is [] until sub-plan 12 (Team Progress) feeds it — the follow-up block is
 // simply omitted when empty (empty-tolerant), so nothing to rework when D lands.
-export function buildReportPrompt({ transcriptBlock, teams = {}, coachedTeam = '', priorActionItems = [] }) {
+export function buildReportPrompt({ transcriptBlock, teams = {}, coachedTeam = '', priorActionItems = [], notesBlock = '' }) {
   const lines = [];
   lines.push(`Coached team: ${coachedTeam || '(unnamed)'}${teams.opponent ? ` vs ${teams.opponent}` : ''}.`);
   if (priorActionItems.length) {
     lines.push('');
     lines.push('Prior action items from earlier scrims — judge each resolved / persisting / unclear from this review and fill "followUps":');
     lines.push(JSON.stringify(priorActionItems.map((p) => ({ id: p.id, text: p.text })), null, 0));
+  }
+  if (String(notesBlock).trim()) {
+    lines.push('');
+    lines.push('Player-written notes (supplementary source for sections; the transcript wins on conflict):');
+    lines.push(String(notesBlock).trim());
   }
   lines.push('');
   lines.push('VOD Review transcript:');
@@ -87,6 +112,11 @@ export function coerceReport(obj) {
   const arr = (v) => (Array.isArray(v) ? v : []);
   return {
     tldr: typeof o.tldr === 'string' ? o.tldr : '',
+    sections: arr(o.sections).map((s) => ({
+      id: String(s?.id || slugId(s?.heading)),
+      heading: String(s?.heading ?? ''),
+      md: String(s?.md ?? ''),
+    })).filter((s) => s.heading || s.md),
     actionItems: arr(o.actionItems).map((it) => ({
       id: String(it?.id || slugId(it?.text)),
       text: String(it?.text ?? ''),
@@ -131,8 +161,8 @@ export function reconcileReport(fresh, prior) {
 
 // DI'd invoke (like autoClassify.classifyMoments) → generate + parse + reconcile. Reprompt-once on a
 // parse failure, then let a second failure throw. Opus via the alias the Rust side maps to claude-opus-4-8.
-export async function generateReport(invoke, { transcriptBlock, teams, coachedTeam, priorActionItems = [], prior = null }, agents = {}) {
-  const user = buildReportPrompt({ transcriptBlock, teams, coachedTeam, priorActionItems });
+export async function generateReport(invoke, { transcriptBlock, teams, coachedTeam, priorActionItems = [], notesBlock = '', prior = null }, agents = {}) {
+  const user = buildReportPrompt({ transcriptBlock, teams, coachedTeam, priorActionItems, notesBlock });
   const base = {
     systemPrompt: VOD_REPORT_SYSTEM_PROMPT,
     backend: agents.authBackend || 'api-key',

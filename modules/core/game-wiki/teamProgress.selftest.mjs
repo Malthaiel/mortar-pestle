@@ -69,6 +69,21 @@ const open = openHomework(agg);
 assert.ok(!open.some((o) => normIssue(o.text) === normIssue('Save ult for retreats')));
 assert.ok(open.length >= 1);
 
+// recurringLessons (VOD Report Sections): headings folded across scrims, repeats counted, all kept
+const lessonScrims = [
+  { date: '2026-07-01', report: { actionItems: [], sections: [{ id: 'tempo', heading: 'Tempo', md: 'x' }] }, metrics: {} },
+  { date: '2026-07-08', report: { actionItems: [], sections: [{ id: 'tempo', heading: 'Tempo', md: 'y' }, { id: 'convert', heading: 'Convert', md: 'z' }] }, metrics: {} },
+];
+const lagg = aggregateTeam({ team: 'Reliquary', scrims: lessonScrims });
+assert.equal(lagg.recurringLessons.length, 2);
+assert.deepEqual(lagg.recurringLessons[0], { heading: 'Tempo', count: 2, dates: ['2026-07-01', '2026-07-08'] });
+assert.equal(lagg.recurringLessons[1].count, 1);
+const lmd = renderTeamPage(lagg, '2026-07-09');
+assert.ok(lmd.includes('## Recurring Lessons'));
+assert.ok(lmd.includes('- Tempo — 2 scrims (last 2026-07-08)'));
+// sections-less legacy reports degrade to the empty-state line
+assert.ok(renderTeamPage(aggregateTeam({ team: 'X', scrims: [] }), '').includes('No taught topics captured yet'));
+
 // renderTeamPage: issues-first order, deterministic (stamp injected), has all sections + a table
 const md = renderTeamPage(agg, '2026-07-09');
 assert.ok(md.startsWith('# Reliquary — Team Progress'));

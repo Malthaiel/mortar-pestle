@@ -108,13 +108,31 @@ export function aggregateTeam({ team, scrims = [] }) {
     name, items, open: items.filter((it) => !it.done).length,
   })).sort((a, b) => b.open - a.open || a.name.localeCompare(b.name));
 
+  // Recurring lessons (VOD Report Sections): fold report section headings across scrims into a
+  // taught-topics ledger — repeated headings = themes the coach keeps re-teaching. All lessons kept
+  // (a one-scrim lesson is still a ledger entry), sorted most-repeated first then most-recent.
+  const lessonMap = new Map(); // key -> { heading, dates:[] }
+  ordered.forEach((s) => {
+    for (const sec of (s.report && s.report.sections) || []) {
+      const key = normIssue(sec.heading);
+      if (!key) continue;
+      if (!lessonMap.has(key)) lessonMap.set(key, { heading: sec.heading, dates: [] });
+      const e = lessonMap.get(key);
+      e.dates.push(s.date || '');
+      e.heading = sec.heading; // latest wording wins
+    }
+  });
+  const recurringLessons = [...lessonMap.values()]
+    .map((e) => ({ heading: e.heading, count: e.dates.length, dates: e.dates }))
+    .sort((a, b) => b.count - a.count || String(b.dates[b.dates.length - 1]).localeCompare(String(a.dates[a.dates.length - 1])));
+
   // Metric trends: one row per scrim (date + the team metric bundle).
   const metricTrends = ordered.map((s) => ({ date: s.date || '', ...(s.metrics || {}) }));
   const record = ordered.reduce((r, s) => ({ won: r.won + ((s.metrics && s.metrics.won) || 0), lost: r.lost + ((s.metrics && s.metrics.lost) || 0) }), { won: 0, lost: 0 });
 
   return {
     team, updated: '', scrimCount: n, record,
-    recurring, homework, players, metricTrends,
+    recurring, recurringLessons, homework, players, metricTrends,
   };
 }
 
@@ -134,6 +152,16 @@ export function renderTeamPage(agg, stamp = '') {
   if (agg.recurring.length) {
     for (const r of agg.recurring) L.push(`- ⚠ ${r.text} — ${r.streak >= 2 ? `${r.streak} scrims running` : `${r.scrims} scrims`}`);
   } else L.push('_None flagged yet (needs an issue raised in 2+ scrims)._');
+
+  L.push('');
+  L.push('## Recurring Lessons');
+  const lessons = agg.recurringLessons || [];
+  if (lessons.length) {
+    for (const le of lessons) {
+      const last = le.dates && le.dates.length ? le.dates[le.dates.length - 1] : '';
+      L.push(`- ${le.heading} — ${le.count} scrim${le.count === 1 ? '' : 's'}${last ? ` (last ${last})` : ''}`);
+    }
+  } else L.push('_No taught topics captured yet (sections land with each generated report)._');
 
   L.push('');
   L.push('## Homework');

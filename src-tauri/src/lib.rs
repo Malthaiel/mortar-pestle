@@ -786,6 +786,7 @@ pub fn run() {
             commands::media::reveal_in_files,
             commands::media::open_path,
             commands::coaching::coaching_read_image,
+            commands::coaching::coaching_read_text,
             commands::coaching::coaching_open_path,
             commands::coaching::coaching_reveal_path,
             commands::coaching::coaching_extract_audio,

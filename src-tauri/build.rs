@@ -67,6 +67,7 @@ fn main() {
         "vault_read_file",
         "vault_write_file",
         "coaching_read_image",
+        "coaching_read_text",
         "coaching_open_path",
         "coaching_reveal_path",
         "coaching_extract_audio",
