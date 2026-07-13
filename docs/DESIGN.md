@@ -126,6 +126,28 @@ two intra-library uses of `@modules/core/library/PosterRow.jsx`, which are fine.
 Cross-*family* imports are not allowed — extract shared code to the host
 (`web/src`) instead.
 
+## CSS ownership
+
+Each module owns a `<module>.css` next to its entry and imports it there.
+Exemplars: `modules/core/terminal/terminal.css` ← `terminal/index.jsx`,
+`modules/core/game-wiki/game-wiki.css` ← `game-wiki/index.jsx`,
+`modules/core/feedback/feedback.css` ← `feedback/index.jsx`,
+`modules/studio/overlay/stt.css` ← `overlay/SttPage.jsx`,
+`modules/studio/broadcast/broadcast.css` ← `broadcast/BroadcastPage.jsx`,
+`modules/core/library/library.css` ← `library/index.jsx` (the anime-page CSS
+was moved out of the host sheet by plan 027 — the first slice under this rule).
+
+`web/src/styles.css` holds ONLY host-global styles (design tokens, the candy
+primitives, layout shell). Module-specific selectors do not belong there —
+deleting a module must not orphan selectors in the host sheet, and a new
+module's styles default into its own `<module>.css`, not the host pile.
+
+The overlay-host webview (`web/src/overlays/`) is host code, not a module; its
+panel styles live in a host sheet, and it may import a module's CSS when it
+genuinely reuses that module's chrome (documented exception:
+`OverlayStudioPanel.jsx` imports `stt.css`). The full persistence / data-access
+/ notification conventions live in the repo-root `CONVENTIONS.md`.
+
 ### `Button`
 
 | Component | When |
