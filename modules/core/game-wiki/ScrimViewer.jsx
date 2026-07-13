@@ -1469,7 +1469,7 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
               <MiniBtn icon={IconFolder} title="Select .mp4" onClick={async () => { const p = await pickFile(MP4_FILTERS); if (p) { setScrimField('VOD Review', p); flushSave(); } }} />
               {scrim.scrim['VOD Review'] && <MiniBtn icon={IconPlayCircle} title="Open recording" onClick={() => invoke('coaching_open_path', { path: scrim.scrim['VOD Review'] }).catch(() => {})} />}
             </>} />
-          <div className="candy-chip-row" style={{ marginTop: 8 }}>
+          <div className="candy-chip-row" style={{ marginTop: 8, marginBottom: 'var(--candy-depth)' }}>
             <button className="candy-btn" data-shape="chip"
               disabled={vodBusy || !scrim.scrim['VOD Review'] || !sttUp}
               onClick={extractVodComms}

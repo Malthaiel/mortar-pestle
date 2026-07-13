@@ -196,7 +196,16 @@ function visualTop(el) {
   const ownShadowUp = shadowUp(cs);
   const own = ownPaintedTop(cs, r, ownShadowUp);
   const inFlowKids = flowChildren(el);
-  if (inFlowKids.length === 0) return own < Infinity ? own : r.top - ownShadowUp;
+  if (inFlowKids.length === 0) {
+    if (own < Infinity) return own;          // painted box (bg/border/upward shadow)
+    // transparent box: paints only if it holds text/glyph content. An empty
+    // transparent leaf (a flex:1 spacer with no content/bg) paints nothing →
+    // +Infinity, so a candy row's depth lip overhanging into it isn't credited
+    // as an overrun (the MusicPlayerWidget Controls row over its empty spacer
+    // when no track is loaded).
+    if (ownShadowUp > 0 || (el.textContent || '').trim().length > 0) return r.top - ownShadowUp;
+    return Infinity;
+  }
   let kidsHigh = Infinity;
   for (const child of inFlowKids) {
     const t = visualTop(child);
@@ -257,9 +266,12 @@ export function spacingAudit(root = document.body, { quiet = false, bridge = tru
       // top. A transparent wrapper (VaultTree Collapsible grid) whose first child
       // sits on a marginTop reserve reports the child's top, so the candy depth
       // lip landing in that margin isn't credited as an overrun. For a painted
-      // sibling (bg/border at its top) visualTop == box.top → unchanged.
-      const gap = next ? +(visualTop(next) - r.bottom).toFixed(1) : null;                       // painted-gap
-      const gapAfterBand = next ? +(gap - band).toFixed(1) : null;                                // whitespace past the band
+      // sibling (bg/border at its top) visualTop == box.top → unchanged. A null/
+      // Infinity nextTop = the next row paints nothing (an empty transparent
+      // spacer) → no painted content to collide with → no gap, no flag.
+      const nextTop = next ? visualTop(next) : null;
+      const gap = (nextTop != null && Number.isFinite(nextTop)) ? +(nextTop - r.bottom).toFixed(1) : null;
+      const gapAfterBand = gap != null ? +(gap - band).toFixed(1) : null;                          // whitespace past the band
       if (gapAfterBand != null && gapAfterBand < -TOL) {
         flags.push({ el: k, cls: k.className || k.tagName.toLowerCase(), band, gap, overlap: +(-gapAfterBand).toFixed(1),
           // Move 10 — pin the flagged element so a flag resolves to a file:line
@@ -512,6 +524,24 @@ export function spacingAuditSelfTest() {
       const row = findRow(r, 'fx10-btn');
       const ok = row && row.gapAfterBand != null && row.gapAfterBand >= -TOL;
       return { pass: !!ok, detail: `gapAfterBand=${row?.gapAfterBand} (band ${row?.band}, expect >= -${TOL})` };
+    } });
+  }
+
+  // FX11 — empty transparent next-row (BLIND SPOT until Move 12): a candy row
+  // above an empty transparent div (a flex:1 spacer with no content/bg). The
+  // candy lip overhangs into empty space — nothing paints there to collide with
+  // → visualTop(empty) = +Infinity → gap = null → NO flag. v1's visualTop fell
+  // back to r.top for any leaf → false overrun (the MusicPlayerWidget Controls
+  // row over its empty flex:1 spacer when no track is loaded).
+  {
+    const stack = mk('div', 'sst-fx11', { display: 'flex', flexDirection: 'column', gap: '0px' });
+    const btn = mk('button', 'candy-btn fx11-btn', { height: '20px' }, 'A');
+    const empty = mk('div', 'fx11-empty', { height: '30px' }); // no bg, no text, no kids
+    stack.append(btn, empty); host.appendChild(stack);
+    fixtures.push({ n: 11, name: 'empty-transparent-next', blindSpot: true, stack, verify: (r) => {
+      const row = findRow(r, 'fx11-btn');
+      const ok = row && (row.gapAfterBand == null || row.gapAfterBand >= -TOL);
+      return { pass: !!ok, detail: `gapAfterBand=${row?.gapAfterBand} (band ${row?.band}, expect null or >= -${TOL})` };
     } });
   }
 
