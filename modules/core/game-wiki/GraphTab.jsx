@@ -56,13 +56,16 @@ function buildTeamSeries(data, metric, agg) {
   });
 }
 
-export default function GraphTab({ raw }) {
-  const data = extractSeries(raw);
+export default function GraphTab({ raw, only }) {
+  const all = extractSeries(raw);
+  // `only` (a player_slot) pins the chart to one player's curves — the Players/Teams toggle is
+  // moot for a single player, so it's hidden. Absent → the original all-players/teams tab.
+  const data = only != null ? all.filter((s) => s.slot === only) : all;
   const [metricId, setMetricId] = useState('net_worth');
   const [mode, setMode] = useState('players'); // players | teams
   const metric = METRICS.find((m) => m.id === metricId) || METRICS[0];
 
-  const series = mode === 'teams'
+  const series = (only == null && mode === 'teams')
     ? buildTeamSeries(data, metric.id, metric.agg)
     : buildPlayerSeries(data, metric.id);
 
@@ -75,11 +78,13 @@ export default function GraphTab({ raw }) {
           ))}
         </div>
         <div style={{ flex: 1 }} />
-        <div style={{ display: 'flex', gap: 5 }}>
-          {['players', 'teams'].map((mo) => (
-            <button key={mo} type="button" style={segBtn(mo === mode)} onClick={() => setMode(mo)}>{mo === 'players' ? 'Players' : 'Teams'}</button>
-          ))}
-        </div>
+        {only == null && (
+          <div style={{ display: 'flex', gap: 5 }}>
+            {['players', 'teams'].map((mo) => (
+              <button key={mo} type="button" style={segBtn(mo === mode)} onClick={() => setMode(mo)}>{mo === 'players' ? 'Players' : 'Teams'}</button>
+            ))}
+          </div>
+        )}
       </div>
 
       <Chart series={series} xFormat={clock} yFormat={metric.fmt} />

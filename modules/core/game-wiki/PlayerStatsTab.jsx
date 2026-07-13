@@ -281,9 +281,16 @@ function Panel({ p }) {
   );
 }
 
-export default function PlayerStatsTab({ raw }) {
+export default function PlayerStatsTab({ raw, only }) {
   const players = extractPlayers(raw);
   const [sel, setSel] = useState(players[0] ? players[0].slot : null);
+  // `only` (a player_slot) pins the tab to one player and drops the hero strip — the tree leaf
+  // already selects the player. Absent → the original all-players tab with its own strip.
+  if (only != null) {
+    const p = players.find((x) => x.slot === only);
+    if (!p) return <div style={{ ...muted, fontSize: 13 }}>Player not in this match.</div>;
+    return <Panel p={p} />;
+  }
   const p = players.find((x) => x.slot === sel) || players[0];
   if (!p) return <div style={{ ...muted, fontSize: 13 }}>No players in this match.</div>;
   return (

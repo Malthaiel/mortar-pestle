@@ -50,8 +50,11 @@ function LaneCard({ lane }) {
   );
 }
 
-export default function LanesTab({ raw }) {
-  const lanes = extractLanes(raw);
+export default function LanesTab({ raw, only }) {
+  const allLanes = extractLanes(raw);
+  // `only` (an assigned_lane value) pins to a single lane's matchup and drops the match-wide
+  // "structures lost" summary (which isn't lane-attributable). Absent → all lanes + structures.
+  const lanes = only != null ? allLanes.filter((l) => l.lane === only) : allLanes;
   const { objectives } = extractObjectives(raw);
   const destroyed = objectives.filter((o) => o.destroyed != null).sort((a, b) => a.destroyed - b.destroyed);
   const byTeam = (team) => destroyed.filter((o) => o.team === team);
@@ -64,6 +67,7 @@ export default function LanesTab({ raw }) {
         {lanes.map((l) => <LaneCard key={l.lane} lane={l} />)}
       </div>
 
+      {only == null && (
       <div style={{ marginTop: 20 }}>
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', ...muted, marginBottom: 2 }}>Structures lost</div>
         <div style={{ fontSize: 10.5, ...muted, marginBottom: 8 }}>deadlock-api doesn't tag structures with a lane — listed per team, not per lane.</div>
@@ -81,6 +85,7 @@ export default function LanesTab({ raw }) {
           ))}
         </div>
       </div>
+      )}
     </div>
   );
 }

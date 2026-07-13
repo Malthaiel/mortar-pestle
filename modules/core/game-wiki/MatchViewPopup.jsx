@@ -1,51 +1,43 @@
-// MatchViewPopup — the "View Full Match" popup (Full Match Data Extraction, SF-A).
-// Settings-drawer-style chrome: AppWindow + a left rail of candy-btn rows + a content
-// pane, mirroring SettingsDrawer. Only the active tab mounts (heavy per-tab extraction
-// runs lazily on mount). Reads the raw sidecar (the source of truth) once and hands it
-// to each tab. Degrades gracefully: missing sidecar → re-run prompt; bad JSON → error.
+// MatchViewPopup — the "View Full Match" popup (Full Match Data Extraction, SF-A; Match View
+// Rework, Phase 0). AppWindow + a folding, resizeable file-tree sidebar (MatchTree, built from
+// the shared treeKit primitives) + a content pane. The old flat 5-row candy rail is gone: the
+// rail is now six sections — Scoreboard, Player Stats (per-player leaves), Lanes (per-lane
+// leaves), Graphs (per-player leaves), Map, and Match Analysis. Reads the raw sidecar (source
+// of truth) once and hands it to each section. Degrades gracefully: missing sidecar → re-run
+// prompt; bad JSON → error.
 
 import { useEffect, useState } from 'react';
 import { api } from '@host/api.js';
 import AppWindow from '@host/components/ui/AppWindow.jsx';
-import { candyGap } from '@host/util/candy.js';
-import { IconTable, IconUsers, IconSword, IconChart, IconMap } from '@host/components/icons.jsx';
-import { extractMatch } from './matchData.js';
+import { IconTable } from '@host/components/icons.jsx';
+import { extractMatch, extractPlayers, extractLanes } from './matchData.js';
+import MatchTree from './MatchTree.jsx';
+import RailSplitter from './RailSplitter.jsx';
 import ScoreboardTab from './ScoreboardTab.jsx';
 import PlayerStatsTab from './PlayerStatsTab.jsx';
 import LanesTab from './LanesTab.jsx';
 import GraphTab from './GraphTab.jsx';
 import MapTab from './MapTab.jsx';
-
-const TABS = [
-  { id: 'scoreboard', label: 'Scoreboard', icon: IconTable },
-  { id: 'players', label: 'Player Stats', icon: IconUsers },
-  { id: 'lanes', label: 'Lanes', icon: IconSword },
-  { id: 'graph', label: 'Graph', icon: IconChart },
-  { id: 'map', label: 'Map', icon: IconMap },
-];
+import TeamfightCommsView from './TeamfightCommsView.jsx';
 
 const muted = { color: 'var(--text-muted)', fontSize: 13 };
 
-function RailButton({ active, accent, onClick, icon: Icon, children }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      data-own-press
-      className={`candy-btn${active ? ' is-active' : ''}`}
-      data-shape="row"
-      style={accent ? { '--accent': accent } : undefined}
-    >
-      <span className="candy-face">
-        {Icon && <Icon size={18} />}
-        <span style={{ overflow: 'hidden', whiteSpace: 'nowrap' }}>{children}</span>
-      </span>
-    </button>
-  );
-}
+// Rail width persistence (per-popup; the tree is denser than the old 186px rail).
+const RAIL_KEY = 'mvpopup.railW';
+const RAIL_MIN = 150, RAIL_MAX = 360, RAIL_DEFAULT = 210;
+const readRailW = () => {
+  const v = Number(localStorage.getItem(RAIL_KEY));
+  return Number.isFinite(v) && v >= RAIL_MIN && v <= RAIL_MAX ? v : RAIL_DEFAULT;
+};
+
+// Steam persona resolution is deferred (CORS-blocked → needs a Rust command + the user's key);
+// until it lands the tree labels fall back to hero names. This empty map is the seam.
+const NO_PERSONAS = new Map();
 
 export default function MatchViewPopup({ sidecarPath, matchN, accent, onClose }) {
-  const [tab, setTab] = useState('scoreboard');
+  const [sel, setSel] = useState({ section: 'scoreboard' });
+  const [railW, setRailW] = useState(readRailW);
+  const [tfOpen, setTfOpen] = useState(false);
   const [state, setState] = useState({ status: 'loading' });
 
   useEffect(() => {
@@ -62,7 +54,14 @@ export default function MatchViewPopup({ sidecarPath, matchN, accent, onClose })
     return () => { cancelled = true; };
   }, [sidecarPath]);
 
+  const setWidth = (w) => { setRailW(w); localStorage.setItem(RAIL_KEY, String(w)); };
+
   const { status, m, raw } = state;
+  const ready = status === 'ready';
+  const players = ready ? extractPlayers(raw) : [];
+  const lanes = ready ? extractLanes(raw).map((l) => l.lane) : [];
+  // The teamfight-comms review sidecar is the matchdata sidecar's twin (same base, .tfcomms prefix).
+  const tfPath = sidecarPath.includes('.matchdata.') ? sidecarPath.replace('.matchdata.', '.tfcomms.') : null;
 
   return (
     <AppWindow
@@ -81,34 +80,51 @@ export default function MatchViewPopup({ sidecarPath, matchN, accent, onClose })
       )}
       bodyStyle={{ padding: 0, overflowY: 'hidden', display: 'flex', fontFamily: 'var(--font-mono)' }}
     >
-      {/* Left rail */}
+      {/* Left rail — folding resizeable tree */}
       <div style={{
-        width: 186, flexShrink: 0, padding: '14px 10px',
-        borderRight: '1px solid var(--border)', background: 'var(--surface-2)',
-        display: 'flex', flexDirection: 'column', gap: candyGap(8),
+        width: railW, flexShrink: 0, padding: '14px 10px',
+        background: 'var(--surface-2)',
         overflowY: 'auto', overflowX: 'hidden',
       }}>
-        {TABS.map((t) => (
-          <RailButton key={t.id} active={t.id === tab} accent={accent} icon={t.icon}
-            onClick={() => setTab(t.id)}>{t.label}</RailButton>
-        ))}
+        {ready && (
+          <MatchTree players={players} lanes={lanes} sel={sel} onSel={setSel}
+            accent={accent} personas={NO_PERSONAS} />
+        )}
       </div>
+      <RailSplitter width={railW} min={RAIL_MIN} max={RAIL_MAX} onWidth={setWidth} />
 
       {/* Content pane */}
       <div style={{ flex: 1, minWidth: 0, padding: '20px 24px', overflowY: 'auto' }}>
         {status === 'loading' && <div style={muted}>Loading match data…</div>}
         {status === 'missing' && <div style={muted}>Raw match data unavailable — re-run Process.</div>}
         {status === 'parse-error' && <div style={{ color: 'var(--error)', fontSize: 13 }}>Couldn’t parse stored match data.</div>}
-        {status === 'ready' && (
+        {ready && (
           <>
-            {tab === 'scoreboard' && <ScoreboardTab m={m} raw={raw} />}
-            {tab === 'players' && <PlayerStatsTab raw={raw} />}
-            {tab === 'lanes' && <LanesTab raw={raw} />}
-            {tab === 'graph' && <GraphTab raw={raw} />}
-            {tab === 'map' && <MapTab raw={raw} />}
+            {sel.section === 'scoreboard' && <ScoreboardTab m={m} raw={raw} />}
+            {sel.section === 'players' && <PlayerStatsTab raw={raw} only={sel.slot} />}
+            {sel.section === 'lanes' && <LanesTab raw={raw} only={sel.lane} />}
+            {sel.section === 'graphs' && <GraphTab raw={raw} only={sel.slot} />}
+            {sel.section === 'map' && <MapTab raw={raw} />}
+            {sel.section === 'analysis' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 460 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>Match Analysis</div>
+                <div style={{ ...muted, lineHeight: 1.5 }}>
+                  The teamfight comms review for this match. Run <b>Review Comms</b> on the match first if it isn’t ready yet.
+                </div>
+                <button type="button" className="candy-btn" data-shape="chip" data-own-press
+                  disabled={!tfPath} onClick={() => setTfOpen(true)}
+                  style={accent ? { '--accent': accent, alignSelf: 'flex-start' } : { alignSelf: 'flex-start' }}>
+                  <span className="candy-face">Open Review</span>
+                </button>
+              </div>
+            )}
           </>
         )}
       </div>
+
+      {tfOpen && tfPath && (
+        <TeamfightCommsView sidecarPath={tfPath} accent={accent} onClose={() => setTfOpen(false)} />
+      )}
     </AppWindow>
   );
 }

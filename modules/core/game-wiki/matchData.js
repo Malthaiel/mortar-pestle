@@ -37,6 +37,11 @@ export const HERO_NAMES = {
 export const heroName = (id) => HERO_NAMES[id] || `Hero ${id}`;
 export const sideName = (t) => (t in TEAM_NAMES ? TEAM_NAMES[t] : `Team ${t}`);
 
+// SteamID3 account_id → SteamID64 (the form the Steam Web API takes). Null-safe: a match
+// payload without account_id (older sidecars) yields null, never a bogus id.
+const STEAMID64_BASE = 76561197960265728n;
+export const steamId64 = (accountId) => (accountId == null ? null : String(BigInt(accountId) + STEAMID64_BASE));
+
 // `…/Scrim/(06-16-26) A VS B` (+ match 1) → `…/Scrim/.matchdata.(06-16-26) A VS B — Match 1.json`
 // (`kind: 'comms'` → `.commstranscript.…`, sub-plan 4; `kind: 'autoclass'` →
 // `.autoclass.…` review-state sidecar, sub-plan 5).
@@ -208,6 +213,7 @@ export function extractPlayers(raw) {
 
     return {
       slot: p.player_slot, team: p.team, side: sideName(p.team),
+      accountId: p.account_id ?? null,
       heroId: p.hero_id, hero: heroName(p.hero_id),
       kills: p.kills ?? 0, deaths: p.deaths ?? 0, assists: p.assists ?? 0,
       netWorth: p.net_worth ?? 0, lastHits: p.last_hits ?? 0, denies: p.denies ?? 0,
