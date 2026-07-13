@@ -70,6 +70,7 @@ fn main() {
         "coaching_read_text",
         "coaching_open_path",
         "coaching_reveal_path",
+        "export_report_file",
         "coaching_extract_audio",
         "deadlock_fetch_match",
         "coaching_classify_match",

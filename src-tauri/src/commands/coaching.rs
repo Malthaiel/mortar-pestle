@@ -139,6 +139,38 @@ pub fn coaching_reveal_path(app: tauri::AppHandle, path: String) -> Result<(), V
         .map_err(|e| VaultError::Io(e.to_string()))
 }
 
+/// Write an exported VOD-review report (a compiled markdown string) to a
+/// user-chosen path. The JS `save()` dialog is the consent boundary — no
+/// allowlist gate, same trust model as `coaching_read_image` /
+/// `coaching_open_path` (an explicit user pick, never widens the asset/vault
+/// allowlist). `atomic_write` creates the parent dir + tmp-file + fsync + rename.
+/// When `reveal` is set, highlight the written file in the OS file manager via
+/// the opener plugin (the same primitive as `coaching_reveal_path`, but ungated
+/// — this path is the user's save pick, not a vault-relative app path). Returns
+/// the written path on success.
+#[tauri::command]
+pub async fn export_report_file(
+    app: tauri::AppHandle,
+    path: String,
+    content: String,
+    reveal: bool,
+) -> Result<String, VaultError> {
+    if path.trim().is_empty() {
+        return Err(VaultError::Invalid("path required".into()));
+    }
+    let out = PathBuf::from(&path);
+    crate::commands::vault::atomic_write(&out, content.as_bytes())?;
+    if reveal {
+        // Canonicalize so the opener resolves the real on-disk path (matches
+        // coaching_reveal_path); a failed canonicalize just skips the reveal —
+        // the file is already written, the reveal is cosmetic.
+        if let Ok(canon) = std::fs::canonicalize(&out) {
+            let _ = app.opener().reveal_item_in_dir(&canon);
+        }
+    }
+    Ok(path)
+}
+
 // ── Comms Extraction (audio → 16 kHz mono WAV) ───────────────────────────────
 // Deadlock Scrim Coaching sub-plan 4. A match's Scrim Recording `.mp4` carries the
 // coached team's voice comms; `coaching_extract_audio` shells system ffmpeg to a

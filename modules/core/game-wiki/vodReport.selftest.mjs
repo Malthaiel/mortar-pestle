@@ -2,7 +2,7 @@
 // Covers the parts that break silently — transcript formatting, tolerant parse (fenced + noisy),
 // coercion of a missing id, and checkbox reconcile across a regenerate.
 import assert from 'node:assert/strict';
-import { mmss, slugId, buildTranscriptBlock, buildReportPrompt, parseReport, reconcileReport, buildNormalizePrompt, parseCorrections, applyCorrections, transcriptHash, normalizeTranscript, parseFindings, applyFindings, verifyReport } from './vodReport.js';
+import { mmss, slugId, buildTranscriptBlock, buildReportPrompt, parseReport, reconcileReport, serializeReportMarkdown, buildNormalizePrompt, parseCorrections, applyCorrections, transcriptHash, normalizeTranscript, parseFindings, applyFindings, verifyReport } from './vodReport.js';
 
 // mmss
 assert.equal(mmss(0), '0:00');
@@ -219,5 +219,47 @@ const vr2 = await verifyReport(async () => { throw new Error('CLI walled'); }, {
 assert.equal(vr2.ran, false);
 assert.ok(vr2.report.meta.warnings.some((w) => w.includes('Pass 2 skipped')));
 assert.equal(vr2.report.playerCards[0].hero, 'Grey Talom'); // draft shipped unmodified
+
+// ── Export to markdown (serializeReportMarkdown) ─────────────────────────────
+
+const exRep = parseReport(JSON.stringify({
+  tldr: 'good macro',
+  sections: [{ id: 'tempo', heading: 'Tempo', md: 'Hold the push [2:05]\n- step one' }],
+  actionItems: [
+    { id: 'ward-river', text: 'ward river', count: 2, timestamps: ['1:15', '3:40'], player: 'Sam', status: 'done' },
+    { id: 'rotate', text: 'rotate mid', count: 1, timestamps: [], player: null, status: 'pending' },
+  ],
+  qa: [{ q: 'why dive?', a: 'bad call', askedBy: 'Sam', t: '4:09' }],
+  keepDoing: ['early game'], debates: ['item order'],
+  followUps: [{ priorItem: 'ward river', verdict: 'persisting', evidence: 'still no wards [6:00]' }],
+}));
+
+const mdAll = serializeReportMarkdown(exRep, new Set(['report', 'actions', 'qa', 'keep', 'debates', 'followups']), 'Scrim 2026-07-13');
+assert.ok(mdAll.startsWith('# Scrim 2026-07-13\n'));
+assert.ok(mdAll.includes('## TL;DR'));
+assert.ok(mdAll.includes('## Tempo'));
+assert.ok(mdAll.includes('[2:05]'), 'plain [m:ss] token survives');
+assert.ok(mdAll.includes('- [x] ward river ×2 @Sam [1:15] [3:40]'), 'done action item with count+player+stamps');
+assert.ok(mdAll.includes('- [ ] rotate mid'), 'pending action item');
+assert.ok(mdAll.includes('**[4:09] Sam:** why dive?'), 'qa question line');
+assert.ok(mdAll.includes('> bad call'), 'qa answer blockquoted');
+assert.ok(mdAll.includes('## Keep Doing\n\n- early game'));
+assert.ok(mdAll.includes('## Debates\n\n- item order'));
+assert.ok(mdAll.includes('- **persisting** — ward river'), 'followup verdict line');
+assert.ok(mdAll.includes('still no wards [6:00]'), 'followup evidence indented');
+
+// selection omits unchecked sections
+const mdSome = serializeReportMarkdown(exRep, new Set(['report']), 'X');
+assert.ok(mdSome.includes('## TL;DR'));
+assert.ok(!mdSome.includes('## Action Items'));
+assert.ok(!mdSome.includes('## Q&A'));
+
+// empty selection → empty string
+assert.equal(serializeReportMarkdown(exRep, new Set(), 'X'), '');
+
+// segments section renders the transcript with m:ss stamps
+const mdSeg = serializeReportMarkdown(exRep, new Set(['segments']), 'X', [{ t0Ms: 125000, speaker: 'Coach', text: 'hello' }]);
+assert.ok(mdSeg.includes('## Segments (transcript)'));
+assert.ok(mdSeg.includes('2:05 Coach hello'));
 
 console.log('vodReport.selftest: all assertions passed');

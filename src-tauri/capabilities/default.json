@@ -62,6 +62,7 @@
     "allow-coaching-read-text",
     "allow-coaching-open-path",
     "allow-coaching-reveal-path",
+    "allow-export-report-file",
     "allow-coaching-extract-audio",
     "allow-deadlock-fetch-match",
     "allow-coaching-classify-match",

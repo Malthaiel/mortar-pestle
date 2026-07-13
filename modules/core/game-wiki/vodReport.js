@@ -237,6 +237,92 @@ export function reconcileReport(fresh, prior) {
   };
 }
 
+// Compile a subset of the report into a single GFM markdown string for the "Export
+// to .md" action on the VOD Review popup. `selected` is a Set of section ids:
+// 'report' | 'actions' | 'qa' | 'keep' | 'debates' | 'followups' | 'segments'.
+// `name` is the scrim title for the H1 (the caller derives it from the scrim
+// mdPath basename). `segments` (the parsed .vodcomms segment list) is read only
+// when 'segments' is selected. section.md bodies are emitted RAW — their [m:ss]
+// tokens are plain text in the file (the in-app linkTimeTokens/TimeChip transform
+// is render-only and must NOT run on export). Empty selection → ''.
+export function serializeReportMarkdown(report, selected, name, segments = []) {
+  const r = report || {};
+  const sel = (id) => !!selected?.has(id);
+  const ORDER = ['report', 'actions', 'qa', 'keep', 'debates', 'followups', 'segments'];
+  if (!ORDER.some(sel)) return '';
+  const blocks = [];
+  blocks.push(`# ${String(name ?? '').trim() || 'VOD Review'}`);
+
+  if (sel('report')) {
+    blocks.push(`## TL;DR\n\n${String(r.tldr ?? '').trim() || '_(no summary)_'}`);
+    for (const sec of (Array.isArray(r.sections) ? r.sections : [])) {
+      const h = String(sec?.heading ?? '').trim();
+      const md = String(sec?.md ?? '').trim();
+      if (!h && !md) continue;
+      blocks.push(`## ${h || 'Section'}\n\n${md}`);
+    }
+  }
+  if (sel('actions')) {
+    const items = Array.isArray(r.actionItems) ? r.actionItems : [];
+    blocks.push('## Action Items\n\n' + (items.length
+      ? items.map((it) => {
+          const box = it?.status === 'done' ? '- [x]' : '- [ ]';
+          let line = `${box} ${String(it?.text ?? '').trim()}`;
+          if (Number(it?.count) > 1) line += ` ×${it.count}`;
+          if (it?.player) line += ` @${it.player}`;
+          const ts = (Array.isArray(it?.timestamps) ? it.timestamps : []).map(String).filter(Boolean);
+          if (ts.length) line += ` ${ts.map((t) => `[${t}]`).join(' ')}`;
+          return line;
+        }).join('\n')
+      : '_(none)_'));
+  }
+  if (sel('qa')) {
+    const qa = Array.isArray(r.qa) ? r.qa : [];
+    blocks.push('## Q&A\n\n' + (qa.length
+      ? qa.map((x) => {
+          const stamp = x?.t ? `[${x.t}] ` : '';
+          const who = String(x?.askedBy || 'Q').trim();
+          const q = String(x?.q ?? '').trim();
+          const a = String(x?.a ?? '').trim() || '_(no answer)_';
+          return `**${stamp}${who}:** ${q}\n\n> ${a.replace(/\n/g, '\n> ')}`;
+        }).join('\n\n')
+      : '_(none)_'));
+  }
+  if (sel('keep')) {
+    const kd = (Array.isArray(r.keepDoing) ? r.keepDoing : []).map(String);
+    blocks.push('## Keep Doing\n\n' + (kd.length ? kd.map((x) => `- ${x}`).join('\n') : '_(none)_'));
+  }
+  if (sel('debates')) {
+    const db = (Array.isArray(r.debates) ? r.debates : []).map(String);
+    blocks.push('## Debates\n\n' + (db.length ? db.map((x) => `- ${x}`).join('\n') : '_(none)_'));
+  }
+  if (sel('followups')) {
+    const fu = Array.isArray(r.followUps) ? r.followUps : [];
+    blocks.push('## Follow-ups\n\n' + (fu.length
+      ? fu.map((f) => {
+          const v = String(f?.verdict ?? 'unclear');
+          const p = String(f?.priorItem ?? '').trim() || '_(item)_';
+          const ev = String(f?.evidence ?? '').trim();
+          let line = `- **${v}** — ${p}`;
+          if (ev) line += `\n  ${ev}`;
+          return line;
+        }).join('\n')
+      : '_(none)_'));
+  }
+  if (sel('segments')) {
+    const segs = Array.isArray(segments) ? segments : [];
+    blocks.push('## Segments (transcript)\n\n' + (segs.length
+      ? segs.map((s) => {
+          const t = mmss((Number(s?.t0Ms) || 0) / 1000);
+          const sp = String(s?.speaker || '—');
+          const tx = String(s?.text || '').trim() || '·';
+          return `${t} ${sp} ${tx}`;
+        }).join('\n')
+      : '_(unavailable)_'));
+  }
+  return blocks.join('\n\n') + '\n';
+}
+
 // ── Pass 0: transcript name-normalization (Analyst pipeline, Move 9) ─────────
 // One-shot lexicon-grounded proper-noun correction of the diarized transcript before the report
 // draft reads it. An ENHANCER, never a blocker: any contract slip (parse failure after one

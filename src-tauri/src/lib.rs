@@ -789,6 +789,7 @@ pub fn run() {
             commands::coaching::coaching_read_text,
             commands::coaching::coaching_open_path,
             commands::coaching::coaching_reveal_path,
+            commands::coaching::export_report_file,
             commands::coaching::coaching_extract_audio,
             commands::coaching::deadlock_fetch_match,
             commands::coaching::coaching_classify_match,

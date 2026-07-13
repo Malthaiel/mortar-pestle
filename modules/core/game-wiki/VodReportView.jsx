@@ -22,6 +22,10 @@ import { candyGap } from '@host/util/candy.js';
 import { IconTable, IconFolder } from '@host/components/icons.jsx';
 import { parseSegments } from './commsCompile.js';
 import { speakerColor } from './diarize.js';
+import { save } from '@tauri-apps/plugin-dialog';
+import Popover from '@host/components/ui/Popover.jsx';
+import { PrimaryBtn, OutlinedBtn } from '@host/components/ui/Button.jsx';
+import { serializeReportMarkdown } from './vodReport.js';
 
 const muted = { color: 'var(--text-muted)', fontSize: 13 };
 
@@ -31,11 +35,11 @@ function mmss(ms) {
   return `${Math.floor(v / 60)}:${String(v % 60).padStart(2, '0')}`;
 }
 
-function RailButton({ active, accent, onClick, disabled, children }) {
+function RailButton({ active, accent, onClick, disabled, children, ...rest }) {
   return (
     <button type="button" onClick={onClick} data-own-press disabled={disabled}
       className={`candy-btn${active ? ' is-active' : ''}`} data-shape="row"
-      style={accent ? { '--accent': accent } : undefined}>
+      style={accent ? { '--accent': accent } : undefined} {...rest}>
       <span className="candy-face"><span style={{ overflow: 'hidden', whiteSpace: 'nowrap' }}>{children}</span></span>
     </button>
   );
@@ -65,6 +69,24 @@ export function linkTimeTokens(md) {
     .join('');
 }
 
+// Sections offered by the Export popover, in emit order (matches serializeReportMarkdown).
+const EXPORT_SECTIONS = [
+  { id: 'report', label: 'Report + TL;DR' },
+  { id: 'actions', label: 'Action Items' },
+  { id: 'qa', label: 'Q&A' },
+  { id: 'keep', label: 'Keep Doing' },
+  { id: 'debates', label: 'Debates' },
+  { id: 'followups', label: 'Follow-ups' },
+  { id: 'segments', label: 'Segments (transcript)' },
+];
+
+// Leaf filename without extension — the export H1 + default save name derive from it.
+function baseName(p) {
+  const s = String(p ?? '');
+  const leaf = s.split(/[\\/]/).pop() || s;
+  return leaf.replace(/\.[^.]+$/, '') || 'VOD Review';
+}
+
 function Empty({ children }) { return <div style={muted}>{children}</div>; }
 
 export default function VodReportView({ sidecarPath, commsPath, mdPath, accent, onClose, onRegenerate, onAddNotes }) {
@@ -76,6 +98,13 @@ export default function VodReportView({ sidecarPath, commsPath, mdPath, accent, 
   const [busy, setBusy] = useState(''); // '' | 'regen' | 'notes'
   const paneRef = useRef(null); // content pane — jump target lookup root
   const pendingJumpRef = useRef(null); // m:ss awaiting the Segments tab to be visible
+  // Export-to-.md popover state (anchored to the Export rail button).
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportAnchor, setExportAnchor] = useState(null); // RailButton bounding rect
+  const [exportSel, setExportSel] = useState(() => new Set(['report', 'actions', 'qa']));
+  const [exportDest, setExportDest] = useState('');
+  const [exportErr, setExportErr] = useState('');
+  const [exportBusy, setExportBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -162,6 +191,55 @@ export default function VodReportView({ sidecarPath, commsPath, mdPath, accent, 
     } finally { setBusy(''); }
   };
 
+  // App-wide toast via the shared `agentic:notify` bus (NotificationProvider styles it).
+  const toast = (type, title, message) => {
+    const err = type === 'error';
+    window.dispatchEvent(new CustomEvent('agentic:notify', {
+      detail: {
+        type: err ? 'deadlock-error' : 'deadlock-info', title, message,
+        accent: err ? 'var(--error)' : (accent || 'var(--accent)'),
+        iconKey: err ? 'alert' : 'bell', duration: err ? 6000 : 3500,
+      },
+    }));
+  };
+
+  const openExport = (e) => {
+    if (exportOpen) { setExportOpen(false); return; } // toggle — outsideExempt keeps the click in
+    setExportErr('');
+    setExportAnchor(e.currentTarget.getBoundingClientRect());
+    setExportOpen(true);
+  };
+  const pickExportDest = async () => {
+    setExportErr('');
+    try {
+      const p = await save({
+        defaultPath: `${baseName(mdPath)} VOD Review.md`,
+        filters: [{ name: 'Markdown', extensions: ['md'] }],
+      });
+      if (p) setExportDest(p.toLowerCase().endsWith('.md') ? p : `${p}.md`);
+    } catch (e) { setExportErr(String(e?.message || e)); }
+  };
+  const toggleSection = (id) => setExportSel((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const doExport = async () => {
+    if (!report || !exportDest || exportSel.size === 0 || exportBusy) return;
+    setExportBusy(true);
+    setExportErr('');
+    try {
+      const md = serializeReportMarkdown(report, exportSel, `${baseName(mdPath)} VOD Review`, segments);
+      await invoke('export_report_file', { path: exportDest, content: md, reveal: true });
+      toast('success', 'Exported', exportDest);
+      setExportOpen(false);
+    } catch (e) {
+      setExportErr(String(e?.message || e));
+    } finally {
+      setExportBusy(false);
+    }
+  };
+
   const { status } = state;
   const r = report || {};
   const sections = r.sections || [];
@@ -196,6 +274,9 @@ export default function VodReportView({ sidecarPath, commsPath, mdPath, accent, 
               {busy === 'regen' ? 'Regenerating…' : 'Regenerate'}
             </RailButton>
           )}
+          <RailButton accent={accent} data-export-trigger disabled={!report} onClick={openExport}>
+            {exportBusy ? 'Exporting…' : 'Export'}
+          </RailButton>
           {mdPath && (
             <button type="button" data-own-press className="candy-btn" data-shape="icon"
               title="Show scrim file in folder" style={{ alignSelf: 'flex-start', '--accent': accent }}
@@ -295,6 +376,42 @@ export default function VodReportView({ sidecarPath, commsPath, mdPath, accent, 
           </>
         )}
       </div>
+
+      {/* Export-to-.md popover — anchored to the Export rail button. */}
+      <Popover
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        outsideExempt="[data-export-trigger]"
+        accent={accent}
+        showClose
+        title="Export VOD Review"
+        style={exportAnchor ? { position: 'fixed', left: Math.min(exportAnchor.right + 8, window.innerWidth - 308), bottom: Math.max(8, window.innerHeight - exportAnchor.top + 8), width: 300, zIndex: 100000 } : { display: 'none' }}
+        bodyStyle={{ padding: 14 }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>Sections to export:</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {EXPORT_SECTIONS.map((s) => (
+              <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--text)', cursor: 'pointer' }}>
+                <input type="checkbox" checked={exportSel.has(s.id)} onChange={() => toggleSection(s.id)} style={{ accentColor: accent || 'var(--accent)' }} />
+                {s.label}
+              </label>
+            ))}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ flex: 1, minWidth: 0, fontSize: 11.5, fontFamily: 'var(--font-mono)', color: exportDest ? 'var(--text)' : 'var(--text-faint)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={exportDest}>
+              {exportDest || 'No destination chosen'}
+            </div>
+            <OutlinedBtn small onClick={pickExportDest} disabled={exportBusy}>Choose…</OutlinedBtn>
+          </div>
+          {exportErr && <div style={{ fontSize: 11.5, color: 'var(--error)' }}>{exportErr}</div>}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <PrimaryBtn small accent={accent} onClick={doExport} disabled={!exportDest || exportSel.size === 0 || exportBusy}>
+              {exportBusy ? 'Exporting…' : 'Export'}
+            </PrimaryBtn>
+          </div>
+        </div>
+      </Popover>
     </AppWindow>
   );
 }
