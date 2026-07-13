@@ -19,6 +19,7 @@ import ConciergeProvider from '@host/agents/concierge/ConciergeProvider.jsx';
 import AgentsOverlayLauncher from './AgentsOverlayLauncher.jsx';
 import OverlayBrowserPanel from './OverlayBrowserPanel.jsx';
 import BrowserOverlayLauncher from './BrowserOverlayLauncher.jsx';
+import MonitorOverlayChip from './MonitorOverlayChip.jsx';
 
 // Minimal module-api shim for the host-mounted SttProvider. It only needs
 // invoke (all stt_* calls are cross-window-safe Tauri invokes) and events.on
@@ -103,6 +104,34 @@ export default function OverlayHostView() {
     return () => window.removeEventListener('agentic:notify', onNotify);
   }, []);
 
+  // Overlay-local monitor-cycle shortcut (Alt+M): cycle the overlay to the next
+  // monitor via the Rust pref. Ignored while typing in an input/textarea/
+  // contenteditable so it never fights the Concierge chat or the STT field.
+  // CAVEAT: the overlay-host window is non-activating (focus:false + WS_EX_NOACTIVATE)
+  // so the game keeps keyboard focus while the overlay is shown — this keydown may
+  // not fire while the game is focused. If it doesn't, a true global hotkey needs the
+  // winhook (separate follow-up). Registered only while visible.
+  useEffect(() => {
+    if (!visible) return;
+    const onKey = (e) => {
+      if (!(e.altKey && (e.key === 'm' || e.key === 'M'))) return;
+      const el = document.activeElement;
+      const tag = el?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable) return;
+      e.preventDefault();
+      invoke('overlay_list_monitors')
+        .then((list) => {
+          if (!list || list.length < 2) return;
+          const idx = list.findIndex((m) => m.isSelected);
+          const next = list[(idx + 1) % list.length];
+          if (next) invoke('overlay_set_monitor', { name: next.name }).catch(() => {});
+        })
+        .catch(() => {});
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [visible]);
+
   return (
     <div style={{
       position: 'fixed', inset: 0, overflow: 'hidden',
@@ -116,6 +145,7 @@ export default function OverlayHostView() {
       <ScrimOverlayPanel />
       <OverlayBrowserPanel visible={visible} />
       <BrowserOverlayLauncher />
+      <MonitorOverlayChip />
       {/* Concierge over the game. Providerless — every dep (useSettings, useAgentChat,
           the api singleton) is a plain hook/singleton; agent-chunk is emitted app-
           globally so the host webview receives its own stream with no bridge. The

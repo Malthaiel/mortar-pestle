@@ -109,12 +109,25 @@ function visualBottom(el) {
   const inFlowKids = flowChildren(el);
   // Leaf: its own painted box, or rect.bottom for a transparent text/content leaf.
   if (inFlowKids.length === 0) return own > -Infinity ? own : r.bottom + ownShadow;
-  let low = own;
+  // Descendant overhang, tracked separately from `own` so a clipping box can
+  // clamp ONLY the descendant part — the element's own box-shadow paints outside
+  // the box and is NOT clipped by its own overflow.
+  let kidsLow = -Infinity;
   for (const child of inFlowKids) {
     const b = visualBottom(child);
-    if (b > low) low = b;
+    if (b > kidsLow) kidsLow = b;
   }
-  return low;
+  // Move 10 — overflow clipping. A container whose overflow-y is not visible
+  // (hidden/clip/scroll/auto) hides descendant paint past its border-box, so the
+  // overhang the audit would otherwise credit below it is INVISIBLE. Clamp the
+  // descendant contribution to the box bottom; keep `own` unclamped. Fixes the
+  // collapsed planner-calendar false positive: a maxHeight:0 + overflow:hidden
+  // body holding a 1248px CalendarPanel reported a 1241px "spill" that paints
+  // nothing — it's clipped to 0px. A candy control's OWN depth lip is read at the
+  // candy-btn itself (never overflow:hidden), so genuine lip overruns are
+  // unaffected — only overhang credited THROUGH a clipping ancestor is dropped.
+  if (cs.overflowY !== 'visible') kidsLow = Math.min(kidsLow, r.bottom);
+  return Math.max(own, kidsLow);
 }
 
 const isVStack = (cs) =>
@@ -167,7 +180,12 @@ export function spacingAudit(root = document.body, { quiet = false, bridge = tru
       const gap = next ? +(next.getBoundingClientRect().top - r.bottom).toFixed(1) : null;       // border-box gap
       const gapAfterBand = next ? +(gap - band).toFixed(1) : null;                                // whitespace past the band
       if (gapAfterBand != null && gapAfterBand < -TOL) {
-        flags.push({ el: k, cls: k.className || k.tagName.toLowerCase(), band, gap, overlap: +(-gapAfterBand).toFixed(1) });
+        flags.push({ el: k, cls: k.className || k.tagName.toLowerCase(), band, gap, overlap: +(-gapAfterBand).toFixed(1),
+          // Move 10 — pin the flagged element so a flag resolves to a file:line
+          // without a DOM inspector. txt = the row's visible label (greppable in
+          // JSX), shape = its candy data-shape. Both survive the el-strip below.
+          txt: (k.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 60) || null,
+          shape: k.dataset?.shape || null });
       }
       return { row: k.className || k.tagName.toLowerCase(), h: +r.height.toFixed(1), band, visualH: +(r.height + band).toFixed(1), gap, gapAfterBand };
     });
@@ -205,7 +223,7 @@ export function spacingAudit(root = document.body, { quiet = false, bridge = tru
         out.push('  ' + pad(String(r.row).slice(0, 24), 26) + pad(r.h, 7) + pad(r.band, 7) + pad(r.visualH, 9) + pad(r.gap, 7) + pad(r.gapAfterBand, 7));
       }
     }
-    for (const f of flags) out.push(`  ! ${f.cls}: band ${f.band}px overruns its ${f.gap}px gap (overlap ${f.overlap}px)`);
+    for (const f of flags) out.push(`  ! ${f.cls}: band ${f.band}px overruns its ${f.gap}px gap (overlap ${f.overlap}px)${f.txt ? ` «${f.txt}»` : ''}${f.shape ? ` [${f.shape}]` : ''}`);
     if (showRhythm) {
       // Evidence per off-grid row — the reader concludes; no slack/lift verdict.
       out.push('', `off-grid rows: ${rhythm.length}`);
@@ -227,6 +245,8 @@ export function spacingAudit(root = document.body, { quiet = false, bridge = tru
 // setting passes). Against the CURRENT audit fixtures 1-4 pass and 5/6/8 fail —
 // the failures PROVE the known blind spots (display:contents, background-clip,
 // inset shadow); Moves 4/5 flip them green. FX7 pends the rhythm array (Move 6).
+// Move 10 adds FX9 (overflow-hidden ancestor) — v1 credited a clipped child's
+// height as the container's band; the overflow clamp in visualBottom silences it.
 // Run window.spacingAuditSelfTest() after any edit to THIS file; once Moves 4/5
 // land, require pass:true (Move 9 protocol).
 
@@ -374,6 +394,22 @@ export function spacingAuditSelfTest() {
     stack.append(inset, sib()); host.appendChild(stack);
     fixtures.push({ n: 8, name: 'inset-shadow', blindSpot: true, stack, verify: (r) => {
       const row = findRow(r, 'fx8-row');
+      return { pass: near(row?.band, 0), detail: `band=${row?.band} exp≈0` };
+    } });
+  }
+
+  // FX9 — overflow-hidden ancestor (BLIND SPOT until Move 10): a container with
+  // overflow:hidden + a tall in-flow child. The child paints far below the box
+  // but is CLIPPED, so visualBottom must clamp the descendant contribution to the
+  // box bottom → band 0, not the child's height. v1 credited the child's full
+  // height as the container's band (the collapsed planner-calendar false positive).
+  {
+    const stack = mk('div', 'sst-fx9', { display: 'flex', flexDirection: 'column', gap: '8px' });
+    const clip = mk('div', 'fx9-row', { overflow: 'hidden', height: '10px', background: 'transparent' });
+    clip.appendChild(mk('div', 'fx9-tall', { height: '500px', background: '#3cc' }));
+    stack.append(clip, sib()); host.appendChild(stack);
+    fixtures.push({ n: 9, name: 'overflow-hidden-clip', blindSpot: true, stack, verify: (r) => {
+      const row = findRow(r, 'fx9-row');
       return { pass: near(row?.band, 0), detail: `band=${row?.band} exp≈0` };
     } });
   }

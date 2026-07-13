@@ -4963,6 +4963,7 @@ button.cal-customdays__step:hover {
 /* Same standalone-chip squaring as .ov-agents-chip (data-shape="icon" sizing is
    .dock-root-scoped, which the host chips aren't inside). */
 .ov-browser-chip > .candy-face { padding: 8px; gap: 0; }
+.ov-monitor-chip > .candy-face { padding: 8px; gap: 0; }
 /* Corner grip — two hairline edges, no glow (house rule). */
 .ov-resize-handle { position: absolute; right: 3px; bottom: 3px; width: 12px; height: 12px; cursor: nwse-resize; border-right: 2px solid var(--text-faint); border-bottom: 2px solid var(--text-faint); border-radius: 0 0 4px 0; opacity: .7; touch-action: none; }
 .ov-resize-handle:hover { opacity: 1; }

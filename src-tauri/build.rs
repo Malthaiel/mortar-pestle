@@ -299,6 +299,8 @@ fn main() {
         "overlay_go_live",
         "overlay_go_offline",
         "overlay_get_live_target",
+        "overlay_list_monitors",
+        "overlay_set_monitor",
         "broadcast_get_state",
         "broadcast_request",
         "broadcast_start_record",

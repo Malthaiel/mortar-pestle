@@ -295,6 +295,8 @@
     "allow-overlay-go-live",
     "allow-overlay-go-offline",
     "allow-overlay-get-live-target",
+    "allow-overlay-list-monitors",
+    "allow-overlay-set-monitor",
     "allow-broadcast-get-state",
     "allow-broadcast-request",
     "allow-broadcast-start-record",

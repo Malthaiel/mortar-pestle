@@ -12,7 +12,7 @@
 use std::sync::{Mutex, OnceLock};
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter, Manager, Monitor, PhysicalPosition};
 
 use crate::commands::vault::VaultError;
 
@@ -47,6 +47,190 @@ fn lock() -> std::sync::MutexGuard<'static, Option<LiveTarget>> {
 /// the STT dictation reroute in `lib.rs::run` (`dictation_committed` arm).
 pub fn current_live_target() -> Option<LiveTarget> {
     lock().clone()
+}
+
+/// The monitor the in-game overlay (`overlay-host`) renders on, chosen from the
+/// overlay's monitor picker chip, the Settings row, or the cycle shortcut. Like
+/// `LiveTarget` it lives in a process-lifetime `OnceLock<Mutex<…>>` cell — the
+/// overlay-host webview has its own localStorage (unreadable by the main Settings
+/// webview), so a cross-window choice can't live in either localStorage; Rust is the
+/// single source of truth both webviews reach. Persisted to `overlay_monitor.json`
+/// in app-data so it survives restarts. Matched by name first, then by position
+/// (a monitor's `name()` can be `None`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MonitorPref {
+    /// The monitor's device name (`Monitor::name()`); `None` when the platform
+    /// didn't expose one (position-match is the fallback).
+    #[serde(default)]
+    pub name: Option<String>,
+    /// Physical top-left position (physical px) — the position-match fallback.
+    pub pos: (i32, i32),
+    /// Physical size — stored for completeness; `show_overlay_host` re-sizes to the
+    /// resolved monitor's live `size()` anyway, so a stale size never sticks.
+    pub size: (u32, u32),
+}
+
+struct MonitorState {
+    /// Whether the pref has been read off disk yet (distinguishes "loaded, no pref"
+    /// from "not loaded" so a deliberately-cleared pref isn't re-read every call).
+    loaded: bool,
+    pref: Option<MonitorPref>,
+}
+
+fn monitor_cell() -> &'static Mutex<MonitorState> {
+    static CELL: OnceLock<Mutex<MonitorState>> = OnceLock::new();
+    CELL.get_or_init(|| Mutex::new(MonitorState { loaded: false, pref: None }))
+}
+
+fn lock_monitor() -> std::sync::MutexGuard<'static, MonitorState> {
+    monitor_cell().lock().unwrap_or_else(|p| p.into_inner())
+}
+
+/// The chosen monitor (a clone), lazily loaded from `overlay_monitor.json` on the
+/// first call. Read by `show_overlay_host` (so Shift+C re-shows on the chosen
+/// monitor) and by `overlay_list_monitors` (to mark the current selection).
+fn current_monitor_pref(app: &AppHandle) -> Option<MonitorPref> {
+    let mut g = lock_monitor();
+    if !g.loaded {
+        g.pref = read_pref_file(app);
+        g.loaded = true;
+    }
+    g.pref.clone()
+}
+
+/// Store the choice in the cell and persist it to `overlay_monitor.json`.
+fn set_monitor_pref(app: &AppHandle, pref: Option<MonitorPref>) {
+    {
+        let mut g = lock_monitor();
+        g.loaded = true;
+        g.pref = pref.clone();
+    }
+    write_pref_file(app, &pref);
+}
+
+fn pref_path(app: &AppHandle) -> Option<std::path::PathBuf> {
+    app.path()
+        .app_data_dir()
+        .ok()
+        .map(|d| d.join("overlay_monitor.json"))
+}
+
+fn read_pref_file(app: &AppHandle) -> Option<MonitorPref> {
+    let path = pref_path(app)?;
+    let data = std::fs::read_to_string(path).ok()?;
+    serde_json::from_str(&data).ok()
+}
+
+fn write_pref_file(app: &AppHandle, pref: &Option<MonitorPref>) {
+    let Some(path) = pref_path(app) else { return };
+    match pref {
+        Some(p) => {
+            if let Ok(json) = serde_json::to_string_pretty(p) {
+                if let Some(dir) = path.parent() {
+                    let _ = std::fs::create_dir_all(dir);
+                }
+                let _ = std::fs::write(path, json);
+            }
+        }
+        None => {
+            let _ = std::fs::remove_file(path);
+        }
+    }
+}
+
+/// Find the chosen monitor among `app.available_monitors()` by name first, then by
+/// position. Returns the live `Monitor` — its `size()` is re-read, so a stored
+/// stale size never sticks.
+fn resolve_monitor(app: &AppHandle, pref: &MonitorPref) -> Option<Monitor> {
+    let monitors = app.available_monitors().ok()?;
+    if let Some(name) = &pref.name {
+        if let Some(m) = monitors
+            .iter()
+            .find(|m| m.name().map(|s| s.as_str()) == Some(name.as_str()))
+        {
+            return Some(m.clone());
+        }
+    }
+    monitors
+        .iter()
+        .find(|m| *m.position() == PhysicalPosition::new(pref.pos.0, pref.pos.1))
+        .cloned()
+}
+
+/// `overlay_list_monitors` — every available monitor with a friendly label, its
+/// physical resolution, and which one is currently chosen. Drives the overlay chip
+/// dropdown and the Settings row.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MonitorInfo {
+    pub name: Option<String>,
+    pub label: String,
+    pub width: u32,
+    pub height: u32,
+    pub is_selected: bool,
+}
+
+#[tauri::command]
+pub fn overlay_list_monitors(app: AppHandle) -> Result<Vec<MonitorInfo>, VaultError> {
+    let pref = current_monitor_pref(&app);
+    let monitors = app.available_monitors().unwrap_or_default();
+    Ok(monitors
+        .iter()
+        .enumerate()
+        .map(|(i, m)| {
+            let name_ref = m.name();
+            let name: Option<String> = name_ref.cloned();
+            let label = name
+                .clone()
+                .unwrap_or_else(|| format!("Display {}", i + 1));
+            let size = m.size();
+            let is_selected = pref
+                .as_ref()
+                .map(|p| match (p.name.as_deref(), name_ref) {
+                    (Some(pn), Some(n)) => pn == n.as_str(),
+                    _ => *m.position() == PhysicalPosition::new(p.pos.0, p.pos.1),
+                })
+                .unwrap_or(false);
+            MonitorInfo {
+                name,
+                label,
+                width: size.width,
+                height: size.height,
+                is_selected,
+            }
+        })
+        .collect())
+}
+
+/// `overlay_set_monitor` — choose a monitor by its `name` (from
+/// `overlay_list_monitors`): store + persist the pref, and if the overlay-host is
+/// visible, reposition + re-size it immediately. An unmatched/unset name is a no-op
+/// (the stored pref is left as-is — there's no clear path today).
+#[tauri::command]
+pub fn overlay_set_monitor(app: AppHandle, name: Option<String>) -> Result<(), VaultError> {
+    let monitors = app.available_monitors().unwrap_or_default();
+    let Some(m) = name
+        .as_deref()
+        .and_then(|n| monitors.iter().find(|m| m.name().map(|s| s.as_str()) == Some(n)))
+    else {
+        return Ok(());
+    };
+    let pos = m.position();
+    let size = m.size();
+    let pref = MonitorPref {
+        name: m.name().cloned(),
+        pos: (pos.x, pos.y),
+        size: (size.width, size.height),
+    };
+    set_monitor_pref(&app, Some(pref));
+    if let Some(win) = app.get_webview_window("overlay-host") {
+        if win.is_visible().unwrap_or(false) {
+            let _ = win.set_position(*m.position());
+            let _ = win.set_size(*m.size());
+        }
+    }
+    Ok(())
 }
 
 /// `overlay_go_live` — mark a scrim/match live: store the target, surface the
@@ -98,12 +282,22 @@ pub fn overlay_get_live_target() -> Result<Option<LiveTarget>, VaultError> {
 /// identically.
 pub fn show_overlay_host(win: &tauri::WebviewWindow) {
     harden_capture_overlay(win);
-    // Windows: a `fullscreen: true` transparent window is not alpha-composited by
-    // DWM (renders opaque grey); size a borderless monitor-sized window instead.
-    // Best-effort — a monitor lookup miss just shows it at its previous geometry.
-    if let Some(mon) = win.current_monitor().ok().flatten()
-        .or_else(|| win.primary_monitor().ok().flatten())
-    {
+    // Size to the chosen monitor when a pref is set; else preserve the prior
+    // behavior (current monitor → primary). A transparent *fullscreen* window
+    // renders opaque grey on the Windows DWM, so a borderless monitor-sized window
+    // is used instead. If the chosen monitor was unplugged, fall back to primary
+    // (silent — the stored pref is kept so it resumes on reconnect). Best-effort — a
+    // monitor lookup miss just shows it at its previous geometry.
+    let mon = match current_monitor_pref(&win.app_handle()) {
+        Some(p) => resolve_monitor(&win.app_handle(), &p)
+            .or_else(|| win.primary_monitor().ok().flatten()),
+        None => win
+            .current_monitor()
+            .ok()
+            .flatten()
+            .or_else(|| win.primary_monitor().ok().flatten()),
+    };
+    if let Some(mon) = mon {
         let _ = win.set_position(*mon.position());
         let _ = win.set_size(*mon.size());
     }

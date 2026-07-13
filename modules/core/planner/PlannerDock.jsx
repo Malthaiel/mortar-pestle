@@ -314,7 +314,11 @@ export default function PlannerDock() {
                 overflowY: calendarCollapsed ? 'hidden' : 'auto',
               }}
             >
-              <div data-no-drag style={{ display: 'flex', justifyContent: 'flex-end', padding: '6px 8px 0' }}>
+              {/* padding-bottom: --candy-depth reserves the Edit-Frame chip's depth
+                  lip so it doesn't bleed onto the CalendarPanel below at 0 gap
+                  (spacingAudit flagged the 5px overrun; --candy-depth is
+                  --candy-depth-small here, set on .button-planner-calendar). */}
+              <div data-no-drag style={{ display: 'flex', justifyContent: 'flex-end', padding: '6px 8px var(--candy-depth)' }}>
                 <button
                   type="button"
                   className={`candy-btn${frameEditMode ? ' is-active' : ''}`}
