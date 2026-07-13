@@ -57,6 +57,11 @@ jobs:
           # behind a paid subscription; revisit this flag then. Overrides the
           # gitignored web/.env (which sets the same locally).
           VITE_BUILD_TIER: studio
+          # Feedback Board (Supabase) — build.rs:13 panics on release builds
+          # without these (fail loud so the board doesn't ship dead). Baked via
+          # option_env! at compile time. Dev keeps the runtime env fallback.
+          MORTAR_PESTLE_SUPABASE_URL: ${{ secrets.MORTAR_PESTLE_SUPABASE_URL }}
+          MORTAR_PESTLE_SUPABASE_ANON_KEY: ${{ secrets.MORTAR_PESTLE_SUPABASE_ANON_KEY }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Mortar & Pestle ${{ github.ref_name }}'
