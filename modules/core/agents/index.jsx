@@ -6,9 +6,11 @@
 // settings tab rather than a module page.
 
 import ConciergeProvider from '@host/agents/concierge/ConciergeProvider.jsx';
+import AnalystProvider from '@host/agents/analyst/AnalystProvider.jsx';
 
 export default {
   register(api) {
     api.slots.registerProvider(ConciergeProvider);
+    api.slots.registerProvider(AnalystProvider);
   },
 };

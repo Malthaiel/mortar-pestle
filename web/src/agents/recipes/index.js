@@ -11,9 +11,11 @@
 // prompt needs no recipe catalogue in v1 — the recipe drives its own prompt.
 
 import { organizeMd } from './organize-md.jsx';
+import { analystTeach } from './analyst-teach.jsx';
 
 export const RECIPES = {
   [organizeMd.id]: organizeMd,
+  [analystTeach.id]: analystTeach,
 };
 
 export function getRecipe(id) {

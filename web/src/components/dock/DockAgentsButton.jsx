@@ -10,6 +10,7 @@ import DockButton from './DockButton.jsx';
 import { IconSparkles } from '../icons.jsx';
 import { listAgents } from '../../agents/agents-registry.js';
 import { openConcierge } from '../../agents/concierge/ConciergeProvider.jsx';
+import { openAnalyst } from '../../agents/analyst/AnalystProvider.jsx';
 
 export default function DockAgentsButton({ label, accent, settings, setSetting, onContextMenu }) {
   const [open, setOpen] = useState(false);
@@ -44,6 +45,8 @@ export default function DockAgentsButton({ label, accent, settings, setSetting, 
     // Concierge exits Design Mode first — one agent surface at a time (they share
     // the global agent-chat event stream).
     else if (id === 'concierge') { setSetting('agents', { mode: false }); openConcierge(); }
+    // Analyst's provider centralizes its own exclusion (exits Design Mode, closes Concierge).
+    else if (id === 'analyst') openAnalyst();
   };
 
   return (

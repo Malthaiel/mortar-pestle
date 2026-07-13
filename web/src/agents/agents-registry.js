@@ -21,6 +21,13 @@ export const AGENTS_REGISTRY = {
     // Opens the Concierge floating window — see ConciergeProvider (SF2).
     launch: 'window',
   },
+  analyst: {
+    id: 'analyst',
+    label: 'Analyst',
+    tagline: 'Deadlock coach-analyst',
+    // Opens the Analyst floating window — see AnalystProvider.
+    launch: 'window',
+  },
 };
 
 export function listAgents() {
