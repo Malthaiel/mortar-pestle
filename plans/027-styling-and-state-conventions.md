@@ -324,3 +324,40 @@ Stop and report (do not improvise) if:
 - **Deliberately deferred**: this plan does not touch the `vault.endpoint`
   deprecation or consolidate the 5 module-owned api.js wrappers — both are named in
   the doc as standing conventions but their enforcement sweep is future work.
+
+## Resolved (2026-07-13 — re-scoped + executed)
+
+The plan was written at `57a6c80` (2026-07-03); by execution time 10 days of
+commits had drifted the cited line numbers and added an un-scoped library block.
+The drift was benign (both strays library-owned), so the plan was re-scoped in
+chat and executed, not re-written:
+
+- **Drift found**: `styles.css` was 4966 lines (plan said 4932). The main anime
+  block had shifted `4431-4811` → `4442-4822` (comment header reworded too). A
+  second, separate `.anime-rail-controls` / `.anime-rail-add` cluster at
+  `1752-1768` (lead comments + 8 selectors) — library-owned (used only by
+  `AnimeDetailHeader.jsx` + `DiscoveryDetail.jsx`) but not in the original scope —
+  would have been orphaned in `styles.css` by a verbatim move. A non-`.anime-`
+  selector `.detail-column` at `:4789` (inside the main range, library-owned,
+  comment says "the whole anime detail page") tripped the plan's prefix-only STOP
+  gate as a false alarm.
+- **Re-scope**: move BOTH clusters — main block `4442-4822` + rail-controls
+  `1752-1768` — verbatim into `modules/core/library/library.css`, imported from
+  `library/index.jsx`. Operator-approved (Branch A of the re-scope decision).
+- **Landed**: `CONVENTIONS.md` (repo root) + CSS-ownership rule appended to
+  `docs/DESIGN.md` beside plan 008's boundary note (commit `10f76d5`); anime CSS
+  relocated, `styles.css` 4966 → 4566 (commit `f31d663`). Branch
+  `session/027-css-conventions`, PENDING `mortar-pestle_wt.py land`.
+- **Verified**: `npm --prefix web run build` exit 0; `grep -c anime- styles.css`
+  → 0; brace balance 873/873; manual visual check 2026-07-13 — anime series detail
+  + discovery detail render unchanged (alt-titles, histogram, status bars, info
+  list, recs row, rail controls).
+- **Step 3 (overlay-host panel CSS) SKIPPED**: optional + gated; host-scoped and
+  borrow-adjacent (`OverlayStudioPanel.jsx` imports `stt.css`). The anime slice
+  already proves the pattern. Tracked as a future optional slice, not debt.
+- **Surfaced (out of scope, logged to Update Queue)**: (1) `docs/DESIGN.md` H3
+  `### Button`/`Pill`/`Stat`/`Section` are orphaned — plan 008's boundary note
+  (`## Module ↔ host import boundary`) was inserted inside the `## Primitives`
+  section, splitting it; the H3s now fall under whatever `##` follows. (2)
+  `plans/README.md` row 39 (plan 026) still says IN PROGRESS / PENDING LAND
+  though 026 landed via merge `2cab561` (handoff 2026-07-10).
