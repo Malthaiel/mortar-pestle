@@ -10,8 +10,26 @@ const scrimDir = path.join(process.env.APPDATA || '', 'dev.malthaiel.mortar-pest
 assert.ok(fs.existsSync(scrimDir), `Scrim dir not found at ${scrimDir}`);
 const load = (name) => JSON.parse(fs.readFileSync(path.join(scrimDir, name), 'utf8'));
 
-// ── sidecar 1: the Diarize ground-truth match ────────────────────────────────
-const raw = load('.matchdata.(07-09-26) Diarize VS Test — Match 1.json');
+// Scrim filenames follow user-renamable scrim names, so discover sidecars by glob
+// and pin the ground-truth match by match_id — a rename/delete can't break the test.
+const sidecars = fs.readdirSync(scrimDir)
+  .filter((n) => /^\.matchdata\..*\.json$/.test(n))
+  .map((n) => ({ n, raw: load(n) }));
+assert.ok(sidecars.length >= 1, `no .matchdata sidecars in ${scrimDir}`);
+
+// generic guards on EVERY real sidecar: renders, degrades, never throws
+for (const { n, raw } of sidecars) {
+  const d = buildMatchDigest(raw, { label: 'Match 1' });
+  assert.ok(d.includes('### Scoreboard'), `${n}: missing scoreboard`);
+  assert.ok(d.length < 60000, `${n}: digest too big (${d.length} chars)`);
+  assert.ok(!d.includes('Hero undefined'), `${n}: killer slot failed to resolve`);
+}
+
+// ── ground-truth match (the Diarize scrim, pinned by match_id) ────────────────
+const GT_ID = 93081870;
+const gt = sidecars.find(({ raw }) => Number(raw?.match_info?.match_id) === GT_ID);
+assert.ok(gt, `ground-truth match ${GT_ID} not found — scrim deleted?`);
+const raw = gt.raw;
 const digest = buildMatchDigest(raw, { label: 'Match 1' });
 
 // known scoreboard facts (verified against the live payload 2026-07-13)
@@ -47,15 +65,9 @@ assert.equal(detectSwings(curve, 10 ** 9).length, 0);
 // size budget: ≤ ~15k tokens ≈ 60k chars
 assert.ok(digest.length < 60000, `digest too big (${digest.length} chars)`);
 
-// ── sidecar 2: an older, differently-shaped payload (degrade, never throw) ──
-const raw2 = load('.matchdata.(06-16-26) Reliquary VS The Mafia — Match 1.json');
-const digest2 = buildMatchDigest(raw2, { label: 'Match 1' });
-assert.ok(digest2.includes('### Scoreboard'), 'older sidecar digest missing scoreboard');
-assert.ok(digest2.length < 60000);
-
 // ── tolerance: empty/garbage input degrades to gaps, never throws ────────────
 const empty = buildMatchDigest({});
 assert.ok(empty.includes('absent in this sidecar'));
 assert.ok(buildMatchDigest(null).includes('## Match digest'));
 
-console.log('matchDigest selftest OK —', digest.length, 'chars (Diarize),', digest2.length, 'chars (Reliquary),', detectSwings(curve).length, 'swings detected');
+console.log('matchDigest selftest OK —', sidecars.length, 'live sidecar(s),', digest.length, 'chars (ground-truth),', detectSwings(curve).length, 'swings detected');
