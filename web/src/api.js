@@ -1310,6 +1310,9 @@ export const api = {
   createFolder: (path, root) => readCall('vault_create_folder', { path, root }),
   renamePath: (from, to, root) => readCall('vault_rename_path', { from, to, root }),
   deleteFolder: (path, root) => readCall('vault_delete_folder', { path, root }),
+  // Raw one-level listing incl dotfiles (vault_get_folder hides dotfiles + only
+  // returns .md) — for the GameWiki scrim bundle rename/delete to find sidecars.
+  listFolderRaw: (path, root) => readCall('vault_list_folder_raw', { path, root }),
   toggleTaskAtLine: (path, line, root) => readCall('vault_toggle_task', { path, line, root }),
   resolveLink: (target, embed = false) => readCall('vault_resolve_link', { target, embed }),
 

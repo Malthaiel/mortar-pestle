@@ -20,11 +20,12 @@ import {
 // header band is transparent, so they ride the sidebar's circuit texture.
 const ROW_H = 26; // = treeKit NAV_H
 
-function ToolBtn({ title, accent, onClick, disabled, children }) {
+function ToolBtn({ title, accent, onClick, disabled, dataAttr, children }) {
   return (
     <button
       type="button" data-own-press title={title} onClick={onClick} disabled={disabled}
       className="candy-btn" data-shape="icon"
+      {...(dataAttr ? { ['data-' + dataAttr]: '' } : {})}
       style={{
         flexShrink: 0,
         // Size the BUTTON (square, at tree-row height) so the face fills it per the
@@ -50,7 +51,8 @@ function ToolBtn({ title, accent, onClick, disabled, children }) {
 // }
 // controller = { sortMode, setSortMode, sortModes, anyExpanded, expandAll,
 //                collapseAll, revealCurrent, canReveal }
-export default function TreeToolbar({ buttons, controller, accent }) {
+// extra = [{ title, icon, onClick, disabled?, dataAttr? }]  // surface-specific icon buttons appended after the row
+export default function TreeToolbar({ buttons, controller, accent, extra }) {
   const { openContextMenu } = useContextMenu();
   const b = buttons || {};
   const c = controller || {};
@@ -103,6 +105,11 @@ export default function TreeToolbar({ buttons, controller, accent }) {
           {b.revealInFiles.icon || <IconHardDrive/>}
         </ToolBtn>
       )}
+      {(extra || []).map((x, i) => (
+        <ToolBtn key={i} title={x.title} accent={accent} onClick={x.onClick} disabled={!!x.disabled} dataAttr={x.dataAttr}>
+          {x.icon}
+        </ToolBtn>
+      ))}
     </div>
   );
 }

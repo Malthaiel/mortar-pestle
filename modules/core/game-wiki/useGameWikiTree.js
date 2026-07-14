@@ -77,6 +77,13 @@ export function useGameWikiTree() {
 
   const isOpen = useCallback((vp) => expanded.has(vp), [expanded]);
   const childrenOf = useCallback((vp) => cache[vp], [cache]);
+  // Re-list a folder's children after a file op the hook didn't initiate (scrim
+  // bundle rename/delete/new from the GameWikiTree context menu). Drops the cache
+  // entry so the next render isn't stale; re-fetches if the folder is open.
+  const refresh = useCallback((vaultPath) => {
+    setCache((c) => { const next = { ...c }; delete next[vaultPath]; return next; });
+    if (cacheRef.current[vaultPath] || expanded.has(vaultPath)) fetchChildren(vaultPath);
+  }, [fetchChildren, expanded]);
   const collapseAll = useCallback(() => setExpanded(() => { const n = new Set(); persist(n); return n; }), []);
 
   // Top-level games = immediate subfolders of the gamewiki root (slug '').
@@ -96,5 +103,5 @@ export function useGameWikiTree() {
     for (const vp of expanded) if (!cacheRef.current[vp]) fetchChildren(vp);
   }, [expanded, fetchChildren]);
 
-  return { games, isOpen, toggle, childrenOf, collapseAll, anyExpanded: expanded.size > 0 };
+  return { games, isOpen, toggle, childrenOf, refresh, collapseAll, anyExpanded: expanded.size > 0 };
 }

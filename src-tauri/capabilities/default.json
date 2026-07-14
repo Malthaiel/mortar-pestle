@@ -120,6 +120,7 @@
     "allow-vault-create-folder",
     "allow-vault-rename-path",
     "allow-vault-delete-folder",
+    "allow-vault-list-folder-raw",
     "allow-recycle-bin-list",
     "allow-recycle-bin-read",
     "allow-recycle-bin-restore",

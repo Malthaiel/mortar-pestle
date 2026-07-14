@@ -428,6 +428,41 @@ pub fn vault_get_folder(
     })
 }
 
+/// Raw one-level directory listing for a vault-relative folder, including
+/// dotfiles (unlike `vault_get_folder`, which hides dotfiles + only returns
+/// `.md` pages). Used by the GameWiki scrim bundle rename/delete to find every
+/// sibling sidecar (`.matchdata.…`, `.vodreport.…`, …) keyed by a scrim's
+/// basename. Non-recursive; path safety rides on `resolve_in` (root containment).
+#[derive(Serialize)]
+pub struct RawFolderEntries {
+    pub files: Vec<String>,
+    pub subfolders: Vec<String>,
+}
+
+#[tauri::command]
+pub fn vault_list_folder_raw(
+    path: String,
+    root: Option<String>,
+) -> Result<RawFolderEntries, VaultError> {
+    let (rel, abs) = resolve_in(&path, RootKind::from_opt(root.as_deref()))?;
+    if !abs.exists() {
+        return Err(VaultError::NotFound(rel));
+    }
+    let mut files: Vec<String> = Vec::new();
+    let mut subfolders: Vec<String> = Vec::new();
+    for ent in fs::read_dir(&abs).map_err(|e| VaultError::Io(e.to_string()))?.flatten() {
+        let name = ent.file_name().to_string_lossy().into_owned();
+        match ent.file_type() {
+            Ok(t) if t.is_dir() => subfolders.push(name),
+            Ok(_) => files.push(name),
+            Err(_) => continue,
+        }
+    }
+    files.sort();
+    subfolders.sort();
+    Ok(RawFolderEntries { files, subfolders })
+}
+
 // ── File-tree mutation commands (Vault File Tree) ───────────────────────────
 // Create / rename / delete folders for the recursive sidebar tree. File create
 // + delete reuse vault_write_file / vault_delete_file. Path safety rides on

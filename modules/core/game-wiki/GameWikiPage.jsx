@@ -17,7 +17,6 @@ import { encodePagePath } from '@host/components/SidebarBrowser.jsx';
 import PageTitleHeader from '@host/components/PageTitleHeader.jsx';
 import { getGameWikiIndex, resolveTarget } from './gamewikiIndex.js';
 import ScrimViewer from './ScrimViewer.jsx';
-import ScrimListLanding from './ScrimListLanding.jsx';
 
 // Coaching scrims render as the interactive ScrimViewer, not the markdown reader.
 const SCRIM_BASE = 'Deadlock/Coaching/Scrim';
@@ -110,7 +109,12 @@ export default function GameWikiPage({ rest, accent }) {
     [raw, index],
   );
 
-  if (isScrimLanding) return <ScrimListLanding accent={accent} />;
+  if (isScrimLanding) return (
+    <Shell accent={accent}>
+      <h2>Scrims</h2>
+      <p style={{ opacity: 0.7 }}>Expand the Scrim folder on the left, then right-click it for New Scrim (or right-click a scrim for Rename / Delete).</p>
+    </Shell>
+  );
   if (isScrimFile) return <ScrimViewer path={rest + '.md'} accent={accent} />;
 
   if (!rest) {

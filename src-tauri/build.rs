@@ -126,6 +126,7 @@ fn main() {
         "vault_create_folder",
         "vault_rename_path",
         "vault_delete_folder",
+        "vault_list_folder_raw",
         "recycle_bin_list",
         "recycle_bin_read",
         "recycle_bin_restore",

@@ -7,11 +7,12 @@
 // prompt; bad JSON → error.
 
 import { useEffect, useState } from 'react';
-import { api } from '@host/api.js';
+import { api, invoke } from '@host/api.js';
 import AppWindow from '@host/components/ui/AppWindow.jsx';
 import { IconTable } from '@host/components/icons.jsx';
 import { extractMatch, extractPlayers, extractLanes } from './matchData.js';
 import MatchTree from './MatchTree.jsx';
+import TreeToolbar from '@host/components/vault-tree/TreeToolbar.jsx';
 import RailSplitter from './RailSplitter.jsx';
 import ScoreboardTab from './ScoreboardTab.jsx';
 import PlayerStatsTab from './PlayerStatsTab.jsx';
@@ -39,6 +40,7 @@ export default function MatchViewPopup({ sidecarPath, matchN, accent, onClose })
   const [railW, setRailW] = useState(readRailW);
   const [tfOpen, setTfOpen] = useState(false);
   const [state, setState] = useState({ status: 'loading' });
+  const [ctrl, setCtrl] = useState(null); // MatchTree controller handle (collapse/expand-all) for the toolbar
 
   useEffect(() => {
     let cancelled = false;
@@ -80,16 +82,29 @@ export default function MatchViewPopup({ sidecarPath, matchN, accent, onClose })
       )}
       bodyStyle={{ padding: 0, overflowY: 'hidden', display: 'flex', fontFamily: 'var(--font-mono)' }}
     >
-      {/* Left rail — folding resizeable tree */}
+      {/* Left rail — toolbar (fixed) + folding resizeable tree (scroll). Tweak 1: TreeToolbar
+          above MatchTree, collapse/expand-all driven via the MatchTree controller + reveal-match-file. */}
       <div style={{
-        width: railW, flexShrink: 0, padding: '14px 10px',
+        width: railW, flexShrink: 0,
         background: 'var(--surface-2)',
-        overflowY: 'auto', overflowX: 'hidden',
+        display: 'flex', flexDirection: 'column',
       }}>
-        {ready && (
-          <MatchTree players={players} lanes={lanes} sel={sel} onSel={setSel}
-            accent={accent} personas={NO_PERSONAS} />
-        )}
+        <div style={{ flexShrink: 0, padding: '10px 10px 6px' }}>
+          <TreeToolbar
+            buttons={{
+              collapse: { show: true },
+              revealInFiles: { show: true, title: 'Reveal match file', onClick: () => invoke('coaching_reveal_path', { path: sidecarPath }).catch((e) => console.error('coaching_reveal_path failed:', e)) },
+            }}
+            controller={ctrl || { anyExpanded: false, expandAll: () => {}, collapseAll: () => {} }}
+            accent={accent}
+          />
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '4px 10px 14px' }}>
+          {ready && (
+            <MatchTree players={players} lanes={lanes} sel={sel} onSel={setSel}
+              accent={accent} personas={NO_PERSONAS} onController={setCtrl} />
+          )}
+        </div>
       </div>
       <RailSplitter width={railW} min={RAIL_MIN} max={RAIL_MAX} onWidth={setWidth} />
 

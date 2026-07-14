@@ -755,6 +755,7 @@ pub fn run() {
             commands::folder::vault_create_folder,
             commands::folder::vault_rename_path,
             commands::folder::vault_delete_folder,
+            commands::folder::vault_list_folder_raw,
             commands::food::usda_food_search,
             commands::food::usda_food,
             commands::health::daily_health_op,

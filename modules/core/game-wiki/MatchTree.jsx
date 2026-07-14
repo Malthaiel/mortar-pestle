@@ -7,7 +7,7 @@
 // persona when resolved via `personas`, hero name as the fallback until then). Resize lives in
 // the parent (RailSplitter); this only renders + reports selection.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSettings } from '@host/hooks/useSettings.js';
 import {
   AnimCtx, SuffixCtx, REVEAL, GAP,
@@ -43,7 +43,7 @@ function Folder({ label, open, onToggle, accent, count, children }) {
   );
 }
 
-export default function MatchTree({ players, lanes, sel, onSel, accent, personas }) {
+export default function MatchTree({ players, lanes, sel, onSel, accent, personas, onController }) {
   const { settings } = useSettings();
   const anim = REVEAL[settings.vaultTreeReveal] || REVEAL.normal;
   const ps = [...players].sort(byTeamSlot);
@@ -60,6 +60,18 @@ export default function MatchTree({ players, lanes, sel, onSel, accent, personas
     if (next && firstSel) onSel(firstSel);
     return { ...o, [key]: next };
   });
+
+  // Expose a controller so a parent TreeToolbar can drive collapse/expand-all (tweak 1).
+  // anyExpanded reflects the 3 folders; expand/collapse set all three together. The internal
+  // toggle expand-and-navigate logic stays intact — the toolbar only flips the open map.
+  useEffect(() => {
+    if (!onController) return;
+    onController({
+      anyExpanded: Object.values(open).some(Boolean),
+      expandAll: () => setOpen({ players: true, lanes: true, graphs: true }),
+      collapseAll: () => setOpen({ players: false, lanes: false, graphs: false }),
+    });
+  }, [open, onController]);
 
   const leaf = (section, label) => (
     <TreeRow label={label} accent={accent}
