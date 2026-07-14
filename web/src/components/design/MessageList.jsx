@@ -4,17 +4,30 @@
 // messages are left-aligned with an avatar gutter that pulses while
 // streaming.
 
-import { useEffect, useRef } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import AtelierAvatar from './AtelierAvatar.jsx';
 
 export default function MessageList({ messages, streaming, accent, error, emptyName, emptyTagline, emptyBlurb }) {
   const scrollRef = useRef(null);
+  // Pin-to-bottom: only auto-scroll when the user is already near the bottom,
+  // so scrolling up to read earlier messages isn't yanked back on every
+  // streaming chunk. Sending a new user message re-pins.
+  const pinnedRef = useRef(true);
 
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
+    const last = messages[messages.length - 1];
+    if (last && last.role === 'user') pinnedRef.current = true;
+    if (!pinnedRef.current) return;
     el.scrollTop = el.scrollHeight;
   }, [messages, streaming]);
+
+  const handleScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  };
 
   // SF4 — recipe round-trips run `hidden` (tray-centric flow), so visibility is
   // computed from non-hidden messages only. Atelier never sets `hidden`.
@@ -25,12 +38,12 @@ export default function MessageList({ messages, streaming, accent, error, emptyN
     <div
       ref={scrollRef}
       data-aos-no-mark
+      onScroll={handleScroll}
       style={{
         flex: 1, minHeight: 0,
         overflowY: 'auto',
         padding: '14px 14px 6px',
         display: 'flex', flexDirection: 'column', gap: 12,
-        scrollBehavior: 'smooth',
       }}
     >
       {isEmpty && <EmptyState accent={accent} name={emptyName} tagline={emptyTagline} blurb={emptyBlurb}/>}
@@ -72,10 +85,10 @@ function EmptyState({
   );
 }
 
-function Message({ msg, accent }) {
+const Message = memo(function Message({ msg, accent }) {
   if (msg.role === 'user') {
     return (
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', contentVisibility: 'auto', containIntrinsicSize: 'auto 200px' }}>
         <div style={{
           maxWidth: '78%',
           padding: '8px 12px',
@@ -92,7 +105,7 @@ function Message({ msg, accent }) {
     );
   }
   return (
-    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', contentVisibility: 'auto', containIntrinsicSize: 'auto 200px' }}>
       <div style={{ paddingTop: 6, flexShrink: 0 }}>
         <AtelierAvatar accent={accent} streaming={!!msg.streaming}/>
       </div>
@@ -116,7 +129,7 @@ function Message({ msg, accent }) {
       </div>
     </div>
   );
-}
+});
 
 function ErrorRow({ error }) {
   const code = error?.code || 'ERROR';
