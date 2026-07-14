@@ -571,6 +571,12 @@ async fn run_claude_cli(
     let resolved = crate::commands::design::resolve_cli_path(cli_path);
     let alias = if matches!(model, "opus" | "sonnet" | "haiku") { model } else { "opus" };
 
+    // Stage the system prompt in a temp file (see design::SystemPromptFile) and
+    // pass --system-prompt-file so it never touches the command line — a large
+    // --system-prompt arg overflows cmd.exe's 8191-char limit (os error 206).
+    let sp_file = crate::commands::design::SystemPromptFile::new(system)
+        .map_err(|e| DeadlockError::Network(format!("stage system prompt: {e}")))?;
+
     // --print --output-format json → one { type:"result", result, is_error } object.
     let mut cmd = TokioCommand::new(&resolved);
     cmd.arg("--print")
@@ -579,8 +585,8 @@ async fn run_claude_cli(
         .arg("--no-session-persistence")
         .arg("--setting-sources")
         .arg("")
-        .arg("--system-prompt")
-        .arg(system)
+        .arg("--system-prompt-file")
+        .arg(sp_file.path())
         .arg("--model")
         .arg(alias);
     if let Some(tools) = allowed_tools {

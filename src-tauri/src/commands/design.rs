@@ -339,6 +339,33 @@ pub(crate) fn resolve_cli_path(setting_override: &str) -> String {
     }
 }
 
+/// RAII temp file holding a Claude CLI system prompt. On Windows `claude` is an
+/// npm `.cmd` shim run through cmd.exe, whose command line is capped at 8191
+/// chars — a large system prompt passed via `--system-prompt` overflows it and
+/// surfaces as os error 206 ("filename or extension too long"). Stage it here
+/// and pass `--system-prompt-file <path>` instead. The path is short; the blob
+/// stays off the command line. The file is deleted on drop.
+pub(crate) struct SystemPromptFile(PathBuf);
+impl SystemPromptFile {
+    pub(crate) fn new(content: &str) -> std::io::Result<Self> {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static SEQ: AtomicU64 = AtomicU64::new(0);
+        let n = SEQ.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir()
+            .join(format!("mp-claude-sp-{}-{}.txt", std::process::id(), n));
+        std::fs::write(&path, content)?;
+        Ok(Self(path))
+    }
+    pub(crate) fn path(&self) -> &Path {
+        &self.0
+    }
+}
+impl Drop for SystemPromptFile {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
 fn flatten_messages_to_prompt(messages: &Value) -> String {
     let Some(arr) = messages.as_array() else {
         return String::new();
@@ -424,6 +451,14 @@ pub async fn agent_chat_cli(
         "opus".to_string()
     };
 
+    // Stage the system prompt in a temp file (see SystemPromptFile) and pass
+    // --system-prompt-file so it never touches the command line.
+    let sp_file = SystemPromptFile::new(&system).map_err(|e| {
+        let msg = format!("failed to stage system prompt: {e}");
+        let _ = app.emit("agent-error", json!({ "code": "IO", "message": &msg }));
+        DesignError::Io(msg)
+    })?;
+
     let spawn_result = TokioCommand::new(&resolved)
         .arg("--print")
         .arg("--output-format")
@@ -437,8 +472,8 @@ pub async fn agent_chat_cli(
         .arg("bypassPermissions")
         .arg("--allowed-tools")
         .arg("Read Glob Grep Edit Write")
-        .arg("--system-prompt")
-        .arg(&system)
+        .arg("--system-prompt-file")
+        .arg(sp_file.path())
         .arg("--model")
         .arg(&model_alias)
         .stdin(Stdio::piped())
