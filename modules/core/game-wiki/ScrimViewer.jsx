@@ -8,12 +8,18 @@
 // SF5 adds file pickers + the inline scoreboard; SF7 adds "+ New Match".
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { api, invoke } from '@host/api.js';
-import { IconFolder, IconPlayCircle, IconPlus } from '@host/components/icons.jsx';
+import { IconFolder, IconPlayCircle, IconPlus, IconFileText, IconSettings, IconFilm, IconHardDrive, IconChevronRight } from '@host/components/icons.jsx';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
 import { candyGap } from '@host/util/candy.js';
+import CollapsibleRail from '@host/components/ui/CollapsibleRail.jsx';
+import AppWindow from '@host/components/ui/AppWindow.jsx';
+import Popover from '@host/components/ui/Popover.jsx';
+import SidebarSeam from '@host/components/SidebarSeam.jsx';
+import TreeSidebar from '@host/components/vault-tree/TreeSidebar.jsx';
+import { useTreeExpansion } from '@host/components/vault-tree/useTreeExpansion.js';
+import { useKeybindHold } from '@host/keybinds/useKeybind.js';
 import { parseScrim, serializeScrim, mergeScrim, appendMatch, getNotes, ensureNotes } from './scrimSchema.js';
 import MatchViewPopup from './MatchViewPopup.jsx';
 import { sidecarPath, scrimSidecarPath, renderSummary, setMatchDataBody, MATCH_DATA_PLACEHOLDER, clock, extractMeta, fmtLocalTime, extractSpatial } from './matchData.js';
@@ -68,6 +74,27 @@ function saveTrackDefault(key, val) {
   try { localStorage.setItem(LS_TRACKS, JSON.stringify(d)); } catch { /* private mode */ }
 }
 const loadYourName = () => { try { return localStorage.getItem(LS_YOUNAME) || ''; } catch { return ''; } };
+
+// Scrim Tree Consolidation (2026-07-14): the tree's Report/Coaching leaves + the pane
+// view + the collapsible rail persistence. The report tab list is normally published live
+// by the inline VodReportView (onTabsChange); this default seeds the tree before a report
+// exists so its leaves are clickable from the start.
+const DEFAULT_REPORT_TABS = [
+  { id: 'tldr', label: 'Report' }, { id: 'players', label: 'Player Cards' },
+  { id: 'macro', label: 'Macro' }, { id: 'comms', label: 'Comms Grade' },
+  { id: 'actions', label: 'Action Items' }, { id: 'qa', label: 'Q&A' },
+  { id: 'keep', label: 'Keep Doing' }, { id: 'debates', label: 'Debates' },
+  { id: 'followups', label: 'Follow-ups' }, { id: 'segments', label: 'Segments' },
+];
+const REPORT_GROUP = ['tldr', 'players', 'macro', 'comms'];
+const COACHING_GROUP = ['actions', 'qa', 'keep', 'debates', 'followups', 'segments'];
+const LS_RAIL_EXPANDED = 'gw-scrim-rail-expanded'; // global (one scrim-rail pref, 1-1 with the main nav)
+const LS_RAIL_WIDTH = 'gw-scrim-rail-width';
+const RAIL_MIN = 200, RAIL_MAX = 460, RAIL_DEFAULT = 280;
+const loadRailExpanded = () => { try { return localStorage.getItem(LS_RAIL_EXPANDED) !== '0'; } catch { return true; } };
+const loadRailWidth = () => { try { const v = parseInt(localStorage.getItem(LS_RAIL_WIDTH), 10); return Number.isFinite(v) && v >= RAIL_MIN && v <= RAIL_MAX ? v : RAIL_DEFAULT; } catch { return RAIL_DEFAULT; } };
+const viewKey = (p) => `gw-scrim-view:${p}`; // per-scrim last-viewed pane
+const loadView = (p) => { try { const j = JSON.parse(localStorage.getItem(viewKey(p)) || 'null'); if (j && (j.kind === 'match' || j.kind === 'report')) return j; } catch { /* none */ } return null; };
 
 // A track field ("" / non-numeric / negative → null = "not set"); a set value routes -map 0:a:<n>.
 function trackIndex(v) {
@@ -472,6 +499,34 @@ function SpeakersPanel({ sidecarPath: scPath, roster, onReassign }) {
   );
 }
 
+// The scrim rail's collapse header — the shared CollapsibleRail's `header` slot (1-1 with
+// the main nav's brand toggle, labelled with the matchup instead of the brand mark). Wears
+// the same `.candy-btn.is-primary` brand block; collapsed shows an expand chevron.
+function ScrimRailHeader({ expanded, matchup, accent, onToggle }) {
+  const tip = expanded ? 'Collapse rail' : 'Expand rail';
+  return (
+    <div style={{ height: 'var(--brand-section-h)', flexShrink: 0, display: 'flex' }}>
+      <button type="button" onClick={onToggle} data-own-press aria-label={tip} title={tip} aria-pressed={!expanded}
+        className="candy-btn is-primary" data-shape="block" data-variant="brand" style={accent ? { '--accent': accent } : undefined}>
+        <span className="candy-face" style={{ justifyContent: expanded ? 'flex-start' : 'center', padding: expanded ? '0 12px' : 0 }}>
+          {expanded
+            ? <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{matchup}</span>
+            : <IconChevronRight size={16} />}
+        </span>
+      </button>
+    </div>
+  );
+}
+
+// One reveal-target row in the tree toolbar's Reveal popover.
+function RevealRow({ label, onClick }) {
+  return (
+    <button type="button" className="candy-btn" data-shape="row" onClick={onClick} style={{ width: '100%' }}>
+      <span className="candy-face" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconFileText size={16} /> {label}</span>
+    </button>
+  );
+}
+
 export default function ScrimViewer({ path, accent, overlay = false, live = false, onLive }) {
   const [scrim, setScrim] = useState(null);
   const [err, setErr] = useState(null);
@@ -483,7 +538,6 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
   const [vodPhase, setVodPhase] = useState(''); // status label while extracting the VOD Review
   const [reporting, setReporting] = useState(false); // Generate Report (Claude) in flight (sub-plan 11)
   const [reportPhase, setReportPhase] = useState(''); // pipeline phase label on the report button face (Move 15)
-  const [vodReportOpen, setVodReportOpen] = useState(false); // VodReportView popup open
   const [reviewingN, setReviewingN] = useState(null); // match.n with an in-flight Review Comms (sub-plan 13)
   const [tfOpen, setTfOpen] = useState(null); // { n } → TeamfightCommsView popup open for that match
   const [tfReady, setTfReady] = useState(() => new Set()); // match.ns with a cached .tfcomms review
@@ -502,10 +556,6 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
   // head/notes/voice/timer while spectating in-game. State lives in
   // ScrimOverlayPanel (live/onLive props) so the panel head can exit it.
   const slim = overlay && live;
-  // Panel-head slot for the focused-match picker + save tag (overlay only) —
-  // the panel renders #ov-scrim-head-match, we portal controls into it.
-  const [headSlot, setHeadSlot] = useState(null);
-  useEffect(() => { if (overlay) setHeadSlot(document.getElementById('ov-scrim-head-match')); }, [overlay]);
   // SF6 Comms Diarization: coached-team roster (Speakers panel + inline-relabel dropdowns), your
   // mic-track name, the global track defaults (field placeholders), + a bump key that remounts the
   // comms views after a cluster relabel (the opaque summary text is unchanged, so its key alone won't).
@@ -515,6 +565,22 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
   const [commsRelabelKey, setCommsRelabelKey] = useState(0);
   const matchFocusRef = useRef(null); // fresh focusedN for event-listener closures
   useEffect(() => { matchFocusRef.current = focusedN; }, [focusedN]);
+
+  // Scrim Tree Consolidation (2026-07-14): the pane view (match card vs report tab,
+  // per-scrim persisted), the report tab list (published by the inline VodReportView),
+  // the collapsible left rail (global expanded flag + width, 1-1 with the main nav), and
+  // the tree-toolbar composition popups (settings modal · scrim popup · reveal popover).
+  const [view, setView] = useState(null); // {kind:'match',n} | {kind:'report',tab}; null until scrim loads
+  const [reportTabs, setReportTabs] = useState(DEFAULT_REPORT_TABS);
+  const [railExpanded, setRailExpanded] = useState(loadRailExpanded);
+  const [railWidth, setRailWidth] = useState(loadRailWidth);
+  const [railResizing, setRailResizing] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [scrimOpen, setScrimOpen] = useState(false);
+  const [revealOpen, setRevealOpen] = useState(false);
+  const [revealAnchor, setRevealAnchor] = useState(null);
+  const railPeek = useKeybindHold('sidebar.peek-left', settings?.keybinds);
+  const treeExp = useTreeExpansion('gw-scrim-tree', ['matches', 'report', 'coaching']);
 
   const scrimRef = useRef(null);
   const runningRef = useRef(false); // Run Process double-fire guard
@@ -1089,7 +1155,7 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
       const n = (report.actionItems || []).length;
       applyEdit((p) => ({ ...p, scrim: { ...p.scrim, 'VOD Report': `generated ${stamp} · ${n} item${n === 1 ? '' : 's'}` } }));
       flushSave();
-      setVodReportOpen(true);
+      setView({ kind: 'report', tab: 'tldr' });
       // regenerate this team's cross-scrim page/sidecar (best-effort — never blocks the report result)
       updateTeamProgress(coachedTeam).catch(() => {});
       notify('success', 'Report generated', `${n} action item${n === 1 ? '' : 's'}.`);
@@ -1347,7 +1413,7 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
   // Load on path change; flush a pending edit for the outgoing path before switching.
   useEffect(() => {
     let cancelled = false;
-    setScrim(null); setErr(null); setSaveState('idle');
+    setScrim(null); setErr(null); setSaveState('idle'); setView(null);
     scrimRef.current = null; lastSavedRef.current = null;
     api.getRawFileMeta(path, 'gamewiki')
       .then((r) => {
@@ -1364,6 +1430,25 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
       if (scrimRef.current && serializeScrim(scrimRef.current) !== lastSavedRef.current) doSave();
     };
   }, [path, doSave]);
+
+  // Reconcile the pane view once the scrim loads (and whenever matches change): keep a
+  // valid restored view (report tab, or an existing match); else fall back to the last
+  // saved per-scrim view; else the first match. The functional updater bails (same ref)
+  // when the current view is still valid, so this is a no-op on ordinary field edits.
+  useEffect(() => {
+    if (!scrim) return;
+    const ns = (scrim.matches || []).map((m) => m.n);
+    setView((cur) => {
+      const restored = cur || loadView(path);
+      if (restored?.kind === 'report') return restored;
+      if (restored?.kind === 'match' && ns.includes(restored.n)) return restored;
+      return { kind: 'match', n: ns[0] ?? 1 };
+    });
+  }, [scrim, path]);
+  // Persist the pane view per scrim + the rail-expanded flag globally (width persists via
+  // the SidebarSeam storageKey).
+  useEffect(() => { if (view) { try { localStorage.setItem(viewKey(path), JSON.stringify(view)); } catch { /* private mode */ } } }, [view, path]);
+  useEffect(() => { try { localStorage.setItem(LS_RAIL_EXPANDED, railExpanded ? '1' : '0'); } catch { /* private mode */ } }, [railExpanded]);
 
   // ── Overlay mode: focused-match live capture (dictate → note, screenshot →
   //    scoreboard) routed to the focused match. All gated on `overlay`; the in-app
@@ -1427,6 +1512,10 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
     if (focusedN == null || !ns.includes(focusedN)) setFocusedN(ns[0] ?? null);
   }, [overlay, scrim, focusedN]);
 
+  // Keep the overlay's live-capture focus in lockstep with the tree's selected match, so
+  // dictation/screenshot route to whatever match the tree currently shows.
+  useEffect(() => { if (overlay && view?.kind === 'match') setFocusedN(view.n); }, [overlay, view]);
+
   // Publish the Rust live-target so the hotkey dictation reroute targets the focused
   // match (refresh on focus change; clear on unmount).
   useEffect(() => {
@@ -1478,335 +1567,366 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
   }));
   const addMatch = () => { applyEdit((p) => appendMatch(p)); flushSave(); };
 
-  return (
-    <div style={overlay ? { minHeight: 0 } : wrap}>
-      <div style={overlay ? { padding: '2px 4px', fontFamily: 'var(--font-mono)', '--accent': accent } : { ...inner, '--accent': accent }}>
-        {/* Overlay: no in-body head — the scrim picker in the panel head IS the title;
-            the match picker + save tag portal into the head's slot instead. */}
-        {!overlay && (
-          <div data-spacing-intent="overlay compact head" style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>{(fm['Team 1'] || '?')} VS {(fm['Team 2'] || '?')}</div>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-              <SaveTag state={saveState} />
-            </div>
-          </div>
-        )}
-        {overlay && headSlot && createPortal(
-          <>
-            {scrim.matches.length > 0 && (
-              <CandySelect value={focusedN} options={scrim.matches.map((m) => ({ value: m.n, label: `Match ${m.n}` }))} onChange={setFocusedN} title="Focused match" chevron={false} />
+  // ── Scrim Tree Consolidation (Phase 3): the match card as a pane-renderable function
+  //    (one leaf per match drives it), plus the 3-folder tree model + the non-overlay
+  //    tree layout. renderMatchCard is the verbatim match card; the overlay return below
+  //    keeps its own inline copy this phase (Phase 4 dedups). ──
+  const renderMatchCard = (m, idx) => {
+    const matchData = (m.subsections.find((s) => s.kind === 'opaque' && s.heading === 'Match Data') || {}).body;
+    const populated = matchData && matchData !== MATCH_DATA_PLACEHOLDER;
+    const summaryBody = (m.subsections.find((s) => s.kind === 'opaque' && s.heading === 'Coaching Summary') || {}).body;
+    const hasSummary = !!(summaryBody && summaryBody.trim());
+    const commsBody = (m.subsections.find((s) => s.kind === 'opaque' && s.heading === 'Comms Transcript') || {}).body;
+    const hasComms = !!(commsBody && commsBody.trim());
+    const coachedTeam = fm['Coached Team'] || fm['Team 1'] || '';
+    const enemyTeam = (fm['Team 1'] === coachedTeam ? fm['Team 2'] : fm['Team 1']) || '';
+    const { coachedSide, enemySide } = sideFromTeamFields(m.fields, coachedTeam);
+    const autoBody = (m.subsections.find((s) => s.kind === 'opaque' && s.heading === `Auto Classification (${coachedTeam})`) || {}).body;
+    const hasAuto = !!(autoBody && autoBody.trim());
+    const enemyAutoBody = (m.subsections.find((s) => s.kind === 'opaque' && s.heading === `Auto Classification (${enemyTeam})`) || {}).body;
+    const hasEnemyAuto = !!(enemyAutoBody && enemyAutoBody.trim());
+    return (
+      <div key={m.n} style={card}>
+        {/* Slim hides the whole title/chip block — the head's match picker already
+            names the match; Dictate lives in the notes control row. */}
+        {!slim && (
+        <div style={{ marginBottom: candyGap(8) }}>
+          <div style={sectionTitle}>Match {m.n}</div>
+          <div className="candy-chip-row" style={{ marginTop: 4 }}>
+            {overlay && (
+              <button className="candy-btn" data-shape="chip" onClick={takeScoreboardShot}
+                title="Capture a scoreboard screenshot for this match">
+                <span className="candy-face">Scoreboard</span>
+              </button>
             )}
-            <SaveTag state={saveState} />
-          </>,
-          headSlot
-        )}
-
-        {!overlay && (
-          <div style={card}>
-            <div style={{ ...sectionTitle, marginBottom: 8 }}>Coaching Setup</div>
-            <RosterEditor team={fm['Coached Team'] || fm['Team 1'] || ''} readStore={readTeamStore} writeStore={writeTeamStore} onSaved={setCoachedRoster} />
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 14 }}>
-              <EditField label="Comms Track" value={fm['Comms Track']} onChange={(v) => setFm('Comms Track', v)}
-                onCommit={() => { flushSave(); saveTrackDefault('comms', scrimRef.current?.frontmatter?.['Comms Track'] || ''); setTrackDefaults(loadTrackDefaults()); }}
-                placeholder={trackDefaults.comms !== '' ? `default ${trackDefaults.comms}` : 'OBS track # (e.g. 4)'} />
-              <EditField label="Mic Track" value={fm['Mic Track']} onChange={(v) => setFm('Mic Track', v)}
-                onCommit={() => { flushSave(); saveTrackDefault('mic', scrimRef.current?.frontmatter?.['Mic Track'] || ''); setTrackDefaults(loadTrackDefaults()); }}
-                placeholder={trackDefaults.mic !== '' ? `default ${trackDefaults.mic}` : 'OBS track # (e.g. 1)'} />
-            </div>
-            <EditField label="Your Name (mic track)" value={yourName} onChange={setYourName}
-              onCommit={() => { try { localStorage.setItem(LS_YOUNAME, yourName || ''); } catch { /* private mode */ } }}
-              placeholder="how your mic track is labeled (default: You)" />
-          </div>
-        )}
-
-        {!slim && (<>
-        <div style={card}>
-          <div style={{ ...sectionTitle, marginBottom: 8 }}>Matchup</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 14 }}>
-            <EditField label="Team 1" value={fm['Team 1']} onChange={(v) => setFm('Team 1', v)} onCommit={flushSave} />
-            <EditField label="Team 2" value={fm['Team 2']} onChange={(v) => setFm('Team 2', v)} onCommit={flushSave} />
-            <EditField label="Coached Team" value={fm['Coached Team']} onChange={(v) => setFm('Coached Team', v)} onCommit={flushSave} />
-            <EditField label="Date" value={fm['Date']} onChange={(v) => setFm('Date', v)} onCommit={flushSave} placeholder="YYYY-MM-DD" />
-            <EditField label="Scheduled" value={fm['Scheduled']} onChange={(v) => setFm('Scheduled', v)} onCommit={flushSave} placeholder="e.g. 7:00 PM" />
-          </div>
-        </div>
-
-        <div style={card}>
-          <div style={{ ...sectionTitle, marginBottom: 8 }}>Scrim</div>
-          <EditField label="Score" value={scrim.scrim['Score']} onChange={(v) => setScrimField('Score', v)} onCommit={flushSave} placeholder="e.g. 2-1" />
-          <EditField label="VOD Review" value={scrim.scrim['VOD Review']} onChange={(v) => setScrimField('VOD Review', v)} onCommit={flushSave} placeholder="/path/to/review.mp4"
-            right={<>
-              <MiniBtn icon={IconFolder} title="Select .mp4" onClick={async () => { const p = await pickFile(MP4_FILTERS); if (p) { setScrimField('VOD Review', p); flushSave(); } }} />
-              {scrim.scrim['VOD Review'] && <MiniBtn icon={IconPlayCircle} title="Open recording" onClick={() => invoke('coaching_open_path', { path: scrim.scrim['VOD Review'] }).catch(() => {})} />}
-            </>} />
-          <div className="candy-chip-row" style={{ marginTop: 8, marginBottom: 'var(--candy-depth)' }}>
+            {!slim && populated && (
+              <button className="candy-btn" data-shape="chip" onClick={() => setMatchPopup({ n: m.n })} title="Open the full match view">
+                <span className="candy-face">View Full Match</span>
+              </button>
+            )}
+            {!slim && (
             <button className="candy-btn" data-shape="chip"
-              disabled={vodBusy || !scrim.scrim['VOD Review'] || !sttUp}
-              onClick={extractVodComms}
-              title={!scrim.scrim['VOD Review'] ? 'Set a VOD Review (.mp4) for this scrim first'
+              disabled={commsN === m.n || runningN === m.n || !m.fields['Scrim Recording'] || !sttUp}
+              onClick={() => extractComms(idx)}
+              title={!m.fields['Scrim Recording']
+                ? 'Set a Scrim Recording (.mp4) for this match first'
                 : !sttUp ? 'Speech engine unavailable — reopen the app'
-                  : 'Extract VOD Comms — transcribe + split voices in the review recording'}
-              style={vodBusy ? { opacity: 0.6, cursor: 'progress' } : undefined}>
-              <span className="candy-face">{vodBusy ? (vodPhase || 'Working…') : 'Extract VOD Comms'}</span>
+                  : 'Extract Comms — transcribe this match recording'}
+              style={commsN === m.n ? { opacity: 0.6, cursor: 'progress' } : undefined}>
+              <span className="candy-face">{commsN === m.n ? (commsPhase || 'Working…') : 'Extract Comms'}</span>
             </button>
-            {vodBusy && (
-              <button className="candy-btn" data-shape="chip" onClick={cancelVod} title="Cancel">
-                <span className="candy-face">×</span>
-              </button>
             )}
+            {!slim && commsN === m.n && (
+              <button className="candy-btn" data-shape="chip" onClick={cancelComms} title="Cancel transcription"><span className="candy-face">×</span></button>
+            )}
+            {!slim && (
             <button className="candy-btn" data-shape="chip"
-              disabled={reporting || !scrim.scrim['VOD Comms'] || !aiConfigured}
-              onClick={generateVodReport}
-              title={!scrim.scrim['VOD Comms'] ? 'Extract VOD Comms first — the report reads that transcript'
-                : !aiConfigured ? 'Configure an AI backend in Settings → Agents (API key or Claude CLI)'
-                  : 'Generate Report — Claude organizes the review into an action list'}
-              style={reporting ? { opacity: 0.6, cursor: 'progress' } : undefined}>
-              <span className="candy-face">{reporting ? (reportPhase || 'Asking Claude…') : 'Generate Report'}</span>
+              disabled={runningN === m.n || commsN === m.n}
+              onClick={() => runProcess(idx)}
+              title="Run Process — pull this match's data from deadlock-api by Match ID"
+              style={runningN === m.n ? { opacity: 0.6, cursor: 'progress' } : undefined}>
+              <span className="candy-face">{runningN === m.n ? 'Running…' : 'Run Process'}</span>
             </button>
-            {scrim.scrim['VOD Report'] && (
-              <button className="candy-btn" data-shape="chip" onClick={() => setVodReportOpen(true)} title="Open the generated report">
-                <span className="candy-face">Open Report</span>
-              </button>
             )}
           </div>
         </div>
-        </>)}
-
-        {scrim.matches.map((m, idx) => {
-          if (overlay && m.n !== focusedN) return null; // overlay shows only the focused match
-          const matchData = (m.subsections.find((s) => s.kind === 'opaque' && s.heading === 'Match Data') || {}).body;
-          const populated = matchData && matchData !== MATCH_DATA_PLACEHOLDER;
-          const summaryBody = (m.subsections.find((s) => s.kind === 'opaque' && s.heading === 'Coaching Summary') || {}).body;
-          const hasSummary = !!(summaryBody && summaryBody.trim());
-          const commsBody = (m.subsections.find((s) => s.kind === 'opaque' && s.heading === 'Comms Transcript') || {}).body;
-          const hasComms = !!(commsBody && commsBody.trim());
-          const coachedTeam = fm['Coached Team'] || fm['Team 1'] || '';
-          const enemyTeam = (fm['Team 1'] === coachedTeam ? fm['Team 2'] : fm['Team 1']) || '';
-          const { coachedSide, enemySide } = sideFromTeamFields(m.fields, coachedTeam);
-          const autoBody = (m.subsections.find((s) => s.kind === 'opaque' && s.heading === `Auto Classification (${coachedTeam})`) || {}).body;
-          const hasAuto = !!(autoBody && autoBody.trim());
-          const enemyAutoBody = (m.subsections.find((s) => s.kind === 'opaque' && s.heading === `Auto Classification (${enemyTeam})`) || {}).body;
-          const hasEnemyAuto = !!(enemyAutoBody && enemyAutoBody.trim());
-          return (
-            <div key={m.n} style={card}>
-              {/* Slim hides the whole title/chip block — the head's match picker already
-                  names the match; Dictate lives in the notes control row. */}
-              {!slim && (
-              <div style={{ marginBottom: candyGap(8) }}>
-                <div style={sectionTitle}>Match {m.n}</div>
-                <div className="candy-chip-row" style={{ marginTop: 4 }}>
-                  {overlay && (
-                    <>
-                      <button className="candy-btn" data-shape="chip" onClick={() => onLive?.(true)}
-                        title="Live mode — just notes, voice, and the timer">
-                        <span className="candy-face">Live</span>
-                      </button>
-                      <button className="candy-btn" data-shape="chip" onClick={takeScoreboardShot}
-                        title="Capture a scoreboard screenshot for this match">
-                        <span className="candy-face">Scoreboard</span>
-                      </button>
-                    </>
-                  )}
-                  {!slim && populated && (
-                    <button className="candy-btn" data-shape="chip" onClick={() => setMatchPopup({ n: m.n })} title="Open the full match view">
-                      <span className="candy-face">View Full Match</span>
-                    </button>
-                  )}
-                  {!slim && (
-                  <button className="candy-btn" data-shape="chip"
-                    disabled={commsN === m.n || runningN === m.n || !m.fields['Scrim Recording'] || !sttUp}
-                    onClick={() => extractComms(idx)}
-                    title={!m.fields['Scrim Recording']
-                      ? 'Set a Scrim Recording (.mp4) for this match first'
-                      : !sttUp ? 'Speech engine unavailable — reopen the app'
-                        : 'Extract Comms — transcribe this match recording'}
-                    style={commsN === m.n ? { opacity: 0.6, cursor: 'progress' } : undefined}>
-                    <span className="candy-face">{commsN === m.n ? (commsPhase || 'Working…') : 'Extract Comms'}</span>
-                  </button>
-                  )}
-                  {!slim && commsN === m.n && (
-                    <button className="candy-btn" data-shape="chip" onClick={cancelComms} title="Cancel transcription"><span className="candy-face">×</span></button>
-                  )}
-                  {!slim && (
-                  <button className="candy-btn" data-shape="chip"
-                    disabled={runningN === m.n || commsN === m.n}
-                    onClick={() => runProcess(idx)}
-                    title="Run Process — pull this match's data from deadlock-api by Match ID"
-                    style={runningN === m.n ? { opacity: 0.6, cursor: 'progress' } : undefined}>
-                    <span className="candy-face">{runningN === m.n ? 'Running…' : 'Run Process'}</span>
-                  </button>
-                  )}
-                </div>
-              </div>
-              )}
-              {!slim && (<>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 14 }}>
-                <EditField label="Match ID" value={m.fields['Match ID']} onChange={(v) => setMatchField(idx, 'Match ID', v)} onCommit={flushSave} placeholder="e.g. 38291042" />
-                <EditField label="Time" value={m.fields['Time']} onChange={(v) => setMatchField(idx, 'Time', v)} onCommit={flushSave} placeholder="e.g. 7:42 PM" />
-                <EditField label="Amber" value={m.fields['Amber']} onChange={(v) => setMatchField(idx, 'Amber', v)} onCommit={flushSave} placeholder="team on Amber side" />
-                <EditField label="Sapphire" value={m.fields['Sapphire']} onChange={(v) => setMatchField(idx, 'Sapphire', v)} onCommit={flushSave} placeholder="team on Sapphire side" />
-                <EditField label="Comms Offset" value={m.fields['Comms Offset']} onChange={(v) => setMatchField(idx, 'Comms Offset', v)} onCommit={flushSave} placeholder="s of pre-game in recording" />
-              </div>
-              <EditField label="Scrim Recording" value={m.fields['Scrim Recording']} onChange={(v) => setMatchField(idx, 'Scrim Recording', v)} onCommit={flushSave} placeholder="/path/to/match.mp4"
-                right={<>
-                  <MiniBtn icon={IconFolder} title="Select .mp4" onClick={async () => { const p = await pickFile(MP4_FILTERS); if (p) { setMatchField(idx, 'Scrim Recording', p); flushSave(); } }} />
-                  {m.fields['Scrim Recording'] && <MiniBtn icon={IconPlayCircle} title="Open recording" onClick={() => invoke('coaching_open_path', { path: m.fields['Scrim Recording'] }).catch(() => {})} />}
-                </>} />
-              <EditField label="Scoreboard" value={m.fields['Scoreboard']} onChange={(v) => setMatchField(idx, 'Scoreboard', v)} onCommit={flushSave} placeholder="/path/to/scoreboard.png"
-                right={<MiniBtn icon={IconFolder} title="Select screenshot" onClick={async () => { const p = await pickFile(IMG_FILTERS); if (p) { setMatchField(idx, 'Scoreboard', p); flushSave(); } }} />} />
-              <Scoreboard path={m.fields['Scoreboard']} />
-              </>)}
-              {/* Coached team only — enemy notes UI dropped by design (notes are only ever
-                  taken on the coached team); enemy notes on disk still round-trip verbatim. */}
-              <TeamNotes team={coachedTeam} bullets={getNotes(m, coachedTeam)?.bullets || []} overlay={overlay} slim={slim}
-                dictating={dictating} onDictate={overlay ? toggleDictate : undefined}
-                onChange={(b) => setNotes(idx, coachedTeam, b)} onCommit={flushSave} storageKey={`gw-sw:${path}:m${m.n}:${coachedTeam}`} />
-              {!slim && hasSummary && (
-                <div style={{ marginTop: 8 }}>
-                  <CoachingSummaryView body={summaryBody} />
-                </div>
-              )}
-              {!slim && hasComms && (
-                <SpeakersPanel key={`sp:${commsBody}:${commsRelabelKey}`} sidecarPath={sidecarPath(path, m.n, 'comms')}
-                  roster={coachedRoster} onReassign={(cid, name) => reassignCluster(idx, cid, name)} />
-              )}
-              {!slim && (
-              <div style={{ marginTop: 8 }}>
-                <div style={labelStyle}>Comms Transcript</div>
-                {hasComms
-                  ? <CommsTranscriptView key={`ct:${commsBody}:${commsRelabelKey}`} sidecarPath={sidecarPath(path, m.n, 'comms')}
-                      roster={coachedRoster} onReassign={(cid, name) => reassignCluster(idx, cid, name)} />
-                  : <div className="text-trim" style={{ fontSize: 12, color: 'var(--text-muted)' }}>Not yet extracted — click <strong>Extract Comms</strong>.</div>}
-              </div>
-              )}
-              {!slim && hasComms && populated && coachedSide != null && (
-                <div style={{ marginTop: 8 }}>
-                  <div style={labelStyle}>Silent Deaths</div>
-                  <SilentDeathAudit key={`${commsBody}:${matchData}`}
-                    matchSidecar={sidecarPath(path, m.n)}
-                    commsSidecar={sidecarPath(path, m.n, 'comms')}
-                    side={coachedSide}
-                    offsetS={Number(m.fields['Comms Offset']) || 0} />
-                </div>
-              )}
-              {!slim && (
-              <div style={{ marginTop: 8 }}>
-                <div style={labelStyle}>Auto Classification</div>
-                <div className="candy-chip-row">
-                  <button className="candy-btn" data-shape="chip"
-                    disabled={!populated || coachedSide == null || !aiConfigured || classifyingN === m.n || runningN === m.n || commsN === m.n}
-                    onClick={() => classify(idx, coachedSide, coachedTeam)}
-                    title={!populated ? 'Run Process first — Classify needs the match data'
-                      : coachedSide == null ? 'Fill the Amber/Sapphire team fields so the coached side resolves'
-                        : !aiConfigured ? 'Configure an AI backend in Settings → Agents (API key or Claude CLI)'
-                          : `Classify ${coachedTeam || 'the coached team'} — merges the AI with your notes`}
-                    style={classifyingN === m.n ? { opacity: 0.6, cursor: 'progress' } : undefined}>
-                    <span className="candy-face">{classifyingN === m.n ? (classifyPhase || 'Working…') : `Classify ${coachedTeam || 'coached'}`}</span>
-                  </button>
-                  <button className="candy-btn" data-shape="chip"
-                    disabled={!populated || enemySide == null || !aiConfigured || classifyingN === m.n || runningN === m.n || commsN === m.n}
-                    onClick={() => classify(idx, enemySide, enemyTeam)}
-                    title={!populated ? 'Run Process first'
-                      : enemySide == null ? 'Fill the Amber/Sapphire team fields so the enemy side resolves'
-                        : !aiConfigured ? 'Configure an AI backend in Settings → Agents'
-                          : `Classify ${enemyTeam || 'the enemy team'}`}
-                    style={classifyingN === m.n ? { opacity: 0.6, cursor: 'progress' } : undefined}>
-                    <span className="candy-face">Classify {enemyTeam || 'enemy'}</span>
-                  </button>
-                </div>
-                {!populated && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: candyGap(8) }}>Pull match data first (Run Process), then Classify.</div>}
-                {populated && coachedSide == null && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: candyGap(8) }}>Fill the <strong>Amber</strong> / <strong>Sapphire</strong> fields above with each team so the sides resolve.</div>}
-                {hasAuto && (
-                  <div style={{ marginTop: candyGap(8) }}>
-                    <div style={{ ...labelStyle, color: 'var(--accent)', marginBottom: 2 }}>{coachedTeam || 'Coached'}</div>
-                    <AutoClassificationView key={autoBody} sidecarPath={sidecarPath(path, m.n, 'autoclass')} team={coachedTeam} />
-                  </div>
-                )}
-                {hasEnemyAuto && (
-                  <div style={{ marginTop: candyGap(8) }}>
-                    <div style={{ ...labelStyle, color: 'var(--text-muted)', marginBottom: 2 }}>{enemyTeam} · enemy</div>
-                    <AutoClassificationView key={enemyAutoBody} sidecarPath={sidecarPath(path, m.n, 'autoclass')} team={enemyTeam} />
-                  </div>
-                )}
-              </div>
-              )}
-              {/* Teamfight Comms Review (sub-plan 13) — Claude judges each fight's callouts. */}
-              {!slim && (
-              <div style={{ marginTop: 8 }}>
-                <div style={labelStyle}>Teamfight Comms</div>
-                <div className="candy-chip-row">
-                  <button className="candy-btn" data-shape="chip"
-                    disabled={!populated || !hasComms || coachedSide == null || !aiConfigured || reviewingN === m.n || runningN === m.n || commsN === m.n || classifyingN === m.n}
-                    onClick={() => reviewComms(idx, coachedSide, coachedTeam)}
-                    title={!populated ? 'Run Process first — the review needs the match data'
-                      : !hasComms ? 'Extract Comms first — the review reads that transcript'
-                        : coachedSide == null ? 'Fill the Amber/Sapphire team fields so the coached side resolves'
-                          : !aiConfigured ? 'Configure an AI backend in Settings → Agents (API key or Claude CLI)'
-                            : 'Review Comms — Claude judges each teamfight’s callouts (good / missed / wrong / late)'}
-                    style={reviewingN === m.n ? { opacity: 0.6, cursor: 'progress' } : undefined}>
-                    <span className="candy-face">{reviewingN === m.n ? 'Asking Claude…' : 'Review Comms'}</span>
-                  </button>
-                  {tfReady.has(m.n) && reviewingN !== m.n && (
-                    <button className="candy-btn" data-shape="chip" onClick={() => setTfOpen({ n: m.n })} title="Open the teamfight comms review">
-                      <span className="candy-face">Open Review</span>
-                    </button>
-                  )}
-                </div>
-                {populated && !hasComms && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: candyGap(8) }}>Extract Comms first, then Review Comms.</div>}
-              </div>
-              )}
-            </div>
-          );
-        })}
-
-        {matchPopup && (
-          <MatchViewPopup
-            sidecarPath={sidecarPath(path, matchPopup.n)}
-            matchN={matchPopup.n}
-            accent={accent}
-            onClose={() => setMatchPopup(null)}
-          />
         )}
+        {!slim && (<>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 14 }}>
+          <EditField label="Match ID" value={m.fields['Match ID']} onChange={(v) => setMatchField(idx, 'Match ID', v)} onCommit={flushSave} placeholder="e.g. 38291042" />
+          <EditField label="Time" value={m.fields['Time']} onChange={(v) => setMatchField(idx, 'Time', v)} onCommit={flushSave} placeholder="e.g. 7:42 PM" />
+          <EditField label="Amber" value={m.fields['Amber']} onChange={(v) => setMatchField(idx, 'Amber', v)} onCommit={flushSave} placeholder="team on Amber side" />
+          <EditField label="Sapphire" value={m.fields['Sapphire']} onChange={(v) => setMatchField(idx, 'Sapphire', v)} onCommit={flushSave} placeholder="team on Sapphire side" />
+          <EditField label="Comms Offset" value={m.fields['Comms Offset']} onChange={(v) => setMatchField(idx, 'Comms Offset', v)} onCommit={flushSave} placeholder="s of pre-game in recording" />
+        </div>
+        <EditField label="Scrim Recording" value={m.fields['Scrim Recording']} onChange={(v) => setMatchField(idx, 'Scrim Recording', v)} onCommit={flushSave} placeholder="/path/to/match.mp4"
+          right={<>
+            <MiniBtn icon={IconFolder} title="Select .mp4" onClick={async () => { const p = await pickFile(MP4_FILTERS); if (p) { setMatchField(idx, 'Scrim Recording', p); flushSave(); } }} />
+            {m.fields['Scrim Recording'] && <MiniBtn icon={IconPlayCircle} title="Open recording" onClick={() => invoke('coaching_open_path', { path: m.fields['Scrim Recording'] }).catch(() => {})} />}
+          </>} />
+        <EditField label="Scoreboard" value={m.fields['Scoreboard']} onChange={(v) => setMatchField(idx, 'Scoreboard', v)} onCommit={flushSave} placeholder="/path/to/scoreboard.png"
+          right={<MiniBtn icon={IconFolder} title="Select screenshot" onClick={async () => { const p = await pickFile(IMG_FILTERS); if (p) { setMatchField(idx, 'Scoreboard', p); flushSave(); } }} />} />
+        <Scoreboard path={m.fields['Scoreboard']} />
+        </>)}
+        {/* Coached team only — enemy notes UI dropped by design (notes are only ever
+            taken on the coached team); enemy notes on disk still round-trip verbatim. */}
+        <TeamNotes team={coachedTeam} bullets={getNotes(m, coachedTeam)?.bullets || []} overlay={overlay} slim={slim}
+          dictating={dictating} onDictate={overlay ? toggleDictate : undefined}
+          onChange={(b) => setNotes(idx, coachedTeam, b)} onCommit={flushSave} storageKey={`gw-sw:${path}:m${m.n}:${coachedTeam}`} />
+        {!slim && hasSummary && (
+          <div style={{ marginTop: 8 }}>
+            <CoachingSummaryView body={summaryBody} />
+          </div>
+        )}
+        {!slim && hasComms && (
+          <SpeakersPanel key={`sp:${commsBody}:${commsRelabelKey}`} sidecarPath={sidecarPath(path, m.n, 'comms')}
+            roster={coachedRoster} onReassign={(cid, name) => reassignCluster(idx, cid, name)} />
+        )}
+        {!slim && (
+        <div style={{ marginTop: 8 }}>
+          <div style={labelStyle}>Comms Transcript</div>
+          {hasComms
+            ? <CommsTranscriptView key={`ct:${commsBody}:${commsRelabelKey}`} sidecarPath={sidecarPath(path, m.n, 'comms')}
+                roster={coachedRoster} onReassign={(cid, name) => reassignCluster(idx, cid, name)} />
+            : <div className="text-trim" style={{ fontSize: 12, color: 'var(--text-muted)' }}>Not yet extracted — click <strong>Extract Comms</strong>.</div>}
+        </div>
+        )}
+        {!slim && hasComms && populated && coachedSide != null && (
+          <div style={{ marginTop: 8 }}>
+            <div style={labelStyle}>Silent Deaths</div>
+            <SilentDeathAudit key={`${commsBody}:${matchData}`}
+              matchSidecar={sidecarPath(path, m.n)}
+              commsSidecar={sidecarPath(path, m.n, 'comms')}
+              side={coachedSide}
+              offsetS={Number(m.fields['Comms Offset']) || 0} />
+          </div>
+        )}
+        {!slim && (
+        <div style={{ marginTop: 8 }}>
+          <div style={labelStyle}>Auto Classification</div>
+          <div className="candy-chip-row">
+            <button className="candy-btn" data-shape="chip"
+              disabled={!populated || coachedSide == null || !aiConfigured || classifyingN === m.n || runningN === m.n || commsN === m.n}
+              onClick={() => classify(idx, coachedSide, coachedTeam)}
+              title={!populated ? 'Run Process first — Classify needs the match data'
+                : coachedSide == null ? 'Fill the Amber/Sapphire team fields so the coached side resolves'
+                  : !aiConfigured ? 'Configure an AI backend in Settings → Agents (API key or Claude CLI)'
+                    : `Classify ${coachedTeam || 'the coached team'} — merges the AI with your notes`}
+              style={classifyingN === m.n ? { opacity: 0.6, cursor: 'progress' } : undefined}>
+              <span className="candy-face">{classifyingN === m.n ? (classifyPhase || 'Working…') : `Classify ${coachedTeam || 'coached'}`}</span>
+            </button>
+            <button className="candy-btn" data-shape="chip"
+              disabled={!populated || enemySide == null || !aiConfigured || classifyingN === m.n || runningN === m.n || commsN === m.n}
+              onClick={() => classify(idx, enemySide, enemyTeam)}
+              title={!populated ? 'Run Process first'
+                : enemySide == null ? 'Fill the Amber/Sapphire team fields so the enemy side resolves'
+                  : !aiConfigured ? 'Configure an AI backend in Settings → Agents'
+                    : `Classify ${enemyTeam || 'the enemy team'}`}
+              style={classifyingN === m.n ? { opacity: 0.6, cursor: 'progress' } : undefined}>
+              <span className="candy-face">Classify {enemyTeam || 'enemy'}</span>
+            </button>
+          </div>
+          {!populated && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: candyGap(8) }}>Pull match data first (Run Process), then Classify.</div>}
+          {populated && coachedSide == null && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: candyGap(8) }}>Fill the <strong>Amber</strong> / <strong>Sapphire</strong> fields above with each team so the sides resolve.</div>}
+          {hasAuto && (
+            <div style={{ marginTop: candyGap(8) }}>
+              <div style={{ ...labelStyle, color: 'var(--accent)', marginBottom: 2 }}>{coachedTeam || 'Coached'}</div>
+              <AutoClassificationView key={autoBody} sidecarPath={sidecarPath(path, m.n, 'autoclass')} team={coachedTeam} />
+            </div>
+          )}
+          {hasEnemyAuto && (
+            <div style={{ marginTop: candyGap(8) }}>
+              <div style={{ ...labelStyle, color: 'var(--text-muted)', marginBottom: 2 }}>{enemyTeam} · enemy</div>
+              <AutoClassificationView key={enemyAutoBody} sidecarPath={sidecarPath(path, m.n, 'autoclass')} team={enemyTeam} />
+            </div>
+          )}
+        </div>
+        )}
+        {/* Teamfight Comms Review (sub-plan 13) — Claude judges each fight's callouts. */}
+        {!slim && (
+        <div style={{ marginTop: 8 }}>
+          <div style={labelStyle}>Teamfight Comms</div>
+          <div className="candy-chip-row">
+            <button className="candy-btn" data-shape="chip"
+              disabled={!populated || !hasComms || coachedSide == null || !aiConfigured || reviewingN === m.n || runningN === m.n || commsN === m.n || classifyingN === m.n}
+              onClick={() => reviewComms(idx, coachedSide, coachedTeam)}
+              title={!populated ? 'Run Process first — the review needs the match data'
+                : !hasComms ? 'Extract Comms first — the review reads that transcript'
+                  : coachedSide == null ? 'Fill the Amber/Sapphire team fields so the coached side resolves'
+                    : !aiConfigured ? 'Configure an AI backend in Settings → Agents (API key or Claude CLI)'
+                      : 'Review Comms — Claude judges each teamfight’s callouts (good / missed / wrong / late)'}
+              style={reviewingN === m.n ? { opacity: 0.6, cursor: 'progress' } : undefined}>
+              <span className="candy-face">{reviewingN === m.n ? 'Asking Claude…' : 'Review Comms'}</span>
+            </button>
+            {tfReady.has(m.n) && reviewingN !== m.n && (
+              <button className="candy-btn" data-shape="chip" onClick={() => setTfOpen({ n: m.n })} title="Open the teamfight comms review">
+                <span className="candy-face">Open Review</span>
+              </button>
+            )}
+          </div>
+          {populated && !hasComms && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: candyGap(8) }}>Extract Comms first, then Review Comms.</div>}
+        </div>
+        )}
+      </div>
+    );
+  };
 
-        {vodReportOpen && (
-          <VodReportView
+  // Tree model (3 folders) + toolbar wiring.
+  const revealPath = (p) => invoke('coaching_reveal_path', { path: p }).catch(() => {});
+  const tabs = reportTabs.length ? reportTabs : DEFAULT_REPORT_TABS;
+  const tabLeaf = (t) => ({ id: t.id, label: t.label, active: view?.kind === 'report' && view.tab === t.id, onActivate: () => setView({ kind: 'report', tab: t.id }) });
+  const group = (id, label, ids) => ({ id, label, isFolder: true, children: tabs.filter((t) => ids.includes(t.id)).map(tabLeaf) });
+  const treeNodes = [
+    { id: 'matches', label: 'Matches', isFolder: true, children: [
+      ...scrim.matches.map((m) => ({ id: `match:${m.n}`, label: `Match ${m.n}`, active: view?.kind === 'match' && view.n === m.n, onActivate: () => setView({ kind: 'match', n: m.n }) })),
+      { id: 'match:new', label: '+ New Match', onActivate: addMatch },
+    ] },
+    group('report', 'Report', REPORT_GROUP),
+    group('coaching', 'Coaching', COACHING_GROUP),
+  ];
+  const treeController = { ...treeExp, expandAll: () => treeExp.expandAll(['matches', 'report', 'coaching']) };
+  const treeButtons = { collapse: { show: true } };
+  const treeExtra = [
+    { title: 'Reveal files', icon: <IconHardDrive />, dataAttr: 'scrim-reveal-trigger', onClick: (e) => { setRevealAnchor(e.currentTarget.getBoundingClientRect()); setRevealOpen((o) => !o); } },
+    { title: 'Coaching setup', icon: <IconSettings />, onClick: () => setSettingsOpen(true) },
+    { title: 'Scrim', icon: <IconFilm />, onClick: () => setScrimOpen(true) },
+    ...(overlay ? [{ title: 'Go Live — just notes, voice, and the timer', icon: <IconPlayCircle />, onClick: () => onLive?.(true) }] : []),
+  ];
+  const paneMatch = view?.kind === 'match' ? scrim.matches.find((m) => m.n === view.n) : null;
+  const paneMatchIdx = paneMatch ? scrim.matches.findIndex((m) => m.n === paneMatch.n) : -1;
+  // Slim (overlay live): the pane is always the focused match, stripped to notes+timer+dictate
+  // (renderMatchCard self-strips on slim); the rail is force-collapsed (derived, not persisted).
+  const slimMatch = slim ? scrim.matches.find((m) => m.n === focusedN) : null;
+  const slimMatchIdx = slimMatch ? scrim.matches.findIndex((m) => m.n === slimMatch.n) : -1;
+  const paneInner = overlay ? { padding: '2px 4px', fontFamily: 'var(--font-mono)', '--accent': accent } : { ...inner, '--accent': accent };
+
+  // The tree layout serves BOTH the main window and the overlay (Phase 4). Overlay
+  // differences (Go Live toolbar button, slim pane strip, rail auto-compact) are woven in
+  // via the `overlay`/`slim` flags below.
+  return (
+    <div style={{ display: 'flex', flex: 1, minHeight: 0, '--accent': accent }}>
+      <CollapsibleRail
+        expanded={slim ? false : railExpanded}
+        peek={slim ? false : railPeek}
+        width={railWidth}
+        railWidth={56}
+        containerStyle={{ background: 'var(--surface)', borderRight: '1px solid var(--border)', transition: railResizing ? 'none' : 'width 180ms ease' }}
+        header={<ScrimRailHeader expanded={railExpanded || railPeek} matchup={`${fm['Team 1'] || '?'} VS ${fm['Team 2'] || '?'}`} accent={accent} onToggle={() => setRailExpanded((v) => !v)} />}
+        seam={
+          <div style={{ position: 'absolute', top: 0, bottom: 0, right: 0, display: 'flex', zIndex: 70 }}>
+            <SidebarSeam width={railWidth} onWidthChange={setRailWidth} accent={accent} defaultWidth={RAIL_DEFAULT} minWidth={RAIL_MIN} maxWidth={RAIL_MAX}
+              collapseThreshold={140} onCollapse={() => setRailExpanded(false)} onDragStart={() => setRailResizing(true)} onDragEnd={() => setRailResizing(false)}
+              storageKey={LS_RAIL_WIDTH} edgeRingSide="right" ariaLabel="Resize scrim rail" />
+          </div>
+        }
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, borderTop: '1px solid var(--border)', marginTop: 4 }}>
+          <TreeSidebar nodes={treeNodes} controller={treeController} buttons={treeButtons} accent={accent} toolbarExtra={treeExtra} />
+        </div>
+      </CollapsibleRail>
+
+      <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        {slim ? (
+          slimMatch ? (
+            <div style={{ flex: 1, minWidth: 0, minHeight: 0, overflowY: 'auto' }}>
+              <div style={paneInner}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}><SaveTag state={saveState} /></div>
+                {renderMatchCard(slimMatch, slimMatchIdx)}
+              </div>
+            </div>
+          ) : (
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 13 }}>No match.</div>
+          )
+        ) : view?.kind === 'report' ? (
+          <VodReportView inline tab={view.tab}
+            onTabChange={(t) => setView({ kind: 'report', tab: t })}
+            onTabsChange={setReportTabs}
             sidecarPath={scrimSidecarPath(path, 'vodreport')}
             commsPath={scrimSidecarPath(path, 'vodcomms')}
             feedbackPath={scrimSidecarPath(path, 'vodfeedback')}
-            mdPath={path}
-            accent={accent}
-            onClose={() => setVodReportOpen(false)}
-            onRegenerate={generateVodReport}
-            onAddNotes={addVodNotes}
-          />
-        )}
-
-        {tfOpen && (
-          <TeamfightCommsView
-            sidecarPath={sidecarPath(path, tfOpen.n, 'tfcomms')}
-            accent={accent}
-            onClose={() => setTfOpen(null)}
-          />
-        )}
-
-        {review && (
-          <ReviewModal
-            accent={accent}
-            teamName={review.teamName}
-            items={review.items}
-            onSave={(kept, dropped) => saveReview(review.idx, review.teamName, kept, dropped)}
-            onClose={() => setReview(null)}
-          />
-        )}
-
-        {!slim && (
-        <button className="candy-btn" data-shape="row" onClick={addMatch} style={{ width: '100%', marginTop: 4 }}>
-          <span className="candy-face" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconPlus size={14} /> New Match</span>
-        </button>
+            mdPath={path} accent={accent} />
+        ) : paneMatch ? (
+          <div style={{ flex: 1, minWidth: 0, minHeight: 0, overflowY: 'auto' }}>
+            <div style={paneInner}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}><SaveTag state={saveState} /></div>
+              {renderMatchCard(paneMatch, paneMatchIdx)}
+            </div>
+          </div>
+        ) : (
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 13 }}>
+            Pick a match, or a report section.
+          </div>
         )}
       </div>
+
+      {/* Coaching Setup + Matchup — the settings-modal toolbar button. */}
+      <AppWindow open={settingsOpen} onClose={() => setSettingsOpen(false)} title="Coaching Setup" accent={accent} width="min(560px, 92vw)" height="min(620px, 88vh)">
+        <RosterEditor team={fm['Coached Team'] || fm['Team 1'] || ''} readStore={readTeamStore} writeStore={writeTeamStore} onSaved={setCoachedRoster} />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 14 }}>
+          <EditField label="Comms Track" value={fm['Comms Track']} onChange={(v) => setFm('Comms Track', v)}
+            onCommit={() => { flushSave(); saveTrackDefault('comms', scrimRef.current?.frontmatter?.['Comms Track'] || ''); setTrackDefaults(loadTrackDefaults()); }}
+            placeholder={trackDefaults.comms !== '' ? `default ${trackDefaults.comms}` : 'OBS track # (e.g. 4)'} />
+          <EditField label="Mic Track" value={fm['Mic Track']} onChange={(v) => setFm('Mic Track', v)}
+            onCommit={() => { flushSave(); saveTrackDefault('mic', scrimRef.current?.frontmatter?.['Mic Track'] || ''); setTrackDefaults(loadTrackDefaults()); }}
+            placeholder={trackDefaults.mic !== '' ? `default ${trackDefaults.mic}` : 'OBS track # (e.g. 1)'} />
+        </div>
+        <EditField label="Your Name (mic track)" value={yourName} onChange={setYourName}
+          onCommit={() => { try { localStorage.setItem(LS_YOUNAME, yourName || ''); } catch { /* private mode */ } }}
+          placeholder="how your mic track is labeled (default: You)" />
+        <div style={{ ...sectionTitle, marginTop: 20, marginBottom: 8 }}>Matchup</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 14 }}>
+          <EditField label="Team 1" value={fm['Team 1']} onChange={(v) => setFm('Team 1', v)} onCommit={flushSave} />
+          <EditField label="Team 2" value={fm['Team 2']} onChange={(v) => setFm('Team 2', v)} onCommit={flushSave} />
+          <EditField label="Coached Team" value={fm['Coached Team']} onChange={(v) => setFm('Coached Team', v)} onCommit={flushSave} />
+          <EditField label="Date" value={fm['Date']} onChange={(v) => setFm('Date', v)} onCommit={flushSave} placeholder="YYYY-MM-DD" />
+          <EditField label="Scheduled" value={fm['Scheduled']} onChange={(v) => setFm('Scheduled', v)} onCommit={flushSave} placeholder="e.g. 7:00 PM" />
+        </div>
+      </AppWindow>
+
+      {/* The whole Scrim card — the scrim-popup toolbar button. */}
+      <AppWindow open={scrimOpen} onClose={() => setScrimOpen(false)} title="Scrim" accent={accent} width="min(560px, 92vw)" height="min(560px, 86vh)">
+        <EditField label="Score" value={scrim.scrim['Score']} onChange={(v) => setScrimField('Score', v)} onCommit={flushSave} placeholder="e.g. 2-1" />
+        <EditField label="VOD Review" value={scrim.scrim['VOD Review']} onChange={(v) => setScrimField('VOD Review', v)} onCommit={flushSave} placeholder="/path/to/review.mp4"
+          right={<>
+            <MiniBtn icon={IconFolder} title="Select .mp4" onClick={async () => { const p = await pickFile(MP4_FILTERS); if (p) { setScrimField('VOD Review', p); flushSave(); } }} />
+            {scrim.scrim['VOD Review'] && <MiniBtn icon={IconPlayCircle} title="Open recording" onClick={() => invoke('coaching_open_path', { path: scrim.scrim['VOD Review'] }).catch(() => {})} />}
+          </>} />
+        <div className="candy-chip-row" style={{ marginTop: 8, marginBottom: 'var(--candy-depth)' }}>
+          <button className="candy-btn" data-shape="chip"
+            disabled={vodBusy || !scrim.scrim['VOD Review'] || !sttUp}
+            onClick={extractVodComms}
+            title={!scrim.scrim['VOD Review'] ? 'Set a VOD Review (.mp4) for this scrim first'
+              : !sttUp ? 'Speech engine unavailable — reopen the app'
+                : 'Extract VOD Comms — transcribe + split voices in the review recording'}
+            style={vodBusy ? { opacity: 0.6, cursor: 'progress' } : undefined}>
+            <span className="candy-face">{vodBusy ? (vodPhase || 'Working…') : 'Extract VOD Comms'}</span>
+          </button>
+          {vodBusy && (
+            <button className="candy-btn" data-shape="chip" onClick={cancelVod} title="Cancel">
+              <span className="candy-face">×</span>
+            </button>
+          )}
+          <button className="candy-btn" data-shape="chip"
+            disabled={reporting || !scrim.scrim['VOD Comms'] || !aiConfigured}
+            onClick={generateVodReport}
+            title={!scrim.scrim['VOD Comms'] ? 'Extract VOD Comms first — the report reads that transcript'
+              : !aiConfigured ? 'Configure an AI backend in Settings → Agents (API key or Claude CLI)'
+                : 'Generate Report — Claude organizes the review into an action list'}
+            style={reporting ? { opacity: 0.6, cursor: 'progress' } : undefined}>
+            <span className="candy-face">{reporting ? (reportPhase || 'Asking Claude…') : 'Generate Report'}</span>
+          </button>
+          <button className="candy-btn" data-shape="chip" onClick={addVodNotes}
+            title="Add player-written notes (.md/.txt) to feed the next report generation">
+            <span className="candy-face">Add Notes</span>
+          </button>
+          {scrim.scrim['VOD Report'] && (
+            <button className="candy-btn" data-shape="chip" onClick={() => { setView({ kind: 'report', tab: 'tldr' }); setScrimOpen(false); }} title="Open the generated report">
+              <span className="candy-face">Open Report</span>
+            </button>
+          )}
+        </div>
+      </AppWindow>
+
+      {/* Reveal files — the tree-toolbar popover (3 targets). */}
+      <Popover open={revealOpen} onClose={() => setRevealOpen(false)} outsideExempt="[data-scrim-reveal-trigger]" accent={accent} showClose title="Reveal"
+        style={revealAnchor ? { position: 'fixed', left: Math.min(revealAnchor.left, window.innerWidth - 240), top: Math.min(revealAnchor.bottom + 6, window.innerHeight - 180), width: 220, zIndex: 100000 } : { display: 'none' }}
+        bodyStyle={{ padding: 8 }}>
+        <RevealRow label="Scrim file" onClick={() => revealPath(path)} />
+        <RevealRow label="Comms transcript" onClick={() => revealPath(scrimSidecarPath(path, 'vodcomms'))} />
+        <RevealRow label="Feedback sidecar" onClick={() => revealPath(scrimSidecarPath(path, 'vodfeedback'))} />
+      </Popover>
+
+      {/* Shared modals reused from the old return (report is inline now — no VodReportView popup). */}
+      {matchPopup && (
+        <MatchViewPopup sidecarPath={sidecarPath(path, matchPopup.n)} matchN={matchPopup.n} accent={accent} onClose={() => setMatchPopup(null)} />
+      )}
+      {tfOpen && (
+        <TeamfightCommsView sidecarPath={sidecarPath(path, tfOpen.n, 'tfcomms')} accent={accent} onClose={() => setTfOpen(null)} />
+      )}
+      {review && (
+        <ReviewModal accent={accent} teamName={review.teamName} items={review.items}
+          onSave={(kept, dropped) => saveReview(review.idx, review.teamName, kept, dropped)} onClose={() => setReview(null)} />
+      )}
     </div>
   );
 }

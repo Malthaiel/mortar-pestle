@@ -45,8 +45,8 @@ export default function ScrimOverlayPanel() {
     <div className="video-cinema" style={{ position: 'absolute', top: 0, left: 0, background: 'transparent', padding: 0, ...dragStyle }}>
       <div className="candy-card ov-scrim-panel">
         {/* Header (drag handle) — Scrim menu · scrim picker (+ Add Scrim lives at the
-            bottom of its list) · match picker slot (portaled in by ScrimViewer) ·
-            Minimize (Exit Live while slim) */}
+            bottom of its list) · Minimize (Exit Live while slim). The match picker is
+            retired — ScrimViewer's tree drives match selection now (Scrim Tree, Phase 4). */}
         <div className="candy-center-row ov-scrim-head" data-spacing-intent="candy-center lift" {...dragProps} style={{ touchAction: 'none' }}>
           <CandySelect
             value={null}
@@ -66,8 +66,6 @@ export default function ScrimOverlayPanel() {
               chevron={false}
             />
           </div>
-          {/* ScrimViewer portals the focused-match picker + save tag in here. */}
-          <div id="ov-scrim-head-match" style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }} />
           <div style={{ flex: 1 }} />
           {selectedPath && (live
             ? (

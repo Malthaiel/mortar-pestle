@@ -293,11 +293,16 @@ function ReportArtifactTree({ tabs, tab, onTab, accent, reveal }) {
   return <TreeSidebar nodes={nodes} controller={controller} buttons={buttons} accent={accent} />;
 }
 
-export default function VodReportView({ sidecarPath, commsPath, feedbackPath, mdPath, accent, onClose, onRegenerate, onAddNotes }) {
+export default function VodReportView({ sidecarPath, commsPath, feedbackPath, mdPath, accent, onClose, onRegenerate, onAddNotes, inline = false, tab: tabProp, onTabChange, onTabsChange }) {
   const [state, setState] = useState({ status: 'loading' });
   const [report, setReport] = useState(null);
   const [segments, setSegments] = useState(null); // null = loading, [] = none/unavailable
-  const [tab, setTab] = useState('tldr');
+  const [tab, setTabInternal] = useState('tldr');
+  // Inline mode (embedded in ScrimViewer's tree): the parent owns the active tab.
+  // Sync from the parent's `tab` prop, and echo internal switches (e.g. a segment
+  // jump) back up. Popup mode ignores the prop and self-manages.
+  const setTab = useCallback((t) => { setTabInternal(t); if (inline) onTabChange?.(t); }, [inline, onTabChange]);
+  useEffect(() => { if (inline && tabProp && tabProp !== tab) setTabInternal(tabProp); }, [inline, tabProp, tab]);
   const [reloadKey, setReloadKey] = useState(0); // bumped after a Regenerate to re-read the sidecar
   const [busy, setBusy] = useState(''); // '' | 'regen' | 'notes'
   const paneRef = useRef(null); // content pane — jump target lookup root
@@ -401,7 +406,7 @@ export default function VodReportView({ sidecarPath, commsPath, feedbackPath, md
   const jumpToSegment = useCallback((t) => {
     pendingJumpRef.current = t;
     setTab('segments');
-  }, []);
+  }, [setTab]);
 
   useEffect(() => {
     const t = pendingJumpRef.current;
@@ -511,28 +516,15 @@ export default function VodReportView({ sidecarPath, commsPath, feedbackPath, md
     { id: 'segments', label: `Segments${(segments || []).length ? ` (${segments.length})` : ''}` },
   ];
 
-  return (
-    <AppWindow open onClose={onClose} title="VOD Review Report" accent={accent}
-      width="min(920px, 92vw)" height="min(720px, 88vh)"
-      headerActions={mdPath ? (
-        <button type="button" data-own-press className="candy-btn" data-shape="chip"
-          title="Open the Analyst chat pointed at this scrim — free-text corrections, teaching, and report regeneration live there"
-          onClick={() => openAnalyst({ scrimPath: mdPath })}>
-          <span className="candy-face">Ask Analyst</span>
-        </button>
-      ) : undefined}
-      bodyStyle={{ padding: 0, overflowY: 'hidden', display: 'flex' }}>
-      {/* Left rail — artifact file tree (tweak 1) */}
-      <div style={{ width: 186, flexShrink: 0, minHeight: 0, display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border)', background: 'var(--surface-2)' }}>
-        <ReportArtifactTree
-          tabs={TABS}
-          tab={tab}
-          onTab={setTab}
-          accent={accent}
-          reveal={{ mdPath, commsPath, feedbackPath }}
-        />
-      </div>
+  // Publish the tab list to the parent tree (inline mode) so it can build the
+  // Report/Coaching folder leaves + counts from the same source of truth.
+  useEffect(() => {
+    if (inline) onTabsChange?.(TABS);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inline, onTabsChange, JSON.stringify(TABS.map((t) => [t.id, t.label]))]);
 
+  const body = (
+    <>
       {/* Content pane */}
       <div ref={paneRef} style={{ flex: 1, minWidth: 0, padding: '20px 24px', overflowY: 'auto' }}>
         {/* meta.warnings bar + unmatched-corrections drawer (Move 12/13) — every tab but Segments */}
@@ -866,6 +858,34 @@ export default function VodReportView({ sidecarPath, commsPath, feedbackPath, md
           </div>
         </div>
       </Popover>
+    </>
+  );
+
+  if (inline) {
+    return <div style={{ display: 'flex', flex: 1, minHeight: 0, position: 'relative' }}>{body}</div>;
+  }
+
+  return (
+    <AppWindow open onClose={onClose} title="VOD Review Report" accent={accent}
+      width="min(920px, 92vw)" height="min(720px, 88vh)"
+      headerActions={mdPath ? (
+        <button type="button" data-own-press className="candy-btn" data-shape="chip"
+          title="Open the Analyst chat pointed at this scrim — free-text corrections, teaching, and report regeneration live there"
+          onClick={() => openAnalyst({ scrimPath: mdPath })}>
+          <span className="candy-face">Ask Analyst</span>
+        </button>
+      ) : undefined}
+      bodyStyle={{ padding: 0, overflowY: 'hidden', display: 'flex' }}>
+      <div style={{ width: 186, flexShrink: 0, minHeight: 0, display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border)', background: 'var(--surface-2)' }}>
+        <ReportArtifactTree
+          tabs={TABS}
+          tab={tab}
+          onTab={setTab}
+          accent={accent}
+          reveal={{ mdPath, commsPath, feedbackPath }}
+        />
+      </div>
+      {body}
     </AppWindow>
   );
 }

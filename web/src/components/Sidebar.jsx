@@ -29,6 +29,7 @@ import { useSidebarSwap } from '../hooks/useSidebarSwap.js';
 import { useManifests, useLeftSidebarSlots, usePageSidebars } from '../module-sdk/useModuleRegistry.js';
 import SidebarToggleButton from './SidebarToggleButton.jsx';
 import SidebarSeam from './SidebarSeam.jsx';
+import CollapsibleRail from './ui/CollapsibleRail.jsx';
 import SidebarEmptyState from './SidebarEmptyState.jsx';
 import RailStack from './sidebar/RailStack.jsx';
 import VersionChip from './sidebar/VersionChip.jsx';
@@ -92,123 +93,80 @@ export default function Sidebar({ accent, settings }) {
   };
 
   const renderedWidth = effectiveExpanded ? width : RAIL_WIDTH;
-  const seamMounted = effectiveExpanded;
   // The SwapContainer is rendered at full saved width inside an absolutely
   // positioned wrapper, so it stays mounted even when the outer sidebar clips
   // to the 56 px rail. Only skip mounting entirely when there's nothing to
   // show (no module and the user hasn't peeked the rail open).
   const bodyMounted = !!activeModuleId || !!pageSidebar || effectiveExpanded;
 
-  return (
-    <div style={{
-      position: 'relative',
-      width: renderedWidth,
-      flexShrink: 0,
-      background: 'var(--surface)',
-      borderRight: '1px solid var(--border)',
-      display: 'flex', flexDirection: 'column',
-      overflow: 'hidden',
-      transition: isResizing ? 'none' : 'width 180ms ease',
-      zIndex: 50,
-    }}>
-      {/* Full-rail background-texture backdrop, mirrored from the right rail
-          (flipped gradient angle/origin). z-index:-1 sits it behind all rail
-          content; hidden when collapsed. */}
-      {effectiveExpanded && (
-        <div className="sidebar-pattern-mirror" aria-hidden="true" style={{
-          position: 'absolute', inset: 0, zIndex: -1, pointerEvents: 'none',
-        }}/>
-      )}
-      <SidebarHeader
-        expanded={effectiveExpanded}
+  // Body (rendered at full width, clipped when collapsed) + the thin-rail layer
+  // (module rail stack + version chip) are fed to the shared CollapsibleRail,
+  // which owns the width animation, clip, crossfade, header slot, and seam.
+  const bodyEl = pageSidebar ? (
+    <PageSecondary pageSidebar={pageSidebar} route={route} accent={accent} />
+  ) : (
+    <SwapContainer
+      activeModuleId={activeModuleId}
+      manifests={manifests}
+      slotsByModuleId={slotsByModuleId}
+      route={route}
+      accent={accent}
+      sidebarWidth={width}
+      rootCounts={rootCounts}
+      slideDuration={dockModules.slideDuration ?? 260}
+    />
+  );
+
+  const railEl = (pageSidebar || activeModuleId) ? (
+    pageSidebar ? (
+      <RailStack
+        slot={pageSidebar.renderRail ? { renderRail: pageSidebar.renderRail } : null}
+        manifest={{ name: pageSidebar.label }}
         accent={accent}
-        onToggle={handleBrandClick}
-        settings={settings}
-        sidebarWidth={renderedWidth}
       />
+    ) : (
+      <RailStack
+        slot={slotsByModuleId[activeModuleId]}
+        manifest={manifests[activeModuleId]}
+        accent={accent}
+      />
+    )
+  ) : null;
 
-      <div style={{
-        flex: 1, minHeight: 0,
-        position: 'relative',
-        display: 'flex', flexDirection: 'column',
-      }}>
-        {bodyMounted && (
-          <>
-            <div style={{
-              position: 'absolute',
-              top: 0, bottom: 0, left: 0,
-              width,
-              display: 'flex', flexDirection: 'column',
-              borderTop: '1px solid var(--border)',
-              marginTop: 4,
-              opacity: effectiveExpanded ? 1 : 0,
-              pointerEvents: effectiveExpanded ? 'auto' : 'none',
-              transition: isResizing ? 'none' : 'opacity 180ms ease',
-            }}>
-              {pageSidebar ? (
-                <PageSecondary pageSidebar={pageSidebar} route={route} accent={accent} />
-              ) : (
-                <SwapContainer
-                  activeModuleId={activeModuleId}
-                  manifests={manifests}
-                  slotsByModuleId={slotsByModuleId}
-                  route={route}
-                  accent={accent}
-                  sidebarWidth={width}
-                  rootCounts={rootCounts}
-                  slideDuration={dockModules.slideDuration ?? 260}
-                />
-              )}
-            </div>
-            {(pageSidebar || activeModuleId) && (
-              <div style={{
-                position: 'absolute',
-                top: 0, bottom: 0, left: 0,
-                width: RAIL_WIDTH,
-                display: 'flex', flexDirection: 'column',
-                borderTop: '1px solid var(--border)',
-                marginTop: 4,
-                opacity: effectiveExpanded ? 0 : 1,
-                pointerEvents: effectiveExpanded ? 'none' : 'auto',
-                transition: isResizing ? 'none' : 'opacity 180ms ease',
-              }}>
-                {pageSidebar ? (
-                  <RailStack
-                    slot={pageSidebar.renderRail ? { renderRail: pageSidebar.renderRail } : null}
-                    manifest={{ name: pageSidebar.label }}
-                    accent={accent}
-                  />
-                ) : (
-                  <RailStack
-                    slot={slotsByModuleId[activeModuleId]}
-                    manifest={manifests[activeModuleId]}
-                    accent={accent}
-                  />
-                )}
-              </div>
-            )}
-            <div style={{
-              position: 'absolute',
-              bottom: 0, left: 0,
-              width: RAIL_WIDTH,
-              display: 'flex', justifyContent: 'center',
-              opacity: effectiveExpanded ? 0 : 1,
-              pointerEvents: effectiveExpanded ? 'none' : 'auto',
-              transition: isResizing ? 'none' : 'opacity 180ms ease',
-            }}>
-              <VersionChip />
-            </div>
-          </>
-        )}
-      </div>
+  const railContent = (
+    <>
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>{railEl}</div>
+      <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'center' }}><VersionChip /></div>
+    </>
+  );
 
-      {seamMounted && (
-        <div style={{
-          position: 'absolute',
-          top: 0, bottom: 0, right: 0,
-          display: 'flex',
-          zIndex: 70,
-        }}>
+  return (
+    <CollapsibleRail
+      expanded={sidebarExpanded}
+      peek={shiftPeek}
+      width={width}
+      railWidth={RAIL_WIDTH}
+      bodyMounted={bodyMounted}
+      patternClass="sidebar-pattern-mirror"
+      containerStyle={{
+        background: 'var(--surface)',
+        borderRight: '1px solid var(--border)',
+        transition: isResizing ? 'none' : 'width 180ms ease',
+        zIndex: 50,
+      }}
+      layerStyle={{ borderTop: '1px solid var(--border)', marginTop: 4, transition: isResizing ? 'none' : 'opacity 180ms ease' }}
+      header={
+        <SidebarHeader
+          expanded={effectiveExpanded}
+          accent={accent}
+          onToggle={handleBrandClick}
+          settings={settings}
+          sidebarWidth={renderedWidth}
+        />
+      }
+      railContent={railContent}
+      seam={
+        <div style={{ position: 'absolute', top: 0, bottom: 0, right: 0, display: 'flex', zIndex: 70 }}>
           <SidebarSeam
             width={width}
             onWidthChange={setWidth}
@@ -227,9 +185,10 @@ export default function Sidebar({ accent, settings }) {
             ariaLabel="Resize sidebar"
           />
         </div>
-      )}
-
-    </div>
+      }
+    >
+      {bodyEl}
+    </CollapsibleRail>
   );
 }
 
