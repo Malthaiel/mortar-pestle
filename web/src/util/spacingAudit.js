@@ -225,12 +225,20 @@ const isVStack = (cs) =>
 // the case-2 "gap directly below a candy control" defect in mixed candy+flat
 // sections wrapped in a plain <div> (e.g. ScrimViewer Auto Classification).
 const isCandyBlock = (el, cs) => {
-  if (cs.display.includes('flex') || cs.display.includes('grid') || cs.display.includes('inline')) return false;
+  if (cs.display.includes('flex') || cs.display.includes('grid') || cs.display.includes('inline') || cs.display.includes('table')) return false;
   // Only in-flow (static/relative) children form a vertical stack; absolute/fixed
   // children overlap geometrically (e.g. overlay panels at the same top/left), so
   // flowChildren drops them (and splices display:contents through).
   const kids = flowChildren(el);
   if (kids.length < 2) return false;
+  // Prose paragraph ≠ stack (FX12): bare text between the element children means
+  // an inline formatting context — strong/em/prose TimeChips share text LINES,
+  // so row math over them is meaningless (the 114-flag TL;DR howl, 2026-07-14).
+  // Detected via text-node children, NOT child display: candy-btn itself is
+  // inline-flex, so an inline-display bail would kill the legit plain-div candy
+  // stacks this branch exists for. `table` above: tr/table lay cells out
+  // horizontally, same false-stack class.
+  if ([...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())) return false;
   return kids.some((k) => k.matches?.('.candy-btn') || k.querySelector?.('.candy-btn'));
 };
 
@@ -542,6 +550,26 @@ export function spacingAuditSelfTest() {
       const row = findRow(r, 'fx11-btn');
       const ok = row && (row.gapAfterBand == null || row.gapAfterBand >= -TOL);
       return { pass: !!ok, detail: `gapAfterBand=${row?.gapAfterBand} (band ${row?.band}, expect null or >= -${TOL})` };
+    } });
+  }
+
+  // FX12 — prose paragraph is NOT a stack (2026-07-14): a block container with
+  // bare text + inline children (strong + a baseline TimeChip-style candy chip)
+  // is an inline formatting context — its "rows" share text lines, and treating
+  // it as a candy block produced 114 false band-overruns on the VOD report
+  // TL;DR tab. Correct: isCandyBlock bails on the bare-text child → no stack,
+  // no flags from this container.
+  {
+    const para = mk('div', 'sst-fx12', {}); // plain block, like a markdown <p>
+    const strong = mk('strong', 'fx12-strong', {}, 'Stage 1 — Draft.');
+    const chip = mk('button', 'candy-btn fx12-chip', { verticalAlign: 'baseline' }, '8:12');
+    chip.dataset.shape = 'chip';
+    para.append(strong, document.createTextNode(' prose between the inline children wraps across lines and '), chip, document.createTextNode(' more prose after the chip.'));
+    host.appendChild(para);
+    fixtures.push({ n: 12, name: 'prose-not-a-stack', stack: para, verify: (r) => {
+      const flagged = r.flags.some((f) => String(f.cls).includes('fx12') || f.txt === '8:12');
+      const stacked = r.stacks.some((s) => String(s.stack).includes('sst-fx12'));
+      return { pass: !flagged && !stacked, detail: flagged || stacked ? 'paragraph treated as stack' : 'paragraph skipped' };
     } });
   }
 

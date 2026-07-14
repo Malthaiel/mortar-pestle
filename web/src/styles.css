@@ -1327,6 +1327,15 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
 body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
   --candy-depth: var(--candy-depth-small);
 }
+/* VOD report rendition (user-directed 2026-07-14) — inside the VOD Review Report the
+   music-tile shell renders its outer frame at HALF spec (4·tile-px, not 8): the report
+   pane is wide enough that --tile-px caps at 1px, so the full frame reads oversized
+   there vs the narrow sidebar (where tile-px scaling already halves it visually).
+   Scoped to the .vod-half-frame wrapper; the sidebar widget is untouched. */
+.vod-half-frame .candy-btn[data-shape="tile"].music-tile {
+  --cbtn-frame: calc(4 * var(--tile-px));
+  --candy-depth: calc(13.5 * var(--tile-px));  /* 18 − 25% (user-directed); --cbtn-depth + inner controls follow */
+}
 /* Planner twin — fills its sidebar slot (flex) instead of the fixed music
    height; clips the dock's square corners to the rounded frame (box-shadow /
    band unaffected). Dial + calendar press behaviours fall out of the

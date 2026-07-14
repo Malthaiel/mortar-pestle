@@ -26,3 +26,8 @@
 .gamewiki-md th { background: var(--surface-2); font-weight: 600; }
 .gamewiki-md hr { border: none; border-top: 1px solid var(--border); margin: 1em 0; }
 .gamewiki-md pre { margin: 8px 0; }
+/* Prose TimeChips reserve their shadow band below the line: an inline-flex box's
+   vertical margin participates in the line box, so only chip-bearing lines grow —
+   the candy slab no longer paints over the next text line (audit: 2.7px overlap,
+   fixed 2026-07-14 user-directed). */
+.gamewiki-md .candy-btn[data-shape="chip"] { margin-bottom: var(--cbtn-depth); }

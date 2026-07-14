@@ -37,6 +37,7 @@ import { serializeReportMarkdown, coerceReport, slugId } from './vodReport.js';
 import { openAnalyst } from '@host/agents/analyst/AnalystProvider.jsx';
 
 const muted = { color: 'var(--text-muted)', fontSize: 13 };
+const macroBtnCluster = { flexShrink: 0, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center' };
 
 // Milliseconds → m:ss (raw-segment timestamp). "0:00" for missing/NaN. Mirrors CommsTranscriptView.
 function mmss(ms) {
@@ -62,8 +63,8 @@ function TimeChip({ t, onJump }) {
     <button type="button" data-own-press className="candy-btn" data-shape="chip"
       title={`Jump to ${t} in Segments`}
       onClick={(e) => { e.preventDefault(); e.stopPropagation(); onJump?.(t); }}
-      style={{ verticalAlign: 'baseline', marginRight: 4 }}>
-      <span className="candy-face" style={{ fontSize: 11, fontFamily: 'var(--font-mono)', padding: '1px 7px' }}>{t}</span>
+      style={{ verticalAlign: 'baseline', marginRight: 4, '--cbtn-depth': 'calc(var(--candy-depth-small) * 0.9375)' }}>
+      <span className="candy-face" style={{ fontSize: 11, fontFamily: 'var(--font-mono)', padding: '1px 5px', lineHeight: 1.25 }}>{t}</span>
     </button>
   );
 }
@@ -133,43 +134,72 @@ function collectRefs(r) {
 
 const KIND_LABEL = { wrong: 'Marked wrong', edit: 'Coach edit', note: 'Note' };
 
-// Per-item correction controls: Wrong appends immediately; Edit / Note open a small inline input.
-// Coach text renders BESIDE the AI text (kind-labeled lines) — the AI original is never overwritten.
-function ItemControls({ refId, aiText, entries, onAdd }) {
-  const [mode, setMode] = useState(''); // '' | 'edit' | 'note'
-  const [text, setText] = useState('');
+// tweak 4 (redesigned 2026-07-13): per-item correction collapsed to ONE "Mark" chip placed left of
+// the text — row order is [timestamp] Mark text (single-value sections read "Mark  TEMPO"). Click opens
+// a popover (Wrong toggle + Edit + Note + Save/Clear); the chip carries the mark state (Mark / Wrong=red
+// / Edit / Note=accent). The edit/note text renders as a single muted line under the row (MarkLine);
+// Wrong has no line — the red chip IS the indicator. One edit + one note per ref (Save replaces). The
+// .vodfeedback schema, REF.*, and collectRefs are unchanged, so the Unmatched-corrections drawer still
+// works; preventDefault/stopPropagation mirrors TimeChip (these can render inside the action-item label).
+function MarkChip({ refId, aiText, entries, accent, onOpen, active }) {
   const mine = (entries || []).filter((e) => e.ref === refId);
-  const wrongMarked = mine.some((e) => e.kind === 'wrong');
-  const start = (m) => { setMode(m); setText(m === 'edit' ? String(aiText ?? '') : ''); };
-  const save = () => { onAdd({ ref: refId, kind: mode, aiText: String(aiText ?? ''), userText: text.trim() }); setMode(''); setText(''); };
-  // preventDefault/stopPropagation mirrors TimeChip — these render inside the action-item <label>.
-  const chip = (label, onClick, title) => (
-    <button key={label} type="button" data-own-press className="candy-btn" data-shape="chip" title={title}
-      onClick={(e) => { e.preventDefault(); e.stopPropagation(); onClick(); }}>
-      <span className="candy-face" style={{ fontSize: 11, padding: '1px 7px' }}>{label}</span>
+  const wrong = mine.some((e) => e.kind === 'wrong');
+  const hasEdit = mine.some((e) => e.kind === 'edit');
+  const hasNote = mine.some((e) => e.kind === 'note');
+  const label = wrong ? 'Wrong' : hasEdit ? 'Edit' : hasNote ? 'Note' : 'Mark';
+  const color = wrong ? 'var(--error)' : (hasEdit || hasNote) ? (accent || 'var(--accent)') : 'var(--text-muted)';
+  return (
+    <button type="button" data-own-press data-mark-trigger className={`candy-btn${active ? ' is-active' : ''}`} data-shape="chip"
+      title="Mark this item: Wrong / Edit / Note"
+      style={{ verticalAlign: 'baseline', marginRight: 8, '--cbtn-depth': 'calc(var(--candy-depth-small) * 0.9375)' }}
+      onClick={(e) => { e.preventDefault(); e.stopPropagation(); onOpen(refId, aiText, e); }}>
+      <span className="candy-face" style={{ fontSize: 11, padding: '1px 5px', lineHeight: 1.25, color }}>{label}</span>
     </button>
   );
+}
+
+// The coach's edit/note text for one ref, as muted lines under the row. Wrong has no line (chip is it).
+function MarkLine({ refId, entries }) {
+  const mine = (entries || []).filter((e) => e.ref === refId);
+  const edit = mine.find((e) => e.kind === 'edit');
+  const note = mine.find((e) => e.kind === 'note');
+  if (!edit && !note) return null;
   return (
     <div style={{ marginTop: 3 }}>
-      {mine.map((e, i) => (
-        <div key={i} style={{ fontSize: 12, paddingLeft: 8, borderLeft: '2px solid var(--accent)', marginTop: 2, color: e.kind === 'wrong' ? 'var(--error)' : 'var(--text-2)' }}>
-          {KIND_LABEL[e.kind] || e.kind}{e.userText ? `: ${e.userText}` : ''}
-        </div>
-      ))}
-      {mode ? (
-        <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start', marginTop: 4 }}>
-          <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2}
-            style={{ flex: 1, fontSize: 12, fontFamily: 'inherit', background: 'var(--surface-2)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 6px', resize: 'vertical' }} />
-          {chip('Save', save, mode === 'edit' ? 'Save the corrected text beside the AI text' : 'Save the note')}
-          {chip('Cancel', () => setMode(''), 'Discard')}
-        </div>
-      ) : (
-        <div style={{ display: 'flex', gap: 6, marginTop: mine.length ? 4 : 2 }}>
-          {chip(wrongMarked ? 'Unmark' : 'Wrong', () => onAdd({ ref: refId, kind: 'wrong', aiText: String(aiText ?? ''), userText: '' }), wrongMarked ? 'Remove the wrong mark' : 'Mark this item wrong')}
-          {chip('Edit', () => start('edit'), 'Write the corrected text (kept beside the AI text)')}
-          {chip('Note', () => start('note'), 'Attach a note')}
-        </div>
-      )}
+      {edit && <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 2, borderLeft: '2px solid var(--accent)', paddingLeft: 6 }}>edit: {edit.userText}</div>}
+      {note && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2, borderLeft: '2px solid var(--border)', paddingLeft: 6 }}>note: {note.userText}</div>}
+    </div>
+  );
+}
+
+// The Mark popover body: a Wrong toggle chip + an Edit textarea + a Note textarea + Save/Clear. Save
+// writes one-of-each for the ref (replaces); Clear wipes all marks for the ref. Remounted per ref via key.
+function MarkPopoverBody({ refId, aiText, entries, accent, onSave, onClose }) {
+  const mine = (entries || []).filter((e) => e.ref === refId);
+  const [wrong, setWrong] = useState(mine.some((e) => e.kind === 'wrong'));
+  const [edit, setEdit] = useState(mine.find((e) => e.kind === 'edit')?.userText ?? String(aiText ?? ''));
+  const [note, setNote] = useState(mine.find((e) => e.kind === 'note')?.userText ?? '');
+  const inputStyle = { width: '100%', fontSize: 12, fontFamily: 'inherit', background: 'var(--surface-2)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 6px', resize: 'vertical' };
+  const commit = (v) => { onSave(v); onClose(); };
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <button type="button" data-own-press className={`candy-btn${wrong ? ' is-active' : ''}`} data-shape="chip"
+        onClick={() => setWrong((w) => !w)}
+        style={{ '--cbtn-depth': 'calc(var(--candy-depth-small) * 0.75)', ...(wrong ? { '--accent': 'var(--error)' } : {}) }}>
+        <span className="candy-face" style={{ fontSize: 11, padding: '1px 5px', lineHeight: 1.25, color: wrong ? 'var(--error)' : 'var(--text-2)' }}>Wrong{wrong ? ' (on)' : ''}</span>
+      </button>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <span style={{ fontSize: 11.5, color: 'var(--text-2)' }}>Edit</span>
+        <textarea value={edit} onChange={(e) => setEdit(e.target.value)} rows={2} style={inputStyle} placeholder="Corrected text (kept beside the AI text)" />
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <span style={{ fontSize: 11.5, color: 'var(--text-2)' }}>Note</span>
+        <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} style={inputStyle} placeholder="Attach a note" />
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 2 }}>
+        <OutlinedBtn small onClick={() => commit({ wrong: false, edit: '', note: '' })}>Clear</OutlinedBtn>
+        <PrimaryBtn small accent={accent} onClick={() => commit({ wrong, edit: edit.trim(), note: note.trim() })}>Save</PrimaryBtn>
+      </div>
     </div>
   );
 }
@@ -184,68 +214,45 @@ function FindingList({ findings, path }) {
   ));
 }
 
-// tweak 4: chips split from the marks display so Wrong/Edit/Note sit inline on a header/item row's
-// right (no overlap with the header text), while the "Marked wrong"/"Coach edit"/"Note" lines stay
-// below the row. Chip size matches TimeChip (fontSize 11, padding 1px 7px) so the controls read as
-// one set with the timestamp chips. The edit/note input opens under the chips (right-aligned).
-function ItemChips({ refId, aiText, entries, onAdd }) {
-  const [mode, setMode] = useState('');
-  const [text, setText] = useState('');
-  const wrongMarked = (entries || []).some((e) => e.ref === refId && e.kind === 'wrong');
-  const start = (m) => { setMode(m); setText(m === 'edit' ? String(aiText ?? '') : ''); };
-  const save = () => { onAdd({ ref: refId, kind: mode, aiText: String(aiText ?? ''), userText: text.trim() }); setMode(''); setText(''); };
-  const chip = (label, onClick, title) => (
-    <button key={label} type="button" data-own-press className="candy-btn" data-shape="chip" title={title}
-      onClick={(e) => { e.preventDefault(); e.stopPropagation(); onClick(); }}>
-      <span className="candy-face" style={{ fontSize: 11, padding: '1px 7px' }}>{label}</span>
-    </button>
-  );
-  if (mode) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
-        <div style={{ display: 'flex', gap: 6 }}>
-          {chip('Save', save, mode === 'edit' ? 'Save the corrected text beside the AI text' : 'Save the note')}
-          {chip('Cancel', () => setMode(''), 'Discard')}
-        </div>
-        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2}
-          style={{ width: 240, fontSize: 12, fontFamily: 'inherit', background: 'var(--surface-2)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 6px', resize: 'vertical' }} />
+// A candy card for one macro body (Tempo / Lane map / one objective window / one swing). Rides the
+// right-sidebar music player's EXACT shell — the same `.candy-btn.music-tile[data-shape="tile"]` +
+// container-type wrapper + candy-face setup as MusicPlayerWidget.jsx — with report prose as the
+// content. Deviations forced by the content: height auto (prose cards, not the fixed 200·tile-px
+// player) and an inline accent face when the card's mark is active (the tile shape's rest face
+// out-ranks the generic .is-active fill). The whole card is the Mark trigger — inner TimeChip keeps
+// its own jump action via stopPropagation + the music-tile pointer-events whitelist.
+function MacroCard({ refId, aiText, active, onOpen, style, children }) {
+  return (
+    <div style={{ containerType: 'inline-size', width: '100%' }}>
+      <div className={`candy-btn music-tile${active ? ' is-active' : ''}`} data-shape="tile" role="button" tabIndex={0}
+        style={{ height: 'auto', ...style }}
+        title="Mark this item: Wrong / Edit / Note"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={(e) => { e.preventDefault(); onOpen(refId, aiText, e); }}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(refId, aiText, e); } }}>
+        <div className="candy-face" style={{
+          display: 'flex', flexDirection: 'column',
+          width: '100%', height: '100%',
+          padding: 'calc(12 * var(--tile-px))', gap: 'calc(10 * var(--tile-px))',
+          boxSizing: 'border-box', textAlign: 'left',
+          // Prose, not a button label: the face's 11px label default would shrink
+          // the report text (the tile shape resets family/weight/case but not size).
+          fontSize: 'inherit', fontWeight: 400,
+          ...(active ? { background: 'var(--accent)' } : null),
+        }}>{children}</div>
       </div>
-    );
-  }
-  return (
-    <div style={{ display: 'flex', gap: 6 }}>
-      {chip(wrongMarked ? 'Unmark' : 'Wrong', () => onAdd({ ref: refId, kind: 'wrong', aiText: String(aiText ?? ''), userText: '' }), wrongMarked ? 'Remove the wrong mark' : 'Mark this item wrong')}
-      {chip('Edit', () => start('edit'), 'Write the corrected text (kept beside the AI text)')}
-      {chip('Note', () => start('note'), 'Attach a note')}
     </div>
   );
 }
 
-function ItemMarks({ refId, entries }) {
-  const mine = (entries || []).filter((e) => e.ref === refId);
-  if (!mine.length) return null;
-  return (
-    <div style={{ marginTop: 3 }}>
-      {mine.map((e, i) => (
-        <div key={i} style={{ fontSize: 12, paddingLeft: 8, borderLeft: '2px solid var(--accent)', marginTop: 2, color: e.kind === 'wrong' ? 'var(--error)' : 'var(--text-2)' }}>
-          {KIND_LABEL[e.kind] || e.kind}{e.userText ? `: ${e.userText}` : ''}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function Labeled({ label, children, controls }) {
-  // Header unified to the report section-header size (tweak 3): same fontSize/weight as .gamewiki-md h2,
-  // no uppercase/letter-spacing — one header look across the popup's Macro/Player/Comms tabs.
-  // tweak 4: single-value sections pass their Wrong/Edit/Note ItemControls via `controls` → header
-  // right. Multi-item sections keep per-item controls in the body (preserves per-item feedback refs).
+function Labeled({ label, mark, children }) {
+  // Header unified to the report section-header size (tweak 3): same fontSize/weight as .gamewiki-md h2.
+  // tweak 4 (redesigned): the Mark chip renders inline BEFORE the label (row order [timestamp] Mark text,
+  // so a single-value section reads "Mark  TEMPO"). Inline flow + vertical-align baseline (the TimeChip
+  // pattern) — not a flex row — so the chip's shadow band clears the header text without centering drift.
   return (
     <div style={{ marginTop: 8 }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-        <div style={{ fontSize: 16, fontWeight: 650, lineHeight: 1.3, color: 'var(--text)' }}>{label}</div>
-        {controls && <div style={{ flexShrink: 0 }}>{controls}</div>}
-      </div>
+      <div style={{ fontSize: 16, fontWeight: 650, lineHeight: 1.3, color: 'var(--text)' }}>{mark}{label}</div>
       <div style={{ fontSize: 13.5, marginTop: 4 }}>{children}</div>
     </div>
   );
@@ -270,6 +277,10 @@ export default function VodReportView({ sidecarPath, commsPath, feedbackPath, md
   // Per-item corrections (.vodfeedback sidecar, append-only) + the Player-Cards expander set.
   const [feedback, setFeedback] = useState({ entries: [] });
   const [openCards, setOpenCards] = useState(() => new Set());
+  // Mark popover (tweak 4 redesign): one popover for the whole popup, anchored to the clicked chip.
+  const [markTarget, setMarkTarget] = useState(null); // { refId, aiText } the open popover edits
+  const [markAnchor, setMarkAnchor] = useState(null); // chip bounding rect
+  const [markOpen, setMarkOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -311,15 +322,25 @@ export default function VodReportView({ sidecarPath, commsPath, feedbackPath, md
     return () => { cancelled = true; };
   }, [feedbackPath]);
 
-  const addFeedback = (entry) => {
-    // 'wrong' is a toggle (tweak 5): if this ref is already marked wrong, clicking again removes the
-    // mark instead of stacking another "Marked wrong" line. Edit/Note still append (multiple are legit).
-    let next;
-    if (entry.kind === 'wrong' && feedback.entries.some((e) => e.ref === entry.ref && e.kind === 'wrong')) {
-      next = { entries: feedback.entries.filter((e) => !(e.ref === entry.ref && e.kind === 'wrong')) };
-    } else {
-      next = { entries: [...feedback.entries, { ...entry, ts: new Date().toISOString() }] };
-    }
+  // tweak 4 (redesigned): one Mark chip per item opens a single shared popover. Clicking the same
+  // chip again closes it; clicking a different chip re-anchors and remounts the body (keyed by refId).
+  const isActive = (id) => markOpen && markTarget?.refId === id;
+  const openMark = (refId, aiText, e) => {
+    if (markOpen && markTarget?.refId === refId) { setMarkOpen(false); return; }
+    setMarkTarget({ refId, aiText });
+    setMarkAnchor(e.currentTarget.getBoundingClientRect());
+    setMarkOpen(true);
+  };
+  // Save replaces all marks for this ref with one-of-each (wrong / edit / note). Clear = all empty.
+  // Keeps the {ref,kind,aiText,userText,ts} schema, so collectRefs + the Unmatched drawer are unaffected.
+  const saveMark = (refId, aiText, { wrong, edit, note }) => {
+    const ts = new Date().toISOString();
+    const kept = feedback.entries.filter((e) => e.ref !== refId);
+    const made = [];
+    if (wrong) made.push({ ref: refId, kind: 'wrong', aiText: String(aiText ?? ''), userText: '', ts });
+    if (edit) made.push({ ref: refId, kind: 'edit', aiText: String(aiText ?? ''), userText: edit, ts });
+    if (note) made.push({ ref: refId, kind: 'note', aiText: String(aiText ?? ''), userText: note, ts });
+    const next = { entries: [...kept, ...made] };
     setFeedback(next); // optimistic
     if (feedbackPath) api.savePage(feedbackPath, JSON.stringify(next), null, 'gamewiki').catch(() => {});
   };
@@ -566,33 +587,34 @@ export default function VodReportView({ sidecarPath, commsPath, feedbackPath, md
                       </RailButton>
                       {isOpen && (
                         <div style={{ padding: '0 8px' }}>
-                          <Labeled label="Lane verdict" controls={<ItemChips refId={REF.pcField(c, 'laneVerdict')} aiText={c.laneVerdict} entries={feedback.entries} onAdd={addFeedback} />}>
+                          <Labeled label="Lane verdict" mark={<MarkChip refId={REF.pcField(c, 'laneVerdict')} aiText={c.laneVerdict} entries={feedback.entries} accent={accent} onOpen={openMark} active={isActive(REF.pcField(c, 'laneVerdict'))} />}>
                             {c.laneVerdict || 'Not analyzed.'}
                             <FindingList findings={r.meta.findings} path={`playerCards[${i}].laneVerdict`} />
-                            <ItemMarks refId={REF.pcField(c, 'laneVerdict')} entries={feedback.entries} />
+                            <MarkLine refId={REF.pcField(c, 'laneVerdict')} entries={feedback.entries} />
                           </Labeled>
-                          <Labeled label="Souls curve" controls={<ItemChips refId={REF.pcField(c, 'soulsCurveRead')} aiText={c.soulsCurveRead} entries={feedback.entries} onAdd={addFeedback} />}>
+                          <Labeled label="Souls curve" mark={<MarkChip refId={REF.pcField(c, 'soulsCurveRead')} aiText={c.soulsCurveRead} entries={feedback.entries} accent={accent} onOpen={openMark} active={isActive(REF.pcField(c, 'soulsCurveRead'))} />}>
                             {c.soulsCurveRead || 'Not analyzed.'}
                             <FindingList findings={r.meta.findings} path={`playerCards[${i}].soulsCurveRead`} />
-                            <ItemMarks refId={REF.pcField(c, 'soulsCurveRead')} entries={feedback.entries} />
+                            <MarkLine refId={REF.pcField(c, 'soulsCurveRead')} entries={feedback.entries} />
                           </Labeled>
-                          <Labeled label="Items" controls={<ItemChips refId={REF.pcField(c, 'itemCritique')} aiText={c.itemCritique} entries={feedback.entries} onAdd={addFeedback} />}>
+                          <Labeled label="Items" mark={<MarkChip refId={REF.pcField(c, 'itemCritique')} aiText={c.itemCritique} entries={feedback.entries} accent={accent} onOpen={openMark} active={isActive(REF.pcField(c, 'itemCritique'))} />}>
                             {c.itemCritique || 'Not analyzed.'}
                             <FindingList findings={r.meta.findings} path={`playerCards[${i}].itemCritique`} />
-                            <ItemMarks refId={REF.pcField(c, 'itemCritique')} entries={feedback.entries} />
+                            <MarkLine refId={REF.pcField(c, 'itemCritique')} entries={feedback.entries} />
                           </Labeled>
                           {(c.deathAnalysis || []).length > 0 && (
                             <Labeled label="Deaths">
                               {c.deathAnalysis.map((d, j) => (
                                 <div key={j} style={{ marginTop: j ? 8 : 0 }}>
-                                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-                                    <span><TimeChip t={d.t} onJump={jumpToSegment} />{d.what}</span>
-                                    <ItemChips refId={REF.death(c, d)} aiText={d.what} entries={feedback.entries} onAdd={addFeedback} />
+                                  <div style={{ lineHeight: 1.5 }}>
+                                    <TimeChip t={d.t} onJump={jumpToSegment} />
+                                    <MarkChip refId={REF.death(c, d)} aiText={d.what} entries={feedback.entries} accent={accent} onOpen={openMark} active={isActive(REF.death(c, d))} />
+                                    <span>{d.what}</span>
                                   </div>
                                   {d.why && <div style={{ color: 'var(--text-2)', marginTop: 2 }}>{d.why}</div>}
                                   {d.lesson && <div style={{ color: 'var(--text-muted)', marginTop: 2 }}>Lesson: {d.lesson}</div>}
                                   <FindingList findings={r.meta.findings} path={`playerCards[${i}].deathAnalysis[${j}]`} />
-                                  <ItemMarks refId={REF.death(c, d)} entries={feedback.entries} />
+                                  <MarkLine refId={REF.death(c, d)} entries={feedback.entries} />
                                 </div>
                               ))}
                             </Labeled>
@@ -601,11 +623,11 @@ export default function VodReportView({ sidecarPath, commsPath, feedbackPath, md
                             <Labeled label="Drills">
                               {c.drills.map((t, j) => (
                                 <div key={j} style={{ marginTop: j ? 6 : 0 }}>
-                                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                                  <div style={{ lineHeight: 1.5 }}>
+                                    <MarkChip refId={REF.drill(c, t)} aiText={t} entries={feedback.entries} accent={accent} onOpen={openMark} active={isActive(REF.drill(c, t))} />
                                     <span>{t}</span>
-                                    <ItemChips refId={REF.drill(c, t)} aiText={t} entries={feedback.entries} onAdd={addFeedback} />
                                   </div>
-                                  <ItemMarks refId={REF.drill(c, t)} entries={feedback.entries} />
+                                  <MarkLine refId={REF.drill(c, t)} entries={feedback.entries} />
                                 </div>
                               ))}
                             </Labeled>
@@ -619,43 +641,59 @@ export default function VodReportView({ sidecarPath, commsPath, feedbackPath, md
             ) : <Empty>Not in this report — Regenerate to build player cards.</Empty>)}
 
             {tab === 'macro' && (r.macro?.tempoRead || r.macro?.laneMap || (r.macro?.objectiveWindows || []).length || (r.macro?.swings || []).length ? (
-              <div>
-                <Labeled label="Tempo" controls={<ItemChips refId={REF.tempoRead} aiText={r.macro.tempoRead} entries={feedback.entries} onAdd={addFeedback} />}>
-                  {r.macro.tempoRead || 'Not analyzed.'}
-                  <FindingList findings={r.meta.findings} path="macro.tempoRead" />
-                  <ItemMarks refId={REF.tempoRead} entries={feedback.entries} />
+              <div className="vod-half-frame">
+                <Labeled label="Tempo">
+                  <MacroCard refId={REF.tempoRead} aiText={r.macro.tempoRead} active={isActive(REF.tempoRead)} onOpen={openMark}>
+                    <div>{r.macro.tempoRead || 'Not analyzed.'}</div>
+                    <FindingList findings={r.meta.findings} path="macro.tempoRead" />
+                    <MarkLine refId={REF.tempoRead} entries={feedback.entries} />
+                  </MacroCard>
                 </Labeled>
-                <Labeled label="Lane map" controls={<ItemChips refId={REF.laneMap} aiText={r.macro.laneMap} entries={feedback.entries} onAdd={addFeedback} />}>
-                  {r.macro.laneMap || 'Not analyzed.'}
-                  <FindingList findings={r.meta.findings} path="macro.laneMap" />
-                  <ItemMarks refId={REF.laneMap} entries={feedback.entries} />
+                <Labeled label="Lane map">
+                  <MacroCard refId={REF.laneMap} aiText={r.macro.laneMap} active={isActive(REF.laneMap)} onOpen={openMark}>
+                    <div>{r.macro.laneMap || 'Not analyzed.'}</div>
+                    <FindingList findings={r.meta.findings} path="macro.laneMap" />
+                    <MarkLine refId={REF.laneMap} entries={feedback.entries} />
+                  </MacroCard>
                 </Labeled>
                 {(r.macro.objectiveWindows || []).length > 0 && (
                   <Labeled label="Objective windows">
                     {r.macro.objectiveWindows.map((w, i) => (
-                      <div key={i} style={{ marginTop: i ? 8 : 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-                          <span><TimeChip t={w.t} onJump={jumpToSegment} /><b>{w.event}</b>{w.verdict ? ` — ${w.verdict}` : ''}</span>
-                          <ItemChips refId={REF.objective(w)} aiText={`${w.event} ${w.verdict}`} entries={feedback.entries} onAdd={addFeedback} />
+                      <MacroCard key={i} refId={REF.objective(w)} aiText={`${w.event} ${w.verdict}`} active={isActive(REF.objective(w))} onOpen={openMark}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                          <div style={{ lineHeight: 1.4 }}>
+                            <div style={{ fontSize: 15, fontWeight: 650 }}>{w.event}</div>
+                            {w.verdict && <div style={{ fontSize: 13, color: 'var(--text-2)', marginTop: 2 }}>— {w.verdict}</div>}
+                          </div>
+                          <span style={macroBtnCluster}>
+                            <TimeChip t={w.t} onJump={jumpToSegment} />
+                          </span>
                         </div>
-                        {w.why && <div style={{ color: 'var(--text-2)', marginTop: 2 }}>{w.why}</div>}
+                        {w.why && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 8, color: 'var(--text-2)' }}>
+                            <span style={{ flexShrink: 0, width: 5, height: 5, borderRadius: '50%', background: 'currentColor' }} />
+                            <span>{w.why}</span>
+                          </div>
+                        )}
                         <FindingList findings={r.meta.findings} path={`macro.objectiveWindows[${i}]`} />
-                        <ItemMarks refId={REF.objective(w)} entries={feedback.entries} />
-                      </div>
+                        <MarkLine refId={REF.objective(w)} entries={feedback.entries} />
+                      </MacroCard>
                     ))}
                   </Labeled>
                 )}
                 {(r.macro.swings || []).length > 0 && (
                   <Labeled label="Tempo swings">
                     {r.macro.swings.map((s, i) => (
-                      <div key={i} style={{ marginTop: i ? 8 : 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-                          <span><TimeChip t={s.t} onJump={jumpToSegment} />{s.direction}{s.cause ? ` — ${s.cause}` : ''}</span>
-                          <ItemChips refId={REF.swing(s)} aiText={`${s.direction} ${s.cause}`} entries={feedback.entries} onAdd={addFeedback} />
+                      <MacroCard key={i} refId={REF.swing(s)} aiText={`${s.direction} ${s.cause}`} active={isActive(REF.swing(s))} onOpen={openMark}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, lineHeight: 1.5 }}>
+                          <span>{s.direction}{s.cause ? ` — ${s.cause}` : ''}</span>
+                          <span style={macroBtnCluster}>
+                            <TimeChip t={s.t} onJump={jumpToSegment} />
+                          </span>
                         </div>
                         <FindingList findings={r.meta.findings} path={`macro.swings[${i}]`} />
-                        <ItemMarks refId={REF.swing(s)} entries={feedback.entries} />
-                      </div>
+                        <MarkLine refId={REF.swing(s)} entries={feedback.entries} />
+                      </MacroCard>
                     ))}
                   </Labeled>
                 )}
@@ -664,22 +702,23 @@ export default function VodReportView({ sidecarPath, commsPath, feedbackPath, md
 
             {tab === 'comms' && (r.commsGrade?.overall || (r.commsGrade?.callouts || []).length || (r.commsGrade?.missed || []).length ? (
               <div>
-                <Labeled label="Overall" controls={<ItemChips refId={REF.overall} aiText={r.commsGrade.overall} entries={feedback.entries} onAdd={addFeedback} />}>
+                <Labeled label="Overall" mark={<MarkChip refId={REF.overall} aiText={r.commsGrade.overall} entries={feedback.entries} accent={accent} onOpen={openMark} active={isActive(REF.overall)} />}>
                   <b>{r.commsGrade.overall || 'Not graded.'}</b>
                   <FindingList findings={r.meta.findings} path="commsGrade.overall" />
-                  <ItemMarks refId={REF.overall} entries={feedback.entries} />
+                  <MarkLine refId={REF.overall} entries={feedback.entries} />
                 </Labeled>
                 {(r.commsGrade.callouts || []).length > 0 && (
                   <Labeled label="Callouts">
                     {r.commsGrade.callouts.map((c, i) => (
-                      <div key={i} style={{ marginTop: i ? 8 : 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-                          <span><TimeChip t={c.t} onJump={jumpToSegment} /><b>{c.who}:</b> {c.call}</span>
-                          <ItemChips refId={REF.callout(c)} aiText={c.call} entries={feedback.entries} onAdd={addFeedback} />
+                      <div key={i} style={{ marginTop: i ? 12 : 0 }}>
+                        <div style={{ lineHeight: 1.5 }}>
+                          <TimeChip t={c.t} onJump={jumpToSegment} />
+                          <MarkChip refId={REF.callout(c)} aiText={c.call} entries={feedback.entries} accent={accent} onOpen={openMark} active={isActive(REF.callout(c))} />
+                          <span><b>{c.who}:</b> {c.call}</span>
                         </div>
                         {(c.verdict || c.evidence) && <div style={{ color: 'var(--text-2)', marginTop: 2 }}>{c.verdict}{c.evidence ? ` — ${c.evidence}` : ''}</div>}
                         <FindingList findings={r.meta.findings} path={`commsGrade.callouts[${i}]`} />
-                        <ItemMarks refId={REF.callout(c)} entries={feedback.entries} />
+                        <MarkLine refId={REF.callout(c)} entries={feedback.entries} />
                       </div>
                     ))}
                   </Labeled>
@@ -688,12 +727,12 @@ export default function VodReportView({ sidecarPath, commsPath, feedbackPath, md
                   <Labeled label="Missed calls">
                     {r.commsGrade.missed.map((m, i) => (
                       <div key={i} style={{ marginTop: i ? 6 : 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                        <div style={{ lineHeight: 1.5 }}>
+                          <MarkChip refId={REF.missed(m)} aiText={m} entries={feedback.entries} accent={accent} onOpen={openMark} active={isActive(REF.missed(m))} />
                           <span>{m}</span>
-                          <ItemChips refId={REF.missed(m)} aiText={m} entries={feedback.entries} onAdd={addFeedback} />
                         </div>
                         <FindingList findings={r.meta.findings} path={`commsGrade.missed[${i}]`} />
-                        <ItemMarks refId={REF.missed(m)} entries={feedback.entries} />
+                        <MarkLine refId={REF.missed(m)} entries={feedback.entries} />
                       </div>
                     ))}
                   </Labeled>
@@ -712,9 +751,12 @@ export default function VodReportView({ sidecarPath, commsPath, feedbackPath, md
                         {it.count > 1 && <span style={{ fontSize: 11.5, color: 'var(--text-muted)', marginLeft: 6 }}>×{it.count}</span>}
                         {it.player && <span style={{ fontSize: 11.5, color: 'var(--accent)', marginLeft: 6 }}>@{it.player}</span>}
                       </span>
-                      {(it.timestamps || []).length > 0 && <span style={{ display: 'block', marginTop: 3 }}>{it.timestamps.map((t, i) => <TimeChip key={i} t={t} onJump={jumpToSegment} />)}</span>}
+                      <span style={{ display: 'block', marginTop: 3 }}>
+                        {(it.timestamps || []).map((t, i) => <TimeChip key={i} t={t} onJump={jumpToSegment} />)}
+                        <MarkChip refId={REF.action(it)} aiText={it.text} entries={feedback.entries} accent={accent} onOpen={openMark} active={isActive(REF.action(it))} />
+                      </span>
                       <FindingList findings={r.meta.findings} path={`actionItems[${(r.actionItems || []).indexOf(it)}]`} />
-                      <ItemControls refId={REF.action(it)} aiText={it.text} entries={feedback.entries} onAdd={addFeedback} />
+                      <MarkLine refId={REF.action(it)} entries={feedback.entries} />
                     </span>
                   </label>
                 ))}
@@ -754,6 +796,23 @@ export default function VodReportView({ sidecarPath, commsPath, feedbackPath, md
           </>
         )}
       </div>
+
+      {/* Mark popover (tweak 4 redesign) — one shared popover anchored to the clicked Mark chip. */}
+      <Popover
+        open={markOpen}
+        onClose={() => setMarkOpen(false)}
+        outsideExempt="[data-mark-trigger]"
+        accent={accent}
+        showClose
+        title="Mark"
+        style={markAnchor ? { position: 'fixed', left: Math.min(markAnchor.left, window.innerWidth - 280), top: Math.min(markAnchor.bottom + 6, window.innerHeight - 260), width: 260, zIndex: 100000 } : { display: 'none' }}
+        bodyStyle={{ padding: 12 }}
+      >
+        {markOpen && markTarget && (
+          <MarkPopoverBody key={markTarget.refId} refId={markTarget.refId} aiText={markTarget.aiText} entries={feedback.entries} accent={accent}
+            onSave={(v) => saveMark(markTarget.refId, markTarget.aiText, v)} onClose={() => setMarkOpen(false)} />
+        )}
+      </Popover>
 
       {/* Export-to-.md popover — anchored to the Export rail button. */}
       <Popover
