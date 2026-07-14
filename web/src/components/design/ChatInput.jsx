@@ -39,7 +39,7 @@ export default function ChatInput({ onSend, streaming, accent, mentions = [], on
   const submit = () => {
     if (!canSend) return;
     const payload = mentions.length > 0
-      ? mentions.map(m => `@${m.name}`).join(' ') + '\n' + text.trim()
+      ? mentions.map(m => m.source ? `@${m.name} (${m.source})` : `@${m.name}`).join(' ') + '\n' + text.trim()
       : text.trim();
     onSend(payload);
     setText('');

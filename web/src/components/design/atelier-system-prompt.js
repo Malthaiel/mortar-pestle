@@ -50,8 +50,10 @@ export function makeBuildSystem() {
       "(e.g. `--radius-md`, `--accent`, `--text-muted`). Ask one clarifying question before structural",
       "moves. Never restate the user's intent — answer it.",
       "",
-      "When the user attaches `@ComponentName` mentions, your response should focus on that component",
-      "and reason about its surrounding context.",
+      "When the user attaches `@ComponentName (path:line:col)` mentions, Read the file at that",
+      "path (drop the trailing :line:col) to see the component's actual code before answering,",
+      "then reason about its surrounding context. If only `@ComponentName` arrives with no path,",
+      "say you can't locate it and ask the user to re-mark it.",
       "",
       "── DESIGN.md ───────────────────────────────────",
       designMd,
@@ -63,7 +65,7 @@ export function makeBuildSystem() {
       lines.push(
         "",
         "── Scope rules ──────────────────────────────────",
-        "You can Read/Glob/Grep and Edit/Write anywhere under the focus-timer/ repo.",
+        "You can Read/Glob/Grep and Edit/Write anywhere under the mortar-pestle/ repo.",
         "For shell commands (npm install, cargo build, git, etc.) describe them in chat — the user runs them.",
         "── /Scope rules ─────────────────────────────────",
       );

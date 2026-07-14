@@ -459,8 +459,15 @@ pub async fn agent_chat_cli(
         DesignError::Io(msg)
     })?;
 
-    let spawn_result = TokioCommand::new(&resolved)
-        .arg("--print")
+    // Run the CLI from the repo root so @Component (path:line:col) mentions
+    // resolve: the agent's Read/Glob/Grep are cwd-relative, and the marked
+    // source paths are repo-relative (e.g. `modules/...`, `web/src/...`).
+    // Guarded: in a packaged build CARGO_MANIFEST_DIR points at the build
+    // machine, so skip setting cwd there (the source tree isn't on disk in
+    // prod anyway) rather than fail the spawn.
+    let root = project_root();
+    let mut cmd = TokioCommand::new(&resolved);
+    cmd.arg("--print")
         .arg("--output-format")
         .arg("stream-json")
         .arg("--include-partial-messages")
@@ -475,7 +482,11 @@ pub async fn agent_chat_cli(
         .arg("--system-prompt-file")
         .arg(sp_file.path())
         .arg("--model")
-        .arg(&model_alias)
+        .arg(&model_alias);
+    if root.is_dir() {
+        cmd.current_dir(&root);
+    }
+    let spawn_result = cmd
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
