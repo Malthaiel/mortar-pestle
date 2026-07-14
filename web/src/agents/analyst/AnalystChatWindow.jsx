@@ -82,12 +82,25 @@ export default function AnalystChatWindow({ settings, setSetting, accent, onClos
   };
   const closeRecipe = () => setRecipeState(IDLE);
 
-  // "teach: <fact>" routes into the analyst-teach recipe via the provider event
-  // (same dispatch pattern as Concierge's in-window file picker).
+  // Recipe-prefix routing via the provider event (same dispatch pattern as Concierge's in-window
+  // file picker): "teach: <fact>" distills into the brain; "correct: <optional note>" regenerates
+  // the pointed report with recorded corrections authoritative; "learn" distills the recorded
+  // corrections into the brain. correct/learn need the match pointer — unpointed, the recipe
+  // surfaces a tray error telling the user to open via Ask Analyst.
   const handleSend = (text, opts) => {
-    const m = String(text || '').match(/^teach\b[:,]?\s*([\s\S]+)/i);
-    if (m) {
-      window.dispatchEvent(new CustomEvent('analyst:open', { detail: { recipe: 'analyst-teach', target: { text: m[1].trim() } } }));
+    const t = String(text || '');
+    const teach = t.match(/^teach\b[:,]?\s*([\s\S]+)/i);
+    if (teach) {
+      window.dispatchEvent(new CustomEvent('analyst:open', { detail: { recipe: 'analyst-teach', target: { text: teach[1].trim() } } }));
+      return;
+    }
+    const correct = t.match(/^correct\b[:,]?\s*([\s\S]*)/i);
+    if (correct) {
+      window.dispatchEvent(new CustomEvent('analyst:open', { detail: { recipe: 'correct-report', target: { scrimPath: match?.scrimPath || '', note: correct[1].trim() } } }));
+      return;
+    }
+    if (/^learn\b[.!]?\s*$/i.test(t.trim())) {
+      window.dispatchEvent(new CustomEvent('analyst:open', { detail: { recipe: 'analyst-learn', target: { scrimPath: match?.scrimPath || '' } } }));
       return;
     }
     send(text, opts);
@@ -113,7 +126,7 @@ export default function AnalystChatWindow({ settings, setSetting, accent, onClos
         error={error}
         emptyName="Analyst"
         emptyTagline="Deadlock coach-analyst"
-        emptyBlurb={'Ask about a match, a player, or the meta. Start a message with "teach:" to add durable knowledge to the brain (previewed before it writes).'}
+        emptyBlurb={'Ask about a match, a player, or the meta. "teach: <fact>" adds durable knowledge to the brain. From a report window (Ask Analyst): "correct: <note>" regenerates the report obeying your recorded corrections, and "learn" distills those corrections into the brain. Every write is previewed first.'}
       />
       {recipeState.phase !== 'idle' && (
         <RecipeTray

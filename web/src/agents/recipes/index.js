@@ -12,10 +12,14 @@
 
 import { organizeMd } from './organize-md.jsx';
 import { analystTeach } from './analyst-teach.jsx';
+import { analystLearn } from './analyst-learn.jsx';
+import { correctReport } from './correct-report.jsx';
 
 export const RECIPES = {
   [organizeMd.id]: organizeMd,
   [analystTeach.id]: analystTeach,
+  [analystLearn.id]: analystLearn,
+  [correctReport.id]: correctReport,
 };
 
 export function getRecipe(id) {

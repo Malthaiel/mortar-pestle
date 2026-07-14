@@ -468,7 +468,6 @@ function SpeakersPanel({ sidecarPath: scPath, roster, onReassign }) {
           </div>
         );
       })}
-      {!roster.length && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: candyGap(4) }}>Add players to the roster above to name these voices.</div>}
     </div>
   );
 }
@@ -1488,7 +1487,6 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
           <div data-spacing-intent="overlay compact head" style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>{(fm['Team 1'] || '?')} VS {(fm['Team 2'] || '?')}</div>
-              <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>{fm['Status'] || 'draft'}</div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
               <SaveTag state={saveState} />
@@ -1520,9 +1518,6 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
             <EditField label="Your Name (mic track)" value={yourName} onChange={setYourName}
               onCommit={() => { try { localStorage.setItem(LS_YOUNAME, yourName || ''); } catch { /* private mode */ } }}
               placeholder="how your mic track is labeled (default: You)" />
-            <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>
-              Track #s are 0-based OBS audio tracks — set once, remembered for next time. Blank comms track = one un-split transcript (no speaker labels).
-            </div>
           </div>
         )}
 
@@ -1576,13 +1571,6 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
               </button>
             )}
           </div>
-          {!vodBusy && !reporting && (scrim.scrim['VOD Comms'] || scrim.scrim['VOD Report']) && (
-            <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 4 }}>
-              {scrim.scrim['VOD Comms'] && <span>Comms: {scrim.scrim['VOD Comms']}</span>}
-              {scrim.scrim['VOD Comms'] && scrim.scrim['VOD Report'] && <span> · </span>}
-              {scrim.scrim['VOD Report'] && <span>Report: {scrim.scrim['VOD Report']}</span>}
-            </div>
-          )}
         </div>
         </>)}
 
@@ -1786,6 +1774,7 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
           <VodReportView
             sidecarPath={scrimSidecarPath(path, 'vodreport')}
             commsPath={scrimSidecarPath(path, 'vodcomms')}
+            feedbackPath={scrimSidecarPath(path, 'vodfeedback')}
             mdPath={path}
             accent={accent}
             onClose={() => setVodReportOpen(false)}
