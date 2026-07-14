@@ -27,7 +27,9 @@ import remarkGfm from 'remark-gfm';
 import { api, invoke } from '@host/api.js';
 import AppWindow from '@host/components/ui/AppWindow.jsx';
 import { candyGap } from '@host/util/candy.js';
-import { IconFolder } from '@host/components/icons.jsx';
+import { IconFileText } from '@host/components/icons.jsx';
+import TreeSidebar from '@host/components/vault-tree/TreeSidebar.jsx';
+import { useTreeExpansion } from '@host/components/vault-tree/useTreeExpansion.js';
 import { parseSegments } from './commsCompile.js';
 import { speakerColor } from './diarize.js';
 import { save } from '@tauri-apps/plugin-dialog';
@@ -256,6 +258,39 @@ function Labeled({ label, mark, children }) {
       <div style={{ fontSize: 13.5, marginTop: 4 }}>{children}</div>
     </div>
   );
+}
+
+// ReportArtifactTree — the artifact file tree, built on the shared TreeSidebar default
+// (feed it nodes + controller + buttons; the shell owns the toolbar band, scroll body,
+// cascade, and candy pills). Two folder groups (Report / Coaching) drive the tab state;
+// three reveal-leaves (Scrim page / Comms transcript / Feedback sidecar) call
+// coaching_reveal_path. Was a ~55-line hand-rolled clone of the shell — now a config.
+function ReportArtifactTree({ tabs, tab, onTab, accent, reveal }) {
+  const exp = useTreeExpansion('vodreport:tree', ['report']); // Report open, Coaching collapsed
+  const controller = { ...exp, expandAll: () => exp.expandAll(['report', 'coaching']) };
+  const revealPath = (p) => p && invoke('coaching_reveal_path', { path: p })
+    .catch((e) => console.error('coaching_reveal_path failed:', e));
+  const group = (id, label, ids) => ({
+    id, label, isFolder: true,
+    children: tabs.filter((t) => ids.includes(t.id)).map((t) => ({
+      id: t.id, label: t.label, active: tab === t.id, onActivate: () => onTab(t.id),
+    })),
+  });
+  const leaf = (id, label, path) => ({
+    id, label, leadIcon: <IconFileText size={18} />, onActivate: () => revealPath(path),
+  });
+  const nodes = [
+    group('report', 'Report', ['tldr', 'players', 'macro', 'comms']),
+    group('coaching', 'Coaching', ['actions', 'qa', 'keep', 'debates', 'followups', 'segments']),
+    leaf('scrim', 'Scrim page', reveal.mdPath),
+    leaf('comms', 'Comms transcript', reveal.commsPath),
+    leaf('feedback', 'Feedback sidecar', reveal.feedbackPath),
+  ];
+  const buttons = {
+    collapse: { show: true },
+    revealInFiles: { show: !!reveal.mdPath, title: 'Reveal scrim file', onClick: () => revealPath(reveal.mdPath) },
+  };
+  return <TreeSidebar nodes={nodes} controller={controller} buttons={buttons} accent={accent} />;
 }
 
 export default function VodReportView({ sidecarPath, commsPath, feedbackPath, mdPath, accent, onClose, onRegenerate, onAddNotes }) {
@@ -487,33 +522,15 @@ export default function VodReportView({ sidecarPath, commsPath, feedbackPath, md
         </button>
       ) : undefined}
       bodyStyle={{ padding: 0, overflowY: 'hidden', display: 'flex' }}>
-      {/* Left rail */}
-      <div style={{ width: 186, flexShrink: 0, padding: '14px 10px', borderRight: '1px solid var(--border)', background: 'var(--surface-2)', display: 'flex', flexDirection: 'column', gap: candyGap(8), overflowY: 'auto', overflowX: 'hidden' }}>
-        {TABS.map((t) => (
-          <RailButton key={t.id} active={t.id === tab} accent={accent} onClick={() => setTab(t.id)}>{t.label}</RailButton>
-        ))}
-        <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: candyGap(8) }}>
-          {onAddNotes && (
-            <RailButton accent={accent} disabled={!!busy} onClick={() => runRail('notes', onAddNotes)}>
-              {busy === 'notes' ? 'Adding…' : 'Add Notes'}
-            </RailButton>
-          )}
-          {onRegenerate && (
-            <RailButton accent={accent} disabled={!!busy} onClick={() => runRail('regen', onRegenerate)}>
-              {busy === 'regen' ? 'Regenerating…' : 'Regenerate'}
-            </RailButton>
-          )}
-          <RailButton accent={accent} data-export-trigger disabled={!report} onClick={openExport}>
-            {exportBusy ? 'Exporting…' : 'Export'}
-          </RailButton>
-          {mdPath && (
-            <button type="button" data-own-press className="candy-btn" data-shape="icon"
-              title="Show scrim file in folder" style={{ alignSelf: 'flex-start', '--accent': accent }}
-              onClick={() => invoke('coaching_reveal_path', { path: mdPath }).catch((e) => console.error('coaching_reveal_path failed:', e))}>
-              <span className="candy-face"><IconFolder size={16} /></span>
-            </button>
-          )}
-        </div>
+      {/* Left rail — artifact file tree (tweak 1) */}
+      <div style={{ width: 186, flexShrink: 0, minHeight: 0, display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border)', background: 'var(--surface-2)' }}>
+        <ReportArtifactTree
+          tabs={TABS}
+          tab={tab}
+          onTab={setTab}
+          accent={accent}
+          reveal={{ mdPath, commsPath, feedbackPath }}
+        />
       </div>
 
       {/* Content pane */}

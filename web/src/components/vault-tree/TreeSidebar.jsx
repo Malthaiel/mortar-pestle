@@ -76,7 +76,7 @@ function TreeNode({ node, controller, accent, topLevel = false }) {
   );
 }
 
-export default function TreeSidebar({ nodes, controller, buttons, accent, showSuffix = false }) {
+export default function TreeSidebar({ nodes, controller, buttons, accent, showSuffix = false, toolbarExtra }) {
   const { settings } = useSettings();
   // Reuse the vault tree's cascade-timing preset so every sidebar animates alike.
   const anim = REVEAL[settings.vaultTreeReveal] || REVEAL.normal;
@@ -92,7 +92,7 @@ export default function TreeSidebar({ nodes, controller, buttons, accent, showSu
             circuit texture; rows scroll in the box below. Bottom pad = GAP so the
             buttons' candy slab clears the first row. */}
         <div style={{ flexShrink: 0, padding: `8px 8px ${GAP}` }}>
-          <TreeToolbar buttons={buttons} controller={controller} accent={accent}/>
+          <TreeToolbar buttons={buttons} controller={controller} accent={accent} extra={toolbarExtra}/>
         </div>
         {/* Scrolling tree body — the only scroller. overflowX hidden keeps long
             names ellipsizing (the min-width:0 chain). */}
