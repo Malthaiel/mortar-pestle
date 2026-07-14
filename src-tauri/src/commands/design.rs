@@ -673,3 +673,197 @@ pub fn design_pending_set(app: AppHandle, edits: Vec<PendingEdit>) -> Result<(),
     let path = pending_file(&app)?;
     persist_pending(&path, &edits)
 }
+
+// ── SF11: Working-tree git surface ───────────────────────────────────────
+// The Atelier agent edits files directly (Write/Edit, no Bash) and leaves
+// them dirty in the working tree — there is no git step in the agent flow.
+// These three commands give the in-app WorkingTreeTray a way to list, commit,
+// and discard those dirty (tracked-modified) files without the user dropping
+// to a terminal. Reuses the release.rs git convention: bare `git` on PATH
+// with `git -C <root>` for cwd (git.exe is not a .cmd shim, unlike `claude`).
+//
+// v1 scope: tracked-modified only (porcelain ` M`/`MM`/`M `, skip `??`);
+// discard = `git checkout --` (unstaged only — the agent never stages);
+// fixed auto-generated commit message; no per-file commit.
+
+#[derive(Serialize)]
+pub struct GitDirtyFile {
+    pub path: String,
+    pub staged: bool,
+}
+
+#[derive(Serialize)]
+pub struct GitCommitOut {
+    pub sha: String,
+    pub count: usize,
+    pub message: String,
+}
+
+/// Run `git -C <root> status --porcelain=v1 -z` and return raw stdout, or
+/// `None` if `git` is missing or <root> is not a repo (end-user installs may
+/// have neither — mirror release.rs `in_git_repo` tolerance).
+async fn git_porcelain(root: &Path) -> Option<String> {
+    let out = TokioCommand::new("git")
+        .arg("-C")
+        .arg(root)
+        .arg("status")
+        .arg("--porcelain=v1")
+        .arg("-z")
+        .output()
+        .await
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    Some(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+/// Parse `--porcelain=v1 -z` output into tracked-modified files. Skips
+/// untracked (`??`) and ignored (`!!`) entries. For renames/copies (`R`/`C`)
+/// the next NUL token is the destination path — consume it and use it.
+fn parse_dirty(stdout: &str) -> Vec<GitDirtyFile> {
+    let mut files = Vec::new();
+    let mut tokens = stdout.split('\0');
+    while let Some(tok) = tokens.next() {
+        let bytes = tok.as_bytes();
+        if bytes.len() < 4 {
+            continue;
+        }
+        let x = bytes[0] as char;
+        if x == '?' || x == '!' {
+            continue;
+        }
+        // tok = "XY <path>" — bytes[2] is a space, path starts at index 3.
+        let path = &tok[3..];
+        let final_path = if x == 'R' || x == 'C' {
+            tokens.next().unwrap_or(path)
+        } else {
+            path
+        };
+        let staged = x != ' ' && x != '?';
+        files.push(GitDirtyFile {
+            path: final_path.to_string(),
+            staged,
+        });
+    }
+    files
+}
+
+#[tauri::command]
+pub async fn design_git_status(_app: AppHandle) -> Result<Vec<GitDirtyFile>, DesignError> {
+    let root = project_root();
+    Ok(match git_porcelain(&root).await {
+        Some(stdout) => parse_dirty(&stdout),
+        None => Vec::new(),
+    })
+}
+
+#[tauri::command]
+pub async fn design_git_commit(_app: AppHandle) -> Result<GitCommitOut, DesignError> {
+    let root = project_root();
+    let dirty = match git_porcelain(&root).await {
+        Some(stdout) => parse_dirty(&stdout),
+        None => return Err(DesignError::Io("not a git repository".into())),
+    };
+    if dirty.is_empty() {
+        return Err(DesignError::Io("nothing to commit".into()));
+    }
+    let count = dirty.len();
+    let message = format!("feat(atelier): {count} file(s) from working tree");
+
+    // Stage modified+deleted tracked files only (skips untracked, so the
+    // commit matches exactly what the tray showed).
+    let add = TokioCommand::new("git")
+        .arg("-C")
+        .arg(&root)
+        .arg("add")
+        .arg("-u")
+        .output()
+        .await
+        .map_err(|e| DesignError::Io(format!("git add: {e}")))?;
+    if !add.status.success() {
+        return Err(DesignError::Io(format!(
+            "git add -u failed: {}",
+            String::from_utf8_lossy(&add.stderr)
+        )));
+    }
+
+    let commit = TokioCommand::new("git")
+        .arg("-C")
+        .arg(&root)
+        .arg("commit")
+        .arg("-m")
+        .arg(&message)
+        .output()
+        .await
+        .map_err(|e| DesignError::Io(format!("git commit: {e}")))?;
+    if !commit.status.success() {
+        return Err(DesignError::Io(format!(
+            "git commit failed: {}",
+            String::from_utf8_lossy(&commit.stderr)
+        )));
+    }
+
+    let rev = TokioCommand::new("git")
+        .arg("-C")
+        .arg(&root)
+        .arg("rev-parse")
+        .arg("--short")
+        .arg("HEAD")
+        .output()
+        .await
+        .map_err(|e| DesignError::Io(format!("git rev-parse: {e}")))?;
+    let sha = String::from_utf8_lossy(&rev.stdout).trim().to_string();
+    Ok(GitCommitOut { sha, count, message })
+}
+
+/// Discard (git checkout) dirty tracked files. `paths` empty = all
+/// tracked-modified; non-empty = just those. Returns the count reverted.
+/// Note: `git checkout --` reverts unstaged worktree modifications only —
+/// it does not touch the staged index. v1 assumes the agent never stages.
+#[tauri::command]
+pub async fn design_git_discard(_app: AppHandle, paths: Vec<String>) -> Result<usize, DesignError> {
+    let root = project_root();
+    let porcelain = match git_porcelain(&root).await {
+        Some(s) => s,
+        None => return Ok(0),
+    };
+    let before = parse_dirty(&porcelain);
+    if paths.is_empty() {
+        if before.is_empty() {
+            return Ok(0);
+        }
+        let out = TokioCommand::new("git")
+            .arg("-C")
+            .arg(&root)
+            .arg("checkout")
+            .arg("--")
+            .arg(".")
+            .output()
+            .await
+            .map_err(|e| DesignError::Io(format!("git checkout: {e}")))?;
+        if !out.status.success() {
+            return Err(DesignError::Io(format!(
+                "git checkout failed: {}",
+                String::from_utf8_lossy(&out.stderr)
+            )));
+        }
+        return Ok(before.len());
+    }
+    let mut count = 0;
+    for p in &paths {
+        let out = TokioCommand::new("git")
+            .arg("-C")
+            .arg(&root)
+            .arg("checkout")
+            .arg("--")
+            .arg(p)
+            .output()
+            .await
+            .map_err(|e| DesignError::Io(format!("git checkout {p}: {e}")))?;
+        if out.status.success() {
+            count += 1;
+        }
+    }
+    Ok(count)
+}

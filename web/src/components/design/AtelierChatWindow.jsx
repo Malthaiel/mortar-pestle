@@ -16,10 +16,12 @@ import { useAgentChat } from './useAgentChat.js';
 import { makeBuildSystem } from './atelier-system-prompt.js';
 import { useDesignPointer } from './DesignPointer.jsx';
 import { useLiveOverrides, getOrCreateSelClass } from './useLiveOverrides.js';
+import { useGitStatus } from './useGitStatus.js';
 import MarkupOverlay from './MarkupOverlay.jsx';
 import { readReveal } from './computed-style-reveal.js';
 import TokenBubble from './TokenBubble.jsx';
 import PendingEditsTray from './PendingEditsTray.jsx';
+import WorkingTreeTray from './WorkingTreeTray.jsx';
 import AtelierAvatar from './AtelierAvatar.jsx';
 import MessageList from './MessageList.jsx';
 import ChatInput from './ChatInput.jsx';
@@ -52,8 +54,10 @@ export default function AtelierChatWindow({ settings, setSetting, accent, exitin
   const [lastReveal, setLastReveal] = useState(null);
   const [editTarget, setEditTarget] = useState(null); // { element, reveal, selClass }
   const [trayOpen, setTrayOpen] = useState(false);
+  const [wtOpen, setWtOpen] = useState(false);
   const { pointerMode, setPointerMode } = useDesignPointer();
   const { pending, setOverride, clearOverride, clearSelClass, clearById, clearAll } = useLiveOverrides();
+  const { dirty, refresh: refreshGit } = useGitStatus();
 
   // Enrich pending with off-screen flag (recomputed each render so toggling
   // tabs / scrolling updates the indicator).
@@ -134,6 +138,36 @@ export default function AtelierChatWindow({ settings, setSetting, accent, exitin
     clearAll();
   }, [clearAll]);
 
+  const handleWtDiscard = useCallback(async (path) => {
+    try {
+      await invoke('design_git_discard', { paths: [path] });
+      await refreshGit();
+    } catch (e) {
+      console.error('[design] working-tree discard failed:', e);
+      alert(`Discard failed: ${e?.message || e}`);
+    }
+  }, [refreshGit]);
+
+  const handleWtDiscardAll = useCallback(async () => {
+    try {
+      await invoke('design_git_discard', { paths: [] });
+      await refreshGit();
+    } catch (e) {
+      console.error('[design] working-tree discard-all failed:', e);
+      alert(`Discard failed: ${e?.message || e}`);
+    }
+  }, [refreshGit]);
+
+  const handleWtCommitAll = useCallback(async () => {
+    try {
+      await invoke('design_git_commit');
+      await refreshGit();
+    } catch (e) {
+      console.error('[design] working-tree commit-all failed:', e);
+      alert(`Commit failed: ${e?.message || e}`);
+    }
+  }, [refreshGit]);
+
   const closeBubble = () => setEditTarget(null);
 
   const showMarkupOverlay = (pointerMode === 'markup' || pointerMode === 'edit') && !exiting;
@@ -188,6 +222,30 @@ export default function AtelierChatWindow({ settings, setSetting, accent, exitin
           }}
         >{pending.length} pending</button>
       )}
+      {dirty.length > 0 && (
+        <button
+          type="button"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={() => setWtOpen((v) => !v)}
+          title={`${dirty.length} dirty working-tree file${dirty.length === 1 ? '' : 's'} — click to ${wtOpen ? 'close' : 'open'} tray`}
+          style={{
+            padding: '2px 7px',
+            background: wtOpen
+              ? (accent || 'var(--text)')
+              : 'color-mix(in oklch, var(--text) 10%, transparent)',
+            color: wtOpen ? '#fff' : 'var(--text)',
+            border: wtOpen
+              ? 'none'
+              : '1px solid var(--border-soft)',
+            borderRadius: 999,
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10, fontWeight: 700,
+            letterSpacing: '0.04em',
+            cursor: 'pointer',
+            transition: 'background 100ms ease, color 100ms ease',
+          }}
+        >{dirty.length} dirty</button>
+      )}
       <PointerToggle accent={accent} pointerMode={pointerMode} setPointerMode={setPointerMode}/>
     </>
   );
@@ -214,6 +272,16 @@ export default function AtelierChatWindow({ settings, setSetting, accent, exitin
           onCommitAll={handleTrayCommitAll}
           onDiscardAll={handleTrayDiscardAll}
           onClose={() => setTrayOpen(false)}
+        />
+      )}
+      {wtOpen && (
+        <WorkingTreeTray
+          files={dirty}
+          accent={accent}
+          onDiscard={handleWtDiscard}
+          onDiscardAll={handleWtDiscardAll}
+          onCommitAll={handleWtCommitAll}
+          onClose={() => setWtOpen(false)}
         />
       )}
       <MessageList
