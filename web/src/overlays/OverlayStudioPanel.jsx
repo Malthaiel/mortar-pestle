@@ -29,6 +29,17 @@ import { openConcierge } from '@host/agents/concierge/ConciergeProvider.jsx';
 import useOverlayPanelDrag from './useOverlayPanelDrag.js';
 import '@modules/studio/overlay/stt.css'; // reused .stt-vu / .stt-transcript chrome (the host never mounts SttPage)
 
+// Panel presence — shared with StudioOverlayLauncher via localStorage + a window
+// event (the OverlayBrowserPanel pattern). Default OPEN; hiding keeps the panel
+// mounted (display:none) so recordings/transcripts in flight survive a minimize.
+export const OPEN_EVT = 'overlay-studio-open-changed';
+const OPEN_KEY = 'overlay-studio-open';
+export const isPanelOpen = () => { try { return localStorage.getItem(OPEN_KEY) !== '0'; } catch { return true; } };
+export const setPanelOpen = (v) => {
+  try { localStorage.setItem(OPEN_KEY, v ? '1' : '0'); } catch { /* ignore */ }
+  window.dispatchEvent(new CustomEvent(OPEN_EVT, { detail: !!v }));
+};
+
 const ORDER_KEY = 'overlay-studio-order';
 const HISTORY_KEY = 'overlay-stt-history';
 const HISTORY_CAP = 20;
@@ -102,6 +113,13 @@ function ViewAllModal({ section, clips, shots, history, onClose, doCopy, onDelHi
 
 export default function OverlayStudioPanel({ showToast }) {
   const { style: dragStyle, dragProps } = useOverlayPanelDrag('overlay-panel-studio', { x: 220, y: 40 });
+  // Minimized/open — driven by the bottom-left launcher chip.
+  const [open, setOpen] = useState(isPanelOpen);
+  useEffect(() => {
+    const onChange = (e) => setOpen(!!e.detail);
+    window.addEventListener(OPEN_EVT, onChange);
+    return () => window.removeEventListener(OPEN_EVT, onChange);
+  }, []);
   const [order, setOrder] = useState(loadOrder);
   const [viewAll, setViewAll] = useState(null); // 'voice' | 'video' | 'shots' | null
 
@@ -276,7 +294,7 @@ export default function OverlayStudioPanel({ showToast }) {
 
   return (
     <>
-      <div className="video-cinema" style={{ position: 'absolute', top: 0, left: 0, background: 'transparent', padding: 0, ...dragStyle }}>
+      <div className="video-cinema" style={{ position: 'absolute', top: 0, left: 0, background: 'transparent', padding: 0, display: open ? undefined : 'none', ...dragStyle }}>
         <div className="candy-card ov-studio-panel">
           <div className="candy-center-row ov-studio-head" {...dragProps} style={{ touchAction: 'none' }}>
             <span className="ov-studio-title section-title">Studio</span>

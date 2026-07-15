@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { api, invoke } from '@host/api.js';
-import { IconFolder, IconPlayCircle, IconPlus, IconFileText, IconSettings, IconFilm, IconHardDrive, IconChevronRight } from '@host/components/icons.jsx';
+import { IconFolder, IconPlayCircle, IconPlus, IconFileText, IconSettings, IconFilm, IconHardDrive, IconChevronRight, IconRepeat } from '@host/components/icons.jsx';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
 import { candyGap } from '@host/util/candy.js';
 import CollapsibleRail from '@host/components/ui/CollapsibleRail.jsx';
@@ -189,14 +189,16 @@ function Scoreboard({ path }) {
 
 // Count-up game clock (sub-plan 5): readout + text Start/Pause + Reset — glyph-free,
 // the clock wears the notes-label style (no running tint) per the minimalism pass.
-function TimerControls({ sw }) {
+// `stretch`: full-width-bar mode (overlay) — the group flex-fills its row and the
+// chips share it equally, so the bar reads as one edge-to-edge control strip.
+function TimerControls({ sw, stretch }) {
   return (
-    <div className="candy-center-row" style={{ gap: 6 }}>
-      <span style={{ ...labelStyle, marginBottom: 0, fontVariantNumeric: 'tabular-nums', minWidth: 40 }}>{clock(sw.elapsedSec)}</span>
-      <button className="candy-btn" data-shape="chip" onClick={sw.toggle} title={sw.running ? 'Pause timer' : 'Start timer'}>
+    <div className="candy-center-row" style={{ gap: stretch ? 8 : 6, ...(stretch ? { flex: 3, minWidth: 0 } : null) }}>
+      <span style={{ ...labelStyle, marginBottom: 0, fontVariantNumeric: 'tabular-nums', minWidth: 40, ...(stretch ? { textAlign: 'center' } : null) }}>{clock(sw.elapsedSec)}</span>
+      <button className="candy-btn" data-shape="chip" onClick={sw.toggle} title={sw.running ? 'Pause timer' : 'Start timer'} style={stretch ? { flex: 1 } : undefined}>
         <span className="candy-face">{sw.running ? 'Pause' : 'Start'}</span>
       </button>
-      <button className="candy-btn" data-shape="chip" onClick={sw.reset} title="Reset timer">
+      <button className="candy-btn" data-shape="chip" onClick={sw.reset} title="Reset timer" style={stretch ? { flex: 1 } : undefined}>
         <span className="candy-face">Reset</span>
       </button>
     </div>
@@ -234,13 +236,15 @@ function NotesEditor({ bullets, onChange, onCommit, storageKey, overlay, slim, f
   const firstUntimed = ordered.length - untimedCount;
   return (
     <div style={{ marginTop: overlay ? 0 : 8, marginBottom: overlay ? 'var(--cbtn-depth)' : candyGap(8, true), ...(fill ? { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' } : null) }}>
-      {/* One compact control row: timer (slim-only — the clock keeps counting hidden,
-          epoch math in useStopwatch) + Dictate. No "Notes" label — the list is self-evident. */}
+      {/* Full-width control bar (user pick 2026-07-15 over composer/seg/split): timer
+          cluster (slim-only — the clock keeps counting hidden, epoch math in
+          useStopwatch) + Dictate, equal-width cells edge to edge. */}
       {(slim || (overlay && onDictate)) && (
-        <div className="candy-center-row" style={{ gap: 8, marginBottom: 8 }}>
-          {slim && <TimerControls sw={sw} />}
+        <div className="candy-center-row" style={{ gap: 8, marginBottom: candyGap(8, true) }}>
+          {slim && <TimerControls sw={sw} stretch />}
           {overlay && onDictate && (
             <button className={`candy-btn${dictating ? ' is-active' : ''}`} data-shape="chip" onClick={onDictate}
+              style={{ flex: 1 }}
               title="Dictate a note — speech-to-text appended to this match">
               <span className="candy-face">{dictating ? 'Listening' : 'Dictate'}</span>
             </button>
@@ -532,7 +536,9 @@ function RevealRow({ label, onClick }) {
 
 // `fill` (overlay only): the panel's height is user-pinned — in slim live mode the
 // notes list drops its compact cap and flex-fills the pinned height instead.
-export default function ScrimViewer({ path, accent, overlay = false, live = false, onLive, fill = false }) {
+// `scrims`/`onSelectScrim`/`onAddScrim` (overlay only): the toolbar's Switch-scrim
+// popover — [{ path, label }] + select/create handlers owned by ScrimOverlayPanel.
+export default function ScrimViewer({ path, accent, overlay = false, live = false, onLive, fill = false, scrims, onSelectScrim, onAddScrim }) {
   const [scrim, setScrim] = useState(null);
   const [err, setErr] = useState(null);
   const [saveState, setSaveState] = useState('idle'); // idle | saving | saved | error
@@ -597,6 +603,8 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
   const [scrimOpen, setScrimOpen] = useState(false);
   const [revealOpen, setRevealOpen] = useState(false);
   const [revealAnchor, setRevealAnchor] = useState(null);
+  const [swapOpen, setSwapOpen] = useState(false);
+  const [swapAnchor, setSwapAnchor] = useState(null);
   const railPeek = useKeybindHold('sidebar.peek-left', settings?.keybinds);
   const treeExp = useTreeExpansion('gw-scrim-tree', ['matches', 'report', 'coaching']);
 
@@ -1607,8 +1615,11 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
     const hasAuto = !!(autoBody && autoBody.trim());
     const enemyAutoBody = (m.subsections.find((s) => s.kind === 'opaque' && s.heading === `Auto Classification (${enemyTeam})`) || {}).body;
     const hasEnemyAuto = !!(enemyAutoBody && enemyAutoBody.trim());
+    // Overlay: no card chrome (border/fill/padding deleted by request) — the
+    // controls sit directly on the panel; the main-window page keeps the box.
+    const cardBox = overlay ? undefined : card;
     return (
-      <div key={m.n} style={slim && fill ? { ...card, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' } : card}>
+      <div key={m.n} style={slim && fill ? { ...cardBox, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' } : cardBox}>
         {/* Slim hides the whole title/chip block — the head's match picker already
             names the match; Dictate lives in the notes control row. */}
         {!slim && (
@@ -1793,6 +1804,9 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
     { title: 'Coaching setup', icon: <IconSettings />, onClick: () => setSettingsOpen(true) },
     { title: 'Scrim', icon: <IconFilm />, onClick: () => setScrimOpen(true) },
     ...(overlay ? [{ title: live ? 'Leave live mode' : 'Go Live — just notes, voice, and the timer', icon: <IconPlayCircle />, onClick: () => onLive?.(!live), active: live, activeAccent: 'var(--error)' }] : []),
+    // Switch scrim (overlay): the header picker moved here — a popover listing every
+    // scrim + Add Scrim, mirroring the Reveal-files popover pattern.
+    ...(overlay && onSelectScrim ? [{ title: 'Switch scrim', icon: <IconRepeat />, dataAttr: 'scrim-swap-trigger', onClick: (e) => { setSwapAnchor(e.currentTarget.getBoundingClientRect()); setSwapOpen((o) => !o); } }] : []),
   ];
   const paneMatch = view?.kind === 'match' ? scrim.matches.find((m) => m.n === view.n) : null;
   const paneMatchIdx = paneMatch ? scrim.matches.findIndex((m) => m.n === paneMatch.n) : -1;
@@ -1937,6 +1951,16 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
         <RevealRow label="Scrim file" onClick={() => revealPath(path)} />
         <RevealRow label="Comms transcript" onClick={() => revealPath(scrimSidecarPath(path, 'vodcomms'))} />
         <RevealRow label="Feedback sidecar" onClick={() => revealPath(scrimSidecarPath(path, 'vodfeedback'))} />
+      </Popover>
+
+      {/* Switch scrim — the tree-toolbar popover that replaced the header picker (overlay only). */}
+      <Popover open={swapOpen} onClose={() => setSwapOpen(false)} outsideExempt="[data-scrim-swap-trigger]" accent={accent} showClose title="Scrims"
+        style={swapAnchor ? { position: 'fixed', left: Math.min(swapAnchor.left, window.innerWidth - 260), top: Math.min(swapAnchor.bottom + 6, window.innerHeight - 320), width: 240, zIndex: 100000 } : { display: 'none' }}
+        bodyStyle={{ padding: 8, maxHeight: 280, overflowY: 'auto' }}>
+        {(scrims || []).map((s) => (
+          <RevealRow key={s.path} label={s.path === path ? `${s.label} (open)` : s.label} onClick={() => { setSwapOpen(false); onSelectScrim?.(s.path); }} />
+        ))}
+        <RevealRow label="+ Add Scrim" onClick={() => { setSwapOpen(false); onAddScrim?.(); }} />
       </Popover>
 
       {/* Shared modals reused from the old return (report is inline now — no VodReportView popup). */}

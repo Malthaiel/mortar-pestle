@@ -1,16 +1,26 @@
 // Scrim Overlay Panel — the FULL scrim editor as a draggable candy panel in the
-// Overlay Host. The panel picks WHICH scrim (header: scrim picker + New + close);
-// the body is the reused ScrimViewer in `overlay` mode (focused-match only), which
-// owns all editing/saving + the live-target + dictation/screenshot capture. This
-// replaces the former compact live-notes card — all of that functionality now lives
-// in the one reused ScrimViewer, so the overlay and the in-app page are the same UI.
+// Overlay Host. Headerless: scrim switching lives in ScrimViewer's tree toolbar
+// (Switch-scrim popover, fed by this panel), minimize lives in the bottom-left
+// ScrimOverlayLauncher chip, and the panel drags by any empty spot. The body is
+// the reused ScrimViewer in `overlay` mode (focused-match only), which owns all
+// editing/saving + the live-target + dictation/screenshot capture.
 // Accent resolves free — --accent is painted on :root by the host's SttProvider/
 // useSettings (see OverlayHostView).
-import { useState, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import useOverlayPanelDrag from './useOverlayPanelDrag.js';
 import { useScrimOverlay } from './useScrimOverlay.js';
 import ScrimViewer from '@modules/core/game-wiki/ScrimViewer.jsx';
-import CandySelect from '@host/components/ui/CandySelect.jsx';
+
+// Panel presence — shared with ScrimOverlayLauncher via localStorage + a window
+// event (the OverlayBrowserPanel pattern). Default OPEN; hiding keeps the panel
+// mounted (display:none) so the timer, drafts, and dictation survive a minimize.
+export const OPEN_EVT = 'overlay-scrim-open-changed';
+const OPEN_KEY = 'overlay-scrim-open';
+export const isPanelOpen = () => { try { return localStorage.getItem(OPEN_KEY) !== '0'; } catch { return true; } };
+export const setPanelOpen = (v) => {
+  try { localStorage.setItem(OPEN_KEY, v ? '1' : '0'); } catch { /* ignore */ }
+  window.dispatchEvent(new CustomEvent(OPEN_EVT, { detail: !!v }));
+};
 
 // All-direction edge/corner resize — the panel is content-height until the user drags a
 // vertical edge (then height is pinned). A left/top edge also slides the panel (nudgeX/
@@ -38,7 +48,14 @@ function titleOf(path) {
 
 export default function ScrimOverlayPanel() {
   const { style: dragStyle, dragProps, nudgeX, nudgeY, commitPos } = useOverlayPanelDrag('overlay-panel-scrim', { x: 40, y: 40 });
-  const { scrims, selectedPath, selectScrim, closeScrim, createScrim } = useScrimOverlay();
+  const { scrims, selectedPath, selectScrim, createScrim } = useScrimOverlay();
+  // Minimized/open — driven by the bottom-left launcher chip.
+  const [open, setOpen] = useState(isPanelOpen);
+  useEffect(() => {
+    const onChange = (e) => setOpen(!!e.detail);
+    window.addEventListener(OPEN_EVT, onChange);
+    return () => window.removeEventListener(OPEN_EVT, onChange);
+  }, []);
   // Resize (all edges + corners). Refs feed the pointer handlers the current size without
   // re-binding them each frame. height stays null (content-height) until a vertical edge
   // is grabbed, then it's seeded from the panel's measured box.
@@ -82,9 +99,9 @@ export default function ScrimOverlayPanel() {
   const [creating, setCreating] = useState(false);
   const [t1, setT1] = useState('');
   const [t2, setT2] = useState('');
-  // Slim live mode — owned here so the head button can flip to "Exit Live" (the
-  // slim panel itself carries no Live chip). Persisted: the overlay reopens in
-  // whichever mode it was last in (mirrors the overlay-scrim-selected pattern).
+  // Slim live mode — owned here (ScrimViewer's Go Live toolbar toggle drives it via
+  // onLive). Persisted: the overlay reopens in whichever mode it was last in
+  // (mirrors the overlay-scrim-selected pattern).
   const [live, setLiveState] = useState(() => {
     try { return localStorage.getItem('overlay-scrim-live') === '1'; } catch { return false; }
   });
@@ -99,38 +116,11 @@ export default function ScrimOverlayPanel() {
   };
 
   return (
-    <div className="video-cinema" style={{ position: 'absolute', top: 0, left: 0, background: 'transparent', padding: 0, ...dragStyle }}>
-      <div ref={panelRef} className="candy-card ov-scrim-panel" style={{ width, ...(height != null ? { height, maxHeight: 'none' } : null) }}>
-        {/* Header (drag handle) — Scrim menu · scrim picker (+ Add Scrim lives at the
-            bottom of its list) · Minimize (Exit Live while slim). The match picker is
-            retired — ScrimViewer's tree drives match selection now (Scrim Tree, Phase 4). */}
-        <div className="candy-center-row ov-scrim-head" data-spacing-intent="candy-center lift" {...dragProps} style={{ touchAction: 'none' }}>
-          <CandySelect
-            value={null}
-            options={[]}
-            onChange={() => {}}
-            placeholder="Scrim"
-            title="Scrim menu"
-            chevron={false}
-          />
-          <div style={{ minWidth: 0 }}>
-            <CandySelect
-              value={selectedPath}
-              options={[...scrims.map((s) => ({ value: s.path, label: titleOf(s.path) })), { value: '__create__', label: '+ Add Scrim' }]}
-              onChange={(v) => { if (v === '__create__') setCreating(true); else selectScrim(v); }}
-              placeholder="Pick a scrim"
-              title="Scrim"
-              chevron={false}
-            />
-          </div>
-          <div style={{ flex: 1 }} />
-          {selectedPath && (
-            <button type="button" data-no-drag className="candy-btn" data-shape="select" data-own-press title="Minimize — collapse the scrim panel" onClick={closeScrim}>
-              <span className="candy-face"><span>Minimize</span></span>
-            </button>
-          )}
-        </div>
-
+    <div className="video-cinema" style={{ position: 'absolute', top: 0, left: 0, background: 'transparent', padding: 0, display: open ? undefined : 'none', ...dragStyle }}>
+      {/* The header row is gone (picker → tree toolbar, minimize → launcher chip);
+          the whole panel is the drag handle now — useOverlayPanelDrag already bails
+          on buttons/inputs/[data-no-drag], so grab any empty spot to move it. */}
+      <div ref={panelRef} className="candy-card ov-scrim-panel" {...dragProps} style={{ width, touchAction: 'none', ...(height != null ? { height, maxHeight: 'none' } : null) }}>
         {creating && (
           <div className="candy-center-row" style={{ gap: 6, padding: '0 2px' }}>
             <div className="candy-btn" data-shape="field" style={{ flex: 1, minWidth: 0 }}>
@@ -147,10 +137,29 @@ export default function ScrimOverlayPanel() {
           </div>
         )}
 
-        {/* Body — the reused full editor, focused-match mode */}
+        {/* Body — the reused full editor, focused-match mode. The Switch-scrim popover
+            (tree toolbar) gets the scrim list + select/create from here. */}
         {selectedPath
-          ? <div className="ov-scrim-body" style={height != null ? { flex: 1 } : undefined}><ScrimViewer path={selectedPath} overlay live={live} onLive={setLive} fill={height != null} /></div>
-          : !creating && <div className="ov-scrim-empty">Pick a scrim above (+ Add Scrim is at the bottom of the list).</div>}
+          ? <div className="ov-scrim-body" style={height != null ? { flex: 1 } : undefined}>
+              <ScrimViewer path={selectedPath} overlay live={live} onLive={setLive} fill={height != null}
+                scrims={scrims.map((s) => ({ path: s.path, label: titleOf(s.path) }))}
+                onSelectScrim={selectScrim} onAddScrim={() => setCreating(true)} />
+            </div>
+          : !creating && (
+            // No scrim open → no viewer, so no toolbar to swap from. List the scrims
+            // right here (same candy row pills as the popover) so picking is one click.
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '4px 2px' }}>
+              {scrims.length === 0 && <div className="ov-scrim-empty">No scrims yet — Add Scrim below.</div>}
+              {scrims.map((s) => (
+                <button key={s.path} type="button" data-no-drag className="candy-btn" data-shape="row" onClick={() => selectScrim(s.path)} style={{ width: '100%' }}>
+                  <span className="candy-face">{titleOf(s.path)}</span>
+                </button>
+              ))}
+              <button type="button" data-no-drag className="candy-btn" data-shape="row" onClick={() => setCreating(true)} style={{ width: '100%' }}>
+                <span className="candy-face">+ Add Scrim</span>
+              </button>
+            </div>
+          )}
         {/* Resize — hairline grab strips on every edge + corner. */}
         {RESIZE_HANDLES.map((k) => (
           <div key={k} className={`ov-resize-edge e-${k}`} data-no-drag title="Resize" aria-label="Resize scrim panel"

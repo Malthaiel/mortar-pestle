@@ -4458,6 +4458,9 @@ button.cal-customdays__step:hover {
    nothing can drift. The 10.5px shadow-band reserve is on every tile incl. the
    last, so it cancels out of the last-tile vs inter-tile comparison. */
 .ov-studio-panel { width: 400px; display: flex; flex-direction: column; gap: var(--ov-gap); padding: var(--ov-gap); }
+/* Overlay panels are square-cornered (user call 2026-07-15) — overrides the
+   candy-card radius on the three host panels only; main-window cards keep theirs. */
+.ov-studio-panel, .ov-scrim-panel, .ov-browser-panel { border-radius: 0; }
 .ov-studio-head { justify-content: space-between; cursor: move; padding: 2px 4px 0; } /* bottom 0: kill 4px slack so painted bottom = box bottom → band 0, panel head→body visible 8 (was 12, band −4) */
 /* Panel + section titles use the shared .section-title standard (applied in
    OverlayStudioPanel.jsx). These rules keep only the overlay-specific bits — the
@@ -4556,11 +4559,13 @@ button.cal-customdays__step:hover {
 .ov-resize-edge.e-bl { bottom: -1px; left: -1px; width: 12px; height: 12px; cursor: nesw-resize; }
 .ov-resize-edge.e-br { bottom: -1px; right: -1px; width: 12px; height: 12px; cursor: nwse-resize; }
 .ov-resize-edge:hover { background: color-mix(in oklch, var(--text-faint) 45%, transparent); border-radius: 3px; }
-/* Bleed the editor body past the panel's --ov-gap padding on left/right/bottom so the
-   tree rail sits flush to the left edge and its divider runs full-height to the bottom
-   (only the head keeps the panel's inset). */
-.ov-scrim-body { min-width: 0; min-height: 0; overflow-y: auto; margin: 0 calc(-1 * var(--ov-gap)) calc(-1 * var(--ov-gap)); display: flex; flex-direction: column; }
-.ov-scrim-head { justify-content: space-between; cursor: move; gap: 8px; padding: 2px 4px 4px; }
+/* Bleed the editor body past the panel's --ov-gap padding on ALL sides (headerless
+   panel: the rail header sits flush at the panel top, the divider runs full-height).
+   No corner radius needed — the panel itself is square-cornered now. */
+.ov-scrim-body { min-width: 0; min-height: 0; overflow-y: auto; margin: calc(-1 * var(--ov-gap)) calc(-1 * var(--ov-gap)) calc(-1 * var(--ov-gap)); display: flex; flex-direction: column; }
+/* Headerless (2026-07-15): the head row is gone — picker lives in the tree toolbar,
+   minimize in the bottom-left chip; the whole panel drags (cursor stays default,
+   drag bails on buttons/inputs). */
 .ov-scrim-title { text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
 .ov-scrim-team { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ov-scrim-clock { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 18px; font-weight: 700; min-width: 58px; text-align: center; color: var(--text-muted); }
@@ -4585,6 +4590,8 @@ button.cal-customdays__step:hover {
    .dock-root-scoped, which the host chips aren't inside). */
 .ov-browser-chip > .candy-face { padding: 8px; gap: 0; }
 .ov-monitor-chip > .candy-face { padding: 8px; gap: 0; }
+.ov-scrim-chip > .candy-face { padding: 8px; gap: 0; }
+.ov-studio-chip > .candy-face { padding: 8px; gap: 0; }
 /* Corner grip — two hairline edges, no glow (house rule). */
 .ov-resize-handle { position: absolute; right: 3px; bottom: 3px; width: 12px; height: 12px; cursor: nwse-resize; border-right: 2px solid var(--text-faint); border-bottom: 2px solid var(--text-faint); border-radius: 0 0 4px 0; opacity: .7; touch-action: none; }
 .ov-resize-handle:hover { opacity: 1; }

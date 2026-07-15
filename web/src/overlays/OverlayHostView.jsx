@@ -20,6 +20,8 @@ import AgentsOverlayLauncher from './AgentsOverlayLauncher.jsx';
 import OverlayBrowserPanel from './OverlayBrowserPanel.jsx';
 import BrowserOverlayLauncher from './BrowserOverlayLauncher.jsx';
 import MonitorOverlayChip from './MonitorOverlayChip.jsx';
+import ScrimOverlayLauncher from './ScrimOverlayLauncher.jsx';
+import StudioOverlayLauncher from './StudioOverlayLauncher.jsx';
 
 // Minimal module-api shim for the host-mounted SttProvider. It only needs
 // invoke (all stt_* calls are cross-window-safe Tauri invokes) and events.on
@@ -146,6 +148,8 @@ export default function OverlayHostView() {
       <OverlayBrowserPanel visible={visible} />
       <BrowserOverlayLauncher />
       <MonitorOverlayChip />
+      <ScrimOverlayLauncher />
+      <StudioOverlayLauncher />
       {/* Concierge over the game. Providerless — every dep (useSettings, useAgentChat,
           the api singleton) is a plain hook/singleton; agent-chunk is emitted app-
           globally so the host webview receives its own stream with no bridge. The
