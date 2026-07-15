@@ -22,6 +22,7 @@ import BrowserOverlayLauncher from './BrowserOverlayLauncher.jsx';
 import MonitorOverlayChip from './MonitorOverlayChip.jsx';
 import ScrimOverlayLauncher from './ScrimOverlayLauncher.jsx';
 import StudioOverlayLauncher from './StudioOverlayLauncher.jsx';
+import useSmartClickThrough from './useSmartClickThrough.js';
 
 // Minimal module-api shim for the host-mounted SttProvider. It only needs
 // invoke (all stt_* calls are cross-window-safe Tauri invokes) and events.on
@@ -86,6 +87,12 @@ export default function OverlayHostView() {
   // Host-local toast — a fixed bottom-right candy chip. Lives here (not inside a
   // panel) because a panel is CSS-transformed, which would re-anchor position:fixed
   // to the panel instead of the viewport.
+  // Smart click-through: empty overlay space passes clicks to the game; panels,
+  // chips, and a focused text field keep the window interactive. rootRef marks the
+  // fullscreen sheet so the hit-test can tell "empty" from "panel".
+  const rootRef = useRef(null);
+  useSmartClickThrough(visible, rootRef);
+
   const [toast, setToast] = useState(null);
   const toastTimer = useRef(null);
   // Stable identity — showToast sits in child-effect dep arrays (Studio panel), so a
@@ -135,7 +142,7 @@ export default function OverlayHostView() {
   }, [visible]);
 
   return (
-    <div style={{
+    <div ref={rootRef} style={{
       position: 'fixed', inset: 0, overflow: 'hidden',
       opacity: visible ? 1 : 0,
       transform: visible ? 'scale(1)' : 'scale(0.96)',
