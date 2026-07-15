@@ -308,6 +308,8 @@ fn main() {
         "overlay_get_live_target",
         "overlay_list_monitors",
         "overlay_set_monitor",
+        "overlay_note_toast",
+        "overlay_toast_done",
         "broadcast_get_state",
         "broadcast_request",
         "broadcast_start_record",

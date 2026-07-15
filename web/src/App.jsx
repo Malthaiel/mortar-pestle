@@ -34,6 +34,7 @@ import DownloadsPanel from './downloads/DownloadsPanel.jsx';
 import DownloadsManager from './downloads/DownloadsManager.jsx';
 import { VaultProvider, useVaults } from './hooks/useVaults.jsx';
 import OverlayHostView from './overlays/OverlayHostView.jsx';
+import OverlayToastView from './overlays/OverlayToastView.jsx';
 
 // Compose every module-registered provider around the app tree. Order is
 // registration order (topological if modules declare `requires`).
@@ -61,6 +62,7 @@ export default function App() {
   // Overlay windows render standalone (no app chrome, no vault context) — keyed
   // off their URL hash, the same self-identifying pattern as the /player popout.
   if (hash.startsWith('#/overlay/host')) return <OverlayHostView/>;
+  if (hash.startsWith('#/overlay/toast')) return <OverlayToastView/>;
   return (
     <VaultProvider>
       {hash.startsWith('#/player')

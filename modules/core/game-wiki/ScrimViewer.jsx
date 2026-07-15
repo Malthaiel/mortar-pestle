@@ -1524,6 +1524,10 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
       }) };
     });
     flushSave();
+    // Hidden-overlay confirmation: the tiny bottom-right toast window. Rust gates
+    // on host visibility (visible overlay already shows the note appear), so the
+    // call is unconditional here.
+    invoke('overlay_note_toast', { text: t }).catch(() => {});
   }, [applyEdit, flushSave]);
 
   const setFocusedScoreboardIfEmpty = useCallback((pth) => {

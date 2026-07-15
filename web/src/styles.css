@@ -4474,6 +4474,10 @@ button.cal-customdays__step:hover {
 /* Topbar type sits up the scale (14 → 16px), bold, nudged off the left edge. */
 .ov-studio-head .ov-studio-title { font-size: 16px; font-weight: 700; margin-left: 6px; }
 .ov-studio-head .stt-grip { font-size: 15px; line-height: 1; color: var(--text-faint); letter-spacing: 2px; }
+/* Scrim panel topbar: gripless, per-letter spans tracked out edge-to-edge across the
+   full band — "S C R I M  O V E R L A Y" at any panel width (user call 2026-07-15).
+   Studio keeps the left-title + grip layout above. */
+.ov-scrim-panel .ov-studio-head .ov-studio-title { flex: 1; display: flex; justify-content: space-between; margin-left: 0; }
 /* Panel + section titles use the shared .section-title standard (applied in
    OverlayStudioPanel.jsx). These rules keep only the overlay-specific bits — the
    uppercase panel-title look; type/size/weight/colour come from .section-title. */

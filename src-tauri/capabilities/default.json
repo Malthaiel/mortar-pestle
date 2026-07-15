@@ -4,7 +4,8 @@
   "description": "core:default plus each app command's allow-<command> permission. build.rs (AppManifest) DEFINES the per-command permissions; this array must explicitly REFERENCE each one — adding a command to build.rs alone does NOT enable it (it stays ACL-blocked until listed here).",
   "webviews": [
     "main",
-    "overlay-host"
+    "overlay-host",
+    "overlay-toast"
   ],
   "local": true,
   "permissions": [
@@ -306,6 +307,8 @@
     "allow-overlay-get-live-target",
     "allow-overlay-list-monitors",
     "allow-overlay-set-monitor",
+    "allow-overlay-note-toast",
+    "allow-overlay-toast-done",
     "allow-broadcast-get-state",
     "allow-broadcast-request",
     "allow-broadcast-start-record",

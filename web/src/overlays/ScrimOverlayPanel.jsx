@@ -25,16 +25,29 @@ export const setPanelOpen = (v) => {
 // All-direction edge/corner resize — the panel is content-height until the user drags a
 // vertical edge (then height is pinned). A left/top edge also slides the panel (nudgeX/
 // nudgeY) so the opposite edge stays put. Width persists always; height once the user set it.
+// Size is remembered PER MODE: live (slim) and normal each keep their own width/height,
+// and toggling Go Live snaps the panel to that mode's last size.
 const SCRIM_W_KEY = 'overlay-panel-scrim-width';
 const SCRIM_H_KEY = 'overlay-panel-scrim-height';
+const scrimWKey = (live) => (live ? `${SCRIM_W_KEY}-live` : SCRIM_W_KEY);
+const scrimHKey = (live) => (live ? `${SCRIM_H_KEY}-live` : SCRIM_H_KEY);
 const SCRIM_MIN_W = 360, SCRIM_MAX_W = 900, SCRIM_DEFAULT_W = 460;
 const SCRIM_MIN_H = 220, SCRIM_MAX_H = 1400;
 const vpW = () => (typeof window !== 'undefined' && window.innerWidth) || SCRIM_MAX_W;
 const vpH = () => (typeof window !== 'undefined' && window.innerHeight) || SCRIM_MAX_H;
 const clampScrimW = (w) => Math.min(Math.max(w, SCRIM_MIN_W), Math.min(SCRIM_MAX_W, vpW()));
 const clampScrimH = (h) => Math.min(Math.max(h, SCRIM_MIN_H), Math.min(SCRIM_MAX_H, vpH() - 20));
-const loadScrimW = () => { try { const v = parseInt(localStorage.getItem(SCRIM_W_KEY), 10); return Number.isFinite(v) ? clampScrimW(v) : SCRIM_DEFAULT_W; } catch { return SCRIM_DEFAULT_W; } };
-const loadScrimH = () => { try { const v = parseInt(localStorage.getItem(SCRIM_H_KEY), 10); return Number.isFinite(v) ? clampScrimH(v) : null; } catch { return null; } };
+// Live width falls back to the saved normal width (first Go Live looks unchanged);
+// live height falls back to content-height, same as normal.
+const loadScrimW = (live) => {
+  try {
+    const v = parseInt(localStorage.getItem(scrimWKey(live)), 10);
+    if (Number.isFinite(v)) return clampScrimW(v);
+    if (live) return loadScrimW(false);
+    return SCRIM_DEFAULT_W;
+  } catch { return SCRIM_DEFAULT_W; }
+};
+const loadScrimH = (live) => { try { const v = parseInt(localStorage.getItem(scrimHKey(live)), 10); return Number.isFinite(v) ? clampScrimH(v) : null; } catch { return null; } };
 // 8 handles: 4 edges + 4 corners. Each key maps to a horizontal edge (l/r) and/or a
 // vertical edge (t/b) it drives.
 const RESIZE_HANDLES = ['l', 'r', 't', 'b', 'tl', 'tr', 'bl', 'br'];
@@ -56,13 +69,28 @@ export default function ScrimOverlayPanel() {
     window.addEventListener(OPEN_EVT, onChange);
     return () => window.removeEventListener(OPEN_EVT, onChange);
   }, []);
+  // Slim live mode — owned here (ScrimViewer's Go Live toolbar toggle drives it via
+  // onLive). Persisted: the overlay reopens in whichever mode it was last in
+  // (mirrors the overlay-scrim-selected pattern). Declared before width/height so
+  // they can seed from the initial mode.
+  const [live, setLiveState] = useState(() => {
+    try { return localStorage.getItem('overlay-scrim-live') === '1'; } catch { return false; }
+  });
+  const liveRef = useRef(live); liveRef.current = live;
   // Resize (all edges + corners). Refs feed the pointer handlers the current size without
   // re-binding them each frame. height stays null (content-height) until a vertical edge
   // is grabbed, then it's seeded from the panel's measured box.
-  const [width, setWidth] = useState(loadScrimW);
-  const [height, setHeight] = useState(loadScrimH);
+  const [width, setWidth] = useState(() => loadScrimW(live));
+  const [height, setHeight] = useState(() => loadScrimH(live));
   const widthRef = useRef(width); widthRef.current = width;
   const heightRef = useRef(height); heightRef.current = height;
+  const setLive = (v) => {
+    setLiveState(v);
+    try { localStorage.setItem('overlay-scrim-live', v ? '1' : '0'); } catch { /* private mode */ }
+    // Snap to the target mode's remembered size (falls back sensibly when unset).
+    setWidth(loadScrimW(v));
+    setHeight(loadScrimH(v));
+  };
   const panelRef = useRef(null);
   const resize = useRef(null);
   const startResize = (hx, vy) => (e) => {
@@ -90,8 +118,8 @@ export default function ScrimOverlayPanel() {
     resize.current = null;
     try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* already released */ }
     try {
-      localStorage.setItem(SCRIM_W_KEY, String(widthRef.current));
-      if (heightRef.current != null) localStorage.setItem(SCRIM_H_KEY, String(heightRef.current));
+      localStorage.setItem(scrimWKey(liveRef.current), String(widthRef.current));
+      if (heightRef.current != null) localStorage.setItem(scrimHKey(liveRef.current), String(heightRef.current));
     } catch { /* ignore */ }
     commitPos();
   }, [commitPos]);
@@ -99,17 +127,6 @@ export default function ScrimOverlayPanel() {
   const [creating, setCreating] = useState(false);
   const [t1, setT1] = useState('');
   const [t2, setT2] = useState('');
-  // Slim live mode — owned here (ScrimViewer's Go Live toolbar toggle drives it via
-  // onLive). Persisted: the overlay reopens in whichever mode it was last in
-  // (mirrors the overlay-scrim-selected pattern).
-  const [live, setLiveState] = useState(() => {
-    try { return localStorage.getItem('overlay-scrim-live') === '1'; } catch { return false; }
-  });
-  const setLive = (v) => {
-    setLiveState(v);
-    try { localStorage.setItem('overlay-scrim-live', v ? '1' : '0'); } catch { /* private mode */ }
-  };
-
   const doCreate = async () => {
     await createScrim(t1, t2).catch(() => {});
     setCreating(false); setT1(''); setT2('');
@@ -123,8 +140,12 @@ export default function ScrimOverlayPanel() {
           toolbar; minimize stays on the launcher chip. */}
       <div ref={panelRef} className="candy-card ov-scrim-panel" style={{ width, ...(height != null ? { height, maxHeight: 'none' } : null) }}>
         <div className="candy-center-row ov-studio-head" {...dragProps} style={{ touchAction: 'none' }}>
-          <span className="ov-studio-title section-title">Scrim Overlay</span>
-          <span className="stt-grip" aria-hidden="true">⠿</span>
+          {/* Per-letter spans + flex space-between = the title tracks out to fill the
+              full band at ANY panel width (user call 2026-07-15, superseding the
+              centered-title pass earlier the same day). */}
+          <span className="ov-studio-title section-title">
+            {'Scrim Overlay'.split('').map((c, i) => <span key={i}>{c}</span>)}
+          </span>
         </div>
         {creating && (
           <div className="candy-center-row" style={{ gap: 6, padding: '0 2px' }}>

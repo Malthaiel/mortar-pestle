@@ -298,6 +298,57 @@ pub fn show_overlay_host(win: &tauri::WebviewWindow) {
     let _ = win.show();
 }
 
+/// `overlay_note_toast` — confirm a dictated scrim note saved while the overlay
+/// host is hidden. Invoked unconditionally by the overlay ScrimViewer after every
+/// dictated-note save; Rust owns the gating: a visible overlay host already shows
+/// the note appear in the panel, so this is a no-op then. Otherwise the tiny
+/// `overlay-toast` window is hardened (topmost + non-activating + capture-excluded,
+/// like the host) + made fully click-through, parked bottom-right of the overlay
+/// monitor (same pref/fallback chain as `show_overlay_host`), shown, and handed the
+/// text via the `overlay-note-toast` event. The toast webview owns the dwell +
+/// fade-out, then calls `overlay_toast_done` to hide — the `hide_overlay_host`
+/// animate-then-hide pattern.
+#[tauri::command]
+pub fn overlay_note_toast(app: AppHandle, text: String) -> Result<(), VaultError> {
+    let host_visible = app
+        .get_webview_window("overlay-host")
+        .map(|w| w.is_visible().unwrap_or(false))
+        .unwrap_or(false);
+    if host_visible {
+        return Ok(());
+    }
+    if let Some(win) = app.get_webview_window("overlay-toast") {
+        harden_capture_overlay(&win);
+        let _ = win.set_ignore_cursor_events(true); // pure passive strip — never eats a click
+        let mon = match current_monitor_pref(&app) {
+            Some(p) => resolve_monitor(&app, &p).or_else(|| win.primary_monitor().ok().flatten()),
+            None => win.primary_monitor().ok().flatten(),
+        };
+        if let (Some(mon), Ok(sz)) = (mon, win.outer_size()) {
+            let margin = (16.0 * mon.scale_factor()) as i32;
+            let pos = mon.position();
+            let msz = mon.size();
+            let _ = win.set_position(PhysicalPosition::new(
+                pos.x + msz.width as i32 - sz.width as i32 - margin,
+                pos.y + msz.height as i32 - sz.height as i32 - margin,
+            ));
+        }
+        let _ = win.show();
+        let _ = win.emit("overlay-note-toast", serde_json::json!({ "text": text }));
+    }
+    Ok(())
+}
+
+/// `overlay_toast_done` — hide the toast window after its webview finished the
+/// dwell + fade-out (mirrors `hide_overlay_host`). No-op if already hidden.
+#[tauri::command]
+pub fn overlay_toast_done(app: AppHandle) -> Result<(), VaultError> {
+    if let Some(win) = app.get_webview_window("overlay-toast") {
+        let _ = win.hide();
+    }
+    Ok(())
+}
+
 /// SF9 (Game Capture) — harden the in-game **capture** HUD (`overlay-capture`)
 /// for floating over a game. Called from the `lib.rs` capture event-bridge each
 /// time the daemon's Shift+C `overlay` event shows the window; idempotent (the
