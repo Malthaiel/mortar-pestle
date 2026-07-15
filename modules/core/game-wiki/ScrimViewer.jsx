@@ -207,7 +207,10 @@ function TimerControls({ sw }) {
 // decomposes a bullet into a RetagButton (the classification) + an editable "[m:ss] text"
 // field; rows render time-ascending (untimed last) but edits map back to the ORIGINAL
 // index. When the timer runs, a new note via ENTER is stamped with the elapsed time.
-function NotesEditor({ bullets, onChange, onCommit, storageKey, overlay, slim, dictating, onDictate }) {
+// `fill`: slim live mode with a user-pinned panel height — the editor and its list
+// flex-fill the panel instead of the compact 165px list cap (add-field stays pinned
+// at the bottom).
+function NotesEditor({ bullets, onChange, onCommit, storageKey, overlay, slim, fill, dictating, onDictate }) {
   const [draft, setDraft] = useState('');
   const sw = useStopwatch(storageKey);
   // Overlay: bounded scroll window (~3 rows) pinned to the newest note, so 20+ notes
@@ -230,7 +233,7 @@ function NotesEditor({ bullets, onChange, onCommit, storageKey, overlay, slim, d
   const { ordered, untimedCount } = sortByTimeAsc(bullets.map((b, i) => ({ ...parseTimedNote(b), _i: i })), (x) => x.atSec);
   const firstUntimed = ordered.length - untimedCount;
   return (
-    <div style={{ marginTop: overlay ? 0 : 8, marginBottom: overlay ? 'var(--cbtn-depth)' : candyGap(8, true) }}>
+    <div style={{ marginTop: overlay ? 0 : 8, marginBottom: overlay ? 'var(--cbtn-depth)' : candyGap(8, true), ...(fill ? { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' } : null) }}>
       {/* One compact control row: timer (slim-only — the clock keeps counting hidden,
           epoch math in useStopwatch) + Dictate. No "Notes" label — the list is self-evident. */}
       {(slim || (overlay && onDictate)) && (
@@ -244,7 +247,7 @@ function NotesEditor({ bullets, onChange, onCommit, storageKey, overlay, slim, d
           )}
         </div>
       )}
-      <div ref={listRef} style={overlay ? { maxHeight: 165, overflowY: 'auto', minHeight: 0 } : undefined}>
+      <div ref={listRef} style={fill ? { flex: 1, overflowY: 'auto', minHeight: 0 } : overlay ? { maxHeight: 165, overflowY: 'auto', minHeight: 0 } : undefined}>
       {ordered.map((row, k) => (
         <div key={row._i}>
           {untimedCount > 0 && firstUntimed > 0 && k === firstUntimed && (
@@ -282,7 +285,7 @@ function NotesEditor({ bullets, onChange, onCommit, storageKey, overlay, slim, d
 
 // Collapsed-by-default per-team notes: a "Create Notes" button (mirrors "+ New Match")
 // until opened — or auto-opened once the team already has notes (e.g. after a Classify→Save).
-function TeamNotes({ team, bullets, onChange, onCommit, storageKey, overlay, slim, dictating, onDictate }) {
+function TeamNotes({ team, bullets, onChange, onCommit, storageKey, overlay, slim, fill, dictating, onDictate }) {
   const [opened, setOpened] = useState(false);
   if (!slim && !opened && bullets.length === 0) {
     return (
@@ -291,7 +294,7 @@ function TeamNotes({ team, bullets, onChange, onCommit, storageKey, overlay, sli
       </button>
     );
   }
-  return <NotesEditor bullets={bullets} onChange={onChange} onCommit={onCommit} storageKey={storageKey} overlay={overlay} slim={slim} dictating={dictating} onDictate={onDictate} />;
+  return <NotesEditor bullets={bullets} onChange={onChange} onCommit={onCommit} storageKey={storageKey} overlay={overlay} slim={slim} fill={fill} dictating={dictating} onDictate={onDictate} />;
 }
 
 function SaveTag({ state }) {
@@ -527,7 +530,9 @@ function RevealRow({ label, onClick }) {
   );
 }
 
-export default function ScrimViewer({ path, accent, overlay = false, live = false, onLive }) {
+// `fill` (overlay only): the panel's height is user-pinned — in slim live mode the
+// notes list drops its compact cap and flex-fills the pinned height instead.
+export default function ScrimViewer({ path, accent, overlay = false, live = false, onLive, fill = false }) {
   const [scrim, setScrim] = useState(null);
   const [err, setErr] = useState(null);
   const [saveState, setSaveState] = useState('idle'); // idle | saving | saved | error
@@ -575,12 +580,19 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
   const [railExpanded, setRailExpanded] = useState(loadRailExpanded);
   const [railWidth, setRailWidth] = useState(loadRailWidth);
   const [railResizing, setRailResizing] = useState(false);
-  // Live mode auto-shrinks the rail but keeps it re-openable — this LOCAL flag drives
-  // the collapse in slim WITHOUT touching the persisted railExpanded (which is 1-1 with
-  // the main-nav; mutating it would pollute the main window). Reset on every live toggle
-  // so entering live always starts collapsed.
+  // Live mode rail — this LOCAL flag drives the rail in slim WITHOUT touching the
+  // persisted railExpanded (which is 1-1 with the main-nav; mutating it would pollute
+  // the main window). On every live toggle it re-seeds: collapsed when the
+  // scrimLiveAutoCollapse setting is on, else whatever the rail was (default off).
+  // The setting is read FRESH from localStorage — the overlay host is a separate
+  // webview, so useSettings' in-webview change event never reaches it.
   const [liveRailOpen, setLiveRailOpen] = useState(false);
-  useEffect(() => { setLiveRailOpen(false); }, [live]);
+  useEffect(() => {
+    let auto = false;
+    try { auto = JSON.parse(localStorage.getItem('focus_settings') || '{}').scrimLiveAutoCollapse === true; } catch { /* default: keep rail */ }
+    setLiveRailOpen(auto ? false : railExpanded);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-seed only on live toggle
+  }, [live]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [scrimOpen, setScrimOpen] = useState(false);
   const [revealOpen, setRevealOpen] = useState(false);
@@ -1596,7 +1608,7 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
     const enemyAutoBody = (m.subsections.find((s) => s.kind === 'opaque' && s.heading === `Auto Classification (${enemyTeam})`) || {}).body;
     const hasEnemyAuto = !!(enemyAutoBody && enemyAutoBody.trim());
     return (
-      <div key={m.n} style={card}>
+      <div key={m.n} style={slim && fill ? { ...card, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' } : card}>
         {/* Slim hides the whole title/chip block — the head's match picker already
             names the match; Dictate lives in the notes control row. */}
         {!slim && (
@@ -1660,7 +1672,7 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
         </>)}
         {/* Coached team only — enemy notes UI dropped by design (notes are only ever
             taken on the coached team); enemy notes on disk still round-trip verbatim. */}
-        <TeamNotes team={coachedTeam} bullets={getNotes(m, coachedTeam)?.bullets || []} overlay={overlay} slim={slim}
+        <TeamNotes team={coachedTeam} bullets={getNotes(m, coachedTeam)?.bullets || []} overlay={overlay} slim={slim} fill={slim && fill}
           dictating={dictating} onDictate={overlay ? toggleDictate : undefined}
           onChange={(b) => setNotes(idx, coachedTeam, b)} onCommit={flushSave} storageKey={`gw-sw:${path}:m${m.n}:${coachedTeam}`} />
         {!slim && hasSummary && (
@@ -1818,8 +1830,8 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
       <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         {slim ? (
           slimMatch ? (
-            <div style={{ flex: 1, minWidth: 0, minHeight: 0, overflowY: 'auto' }}>
-              <div style={paneInner}>
+            <div style={{ flex: 1, minWidth: 0, minHeight: 0, overflowY: 'auto', ...(fill ? { display: 'flex', flexDirection: 'column' } : null) }}>
+              <div style={fill ? { ...paneInner, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' } : paneInner}>
                 <div style={{ display: 'flex', justifyContent: 'flex-end' }}><SaveTag state={saveState} /></div>
                 {renderMatchCard(slimMatch, slimMatchIdx)}
               </div>

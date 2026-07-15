@@ -233,23 +233,16 @@ pub fn overlay_set_monitor(app: AppHandle, name: Option<String>) -> Result<(), V
     Ok(())
 }
 
-/// `overlay_go_live` — mark a scrim/match live: store the target, surface the
-/// unified overlay-host window (the Scrim panel gates itself on the live target),
-/// and push `overlay-live-target` so an already-mounted panel updates immediately.
-/// The host is shown ONLY when not already visible, so a match-switch (which
-/// re-fires this) never re-shows/reloads it and wipes panel state. A freshly-shown
-/// host re-pulls via `overlay_get_live_target` on mount, covering the emit-before-
-/// listen race. Interactive (draggable panel) — NOT click-through, unlike the
-/// removed standalone scrim window.
+/// `overlay_go_live` — mark a scrim/match live: store the target and push
+/// `overlay-live-target` so an already-mounted panel updates immediately.
+/// Deliberately does NOT show the host window — Shift+C owns host visibility
+/// (mirrors `overlay_go_offline`). Its only JS caller is the overlay webview's
+/// own ScrimViewer republishing the focused match, and a show-if-hidden branch
+/// here made the DEV reload-after-hide (`hide_overlay_host`) pop the window
+/// right back up: reload → panel remounts hidden → republishes → re-show.
 #[tauri::command]
 pub fn overlay_go_live(app: AppHandle, target: LiveTarget) -> Result<(), VaultError> {
     *lock() = Some(target.clone());
-    if let Some(win) = app.get_webview_window("overlay-host") {
-        if !win.is_visible().unwrap_or(false) {
-            show_overlay_host(&win);
-            let _ = app.emit("overlay-host-visible", true);
-        }
-    }
     let _ = app.emit("overlay-live-target", Some(&target));
     Ok(())
 }
@@ -276,10 +269,11 @@ pub fn overlay_get_live_target() -> Result<Option<LiveTarget>, VaultError> {
 /// non-activating + capture-excluded (`harden_capture_overlay`), sized to the
 /// current monitor (a transparent *fullscreen* window renders opaque grey on the
 /// Windows DWM, so a borderless monitor-sized window is used instead), then shown.
-/// DEV reloads the webview on show — Vite HMR doesn't reach the occluded overlay
-/// webview, so this guarantees fresh code. Shared by the capture `overlay` hotkey
-/// bridge (`lib.rs`) and `overlay_go_live` so Shift+C and Go-Live surface the host
-/// identically.
+/// DEV code-freshness (Vite HMR doesn't reach the occluded overlay webview) is
+/// handled by `hide_overlay_host` reloading AFTER each hide — reloading here made
+/// every open eat a full webview boot (seconds), and it also auto-opened devtools.
+/// Shared by the capture `overlay` hotkey bridge (`lib.rs`) and `overlay_go_live`
+/// so Shift+C and Go-Live surface the host identically.
 pub fn show_overlay_host(win: &tauri::WebviewWindow) {
     harden_capture_overlay(win);
     // Size to the chosen monitor when a pref is set; else preserve the prior
@@ -300,11 +294,6 @@ pub fn show_overlay_host(win: &tauri::WebviewWindow) {
     if let Some(mon) = mon {
         let _ = win.set_position(*mon.position());
         let _ = win.set_size(*mon.size());
-    }
-    #[cfg(debug_assertions)]
-    {
-        win.open_devtools();
-        let _ = win.eval("location.reload()");
     }
     let _ = win.show();
 }

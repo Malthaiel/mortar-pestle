@@ -149,7 +149,7 @@ export default function ScrimOverlayPanel() {
 
         {/* Body — the reused full editor, focused-match mode */}
         {selectedPath
-          ? <div className="ov-scrim-body" style={height != null ? { flex: 1 } : undefined}><ScrimViewer path={selectedPath} overlay live={live} onLive={setLive} /></div>
+          ? <div className="ov-scrim-body" style={height != null ? { flex: 1 } : undefined}><ScrimViewer path={selectedPath} overlay live={live} onLive={setLive} fill={height != null} /></div>
           : !creating && <div className="ov-scrim-empty">Pick a scrim above (+ Add Scrim is at the bottom of the list).</div>}
         {/* Resize — hairline grab strips on every edge + corner. */}
         {RESIZE_HANDLES.map((k) => (

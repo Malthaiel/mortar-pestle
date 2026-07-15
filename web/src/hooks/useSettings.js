@@ -272,6 +272,12 @@ export const SETTINGS_DEFAULTS = {
   fontHeading: 'dm-sans',
   fontMono: 'dm-mono',
   fontCandy: 'dm-sans',
+  // Scrim overlay live mode: auto-collapse the match tree on entering Live
+  // (Settings → Modules › Overlay › Scrim). Default OFF — the tree keeps the
+  // state you left it in. Read FRESH from localStorage at live-entry in
+  // ScrimViewer (the overlay host is a separate webview; the in-webview
+  // settings-change event never reaches it).
+  scrimLiveAutoCollapse: false,
   // Hover-preview trailing-drag bucket for the animation preview cards.
   // 'none' | 'light' | 'medium' | 'heavy'. Read in AnimationRows.jsx (AnimationField).
   previewFollowDrag: 'light',

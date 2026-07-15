@@ -56,6 +56,13 @@ fn hide_overlay_host(app: tauri::AppHandle) {
     use tauri::Manager;
     if let Some(win) = app.get_webview_window("overlay-host") {
         let _ = win.hide();
+        // DEV: refresh the webview NOW, while hidden — Vite HMR doesn't reach the
+        // occluded overlay webview, so the reload keeps its code fresh for the next
+        // show. Was a reload (+ devtools auto-open) on every SHOW, which made every
+        // open eat a full webview boot. Edits made while the overlay sits hidden
+        // miss this pass — toggle it (Shift+C twice) to pick them up.
+        #[cfg(debug_assertions)]
+        let _ = win.eval("location.reload()");
     }
     // Safety net: never strand a reparented browser tab inside the hidden
     // window (a crashed/hung host webview can't run its own detach). Spawned,
