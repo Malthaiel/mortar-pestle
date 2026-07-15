@@ -38,7 +38,7 @@ import { matchMetrics, sumMatchMetrics, aggregateTeam, renderTeamPage, openHomew
 import CommsTranscriptView from './CommsTranscriptView.jsx';
 import { useSettings } from '@host/hooks/useSettings.js';
 import { buildMomentsDigest, classifyMoments, reconcile, renderAutoClassification, setAutoClassificationBody, sideFromTeamFields, mergedItemToBullet } from './autoClassify.js';
-import { useStopwatch } from './useStopwatch.js';
+import { useStopwatch, readStopwatch } from './useStopwatch.js';
 import RetagButton from './RetagButton.jsx';
 import ReviewModal from './ReviewModal.jsx';
 import { classColor } from './classColors.js';
@@ -183,7 +183,7 @@ function Scoreboard({ path }) {
   }, [path]);
   if (!path) return null;
   if (failed) return <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Couldn’t load screenshot (moved or unreadable).</div>;
-  if (!src) return <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Loading screenshot…</div>;
+  if (!src) return <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Loading screenshot</div>;
   return <img src={src} alt="Scoreboard" style={{ maxWidth: '100%', borderRadius: 8, marginTop: 8, display: 'block', border: '1px solid color-mix(in oklch, var(--text) 12%, transparent)' }} />;
 }
 
@@ -230,16 +230,16 @@ function NotesEditor({ bullets, onChange, onCommit, storageKey, overlay, slim, d
   const { ordered, untimedCount } = sortByTimeAsc(bullets.map((b, i) => ({ ...parseTimedNote(b), _i: i })), (x) => x.atSec);
   const firstUntimed = ordered.length - untimedCount;
   return (
-    <div style={{ marginTop: 8, marginBottom: candyGap(8, true) }}>
+    <div style={{ marginTop: overlay ? 0 : 8, marginBottom: overlay ? 'var(--cbtn-depth)' : candyGap(8, true) }}>
       {/* One compact control row: timer (slim-only — the clock keeps counting hidden,
           epoch math in useStopwatch) + Dictate. No "Notes" label — the list is self-evident. */}
       {(slim || (overlay && onDictate)) && (
         <div className="candy-center-row" style={{ gap: 8, marginBottom: 8 }}>
           {slim && <TimerControls sw={sw} />}
           {overlay && onDictate && (
-            <button className="candy-btn" data-shape="chip" onClick={onDictate}
+            <button className={`candy-btn${dictating ? ' is-active' : ''}`} data-shape="chip" onClick={onDictate}
               title="Dictate a note — speech-to-text appended to this match">
-              <span className="candy-face" style={dictating ? { color: 'var(--accent)' } : undefined}>{dictating ? '● listening…' : 'Dictate'}</span>
+              <span className="candy-face">{dictating ? 'Listening' : 'Dictate'}</span>
             </button>
           )}
         </div>
@@ -256,7 +256,7 @@ function NotesEditor({ bullets, onChange, onCommit, storageKey, overlay, slim, d
               <input
                 className="candy-face"
                 value={formatTimedBullet({ atSec: row.atSec, classification: null, text: row.text })}
-                placeholder="note…"
+                placeholder="note"
                 onChange={(e) => onText(row, e.target.value)}
                 onBlur={onCommit}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } }}
@@ -271,7 +271,7 @@ function NotesEditor({ bullets, onChange, onCommit, storageKey, overlay, slim, d
         <input
           className="candy-face"
           value={draft}
-          placeholder={sw.running ? `Add a note…  (stamped @ ${clock(sw.elapsedSec)})` : 'Add a note…  (e.g. Blunder: dove mid)'}
+          placeholder={sw.running ? `Add a note  (stamped @ ${clock(sw.elapsedSec)})` : 'Add a note'}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addBullet(); } }}
         />
@@ -295,7 +295,7 @@ function TeamNotes({ team, bullets, onChange, onCommit, storageKey, overlay, sli
 }
 
 function SaveTag({ state }) {
-  const map = { saving: ['Saving…', 'var(--text-muted)'], saved: ['Saved', 'var(--text-muted)'], error: ['Save failed — edit to retry', 'var(--error)'] };
+  const map = { saving: ['Saving', 'var(--text-muted)'], error: ['Save failed — edit to retry', 'var(--error)'] };
   const m = map[state];
   if (!m) return null;
   return <span style={{ fontSize: 11, color: m[1] }}>{m[0]}</span>;
@@ -342,7 +342,7 @@ function AutoClassificationView({ sidecarPath: scPath, team }) {
       .catch(() => { if (!cancelled) setSugg([]); });
     return () => { cancelled = true; };
   }, [scPath, team]);
-  if (sugg == null) return <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Loading…</div>;
+  if (sugg == null) return <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Loading</div>;
   if (!sugg.length) return <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>No AI provenance yet.</div>;
   const { ordered, untimedCount } = sortByTimeAsc(sugg, (s) => secFromClock(s.at));
   const firstUntimed = ordered.length - untimedCount;
@@ -400,7 +400,7 @@ function SilentDeathAudit({ matchSidecar, commsSidecar, side, offsetS }) {
   }, [matchSidecar, commsSidecar, side, offsetS]);
 
   const { status, audit } = state;
-  if (status === 'loading') return <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Checking callouts…</div>;
+  if (status === 'loading') return <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Checking callouts</div>;
   if (status === 'missing') return <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Needs both match data and a comms transcript.</div>;
   if (status === 'error') return <div style={{ fontSize: 12, color: 'var(--error)' }}>Couldn’t parse the stored match data.</div>;
   if (!audit.total) return <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>No coached-team deaths recorded.</div>;
@@ -439,7 +439,7 @@ function RosterEditor({ team, readStore, writeStore, onSaved }) {
   const update = (names) => { storeRef.current = { ...storeRef.current, roster: names }; setRoster(names); };
   const commit = () => { writeStore(team, storeRef.current).then(() => onSaved?.(storeRef.current.roster)).catch(() => {}); };
   if (!String(team || '').trim()) return <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Set a Coached Team (below) to build its roster.</div>;
-  if (roster == null) return <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Loading roster…</div>;
+  if (roster == null) return <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Loading roster</div>;
   const addName = () => { const t = draft.trim(); setDraft(''); if (!t || roster.includes(t)) return; update([...roster, t]); commit(); };
   return (
     <div style={{ marginBottom: candyGap(8, true) }}>
@@ -456,7 +456,7 @@ function RosterEditor({ team, readStore, writeStore, onSaved }) {
         </div>
       ))}
       <div className="candy-btn" data-shape="field" style={{ width: '100%', marginTop: 2 }}>
-        <input className="candy-face" value={draft} placeholder="Add a player…"
+        <input className="candy-face" value={draft} placeholder="Add a player"
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addName(); } }} />
       </div>
@@ -575,6 +575,12 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
   const [railExpanded, setRailExpanded] = useState(loadRailExpanded);
   const [railWidth, setRailWidth] = useState(loadRailWidth);
   const [railResizing, setRailResizing] = useState(false);
+  // Live mode auto-shrinks the rail but keeps it re-openable — this LOCAL flag drives
+  // the collapse in slim WITHOUT touching the persisted railExpanded (which is 1-1 with
+  // the main-nav; mutating it would pollute the main window). Reset on every live toggle
+  // so entering live always starts collapsed.
+  const [liveRailOpen, setLiveRailOpen] = useState(false);
+  useEffect(() => { setLiveRailOpen(false); }, [live]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [scrimOpen, setScrimOpen] = useState(false);
   const [revealOpen, setRevealOpen] = useState(false);
@@ -791,7 +797,7 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
     const scPath = sidecarPath(path, matchN, 'comms');
     // Persist the sidecar payload + the opaque ### Comms Transcript summary (segs = the merged list).
     const finishOpaque = async (segs, payload) => {
-      setCommsPhase('Saving…');
+      setCommsPhase('Saving');
       await api.savePage(scPath, JSON.stringify(payload), null, 'gamewiki');
       const durationS = segs.length ? Math.max(...segs.map((s) => Number(s.t1Ms) || 0)) / 1000 : 0;
       const body = renderCommsSummary({ n: matchN, segments: segs, durationS, sidecarFileName: scPath.split('/').pop() });
@@ -831,7 +837,7 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
     const coachName = loadYourName() || 'Coach';
     const merged = mergeTranscripts({ micSegments: result.micSegments || [], commsSegments: aligned, micSpeaker: coachName, nameMap });
     const scPath = scrimSidecarPath(path, 'vodcomms');
-    setVodPhase('Saving…');
+    setVodPhase('Saving');
     await api.savePage(scPath, JSON.stringify(buildCommsSidecar({ segments: merged, clusters: result.diarization?.clusters || [], micSpeaker: coachName })), null, 'gamewiki');
     const stamp = new Date().toISOString().slice(0, 10);
     applyEdit((p) => ({ ...p, scrim: { ...p.scrim, 'VOD Comms': `extracted ${stamp} · ${merged.length} segments` } }));
@@ -862,7 +868,7 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
     const micIdx = trackIndex(fmNow['Mic Track'] ?? defs.mic);
 
     commsRef.current = true;
-    setCommsN(m.n); setCommsPhase('Extracting audio…');
+    setCommsN(m.n); setCommsPhase('Extracting audio');
     try {
       // flush any pending box edit so the on-disk file is current before the final merge
       clearTimeout(saveTimer.current);
@@ -886,7 +892,7 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
   // comms-job-done {cancelled:true} event clears the busy UI.
   const cancelComms = useCallback(() => {
     if (!commsRef.current) return;
-    setCommsPhase('Cancelling…');
+    setCommsPhase('Cancelling');
     invoke('comms_job_cancel').catch(() => {});
   }, []);
 
@@ -909,7 +915,7 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
     if (commsIdx == null) { notify('error', 'No comms track', 'Set the Comms Track (the Discord audio track index) so the team voices can be separated.'); return; }
 
     vodRef.current = true;
-    setVodBusy(true); setVodPhase('Extracting audio…');
+    setVodBusy(true); setVodPhase('Extracting audio');
     try {
       clearTimeout(saveTimer.current);
       if (serializeScrim(scrimRef.current) !== lastSavedRef.current) await doSave();
@@ -929,7 +935,7 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
 
   const cancelVod = useCallback(() => {
     if (!vodRef.current) return;
-    setVodPhase('Cancelling…');
+    setVodPhase('Cancelling');
     invoke('comms_job_cancel').catch(() => {});
   }, []);
 
@@ -942,7 +948,7 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
   // null and it just clears its busy UI.
   useEffect(() => {
     let dead = false;
-    const phaseText = (p) => `${p.phase}…${p.pct != null ? ` ${Math.round(p.pct)}%` : ''}`;
+    const phaseText = (p) => `${p.phase}${p.pct != null ? ` ${Math.round(p.pct)}%` : ''}`;
     const showBusy = (p) => {
       if (p.kind === 'vod') { vodRef.current = true; setVodBusy(true); setVodPhase(phaseText(p)); }
       else { commsRef.current = true; setCommsN(p.matchN); setCommsPhase(phaseText(p)); }
@@ -1100,7 +1106,7 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
       try { notesBlock = (await api.getRawFileMeta(scrimSidecarPath(path, 'vodnotes'), 'gamewiki')).content; } catch { /* no notes */ }
 
       // ── Analyst pipeline (Moves 6/8/9/10/11): brain + digests + normalize → draft → verify ──
-      setReportPhase('Normalizing…');
+      setReportPhase('Normalizing');
       // lexicon, auto-refreshed when >7 days stale (no AI — folder enumeration + re-render)
       let lexicon = '';
       try {
@@ -1137,18 +1143,18 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
       const transcriptBlock = buildTranscriptBlock(norm.segments);
 
       // Pass 1: the grounded draft
-      setReportPhase('Analyzing…');
+      setReportPhase('Analyzing');
       const draft = await generateReport(invoke, { transcriptBlock, teams: { opponent }, coachedTeam, priorActionItems, notesBlock, brainContext: brain.text, matchDigests, coachNotesBlock, prior }, agents);
 
       // Pass 2: read-only tool-armed fact-check (degrades to a warning, never blocks)
-      setReportPhase('Fact-checking…');
+      setReportPhase('Fact-checking');
       const { report, ran: verified } = await verifyReport(invoke, { report: draft, matchDigests, lexicon }, agents);
 
       report.meta.passes = [...(norm.discarded ? [] : ['normalize']), 'draft', ...(verified ? ['verify'] : [])];
       report.meta.brainSections = brain.sections.filter((s) => s.present).map((s) => s.label);
       report.meta.warnings = [...brain.warnings, ...(norm.warning ? [norm.warning] : []), ...report.meta.warnings];
 
-      setReportPhase('Saving…');
+      setReportPhase('Saving');
       await api.savePage(scPath, JSON.stringify(report), null, 'gamewiki');
 
       const stamp = new Date().toISOString().slice(0, 10);
@@ -1303,7 +1309,7 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
   const classify = useCallback(async (idx, side, teamName) => {
     const m = scrimRef.current?.matches?.[idx];
     if (!m || classifyRef.current || side == null || !teamName) return;
-    classifyRef.current = true; setClassifyingN(m.n); setClassifyPhase('Reading match data…');
+    classifyRef.current = true; setClassifyingN(m.n); setClassifyPhase('Reading match data');
     try {
       clearTimeout(saveTimer.current);
       if (serializeScrim(scrimRef.current) !== lastSavedRef.current) await doSave();
@@ -1330,11 +1336,11 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
       if (!backend) backend = (await invoke('design_get_api_key').catch(() => false)) ? 'api-key' : 'claude-cli';
       const agents = { authBackend: backend, model: ag.model || 'opus', claudeCliPath: ag.claudeCliPath || '' };
 
-      setClassifyPhase('Asking Claude…');
+      setClassifyPhase('Asking Claude');
       const fresh = await classifyMoments(invoke, digest, agents, { commsSlice, userNotes });
 
       // reconcile with prior review state, persist the sidecar (review-state source of truth)
-      setClassifyPhase('Saving…');
+      setClassifyPhase('Saving');
       const scPath = sidecarPath(path, m.n, 'autoclass');
       let store = { teams: {} };
       try { const sr = await api.getRawFileMeta(scPath, 'gamewiki'); store = JSON.parse(sr.content) || { teams: {} }; if (!store.teams) store.teams = {}; } catch { /* first run */ }
@@ -1459,10 +1465,14 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
     if (mn == null || !t) return;
     applyEdit((p) => {
       const coached = p.frontmatter?.['Coached Team'] || p.frontmatter?.['Team 1'] || '';
+      // Stamp with the running game clock (same [m:ss] the typed-note path uses) so a
+      // dictated note lands timed exactly like one typed while the timer runs.
+      const sw = readStopwatch(`gw-sw:${path}:m${mn}:${coached}`);
+      const stamped = sw.running ? `[${clock(sw.elapsedSec)}] ${t}` : t;
       return { ...p, matches: (p.matches || []).map((m) => {
         if (m.n !== mn) return m;
         const has = (m.subsections || []).some((s) => s.kind === 'notes' && s.team === coached);
-        const next = [...(getNotes(m, coached)?.bullets || []), t];
+        const next = [...(getNotes(m, coached)?.bullets || []), stamped];
         if (has) return { ...m, subsections: m.subsections.map((s) => (s.kind === 'notes' && s.team === coached ? { ...s, bullets: next } : s)) };
         const subs = [...(m.subsections || [])];
         const fo = subs.findIndex((s) => s.kind === 'opaque');
@@ -1541,7 +1551,7 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
   }, [overlay, appendNoteToFocused, setFocusedScoreboardIfEmpty]);
 
   if (err) return <div style={wrap}><div style={inner}><p style={{ color: 'var(--error)' }}>Couldn’t open this scrim: {err}</p></div></div>;
-  if (!scrim) return <div style={wrap}><div style={inner}><p style={{ color: 'var(--text-muted)' }}>Loading…</p></div></div>;
+  if (!scrim) return <div style={wrap}><div style={inner}><p style={{ color: 'var(--text-muted)' }}>Loading</p></div></div>;
 
   const fm = scrim.frontmatter;
   const setFm = (k, v) => applyEdit((p) => ({ ...p, frontmatter: { ...p.frontmatter, [k]: v } }));
@@ -1613,7 +1623,7 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
                 : !sttUp ? 'Speech engine unavailable — reopen the app'
                   : 'Extract Comms — transcribe this match recording'}
               style={commsN === m.n ? { opacity: 0.6, cursor: 'progress' } : undefined}>
-              <span className="candy-face">{commsN === m.n ? (commsPhase || 'Working…') : 'Extract Comms'}</span>
+              <span className="candy-face">{commsN === m.n ? (commsPhase || 'Working') : 'Extract Comms'}</span>
             </button>
             )}
             {!slim && commsN === m.n && (
@@ -1625,7 +1635,7 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
               onClick={() => runProcess(idx)}
               title="Run Process — pull this match's data from deadlock-api by Match ID"
               style={runningN === m.n ? { opacity: 0.6, cursor: 'progress' } : undefined}>
-              <span className="candy-face">{runningN === m.n ? 'Running…' : 'Run Process'}</span>
+              <span className="candy-face">{runningN === m.n ? 'Running' : 'Run Process'}</span>
             </button>
             )}
           </div>
@@ -1693,7 +1703,7 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
                   : !aiConfigured ? 'Configure an AI backend in Settings → Agents (API key or Claude CLI)'
                     : `Classify ${coachedTeam || 'the coached team'} — merges the AI with your notes`}
               style={classifyingN === m.n ? { opacity: 0.6, cursor: 'progress' } : undefined}>
-              <span className="candy-face">{classifyingN === m.n ? (classifyPhase || 'Working…') : `Classify ${coachedTeam || 'coached'}`}</span>
+              <span className="candy-face">{classifyingN === m.n ? (classifyPhase || 'Working') : `Classify ${coachedTeam || 'coached'}`}</span>
             </button>
             <button className="candy-btn" data-shape="chip"
               disabled={!populated || enemySide == null || !aiConfigured || classifyingN === m.n || runningN === m.n || commsN === m.n}
@@ -1736,7 +1746,7 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
                     : !aiConfigured ? 'Configure an AI backend in Settings → Agents (API key or Claude CLI)'
                       : 'Review Comms — Claude judges each teamfight’s callouts (good / missed / wrong / late)'}
               style={reviewingN === m.n ? { opacity: 0.6, cursor: 'progress' } : undefined}>
-              <span className="candy-face">{reviewingN === m.n ? 'Asking Claude…' : 'Review Comms'}</span>
+              <span className="candy-face">{reviewingN === m.n ? 'Asking Claude' : 'Review Comms'}</span>
             </button>
             {tfReady.has(m.n) && reviewingN !== m.n && (
               <button className="candy-btn" data-shape="chip" onClick={() => setTfOpen({ n: m.n })} title="Open the teamfight comms review">
@@ -1770,7 +1780,7 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
     { title: 'Reveal files', icon: <IconHardDrive />, dataAttr: 'scrim-reveal-trigger', onClick: (e) => { setRevealAnchor(e.currentTarget.getBoundingClientRect()); setRevealOpen((o) => !o); } },
     { title: 'Coaching setup', icon: <IconSettings />, onClick: () => setSettingsOpen(true) },
     { title: 'Scrim', icon: <IconFilm />, onClick: () => setScrimOpen(true) },
-    ...(overlay ? [{ title: 'Go Live — just notes, voice, and the timer', icon: <IconPlayCircle />, onClick: () => onLive?.(true) }] : []),
+    ...(overlay ? [{ title: live ? 'Leave live mode' : 'Go Live — just notes, voice, and the timer', icon: <IconPlayCircle />, onClick: () => onLive?.(!live), active: live, activeAccent: 'var(--error)' }] : []),
   ];
   const paneMatch = view?.kind === 'match' ? scrim.matches.find((m) => m.n === view.n) : null;
   const paneMatchIdx = paneMatch ? scrim.matches.findIndex((m) => m.n === paneMatch.n) : -1;
@@ -1778,7 +1788,7 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
   // (renderMatchCard self-strips on slim); the rail is force-collapsed (derived, not persisted).
   const slimMatch = slim ? scrim.matches.find((m) => m.n === focusedN) : null;
   const slimMatchIdx = slimMatch ? scrim.matches.findIndex((m) => m.n === slimMatch.n) : -1;
-  const paneInner = overlay ? { padding: '2px 4px', fontFamily: 'var(--font-mono)', '--accent': accent } : { ...inner, '--accent': accent };
+  const paneInner = overlay ? { padding: 8, fontFamily: 'var(--font-mono)', '--accent': accent } : { ...inner, '--accent': accent };
 
   // The tree layout serves BOTH the main window and the overlay (Phase 4). Overlay
   // differences (Go Live toolbar button, slim pane strip, rail auto-compact) are woven in
@@ -1786,12 +1796,12 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
   return (
     <div style={{ display: 'flex', flex: 1, minHeight: 0, '--accent': accent }}>
       <CollapsibleRail
-        expanded={slim ? false : railExpanded}
+        expanded={slim ? liveRailOpen : railExpanded}
         peek={slim ? false : railPeek}
         width={railWidth}
         railWidth={56}
         containerStyle={{ background: 'var(--surface)', borderRight: '1px solid var(--border)', transition: railResizing ? 'none' : 'width 180ms ease' }}
-        header={<ScrimRailHeader expanded={railExpanded || railPeek} matchup={`${fm['Team 1'] || '?'} VS ${fm['Team 2'] || '?'}`} accent={accent} onToggle={() => setRailExpanded((v) => !v)} />}
+        header={<ScrimRailHeader expanded={slim ? liveRailOpen : (railExpanded || railPeek)} matchup={`${fm['Team 1'] || '?'} VS ${fm['Team 2'] || '?'}`} accent={accent} onToggle={slim ? () => setLiveRailOpen((v) => !v) : () => setRailExpanded((v) => !v)} />}
         seam={
           <div style={{ position: 'absolute', top: 0, bottom: 0, right: 0, display: 'flex', zIndex: 70 }}>
             <SidebarSeam width={railWidth} onWidthChange={setRailWidth} accent={accent} defaultWidth={RAIL_DEFAULT} minWidth={RAIL_MIN} maxWidth={RAIL_MAX}
@@ -1879,7 +1889,7 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
               : !sttUp ? 'Speech engine unavailable — reopen the app'
                 : 'Extract VOD Comms — transcribe + split voices in the review recording'}
             style={vodBusy ? { opacity: 0.6, cursor: 'progress' } : undefined}>
-            <span className="candy-face">{vodBusy ? (vodPhase || 'Working…') : 'Extract VOD Comms'}</span>
+            <span className="candy-face">{vodBusy ? (vodPhase || 'Working') : 'Extract VOD Comms'}</span>
           </button>
           {vodBusy && (
             <button className="candy-btn" data-shape="chip" onClick={cancelVod} title="Cancel">
@@ -1893,7 +1903,7 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
               : !aiConfigured ? 'Configure an AI backend in Settings → Agents (API key or Claude CLI)'
                 : 'Generate Report — Claude organizes the review into an action list'}
             style={reporting ? { opacity: 0.6, cursor: 'progress' } : undefined}>
-            <span className="candy-face">{reporting ? (reportPhase || 'Asking Claude…') : 'Generate Report'}</span>
+            <span className="candy-face">{reporting ? (reportPhase || 'Asking Claude') : 'Generate Report'}</span>
           </button>
           <button className="candy-btn" data-shape="chip" onClick={addVodNotes}
             title="Add player-written notes (.md/.txt) to feed the next report generation">

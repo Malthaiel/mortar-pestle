@@ -20,11 +20,12 @@ import {
 // header band is transparent, so they ride the sidebar's circuit texture.
 const ROW_H = 26; // = treeKit NAV_H
 
-function ToolBtn({ title, accent, onClick, disabled, dataAttr, children }) {
+function ToolBtn({ title, accent, onClick, disabled, dataAttr, active, activeAccent, children }) {
   return (
     <button
       type="button" data-own-press title={title} onClick={onClick} disabled={disabled}
-      className="candy-btn" data-shape="icon"
+      aria-pressed={active ? true : undefined}
+      className={`candy-btn${active ? ' is-active' : ''}`} data-shape="icon"
       {...(dataAttr ? { ['data-' + dataAttr]: '' } : {})}
       style={{
         flexShrink: 0,
@@ -32,7 +33,10 @@ function ToolBtn({ title, accent, onClick, disabled, dataAttr, children }) {
         // base .candy-btn[data-shape="icon"] rule. Depth = nav rows.
         width: ROW_H, height: ROW_H, borderRadius: 8,
         '--cbtn-depth': 'var(--candy-depth-nav)',
+        // An active toggle can override the fill colour (e.g. a red "live on" band):
+        // is-active reads --accent, so a per-button activeAccent re-tints just this one.
         ...(accent ? { '--accent': accent } : {}),
+        ...(active && activeAccent ? { '--accent': activeAccent } : {}),
         ...(disabled ? { opacity: 0.45 } : {}),
       }}
     >
@@ -51,7 +55,9 @@ function ToolBtn({ title, accent, onClick, disabled, dataAttr, children }) {
 // }
 // controller = { sortMode, setSortMode, sortModes, anyExpanded, expandAll,
 //                collapseAll, revealCurrent, canReveal }
-// extra = [{ title, icon, onClick, disabled?, dataAttr? }]  // surface-specific icon buttons appended after the row
+// extra = [{ title, icon, onClick, disabled?, dataAttr?, active?, activeAccent? }]
+//   surface-specific icon buttons appended after the row; active holds the .is-active
+//   fill (activeAccent re-tints it, e.g. red for a "live on" toggle)
 export default function TreeToolbar({ buttons, controller, accent, extra }) {
   const { openContextMenu } = useContextMenu();
   const b = buttons || {};
@@ -106,7 +112,8 @@ export default function TreeToolbar({ buttons, controller, accent, extra }) {
         </ToolBtn>
       )}
       {(extra || []).map((x, i) => (
-        <ToolBtn key={i} title={x.title} accent={accent} onClick={x.onClick} disabled={!!x.disabled} dataAttr={x.dataAttr}>
+        <ToolBtn key={i} title={x.title} accent={accent} onClick={x.onClick} disabled={!!x.disabled} dataAttr={x.dataAttr}
+          active={!!x.active} activeAccent={x.activeAccent}>
           {x.icon}
         </ToolBtn>
       ))}

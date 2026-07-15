@@ -20,6 +20,14 @@ function elapsedOf(st) {
     : st.accumulatedSec;
 }
 
+// Read a stopwatch's live state straight from localStorage (no React) — lets a
+// non-NotesEditor caller (e.g. the overlay dictation append) stamp a note with the
+// same [m:ss] the typed-note path uses. Same epoch math as the hook.
+export function readStopwatch(key) {
+  const st = load(key);
+  return { running: st.running, elapsedSec: elapsedOf(st) };
+}
+
 export function useStopwatch(key) {
   const [st, setSt] = useState(() => load(key));
   const [elapsedSec, setElapsedSec] = useState(() => elapsedOf(st));

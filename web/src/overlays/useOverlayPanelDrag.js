@@ -69,8 +69,26 @@ export default function useOverlayPanelDrag(key, initial = { x: 0, y: 0 }) {
     setPos((p) => { const c = clampPos(p, sizeRef.current); try { localStorage.setItem(key, JSON.stringify(c)); } catch {} return c; });
   }, [key]);
 
+  // Shift the panel's X by dx without a header drag — used by a left-edge resize to
+  // keep the panel's RIGHT edge fixed while the width grows/shrinks from the left.
+  const nudgeX = useCallback((dx) => {
+    setPos((p) => clampPos({ x: p.x + dx, y: p.y }, sizeRef.current));
+  }, []);
+  // Same, vertical — a top-edge resize keeps the panel's BOTTOM edge fixed.
+  const nudgeY = useCallback((dy) => {
+    setPos((p) => clampPos({ x: p.x, y: p.y + dy }, sizeRef.current));
+  }, []);
+  // Persist the current position (a resize interaction owns its own pointer-up, so it
+  // calls this to save the nudged X the same way a drag's end handler saves a move).
+  const commitPos = useCallback(() => {
+    setPos((p) => { const c = clampPos(p, sizeRef.current); try { localStorage.setItem(key, JSON.stringify(c)); } catch { /* ignore */ } return c; });
+  }, [key]);
+
   return {
     style: { transform: `translate(${pos.x}px, ${pos.y}px)` },
     dragProps: { onPointerDown, onPointerMove, onPointerUp: end, onPointerCancel: end },
+    nudgeX,
+    nudgeY,
+    commitPos,
   };
 }
