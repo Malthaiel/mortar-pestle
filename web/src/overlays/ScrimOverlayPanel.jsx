@@ -117,10 +117,15 @@ export default function ScrimOverlayPanel() {
 
   return (
     <div className="video-cinema" style={{ position: 'absolute', top: 0, left: 0, background: 'transparent', padding: 0, display: open ? undefined : 'none', ...dragStyle }}>
-      {/* The header row is gone (picker → tree toolbar, minimize → launcher chip);
-          the whole panel is the drag handle now — useOverlayPanelDrag already bails
-          on buttons/inputs/[data-no-drag], so grab any empty spot to move it. */}
-      <div ref={panelRef} className="candy-card ov-scrim-panel" {...dragProps} style={{ width, touchAction: 'none', ...(height != null ? { height, maxHeight: 'none' } : null) }}>
+      {/* Topbar = the Studio panel's header copied 1-1 (user call 2026-07-15,
+          reversing the whole-panel drag): the ⠿ grip row is the ONLY drag handle,
+          so the panel body never fights inner controls. Picker stays in the tree
+          toolbar; minimize stays on the launcher chip. */}
+      <div ref={panelRef} className="candy-card ov-scrim-panel" style={{ width, ...(height != null ? { height, maxHeight: 'none' } : null) }}>
+        <div className="candy-center-row ov-studio-head" {...dragProps} style={{ touchAction: 'none' }}>
+          <span className="ov-studio-title section-title">Scrim Overlay</span>
+          <span className="stt-grip" aria-hidden="true">⠿</span>
+        </div>
         {creating && (
           <div className="candy-center-row" style={{ gap: 6, padding: '0 2px' }}>
             <div className="candy-btn" data-shape="field" style={{ flex: 1, minWidth: 0 }}>

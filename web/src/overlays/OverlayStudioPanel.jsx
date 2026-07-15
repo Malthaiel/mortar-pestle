@@ -297,7 +297,7 @@ export default function OverlayStudioPanel({ showToast }) {
       <div className="video-cinema" style={{ position: 'absolute', top: 0, left: 0, background: 'transparent', padding: 0, display: open ? undefined : 'none', ...dragStyle }}>
         <div className="candy-card ov-studio-panel">
           <div className="candy-center-row ov-studio-head" {...dragProps} style={{ touchAction: 'none' }}>
-            <span className="ov-studio-title section-title">Studio</span>
+            <span className="ov-studio-title section-title">Studio Overlay</span>
             <span className="stt-grip" aria-hidden="true">⠿</span>
           </div>
           <DraggableSidebarList

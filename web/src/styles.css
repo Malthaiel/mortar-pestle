@@ -4458,10 +4458,22 @@ button.cal-customdays__step:hover {
    nothing can drift. The 10.5px shadow-band reserve is on every tile incl. the
    last, so it cancels out of the last-tile vs inter-tile comparison. */
 .ov-studio-panel { width: 400px; display: flex; flex-direction: column; gap: var(--ov-gap); padding: var(--ov-gap); }
-/* Overlay panels are square-cornered (user call 2026-07-15) — overrides the
-   candy-card radius on the three host panels only; main-window cards keep theirs. */
-.ov-studio-panel, .ov-scrim-panel, .ov-browser-panel { border-radius: 0; }
-.ov-studio-head { justify-content: space-between; cursor: move; padding: 2px 4px 0; } /* bottom 0: kill 4px slack so painted bottom = box bottom → band 0, panel head→body visible 8 (was 12, band −4) */
+/* Topbar band (user call 2026-07-15, superseding the flush 2px-pad row): tinted +
+   edge-to-edge so the grip header reads as a real bar. Negative margins cancel the
+   panel's --ov-gap padding; top radius = the card radius minus its 2px border. The
+   background paints the full box, so the old half-leading slack concern is gone
+   (painted bottom = box bottom by construction). Shared by Studio + Scrim. */
+.ov-studio-head {
+  justify-content: space-between; cursor: move;
+  margin: calc(-1 * var(--ov-gap)) calc(-1 * var(--ov-gap)) 0;
+  padding: 10px var(--ov-gap);
+  background: color-mix(in oklch, var(--text) 5%, transparent);
+  border-bottom: 2px solid var(--border-2); /* same weight + color as the candy-card frame around the panel */
+  border-radius: calc(var(--radius-md) - 2px) calc(var(--radius-md) - 2px) 0 0;
+}
+/* Topbar type sits up the scale (14 → 16px), bold, nudged off the left edge. */
+.ov-studio-head .ov-studio-title { font-size: 16px; font-weight: 700; margin-left: 6px; }
+.ov-studio-head .stt-grip { font-size: 15px; line-height: 1; color: var(--text-faint); letter-spacing: 2px; }
 /* Panel + section titles use the shared .section-title standard (applied in
    OverlayStudioPanel.jsx). These rules keep only the overlay-specific bits — the
    uppercase panel-title look; type/size/weight/colour come from .section-title. */

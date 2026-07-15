@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { api, invoke } from '@host/api.js';
-import { IconFolder, IconPlayCircle, IconPlus, IconFileText, IconSettings, IconFilm, IconHardDrive, IconChevronRight, IconRepeat } from '@host/components/icons.jsx';
+import { IconFolder, IconPlayCircle, IconPlus, IconFileText, IconSettings, IconFilm, IconHardDrive, IconChevronRight, IconRepeat, IconMic } from '@host/components/icons.jsx';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
 import { candyGap } from '@host/util/candy.js';
 import CollapsibleRail from '@host/components/ui/CollapsibleRail.jsx';
@@ -157,10 +157,10 @@ function EditField({ label, value, onChange, onCommit, placeholder, right }) {
   );
 }
 
-function MiniBtn({ icon: Icon, title, onClick }) {
+function MiniBtn({ icon: Icon, title, onClick, active, shape = 'icon', style }) {
   return (
-    <button className="candy-btn" data-shape="icon" title={title} onClick={onClick}
-      style={{ width: 30, height: 30, flexShrink: 0 }}>
+    <button className={`candy-btn${active ? ' is-active' : ''}`} data-shape={shape} title={title} onClick={onClick}
+      style={{ width: 30, height: 30, flexShrink: 0, ...style }}>
       <span className="candy-face"><Icon size={15} /></span>
     </button>
   );
@@ -187,21 +187,30 @@ function Scoreboard({ path }) {
   return <img src={src} alt="Scoreboard" style={{ maxWidth: '100%', borderRadius: 8, marginTop: 8, display: 'block', border: '1px solid color-mix(in oklch, var(--text) 12%, transparent)' }} />;
 }
 
-// Count-up game clock (sub-plan 5): readout + text Start/Pause + Reset — glyph-free,
-// the clock wears the notes-label style (no running tint) per the minimalism pass.
-// `stretch`: full-width-bar mode (overlay) — the group flex-fills its row and the
-// chips share it equally, so the bar reads as one edge-to-edge control strip.
-function TimerControls({ sw, stretch }) {
+// Count-up game clock (sub-plan 5; press-the-clock redesign, user pick 2026-07-15):
+// the clock chip IS the whole timer control — tap toggles Start/Pause, hold ~600ms
+// resets (no visible Reset control; the title teaches it). Running: the digits
+// breathe (inline `breath` animation, so the body[data-anim-clock-ambient="off"]
+// [style*="breath"] gate keeps matching); paused: still + muted. The breath lives on
+// an inner span, NOT .candy-face — the candy press animates the face's transform and
+// an animation there would clobber the press.
+function TimerControls({ sw }) {
+  const holdT = useRef(null);
+  const held = useRef(false);
+  const startHold = () => { held.current = false; holdT.current = setTimeout(() => { held.current = true; sw.reset(); }, 600); };
+  const cancelHold = () => { clearTimeout(holdT.current); held.current = false; };
   return (
-    <div className="candy-center-row" style={{ gap: stretch ? 8 : 6, ...(stretch ? { flex: 3, minWidth: 0 } : null) }}>
-      <span style={{ ...labelStyle, marginBottom: 0, fontVariantNumeric: 'tabular-nums', minWidth: 40, ...(stretch ? { textAlign: 'center' } : null) }}>{clock(sw.elapsedSec)}</span>
-      <button className="candy-btn" data-shape="chip" onClick={sw.toggle} title={sw.running ? 'Pause timer' : 'Start timer'} style={stretch ? { flex: 1 } : undefined}>
-        <span className="candy-face">{sw.running ? 'Pause' : 'Start'}</span>
-      </button>
-      <button className="candy-btn" data-shape="chip" onClick={sw.reset} title="Reset timer" style={stretch ? { flex: 1 } : undefined}>
-        <span className="candy-face">Reset</span>
-      </button>
-    </div>
+    <button className="candy-btn" data-shape="chip"
+      onPointerDown={startHold}
+      onPointerUp={() => clearTimeout(holdT.current)}
+      onPointerLeave={cancelHold} onPointerCancel={cancelHold}
+      onClick={() => { if (held.current) { held.current = false; return; } sw.toggle(); }}
+      title={sw.running ? 'Tap to pause. Hold to reset.' : 'Tap to start. Hold to reset.'}
+      style={{ minWidth: 64 }}>
+      <span className="candy-face" style={{ fontVariantNumeric: 'tabular-nums', ...(sw.running ? null : { color: 'var(--text-muted)' }) }}>
+        <span style={sw.running ? { display: 'inline-block', animation: 'breath 4s ease-in-out infinite' } : undefined}>{clock(sw.elapsedSec)}</span>
+      </span>
+    </button>
   );
 }
 
@@ -219,6 +228,10 @@ function NotesEditor({ bullets, onChange, onCommit, storageKey, overlay, slim, f
   // never grow the panel — the add-field below stays on screen.
   const listRef = useRef(null);
   useEffect(() => { if (overlay && listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight; }, [overlay, bullets.length]);
+  // Bottom composer bar (user pick 2026-07-15, iteration 2): the note field hides
+  // behind the + button — press + to reveal it below the bar, Enter commits (field
+  // stays open for the next note), Escape or + again hides it.
+  const [composeOpen, setComposeOpen] = useState(false);
   const addBullet = () => {
     const t = draft.trim();
     if (!t) return;
@@ -234,24 +247,10 @@ function NotesEditor({ bullets, onChange, onCommit, storageKey, overlay, slim, f
   const onRetag = (row, c) => setAt(row._i, formatTimedBullet({ atSec: row.atSec, classification: c, text: row.text }));
   const { ordered, untimedCount } = sortByTimeAsc(bullets.map((b, i) => ({ ...parseTimedNote(b), _i: i })), (x) => x.atSec);
   const firstUntimed = ordered.length - untimedCount;
+  const bar = slim || (overlay && onDictate);
   return (
     <div style={{ marginTop: overlay ? 0 : 8, marginBottom: overlay ? 'var(--cbtn-depth)' : candyGap(8, true), ...(fill ? { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' } : null) }}>
-      {/* Full-width control bar (user pick 2026-07-15 over composer/seg/split): timer
-          cluster (slim-only — the clock keeps counting hidden, epoch math in
-          useStopwatch) + Dictate, equal-width cells edge to edge. */}
-      {(slim || (overlay && onDictate)) && (
-        <div className="candy-center-row" style={{ gap: 8, marginBottom: candyGap(8, true) }}>
-          {slim && <TimerControls sw={sw} stretch />}
-          {overlay && onDictate && (
-            <button className={`candy-btn${dictating ? ' is-active' : ''}`} data-shape="chip" onClick={onDictate}
-              style={{ flex: 1 }}
-              title="Dictate a note — speech-to-text appended to this match">
-              <span className="candy-face">{dictating ? 'Listening' : 'Dictate'}</span>
-            </button>
-          )}
-        </div>
-      )}
-      <div ref={listRef} style={fill ? { flex: 1, overflowY: 'auto', minHeight: 0 } : overlay ? { maxHeight: 165, overflowY: 'auto', minHeight: 0 } : undefined}>
+      <div ref={listRef} data-spacing-intent="notes list hugs the control bar (legacy 2px, pre-grid)" style={fill ? { flex: 1, overflowY: 'auto', minHeight: 0 } : overlay ? { maxHeight: 165, overflowY: 'auto', minHeight: 0 } : undefined}>
       {ordered.map((row, k) => (
         <div key={row._i}>
           {untimedCount > 0 && firstUntimed > 0 && k === firstUntimed && (
@@ -274,15 +273,38 @@ function NotesEditor({ bullets, onChange, onCommit, storageKey, overlay, slim, f
         </div>
       ))}
       </div>
-      <div className="candy-btn" data-shape="field" style={{ width: '100%', marginTop: 2 }}>
-        <input
-          className="candy-face"
-          value={draft}
-          placeholder={sw.running ? `Add a note  (stamped @ ${clock(sw.elapsedSec)})` : 'Add a note'}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addBullet(); } }}
-        />
-      </div>
+      {/* Bottom control bar (user pick 2026-07-15, iteration 3, superseding the
+          top full-width strip): a centered [+][clock][mic] cluster below the notes.
+          + toggles the note field below; the clock chip is the whole timer control
+          (slim-only — it keeps counting hidden, epoch math in useStopwatch); mic
+          dictates. Circle shape on the icon buttons so all three wear the same
+          full-round radius as the clock chip. */}
+      {bar && (
+        <div className="candy-center-row" style={{ justifyContent: 'center', gap: 8, marginTop: 2 }}>
+          {/* Full --cbtn-depth on the circles (circle shape defaults to small) so all
+              three buttons sit on the same candy depth as the clock chip. */}
+          <MiniBtn shape="circle" style={{ '--cbtn-depth': 'var(--candy-depth)' }} icon={IconPlus} title={composeOpen ? 'Hide the note field' : 'Add a note'} onClick={() => setComposeOpen((v) => !v)} active={composeOpen} />
+          {slim && <TimerControls sw={sw} />}
+          {overlay && onDictate && (
+            <MiniBtn shape="circle" style={{ '--cbtn-depth': 'var(--candy-depth)' }} icon={IconMic} title={dictating ? 'Stop dictating' : 'Dictate a note — speech-to-text appended to this match'} onClick={onDictate} active={dictating} />
+          )}
+        </div>
+      )}
+      {(!bar || composeOpen) && (
+        <div className="candy-btn" data-shape="field" style={{ width: '100%', marginTop: bar ? candyGap(8, true) : 2 }}>
+          <input
+            className="candy-face"
+            autoFocus={bar}
+            value={draft}
+            placeholder={sw.running ? `Add a note  (stamped @ ${clock(sw.elapsedSec)})` : 'Add a note'}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { e.preventDefault(); addBullet(); }
+              if (e.key === 'Escape') setComposeOpen(false);
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }
