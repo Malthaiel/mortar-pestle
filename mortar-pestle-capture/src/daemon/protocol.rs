@@ -16,6 +16,10 @@ use serde::{Deserialize, Serialize};
 /// struct definition, not the crate location. `event ∈ { state_changed, saved,
 /// error }`; `error.code ∈ { not_implemented, bad_request, busy, internal }`.
 pub use mortar_pestle_daemon::envelope::{Event, ProtoError, Request, Response};
+/// The hotkey wire types — re-exported from the shared daemon crate (D5-WI-1
+/// Step 4). Byte-identical to the pre-fold local defs (serde derives generate
+/// from the struct definition, not the crate location).
+pub use mortar_pestle_daemon::hotkeys::{HotkeysSnapshot, Shortcut};
 
 /// The authoritative state snapshot — the sole source of UI truth. Returned by
 /// `hello`/`get_state`/all mutations and carried by the `state_changed` event.
@@ -41,25 +45,6 @@ pub struct StateSnapshot {
     /// src-tauri client mirror forward-compatible until it adds the field.
     #[serde(default)]
     pub armed: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct HotkeysSnapshot {
-    pub bound: bool,
-    pub portal_version: u32,
-    pub can_configure: bool,
-    pub shortcuts: Vec<Shortcut>,
-    pub last_error: Option<String>,
-}
-
-/// `id ∈ { record, save_replay, screenshot }`; `trigger_description` is what KDE
-/// actually bound (may differ from the requested default — rebindability rule).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Shortcut {
-    pub id: String,
-    pub description: String,
-    pub trigger_description: String,
-    pub reserved: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

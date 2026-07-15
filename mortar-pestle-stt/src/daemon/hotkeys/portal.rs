@@ -35,9 +35,9 @@ pub async fn run(ctx: ControlContext, mut rebind_rx: mpsc::UnboundedReceiver<()>
     // Best-effort host-app registration (a stable app-id ⇒ the binding persists
     // across restarts without re-prompting). The dash-free APP_ID passes ashpd's
     // typed `AppID`; a non-sandboxed binary is registered by its live D-Bus peer.
-    match state::APP_ID.parse::<ashpd::AppID>() {
+    match state::SPEC.app_id.parse::<ashpd::AppID>() {
         Ok(app_id) => match ashpd::register_host_app_with_connection(conn.clone(), app_id).await {
-            Ok(()) => log::info!("hotkeys: registered host app-id {}", state::APP_ID),
+            Ok(()) => log::info!("hotkeys: registered host app-id {}", state::SPEC.app_id),
             Err(e) => log::warn!("hotkeys: host registration failed (non-fatal): {e:?}"),
         },
         Err(e) => log::warn!("hotkeys: APP_ID rejected by ashpd (non-fatal): {e:?}"),
@@ -57,7 +57,7 @@ pub async fn run(ctx: ControlContext, mut rebind_rx: mpsc::UnboundedReceiver<()>
 
     // BindShortcuts: KDE shows ONE consent dialog on first run; later runs reuse the
     // stored trigger under the app-id.
-    let shortcuts = state::new_shortcuts();
+    let shortcuts = state::SPEC.new_shortcuts();
     match gs.bind_shortcuts(&session, &shortcuts, None, Default::default()).await {
         Ok(req) => {
             if let Err(e) = req.response() {
@@ -71,7 +71,7 @@ pub async fn run(ctx: ControlContext, mut rebind_rx: mpsc::UnboundedReceiver<()>
     // user-customised). Populate the snapshot from it.
     match gs.list_shortcuts(&session, Default::default()).await {
         Ok(req) => match req.response() {
-            Ok(listed) => publish(&ctx, version, can_configure, state::to_protocol(listed.shortcuts()), None),
+            Ok(listed) => publish(&ctx, version, can_configure, state::SPEC.to_protocol(listed.shortcuts()), None),
             Err(e) => publish(&ctx, version, can_configure, Vec::new(), Some(format!("ListShortcuts response: {e:?}"))),
         },
         Err(e) => publish(&ctx, version, can_configure, Vec::new(), Some(format!("ListShortcuts: {e:?}"))),
@@ -102,7 +102,7 @@ pub async fn run(ctx: ControlContext, mut rebind_rx: mpsc::UnboundedReceiver<()>
                 None => { log::warn!("hotkeys: Deactivated stream ended"); break; }
             },
             ev = changed.next() => match ev {
-                Some(chg) => publish(&ctx, version, can_configure, state::to_protocol(chg.shortcuts()), None),
+                Some(chg) => publish(&ctx, version, can_configure, state::SPEC.to_protocol(chg.shortcuts()), None),
                 None => { log::warn!("hotkeys: ShortcutsChanged stream ended"); break; }
             },
             msg = rebind_rx.recv() => match msg {

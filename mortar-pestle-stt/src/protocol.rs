@@ -22,6 +22,10 @@ use serde::{Deserialize, Serialize};
 /// segment, final, progress, vu, error }`; `error.code ∈ { not_implemented,
 /// bad_request, busy, internal }`.
 pub use mortar_pestle_daemon::envelope::{Event, ProtoError, Request, Response};
+/// The hotkey wire types — re-exported from the shared daemon crate (D5-WI-1
+/// Step 4). Byte-identical to the pre-fold local defs (serde derives generate
+/// from the struct definition, not the crate location).
+pub use mortar_pestle_daemon::hotkeys::{HotkeysSnapshot, Shortcut};
 
 // ── SF1 STT payloads ─────────────────────────────────────────────────────────
 //
@@ -205,33 +209,13 @@ pub struct DownloadComplete {
 
 // ── Phase 5 push-to-talk (SF5) ────────────────────────────────────────────────
 //
-// Global hold-to-talk hotkey via the XDG GlobalShortcuts portal. HotkeysSnapshot +
-// Shortcut mirror mortar-pestle-capture's wire structs byte-for-byte. The daemon pushes
+// Global hold-to-talk hotkey via the XDG GlobalShortcuts portal. The wire types
+// `HotkeysSnapshot` + `Shortcut` are re-exported from the shared daemon crate
+// (D5-WI-1 Step 4) — byte-identical to the pre-fold local defs. The daemon pushes
 // the snapshot as a `hotkeys` event + answers it inside `get_state`. Dictation
 // lifecycle events carry the source so the host routes a HOTKEY transcript to the
 // daily log (`dictation_committed`), while UI-driven dictation uses its per-call
 // Channel.
-
-/// The bound global-shortcut state (mirrors mortar-pestle-capture's `HotkeysSnapshot`).
-/// `bound:false` + `last_error` when the portal is unavailable.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct HotkeysSnapshot {
-    pub bound: bool,
-    pub portal_version: u32,
-    pub can_configure: bool,
-    pub shortcuts: Vec<Shortcut>,
-    pub last_error: Option<String>,
-}
-
-/// One bound shortcut. `trigger_description` is what KDE ACTUALLY bound (may differ
-/// from the requested default — the rebindability rule).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Shortcut {
-    pub id: String,
-    pub description: String,
-    pub trigger_description: String,
-    pub reserved: bool,
-}
 
 /// `dictation_started` event — a dictation began. `source ∈ { hotkey, client }`
 /// lets the host distinguish global push-to-talk from a UI-initiated session.

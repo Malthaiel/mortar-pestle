@@ -35,7 +35,7 @@ pub fn spawn(
     events_tx: broadcast::Sender<Event>,
     rebind_rx: mpsc::UnboundedReceiver<()>,
 ) {
-    state::install_desktop_file();
+    state::SPEC.install_desktop_file();
     crate::capture::portal::portal_runtime().spawn(portal::run(engine, cmd_tx, event_tx, events_tx, rebind_rx));
 }
 
