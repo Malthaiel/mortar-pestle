@@ -26,7 +26,7 @@ use crate::daemon::engine::ControlContext;
 /// the GlobalShortcuts portal flow; Windows installs a WH_KEYBOARD_LL low-level hook.
 #[cfg(target_os = "linux")]
 pub fn spawn(ctx: ControlContext, rebind_rx: mpsc::UnboundedReceiver<()>) {
-    state::install_desktop_file();
+    state::SPEC.install_desktop_file();
     tokio::spawn(portal::run(ctx, rebind_rx));
 }
 

@@ -17,3 +17,9 @@ log = "0.4"
 # Windows: QPC for clock::now_mono_ns (raw-binding convention, broadcast precedent).
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_System_Performance", "Win32_Foundation"] }
+
+# Linux: the GlobalShortcuts portal client for the hotkeys state layer (D5-WI-1
+# Step 4). cfg-gated so broadcast (Windows-only) never pulls ashpd. Version +
+# the `global_shortcuts` feature match both sidecars' own ashpd dep exactly.
+[target.'cfg(target_os = "linux")'.dependencies]
+ashpd = { version = "0.13", features = ["global_shortcuts"] }
