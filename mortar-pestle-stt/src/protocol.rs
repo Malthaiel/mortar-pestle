@@ -12,50 +12,16 @@
 #![allow(dead_code)] // SF1 emits `echo` + dictation `vu`; the rest land in SF2/SF3.
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 // ── Envelope (byte-for-byte identical to the mortar-pestle-capture wire format) ─────
 
-/// Client→engine request frame: `{"op": <verb>, "id": <string>, "args": {...}}`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Request {
-    pub op: String,
-    pub id: String,
-    #[serde(default)]
-    pub args: Value,
-}
-
-/// Engine→client response frame, correlated by `id`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Response {
-    pub id: String,
-    pub ok: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub data: Option<Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<ProtoError>,
-}
-
-/// Unsolicited async event frame: `{"event": <name>, "data": {...}}`.
-/// `event ∈ { echo, model_loaded, segment, final, progress, vu, error }`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Event {
-    pub event: String,
-    pub data: Value,
-}
-
-/// `error.code ∈ { not_implemented, bad_request, busy, internal }`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProtoError {
-    pub code: String,
-    pub message: String,
-}
-
-impl ProtoError {
-    pub fn new(code: &str, message: impl Into<String>) -> Self {
-        Self { code: code.into(), message: message.into() }
-    }
-}
+/// The four wire-envelope frames (`Request` / `Response` / `Event` /
+/// `ProtoError`), re-exported from the shared daemon crate (D5-WI-1). Byte-
+/// identical to the pre-fold definitions — serde derives generate from the
+/// struct definition, not the crate location. `event ∈ { echo, model_loaded,
+/// segment, final, progress, vu, error }`; `error.code ∈ { not_implemented,
+/// bad_request, busy, internal }`.
+pub use mortar_pestle_daemon::envelope::{Event, ProtoError, Request, Response};
 
 // ── SF1 STT payloads ─────────────────────────────────────────────────────────
 //

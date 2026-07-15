@@ -14,20 +14,22 @@
 
 use std::io;
 #[cfg(unix)]
-use std::os::unix::fs::DirBuilderExt;
-#[cfg(unix)]
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
-#[cfg(unix)]
-use std::time::Duration;
 
 use serde_json::{json, Value};
-use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, BufReader};
 #[cfg(unix)]
-use tokio::net::{UnixListener, UnixStream};
+use tokio::net::UnixStream;
 #[cfg(windows)]
-use tokio::net::windows::named_pipe::{NamedPipeServer, ServerOptions};
+use tokio::net::windows::named_pipe::NamedPipeServer;
 use tokio::sync::mpsc;
+
+use mortar_pestle_daemon::framing;
+#[cfg(windows)]
+use mortar_pestle_daemon::pipe;
+#[cfg(unix)]
+use mortar_pestle_daemon::sock;
 
 use crate::daemon::engine::{ControlContext, EngineCmd};
 use crate::daemon::dictation::{self, DictationSource};
@@ -47,10 +49,7 @@ static NEXT_CONN_ID: AtomicU64 = AtomicU64::new(1);
 /// from the capture daemon's `capture.sock`.
 #[cfg(unix)]
 pub fn socket_path() -> PathBuf {
-    let runtime = std::env::var_os("XDG_RUNTIME_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("/tmp"));
-    runtime.join("mortar-pestle").join("stt.sock")
+    sock::socket_path("stt.sock")
 }
 
 /// `\\.\pipe\mortar-pestle-stt` — the Windows named-pipe analogue of the Unix socket
@@ -62,98 +61,18 @@ pub fn socket_path() -> PathBuf {
 #[cfg(windows)]
 pub const PIPE_NAME: &str = r"\\.\pipe\mortar-pestle-stt";
 
-/// Bind the control socket, single-instance. Returns the bound listener, or `None`
-/// when a live daemon already owns the socket — in which case the caller should
-/// exit cleanly (already handled inside `serve`).
-///
-/// Order: ensure parent dir (0700) → try bind. On `AddrInUse`, probe the existing
-/// socket with `echo`; an `ok:true` reply ⇒ live daemon (return `None`); any
-/// connect/parse failure ⇒ stale socket ⇒ unlink + rebind.
-#[cfg(unix)]
-async fn bind_or_probe(path: &PathBuf) -> io::Result<Option<UnixListener>> {
-    if let Some(parent) = path.parent() {
-        std::fs::DirBuilder::new()
-            .recursive(true)
-            .mode(0o700)
-            .create(parent)?;
-    }
-
-    match UnixListener::bind(path) {
-        Ok(listener) => Ok(Some(listener)),
-        Err(e) if e.kind() == io::ErrorKind::AddrInUse => {
-            if probe_live_daemon(path).await {
-                log::info!("mortar-pestle-stt daemon already running at {}", path.display());
-                Ok(None)
-            } else {
-                log::warn!("stale stt socket at {} — unlinking + rebinding", path.display());
-                let _ = std::fs::remove_file(path);
-                match UnixListener::bind(path) {
-                    Ok(listener) => Ok(Some(listener)),
-                    // A lost cold-start race: another instance re-created the socket
-                    // file between our unlink and bind. Retry the unlink+bind ONCE
-                    // more before giving up (the live-probe path above is untouched).
-                    Err(e) if e.kind() == io::ErrorKind::AddrInUse => {
-                        log::warn!("rebind raced at {} — unlinking + retrying once", path.display());
-                        let _ = std::fs::remove_file(path);
-                        UnixListener::bind(path).map(Some)
-                    }
-                    Err(e) => Err(e),
-                }
-            }
-        }
-        Err(e) => Err(e),
-    }
-}
-
-/// Connect to an existing socket and send `echo`; `true` iff a live daemon
-/// answers with `ok:true`. Any connect, write, read, or parse failure (and a
-/// short timeout) ⇒ `false` ⇒ treat as stale.
-///
-/// NOTE: unlike the capture daemon (which checks for a `data.state` field), the
-/// SF1 echo daemon has NO snapshot — `ok:true` alone is the liveness predicate.
-#[cfg(unix)]
-async fn probe_live_daemon(path: &PathBuf) -> bool {
-    let probe = async {
-        let mut stream = UnixStream::connect(path).await.ok()?;
-        let hello = serde_json::to_string(&Request {
-            op: "echo".into(),
-            id: "probe".into(),
-            args: json!({ "text": "probe" }),
-        })
-        .ok()?;
-        stream.write_all(hello.as_bytes()).await.ok()?;
-        stream.write_all(b"\n").await.ok()?;
-        stream.flush().await.ok()?;
-
-        let mut reader = BufReader::new(stream);
-        let mut line = String::new();
-        let n = reader.read_line(&mut line).await.ok()?;
-        if n == 0 {
-            return None;
-        }
-        let resp: Response = serde_json::from_str(line.trim()).ok()?;
-        // A live SF1 echo daemon answers ok:true (no snapshot/state field exists).
-        if resp.ok {
-            Some(())
-        } else {
-            None
-        }
-    };
-
-    matches!(
-        tokio::time::timeout(Duration::from_secs(2), probe).await,
-        Ok(Some(()))
-    )
-}
-
-/// Build + run the control server. Binds (single-instance), then accepts clients
-/// until the process is killed. On "already running" it prints one line and exits
-/// the process (0) — the single-instance probe path. Errors propagate to the
-/// caller (a bind failure that is NOT "already running").
+/// Build + run the control server. Binds (single-instance) via the shared
+/// `sock::bind_or_probe` (probe: `echo`; unlike the capture daemon the liveness
+/// predicate is `ok:true` ALONE — the SF1 echo daemon has no snapshot), then
+/// accepts clients until the process is killed. On "already running" it prints
+/// one line and exits the process (0) — the single-instance probe path. Errors
+/// propagate to the caller (a bind failure that is NOT "already running").
 #[cfg(unix)]
 pub async fn serve(ctx: ControlContext) -> io::Result<()> {
     let path = socket_path();
-    let listener = match bind_or_probe(&path).await? {
+    let live: sock::Liveness =
+        Box::new(|v: &Value| v.get("ok").and_then(Value::as_bool).unwrap_or(false));
+    let listener = match sock::bind_or_probe(&path, "echo", json!({ "text": "probe" }), live).await? {
         Some(l) => l,
         None => {
             // Live daemon already owns the socket — single-instance contract.
@@ -204,10 +123,10 @@ pub async fn serve(ctx: ControlContext) -> io::Result<()> {
 /// one to its serve task, or a fast second client races a connect gap (`ERROR_PIPE_BUSY`).
 #[cfg(windows)]
 pub async fn serve(ctx: ControlContext) -> io::Result<()> {
-    let mut server = match ServerOptions::new().first_pipe_instance(true).create(PIPE_NAME) {
+    let mut server = match pipe::bind_first(PIPE_NAME) {
         Ok(s) => s,
         // ERROR_ACCESS_DENIED (5) / PermissionDenied ⇒ another daemon owns the name.
-        Err(e) if e.raw_os_error() == Some(5) || e.kind() == io::ErrorKind::PermissionDenied => {
+        Err(e) if pipe::already_running(&e) || e.kind() == io::ErrorKind::PermissionDenied => {
             println!("mortar-pestle-stt: daemon already running ({PIPE_NAME})");
             std::process::exit(0);
         }
@@ -228,12 +147,12 @@ pub async fn serve(ctx: ControlContext) -> io::Result<()> {
             }
             res = server.connect() => match res {
                 Ok(()) => {
-                    // The connected instance IS the connection. Pre-create the next
-                    // listening instance BEFORE serving this one (NOT first_pipe_instance —
-                    // only the first create claims the name), so the pipe is always
-                    // attachable for the next client.
-                    let connected = server;
-                    server = ServerOptions::new().create(PIPE_NAME)?;
+                    // The connected instance IS the connection. `pipe::accept_next`
+                    // pre-creates the next listening instance BEFORE serving this one
+                    // (NOT first_pipe_instance — only the first create claims the
+                    // name), so the pipe is always attachable for the next client.
+                    let (connected, next) = pipe::accept_next(PIPE_NAME, server)?;
+                    server = next;
                     let ctx = ctx.clone();
                     tokio::spawn(async move {
                         if let Err(e) = handle_client(connected, ctx).await {
@@ -244,7 +163,7 @@ pub async fn serve(ctx: ControlContext) -> io::Result<()> {
                 Err(e) => {
                     // Connect failed on this instance — recreate the listener + continue.
                     log::warn!("pipe connect failed: {e}");
-                    server = ServerOptions::new().create(PIPE_NAME)?;
+                    server = pipe::create_next(PIPE_NAME)?;
                 }
             }
         }
@@ -294,7 +213,7 @@ where
                 maybe = resp_rx.recv() => {
                     match maybe {
                         Some(line) => {
-                            if write_line(&mut write_half, &line).await.is_err() {
+                            if framing::write_line(&mut write_half, &line).await.is_err() {
                                 break;
                             }
                         }
@@ -308,7 +227,7 @@ where
                     match ev {
                         Ok(event) => {
                             if let Ok(line) = serde_json::to_string(&event) {
-                                if write_line(&mut write_half, &line).await.is_err() {
+                                if framing::write_line(&mut write_half, &line).await.is_err() {
                                     break;
                                 }
                             }
@@ -325,16 +244,27 @@ where
     });
 
     // Reader: one JSON Request per line → dispatch → push the Response line.
-    let mut lines = BufReader::new(read_half).lines();
-    while let Some(line) = lines.next_line().await? {
-        if line.trim().is_empty() {
+    // `.take()` + per-line `set_limit` caps a hostile unterminated line at
+    // MAX_LINE_BYTES (the shared framing / broadcast idiom) instead of wedging
+    // an unbounded `lines()` reader.
+    let mut reader = BufReader::new(read_half).take(framing::MAX_LINE_BYTES as u64);
+    let mut line = String::new();
+    loop {
+        line.clear();
+        reader.set_limit(framing::MAX_LINE_BYTES as u64);
+        let n = reader.read_line(&mut line).await?;
+        if n == 0 {
+            break;
+        }
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
             continue;
         }
-        let resp = match serde_json::from_str::<Request>(&line) {
+        let resp = match serde_json::from_str::<Request>(trimmed) {
             Ok(req) => dispatch(&ctx, conn_id, req),
             // Malformed line: bad_request, NO panic, keep the connection alive.
             Err(e) => Response {
-                id: extract_id(&line),
+                id: framing::extract_id::<String>(trimmed),
                 ok: false,
                 data: None,
                 error: Some(ProtoError::new("bad_request", format!("invalid JSON request: {e}"))),
@@ -358,25 +288,6 @@ where
     drop(resp_tx);
     let _ = writer.await;
     Ok(())
-}
-
-/// Write one NDJSON line (`line` + `\n`) and flush.
-async fn write_line<W>(w: &mut W, line: &str) -> io::Result<()>
-where
-    W: AsyncWriteExt + Unpin,
-{
-    w.write_all(line.as_bytes()).await?;
-    w.write_all(b"\n").await?;
-    w.flush().await
-}
-
-/// Best-effort `id` recovery from a malformed line so the error response still
-/// correlates. Falls back to empty when the line is not even partial JSON.
-fn extract_id(line: &str) -> String {
-    serde_json::from_str::<Value>(line)
-        .ok()
-        .and_then(|v| v.get("id").and_then(|i| i.as_str()).map(str::to_owned))
-        .unwrap_or_default()
 }
 
 /// Map a parsed `Request` to a `Response`. Mutating verbs forward an `EngineCmd` to the

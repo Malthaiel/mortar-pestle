@@ -7,29 +7,20 @@
 use std::sync::mpsc;
 
 use serde_json::Value;
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
-use tokio::net::windows::named_pipe::{NamedPipeServer, ServerOptions};
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
+use tokio::net::windows::named_pipe::NamedPipeServer;
 use tokio::sync::{broadcast, oneshot};
+
+use mortar_pestle_daemon::{framing, pipe};
 
 use crate::daemon::engine::{Cmd, Reply};
 use crate::daemon::protocol::{Event, ProtoError, Request, Response};
 
 pub const PIPE_NAME: &str = r"\\.\pipe\mortar-pestle-broadcast";
-const MAX_LINE_BYTES: usize = 1024 * 1024;
 
 pub struct Ctx {
     pub cmd_tx: mpsc::Sender<Cmd>,
     pub events: broadcast::Sender<Event>,
-}
-
-/// true ⇒ another daemon owns the pipe (caller exits 0 for supervisor adopt).
-pub fn already_running(err: &std::io::Error) -> bool {
-    err.raw_os_error() == Some(5) // ERROR_ACCESS_DENIED with first_pipe_instance
-}
-
-/// Claim the pipe (single-instance gate) — called BEFORE libobs init.
-pub fn bind_first() -> std::io::Result<NamedPipeServer> {
-    ServerOptions::new().first_pipe_instance(true).create(PIPE_NAME)
 }
 
 pub async fn serve(first: NamedPipeServer, ctx: Ctx) -> std::io::Result<()> {
@@ -40,8 +31,10 @@ pub async fn serve(first: NamedPipeServer, ctx: Ctx) -> std::io::Result<()> {
         server.connect().await?;
         // Pre-create the next instance BEFORE serving this client, so a new
         // client can always connect (capture socket.rs accept-loop idiom).
-        let next = ServerOptions::new().create(PIPE_NAME)?;
-        let client = std::mem::replace(&mut server, next);
+        // `pipe::accept_next` does the pre-create + hands back the connected
+        // instance alongside the next one to listen on.
+        let (client, next) = pipe::accept_next(PIPE_NAME, server)?;
+        server = next;
         let cmd_tx = ctx.cmd_tx.clone();
         let events = ctx.events.subscribe();
         tokio::spawn(async move {
@@ -58,7 +51,7 @@ async fn serve_conn(
     mut events: broadcast::Receiver<Event>,
 ) -> std::io::Result<()> {
     let (reader, mut writer) = tokio::io::split(pipe);
-    let mut reader = BufReader::new(reader).take(MAX_LINE_BYTES as u64);
+    let mut reader = BufReader::new(reader).take(framing::MAX_LINE_BYTES as u64);
     let (resp_tx, mut resp_rx) = tokio::sync::mpsc::unbounded_channel::<Response>();
 
     let writer_task = tokio::spawn(async move {
@@ -77,13 +70,9 @@ async fn serve_conn(
                     Err(broadcast::error::RecvError::Closed) => break,
                 },
             };
-            if writer.write_all(line.as_bytes()).await.is_err() {
+            if framing::write_line(&mut writer, &line).await.is_err() {
                 break;
             }
-            if writer.write_all(b"\n").await.is_err() {
-                break;
-            }
-            let _ = writer.flush().await;
         }
     });
 
@@ -91,7 +80,7 @@ async fn serve_conn(
     loop {
         line.clear();
         // .take() caps a hostile unterminated line at MAX_LINE_BYTES.
-        reader.set_limit(MAX_LINE_BYTES as u64);
+        reader.set_limit(framing::MAX_LINE_BYTES as u64);
         let n = reader.read_line(&mut line).await?;
         if n == 0 {
             break;
@@ -102,7 +91,7 @@ async fn serve_conn(
         }
         let resp = match serde_json::from_str::<Request>(trimmed) {
             Ok(req) => dispatch(req, &cmd_tx).await,
-            Err(e) => Response::err(0, ProtoError::bad_request(format!("malformed request: {e}"))),
+            Err(e) => Response::err(framing::extract_id::<u64>(trimmed), ProtoError::bad_request(format!("malformed request: {e}"))),
         };
         if resp_tx.send(resp).is_err() {
             break;

@@ -13,6 +13,9 @@ log = "0.4"
 env_logger = "0.11"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Shared NDJSON daemon transport/framing (D5-WI-1 sidecar dedup). 3-way tier
+# (framing/clock/pipe) — broadcast links ONLY this tier (no envelope/sock).
+mortar-pestle-daemon = { path = "../mortar-pestle-daemon" }
 # SP3 screenshot verb: thumbnail PNG encode + base64 reply transport.
 png = "0.17"
 base64 = "0.22"

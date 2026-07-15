@@ -11,6 +11,7 @@ pub mod socket;
 
 use std::sync::mpsc;
 
+use mortar_pestle_daemon::pipe;
 use tokio::sync::{broadcast, oneshot};
 
 const EVENT_BUS_CAPACITY: usize = 256;
@@ -28,9 +29,9 @@ pub fn run(payload_root: std::path::PathBuf) -> i32 {
     rt.block_on(async move {
         // Bind-or-yield BEFORE touching libobs: a second instance must exit 0
         // for supervisor adopt without spinning up a whole GPU pipeline.
-        let first = match socket::bind_first() {
+        let first = match pipe::bind_first(socket::PIPE_NAME) {
             Ok(s) => s,
-            Err(e) if socket::already_running(&e) => {
+            Err(e) if pipe::already_running(&e) => {
                 log::info!("daemon already running on {} — exiting for adopt", socket::PIPE_NAME);
                 return 0;
             }
