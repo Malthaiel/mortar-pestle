@@ -667,6 +667,7 @@ dependencies = [
  "glow",
  "khronos-egl",
  "log",
+ "mortar-pestle-daemon",
  "nvenc-sys",
  "pipewire",
  "serde",
@@ -674,6 +675,17 @@ dependencies = [
  "tokio",
  "windows",
  "windows-core",
+ "windows-sys",
+]
+
+[[package]]
+name = "mortar-pestle-daemon"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "serde",
+ "serde_json",
+ "tokio",
  "windows-sys",
 ]
 

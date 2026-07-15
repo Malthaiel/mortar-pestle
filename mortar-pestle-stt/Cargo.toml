@@ -22,6 +22,9 @@ log = "0.4"
 env_logger = "0.11"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Shared NDJSON daemon transport/framing (D5-WI-1 sidecar dedup). 3-way tier
+# (framing/clock/pipe) + 2-way tier (envelope/sock) consumed per sidecar.
+mortar-pestle-daemon = { path = "../mortar-pestle-daemon" }
 # SF2 dependency add (ask-first gate, user-approved 2026-06-16). whisper-rs vendors
 # whisper.cpp (offline C/C++/CMake build); symphonia decodes the input file to f32
 # PCM (wav+pcm only this SF — mp3/isomp4/aac are a one-line bump when a later phase

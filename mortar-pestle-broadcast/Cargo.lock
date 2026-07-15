@@ -263,7 +263,19 @@ dependencies = [
  "base64",
  "env_logger",
  "log",
+ "mortar-pestle-daemon",
  "png",
+ "serde",
+ "serde_json",
+ "tokio",
+ "windows-sys",
+]
+
+[[package]]
+name = "mortar-pestle-daemon"
+version = "0.1.0"
+dependencies = [
+ "log",
  "serde",
  "serde_json",
  "tokio",

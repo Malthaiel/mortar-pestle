@@ -1042,6 +1042,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "mortar-pestle-daemon"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "serde",
+ "serde_json",
+ "tokio",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "mortar-pestle-stt"
 version = "0.1.0"
 dependencies = [
@@ -1050,6 +1061,7 @@ dependencies = [
  "env_logger",
  "futures-util",
  "log",
+ "mortar-pestle-daemon",
  "rubato",
  "serde",
  "serde_json",

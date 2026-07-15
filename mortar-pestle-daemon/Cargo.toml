@@ -1,0 +1,19 @@
+[package]
+name = "mortar-pestle-daemon"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "MIT"
+description = "Shared NDJSON daemon transport/framing for the mortar-pestle capture/stt/broadcast sidecars."
+
+[dependencies]
+# Async runtime primitives (io traits, broadcast channel, net listeners).
+tokio = { version = "1", features = ["io-util", "net", "sync", "time"] }
+# NDJSON envelope (de)serialization.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+log = "0.4"
+
+# Windows: QPC for clock::now_mono_ns (raw-binding convention, broadcast precedent).
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_System_Performance", "Win32_Foundation"] }

@@ -16,6 +16,9 @@ env_logger = "0.11"
 # Complete Phase 1 (sub-plan 5): NDJSON control-protocol types + (de)serialization.
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Shared NDJSON daemon transport/framing (D5-WI-1 sidecar dedup). 3-way tier
+# (framing/clock/pipe) + 2-way tier (envelope/sock) consumed per sidecar.
+mortar-pestle-daemon = { path = "../mortar-pestle-daemon" }
 
 # Linux capture backend: xdg-desktop-portal ScreenCast + PipeWire dmabuf -> EGL/GL.
 [target.'cfg(target_os = "linux")'.dependencies]
