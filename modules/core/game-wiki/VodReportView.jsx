@@ -35,7 +35,7 @@ import { speakerColor } from './diarize.js';
 import { save } from '@tauri-apps/plugin-dialog';
 import Popover from '@host/components/ui/Popover.jsx';
 import { PrimaryBtn, OutlinedBtn } from '@host/components/ui/Button.jsx';
-import { serializeReportMarkdown, coerceReport, slugId } from './vodReport.js';
+import { serializeReportMarkdown, coerceReport, slugId, transcriptHash, applyCorrections } from './vodReport.js';
 import { openAnalyst } from '@host/agents/analyst/AnalystProvider.jsx';
 
 const muted = { color: 'var(--text-muted)', fontSize: 13 };
@@ -293,7 +293,7 @@ function ReportArtifactTree({ tabs, tab, onTab, accent, reveal }) {
   return <TreeSidebar nodes={nodes} controller={controller} buttons={buttons} accent={accent} />;
 }
 
-export default function VodReportView({ sidecarPath, commsPath, feedbackPath, mdPath, accent, onClose, onRegenerate, onAddNotes, inline = false, tab: tabProp, onTabChange, onTabsChange }) {
+export default function VodReportView({ sidecarPath, commsPath, normPath, feedbackPath, mdPath, accent, onClose, onRegenerate, onAddNotes, inline = false, tab: tabProp, onTabChange, onTabsChange }) {
   const [state, setState] = useState({ status: 'loading' });
   const [report, setReport] = useState(null);
   const [segments, setSegments] = useState(null); // null = loading, [] = none/unavailable
@@ -337,17 +337,29 @@ export default function VodReportView({ sidecarPath, commsPath, feedbackPath, md
     return () => { cancelled = true; };
   }, [sidecarPath, reloadKey]);
 
-  // Raw diarized segments the report was built from (.vodcomms sidecar) — read-only here;
+  // Diarized segments the report was built from (.vodcomms sidecar) — read-only here;
   // relabeling lives in ScrimViewer's CommsTranscriptView. Missing/bad → [] (degrades to a gap).
+  // Pass 0's proper-noun corrections (.vodnorm) are overlaid at render time so the Segments tab
+  // and TimeChip jumps show canonical hero/item names — non-destructive, the raw .vodcomms is
+  // never rewritten. Hash-gated: stale corrections (transcript re-extracted) are ignored, not applied.
   useEffect(() => {
-    if (!commsPath) { setSegments([]); return; }
+    if (!commsPath) { setSegments([]); return undefined; }
     let cancelled = false;
     setSegments(null);
-    api.getRawFileMeta(commsPath, 'gamewiki')
-      .then((r) => { if (!cancelled) setSegments(parseSegments(r.content)); })
-      .catch(() => { if (!cancelled) setSegments([]); });
+    (async () => {
+      let segs;
+      try { segs = parseSegments((await api.getRawFileMeta(commsPath, 'gamewiki')).content); }
+      catch { if (!cancelled) setSegments([]); return; }
+      if (normPath) {
+        try {
+          const c = JSON.parse((await api.getRawFileMeta(normPath, 'gamewiki')).content);
+          if (c.hash === transcriptHash(segs) && Array.isArray(c.corrections)) segs = applyCorrections(segs, c.corrections).segments;
+        } catch { /* no norm cache → show raw */ }
+      }
+      if (!cancelled) setSegments(segs);
+    })();
     return () => { cancelled = true; };
-  }, [commsPath]);
+  }, [commsPath, normPath]);
 
   // Load the .vodfeedback sidecar (missing → empty). Writes are whole-file JSON like .vodreport.
   useEffect(() => {

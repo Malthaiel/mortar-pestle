@@ -1845,6 +1845,7 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
             onTabsChange={setReportTabs}
             sidecarPath={scrimSidecarPath(path, 'vodreport')}
             commsPath={scrimSidecarPath(path, 'vodcomms')}
+            normPath={scrimSidecarPath(path, 'vodnorm')}
             feedbackPath={scrimSidecarPath(path, 'vodfeedback')}
             mdPath={path} accent={accent} />
         ) : paneMatch ? (
