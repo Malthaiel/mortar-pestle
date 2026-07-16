@@ -1,14 +1,16 @@
 // Scrim Overlay Panel — the FULL scrim editor as a draggable candy panel in the
-// Overlay Host. Headerless: scrim switching lives in ScrimViewer's tree toolbar
-// (Switch-scrim popover, fed by this panel), minimize lives in the bottom-left
-// ScrimOverlayLauncher chip, and the panel drags by any empty spot. The body is
-// the reused ScrimViewer in `overlay` mode (focused-match only), which owns all
-// editing/saving + the live-target + dictation/screenshot capture.
+// Overlay Host. The header is a slow seamless broadcast-HUD ticker (live scrim
+// state scrolling right-to-left); the whole band is the drag handle. Scrim
+// switching lives in ScrimViewer's tree toolbar (Switch-scrim popover, fed by
+// this panel), minimize lives in the bottom-left ScrimOverlayLauncher chip. The
+// body is the reused ScrimViewer in `overlay` mode (focused-match only), which
+// owns all editing/saving + the live-target + dictation/screenshot capture.
 // Accent resolves free — --accent is painted on :root by the host's SttProvider/
 // useSettings (see OverlayHostView).
 import { useState, useEffect, useRef, useCallback } from 'react';
 import useOverlayPanelDrag from './useOverlayPanelDrag.js';
 import { useScrimOverlay } from './useScrimOverlay.js';
+import { readStopwatch } from '@modules/core/game-wiki/useStopwatch.js';
 import ScrimViewer from '@modules/core/game-wiki/ScrimViewer.jsx';
 
 // Panel presence — shared with ScrimOverlayLauncher via localStorage + a window
@@ -91,6 +93,47 @@ export default function ScrimOverlayPanel() {
     setWidth(loadScrimW(v));
     setHeight(loadScrimH(v));
   };
+
+  // Scrim meta published up by ScrimViewer (onMeta) feeds the broadcast ticker in the
+  // header. Elapsed is polled here from the same per-match stopwatch the notes timer
+  // uses (readStopwatch is React-less; key mirrors ScrimViewer's derivation).
+  const [meta, setMeta] = useState(null);
+  const [elapsed, setElapsed] = useState(null);
+  const onMeta = useCallback((m) => setMeta(m), []);
+  useEffect(() => {
+    if (!selectedPath || !meta || meta.matchN == null) { setElapsed(null); return; }
+    const key = `gw-sw:${selectedPath}:m${meta.matchN}:${meta.coachedTeam}`;
+    const tick = () => setElapsed(readStopwatch(key).elapsedSec);
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [selectedPath, meta]);
+  // Ticker items: ● LIVE (only when live) · SCRIM OVERLAY · matchup · MATCH n/total ·
+  // MM:SS ELAPSED. PATCH / REPORT MODE are omitted — no data source exists for them.
+  const tickerItems = [];
+  if (live) tickerItems.push({ live: true, text: 'LIVE' });
+  tickerItems.push({ text: 'SCRIM OVERLAY', bright: true });
+  if (meta) {
+    if (meta.team1 || meta.team2) tickerItems.push({ text: `${meta.team1 || '?'} VS ${meta.team2 || '?'}`, bright: true });
+    if (meta.matchN != null) {
+      tickerItems.push({ text: `MATCH ${meta.matchN}/${meta.matchTotal}` });
+      if (elapsed != null) {
+        const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
+        const ss = String(elapsed % 60).padStart(2, '0');
+        tickerItems.push({ text: `${mm}:${ss} ELAPSED` });
+      }
+    }
+  }
+  // One ticker group = items each led by a ● separator. Rendered twice in the track for a
+  // seamless translateX(0 → -50%) loop.
+  const renderTickerGroup = (keyPrefix) => tickerItems.map((it, i) => (
+    <span className="ov-scrim-ticker-group" key={`${keyPrefix}-${i}`}>
+      <span className="ov-scrim-ticker-sep" aria-hidden="true">●</span>
+      {it.live
+        ? <span className="ov-scrim-ticker-item ov-scrim-ticker-live"><span className="dot">●</span> {it.text}</span>
+        : <span className={`ov-scrim-ticker-item${it.bright ? ' is-bright' : ''}`}>{it.text}</span>}
+    </span>
+  ));
   const panelRef = useRef(null);
   const resize = useRef(null);
   const startResize = (hx, vy) => (e) => {
@@ -139,13 +182,17 @@ export default function ScrimOverlayPanel() {
           so the panel body never fights inner controls. Picker stays in the tree
           toolbar; minimize stays on the launcher chip. */}
       <div ref={panelRef} className="candy-card ov-scrim-panel" style={{ width, ...(height != null ? { height, maxHeight: 'none' } : null) }}>
+        {/* Broadcast-HUD ticker header (user call 2026-07-15): a slow seamless
+            right-to-left scroll of live scrim state. The whole band is the drag
+            handle (dragProps on the row).
+            Replaces the static title + ⠿ grip that briefly matched the Studio header. */}
         <div className="candy-center-row ov-studio-head" {...dragProps} style={{ touchAction: 'none' }}>
-          {/* Per-letter spans + flex space-between = the title tracks out to fill the
-              full band at ANY panel width (user call 2026-07-15, superseding the
-              centered-title pass earlier the same day). */}
-          <span className="ov-studio-title section-title">
-            {'Scrim Overlay'.split('').map((c, i) => <span key={i}>{c}</span>)}
-          </span>
+          <div className="ov-scrim-ticker">
+            <div className="ov-scrim-ticker-track" style={{ animation: 'scrimTickerScroll 45s linear infinite' }}>
+              {renderTickerGroup('a')}
+              {renderTickerGroup('b')}
+            </div>
+          </div>
         </div>
         {creating && (
           <div className="candy-center-row" style={{ gap: 6, padding: '0 2px' }}>
@@ -167,7 +214,7 @@ export default function ScrimOverlayPanel() {
             (tree toolbar) gets the scrim list + select/create from here. */}
         {selectedPath
           ? <div className="ov-scrim-body" style={height != null ? { flex: 1 } : undefined}>
-              <ScrimViewer path={selectedPath} overlay live={live} onLive={setLive} fill={height != null}
+              <ScrimViewer path={selectedPath} overlay live={live} onLive={setLive} onMeta={onMeta} fill={height != null}
                 scrims={scrims.map((s) => ({ path: s.path, label: titleOf(s.path) }))}
                 onSelectScrim={selectScrim} onAddScrim={() => setCreating(true)} />
             </div>

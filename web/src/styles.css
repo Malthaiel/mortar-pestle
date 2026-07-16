@@ -4474,10 +4474,30 @@ button.cal-customdays__step:hover {
 /* Topbar type sits up the scale (14 → 16px), bold, nudged off the left edge. */
 .ov-studio-head .ov-studio-title { font-size: 16px; font-weight: 700; margin-left: 6px; }
 .ov-studio-head .stt-grip { font-size: 15px; line-height: 1; color: var(--text-faint); letter-spacing: 2px; }
-/* Scrim panel topbar: gripless, per-letter spans tracked out edge-to-edge across the
-   full band — "S C R I M  O V E R L A Y" at any panel width (user call 2026-07-15).
-   Studio keeps the left-title + grip layout above. */
-.ov-scrim-panel .ov-studio-head .ov-studio-title { flex: 1; display: flex; justify-content: space-between; margin-left: 0; }
+/* Scrim panel header = broadcast-HUD ticker (user call 2026-07-15, replacing the
+   static title + ⠿ grip). The whole band drags; the ticker fills it edge-to-edge
+   with a gradient mask fade on both sides. Seamless loop: the track carries two
+   identical groups and translates 0 → -50%, so the loop point is exactly one group
+   width. Animation is applied inline (style={{ animation }}) so the house
+   body[data-anim-<bucket>="off"] [style*="keyframe"] gate can cover it later
+   without touching the component. */
+@keyframes scrimTickerScroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.ov-scrim-panel .ov-studio-head { min-height: 52px; align-items: center; }
+.ov-scrim-ticker { position: relative; flex: 1; min-width: 0; overflow: hidden;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
+.ov-scrim-ticker-track { display: flex; width: max-content; will-change: transform; }
+.ov-scrim-ticker-group { display: flex; align-items: center; white-space: nowrap; }
+.ov-scrim-ticker-item { font-family: var(--font-heading); font-size: 16px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .06em; font-variant-numeric: tabular-nums;
+  color: var(--text-2); white-space: nowrap; }
+.ov-scrim-ticker-item.is-bright { color: var(--text); }
+.ov-scrim-ticker-sep { color: var(--text-faint); opacity: .5; padding: 0 14px; font-size: 9px; }
+.ov-scrim-ticker-live { color: var(--error); font-weight: 700; }
+.ov-scrim-ticker-live .dot { color: var(--error); }
+@media (prefers-reduced-motion: reduce) {
+  .ov-scrim-ticker-track { animation: none !important; transform: none !important; }
+}
 /* Panel + section titles use the shared .section-title standard (applied in
    OverlayStudioPanel.jsx). These rules keep only the overlay-specific bits — the
    uppercase panel-title look; type/size/weight/colour come from .section-title. */

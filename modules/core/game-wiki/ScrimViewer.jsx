@@ -560,7 +560,7 @@ function RevealRow({ label, onClick }) {
 // notes list drops its compact cap and flex-fills the pinned height instead.
 // `scrims`/`onSelectScrim`/`onAddScrim` (overlay only): the toolbar's Switch-scrim
 // popover — [{ path, label }] + select/create handlers owned by ScrimOverlayPanel.
-export default function ScrimViewer({ path, accent, overlay = false, live = false, onLive, fill = false, scrims, onSelectScrim, onAddScrim }) {
+export default function ScrimViewer({ path, accent, overlay = false, live = false, onLive, onMeta, fill = false, scrims, onSelectScrim, onAddScrim }) {
   const [scrim, setScrim] = useState(null);
   const [err, setErr] = useState(null);
   const [saveState, setSaveState] = useState('idle'); // idle | saving | saved | error
@@ -598,6 +598,23 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
   const [commsRelabelKey, setCommsRelabelKey] = useState(0);
   const matchFocusRef = useRef(null); // fresh focusedN for event-listener closures
   useEffect(() => { matchFocusRef.current = focusedN; }, [focusedN]);
+
+  // Publish scrim meta up to the overlay panel for its broadcast ticker header
+  // (ScrimOverlayPanel). Optional — non-overlay callers pass no onMeta and this is a
+  // no-op. Coached-team derivation mirrors the stopwatch-key derivation at line ~1509.
+  useEffect(() => {
+    if (!onMeta) return;
+    if (!scrim) { onMeta(null); return; }
+    const fm = scrim.frontmatter || {};
+    const coached = fm['Coached Team'] || fm['Team 1'] || '';
+    onMeta({
+      team1: fm['Team 1'] || '',
+      team2: fm['Team 2'] || '',
+      matchN: focusedN,
+      matchTotal: (scrim.matches || []).length,
+      coachedTeam: coached,
+    });
+  }, [scrim, focusedN, onMeta]);
 
   // Scrim Tree Consolidation (2026-07-14): the pane view (match card vs report tab,
   // per-scrim persisted), the report tab list (published by the inline VodReportView),
