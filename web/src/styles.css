@@ -4495,9 +4495,6 @@ button.cal-customdays__step:hover {
 .ov-scrim-ticker-sep { color: var(--text-faint); opacity: .5; padding: 0 14px; font-size: 9px; }
 .ov-scrim-ticker-live { color: var(--error); font-weight: 700; }
 .ov-scrim-ticker-live .dot { color: var(--error); }
-@media (prefers-reduced-motion: reduce) {
-  .ov-scrim-ticker-track { animation: none !important; transform: none !important; }
-}
 /* Panel + section titles use the shared .section-title standard (applied in
    OverlayStudioPanel.jsx). These rules keep only the overlay-specific bits — the
    uppercase panel-title look; type/size/weight/colour come from .section-title. */
