@@ -21,33 +21,8 @@ const SECTIONS = [
   { id: 'capture', label: 'Capture' },
   { id: 'voice', label: 'Voice' },
   { id: 'agents', label: 'Agents' },
-  { id: 'scrim', label: 'Scrim' },
   { id: 'monitor', label: 'Monitor' },
 ];
-
-// Scrim section — the over-game scrim-notes panel. One toggle: whether entering
-// Live mode auto-collapses the match tree. Persists to settings.scrimLiveAutoCollapse
-// (default off); ScrimViewer reads it fresh from localStorage at live-entry (the
-// overlay host is a separate webview, so the in-webview change event never reaches it).
-function ScrimOverlaySettingsTab({ settings, setSetting, accent }) {
-  const auto = settings?.scrimLiveAutoCollapse === true;
-  return (
-    <SectionBand title="Live mode" anchor="set-overlay-scrim">
-      <Row label="Auto-collapse the match tree">
-        <EnableToggle
-          enabled={auto}
-          accent={accent || 'var(--accent)'}
-          onChange={(v) => setSetting('scrimLiveAutoCollapse', !!v)}
-          title="Auto-collapse the match tree"
-        />
-      </Row>
-      <div style={{ fontSize: 11, color: 'var(--text-faint)', lineHeight: 1.5, paddingTop: 2 }}>
-        On collapses the scrim panel&rsquo;s match tree every time you enter Live mode,
-        leaving just notes, voice, and the timer. Off keeps the tree however you left it.
-      </div>
-    </SectionBand>
-  );
-}
 
 // Agents section — the over-game Concierge surface (mounted in the Overlay Host by
 // OverlayHostView + AgentsOverlayLauncher). One toggle: whether the launcher reopens
@@ -132,7 +107,6 @@ export default function OverlaySettingsTab({ settings, setSetting, accent, initi
       {section === 'capture' && <CaptureSettingsTab settings={settings} setSetting={setSetting} accent={accent} />}
       {section === 'voice' && <SttSettingsTab settings={settings} setSetting={setSetting} accent={accent} />}
       {section === 'agents' && <AgentsOverlaySettingsTab settings={settings} setSetting={setSetting} accent={accent} />}
-      {section === 'scrim' && <ScrimOverlaySettingsTab settings={settings} setSetting={setSetting} accent={accent} />}
       {section === 'monitor' && <MonitorSettingsSection />}
     </div>
   );

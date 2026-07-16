@@ -81,7 +81,6 @@ export const PAGE_SECTIONS = {
       { id: 'capture', label: 'Capture' },
       { id: 'voice',   label: 'Voice' },
       { id: 'agents',  label: 'Agents' },
-      { id: 'scrim',   label: 'Scrim' },
       { id: 'monitor', label: 'Monitor' },
     ],
   },

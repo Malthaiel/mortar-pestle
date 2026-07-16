@@ -1,21 +1,31 @@
-// Scrim Overlay Panel — the FULL scrim editor as a draggable candy panel in the
-// Overlay Host. The header is a slow seamless broadcast-HUD ticker (live scrim
-// state scrolling right-to-left); the whole band is the drag handle. Scrim
-// switching lives in ScrimViewer's tree toolbar (Switch-scrim popover, fed by
-// this panel), minimize lives in the bottom-left ScrimOverlayLauncher chip. The
-// body is the reused ScrimViewer in `overlay` mode (focused-match only), which
-// owns all editing/saving + the live-target + dictation/screenshot capture.
-// Accent resolves free — --accent is painted on :root by the host's SttProvider/
-// useSettings (see OverlayHostView).
-import { useState, useEffect, useRef, useCallback } from 'react';
+// Scrim Overlay Panel — the GameWiki as a draggable candy panel in the Overlay
+// Host (GameWiki Unification Phase 5): the shared GameWikiRail tree in a
+// CollapsibleRail + the shared GameWikiPage pane, driven by LOCAL selection
+// state (a navigate shim — no router exists in this webview). Non-scrim pages
+// render read-only (the overlay is a mini wiki browser). The header is a slow
+// seamless broadcast-HUD ticker; the whole band is the drag handle. Go Live /
+// slim mode is GONE — dictation targets the last match page opened here
+// (persisted; survives Shift+C reloads), and the panel finishes dictation /
+// screenshot capture on disk when that match page isn't currently mounted.
+// Accent resolves free — --accent is painted on :root by the host (OverlayHostView).
+import { lazy, Suspense, useState, useEffect, useRef, useCallback } from 'react';
+import { listen } from '@tauri-apps/api/event';
 import useOverlayPanelDrag from './useOverlayPanelDrag.js';
-import { useScrimOverlay } from './useScrimOverlay.js';
+import { invoke } from '../api.js';
+import CollapsibleRail from '../components/ui/CollapsibleRail.jsx';
+import GameWikiRail, { RailHeaderPill } from '@modules/core/game-wiki/GameWikiRail.jsx';
 import { readStopwatch } from '@modules/core/game-wiki/useStopwatch.js';
-import ScrimViewer from '@modules/core/game-wiki/ScrimViewer.jsx';
+import {
+  appendMatchNote, setMatchFieldIfEmpty, readOverviewFm, DICTATION_TARGET_KEY,
+} from '@modules/core/game-wiki/scrimShared.jsx';
+
+// react-markdown rides in GameWikiPage (~100KB) — lazy-split off the overlay boot
+// chunk, mirroring the main app's split (index.jsx).
+const GameWikiPage = lazy(() => import('@modules/core/game-wiki/GameWikiPage.jsx'));
 
 // Panel presence — shared with ScrimOverlayLauncher via localStorage + a window
 // event (the OverlayBrowserPanel pattern). Default OPEN; hiding keeps the panel
-// mounted (display:none) so the timer, drafts, and dictation survive a minimize.
+// mounted (display:none) so timers, drafts, and dictation survive a minimize.
 export const OPEN_EVT = 'overlay-scrim-open-changed';
 const OPEN_KEY = 'overlay-scrim-open';
 export const isPanelOpen = () => { try { return localStorage.getItem(OPEN_KEY) !== '0'; } catch { return true; } };
@@ -24,46 +34,34 @@ export const setPanelOpen = (v) => {
   window.dispatchEvent(new CustomEvent(OPEN_EVT, { detail: !!v }));
 };
 
-// All-direction edge/corner resize — the panel is content-height until the user drags a
-// vertical edge (then height is pinned). A left/top edge also slides the panel (nudgeX/
-// nudgeY) so the opposite edge stays put. Width persists always; height once the user set it.
-// Size is remembered PER MODE: live (slim) and normal each keep their own width/height,
-// and toggling Go Live snaps the panel to that mode's last size.
+// All-direction edge/corner resize — the panel is content-height until the user
+// drags a vertical edge (then height is pinned). Single size now (per-mode live
+// sizes died with Go Live).
 const SCRIM_W_KEY = 'overlay-panel-scrim-width';
 const SCRIM_H_KEY = 'overlay-panel-scrim-height';
-const scrimWKey = (live) => (live ? `${SCRIM_W_KEY}-live` : SCRIM_W_KEY);
-const scrimHKey = (live) => (live ? `${SCRIM_H_KEY}-live` : SCRIM_H_KEY);
 const SCRIM_MIN_W = 360, SCRIM_MAX_W = 900, SCRIM_DEFAULT_W = 460;
 const SCRIM_MIN_H = 220, SCRIM_MAX_H = 1400;
 const vpW = () => (typeof window !== 'undefined' && window.innerWidth) || SCRIM_MAX_W;
 const vpH = () => (typeof window !== 'undefined' && window.innerHeight) || SCRIM_MAX_H;
 const clampScrimW = (w) => Math.min(Math.max(w, SCRIM_MIN_W), Math.min(SCRIM_MAX_W, vpW()));
 const clampScrimH = (h) => Math.min(Math.max(h, SCRIM_MIN_H), Math.min(SCRIM_MAX_H, vpH() - 20));
-// Live width falls back to the saved normal width (first Go Live looks unchanged);
-// live height falls back to content-height, same as normal.
-const loadScrimW = (live) => {
-  try {
-    const v = parseInt(localStorage.getItem(scrimWKey(live)), 10);
-    if (Number.isFinite(v)) return clampScrimW(v);
-    if (live) return loadScrimW(false);
-    return SCRIM_DEFAULT_W;
-  } catch { return SCRIM_DEFAULT_W; }
-};
-const loadScrimH = (live) => { try { const v = parseInt(localStorage.getItem(scrimHKey(live)), 10); return Number.isFinite(v) ? clampScrimH(v) : null; } catch { return null; } };
-// 8 handles: 4 edges + 4 corners. Each key maps to a horizontal edge (l/r) and/or a
-// vertical edge (t/b) it drives.
+const loadScrimW = () => { try { const v = parseInt(localStorage.getItem(SCRIM_W_KEY), 10); return Number.isFinite(v) ? clampScrimW(v) : SCRIM_DEFAULT_W; } catch { return SCRIM_DEFAULT_W; } };
+const loadScrimH = () => { try { const v = parseInt(localStorage.getItem(SCRIM_H_KEY), 10); return Number.isFinite(v) ? clampScrimH(v) : null; } catch { return null; } };
+// 8 handles: 4 edges + 4 corners.
 const RESIZE_HANDLES = ['l', 'r', 't', 'b', 'tl', 'tr', 'bl', 'br'];
 
-// "(06-16-26) Reliquary VS The Mafia.md" → "Reliquary VS The Mafia" (date dropped).
-function titleOf(path) {
-  const base = String(path || '').replace(/\.md$/, '').split('/').pop();
-  const m = base.match(/^\((\d{2}-\d{2}-\d{2})\)\s*(.*)$/);
-  return m ? m[2] : base;
-}
+// Local selection (the nav shim's state) — persisted so the overlay reopens on
+// the page it was left on (state dies on every Shift+C reload).
+const SEL_KEY = 'overlay-gw-selected';
+const RAIL_KEY = 'overlay-gw-rail-open';
+const loadSel = () => { try { return localStorage.getItem(SEL_KEY) || ''; } catch { return ''; } };
+const loadRailOpen = () => { try { return localStorage.getItem(RAIL_KEY) !== '0'; } catch { return true; } };
+
+// "TEAM1 VS TEAM2 (MM-DD-YY)" → "TEAM1 VS TEAM2" (date suffix dropped).
+const titleOf = (base) => String(base || '').replace(/\s*\(\d{2}-\d{2}-\d{2}\)\s*$/, '');
 
 export default function ScrimOverlayPanel() {
   const { style: dragStyle, dragProps, nudgeX, nudgeY, commitPos } = useOverlayPanelDrag('overlay-panel-scrim', { x: 40, y: 40 });
-  const { scrims, selectedPath, selectScrim, createScrim } = useScrimOverlay();
   // Minimized/open — driven by the bottom-left launcher chip.
   const [open, setOpen] = useState(isPanelOpen);
   useEffect(() => {
@@ -71,69 +69,90 @@ export default function ScrimOverlayPanel() {
     window.addEventListener(OPEN_EVT, onChange);
     return () => window.removeEventListener(OPEN_EVT, onChange);
   }, []);
-  // Slim live mode — owned here (ScrimViewer's Go Live toolbar toggle drives it via
-  // onLive). Persisted: the overlay reopens in whichever mode it was last in
-  // (mirrors the overlay-scrim-selected pattern). Declared before width/height so
-  // they can seed from the initial mode.
-  const [live, setLiveState] = useState(() => {
-    try { return localStorage.getItem('overlay-scrim-live') === '1'; } catch { return false; }
-  });
-  const liveRef = useRef(live); liveRef.current = live;
-  // Resize (all edges + corners). Refs feed the pointer handlers the current size without
-  // re-binding them each frame. height stays null (content-height) until a vertical edge
-  // is grabbed, then it's seeded from the panel's measured box.
-  const [width, setWidth] = useState(() => loadScrimW(live));
-  const [height, setHeight] = useState(() => loadScrimH(live));
-  const widthRef = useRef(width); widthRef.current = width;
-  const heightRef = useRef(height); heightRef.current = height;
-  const setLive = (v) => {
-    setLiveState(v);
-    try { localStorage.setItem('overlay-scrim-live', v ? '1' : '0'); } catch { /* private mode */ }
-    // Snap to the target mode's remembered size (falls back sensibly when unset).
-    setWidth(loadScrimW(v));
-    setHeight(loadScrimH(v));
-  };
 
-  // Scrim meta published up by ScrimViewer (onMeta) feeds the broadcast ticker in the
-  // header. Elapsed is polled here from the same per-match stopwatch the notes timer
-  // uses (readStopwatch is React-less; key mirrors ScrimViewer's derivation).
-  const [meta, setMeta] = useState(null);
-  const [elapsed, setElapsed] = useState(null);
-  const onMeta = useCallback((m) => setMeta(m), []);
+  // Local selection + nav shim (GameWikiRail/GameWikiPage call nav with
+  // '/game-wiki/<encoded path>' — decode into the sel string).
+  const [sel, setSel] = useState(loadSel);
+  const selRef = useRef(sel); selRef.current = sel;
+  const nav = useCallback((to) => {
+    const m = String(to || '').match(/^\/game-wiki(?:\/(.*))?$/);
+    const rest = m && m[1] ? decodeURIComponent(m[1]) : '';
+    setSel(rest);
+    try { localStorage.setItem(SEL_KEY, rest); } catch { /* private mode */ }
+  }, []);
+  const [railOpen, setRailOpenState] = useState(loadRailOpen);
+  const toggleRail = () => setRailOpenState((v) => {
+    const next = !v;
+    try { localStorage.setItem(RAIL_KEY, next ? '1' : '0'); } catch { /* private mode */ }
+    return next;
+  });
+
+  // Scrim context from the selection — feeds the ticker + the header pill.
+  const scrimFolder = (sel.match(/^(Deadlock\/Coaching\/Scrim\/[^/]+)(?:\/|$)/) || [])[1] || null;
+  const matchN = Number((sel.match(/\/Matches\/Match (\d+)$/) || [])[1]) || null;
+  const scrimTitle = scrimFolder ? titleOf(scrimFolder.split('/').pop()) : '';
+  const [ov, setOv] = useState(null); // Overview frontmatter (teams, coached) for the open scrim
   useEffect(() => {
-    if (!selectedPath || !meta || meta.matchN == null) { setElapsed(null); return; }
-    const key = `gw-sw:${selectedPath}:m${meta.matchN}:${meta.coachedTeam}`;
+    if (!scrimFolder) { setOv(null); return undefined; }
+    let c = false;
+    readOverviewFm(scrimFolder).then((f) => { if (!c) setOv(f); }).catch(() => {});
+    return () => { c = true; };
+  }, [scrimFolder]);
+  const coached = ov?.['Coached Team'] || ov?.['Team 1'] || '';
+
+  // Elapsed — polled from the same per-match stopwatch the notes timer uses.
+  const [elapsed, setElapsed] = useState(null);
+  useEffect(() => {
+    if (!scrimFolder || matchN == null || !matchN) { setElapsed(null); return undefined; }
+    const key = `gw-sw:${scrimFolder}:m${matchN}:${coached}`;
     const tick = () => setElapsed(readStopwatch(key).elapsedSec);
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [selectedPath, meta]);
-  // Ticker items: ● LIVE (only when live) · SCRIM OVERLAY · matchup · MATCH n/total ·
-  // MM:SS ELAPSED. PATCH / REPORT MODE are omitted — no data source exists for them.
-  const tickerItems = [];
-  if (live) tickerItems.push({ live: true, text: 'LIVE' });
-  tickerItems.push({ text: 'SCRIM OVERLAY', bright: true });
-  if (meta) {
-    if (meta.team1 || meta.team2) tickerItems.push({ text: `${meta.team1 || '?'} VS ${meta.team2 || '?'}`, bright: true });
-    if (meta.matchN != null) {
-      tickerItems.push({ text: `MATCH ${meta.matchN}/${meta.matchTotal}` });
-      if (elapsed != null) {
-        const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
-        const ss = String(elapsed % 60).padStart(2, '0');
-        tickerItems.push({ text: `${mm}:${ss} ELAPSED` });
-      }
+  }, [scrimFolder, matchN, coached]);
+
+  // Re-publish the persisted dictation target on mount (the Rust cell survives
+  // reloads, but republishing keeps it in step with what this webview last set).
+  useEffect(() => {
+    let t = null;
+    try { t = JSON.parse(localStorage.getItem(DICTATION_TARGET_KEY) || 'null'); } catch { /* corrupt */ }
+    if (t?.folder && t?.n) {
+      invoke('overlay_go_live', { target: { scrimPath: t.folder, matchN: t.n, coachedTeam: t.coached || null } }).catch(() => {});
     }
-  }
-  // One ticker group = items each led by a ● separator. Rendered twice in the track for a
-  // seamless translateX(0 → -50%) loop.
-  const renderTickerGroup = (keyPrefix) => tickerItems.map((it, i) => (
-    <span className="ov-scrim-ticker-group" key={`${keyPrefix}-${i}`}>
-      <span className="ov-scrim-ticker-sep" aria-hidden="true">●</span>
-      {it.live
-        ? <span className="ov-scrim-ticker-item ov-scrim-ticker-live"><span className="dot">●</span> {it.text}</span>
-        : <span className={`ov-scrim-ticker-item${it.bright ? ' is-bright' : ''}`}>{it.text}</span>}
-    </span>
-  ));
+  }, []);
+
+  // Dictation / screenshot fallback: when the target match page is NOT the page
+  // currently open here, finish the capture on disk (scrimShared helpers). A
+  // mounted MatchPage handles its own events through its save loop.
+  useEffect(() => {
+    const subs = [
+      listen('overlay-dictation-committed', (e) => {
+        const p = e.payload || {};
+        if (!p.scrimPath || p.matchN == null) return;
+        if (selRef.current === `${p.scrimPath}/Matches/Match ${p.matchN}`) return; // MatchPage owns it
+        appendMatchNote(p.scrimPath, Number(p.matchN), p.coachedTeam || '', p.text)
+          .then(() => invoke('overlay_note_toast', { text: String(p.text || '').trim() }).catch(() => {}))
+          .catch(() => {});
+      }),
+      listen('capture-screenshot-saved', (e) => {
+        const pth = e.payload?.path;
+        if (!pth) return;
+        let t = null;
+        try { t = JSON.parse(localStorage.getItem(DICTATION_TARGET_KEY) || 'null'); } catch { /* corrupt */ }
+        if (!t?.folder || !t?.n) return;
+        if (selRef.current === `${t.folder}/Matches/Match ${t.n}`) return; // MatchPage owns it
+        setMatchFieldIfEmpty(t.folder, Number(t.n), 'Scoreboard', pth).catch(() => {});
+      }),
+    ];
+    return () => subs.forEach((s) => s.then((u) => u()).catch(() => {}));
+  }, []);
+
+  // Resize (all edges + corners). Refs feed the pointer handlers the current size
+  // without re-binding them each frame.
+  const [width, setWidth] = useState(loadScrimW);
+  const [height, setHeight] = useState(loadScrimH);
+  const widthRef = useRef(width); widthRef.current = width;
+  const heightRef = useRef(height); heightRef.current = height;
   const panelRef = useRef(null);
   const resize = useRef(null);
   const startResize = (hx, vy) => (e) => {
@@ -161,31 +180,37 @@ export default function ScrimOverlayPanel() {
     resize.current = null;
     try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* already released */ }
     try {
-      localStorage.setItem(scrimWKey(liveRef.current), String(widthRef.current));
-      if (heightRef.current != null) localStorage.setItem(scrimHKey(liveRef.current), String(heightRef.current));
+      localStorage.setItem(SCRIM_W_KEY, String(widthRef.current));
+      if (heightRef.current != null) localStorage.setItem(SCRIM_H_KEY, String(heightRef.current));
     } catch { /* ignore */ }
     commitPos();
   }, [commitPos]);
   const resizeProps = { onPointerMove: moveResize, onPointerUp: endResize, onPointerCancel: endResize };
-  const [creating, setCreating] = useState(false);
-  const [t1, setT1] = useState('');
-  const [t2, setT2] = useState('');
-  const doCreate = async () => {
-    await createScrim(t1, t2).catch(() => {});
-    setCreating(false); setT1(''); setT2('');
-  };
+
+  // Ticker items: SCRIM OVERLAY · scrim title · MATCH n · MM:SS ELAPSED (LIVE
+  // died with Go Live). One group = items each led by a ● separator; rendered
+  // twice in the track for a seamless translateX(0 → -50%) loop.
+  const tickerItems = [{ text: 'GAMEWIKI OVERLAY', bright: true }];
+  if (scrimTitle) tickerItems.push({ text: scrimTitle, bright: true });
+  if (matchN) {
+    tickerItems.push({ text: `MATCH ${matchN}` });
+    if (elapsed != null) {
+      const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
+      const ss = String(elapsed % 60).padStart(2, '0');
+      tickerItems.push({ text: `${mm}:${ss} ELAPSED` });
+    }
+  }
+  const renderTickerGroup = (keyPrefix) => tickerItems.map((it, i) => (
+    <span className="ov-scrim-ticker-group" key={`${keyPrefix}-${i}`}>
+      <span className="ov-scrim-ticker-sep" aria-hidden="true">●</span>
+      <span className={`ov-scrim-ticker-item${it.bright ? ' is-bright' : ''}`}>{it.text}</span>
+    </span>
+  ));
 
   return (
     <div className="video-cinema" style={{ position: 'absolute', top: 0, left: 0, background: 'transparent', padding: 0, display: open ? undefined : 'none', ...dragStyle }}>
-      {/* Topbar = the Studio panel's header copied 1-1 (user call 2026-07-15,
-          reversing the whole-panel drag): the ⠿ grip row is the ONLY drag handle,
-          so the panel body never fights inner controls. Picker stays in the tree
-          toolbar; minimize stays on the launcher chip. */}
       <div ref={panelRef} className="candy-card ov-scrim-panel" style={{ width, ...(height != null ? { height, maxHeight: 'none' } : null) }}>
-        {/* Broadcast-HUD ticker header (user call 2026-07-15): a slow seamless
-            right-to-left scroll of live scrim state. The whole band is the drag
-            handle (dragProps on the row).
-            Replaces the static title + ⠿ grip that briefly matched the Studio header. */}
+        {/* Broadcast-HUD ticker header — the whole band is the drag handle. */}
         <div className="candy-center-row ov-studio-head" {...dragProps} style={{ touchAction: 'none' }}>
           <div className="ov-scrim-ticker">
             <div className="ov-scrim-ticker-track" style={{ animation: 'scrimTickerScroll 45s linear infinite' }}>
@@ -194,45 +219,24 @@ export default function ScrimOverlayPanel() {
             </div>
           </div>
         </div>
-        {creating && (
-          <div className="candy-center-row" style={{ gap: 6, padding: '0 2px' }}>
-            <div className="candy-btn" data-shape="field" style={{ flex: 1, minWidth: 0 }}>
-              <input className="candy-face" autoFocus placeholder="Team 1 (coached)" value={t1}
-                onChange={(e) => setT1(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') doCreate(); }} />
-            </div>
-            <div className="candy-btn" data-shape="field" style={{ flex: 1, minWidth: 0 }}>
-              <input className="candy-face" placeholder="Team 2" value={t2}
-                onChange={(e) => setT2(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') doCreate(); }} />
-            </div>
-            <button type="button" data-no-drag className="candy-btn" data-shape="chip" data-size="small" onClick={doCreate}>
-              <span className="candy-face">Create</span>
-            </button>
-          </div>
-        )}
 
-        {/* Body — the reused full editor, focused-match mode. The Switch-scrim popover
-            (tree toolbar) gets the scrim list + select/create from here. */}
-        {selectedPath
-          ? <div className="ov-scrim-body" style={height != null ? { flex: 1 } : undefined}>
-              <ScrimViewer path={selectedPath} overlay live={live} onLive={setLive} onMeta={onMeta} fill={height != null}
-                scrims={scrims.map((s) => ({ path: s.path, label: titleOf(s.path) }))}
-                onSelectScrim={selectScrim} onAddScrim={() => setCreating(true)} />
+        {/* Body — shared tree rail + shared page pane, local selection. */}
+        <div className="ov-scrim-body" style={height != null ? { flex: 1 } : undefined}>
+          <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+            <CollapsibleRail expanded={railOpen} width={210} railWidth={44}
+              header={<RailHeaderPill label={scrimTitle || 'GAMEWIKI OVERLAY'}
+                title={railOpen ? 'Collapse rail' : 'Expand rail'} onClick={toggleRail} expanded={railOpen} />}
+              containerStyle={{ borderRight: '1px solid var(--border)' }}>
+              <GameWikiRail route={{ page: 'game-wiki', rest: sel }} nav={nav} header={null} />
+            </CollapsibleRail>
+            <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <Suspense fallback={null}>
+                <GameWikiPage rest={sel} nav={nav} overlay />
+              </Suspense>
             </div>
-          : !creating && (
-            // No scrim open → no viewer, so no toolbar to swap from. List the scrims
-            // right here (same candy row pills as the popover) so picking is one click.
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '4px 2px' }}>
-              {scrims.length === 0 && <div className="ov-scrim-empty">No scrims yet — Add Scrim below.</div>}
-              {scrims.map((s) => (
-                <button key={s.path} type="button" data-no-drag className="candy-btn" data-shape="row" onClick={() => selectScrim(s.path)} style={{ width: '100%' }}>
-                  <span className="candy-face">{titleOf(s.path)}</span>
-                </button>
-              ))}
-              <button type="button" data-no-drag className="candy-btn" data-shape="row" onClick={() => setCreating(true)} style={{ width: '100%' }}>
-                <span className="candy-face">+ Add Scrim</span>
-              </button>
-            </div>
-          )}
+          </div>
+        </div>
+
         {/* Resize — hairline grab strips on every edge + corner. */}
         {RESIZE_HANDLES.map((k) => (
           <div key={k} className={`ov-resize-edge e-${k}`} data-no-drag title="Resize" aria-label="Resize scrim panel"

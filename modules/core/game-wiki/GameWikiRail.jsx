@@ -21,7 +21,7 @@ import { newScrimScaffold } from './scrimSchema.js';
 
 // The rail's top pill — the ScrimRailHeader recipe (the main nav's brand block,
 // .candy-btn.is-primary data-variant="brand"). Collapsed shows an expand chevron.
-function RailHeaderPill({ label, title, accent, onClick, expanded = true }) {
+export function RailHeaderPill({ label, title, accent, onClick, expanded = true }) {
   return (
     <div style={{ height: 'var(--brand-section-h)', flexShrink: 0, display: 'flex' }}>
       <button type="button" onClick={onClick} data-own-press aria-label={title} title={title}
@@ -42,8 +42,9 @@ export default function GameWikiRail({ route, accent, nav = navigate, header }) 
   const [modal, setModal] = useState(null);
 
   // Main-app default header: the brand pill routes to the Game Wiki landing.
-  // The overlay passes its own { label, title, onClick, expanded } (Phase 5).
-  const h = header || { label: 'MORTAR & PESTLE', title: 'Game Wiki home', onClick: () => nav('/game-wiki') };
+  // The overlay passes `null` (its pill lives in the CollapsibleRail header slot
+  // so it survives the collapsed state) or its own { label, title, onClick }.
+  const h = header === null ? null : (header || { label: 'MORTAR & PESTLE', title: 'Game Wiki home', onClick: () => nav('/game-wiki') });
 
   const doCreate = async ({ team1, team2 }) => {
     const { base, files } = newScrimScaffold({ team1, team2 });
@@ -75,7 +76,7 @@ export default function GameWikiRail({ route, accent, nav = navigate, header }) 
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-      <RailHeaderPill label={h.label} title={h.title} accent={accent} onClick={h.onClick} expanded={h.expanded !== false}/>
+      {h && <RailHeaderPill label={h.label} title={h.title} accent={accent} onClick={h.onClick} expanded={h.expanded !== false}/>}
       <div style={{ flexShrink: 0, padding: `8px 8px ${GAP}` }}>
         <TreeToolbar buttons={buttons} controller={tree} accent={accent}/>
       </div>

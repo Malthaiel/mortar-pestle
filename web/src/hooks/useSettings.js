@@ -277,7 +277,6 @@ export const SETTINGS_DEFAULTS = {
   // state you left it in. Read FRESH from localStorage at live-entry in
   // ScrimViewer (the overlay host is a separate webview; the in-webview
   // settings-change event never reaches it).
-  scrimLiveAutoCollapse: false,
   // Hover-preview trailing-drag bucket for the animation preview cards.
   // 'none' | 'light' | 'medium' | 'heavy'. Read in AnimationRows.jsx (AnimationField).
   previewFollowDrag: 'light',

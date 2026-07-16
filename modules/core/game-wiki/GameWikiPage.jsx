@@ -1,12 +1,19 @@
-// Game Wiki reader — renders a read-only GameWiki-vault markdown page client-side
-// (react-markdown + GFM), mirroring the Claude module's MessageContent pattern.
+// Game Wiki page pane — dispatches by path shape (GameWiki Unification Phase 4):
+//   <scrim>/Overview            → OverviewPage (scrim-level editor)
+//   <scrim>/Matches/Match <n>   → MatchPage (per-match editor)
+//   <scrim>/Report|Coaching/<t> → VodReportView inline (sidecar-driven views)
+//   anything else               → the read-only markdown reader (react-markdown +
+//                                 GFM, client-side wikilink transform).
 //
-// Why client-side (not vault_render_reference): the shared Rust renderer resolves
-// wikilinks against the ACTIVE (content) vault's manifest — a known, accepted
-// cross-vault degradation (see render/mod.rs::render_path_in) — so a GameWiki page
-// rendered while Citadel is active would mark every `[[Deadlock/…]]` link broken
-// and unclickable. GameWiki uses full-path wikilinks, so we transform them here
-// into in-module `/game-wiki/<path>` links and keep navigation inside the module.
+// Why the reader is client-side (not vault_render_reference): the shared Rust
+// renderer resolves wikilinks against the ACTIVE (content) vault's manifest — a
+// known, accepted cross-vault degradation (see render/mod.rs::render_path_in) —
+// so a GameWiki page rendered while Citadel is active would mark every
+// `[[Deadlock/…]]` link broken. GameWiki uses full-path wikilinks, so we
+// transform them into in-module `/game-wiki/<path>` links here.
+//
+// `nav` (default: the host router) lets the overlay host drive the same pane
+// with local selection state — no router exists in that webview.
 
 import { useEffect, useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
@@ -16,10 +23,11 @@ import { navigate } from '@host/router.js';
 import { encodePagePath } from '@host/components/SidebarBrowser.jsx';
 import PageTitleHeader from '@host/components/PageTitleHeader.jsx';
 import { getGameWikiIndex, resolveTarget } from './gamewikiIndex.js';
-import ScrimViewer from './ScrimViewer.jsx';
-
-// Coaching scrims render as the interactive ScrimViewer, not the markdown reader.
-const SCRIM_BASE = 'Deadlock/Coaching/Scrim';
+import { SCRIM_BASE, REPORT_VIEWS, COACHING_VIEWS } from './GameWikiTree.jsx';
+import { scrimSidecarPath } from './matchData.js';
+import OverviewPage from './OverviewPage.jsx';
+import MatchPage from './MatchPage.jsx';
+import VodReportView from './VodReportView.jsx';
 
 // Drop a leading YAML frontmatter block (the Rust reader strips it too).
 function stripFrontmatter(src) {
@@ -56,13 +64,15 @@ function transformWikilinks(src, index) {
     .join('');
 }
 
-const MD_COMPONENTS = {
+// Anchor override bound to the pane's nav (router in the main app, local
+// selection in the overlay host).
+const mdComponents = (nav) => ({
   a({ href, children, ...rest }) {
     const h = href || '';
     if (h.startsWith('#/game-wiki/')) {
       return (
         <a className="wikilink wikilink--internal" href={h}
-          onClick={(e) => { e.preventDefault(); navigate(h.slice(1)); }} {...rest}>
+          onClick={(e) => { e.preventDefault(); nav(h.slice(1)); }} {...rest}>
           {children}
         </a>
       );
@@ -72,7 +82,7 @@ const MD_COMPONENTS = {
     }
     return <a href={h} {...rest}>{children}</a>;
   },
-};
+});
 
 function Shell({ children, accent, header }) {
   return (
@@ -85,24 +95,29 @@ function Shell({ children, accent, header }) {
   );
 }
 
-export default function GameWikiPage({ rest, accent }) {
+export default function GameWikiPage({ rest, accent, nav = navigate, overlay = false }) {
   const [raw, setRaw] = useState(null);
   const [err, setErr] = useState(null);
   const [index, setIndex] = useState(null);
-  const isScrimFile = !!rest && rest.startsWith(SCRIM_BASE + '/');
+
+  // Scrim dispatch by path shape. A bare scrim-folder path lands on Overview.
+  const sm = rest ? rest.match(/^(Deadlock\/Coaching\/Scrim\/[^/]+)(?:\/(.+))?$/) : null;
+  const scrimFolder = sm ? sm[1] : null;
+  const scrimTail = sm ? (sm[2] || 'Overview') : null;
   const isScrimLanding = rest === SCRIM_BASE;
+  const isScrim = !!scrimFolder && !isScrimLanding;
 
   useEffect(() => { getGameWikiIndex().then(setIndex).catch(() => {}); }, []);
 
   useEffect(() => {
-    if (!rest || isScrimFile || isScrimLanding) { setRaw(null); setErr(null); return; }
+    if (!rest || isScrim || isScrimLanding) { setRaw(null); setErr(null); return; }
     let cancelled = false;
     setRaw(null); setErr(null);
     api.getRawFile(rest + '.md', 'gamewiki')
       .then((c) => { if (!cancelled) setRaw(c); })
       .catch((e) => { if (!cancelled) setErr(String(e?.message || e)); });
     return () => { cancelled = true; };
-  }, [rest, isScrimFile, isScrimLanding]);
+  }, [rest, isScrim, isScrimLanding]);
 
   const body = useMemo(
     () => (raw == null ? '' : transformWikilinks(stripFrontmatter(raw), index)),
@@ -115,7 +130,36 @@ export default function GameWikiPage({ rest, accent }) {
       <p style={{ opacity: 0.7 }}>Expand the Scrim folder on the left, then right-click it for New Scrim (or right-click a scrim for Rename / Delete).</p>
     </Shell>
   );
-  if (isScrimFile) return <ScrimViewer path={rest + '.md'} accent={accent} />;
+
+  if (isScrim) {
+    if (scrimTail === 'Overview') return <OverviewPage folder={scrimFolder} accent={accent} nav={nav} overlay={overlay} />;
+    const mm = scrimTail.match(/^Matches\/Match (\d+)$/);
+    if (mm) return <MatchPage key={`${scrimFolder}/${mm[1]}`} folder={scrimFolder} n={Number(mm[1])} accent={accent} overlay={overlay} />;
+    const rv = scrimTail.match(/^(Report|Coaching)\/([\w-]+)$/);
+    if (rv) {
+      const onTabChange = (t) => {
+        const group = REPORT_VIEWS.some((v) => v.id === t) ? 'Report'
+          : COACHING_VIEWS.some((v) => v.id === t) ? 'Coaching' : 'Report';
+        const to = `${scrimFolder}/${group}/${t}`;
+        if (to !== rest) nav('/game-wiki/' + encodePagePath(to));
+      };
+      return (
+        <VodReportView inline tab={rv[2]} onTabChange={onTabChange}
+          sidecarPath={scrimSidecarPath(scrimFolder, 'vodreport')}
+          commsPath={scrimSidecarPath(scrimFolder, 'vodcomms')}
+          normPath={scrimSidecarPath(scrimFolder, 'vodnorm')}
+          feedbackPath={scrimSidecarPath(scrimFolder, 'vodfeedback')}
+          mdPath={scrimFolder} accent={accent} />
+      );
+    }
+    // A stray real file inside a scrim folder — fall through to the reader shape
+    // is not worth supporting; point at the tree instead.
+    return (
+      <Shell accent={accent}>
+        <p style={{ opacity: 0.7 }}>Pick a page from this scrim in the tree on the left.</p>
+      </Shell>
+    );
+  }
 
   if (!rest) {
     return (
@@ -132,7 +176,7 @@ export default function GameWikiPage({ rest, accent }) {
   const pageTitle = rest.split('/').pop() || rest;
   return (
     <Shell accent={accent} header={<PageTitleHeader title={pageTitle} accent={accent} />}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>{body}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents(nav)}>{body}</ReactMarkdown>
     </Shell>
   );
 }

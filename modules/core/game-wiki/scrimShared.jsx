@@ -15,7 +15,7 @@ import CandySelect from '@host/components/ui/CandySelect.jsx';
 import { candyGap } from '@host/util/candy.js';
 import { IconPlus, IconMic } from '@host/components/icons.jsx';
 import {
-  parseOverview, serializeOverview, parseMatchFile, serializeMatchFile,
+  parseOverview, serializeOverview, parseMatchFile, serializeMatchFile, ensureNotes,
 } from './scrimSchema.js';
 import { sidecarPath, scrimSidecarPath, clock, extractSpatial } from './matchData.js';
 import { parseTimedNote, formatTimedBullet, sortByTimeAsc, secFromClock } from './noteCompile.js';
@@ -29,7 +29,7 @@ import {
 } from './teamProgress.js';
 import { summarize } from './teamfightComms.js';
 import { sideFromTeamFields } from './autoClassify.js';
-import { useStopwatch } from './useStopwatch.js';
+import { useStopwatch, readStopwatch } from './useStopwatch.js';
 import RetagButton from './RetagButton.jsx';
 import { classColor } from './classColors.js';
 import { SCRIM_BASE } from './GameWikiTree.jsx';
@@ -164,6 +164,45 @@ export async function writeMatchOpaque(scrimFolder, n, heading, body) {
     await api.savePage(p, serializeMatchFile(m), r.mtime ?? null, 'gamewiki');
   };
   try { await doWrite(); } catch (e) { if (e?.code === 'CONFLICT') await doWrite(); else throw e; }
+}
+
+// Overlay dictation target (Phase 5): the last match page opened in the overlay,
+// persisted so the target survives Shift+C reloads. { folder, n, coached }.
+export const DICTATION_TARGET_KEY = 'overlay-dictation-target';
+
+// Disk-based transform of a match file (fresh-parse + conflict retry) — the
+// no-mounted-page write path for overlay dictation/screenshot fallbacks.
+async function editMatchFile(scrimFolder, n, transform) {
+  const p = matchPath(scrimFolder, n);
+  const doWrite = async () => {
+    const r = await api.getRawFileMeta(p, 'gamewiki');
+    const m = transform(parseMatchFile(r.content, n));
+    await api.savePage(p, serializeMatchFile(m), r.mtime ?? null, 'gamewiki');
+  };
+  try { await doWrite(); } catch (e) { if (e?.code === 'CONFLICT') await doWrite(); else throw e; }
+}
+
+// Append a dictated note to a match's coached-team notes on disk, stamped with
+// the match's running stopwatch (same [m:ss] form as a typed note).
+export async function appendMatchNote(scrimFolder, n, team, text) {
+  const t = String(text || '').trim();
+  if (!t) return;
+  const sw = readStopwatch(`gw-sw:${scrimFolder}:m${n}:${team}`);
+  const stamped = sw.running ? `[${clock(sw.elapsedSec)}] ${t}` : t;
+  await editMatchFile(scrimFolder, n, (m) => {
+    const w = ensureNotes(m, team);
+    return { ...w, subsections: w.subsections.map((s) => (s.kind === 'notes' && s.team === team ? { ...s, bullets: [...(s.bullets || []), stamped] } : s)) };
+  });
+}
+
+// Fill a match field on disk only when it's still empty (screenshot auto-file).
+export async function setMatchFieldIfEmpty(scrimFolder, n, field, value) {
+  if (!value) return;
+  const r = await api.getRawFileMeta(matchPath(scrimFolder, n), 'gamewiki');
+  if (String(parseMatchFile(r.content, n).fields?.[field] || '').trim()) return;
+  await editMatchFile(scrimFolder, n, (m) => (
+    String(m.fields?.[field] || '').trim() ? m : { ...m, fields: { ...m.fields, [field]: value } }
+  ));
 }
 
 // Disk-based ## Scrim bullet update on Overview.md (fresh-parse + conflict retry).
