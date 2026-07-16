@@ -59,15 +59,21 @@ export const correctReport = {
       if (c.hash === transcriptHash(segments)) segments = applyCorrections(segments, c.corrections).segments;
     } catch { /* no cache — un-normalized transcript */ }
 
-    // scrim page → teams + match numbers for the deterministic digests
+    // Overview.md → teams; Matches/ listing → match numbers for the deterministic
+    // digests (scrimPath is the scrim FOLDER — schema v2).
     let md = '';
-    try { md = await read(scrimPath); } catch { /* teams/digests degrade */ }
+    try { md = await read(`${scrimPath}/Overview.md`); } catch { /* teams degrade */ }
     const fmVal = (k) => (md.match(new RegExp(`^${k}:\\s*(.+)$`, 'm')) || [])[1]?.trim() || '';
     const coachedTeam = fmVal('Coached Team') || fmVal('Team 1');
     const opponent = (fmVal('Team 1') === coachedTeam ? fmVal('Team 2') : fmVal('Team 1')) || '';
     const matchDigests = [];
-    for (const m of md.matchAll(/^## Match (\d+)/gm)) {
-      try { matchDigests.push(buildMatchDigest(JSON.parse(await read(sidecarPath(scrimPath, Number(m[1])))), { label: `Match ${m[1]}` })); }
+    let matchNs = [];
+    try {
+      const res = await api.listFolderRaw(`${scrimPath}/Matches`, 'gamewiki');
+      matchNs = (res?.files || []).map((f) => (f.match(/^Match (\d+)\.md$/) || [])[1]).filter(Boolean).map(Number).sort((a, b) => a - b);
+    } catch { /* no matches folder — digests degrade */ }
+    for (const n of matchNs) {
+      try { matchDigests.push(buildMatchDigest(JSON.parse(await read(sidecarPath(scrimPath, n))), { label: `Match ${n}` })); }
       catch { /* no match data for this one */ }
     }
 

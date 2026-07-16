@@ -1,5 +1,5 @@
 // VOD-report mechanical quality gate (Move 16). Usage:
-//   node modules/core/game-wiki/vodReportGate.mjs "<abs path to .vodreport.<scrim>.json>"
+//   node modules/core/game-wiki/vodReportGate.mjs "<abs path to <scrim folder>/.vodreport.json>"
 // Checks the mechanical facts a report must hold regardless of prose depth:
 //   1. lexicon zero-miss — every playerCards[].hero is a canonical Lexicon entry,
 //      and no learned Mishear "wrong" spelling survives anywhere in the report.
@@ -34,10 +34,9 @@ const heroFields = (report.playerCards || []).map((c) => (c.hero || '').trim()).
 const stamps = [...allText.matchAll(/\b(\d{1,2}):([0-5]\d)\b/g)].map((m) => Number(m[1]) * 60 + Number(m[2]));
 
 // ── vodcomms segments (transcript ground truth) ──────────────────────────────
-const scrimDir = path.join(GW, 'Coaching/Scrim');
-const vodcommsName = fs.readdirSync(scrimDir).find((n) => /^\.vodcomms\..*\.json$/.test(n)
-  && n.includes(path.basename(reportPath).replace(/^\.vodreport\./, '').replace(/\.json$/, '')));
-const segs = JSON.parse(fs.readFileSync(path.join(scrimDir, vodcommsName), 'utf8')).segments;
+// Schema v2 (GameWiki Unification): the report lives at `<scrim folder>/.vodreport.json`,
+// so the transcript is simply its sibling `.vodcomms.json`.
+const segs = JSON.parse(fs.readFileSync(path.join(path.dirname(reportPath), '.vodcomms.json'), 'utf8')).segments;
 const spanEnd = segs[segs.length - 1].t1Ms;
 const TOL = 5000; // segments are ~2.5s apart; ±5s covers rounding
 const inSeg = (sec) => {

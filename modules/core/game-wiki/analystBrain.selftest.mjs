@@ -75,13 +75,21 @@ const fix = new Map([
   // Corrections.md deliberately ABSENT → loud placeholder
   ['Deadlock/Coaching/Teams/Alpha.md', '# Alpha — Team Progress\nstuff'],
   ['Deadlock/Coaching/Teams/.teamprogress.Alpha.json', JSON.stringify({ scrimCount: 2, record: { won: 1, lost: 1 }, recurring: [], homework: [{ text: 'ward river', done: false }, { text: 'done thing', done: true }], recurringLessons: [] })],
-  ['Deadlock/Coaching/Scrim/(07-01-26) Alpha VS Beta.md', '---\nCoached Team: Alpha\n---\nbody'],
-  ['Deadlock/Coaching/Scrim/.vodreport.(07-01-26) Alpha VS Beta.json', JSON.stringify({ tldr: 'Lost lanes, won fights.' })],
-  ['Deadlock/Coaching/Scrim/(07-05-26) Gamma VS Delta.md', '---\nCoached Team: Gamma\n---\nbody'],
+  // schema v2 scrims: folder per scrim, Overview.md + .vodreport.json inside
+  ['Deadlock/Coaching/Scrim/Alpha VS Beta (07-01-26)/Overview.md', '---\nCoached Team: Alpha\n---\nbody'],
+  ['Deadlock/Coaching/Scrim/Alpha VS Beta (07-01-26)/.vodreport.json', JSON.stringify({ tldr: 'Lost lanes, won fights.' })],
+  ['Deadlock/Coaching/Scrim/Gamma VS Delta (07-05-26)/Overview.md', '---\nCoached Team: Gamma\n---\nbody'],
 ]);
 const fixApi = {
   getRawFileMeta: async (p) => { if (!fix.has(p)) throw new Error('absent'); return { content: fix.get(p) }; },
-  getVaultFolder: async (slug, rel) => ({ pages: [...fix.keys()].filter((k) => k.startsWith(`${slug}/${rel}/`) && k.split('/').length === `${slug}/${rel}/x`.split('/').length).map((p) => ({ path: p })) }),
+  getVaultFolder: async (slug, rel) => {
+    const depth = `${slug}/${rel}/x`.split('/').length;
+    const under = [...fix.keys()].filter((k) => k.startsWith(`${slug}/${rel}/`));
+    return {
+      pages: under.filter((k) => k.split('/').length === depth).map((p) => ({ path: p })),
+      subfolders: [...new Set(under.filter((k) => k.split('/').length > depth).map((k) => k.split('/')[depth - 1]))].map((name) => ({ name })),
+    };
+  },
 };
 const ctx = await buildBrainContext(fixApi, { coachedTeam: 'Alpha' });
 assert.ok(ctx.text.includes('=== ANALYST CHARTER ===') && ctx.text.includes('Be elite.'));

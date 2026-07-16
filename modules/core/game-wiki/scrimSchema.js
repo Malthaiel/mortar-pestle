@@ -206,6 +206,78 @@ export function appendMatch(scrim) {
   return { ...scrim, matches: [...(scrim.matches || []), emptyMatch(n, coached, enemy)] };
 }
 
+// ── Schema v2: folder scrims (GameWiki Unification, 2026-07-16) ──────────────
+// A scrim is a folder `…/Scrim/<base>/` holding Overview.md (frontmatter +
+// `## Scrim` bullets) and Matches/Match <n>.md (match fields + subsections, no
+// frontmatter — `n` comes from the filename). Same canonical normal form and
+// round-trip guarantee as v1, per file.
+
+// Overview.md ⇄ { frontmatter, scrim, extraBlocks }. parseScrim already handles
+// the shape (its matches array is just empty for an overview body).
+export function parseOverview(content) {
+  const { frontmatter, scrim, extraBlocks } = parseScrim(content);
+  return { frontmatter, scrim, extraBlocks };
+}
+export function serializeOverview(o) {
+  return serializeScrim({ ...o, matches: [] });
+}
+
+// Matches/Match <n>.md ⇄ { n, fields, subsections }. The file body IS a v1 match
+// block without the `## Match n` header.
+export function parseMatchFile(content, n) {
+  return parseMatchBlock(n, String(content || '').split('\n'));
+}
+export function serializeMatchFile(m) {
+  const out = [];
+  for (const [k, v] of Object.entries(m.fields || {})) out.push(kvLine('- ', k, v));
+  for (const sub of m.subsections || []) {
+    out.push('');
+    if (sub.kind === 'notes') {
+      out.push(`### Notes (${sub.team})`);
+      for (const b of sub.bullets || []) out.push(`- ${b}`);
+    } else {
+      out.push(`### ${sub.heading}`);
+      if (sub.body) out.push(sub.body);
+    }
+  }
+  return out.join('\n') + '\n';
+}
+
+// Per-match twin of mergeScrim: user-edited regions (fields, notes) from `local`,
+// Run-Process-owned opaque subsections re-read fresh from disk.
+export function mergeMatch(local, fresh) {
+  if (!fresh) return local;
+  const nonOpaque = (local.subsections || []).filter((s) => s.kind !== 'opaque');
+  const opaque = (fresh.subsections || []).filter((s) => s.kind === 'opaque');
+  return { ...local, subsections: [...nonOpaque, ...opaque] };
+}
+
+// New-scrim scaffold: the folder base + its two seed files. Caller dedups the
+// folder name against existing scrims and writes each file via api.savePage
+// (vault_write_file creates missing parent dirs).
+export function newScrimScaffold({ team1, team2 } = {}) {
+  const t1 = sanitizeTeam(team1) || 'Team 1';
+  const t2 = sanitizeTeam(team2) || 'Team 2';
+  const d = new Date();
+  const p2 = (x) => String(x).padStart(2, '0');
+  const iso = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
+  const short = `${p2(d.getMonth() + 1)}-${p2(d.getDate())}-${String(d.getFullYear()).slice(2)}`;
+  const base = `${t1} VS ${t2} (${short})`;
+  const s = emptyScrim({ team1: t1, team2: t2, coachedTeam: t1, date: iso });
+  return {
+    base,
+    files: [
+      { rel: 'Overview.md', content: serializeOverview({ frontmatter: s.frontmatter, scrim: s.scrim, extraBlocks: [] }) },
+      { rel: 'Matches/Match 1.md', content: serializeMatchFile(s.matches[0]) },
+    ],
+  };
+}
+
+// "+ New Match" content for Matches/Match <n>.md.
+export function newMatchContent(n, coachedTeam, enemyTeam) {
+  return serializeMatchFile(emptyMatch(n, coachedTeam, enemyTeam));
+}
+
 // Merge user-edited regions (frontmatter, scrim bullets, match fields, notes) from
 // `local` with Run-Process-owned opaque subsections (Match Data, Coaching Summary,
 // unknown ###) re-read fresh from disk — so a concurrent Run Process write is never

@@ -208,27 +208,25 @@ export function sectionOf(md, heading) {
   return (j === -1 ? body : body.slice(0, j)).trim();
 }
 
-// Prior report TL;DRs for a coached team: walk Coaching/Scrim pages, keep the ones whose
-// frontmatter names this team, read each scrim's .vodreport sidecar. Newest last.
-// ponytail: filename order ≈ chronology (scrim names carry a date prefix); a real date sort can
+// Prior report TL;DRs for a coached team: walk Coaching/Scrim FOLDERS (schema v2 —
+// a scrim is a folder holding Overview.md + .vodreport.json), keep the ones whose
+// Overview frontmatter names this team. Newest last.
+// ponytail: folder-name order ≈ chronology (names carry a date suffix); a real date sort can
 // come with a real need.
 export async function collectPriorTldrs(api, coachedTeam, max = 3) {
   const norm = (t) => String(t || '').toLowerCase().replace(/\s+/g, ' ').trim();
   if (!norm(coachedTeam)) return [];
   const res = await api.getVaultFolder('Deadlock', 'Coaching/Scrim', 'gamewiki').catch(() => null);
-  const pages = ((res && res.pages) || [])
-    .map((p) => String(p.path || '').replace(/^\/+/, ''))
-    .filter((p) => p.endsWith('.md') && !p.split('/').pop().startsWith('.'))
-    .sort();
+  const folders = ((res && res.subfolders) || []).map((sf) => String(sf.name || '')).filter(Boolean).sort();
   const out = [];
-  for (const pagePath of pages) {
+  for (const base of folders) {
+    const dir = `Deadlock/Coaching/Scrim/${base}`;
     let content;
-    try { content = String((await api.getRawFileMeta(pagePath, 'gamewiki')).content); } catch { continue; }
+    try { content = String((await api.getRawFileMeta(`${dir}/Overview.md`, 'gamewiki')).content); } catch { continue; }
     const m = content.match(/^Coached Team:\s*(.+)$/m) || content.match(/^Team 1:\s*(.+)$/m);
     if (!m || norm(m[1]) !== norm(coachedTeam)) continue;
-    const base = pagePath.replace(/\.md$/, '').split('/').pop();
     try {
-      const rep = JSON.parse((await api.getRawFileMeta(`Deadlock/Coaching/Scrim/.vodreport.${base}.json`, 'gamewiki')).content);
+      const rep = JSON.parse((await api.getRawFileMeta(`${dir}/.vodreport.json`, 'gamewiki')).content);
       if (rep && String(rep.tldr || '').trim()) out.push({ scrim: base, tldr: String(rep.tldr) });
     } catch { /* no report for this scrim */ }
   }

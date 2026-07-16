@@ -12,8 +12,6 @@
 
 import { itemName, itemSlot, itemTier, isShopItem, structureName } from './matchAssets.js';
 
-const SCRIM_DIR = 'Deadlock/Coaching/Scrim';
-
 // Deadlock team sides: 0 = Amber (The Amber Hand), 1 = Sapphire (The Sapphire Flame).
 export const TEAM_NAMES = { 0: 'Amber', 1: 'Sapphire' };
 
@@ -42,25 +40,30 @@ export const sideName = (t) => (t in TEAM_NAMES ? TEAM_NAMES[t] : `Team ${t}`);
 const STEAMID64_BASE = 76561197960265728n;
 export const steamId64 = (accountId) => (accountId == null ? null : String(BigInt(accountId) + STEAMID64_BASE));
 
-// `…/Scrim/(06-16-26) A VS B` (+ match 1) → `…/Scrim/.matchdata.(06-16-26) A VS B — Match 1.json`
-// (`kind: 'comms'` → `.commstranscript.…`, sub-plan 4; `kind: 'autoclass'` →
-// `.autoclass.…` review-state sidecar, sub-plan 5).
-// Loose dot-prefixed sibling (not a subfolder): keeps the sidecar out of the Scrim/ tree —
-// scan_dir hides the dotfile from the tree/landing. (vault_write_file DOES create missing
-// parent dirs — atomic_write create_dir_all's + resolve_in re-appends a not-yet-existing tail
-// — but a sibling dotfile is simpler than a per-scrim subfolder here anyway.)
-export function sidecarPath(scrimPath, matchN, kind = 'matchdata') {
-  const base = String(scrimPath).replace(/\.md$/, '').split('/').pop();
-  const prefix = kind === 'comms' ? 'commstranscript' : kind === 'autoclass' ? 'autoclass' : kind === 'tfcomms' ? 'tfcomms' : 'matchdata';
-  return `${SCRIM_DIR}/.${prefix}.${base} — Match ${matchN}.json`;
+// A scrim is a FOLDER (`…/Scrim/<base>/` — GameWiki Unification, 2026-07-16): Overview.md +
+// Matches/Match <n>.md + dot-sidecars scoped by the folder. Every sidecar consumer routes
+// through the two helpers below, so they accept ANY path inside the scrim — the folder
+// itself, Overview.md, or Matches/Match <n>.md — and normalize to the folder.
+export function scrimFolderOf(p) {
+  return String(p || '')
+    .replace(/\/+$/, '')
+    .replace(/\/(Overview\.md|Matches(\/[^/]*)?)$/, '')
+    .replace(/\.md$/, '');
 }
 
-// Scrim-level twin of sidecarPath (no per-match suffix): the VOD Review recording is one file
-// for the whole scrim, so its sidecars key off the scrim base alone (sub-plan 11).
-// `…/Scrim/(06-16-26) A VS B` → `…/Scrim/.vodcomms.(06-16-26) A VS B.json` (`kind: 'vodreport'` → `.vodreport.…`).
-export function scrimSidecarPath(scrimPath, kind) {
-  const base = String(scrimPath).replace(/\.md$/, '').split('/').pop();
-  return `${SCRIM_DIR}/.${kind}.${base}.json`;
+// Match-level sidecar: `<folder>/Matches/.matchdata.Match 1.json` (`kind: 'comms'` →
+// `.commstranscript.…`; `'autoclass'`; `'tfcomms'`). Dot-prefix keeps it out of the tree
+// (scan_dir hides dotfiles); the folder scopes the scrim, so the name no longer carries
+// the scrim base.
+export function sidecarPath(scrim, matchN, kind = 'matchdata') {
+  const prefix = kind === 'comms' ? 'commstranscript' : kind === 'autoclass' ? 'autoclass' : kind === 'tfcomms' ? 'tfcomms' : 'matchdata';
+  return `${scrimFolderOf(scrim)}/Matches/.${prefix}.Match ${matchN}.json`;
+}
+
+// Scrim-level twin (no per-match suffix): the VOD Review recording is one file for the
+// whole scrim. `<folder>/.vodcomms.json` (`kind: 'vodreport'` → `.vodreport.json`).
+export function scrimSidecarPath(scrim, kind) {
+  return `${scrimFolderOf(scrim)}/.${kind}.json`;
 }
 
 // Whole seconds → m:ss ("—" for missing/NaN).
