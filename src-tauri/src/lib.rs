@@ -553,6 +553,14 @@ pub fn run() {
                                     }
                                 }
                                 "error" => {
+                                    // A failed screenshot must restore the overlay's
+                                    // per-shot capture affinity (set by
+                                    // capture_screenshot's include-overlay toggle).
+                                    if ev.data.get("code").and_then(|v| v.as_str())
+                                        == Some("screenshot_failed")
+                                    {
+                                        overlay::state::reset_overlay_shot_affinity(&bridge_app);
+                                    }
                                     // Fold the engine error into the state channel
                                     // (no separate capture-error event). The
                                     // payload is the `{code,message,fatal}` body;
@@ -573,6 +581,9 @@ pub fn run() {
                                 // Screenshot saved → forward the PNG path to the
                                 // overlay (which offers the scoreboard auto-fill).
                                 "screenshot_saved" => {
+                                    // Shot done — restore the overlay's per-shot
+                                    // capture affinity to the build default.
+                                    overlay::state::reset_overlay_shot_affinity(&bridge_app);
                                     if let Err(e) = bridge_app.emit("capture-screenshot-saved", &ev.data) {
                                         log::warn!("emit capture-screenshot-saved failed: {e}");
                                     }
@@ -797,6 +808,8 @@ pub fn run() {
             commands::coaching::coaching_read_text,
             commands::coaching::coaching_open_path,
             commands::coaching::coaching_reveal_path,
+            commands::coaching::coaching_scrim_dir,
+            commands::coaching::coaching_rename_scrim_dir,
             commands::coaching::export_report_file,
             commands::coaching::coaching_extract_audio,
             commands::coaching::deadlock_fetch_match,
@@ -963,6 +976,7 @@ pub fn run() {
             overlay::state::overlay_list_monitors,
             overlay::state::overlay_set_monitor,
             overlay::state::overlay_note_toast,
+            overlay::state::overlay_toast_pending,
             overlay::state::overlay_toast_done,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::broadcast::broadcast_get_state,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::broadcast::broadcast_request,

@@ -116,11 +116,31 @@ pub async fn capture_save_replay(window_secs: Option<u32>) -> Result<Option<Stat
 /// `capture-screenshot-saved` Tauri event (the portal grab runs off-thread, like
 /// the `save_replay` → `capture-saved` path). The overlay reads the path to offer
 /// scoreboard auto-fill during a live scrim.
+/// `include_overlay` (default false) is the SF9 toggle: set the overlay windows'
+/// capture affinity for this shot — both directions, so the toggle also works in
+/// dev builds (which skip the exclusion by default). The lib.rs bridge restores
+/// the build default on `screenshot_saved` / `screenshot_failed`; the error paths
+/// here restore immediately since no event will arrive.
 #[tauri::command]
-pub async fn capture_screenshot() -> Result<Option<StateSnapshot>, VaultError> {
-    let client = require_client()?;
-    let data = client.request("screenshot", Value::Null).await.map_err(map_err)?;
-    Ok(decode_optional_snapshot(data))
+pub async fn capture_screenshot(
+    app: tauri::AppHandle,
+    include_overlay: Option<bool>,
+) -> Result<Option<StateSnapshot>, VaultError> {
+    crate::overlay::state::set_overlay_shot_affinity(&app, include_overlay.unwrap_or(false));
+    let client = match require_client() {
+        Ok(c) => c,
+        Err(e) => {
+            crate::overlay::state::reset_overlay_shot_affinity(&app);
+            return Err(e);
+        }
+    };
+    match client.request("screenshot", Value::Null).await {
+        Ok(data) => Ok(decode_optional_snapshot(data)),
+        Err(e) => {
+            crate::overlay::state::reset_overlay_shot_affinity(&app);
+            Err(map_err(e))
+        }
+    }
 }
 
 /// One clip delete's result — the bin tombstone id powers the undo Toast's Restore.

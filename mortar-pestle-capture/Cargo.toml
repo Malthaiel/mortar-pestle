@@ -52,6 +52,8 @@ windows = { version = "0.61", features = [
     "Win32_System_WinRT_Direct3D11",
     "Win32_System_WinRT_Graphics_Capture",
     "Win32_UI_WindowsAndMessaging",
+    # SF9 screenshot: MonitorFromWindow (the monitor the capture target is on).
+    "Win32_Graphics_Gdi",
     # SF3 daemon engine: QPC clock (Performance), the high-res waitable-timer pacer
     # (Threading), and SECURITY_ATTRIBUTES named by the CreateWaitableTimerExW sig.
     "Win32_Security",
@@ -77,6 +79,8 @@ windows-core = "0.61"
 # SF6 WH_KEYBOARD_LL global hotkeys: the low-level keyboard hook + message pump +
 # GetAsyncKeyState (modifier-chord matching). windows-sys is the lighter raw-FFI binding
 # the STT winhook uses; kept separate from `windows` (the typed binding) — no type clash.
+# SF9 screenshot: encode the WGC monitor grab as a .png (pure-Rust, tiny).
+png = "0.17"
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_System_LibraryLoader",

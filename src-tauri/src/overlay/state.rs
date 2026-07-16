@@ -49,6 +49,21 @@ pub fn current_live_target() -> Option<LiveTarget> {
     lock().clone()
 }
 
+/// Pending toast text stashed by `overlay_note_toast` for `OverlayToastView` to
+/// re-pull on mount — the show-before-listen cure (mirrors `overlay_get_live_target`
+/// for the host). The `overlay-toast` webview is `visible:false` at boot; if its
+/// `listen()` isn't attached when Rust emits `overlay-note-toast` (or the webview
+/// only wakes on first show), the event is lost. The view pulls this on mount so
+/// the note still shows. Cleared on read and on `overlay_toast_done`.
+fn pending_cell() -> &'static Mutex<Option<String>> {
+    static CELL: OnceLock<Mutex<Option<String>>> = OnceLock::new();
+    CELL.get_or_init(|| Mutex::new(None))
+}
+
+fn lock_pending() -> std::sync::MutexGuard<'static, Option<String>> {
+    pending_cell().lock().unwrap_or_else(|p| p.into_inner())
+}
+
 /// The monitor the in-game overlay (`overlay-host`) renders on, chosen from the
 /// overlay's monitor picker chip, the Settings row, or the cycle shortcut. Like
 /// `LiveTarget` it lives in a process-lifetime `OnceLock<Mutex<…>>` cell — the
@@ -317,6 +332,9 @@ pub fn overlay_note_toast(app: AppHandle, text: String) -> Result<(), VaultError
     if host_visible {
         return Ok(());
     }
+    // Stash for the mount-time re-pull BEFORE show/emit — covers the show-before-
+    // listen race (the emit can land before the hidden webview's listener attaches).
+    *lock_pending() = Some(text.clone());
     if let Some(win) = app.get_webview_window("overlay-toast") {
         harden_capture_overlay(&win);
         let _ = win.set_ignore_cursor_events(true); // pure passive strip — never eats a click
@@ -324,13 +342,14 @@ pub fn overlay_note_toast(app: AppHandle, text: String) -> Result<(), VaultError
             Some(p) => resolve_monitor(&app, &p).or_else(|| win.primary_monitor().ok().flatten()),
             None => win.primary_monitor().ok().flatten(),
         };
+        // Park bottom-right of the monitor's WORK AREA (excludes the taskbar) so the
+        // chip never tucks under it. `work_area` position/size are physical px.
         if let (Some(mon), Ok(sz)) = (mon, win.outer_size()) {
+            let wa = mon.work_area();
             let margin = (16.0 * mon.scale_factor()) as i32;
-            let pos = mon.position();
-            let msz = mon.size();
             let _ = win.set_position(PhysicalPosition::new(
-                pos.x + msz.width as i32 - sz.width as i32 - margin,
-                pos.y + msz.height as i32 - sz.height as i32 - margin,
+                wa.position.x + wa.size.width as i32 - sz.width as i32 - margin,
+                wa.position.y + wa.size.height as i32 - sz.height as i32 - margin,
             ));
         }
         let _ = win.show();
@@ -339,10 +358,19 @@ pub fn overlay_note_toast(app: AppHandle, text: String) -> Result<(), VaultError
     Ok(())
 }
 
+/// `overlay_toast_pending` — the `OverlayToastView` pulls this on mount to cover
+/// the show-before-listen race (the `overlay-note-toast` emit can land before the
+/// hidden webview's listener attaches). Returns + clears any stashed note text.
+#[tauri::command]
+pub fn overlay_toast_pending() -> Result<Option<String>, VaultError> {
+    Ok(lock_pending().take())
+}
+
 /// `overlay_toast_done` — hide the toast window after its webview finished the
 /// dwell + fade-out (mirrors `hide_overlay_host`). No-op if already hidden.
 #[tauri::command]
 pub fn overlay_toast_done(app: AppHandle) -> Result<(), VaultError> {
+    *lock_pending() = None;
     if let Some(win) = app.get_webview_window("overlay-toast") {
         let _ = win.hide();
     }
@@ -366,6 +394,41 @@ pub fn overlay_toast_done(app: AppHandle) -> Result<(), VaultError> {
 /// - `SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)` (Windows) excludes the
 ///   HUD from the capture stream as belt-and-suspenders for the monitor-capture
 ///   fallback (per-window WGC already excludes a separate HUD window).
+/// SF9 "include overlay" screenshot toggle — set every overlay window's display
+/// affinity for one screenshot. `include=true` lifts the capture exclusion
+/// (WDA_NONE) so the shot shows the panels; `include=false` asserts
+/// WDA_EXCLUDEFROMCAPTURE so the shot is clean EVEN IN DEV (dev builds skip the
+/// exclusion by default so the overlay stays Snipping-Tool-able for UI work —
+/// per-shot both-ways keeps the toggle testable in dev without losing that).
+/// [`reset_overlay_shot_affinity`] restores the build default after the shot;
+/// `harden_capture_overlay`'s re-assert on each Shift+C show is the backstop.
+#[cfg(windows)]
+pub fn set_overlay_shot_affinity(app: &AppHandle, include: bool) {
+    use windows::Win32::UI::WindowsAndMessaging::{
+        SetWindowDisplayAffinity, WDA_EXCLUDEFROMCAPTURE, WDA_NONE,
+    };
+    let affinity = if include { WDA_NONE } else { WDA_EXCLUDEFROMCAPTURE };
+    for (label, win) in app.webview_windows() {
+        if !label.starts_with("overlay") {
+            continue;
+        }
+        if let Ok(hwnd) = win.hwnd() {
+            // SAFETY: plain FFI on our own window's HWND.
+            unsafe {
+                let _ = SetWindowDisplayAffinity(hwnd, affinity);
+            }
+        }
+    }
+}
+#[cfg(not(windows))]
+pub fn set_overlay_shot_affinity(_app: &AppHandle, _include: bool) {}
+
+/// Restore the build-default capture affinity after a screenshot: release =
+/// excluded, dev = capturable (the Snipping Tool dev-skip).
+pub fn reset_overlay_shot_affinity(app: &AppHandle) {
+    set_overlay_shot_affinity(app, cfg!(debug_assertions));
+}
+
 pub fn harden_capture_overlay(win: &tauri::WebviewWindow) {
     let _ = win.set_always_on_top(true);
     #[cfg(windows)]

@@ -45,7 +45,7 @@ pub enum Cmd {
     },
     RemoveSource { scene: String, name: String, reply: Reply },
     SetSourceSettings { scene: String, name: String, settings: Value, replace: bool, reply: Reply },
-    StartRecord { reply: Reply },
+    StartRecord { dir: Option<String>, stem: Option<String>, reply: Reply },
     StopRecord { reply: Reply },
     DisplayCreate { id: String, hwnd: u64, width: u32, height: u32, reply: Reply },
     DisplayResize { id: String, width: u32, height: u32, reply: Reply },
@@ -470,8 +470,8 @@ impl Engine {
                 };
                 self.finish_ephemeral(reply, r);
             }
-            Cmd::StartRecord { reply } => {
-                let r = self.start_record();
+            Cmd::StartRecord { dir, stem, reply } => {
+                let r = self.start_record(dir.as_deref(), stem.as_deref());
                 self.finish(reply, r);
             }
             Cmd::StopRecord { reply } => {
@@ -1392,7 +1392,10 @@ impl Engine {
         "obs_x264".into()
     }
 
-    fn start_record(&mut self) -> Result<Value, ProtoError> {
+    /// `dir`/`stem` override the profile's captures dir + FilenameFormatting for
+    /// this one recording (scrim auto-filing) — both still create_dir_all /
+    /// sanitize / unique_path like the defaults.
+    fn start_record(&mut self, dir: Option<&str>, stem: Option<&str>) -> Result<Value, ProtoError> {
         if self.recording.is_some() {
             return Err(ProtoError::busy("already recording"));
         }
@@ -1402,7 +1405,7 @@ impl Engine {
         if self.current.is_none() {
             return Err(ProtoError::bad_request("no current scene"));
         }
-        let dir = captures_dir();
+        let dir = dir.map(std::path::PathBuf::from).unwrap_or_else(captures_dir);
         std::fs::create_dir_all(&dir)
             .map_err(|e| ProtoError::internal(format!("captures dir: {e}")))?;
 
@@ -1412,7 +1415,7 @@ impl Engine {
             .profile
             .get_or("Output", "FilenameFormatting", "%CCYY-%MM-%DD %hh-%mm-%ss")
             .to_string();
-        let stem = sanitize_filename(&namer::format_filename(&template));
+        let stem = sanitize_filename(&stem.map(str::to_owned).unwrap_or_else(|| namer::format_filename(&template)));
         let stem = if stem.is_empty() { format!("Broadcast {}", local_timestamp_stem()) } else { stem };
         let path = unique_path(&dir, &stem, ext);
         let path_str = path.to_string_lossy().into_owned();

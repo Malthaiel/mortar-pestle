@@ -149,6 +149,9 @@ export default function GameWikiTree({ route, accent }) {
     const path = `${SCRIM_BASE}/${uniq}.md`;
     try {
       await api.savePage(path, content, 0, 'gamewiki');
+      // Per-scrim recordings folder (Videos\Mortar & Pestle\Scrims\<base>) — also
+      // ensured lazily before every record, so a failure here is non-fatal.
+      try { await invoke('coaching_scrim_dir', { base: uniq }); } catch {}
       setModal(null);
       await tree.refresh(SCRIM_BASE);
       navigate('/game-wiki/' + encodePagePath(`${SCRIM_BASE}/${uniq}`));
@@ -162,6 +165,19 @@ export default function GameWikiTree({ route, accent }) {
     if (!newBase || newBase === oldBase) { setModal(null); return; }
     try {
       await renameScrimBundle(oldBase, newBase);
+      // Recordings folder follows the scrim name; the .md's Scrim Recording /
+      // VOD Review fields hold absolute paths INTO that folder, so rewrite the
+      // folder segment in the page too or they dangle. Files inside keep their
+      // birth names (paths stay valid either way).
+      try {
+        await invoke('coaching_rename_scrim_dir', { oldBase, newBase });
+        const p = `${SCRIM_BASE}/${newBase}.md`;
+        const r = await api.getRawFileMeta(p, 'gamewiki');
+        const swapped = r.content
+          .replaceAll(`Scrims\\${oldBase}\\`, `Scrims\\${newBase}\\`)
+          .replaceAll(`Scrims/${oldBase}/`, `Scrims/${newBase}/`);
+        if (swapped !== r.content) await api.savePage(p, swapped, r.mtime ?? null, 'gamewiki');
+      } catch (e) { console.warn('scrim recordings folder rename skipped', e); }
       await tree.refresh(SCRIM_BASE);
       setModal(null);
       if (currentPath === `${SCRIM_BASE}/${oldBase}`) navigate('/game-wiki/' + encodePagePath(`${SCRIM_BASE}/${newBase}`));

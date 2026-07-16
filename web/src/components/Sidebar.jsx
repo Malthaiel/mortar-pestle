@@ -154,7 +154,7 @@ export default function Sidebar({ accent, settings }) {
         transition: isResizing ? 'none' : 'width 180ms ease',
         zIndex: 50,
       }}
-      layerStyle={{ borderTop: '1px solid var(--border)', marginTop: 4, transition: isResizing ? 'none' : 'opacity 180ms ease' }}
+      layerStyle={{ borderTop: '1px solid var(--border)', marginTop: 0, transition: isResizing ? 'none' : 'opacity 180ms ease' }}
       header={
         <SidebarHeader
           expanded={effectiveExpanded}

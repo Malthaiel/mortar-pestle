@@ -93,6 +93,23 @@ pub fn clip_mp4_path(game: &str) -> Result<String, String> {
     Ok(path.to_string_lossy().into_owned())
 }
 
+/// Like [`clip_mp4_path`] but for SF9 screenshots: `<Game> YYYY-MM-DD HH-MM-SS.png`,
+/// deduped on a same-second clash. Windows-only — the Linux portal names its own file.
+#[cfg(windows)]
+pub fn screenshot_png_path(game: &str) -> Result<String, String> {
+    let dir = captures_root().join(game);
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| format!("create captures dir {}: {e}", dir.display()))?;
+    let stem = format!("{game} {}", timestamp_stem());
+    let mut path = dir.join(format!("{stem}.png"));
+    let mut n = 2;
+    while path.exists() {
+        path = dir.join(format!("{stem} ({n}).png"));
+        n += 1;
+    }
+    Ok(path.to_string_lossy().into_owned())
+}
+
 /// Like [`clip_mp4_path`] but tags the file as an instant-replay save:
 /// `<Game> YYYY-MM-DD HH-MM-SS Replay.mp4` (so replays are distinguishable from
 /// manual recordings in the Library). Phase 2.

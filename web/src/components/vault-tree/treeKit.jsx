@@ -14,11 +14,11 @@
 import { useState, useEffect, useContext, createContext } from 'react';
 import { IconChevronRight } from '../icons.jsx';
 
-// Indent guide line — kept prominent (was border@70%×transparent ≈ invisible).
-export const GUIDE = 'color-mix(in oklch, var(--text-muted) 60%, transparent)';
+// Indent guide line — greyer + more translucent (text-faint base, lower mix).
+export const GUIDE = 'color-mix(in oklch, var(--text-faint) 40%, transparent)';
 // Vertical inset of the indent guide from the first/last child row, applied
 // EQUALLY top + bottom → the guide's top gap == its bottom gap by construction.
-export const GUIDE_INSET = 10;
+export const GUIDE_INSET = 2;
 export const MUTED = { fontSize: 10, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)', padding: '4px 12px' };
 
 // Every nav button is this tall (face min-height; box-sizing border-box, so it
@@ -229,8 +229,11 @@ export function TreeChildren({ children }) {
       marginLeft: 14, paddingLeft: 8, marginTop: GAP,
       display: 'flex', flexDirection: 'column', gap: GAP,
     }}>
+      {/* left:3 lands the 1px line under the folder caret's center (caret center sits
+          ~17px from the header's left: 11px padding + 6px half-caret; TreeChildren's
+          border box starts at column-x 14). */}
       <div aria-hidden style={{
-        position: 'absolute', left: 0, top: GUIDE_INSET, bottom: GUIDE_INSET,
+        position: 'absolute', left: 3, top: GUIDE_INSET, bottom: GUIDE_INSET,
         width: 1, background: GUIDE,
       }}/>
       {children}

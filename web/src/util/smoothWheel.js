@@ -60,8 +60,9 @@ const SETTLE = 0.5;       // px threshold to snap-and-stop the rAF loop
 const WHEEL_MIN = 48;     // |deltaY| below this in pixel-mode ⇒ treat as trackpad
 const EXCLUDE = '.cm-scroller, .cm-editor, .xterm, .xterm-viewport, .xterm-screen';
 const SCROLL_HOLD = 420;  // ms the glow stays lit after the last scroll, then fades
-const GLOW_IN = 0.28;     // per-frame approach when brightening (~120ms fade-in)
-const GLOW_OUT = 0.28;    // per-frame approach when dimming (~115ms fade-out)
+const GLOW_IN = 0.065;    // per-frame approach when brightening (~700ms fade-in)
+const GLOW_OUT = 0.065;   // per-frame approach when dimming (~700ms fade-out)
+const NEAR_PAD = 44;      // px from the bar edge that counts as "near the scrollbar"
 const GLOW_DONE = 0.005;  // |target − cur| below this snaps and stops the loop
 
 // Per-element wheel-easing state; WeakMap so detached nodes are GC'd.
@@ -210,25 +211,20 @@ function onScroll(e) {
   kickGlow(el);
 }
 
-// Is the pointer over el's scrollbar gutter? The app uses classic (non-overlay)
-// 6px bars, so the gutter is the strip just past the content box: the right
-// edge for the vertical bar, the bottom edge for the horizontal one
-// (clientWidth/Height exclude the bar; clientLeft/Top are the borders).
-function inGutter(el, x, y) {
+// Is the pointer NEAR el's scrollbar? True inside the element and within
+// NEAR_PAD of the bar edge (the right edge for the vertical bar, the bottom for
+// the horizontal one — clientWidth/Height exclude the bar). Wider than the 6px
+// bar itself so it's easy to reveal, but not the whole scroll area.
+function nearScrollbar(el, x, y) {
   const r = el.getBoundingClientRect();
-  if (canScrollY(el)) {
-    const gx = r.left + el.clientLeft + el.clientWidth;
-    if (x >= gx && x <= r.right && y >= r.top && y <= r.bottom) return true;
-  }
-  if (canScrollX(el)) {
-    const gy = r.top + el.clientTop + el.clientHeight;
-    if (y >= gy && y <= r.bottom && x >= r.left && x <= r.right) return true;
-  }
+  if (x < r.left || x > r.right || y < r.top || y > r.bottom) return false;
+  if (canScrollY(el) && x >= r.left + el.clientLeft + el.clientWidth - NEAR_PAD) return true;
+  if (canScrollX(el) && y >= r.top + el.clientTop + el.clientHeight - NEAR_PAD) return true;
   return false;
 }
 
-// Gutter-hover tracking, rAF-coalesced so getBoundingClientRect runs at most
-// once per frame. Only one element is "gutter-hovered" at a time.
+// Near-scrollbar tracking, rAF-coalesced so the ancestor walk runs at most once
+// per frame. Only one element is "hovered" (bar-lit) at a time.
 let hovered = null;        // el whose gutter the cursor is over (or null)
 let pendingMove = null;    // last mousemove awaiting its frame
 let moveScheduled = false;
@@ -248,7 +244,9 @@ function processMove() {
   let el = e.target instanceof Element ? e.target : null;
   let found = null;
   while (el && el !== document.body && el !== document.documentElement) {
-    if ((canScrollX(el) || canScrollY(el)) && inGutter(el, e.clientX, e.clientY)) { found = el; break; }
+    // Light the bar when the cursor is NEAR it (within NEAR_PAD of the bar edge),
+    // not anywhere over the box. Innermost scrollable wins; glow eases in/out.
+    if ((canScrollX(el) || canScrollY(el)) && nearScrollbar(el, e.clientX, e.clientY)) { found = el; break; }
     el = el.parentElement;
   }
   applyHover(found);

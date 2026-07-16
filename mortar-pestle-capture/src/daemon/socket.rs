@@ -15,7 +15,6 @@ use std::io;
 #[cfg(unix)]
 use std::path::PathBuf;
 
-#[cfg(unix)]
 use serde_json::json;
 #[cfg(unix)]
 use serde_json::Value;
@@ -33,7 +32,6 @@ use mortar_pestle_daemon::pipe;
 use mortar_pestle_daemon::sock;
 
 use crate::daemon::engine::{ControlContext, EngineCmd};
-#[cfg(unix)]
 use crate::daemon::protocol::Event;
 use crate::daemon::protocol::{ProtoError, Request, Response};
 
@@ -372,11 +370,32 @@ fn dispatch(ctx: &ControlContext, req: Request) -> Response {
             });
             snapshot_response(ctx, req.id)
         }
+        // Windows twin (SF9): WGC one-frame monitor grab + PNG, on its own
+        // COM-initialized thread (WGC/D3D11 must never run on the dispatch task).
+        // Same contract as the portal arm: ack now, `screenshot_saved` later.
         #[cfg(windows)]
-        "screenshot" => err_response(
-            req.id,
-            ProtoError::new("not_implemented", "screenshot not implemented on Windows yet (SF9)"),
-        ),
+        "screenshot" => {
+            let events = ctx.events.clone();
+            std::thread::spawn(move || {
+                match crate::capture::screenshot::take_screenshot() {
+                    Ok(path) => {
+                        log::info!("screenshot saved: {path}");
+                        let _ = events.send(Event {
+                            event: "screenshot_saved".into(),
+                            data: json!({ "path": path }),
+                        });
+                    }
+                    Err(e) => {
+                        log::warn!("screenshot failed: {e}");
+                        let _ = events.send(Event {
+                            event: "error".into(),
+                            data: json!({ "code": "screenshot_failed", "message": e, "fatal": false }),
+                        });
+                    }
+                }
+            });
+            snapshot_response(ctx, req.id)
+        }
 
         other => err_response(
             req.id,

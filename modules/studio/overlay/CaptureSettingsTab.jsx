@@ -10,6 +10,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
 import { openInFiles } from '@host/components/vault-tree/revealInFiles.js';
+import EnableToggle from '@host/components/ui/EnableToggle.jsx';
 
 // Snapshot-only live state (the clip list is CapturePage's concern, not Settings).
 // Mirrors useCaptureState's discriminate-by-`state` idiom; null ⇒ engine down.
@@ -252,6 +253,33 @@ function RecordingsSection({ snapshot }) {
   );
 }
 
+// SF9 — whether an app screenshot (Studio overlay → Screenshot) shows the overlay
+// panels themselves. A plain localStorage flag (shared same-origin with the overlay
+// webview, which reads it fresh at click time) — NOT engine config; the affinity
+// flip is host-side, per shot.
+const SHOT_OVERLAY_KEY = 'overlay-shot-include-overlay';
+
+function ScreenshotSection() {
+  const [inc, setInc] = useState(() => {
+    try { return localStorage.getItem(SHOT_OVERLAY_KEY) === '1'; } catch { return false; }
+  });
+  const toggle = (v) => {
+    setInc(!!v);
+    try { localStorage.setItem(SHOT_OVERLAY_KEY, v ? '1' : '0'); } catch { /* quota / private mode */ }
+  };
+  return (
+    <SectionBand title="Screenshots" anchor="set-capture-screenshots">
+      <SettingRow label="Screenshots include the overlay">
+        <EnableToggle enabled={inc} accent="var(--accent)" onChange={toggle} title="Screenshots include the overlay" />
+      </SettingRow>
+      <div style={hintText}>
+        On, a screenshot shows the overlay panels exactly as you see them. Off, the shot
+        is the clean game only. Scoreboard shots from the scrim panel are always clean.
+      </div>
+    </SectionBand>
+  );
+}
+
 export default function CaptureSettingsTab() {
   const { snapshot, engine } = useCaptureSnapshot();
   const down = !!engine && (engine.state === 'down' || engine.state === 'failed');
@@ -263,6 +291,7 @@ export default function CaptureSettingsTab() {
         </div>
       )}
       <RecordingsSection snapshot={snapshot} />
+      <ScreenshotSection />
       <EncoderReadout snapshot={snapshot} />
       <AudioReadout snapshot={snapshot} />
       <HotkeyRows snapshot={snapshot} />

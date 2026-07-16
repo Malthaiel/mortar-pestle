@@ -59,6 +59,26 @@ impl WgcCapture {
                 .map_err(|e| format!("IGraphicsCaptureItemInterop factory: {e}"))?;
         let item: GraphicsCaptureItem = unsafe { interop.CreateForWindow(hwnd) }
             .map_err(|e| format!("CreateForWindow: {e}"))?;
+        Self::start_item(item, winrt_device)
+    }
+
+    /// SF9 screenshot: capture a whole monitor (`CreateForMonitor`) instead of one
+    /// window. WDA_EXCLUDEFROMCAPTURE windows are composited OUT of a monitor item,
+    /// which is what keeps our own overlays out of screenshots by default.
+    pub fn start_monitor(
+        hmon: windows::Win32::Graphics::Gdi::HMONITOR,
+        winrt_device: &IDirect3DDevice,
+    ) -> Result<Self, String> {
+        let interop: IGraphicsCaptureItemInterop =
+            windows::core::factory::<GraphicsCaptureItem, IGraphicsCaptureItemInterop>()
+                .map_err(|e| format!("IGraphicsCaptureItemInterop factory: {e}"))?;
+        let item: GraphicsCaptureItem = unsafe { interop.CreateForMonitor(hmon) }
+            .map_err(|e| format!("CreateForMonitor: {e}"))?;
+        Self::start_item(item, winrt_device)
+    }
+
+    /// Shared tail of [`start`] / [`start_monitor`]: pool + session on `item`.
+    fn start_item(item: GraphicsCaptureItem, winrt_device: &IDirect3DDevice) -> Result<Self, String> {
         let size = item.Size().map_err(|e| format!("item.Size: {e}"))?;
 
         let (pool, rx) = build_pool(winrt_device, size)?;

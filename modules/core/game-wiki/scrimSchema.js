@@ -194,7 +194,7 @@ export function newScrimContent({ team1, team2 } = {}) {
   const p2 = (x) => String(x).padStart(2, '0');
   const iso = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
   const short = `${p2(d.getMonth() + 1)}-${p2(d.getDate())}-${String(d.getFullYear()).slice(2)}`;
-  const base = `(${short}) ${t1} VS ${t2}`;
+  const base = `${t1} VS ${t2} (${short})`;
   return { base, content: serializeScrim(emptyScrim({ team1: t1, team2: t2, coachedTeam: t1, date: iso })) };
 }
 

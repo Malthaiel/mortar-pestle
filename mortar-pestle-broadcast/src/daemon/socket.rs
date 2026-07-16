@@ -344,7 +344,11 @@ async fn dispatch(req: Request, cmd_tx: &mpsc::Sender<Cmd>) -> Response {
         "picker_open" => need_str(&args, "kind").map(|kind| Cmd::PickerOpen { kind, reply: tx }),
         "picker_close" => Ok(Cmd::PickerClose { reply: tx }),
         "load_browser_module" => Ok(Cmd::LoadBrowserModule { reply: tx }),
-        "start_record" => Ok(Cmd::StartRecord { reply: tx }),
+        "start_record" => Ok(Cmd::StartRecord {
+            dir: opt_str(&args, "dir"),
+            stem: opt_str(&args, "stem"),
+            reply: tx,
+        }),
         "stop_record" => Ok(Cmd::StopRecord { reply: tx }),
         "pause_record" => need_bool(&args, "paused").map(|paused| Cmd::PauseRecord { paused, reply: tx }),
         "split_record" => Ok(Cmd::SplitRecord { reply: tx }),

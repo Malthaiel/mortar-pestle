@@ -139,6 +139,53 @@ pub fn coaching_reveal_path(app: tauri::AppHandle, path: String) -> Result<(), V
         .map_err(|e| VaultError::Io(e.to_string()))
 }
 
+/// A scrim basename is app-built (`T1 VS T2 (MM-DD-YY)`, teams pre-sanitized in
+/// `newScrimContent`) but gate it anyway: it becomes a folder name under the
+/// captures root, so no separators, traversal, or reserved characters.
+fn valid_scrim_base(base: &str) -> Result<(), VaultError> {
+    if base.trim().is_empty() {
+        return Err(VaultError::Invalid("scrim name required".into()));
+    }
+    if base.contains(['/', '\\', ':', '*', '?', '"', '<', '>', '|']) || base.contains("..") {
+        return Err(VaultError::Invalid("invalid scrim name".into()));
+    }
+    Ok(())
+}
+
+/// Resolve (and create) the per-scrim recordings folder
+/// `<captures root>\Scrims\<base>` — called after "+ New Scrim" and lazily
+/// before every in-app scrim recording, so pre-existing scrims get their folder
+/// on first record. Returns the absolute path for the daemon's `start_record`
+/// `dir` override.
+#[tauri::command]
+pub fn coaching_scrim_dir(base: String) -> Result<String, VaultError> {
+    valid_scrim_base(&base)?;
+    let dir = PathBuf::from(crate::commands::vault::captures_dir()).join("Scrims").join(&base);
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| VaultError::Io(format!("create scrim dir {}: {e}", dir.display())))?;
+    Ok(dir.to_string_lossy().into_owned())
+}
+
+/// Rename a scrim's recordings folder alongside a scrim-bundle rename. Missing
+/// old folder = no-op (nothing recorded yet); existing new folder = error
+/// rather than a silent merge. Deleting a scrim intentionally has no folder
+/// twin — recordings outlive the page.
+#[tauri::command]
+pub fn coaching_rename_scrim_dir(old_base: String, new_base: String) -> Result<(), VaultError> {
+    valid_scrim_base(&old_base)?;
+    valid_scrim_base(&new_base)?;
+    let root = PathBuf::from(crate::commands::vault::captures_dir()).join("Scrims");
+    let from = root.join(&old_base);
+    let to = root.join(&new_base);
+    if !from.exists() {
+        return Ok(());
+    }
+    if to.exists() {
+        return Err(VaultError::Invalid(format!("recordings folder already exists: {new_base}")));
+    }
+    std::fs::rename(&from, &to).map_err(|e| VaultError::Io(format!("rename scrim dir: {e}")))
+}
+
 /// Write an exported VOD-review report (a compiled markdown string) to a
 /// user-chosen path. The JS `save()` dialog is the consent boundary — no
 /// allowlist gate, same trust model as `coaching_read_image` /

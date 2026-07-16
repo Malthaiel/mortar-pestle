@@ -285,7 +285,12 @@ h1, h2, h3, h4, h5, h6 { font-family: var(--font-heading); }
   /* WebKitGTK won't animate a `transition` on scrollbar pseudo-elements (the
      color snaps), but it repaints the thumb when --sb-glow changes — so the
      fade is driven frame-by-frame in JS, not by CSS. */
-  background-color: color-mix(in oklch, var(--border-2), var(--accent) calc(var(--sb-glow, 0) * 100%));
+  /* Fade the thumb's ALPHA with the glow too, so at rest (glow 0) the bar is
+     fully transparent — it only appears while scrolling or hovering its gutter
+     (both raise --sb-glow in util/smoothWheel.js), then dims back to invisible. */
+  background-color: color-mix(in oklch,
+    color-mix(in oklch, var(--border-2), var(--accent) calc(var(--sb-glow, 0) * 100%)),
+    transparent calc((1 - var(--sb-glow, 0)) * 100%));
 }
 /* Pressed (dragging the thumb) — slightly darker accent, regardless of glow. */
 ::-webkit-scrollbar-thumb:active {
@@ -4591,7 +4596,8 @@ button.cal-customdays__step:hover {
 .ov-resize-edge.e-tr { top: -1px; right: -1px; width: 12px; height: 12px; cursor: nesw-resize; }
 .ov-resize-edge.e-bl { bottom: -1px; left: -1px; width: 12px; height: 12px; cursor: nesw-resize; }
 .ov-resize-edge.e-br { bottom: -1px; right: -1px; width: 12px; height: 12px; cursor: nwse-resize; }
-.ov-resize-edge:hover { background: color-mix(in oklch, var(--text-faint) 45%, transparent); border-radius: 3px; }
+/* Edges stay blank on hover/drag (user call 2026-07-16) — the cursor change is
+   the only affordance; no visible guide strip. */
 /* Bleed the editor body past the panel's --ov-gap padding on ALL sides (headerless
    panel: the rail header sits flush at the panel top, the divider runs full-height).
    No corner radius needed — the panel itself is square-cornered now. */
@@ -4625,6 +4631,11 @@ button.cal-customdays__step:hover {
 .ov-monitor-chip > .candy-face { padding: 8px; gap: 0; }
 .ov-scrim-chip > .candy-face { padding: 8px; gap: 0; }
 .ov-studio-chip > .candy-face { padding: 8px; gap: 0; }
+/* Overlay Settings panel — the Studio shell at settings width; the body is the
+   one deliberate inner-scroll exception (user call 2026-07-15): the shared
+   settings page is taller than an overlay panel wants to be. */
+.ov-settings-panel { width: 480px; }
+.ov-settings-body { height: 520px; overflow-y: auto; overflow-x: hidden; padding-right: 2px; }
 /* Corner grip — two hairline edges, no glow (house rule). */
 .ov-resize-handle { position: absolute; right: 3px; bottom: 3px; width: 12px; height: 12px; cursor: nwse-resize; border-right: 2px solid var(--text-faint); border-bottom: 2px solid var(--text-faint); border-radius: 0 0 4px 0; opacity: .7; touch-action: none; }
 .ov-resize-handle:hover { opacity: 1; }

@@ -6,7 +6,7 @@
 // plain Tauri-backed api + the shared schema; nothing React-context-bound, so it
 // runs in the provider-less overlay host.
 import { useCallback, useEffect, useState } from 'react';
-import { api } from '../api.js';
+import { api, invoke } from '../api.js';
 import { newScrimContent } from '@modules/core/game-wiki/scrimSchema.js';
 
 const SCRIM_DIR = 'Deadlock/Coaching/Scrim';
@@ -23,7 +23,7 @@ export function useScrimOverlay() {
       .then((res) => {
         const pages = (res?.pages || [])
           .map((p) => { const full = (p.path || '').replace(/^\/+/, '').replace(/\.md$/, ''); return { path: `${full}.md`, base: full.split('/').pop() }; })
-          .sort((a, b) => b.base.localeCompare(a.base)); // date-prefixed → newest first
+          .sort((a, b) => b.base.localeCompare(a.base)); // name-first bases → reverse-alphabetical (date flipped to suffix 2026-07-15)
         setScrims(pages);
       })
       .catch(() => setScrims([]));
@@ -46,6 +46,8 @@ export function useScrimOverlay() {
     if (bases.has(uniq)) { let n = 2; while (bases.has(`${base} (${n})`)) n++; uniq = `${base} (${n})`; }
     const path = `${SCRIM_DIR}/${uniq}.md`;
     await api.savePage(path, content, 0, 'gamewiki');
+    // Per-scrim recordings folder — also ensured lazily before every record.
+    try { await invoke('coaching_scrim_dir', { base: uniq }); } catch { /* non-fatal */ }
     load();
     selectScrim(path);
     return path;

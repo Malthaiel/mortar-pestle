@@ -197,7 +197,14 @@ export default function OverlayStudioPanel({ showToast }) {
     try { if (recordingVid) { await invoke('capture_stop'); showToast('Saving…'); } else { await invoke('capture_start'); showToast('Recording started'); } }
     catch { showToast('Capture engine unavailable'); }
   };
-  const screenshot = async () => { try { await invoke('capture_screenshot'); showToast('Screenshot…'); } catch { showToast('Screenshot failed'); } };
+  const screenshot = async () => {
+    // SF9 toggle (Settings → Overlay › Capture): whether the shot shows the overlay
+    // panels. Read fresh at click time — the flag is written by another webview.
+    let includeOverlay = false;
+    try { includeOverlay = localStorage.getItem('overlay-shot-include-overlay') === '1'; } catch { /* default clean shot */ }
+    try { await invoke('capture_screenshot', { includeOverlay }); showToast('Screenshot…'); }
+    catch { showToast('Screenshot failed'); }
+  };
 
   // ── Sections (reorderable tiles) ─────────────────────────────────────────
   const sections = [

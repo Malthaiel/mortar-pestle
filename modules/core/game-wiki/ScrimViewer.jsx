@@ -10,7 +10,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { api, invoke } from '@host/api.js';
-import { IconFolder, IconPlayCircle, IconPlus, IconFileText, IconSettings, IconFilm, IconHardDrive, IconChevronRight, IconRepeat, IconMic } from '@host/components/icons.jsx';
+import RecordButton from '@modules/studio/overlay/RecordButton.jsx';
+import useBroadcastState from '@modules/studio/broadcast/useBroadcastState.js';
+
+// Stable api shim for useBroadcastState (game-wiki has no api.invoke — bare
+// `invoke` is the module contract); module-scoped so the hook's deps never churn.
+const BCAST_API = { invoke };
+import { IconFolder, IconPlayCircle, IconPlus, IconFileText, IconSettings, IconHardDrive, IconChevronRight, IconRepeat, IconMic } from '@host/components/icons.jsx';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
 import { candyGap } from '@host/util/candy.js';
 import CollapsibleRail from '@host/components/ui/CollapsibleRail.jsx';
@@ -90,7 +96,7 @@ const REPORT_GROUP = ['tldr', 'players', 'macro', 'comms'];
 const COACHING_GROUP = ['actions', 'qa', 'keep', 'debates', 'followups', 'segments'];
 const LS_RAIL_EXPANDED = 'gw-scrim-rail-expanded'; // global (one scrim-rail pref, 1-1 with the main nav)
 const LS_RAIL_WIDTH = 'gw-scrim-rail-width';
-const RAIL_MIN = 200, RAIL_MAX = 460, RAIL_DEFAULT = 280;
+const RAIL_MIN = 170, RAIL_MAX = 460, RAIL_DEFAULT = 280;
 const loadRailExpanded = () => { try { return localStorage.getItem(LS_RAIL_EXPANDED) !== '0'; } catch { return true; } };
 const loadRailWidth = () => { try { const v = parseInt(localStorage.getItem(LS_RAIL_WIDTH), 10); return Number.isFinite(v) && v >= RAIL_MIN && v <= RAIL_MAX ? v : RAIL_DEFAULT; } catch { return RAIL_DEFAULT; } };
 const viewKey = (p) => `gw-scrim-view:${p}`; // per-scrim last-viewed pane
@@ -537,7 +543,7 @@ function ScrimRailHeader({ expanded, matchup, accent, onToggle }) {
     <div style={{ height: 'var(--brand-section-h)', flexShrink: 0, display: 'flex' }}>
       <button type="button" onClick={onToggle} data-own-press aria-label={tip} title={tip} aria-pressed={!expanded}
         className="candy-btn is-primary" data-shape="block" data-variant="brand" style={accent ? { '--accent': accent } : undefined}>
-        <span className="candy-face" style={{ justifyContent: expanded ? 'flex-start' : 'center', padding: expanded ? '0 12px' : 0 }}>
+        <span className="candy-face" style={{ justifyContent: 'center', padding: expanded ? '0 12px' : 0 }}>
           {expanded
             ? <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{matchup}</span>
             : <IconChevronRight size={16} />}
@@ -619,7 +625,8 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
   // Scrim Tree Consolidation (2026-07-14): the pane view (match card vs report tab,
   // per-scrim persisted), the report tab list (published by the inline VodReportView),
   // the collapsible left rail (global expanded flag + width, 1-1 with the main nav), and
-  // the tree-toolbar composition popups (settings modal · scrim popup · reveal popover).
+  // the tree-toolbar composition popups (settings modal · reveal popover). The old
+  // scrim popup is the inline Overview pane view now (tree row above Match 1).
   const [view, setView] = useState(null); // {kind:'match',n} | {kind:'report',tab}; null until scrim loads
   const [reportTabs, setReportTabs] = useState(DEFAULT_REPORT_TABS);
   const [railExpanded, setRailExpanded] = useState(loadRailExpanded);
@@ -639,7 +646,14 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
     // eslint-disable-next-line react-hooks/exhaustive-deps -- re-seed only on live toggle
   }, [live]);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [scrimOpen, setScrimOpen] = useState(false);
+  // In-app scrim recording (broadcast engine — multi-track, so Extract Comms
+  // diarization keeps working). recTarget = what THIS viewer is recording
+  // ('match:<n>' | 'vod'); cleared when the engine reports idle (covers a stop
+  // from the Broadcast page or an engine death mid-recording).
+  const bcast = useBroadcastState(BCAST_API);
+  const [recTarget, setRecTarget] = useState(null);
+  const recActive = !!bcast.snapshot?.recording?.active;
+  useEffect(() => { if (!recActive) setRecTarget(null); }, [recActive]);
   const [revealOpen, setRevealOpen] = useState(false);
   const [revealAnchor, setRevealAnchor] = useState(null);
   const [swapOpen, setSwapOpen] = useState(false);
@@ -1505,9 +1519,9 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
     const ns = (scrim.matches || []).map((m) => m.n);
     setView((cur) => {
       const restored = cur || loadView(path);
-      if (restored?.kind === 'report') return restored;
+      if (restored?.kind === 'report' || restored?.kind === 'overview') return restored;
       if (restored?.kind === 'match' && ns.includes(restored.n)) return restored;
-      return { kind: 'match', n: ns[0] ?? 1 };
+      return { kind: 'overview' }; // scrim-level landing (replaced the Scrim popup + bare placeholder)
     });
   }, [scrim, path]);
   // Persist the pane view per scrim + the rail-expanded flag globally (width persists via
@@ -1618,6 +1632,60 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
 
   const fm = scrim.frontmatter;
   const setFm = (k, v) => applyEdit((p) => ({ ...p, frontmatter: { ...p.frontmatter, [k]: v } }));
+  // ── In-app scrim recording — start/stop + auto-file into the scrim folder ──
+  // start_record's {dir, stem} overrides land the file in
+  // Videos\…\Scrims\<base>\<base> — Match <n>.mp4 (or — VOD Review); stop
+  // returns {path}, which auto-fills the matching field. One recording at a
+  // time (engine-enforced busy).
+  const scrimBase = path.split('/').pop().replace(/\.md$/, '');
+  const bReq = (op, args) => invoke('broadcast_request', { op, args });
+  // Dedicated scenes, created on first use: matches film the game
+  // (game_capture), VOD reviews film the whole screen (monitor_capture — the
+  // engine defaults the real monitor id + method).
+  const ensureScrimScene = async (kind) => {
+    const cfg = kind === 'screen'
+      ? { name: 'Scrim — Screen', id: 'monitor_capture', src: 'Screen' }
+      : { name: 'Scrim — Game', id: 'game_capture', src: 'Game' };
+    const snap = await bReq('get_state');
+    if (!(snap?.scenes || []).some((s) => s.name === cfg.name)) {
+      await bReq('create_scene', { name: cfg.name });
+      await bReq('create_source', { scene: cfg.name, id: cfg.id, name: cfg.src });
+    }
+    if (snap?.current_scene !== cfg.name) await bReq('set_current_scene', { name: cfg.name });
+  };
+  const startScrimRecord = async (target) => { // {kind:'match', n} | {kind:'vod'}
+    try {
+      const dir = await invoke('coaching_scrim_dir', { base: scrimBase });
+      await ensureScrimScene(target.kind === 'vod' ? 'screen' : 'game');
+      const stem = target.kind === 'vod' ? `${scrimBase} — VOD Review` : `${scrimBase} — Match ${target.n}`;
+      await bReq('start_record', { dir, stem });
+      setRecTarget(target.kind === 'vod' ? 'vod' : `match:${target.n}`);
+    } catch (e) {
+      notify('error', 'Record failed', e?.message || String(e));
+    }
+  };
+  const stopScrimRecord = async () => {
+    const target = recTarget;
+    try {
+      const r = await bReq('stop_record');
+      const p = r?.path;
+      if (p && target) {
+        if (target === 'vod') setScrimField('VOD Review', p);
+        else {
+          const n = Number(target.slice('match:'.length));
+          const idx = (scrimRef.current?.matches || []).findIndex((m) => m.n === n);
+          if (idx >= 0) setMatchField(idx, 'Scrim Recording', p);
+        }
+        flushSave();
+      }
+    } catch (e) {
+      notify('error', 'Stop failed', e?.message || String(e));
+    } finally { setRecTarget(null); }
+  };
+  // A target's button shows Stop only for its OWN recording; anything else
+  // recording (another match, the Broadcast page) disables it.
+  const recBusyElsewhere = (id) => recActive && recTarget !== id;
+
   const setScrimField = (k, v) => applyEdit((p) => ({ ...p, scrim: { ...p.scrim, [k]: v } }));
   const setMatchField = (idx, k, v) => applyEdit((p) => ({
     ...p, matches: p.matches.map((m, i) => (i === idx ? { ...m, fields: { ...m.fields, [k]: v } } : m)),
@@ -1675,6 +1743,17 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
                 <span className="candy-face">Scoreboard</span>
               </button>
             )}
+            {overlay && (
+              <button className="candy-btn" data-shape="chip"
+                disabled={recBusyElsewhere(`match:${m.n}`) || !bcast.alive}
+                onClick={() => (recTarget === `match:${m.n}` ? stopScrimRecord() : startScrimRecord({ kind: 'match', n: m.n }))}
+                title={!bcast.alive ? 'Studio engine is down — reopen the app'
+                  : recBusyElsewhere(`match:${m.n}`) ? 'Another recording is running — stop it first'
+                    : recTarget === `match:${m.n}` ? 'Stop — the file drops into Scrim Recording'
+                      : 'Record this match into the scrim folder'}>
+                <span className="candy-face">{recTarget === `match:${m.n}` ? 'Stop' : 'Record'}</span>
+              </button>
+            )}
             {!slim && populated && (
               <button className="candy-btn" data-shape="chip" onClick={() => setMatchPopup({ n: m.n })} title="Open the full match view">
                 <span className="candy-face">View Full Match</span>
@@ -1717,6 +1796,10 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
         </div>
         <EditField label="Scrim Recording" value={m.fields['Scrim Recording']} onChange={(v) => setMatchField(idx, 'Scrim Recording', v)} onCommit={flushSave} placeholder="/path/to/match.mp4"
           right={<>
+            {!overlay && (
+              <RecordButton recording={recTarget === `match:${m.n}`} disabled={recBusyElsewhere(`match:${m.n}`) || !bcast.alive} accent={accent}
+                onToggle={() => (recTarget === `match:${m.n}` ? stopScrimRecord() : startScrimRecord({ kind: 'match', n: m.n }))} />
+            )}
             <MiniBtn icon={IconFolder} title="Select .mp4" onClick={async () => { const p = await pickFile(MP4_FILTERS); if (p) { setMatchField(idx, 'Scrim Recording', p); flushSave(); } }} />
             {m.fields['Scrim Recording'] && <MiniBtn icon={IconPlayCircle} title="Open recording" onClick={() => invoke('coaching_open_path', { path: m.fields['Scrim Recording'] }).catch(() => {})} />}
           </>} />
@@ -1834,6 +1917,7 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
   const group = (id, label, ids) => ({ id, label, isFolder: true, children: tabs.filter((t) => ids.includes(t.id)).map(tabLeaf) });
   const treeNodes = [
     { id: 'matches', label: 'Matches', isFolder: true, children: [
+      { id: 'overview', label: 'Overview', active: view?.kind === 'overview', onActivate: () => setView({ kind: 'overview' }) },
       ...scrim.matches.map((m) => ({ id: `match:${m.n}`, label: `Match ${m.n}`, active: view?.kind === 'match' && view.n === m.n, onActivate: () => setView({ kind: 'match', n: m.n }) })),
       { id: 'match:new', label: '+ New Match', onActivate: addMatch },
     ] },
@@ -1845,7 +1929,6 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
   const treeExtra = [
     { title: 'Reveal files', icon: <IconHardDrive />, dataAttr: 'scrim-reveal-trigger', onClick: (e) => { setRevealAnchor(e.currentTarget.getBoundingClientRect()); setRevealOpen((o) => !o); } },
     { title: 'Coaching setup', icon: <IconSettings />, onClick: () => setSettingsOpen(true) },
-    { title: 'Scrim', icon: <IconFilm />, onClick: () => setScrimOpen(true) },
     ...(overlay ? [{ title: live ? 'Leave live mode' : 'Go Live — just notes, voice, and the timer', icon: <IconPlayCircle />, onClick: () => onLive?.(!live), active: live, activeAccent: 'var(--error)' }] : []),
     // Switch scrim (overlay): the header picker moved here — a popover listing every
     // scrim + Add Scrim, mirroring the Reveal-files popover pattern.
@@ -1874,13 +1957,13 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
         seam={
           <div style={{ position: 'absolute', top: 0, bottom: 0, right: 0, display: 'flex', zIndex: 70 }}>
             <SidebarSeam width={railWidth} onWidthChange={setRailWidth} accent={accent} defaultWidth={RAIL_DEFAULT} minWidth={RAIL_MIN} maxWidth={RAIL_MAX}
-              collapseThreshold={140} onCollapse={() => setRailExpanded(false)} onDragStart={() => setRailResizing(true)} onDragEnd={() => setRailResizing(false)}
+              collapseThreshold={120} onCollapse={() => setRailExpanded(false)} onDragStart={() => setRailResizing(true)} onDragEnd={() => setRailResizing(false)}
               storageKey={LS_RAIL_WIDTH} edgeRingSide="right" ariaLabel="Resize scrim rail" />
           </div>
         }
       >
-        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, borderTop: '1px solid var(--border)', marginTop: 4 }}>
-          <TreeSidebar nodes={treeNodes} controller={treeController} buttons={treeButtons} accent={accent} toolbarExtra={treeExtra} />
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, borderTop: '1px solid var(--border)', marginTop: 0 }}>
+          <TreeSidebar nodes={treeNodes} controller={treeController} buttons={treeButtons} accent={accent} toolbarExtra={treeExtra} scrollKey={`scrim-tree:${path}`} />
         </div>
       </CollapsibleRail>
 
@@ -1896,6 +1979,55 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
           ) : (
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 13 }}>No match.</div>
           )
+        ) : view?.kind === 'overview' ? (
+          <div style={{ flex: 1, minWidth: 0, minHeight: 0, overflowY: 'auto' }}>
+            <div style={paneInner}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}><SaveTag state={saveState} /></div>
+              {/* Scrim-level card — the old Scrim AppWindow (toolbar popup), inline since the Overview tree row replaced it. */}
+              <EditField label="Score" value={scrim.scrim['Score']} onChange={(v) => setScrimField('Score', v)} onCommit={flushSave} placeholder="e.g. 2-1" />
+              <EditField label="VOD Review" value={scrim.scrim['VOD Review']} onChange={(v) => setScrimField('VOD Review', v)} onCommit={flushSave} placeholder="/path/to/review.mp4"
+                right={<>
+                  <RecordButton recording={recTarget === 'vod'} disabled={recBusyElsewhere('vod') || !bcast.alive} accent={accent}
+                    onToggle={() => (recTarget === 'vod' ? stopScrimRecord() : startScrimRecord({ kind: 'vod' }))} />
+                  <MiniBtn icon={IconFolder} title="Select .mp4" onClick={async () => { const p = await pickFile(MP4_FILTERS); if (p) { setScrimField('VOD Review', p); flushSave(); } }} />
+                  {scrim.scrim['VOD Review'] && <MiniBtn icon={IconPlayCircle} title="Open recording" onClick={() => invoke('coaching_open_path', { path: scrim.scrim['VOD Review'] }).catch(() => {})} />}
+                </>} />
+              <div className="candy-chip-row" style={{ marginTop: 8, marginBottom: 'var(--candy-depth)' }}>
+                <button className="candy-btn" data-shape="chip"
+                  disabled={vodBusy || !scrim.scrim['VOD Review'] || !sttUp}
+                  onClick={extractVodComms}
+                  title={!scrim.scrim['VOD Review'] ? 'Set a VOD Review (.mp4) for this scrim first'
+                    : !sttUp ? 'Speech engine unavailable — reopen the app'
+                      : 'Extract VOD Comms — transcribe + split voices in the review recording'}
+                  style={vodBusy ? { opacity: 0.6, cursor: 'progress' } : undefined}>
+                  <span className="candy-face">{vodBusy ? (vodPhase || 'Working') : 'Extract VOD Comms'}</span>
+                </button>
+                {vodBusy && (
+                  <button className="candy-btn" data-shape="chip" onClick={cancelVod} title="Cancel">
+                    <span className="candy-face">×</span>
+                  </button>
+                )}
+                <button className="candy-btn" data-shape="chip"
+                  disabled={reporting || !scrim.scrim['VOD Comms'] || !aiConfigured}
+                  onClick={generateVodReport}
+                  title={!scrim.scrim['VOD Comms'] ? 'Extract VOD Comms first — the report reads that transcript'
+                    : !aiConfigured ? 'Configure an AI backend in Settings → Agents (API key or Claude CLI)'
+                      : 'Generate Report — Claude organizes the review into an action list'}
+                  style={reporting ? { opacity: 0.6, cursor: 'progress' } : undefined}>
+                  <span className="candy-face">{reporting ? (reportPhase || 'Asking Claude') : 'Generate Report'}</span>
+                </button>
+                <button className="candy-btn" data-shape="chip" onClick={addVodNotes}
+                  title="Add player-written notes (.md/.txt) to feed the next report generation">
+                  <span className="candy-face">Add Notes</span>
+                </button>
+                {scrim.scrim['VOD Report'] && (
+                  <button className="candy-btn" data-shape="chip" onClick={() => setView({ kind: 'report', tab: 'tldr' })} title="Open the generated report">
+                    <span className="candy-face">Open Report</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
         ) : view?.kind === 'report' ? (
           <VodReportView inline tab={view.tab}
             onTabChange={(t) => setView({ kind: 'report', tab: t })}
@@ -1940,50 +2072,6 @@ export default function ScrimViewer({ path, accent, overlay = false, live = fals
           <EditField label="Coached Team" value={fm['Coached Team']} onChange={(v) => setFm('Coached Team', v)} onCommit={flushSave} />
           <EditField label="Date" value={fm['Date']} onChange={(v) => setFm('Date', v)} onCommit={flushSave} placeholder="YYYY-MM-DD" />
           <EditField label="Scheduled" value={fm['Scheduled']} onChange={(v) => setFm('Scheduled', v)} onCommit={flushSave} placeholder="e.g. 7:00 PM" />
-        </div>
-      </AppWindow>
-
-      {/* The whole Scrim card — the scrim-popup toolbar button. */}
-      <AppWindow open={scrimOpen} onClose={() => setScrimOpen(false)} title="Scrim" accent={accent} width="min(560px, 92vw)" height="min(560px, 86vh)">
-        <EditField label="Score" value={scrim.scrim['Score']} onChange={(v) => setScrimField('Score', v)} onCommit={flushSave} placeholder="e.g. 2-1" />
-        <EditField label="VOD Review" value={scrim.scrim['VOD Review']} onChange={(v) => setScrimField('VOD Review', v)} onCommit={flushSave} placeholder="/path/to/review.mp4"
-          right={<>
-            <MiniBtn icon={IconFolder} title="Select .mp4" onClick={async () => { const p = await pickFile(MP4_FILTERS); if (p) { setScrimField('VOD Review', p); flushSave(); } }} />
-            {scrim.scrim['VOD Review'] && <MiniBtn icon={IconPlayCircle} title="Open recording" onClick={() => invoke('coaching_open_path', { path: scrim.scrim['VOD Review'] }).catch(() => {})} />}
-          </>} />
-        <div className="candy-chip-row" style={{ marginTop: 8, marginBottom: 'var(--candy-depth)' }}>
-          <button className="candy-btn" data-shape="chip"
-            disabled={vodBusy || !scrim.scrim['VOD Review'] || !sttUp}
-            onClick={extractVodComms}
-            title={!scrim.scrim['VOD Review'] ? 'Set a VOD Review (.mp4) for this scrim first'
-              : !sttUp ? 'Speech engine unavailable — reopen the app'
-                : 'Extract VOD Comms — transcribe + split voices in the review recording'}
-            style={vodBusy ? { opacity: 0.6, cursor: 'progress' } : undefined}>
-            <span className="candy-face">{vodBusy ? (vodPhase || 'Working') : 'Extract VOD Comms'}</span>
-          </button>
-          {vodBusy && (
-            <button className="candy-btn" data-shape="chip" onClick={cancelVod} title="Cancel">
-              <span className="candy-face">×</span>
-            </button>
-          )}
-          <button className="candy-btn" data-shape="chip"
-            disabled={reporting || !scrim.scrim['VOD Comms'] || !aiConfigured}
-            onClick={generateVodReport}
-            title={!scrim.scrim['VOD Comms'] ? 'Extract VOD Comms first — the report reads that transcript'
-              : !aiConfigured ? 'Configure an AI backend in Settings → Agents (API key or Claude CLI)'
-                : 'Generate Report — Claude organizes the review into an action list'}
-            style={reporting ? { opacity: 0.6, cursor: 'progress' } : undefined}>
-            <span className="candy-face">{reporting ? (reportPhase || 'Asking Claude') : 'Generate Report'}</span>
-          </button>
-          <button className="candy-btn" data-shape="chip" onClick={addVodNotes}
-            title="Add player-written notes (.md/.txt) to feed the next report generation">
-            <span className="candy-face">Add Notes</span>
-          </button>
-          {scrim.scrim['VOD Report'] && (
-            <button className="candy-btn" data-shape="chip" onClick={() => { setView({ kind: 'report', tab: 'tldr' }); setScrimOpen(false); }} title="Open the generated report">
-              <span className="candy-face">Open Report</span>
-            </button>
-          )}
         </div>
       </AppWindow>
 

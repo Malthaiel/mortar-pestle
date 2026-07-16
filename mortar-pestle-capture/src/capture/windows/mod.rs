@@ -10,6 +10,7 @@
 
 pub mod d3d11;
 pub mod encode;
+pub mod screenshot;
 pub mod wgc;
 
 // The encoded-packet replay ring is platform-neutral (a pure data structure, no

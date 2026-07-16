@@ -22,6 +22,8 @@ import BrowserOverlayLauncher from './BrowserOverlayLauncher.jsx';
 import MonitorOverlayChip from './MonitorOverlayChip.jsx';
 import ScrimOverlayLauncher from './ScrimOverlayLauncher.jsx';
 import StudioOverlayLauncher from './StudioOverlayLauncher.jsx';
+import OverlaySettingsPanel from './OverlaySettingsPanel.jsx';
+import SettingsOverlayLauncher from './SettingsOverlayLauncher.jsx';
 import useSmartClickThrough from './useSmartClickThrough.js';
 
 // Minimal module-api shim for the host-mounted SttProvider. It only needs
@@ -157,6 +159,8 @@ export default function OverlayHostView() {
       <MonitorOverlayChip />
       <ScrimOverlayLauncher />
       <StudioOverlayLauncher />
+      <OverlaySettingsPanel />
+      <SettingsOverlayLauncher />
       {/* Concierge over the game. Providerless — every dep (useSettings, useAgentChat,
           the api singleton) is a plain hook/singleton; agent-chunk is emitted app-
           globally so the host webview receives its own stream with no bridge. The
