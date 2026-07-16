@@ -9,6 +9,12 @@ import { api } from '@host/api.js';
 
 const LS_KEY = 'gamewiki:tree:expanded';
 
+// Virtual scrim sub-folders (Report/ + Coaching/ under a scrim folder — GameWiki
+// Unification): they expand like disk folders (same expanded Set, so collapse-all
+// and persistence cover them) but have NO disk children — never fetch them
+// (vault_get_folder would just 404 into an empty cache entry).
+const VIRTUAL_RE = /^Deadlock\/Coaching\/Scrim\/[^/]+\/(Report|Coaching)$/;
+
 function loadExpanded() {
   try {
     const raw = localStorage.getItem(LS_KEY);
@@ -69,7 +75,7 @@ export function useGameWikiTree() {
     setExpanded((prev) => {
       const next = new Set(prev);
       if (next.has(vaultPath)) next.delete(vaultPath);
-      else { next.add(vaultPath); if (!cacheRef.current[vaultPath]) fetchChildren(vaultPath); }
+      else { next.add(vaultPath); if (!VIRTUAL_RE.test(vaultPath) && !cacheRef.current[vaultPath]) fetchChildren(vaultPath); }
       persist(next);
       return next;
     });
@@ -85,6 +91,21 @@ export function useGameWikiTree() {
     if (cacheRef.current[vaultPath] || expanded.has(vaultPath)) fetchChildren(vaultPath);
   }, [fetchChildren, expanded]);
   const collapseAll = useCallback(() => setExpanded(() => { const n = new Set(); persist(n); return n; }), []);
+  // Expand-all = open the top-level games (children stay lazy — a recursive disk
+  // walk is the wrong cost for a reference vault). TreeToolbar's collapse toggle.
+  const expandAll = useCallback(() => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      for (const g of games || []) {
+        if (!next.has(g.vaultPath)) {
+          next.add(g.vaultPath);
+          if (!cacheRef.current[g.vaultPath]) fetchChildren(g.vaultPath);
+        }
+      }
+      persist(next);
+      return next;
+    });
+  }, [games, fetchChildren]);
 
   // Top-level games = immediate subfolders of the gamewiki root (slug '').
   useEffect(() => {
@@ -100,8 +121,8 @@ export function useGameWikiTree() {
 
   // Materialize children for any open-but-uncached folder (localStorage restore).
   useEffect(() => {
-    for (const vp of expanded) if (!cacheRef.current[vp]) fetchChildren(vp);
+    for (const vp of expanded) if (!VIRTUAL_RE.test(vp) && !cacheRef.current[vp]) fetchChildren(vp);
   }, [expanded, fetchChildren]);
 
-  return { games, isOpen, toggle, childrenOf, refresh, collapseAll, anyExpanded: expanded.size > 0 };
+  return { games, isOpen, toggle, childrenOf, refresh, collapseAll, expandAll, anyExpanded: expanded.size > 0 };
 }

@@ -5,7 +5,7 @@
 // (GameWikiPage), keeping wikilink navigation inside the module.
 
 import { lazy, Suspense } from 'react';
-import GameWikiTree from './GameWikiTree.jsx';
+import GameWikiRail from './GameWikiRail.jsx';
 import SidebarPill from '@host/components/SidebarPill.jsx';
 import './game-wiki.css';
 
@@ -39,7 +39,7 @@ export default {
         />
       ),
       isActive: (route) => route.page === 'game-wiki',
-      renderSecondary: ({ route, accent }) => <GameWikiTree route={route} accent={accent}/>,
+      renderSecondary: ({ route, accent }) => <GameWikiRail route={route} accent={accent}/>,
       order: 10,
     });
 
