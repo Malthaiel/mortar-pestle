@@ -183,28 +183,8 @@ export function emptyScrim({ team1 = '', team2 = '', coachedTeam = '', date = ''
   };
 }
 
-// Build a new-scrim skeleton for "+ New Scrim". ScrimListLanding and the overlay
-// scrim picker share this; the caller dedups the filename + writes it. Browser
-// runtime — new Date() is available here (unlike the workflow sandbox).
+// Filename-safe team name; shared by newScrimScaffold.
 const sanitizeTeam = (name) => String(name || '').replace(/[/\\:*?"<>|]/g, '').replace(/\s+/g, ' ').trim();
-export function newScrimContent({ team1, team2 } = {}) {
-  const t1 = sanitizeTeam(team1) || 'Team 1';
-  const t2 = sanitizeTeam(team2) || 'Team 2';
-  const d = new Date();
-  const p2 = (x) => String(x).padStart(2, '0');
-  const iso = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
-  const short = `${p2(d.getMonth() + 1)}-${p2(d.getDate())}-${String(d.getFullYear()).slice(2)}`;
-  const base = `${t1} VS ${t2} (${short})`;
-  return { base, content: serializeScrim(emptyScrim({ team1: t1, team2: t2, coachedTeam: t1, date: iso })) };
-}
-
-export function appendMatch(scrim) {
-  const n = (scrim.matches?.length || 0) + 1;
-  const fm = scrim.frontmatter || {};
-  const coached = fm['Coached Team'] || fm['Team 1'] || '';
-  const enemy = (fm['Team 1'] === coached ? fm['Team 2'] : fm['Team 1']) || '';
-  return { ...scrim, matches: [...(scrim.matches || []), emptyMatch(n, coached, enemy)] };
-}
 
 // ── Schema v2: folder scrims (GameWiki Unification, 2026-07-16) ──────────────
 // A scrim is a folder `…/Scrim/<base>/` holding Overview.md (frontmatter +
