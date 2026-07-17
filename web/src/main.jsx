@@ -24,5 +24,8 @@ loadAll().then(() => {
     import('./util/candyCenterAudit.js').then((m) => m.startCandyCenterAudit());
     import('./util/spacingAudit.js').then((m) => m.startSpacingAudit());
     import('./util/dragAudit.js').then((m) => m.startDragAudit());
+    // cssVarAudit: unresolved no-fallback var(--x) in inline styles (CSS drops
+    // the whole declaration silently — the GameWikiRail toolbar-padding class).
+    import('./util/cssVarAudit.js').then((m) => m.startCssVarAudit());
   }
 });

@@ -19,7 +19,7 @@ import { useContextMenu } from '../../context-menu/useContextMenu.js';
 import { buildFileItemMenu } from '../../context-menu/defaultMenus.js';
 import { useSettings } from '../../hooks/useSettings.js';
 import { writeSectionPage } from '../../hooks/useSectionMemory.js';
-import { useVaultTree, sortNodes } from './useVaultTree.js';
+import { useVaultTree, sortNodes, VAULT_SORT_MODES } from './useVaultTree.js';
 import {
   AnimCtx, SuffixCtx, REVEAL, GAP, MUTED,
   CandyHeader, TreeRow, TreeChildren, Collapsible, StaggerChild,
@@ -29,16 +29,8 @@ import { openInFiles } from './revealInFiles.js';
 import NameInputModal from './NameInputModal.jsx';
 import ConfirmModal from '../ui/ConfirmModal.jsx';
 
-// The vault's six Obsidian-style sort modes (mode → menu label). sortNodes (in
-// useVaultTree.js) understands these; the controller hands them to TreeToolbar.
-const VAULT_SORT_MODES = [
-  ['name-asc', 'File name (A → Z)'],
-  ['name-desc', 'File name (Z → A)'],
-  ['mtime-desc', 'Modified time (new → old)'],
-  ['mtime-asc', 'Modified time (old → new)'],
-  ['created-desc', 'Created time (new → old)'],
-  ['created-asc', 'Created time (old → new)'],
-];
+// The vault's six Obsidian-style sort modes now live beside sortNodes in
+// useVaultTree.js (shared with the GameWiki tree).
 
 function norm(s) { return (s || '').replace(/\.md$/, ''); }
 function baseName(vp) { return (vp || '').split('/').pop().replace(/\.md$/, ''); }
