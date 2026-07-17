@@ -15,7 +15,6 @@ import { api, invoke } from '@host/api.js';
 import TreeToolbar from '@host/components/vault-tree/TreeToolbar.jsx';
 import { GAP } from '@host/components/vault-tree/treeKit.jsx';
 import { IconChevronRight } from '@host/components/icons.jsx';
-import NameInputModal from '@host/components/vault-tree/NameInputModal.jsx';
 import { VAULT_SORT_MODES } from '@host/components/vault-tree/useVaultTree.js';
 import { encodePagePath } from '@host/components/SidebarBrowser.jsx';
 import GameWikiTree, { SCRIM_BASE } from './GameWikiTree.jsx';
@@ -74,24 +73,11 @@ export default function GameWikiRail({ route, accent, nav = navigate, header }) 
     }
   };
 
-  // New folder at the wiki root (games level) — the vault-toolbar recipe 1-1.
-  const doCreateFolder = async (name) => {
-    const n = (name || '').trim();
-    if (!n) { setModal(null); return; }
-    try {
-      await api.createFolder(n, 'gamewiki');
-      setModal(null);
-      await tree.refreshGames();
-    } catch (e) {
-      setModal({ kind: 'new-folder', err: String(e?.message || e) });
-    }
-  };
-
-  // The vault sidebar's full six-button row, 1-1 (uniformity: every tree
-  // sidebar reads identical; only the New button's job differs per surface).
+  // The vault tree-toolbar recipe minus New folder (GameWiki is read-only
+  // reference — scrims are created via the Scrim folder's right-click menu; a
+  // generic create-folder had no delete/rename affordance, so it's cut).
   const buttons = {
     new: { show: true, title: 'New Scrim', onClick: () => setModal({ kind: 'new-scrim' }) },
-    newFolder: { show: true, onClick: () => setModal({ kind: 'new-folder' }) },
     sort: { show: true },
     collapse: { show: true },
     revealCurrent: { show: true, title: 'Reveal current' },
@@ -134,10 +120,6 @@ export default function GameWikiRail({ route, accent, nav = navigate, header }) 
         onNewScrim={() => setModal({ kind: 'new-scrim' })}/>
       {modal?.kind === 'new-scrim' && (
         <NewScrimModal open error={modal.err} onCancel={() => setModal(null)} onSubmit={doCreate}/>
-      )}
-      {modal?.kind === 'new-folder' && (
-        <NameInputModal open title="New folder" label="Folder name" confirmLabel="Create"
-          onCancel={() => setModal(null)} onSubmit={doCreateFolder}/>
       )}
     </div>
   );

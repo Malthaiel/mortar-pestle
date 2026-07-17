@@ -313,25 +313,18 @@ pub fn show_overlay_host(win: &tauri::WebviewWindow) {
     let _ = win.show();
 }
 
-/// `overlay_note_toast` — confirm a dictated scrim note saved while the overlay
-/// host is hidden. Invoked unconditionally by the overlay ScrimViewer after every
-/// dictated-note save; Rust owns the gating: a visible overlay host already shows
-/// the note appear in the panel, so this is a no-op then. Otherwise the tiny
-/// `overlay-toast` window is hardened (topmost + non-activating + capture-excluded,
-/// like the host) + made fully click-through, parked bottom-right of the overlay
-/// monitor (same pref/fallback chain as `show_overlay_host`), shown, and handed the
-/// text via the `overlay-note-toast` event. The toast webview owns the dwell +
-/// fade-out, then calls `overlay_toast_done` to hide — the `hide_overlay_host`
-/// animate-then-hide pattern.
+/// `overlay_note_toast` — confirm a dictated scrim note saved. Invoked
+/// unconditionally by the overlay ScrimViewer after every dictated-note save, and
+/// fires the toast whether the overlay host is hidden OR open (user call
+/// 2026-07-17: the confirmation is wanted even when the note lands in a visible
+/// panel). The tiny `overlay-toast` window is hardened (topmost + non-activating +
+/// capture-excluded, like the host) + made fully click-through, parked bottom-right
+/// of the overlay monitor (same pref/fallback chain as `show_overlay_host`), shown,
+/// and handed the text via the `overlay-note-toast` event. The toast webview owns
+/// the dwell + fade-out, then calls `overlay_toast_done` to hide — the
+/// `hide_overlay_host` animate-then-hide pattern.
 #[tauri::command]
 pub fn overlay_note_toast(app: AppHandle, text: String) -> Result<(), VaultError> {
-    let host_visible = app
-        .get_webview_window("overlay-host")
-        .map(|w| w.is_visible().unwrap_or(false))
-        .unwrap_or(false);
-    if host_visible {
-        return Ok(());
-    }
     // Stash for the mount-time re-pull BEFORE show/emit — covers the show-before-
     // listen race (the emit can land before the hidden webview's listener attaches).
     *lock_pending() = Some(text.clone());
