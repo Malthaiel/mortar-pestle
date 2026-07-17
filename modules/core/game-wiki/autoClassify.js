@@ -398,24 +398,3 @@ export function mergedItemToBullet(item) {
     : `${item.subject ? item.subject + ' — ' : ''}${item.rationale || ''}`;
   return formatTimedBullet({ atSec: item.atSec, classification: label, text });
 }
-
-// Set the `### Auto Classification (<teamName>)` opaque body on match n (replace if
-// present, append if absent). Mirrors setCoachingSummaryBody, but the heading carries
-// the team so coached + enemy sections coexist. Disk-owned → written via serializeScrim.
-export function setAutoClassificationBody(scrim, n, teamName, body) {
-  const heading = `Auto Classification (${teamName})`;
-  return {
-    ...scrim,
-    matches: (scrim.matches || []).map((mm) => {
-      if (mm.n !== n) return mm;
-      const subs = mm.subsections || [];
-      const has = subs.some((s) => s.kind === 'opaque' && s.heading === heading);
-      return {
-        ...mm,
-        subsections: has
-          ? subs.map((s) => (s.kind === 'opaque' && s.heading === heading ? { ...s, body } : s))
-          : [...subs, { kind: 'opaque', heading, body }],
-      };
-    }),
-  };
-}

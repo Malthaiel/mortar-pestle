@@ -378,23 +378,3 @@ export function renderSummary(raw, sidecarFileName) {
   if (sidecarFileName) lines.push('', `_Raw data: \`${sidecarFileName}\`_`);
   return lines.join('\n');
 }
-
-// Return a copy of `scrim` with match `n`'s ### Match Data opaque body set to `body`
-// (adding the subsection if somehow absent). The opaque region is disk-owned, so the
-// Run Process writer uses this against a fresh-from-disk parse, not local state.
-export function setMatchDataBody(scrim, n, body) {
-  return {
-    ...scrim,
-    matches: (scrim.matches || []).map((mm) => {
-      if (mm.n !== n) return mm;
-      const subs = mm.subsections || [];
-      const has = subs.some((s) => s.kind === 'opaque' && s.heading === 'Match Data');
-      return {
-        ...mm,
-        subsections: has
-          ? subs.map((s) => (s.kind === 'opaque' && s.heading === 'Match Data' ? { ...s, body } : s))
-          : [...subs, { kind: 'opaque', heading: 'Match Data', body }],
-      };
-    }),
-  };
-}

@@ -4,8 +4,7 @@
 // transcribes a Scrim Recording's audio (via coaching_extract_audio + the mortar-pestle-stt
 // sidecar) and persists the full segments to a `.commstranscript.…` sidecar; this module
 // renders the one-line `### Comms Transcript` opaque summary (a pointer to that sidecar)
-// and parses the sidecar back into a view-model. Mirrors setCoachingSummaryBody
-// (noteCompile.js) / setMatchDataBody (matchData.js) byte-for-byte in structure.
+// and parses the sidecar back into a view-model.
 
 const MARKER = '_(Run-Process-owned — regenerated)_';
 
@@ -88,26 +87,4 @@ export function renderCommsSummary({ n, segments = [], durationS, sidecarFileNam
   if (sidecarFileName) lines.push('', `_Raw: \`${sidecarFileName}\`_`);
   lines.push('', MARKER);
   return lines.join('\n');
-}
-
-// Set the `### Comms Transcript` opaque body on match n — replace if present, append if
-// absent. Exact mirror of setCoachingSummaryBody (noteCompile.js) / setMatchDataBody
-// (matchData.js): a disk-owned region the Extract Comms flow writes straight through
-// serializeScrim; mergeScrim pulls it fresh, so it never clobbers Match Data / Coaching
-// Summary (and they never clobber it).
-export function setCommsTranscriptBody(scrim, n, body) {
-  return {
-    ...scrim,
-    matches: (scrim.matches || []).map((mm) => {
-      if (mm.n !== n) return mm;
-      const subs = mm.subsections || [];
-      const has = subs.some((s) => s.kind === 'opaque' && s.heading === 'Comms Transcript');
-      return {
-        ...mm,
-        subsections: has
-          ? subs.map((s) => (s.kind === 'opaque' && s.heading === 'Comms Transcript' ? { ...s, body } : s))
-          : [...subs, { kind: 'opaque', heading: 'Comms Transcript', body }],
-      };
-    }),
-  };
 }

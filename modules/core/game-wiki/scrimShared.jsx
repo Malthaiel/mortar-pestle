@@ -135,8 +135,7 @@ export function mergeOverview(local, fresh) {
   };
 }
 
-// Set (or add) an opaque `### <heading>` subsection on a parsed match — the
-// per-file replacement for the v1 scrim-level setMatchDataBody/…Body wrappers.
+// Set (or add) an opaque `### <heading>` subsection on a parsed match.
 export function setOpaque(m, heading, body) {
   const subs = m.subsections || [];
   const has = subs.some((s) => s.kind === 'opaque' && s.heading === heading);

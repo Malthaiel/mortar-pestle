@@ -151,23 +151,3 @@ export function renderCoachingSummary(compiled) {
   lines.push(MARKER);
   return lines.join('\n');
 }
-
-// Set the `### Coaching Summary` opaque body on match n — replace if present,
-// append if absent. Exact mirror of setMatchDataBody in matchData.js (disk-owned
-// region; Run Process writes it straight to disk through serializeScrim).
-export function setCoachingSummaryBody(scrim, n, body) {
-  return {
-    ...scrim,
-    matches: (scrim.matches || []).map((mm) => {
-      if (mm.n !== n) return mm;
-      const subs = mm.subsections || [];
-      const has = subs.some((s) => s.kind === 'opaque' && s.heading === 'Coaching Summary');
-      return {
-        ...mm,
-        subsections: has
-          ? subs.map((s) => (s.kind === 'opaque' && s.heading === 'Coaching Summary' ? { ...s, body } : s))
-          : [...subs, { kind: 'opaque', heading: 'Coaching Summary', body }],
-      };
-    }),
-  };
-}
