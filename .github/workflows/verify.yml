@@ -27,5 +27,10 @@ jobs:
           npm --prefix web ci
       - name: Build web (so app_lib tests compile)
         run: npm --prefix web run build
+      - name: Fetch bundled resources (usda_foods.db)
+        # cargo test compiles the app crate → tauri_build validates bundle.resources.
+        # `usda_foods.db` is normally populated by tauri's beforeBuildCommand, which a
+        # bare `cargo test` skips — fetch it explicitly so the build doesn't panic.
+        run: node scripts/fetch-usda-db.mjs
       - name: Run verification baseline
         run: node scripts/verify.mjs
