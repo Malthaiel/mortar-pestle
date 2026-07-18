@@ -258,28 +258,6 @@ export function newMatchContent(n, coachedTeam, enemyTeam) {
   return serializeMatchFile(emptyMatch(n, coachedTeam, enemyTeam));
 }
 
-// Merge user-edited regions (frontmatter, scrim bullets, match fields, notes) from
-// `local` with Run-Process-owned opaque subsections (Match Data, Coaching Summary,
-// unknown ###) re-read fresh from disk — so a concurrent Run Process write is never
-// clobbered by a box edit. Matches align by their number `n`; a local-only match
-// (just added, not yet on disk) keeps its local subsections.
-export function mergeScrim(local, fresh) {
-  const freshByN = new Map((fresh.matches || []).map((m) => [m.n, m]));
-  const matches = (local.matches || []).map((lm) => {
-    const fm = freshByN.get(lm.n);
-    if (!fm) return lm;
-    const nonOpaque = (lm.subsections || []).filter((s) => s.kind !== 'opaque');
-    const opaque = (fm.subsections || []).filter((s) => s.kind === 'opaque');
-    return { ...lm, subsections: [...nonOpaque, ...opaque] };
-  });
-  return {
-    frontmatter: local.frontmatter,
-    scrim: local.scrim,
-    matches,
-    extraBlocks: (fresh.extraBlocks && fresh.extraBlocks.length) ? fresh.extraBlocks : (local.extraBlocks || []),
-  };
-}
-
 // Convenience accessors for the viewer (immutable setters return a new object).
 export function getNotes(match, team) {
   const notes = (match?.subsections || []).filter((s) => s.kind === 'notes');

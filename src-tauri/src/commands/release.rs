@@ -92,6 +92,23 @@ fn cargo_version_bytes(path: &Path, version: &str) -> Result<Option<Vec<u8>>, Va
     Ok(Some(fixed.into_bytes()))
 }
 
+/// New bytes for `Cargo.lock` with the `mortar-pestle` app-crate package block's
+/// version bumped. `None` = unchanged. Only that one block is touched — the name
+/// pattern's closing quote excludes workspace siblings (`mortar-pestle-capture`
+/// etc.). Without this, the lock's app-crate version drifts from `Cargo.toml`
+/// and the pathspec-scoped release commit carries a stale lock (this is what
+/// broke v0.0.23's publish: committed lock still at the old version). `\r?` keeps
+/// it CRLF-tolerant.
+fn cargo_lock_version_bytes(path: &Path, version: &str) -> Result<Option<Vec<u8>>, VaultError> {
+    let raw = fs::read_to_string(path).map_err(|e| VaultError::Io(format!("{}: {e}", path.display())))?;
+    let re = Regex::new(r#"(?m)^(name = "mortar-pestle"\r?\nversion = )"[^"]*""#).unwrap();
+    let fixed = re.replace(&raw, format!(r#"$1"{version}""#).as_str()).into_owned();
+    if fixed == raw {
+        return Ok(None);
+    }
+    Ok(Some(fixed.into_bytes()))
+}
+
 /// True if `root` is inside a git work tree. Guard for end-user installs (no
 /// repo, possibly no `git` on PATH) — returns false on any failure.
 async fn in_git_repo(root: &Path) -> bool {
@@ -240,7 +257,7 @@ pub async fn release_publish(
     check_mtime(&releases_abs, releases_base_mtime)?;
     check_mtime(&queue_abs, queue_base_mtime)?;
 
-    // 4. Pre-flight all four code-version files BEFORE any write, so a
+    // 4. Pre-flight all five code-version files BEFORE any write, so a
     //    malformed/missing file aborts before Releases.md is touched.
     let root = code_root();
     let json_paths = [
@@ -249,6 +266,7 @@ pub async fn release_publish(
         root.join("src-tauri/tauri.conf.json"),
     ];
     let cargo_path = root.join("src-tauri/Cargo.toml");
+    let cargo_lock_path = root.join("src-tauri/Cargo.lock");
 
     let mut planned: Vec<(PathBuf, Vec<u8>, String)> = Vec::new();
     for p in &json_paths {
@@ -264,6 +282,16 @@ pub async fn release_publish(
             .to_string_lossy()
             .into_owned();
         planned.push((cargo_path.clone(), bytes, label));
+    }
+    // Cargo.lock's own app-crate block must move with Cargo.toml, or the
+    // pathspec-scoped release commit ships a stale lock (broke v0.0.23).
+    if let Some(bytes) = cargo_lock_version_bytes(&cargo_lock_path, &version)? {
+        let label = cargo_lock_path
+            .strip_prefix(&root)
+            .unwrap_or(&cargo_lock_path)
+            .to_string_lossy()
+            .into_owned();
+        planned.push((cargo_lock_path.clone(), bytes, label));
     }
 
     // 5. Write — vault files first (reversible via git), then version files.
@@ -369,6 +397,28 @@ mod tests {
         // tag reached the bare origin
         let remote_tag = git(origin, &["rev-parse", "v0.9.9"]);
         assert!(remote_tag.status.success(), "tag not pushed to origin: {}", String::from_utf8_lossy(&remote_tag.stderr));
+    }
+
+    #[test]
+    fn cargo_lock_bumps_only_app_crate() {
+        let dir = tempdir().expect("tempdir");
+        let p = dir.path().join("Cargo.lock");
+        std::fs::write(
+            &p,
+            "[[package]]\nname = \"mortar-pestle-capture\"\nversion = \"0.0.22\"\n\n\
+             [[package]]\nname = \"mortar-pestle\"\nversion = \"0.0.22\"\ndependencies = []\n",
+        )
+        .unwrap();
+        let bytes = cargo_lock_version_bytes(&p, "0.0.23").unwrap().expect("changed");
+        let out = String::from_utf8(bytes).unwrap();
+        assert!(out.contains("name = \"mortar-pestle\"\nversion = \"0.0.23\""), "app crate bumped");
+        assert!(
+            out.contains("name = \"mortar-pestle-capture\"\nversion = \"0.0.22\""),
+            "sibling crate untouched"
+        );
+        // idempotent: bumping already-target lock is a no-op
+        std::fs::write(&p, &out).unwrap();
+        assert!(cargo_lock_version_bytes(&p, "0.0.23").unwrap().is_none());
     }
 
     #[tokio::test]

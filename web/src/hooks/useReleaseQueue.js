@@ -215,14 +215,18 @@ export function composeReleaseBlock({ date, version, tag = 'Early Stage', surfac
 // Updates Version/Updated frontmatter, preserving the Schema section + all
 // prior blocks. Mirrors the Close-the-Loop content-preservation rule.
 export function composeFullReleases(raw, newBlock, version, date) {
-  const fmMatch = (raw || '').match(/^(---\n[\s\S]*?\n---\n)([\s\S]*)$/);
+  // \r? on every delimiter: Releases.md ships CRLF frontmatter, and a bare \n
+  // anchor never matches ---\r\n, so the whole file was treated as body and
+  // Version/Updated never bumped. The Version/Updated replaces drop the $ anchor
+  // for the same reason — JS $ (even /m) won't match before a \r.
+  const fmMatch = (raw || '').match(/^(---\r?\n[\s\S]*?\r?\n---\r?\n)([\s\S]*)$/);
   let frontmatter = '';
   let body = raw || '';
   if (fmMatch) { frontmatter = fmMatch[1]; body = fmMatch[2]; }
 
   frontmatter = frontmatter
-    .replace(/^Version:\s*.*$/m, `Version: ${version}`)
-    .replace(/^Updated:\s*.*$/m, `Updated: ${date}`);
+    .replace(/^Version:.*/m, `Version: ${version}`)
+    .replace(/^Updated:.*/m, `Updated: ${date}`);
 
   const m = body.match(/^## \d{4}-\d{2}-\d{2}\s*[—-]\s*v?\d/m);
   if (m == null) {
