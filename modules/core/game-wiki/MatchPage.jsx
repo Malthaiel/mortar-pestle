@@ -367,7 +367,7 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
       }
     };
     setDictating(true);
-    invoke('stt_start_dictation', { model, useGpu: null, onEvent: ch }).catch(() => setDictating(false));
+    invoke('stt_start_dictation', { model, onEvent: ch }).catch(() => setDictating(false));
   }, [dictating, settings, appendNote]);
 
   // ── Overlay live-target: opening this match page makes it the F8 dictation

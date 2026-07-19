@@ -155,7 +155,7 @@ fn load_model_args_golden_roundtrips() {
     let a: LoadModelArgs = assert_byte_roundtrip(GOLDEN);
     assert_eq!(a.name, "base.en");
     // Direction 2.
-    let made = LoadModelArgs { name: "base.en".into(), use_gpu: None };
+    let made = LoadModelArgs { name: "base.en".into() };
     assert_eq!(serde_json::to_string(&made).unwrap(), GOLDEN);
 }
 
@@ -234,7 +234,6 @@ fn start_dictation_args_golden_roundtrips() {
         model: "base.en".into(),
         vad_threshold: Some(0.5),
         hangover_ms: Some(300),
-        use_gpu: None,
     };
     assert_eq!(serde_json::to_string(&made).unwrap(), GOLDEN);
 }
@@ -250,7 +249,7 @@ fn start_dictation_args_omits_none_options() {
     assert!(a.vad_threshold.is_none());
     assert!(a.hangover_ms.is_none());
     // Direction 2.
-    let made = StartDictationArgs { model: "base.en".into(), vad_threshold: None, hangover_ms: None, use_gpu: None };
+    let made = StartDictationArgs { model: "base.en".into(), vad_threshold: None, hangover_ms: None };
     assert_eq!(serde_json::to_string(&made).unwrap(), GOLDEN);
 }
 
@@ -328,34 +327,8 @@ fn download_complete_golden_roundtrips() {
     assert_eq!(serde_json::to_string(&made).unwrap(), GOLDEN);
 }
 
-// ── Phase 5 Force-CPU (use_gpu) present-case goldens ─────────────────────────
-
-#[test]
-fn load_model_args_with_use_gpu_golden() {
-    // Force-CPU on the wire: use_gpu present. Declaration order name, use_gpu.
-    const GOLDEN: &str = r#"{"name":"base.en","use_gpu":false}"#;
-    let a: LoadModelArgs = assert_byte_roundtrip(GOLDEN);
-    assert_eq!(a.name, "base.en");
-    assert_eq!(a.use_gpu, Some(false));
-    let made = LoadModelArgs { name: "base.en".into(), use_gpu: Some(false) };
-    assert_eq!(serde_json::to_string(&made).unwrap(), GOLDEN);
-}
-
-#[test]
-fn start_dictation_args_with_use_gpu_golden() {
-    // All four keys present; use_gpu last in declaration order (after hangover_ms).
-    const GOLDEN: &str =
-        r#"{"model":"base.en","vad_threshold":0.5,"hangover_ms":300,"use_gpu":false}"#;
-    let a: StartDictationArgs = assert_byte_roundtrip(GOLDEN);
-    assert_eq!(a.use_gpu, Some(false));
-    let made = StartDictationArgs {
-        model: "base.en".into(),
-        vad_threshold: Some(0.5),
-        hangover_ms: Some(300),
-        use_gpu: Some(false),
-    };
-    assert_eq!(serde_json::to_string(&made).unwrap(), GOLDEN);
-}
+// The Phase 5 Force-CPU (`use_gpu`) present-case goldens were REMOVED 2026-07-19 with
+// the field itself — transcription is GPU-only, so there is no backend choice to pin.
 
 // ── Phase 5 push-to-talk (SF5) hotkeys payloads ──────────────────────────────
 // Goldens lifted from the engine's `protocol::tests::hotkeys_wire_shapes`.

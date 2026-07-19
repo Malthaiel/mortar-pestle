@@ -194,7 +194,6 @@ export default function SttSettingsTab({ settings, setSetting, accent }) {
     notify({ title: 'Loading model', message: `Switching to ${name}…`, accent: accentColor });
   }, [sttCtx, accentColor]);
 
-  const toggleForceCpu = useCallback((next) => setSetting('stt', { forceCpu: !!next }), [setSetting]);
   const setVad = useCallback((k, v) => setSetting('stt', { [k]: v }), [setSetting]);
 
   return (
@@ -233,11 +232,8 @@ export default function SttSettingsTab({ settings, setSetting, accent }) {
         <Row label="Active backend">
           <span style={mono}>{backend ? backendLabel(backend) : (resident ? '—' : 'no model loaded')}</span>
         </Row>
-        <Row label="Force CPU" anchor="set-stt-forcecpu">
-          <EnableToggle enabled={!!stt.forceCpu} accent={accentColor} onChange={toggleForceCpu} title="Force CPU" />
-        </Row>
         <div style={hint}>
-          Off uses the GPU (Vulkan) when available, falling back to CPU. On forces CPU — slower, but frees the GPU. Toggling reloads the active model immediately.
+          Transcription always runs on the GPU (Vulkan). If the GPU can’t be used, loading a model fails with an error rather than falling back to the processor — a CPU run pins every core and makes the machine unusable.
         </div>
       </SectionBand>
 

@@ -229,13 +229,12 @@ export const DOWNLOADS_DEFAULT = { historyCap: 100, historyExpiryDays: 30 };
 
 // Voice Transcription (STT) — the Modules › Voice settings page (Phase 5).
 // `defaultModel` is the registry model SttProvider preloads on mount (replaced the
-// hardcoded 'base.en'). `forceCpu` picks the whisper backend (true → use_gpu=false;
-// false → auto GPU-first). `vadThreshold` (0..1) + `hangoverMs` tune dictation VAD;
-// defaults mirror the engine's crate::vad DEFAULT_THRESHOLD / DEFAULT_HANGOVER_MS.
+// hardcoded 'base.en'). The `forceCpu` key was REMOVED 2026-07-19 — transcription is
+// GPU-only. `vadThreshold` (0..1) + `hangoverMs` tune dictation VAD; defaults mirror
+// the engine's crate::vad DEFAULT_THRESHOLD / DEFAULT_HANGOVER_MS.
 // Persisted nested object; deep-merged like dock/agents/downloads.
 export const STT_DEFAULT = {
   defaultModel: 'small.en',
-  forceCpu: false,
   vadThreshold: 0.5,
   hangoverMs: 300,
 };

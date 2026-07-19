@@ -6,12 +6,22 @@ description = "Speech-to-text engine: Unix-socket NDJSON daemon driving local Wh
 publish = false
 
 [features]
-# GPU backend is a one-line whisper-rs cargo feature (research-locked). Default OFF so
-# `cargo build` is the fast CPU shakeout build. `vulkan` is the prod default (built by
-# tauri.conf.json's beforeBuildCommand); `cuda` is OPT-IN and NON-DEFAULT (Phase 4 SF2 —
-# attempt-only on this host: nvcc 13.0 rejects host gcc 15.2, no older g++ to pin via
-# CUDAHOSTCXX, so it stays inert here). The runtime resolver (`whisper::load_ctx`) reports
-# the backend that ACTUALLY loaded into `model_loaded.backend`, GPU-first with a CPU fallback.
+# GPU backend is a one-line whisper-rs cargo feature (research-locked). `vulkan` is the
+# prod REQUIREMENT, passed by BOTH tauri configs' beforeBuildCommand — a featureless build
+# has no GPU code compiled in, and since 2026-07-19 `whisper::load_ctx` HARD-ERRORS in that
+# case instead of running on CPU (CPU whisper pins every core; see the module header).
+# `cuda` is OPT-IN and NON-DEFAULT (Phase 4 SF2 — attempt-only on this host: nvcc 13.0
+# rejects host gcc 15.2, no older g++ to pin via CUDAHOSTCXX, so it stays inert here).
+#
+# WINDOWS BUILD ENV (proven 2026-07-19 — a plain `cargo build --features vulkan` FAILS):
+#   1. MSVC env loaded  — `call "…\BuildTools\VC\Auxiliary\Build\vcvars64.bat"`, else the
+#      nested `vulkan-shaders-gen` ExternalProject configure dies with
+#      "No CMAKE_C_COMPILER could be found".
+#   2. `set "CMAKE_GENERATOR=Ninja"` — the VS generator can't hand a compiler to that
+#      nested configure. (Quote the set: `set X=Ninja &&` appends a trailing space.)
+#   3. Build from a SHORT path — `subst X: C:\Users\malth\Code\mortar-pestle`, then build
+#      from `X:\`. The ggml try-compile PDB path is 268 chars from the real repo root;
+#      cl.exe ignores the OS long-path flag and fails with C1041.
 default = []
 vulkan = ["whisper-rs/vulkan"]
 cuda = ["whisper-rs/cuda"]

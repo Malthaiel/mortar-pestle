@@ -30,13 +30,11 @@ function notify({ title, message, accent = 'var(--accent)', iconKey = 'bell', ty
 }
 
 export default function SttProvider({ api, children }) {
-  // Phase 5: the resident/default model + Force-CPU backend come from settings.stt
-  // (replacing the hardcoded DEFAULT_MODEL). useSettings re-syncs across instances,
-  // so a Force-CPU toggle in the Voice settings page reaches this always-mounted
-  // provider and reloads the resident model (see the effect below).
+  // Phase 5: the resident/default model comes from settings.stt (replacing the
+  // hardcoded DEFAULT_MODEL). The Force-CPU setting was REMOVED 2026-07-19 —
+  // transcription is GPU-only, so there is no backend to choose.
   const { settings } = useSettings();
   const sttCfg = settings.stt || {};
-  const forceCpu = !!sttCfg.forceCpu;
 
   const [engine, setEngine] = useState(null);       // EngineStatus { state, restartCount, lastExitCode, message } | null
   const [modelName, setModelName] = useState(() => sttCfg.defaultModel || DEFAULT_MODEL);
@@ -65,9 +63,9 @@ export default function SttProvider({ api, children }) {
   }, []);
 
   // --- speech model preload (so press-to-talk is instant) ---
-  // `useGpu`: null = auto (GPU-first, CPU fallback); false = Force-CPU. `setModelName`
-  // tracks the resident model so the header + picker reflect what's actually loaded.
-  const loadModel = useCallback((name, useGpu = null) => {
+  // `setModelName` tracks the resident model so the header + picker reflect what's
+  // actually loaded. The engine loads GPU-only and errors if the GPU is unusable.
+  const loadModel = useCallback((name) => {
     setModelLoading(true);
     setModelReady(false);
     setError(null);
@@ -92,7 +90,7 @@ export default function SttProvider({ api, children }) {
         default: break;
       }
     };
-    api.invoke('stt_load_model', { name, useGpu, onEvent: ch }).catch((e) => {
+    api.invoke('stt_load_model', { name, onEvent: ch }).catch((e) => {
       if (!aliveRef.current) return;
       setError({ code: 'INVOKE', message: e?.message || String(e) });
       setModelLoading(false);
@@ -112,19 +110,10 @@ export default function SttProvider({ api, children }) {
     api.invoke('stt_list_models')
       .then((list) => {
         const entry = Array.isArray(list) ? list.find((m) => m.name === name) : null;
-        if (aliveRef.current && entry?.cached) loadModel(name, forceCpu ? false : null);
+        if (aliveRef.current && entry?.cached) loadModel(name);
       })
       .catch(() => {});
-  }, [api, loadModel, sttCfg.defaultModel, forceCpu]);
-
-  // Force-CPU toggled in Settings → reload the resident model on the new backend
-  // immediately (the locked behavior). Skips the initial render via the ref.
-  const prevForceCpu = useRef(forceCpu);
-  useEffect(() => {
-    if (prevForceCpu.current === forceCpu) return;
-    prevForceCpu.current = forceCpu;
-    if (modelReady || modelLoading) loadModel(modelName, forceCpu ? false : null);
-  }, [forceCpu, modelName, modelReady, modelLoading, loadModel]);
+  }, [api, loadModel, sttCfg.defaultModel]);
 
   // --- supervisor engine status (drives the live indicator + unavailable state) ---
   useEffect(() => {
@@ -231,12 +220,12 @@ export default function SttProvider({ api, children }) {
         default: break;
       }
     };
-    api.invoke('stt_start_dictation', { model: modelName, useGpu: forceCpu ? false : null, onEvent: ch }).catch((e) => {
+    api.invoke('stt_start_dictation', { model: modelName, onEvent: ch }).catch((e) => {
       if (!aliveRef.current) return;
       setError({ code: 'INVOKE', message: e?.message || String(e) });
       setRecording(false); setMode('idle');
     });
-  }, [api, recording, fileBusy, modelName, forceCpu]);
+  }, [api, recording, fileBusy, modelName]);
 
   const stopDictation = useCallback(() => {
     if (!recording) return;
@@ -355,8 +344,8 @@ export default function SttProvider({ api, children }) {
   // --- Phase 5 model management (consumed by the Voice settings page) ---
   // Load a model live ("Use now"); honors the current Force-CPU setting.
   const useModelNow = useCallback((name) => {
-    loadModel(name, forceCpu ? false : null);
-  }, [loadModel, forceCpu]);
+    loadModel(name);
+  }, [loadModel]);
 
   // Drop the resident model (after deleting it from cache) → no-model state.
   const unload = useCallback(() => {
@@ -387,7 +376,7 @@ export default function SttProvider({ api, children }) {
           break;
         case 'done':
           setProgress(null);
-          if (ev.ok) loadModel(name, forceCpu ? false : null);
+          if (ev.ok) loadModel(name);
           else setModelLoading(false);
           break;
         default: break;
@@ -398,7 +387,7 @@ export default function SttProvider({ api, children }) {
       setError({ code: 'INVOKE', message: e?.message || String(e) });
       setModelLoading(false); setProgress(null);
     });
-  }, [api, loadModel, forceCpu]);
+  }, [api, loadModel]);
 
   const engineDown = !!engine && (engine.state === 'down' || engine.state === 'failed');
 

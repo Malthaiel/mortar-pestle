@@ -25,7 +25,7 @@ use crate::protocol::{Event, HotkeysSnapshot};
 /// `whisper_full` (not at `recv()`) exactly when a cancel needs to land.
 #[derive(Debug, Clone)]
 pub enum EngineCmd {
-    LoadModel { name: String, use_gpu: Option<bool> },
+    LoadModel { name: String },
     TranscribeFile { path: String },
     /// Scrim Coaching sub-plan 6 SF1 — offline speaker diarization of an isolated comms
     /// track. Routed through the worker (not a side thread) so it serializes against

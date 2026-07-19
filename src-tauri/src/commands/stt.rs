@@ -129,7 +129,6 @@ fn require_client() -> Result<SttClient, String> {
 #[tauri::command]
 pub async fn stt_load_model(
     name: String,
-    use_gpu: Option<bool>,
     on_event: Channel<SttEvent>,
 ) -> Result<(), String> {
     use tokio::sync::broadcast::error::RecvError;
@@ -139,8 +138,7 @@ pub async fn stt_load_model(
     // Subscribe BEFORE issuing the request so an early `model_loaded` isn't lost.
     let mut rx = client.subscribe();
 
-    // `use_gpu` (Phase 5 Force-CPU): None = auto, Some(false) = force CPU.
-    let args = serde_json::json!({ "name": name, "use_gpu": use_gpu });
+    let args = serde_json::json!({ "name": name });
     client
         .request("load_model", args)
         .await
@@ -377,7 +375,6 @@ pub async fn stt_start_dictation(
     model: String,
     vad_threshold: Option<f32>,
     hangover_ms: Option<u32>,
-    use_gpu: Option<bool>,
     on_event: Channel<SttEvent>,
 ) -> Result<(), String> {
     use tokio::sync::broadcast::error::RecvError;
@@ -387,12 +384,10 @@ pub async fn stt_start_dictation(
     // Subscribe BEFORE the request so no early `vu` (or open-failure `error`) is missed.
     let mut rx = client.subscribe();
 
-    // Forward all args; `use_gpu` (Phase 5 Force-CPU) picks the speech backend.
     let args = serde_json::json!({
         "model": model,
         "vad_threshold": vad_threshold,
         "hangover_ms": hangover_ms,
-        "use_gpu": use_gpu,
     });
     client
         .request("start_dictation", args)

@@ -43,15 +43,12 @@ pub struct EchoArgs {
     pub text: String,
 }
 
-/// `load_model` request args. `name` is a Whisper model identifier; `use_gpu`
-/// (Phase 5 Force-CPU) picks the backend — absent/`None` = auto (GPU-first, CPU
-/// fallback), `Some(false)` = force CPU, `Some(true)` = force the compiled GPU.
-/// `skip_serializing_if` keeps an omitted optional absent on the wire (not `null`).
+/// `load_model` request args. `name` is a Whisper model identifier. The Phase 5
+/// `use_gpu` (Force-CPU) field was REMOVED 2026-07-19 — transcription is GPU-only,
+/// there is no backend choice on the wire any more.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoadModelArgs {
     pub name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub use_gpu: Option<bool>,
 }
 
 /// `transcribe_file` request args (SF3). `path` is an absolute audio-file path.
@@ -74,10 +71,6 @@ pub struct StartDictationArgs {
     pub vad_threshold: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hangover_ms: Option<u32>,
-    /// Phase 5 Force-CPU — see [`LoadModelArgs::use_gpu`]. Picks the dictation
-    /// speech-context backend (None = auto, Some(false) = force CPU).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub use_gpu: Option<bool>,
 }
 
 /// `stop_dictation` request args — none. Stops the mic and emits a terminal

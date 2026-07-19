@@ -331,7 +331,7 @@ fn dispatch(ctx: &ControlContext, conn_id: u64, req: Request) -> Response {
             Ok(args) => {
                 // Track the last model so hotkey-driven dictation reuses it (SF5).
                 ctx.set_last_model(&args.name);
-                forward(ctx, req.id, EngineCmd::LoadModel { name: args.name, use_gpu: args.use_gpu })
+                forward(ctx, req.id, EngineCmd::LoadModel { name: args.name })
             }
             Err(e) => err_response(
                 req.id,
@@ -415,7 +415,7 @@ fn dispatch(ctx: &ControlContext, conn_id: u64, req: Request) -> Response {
                 // Track the last model (hotkey dictation reuses it, SF5); UI-driven →
                 // DictationSource::Client (its per-call Channel owns the `final`).
                 ctx.set_last_model(&args.model);
-                match dictation::start(ctx, conn_id, args.model, args.vad_threshold, args.hangover_ms, args.use_gpu, DictationSource::Client) {
+                match dictation::start(ctx, conn_id, args.model, args.vad_threshold, args.hangover_ms, DictationSource::Client) {
                     Ok(()) => ack(req.id),
                     Err(e) => err_response(req.id, e),
                 }

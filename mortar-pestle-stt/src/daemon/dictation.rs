@@ -51,7 +51,7 @@ use crate::models::{ensure_model, ModelError};
 use crate::protocol::{DictationCommitted, DictationStarted, Event, Final, ProtoError, Progress, Segment, Vu};
 use crate::resample::{rms, Resampler16k, TARGET_RATE};
 use crate::vad::{EmitCursor, SegmentMs, VadChunker, DEFAULT_HANGOVER_MS, DEFAULT_THRESHOLD};
-use crate::whisper::{load_ctx_choice, transcribe_pcm};
+use crate::whisper::{load_ctx, transcribe_pcm};
 
 /// Who initiated a dictation — drives the terminal routing. A `Hotkey` session also
 /// emits `dictation_committed` so the host appends the transcript to today's Quick
@@ -125,7 +125,6 @@ pub fn start(
     model: String,
     vad_threshold: Option<f32>,
     hangover_ms: Option<u32>,
-    use_gpu: Option<bool>,
     source: DictationSource,
 ) -> Result<(), ProtoError> {
     if ctx.is_dictating() {
@@ -163,7 +162,6 @@ pub fn start(
                 model,
                 vad_threshold,
                 hangover_ms,
-                use_gpu,
                 source,
             )
         })
@@ -230,7 +228,6 @@ fn consume(
     model: String,
     vad_threshold: Option<f32>,
     hangover_ms: Option<u32>,
-    use_gpu: Option<bool>,
     source: DictationSource,
 ) {
     let mut resampler = match Resampler16k::new(native_rate, native_channels) {
@@ -254,7 +251,7 @@ fn consume(
     // must ack fast — it cannot block on a possible first-run fetch). `None` on any
     // failure → graceful degrade (still streams `vu`, still emits `final`).
     let mut vad = init_vad(&events, threshold, hangover);
-    let speech = init_speech(&events, &model, use_gpu);
+    let speech = init_speech(&events, &model);
 
     // Tracks which finalized segments have already been emitted (per the vad module's
     // finalization policy); matched to the same hangover the chunker uses.
@@ -470,10 +467,10 @@ fn init_vad(events: &broadcast::Sender<Event>, threshold: f32, hangover_ms: u32)
 
 /// Fetch-on-demand + load the SPEECH [`WhisperContext`] once on the consumer thread
 /// (SF3), mirroring `whisper::handle_load` (same `ensure_model` + `progress` forwarding +
-/// `whisper::load_ctx` GPU-first selection). Returns `None` on ANY failure after emitting
+/// `whisper::load_ctx` GPU-only selection). Returns `None` on ANY failure after emitting
 /// an `error` — the session then streams `vu` + empty-text VAD `segment`s and still emits
 /// the terminal `final`; the daemon NEVER panics on a model problem.
-fn init_speech(events: &broadcast::Sender<Event>, model: &str, use_gpu: Option<bool>) -> Option<WhisperContext> {
+fn init_speech(events: &broadcast::Sender<Event>, model: &str) -> Option<WhisperContext> {
     let ensured = match ensure_model(model, |pct| {
         if let Ok(data) = serde_json::to_value(Progress { pct }) {
             let _ = events.send(Event { event: "progress".to_string(), data });
@@ -490,7 +487,7 @@ fn init_speech(events: &broadcast::Sender<Event>, model: &str, use_gpu: Option<b
         }
     };
 
-    match load_ctx_choice(&ensured.path, use_gpu) {
+    match load_ctx(&ensured.path) {
         Ok((ctx, backend)) => {
             log::info!("dictation: speech model `{model}` loaded (backend={backend})");
             Some(ctx)

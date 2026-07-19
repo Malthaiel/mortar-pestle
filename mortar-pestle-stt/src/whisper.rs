@@ -78,36 +78,23 @@ pub(crate) fn load_ctx_on(path: &Path, use_gpu: bool) -> Result<WhisperContext, 
     WhisperContext::new_with_params(path, cparams)
 }
 
-/// Load a context GPU-first with a CPU fallback, returning the backend that ACTUALLY loaded
-/// (not a compile-time guess). When a GPU backend is compiled in we try the GPU; on a clean
-/// `Err` (e.g. no usable device) we retry on CPU and report `"cpu"`. This catches only a
-/// Rust `Err` — a hard ggml `abort()` on a GPU-less host would terminate the process before
-/// the fallback, which is out of scope here (every supported host has a working Vulkan
-/// device). Drives both `handle_load` and dictation's `init_speech`.
-pub(crate) fn load_ctx(path: &Path) -> Result<(WhisperContext, &'static str), whisper_rs::WhisperError> {
-    if gpu_compiled() {
-        match load_ctx_on(path, true) {
-            Ok(ctx) => return Ok((ctx, gpu_backend_name())),
-            Err(e) => log::warn!("whisper: GPU load failed ({e}); retrying on CPU"),
-        }
+/// Load a context on the GPU. **GPU-ONLY — there is no CPU fallback and no Force-CPU
+/// escape** (2026-07-19): CPU whisper saturates every core and made the host unusable
+/// during comms extraction, so a missing/broken GPU is now a loud failure to debug, not
+/// a silent degrade. Returns the context + the backend name (for `model_loaded.backend`).
+/// Drives `handle_load`, dictation's `init_speech`, and the CLI.
+///
+/// A build with no GPU feature compiled in (`default = []`) fails here rather than
+/// running on CPU — the prod build passes `--features vulkan` (both tauri configs).
+pub(crate) fn load_ctx(path: &Path) -> Result<(WhisperContext, &'static str), String> {
+    if !gpu_compiled() {
+        return Err("this build has no GPU backend compiled in (rebuild with `--features vulkan`); \
+                    CPU transcription is disabled by design"
+            .to_string());
     }
-    load_ctx_on(path, false).map(|ctx| (ctx, "cpu"))
-}
-
-/// Resolve a context load honoring an explicit backend choice (Phase 5 Force-CPU):
-/// `None` = auto ([`load_ctx`], GPU-first with CPU fallback); `Some(false)` = force
-/// CPU; `Some(true)` = force the compiled GPU backend (no fallback). Returns the
-/// context + the backend that ACTUALLY loaded (for `model_loaded.backend`). Shared by
-/// `handle_load` and dictation's `init_speech`.
-pub(crate) fn load_ctx_choice(
-    path: &Path,
-    use_gpu: Option<bool>,
-) -> Result<(WhisperContext, &'static str), whisper_rs::WhisperError> {
-    match use_gpu {
-        None => load_ctx(path),
-        Some(true) => load_ctx_on(path, true).map(|ctx| (ctx, gpu_backend_name())),
-        Some(false) => load_ctx_on(path, false).map(|ctx| (ctx, "cpu")),
-    }
+    load_ctx_on(path, true)
+        .map(|ctx| (ctx, gpu_backend_name()))
+        .map_err(|e| format!("GPU ({}) load failed: {e}", gpu_backend_name()))
 }
 
 /// Spawn the resident whisper worker thread. Returns its `JoinHandle`; `daemon::run`
@@ -134,7 +121,7 @@ fn run_worker(cmd_rx: Receiver<EngineCmd>, events: broadcast::Sender<Event>, can
 
     while let Ok(cmd) = cmd_rx.recv() {
         match cmd {
-            EngineCmd::LoadModel { name, use_gpu } => handle_load(&mut model, &events, &name, use_gpu),
+            EngineCmd::LoadModel { name } => handle_load(&mut model, &events, &name),
             EngineCmd::TranscribeFile { path } => {
                 handle_transcribe(model.as_ref(), &events, &cancel, &path)
             }
@@ -165,7 +152,6 @@ fn handle_load(
     model_slot: &mut Option<WhisperContext>,
     events: &broadcast::Sender<Event>,
     name: &str,
-    use_gpu: Option<bool>,
 ) {
     if name.is_empty() || name.contains('/') || name.contains("..") {
         emit_error(events, "bad_request", format!("invalid model name `{name}`"));
@@ -194,7 +180,7 @@ fn handle_load(
 
     log::info!("whisper: loading `{name}` from {}", ensured.path.display());
 
-    match load_ctx_choice(&ensured.path, use_gpu) {
+    match load_ctx(&ensured.path) {
         Ok((ctx, backend)) => {
             *model_slot = Some(ctx);
             log::info!("whisper: model `{name}` loaded (backend={backend}, sha256={})", ensured.sha256);
@@ -654,18 +640,11 @@ pub fn run_cli(args: &[String]) -> std::process::ExitCode {
     };
     eprintln!("decoded {:.1}s of audio", pcm.len() as f64 / WHISPER_SAMPLE_RATE as f64);
 
-    // GPU when compiled in (mirrors the daemon's auto-resolve), CPU fallback on error.
-    let ctx = match load_ctx_on(&speech.path, gpu_compiled()) {
-        Ok(c) => c,
-        Err(e) if gpu_compiled() => {
-            eprintln!("gpu load failed ({e}) — retrying on cpu");
-            match load_ctx_on(&speech.path, false) {
-                Ok(c) => c,
-                Err(e) => {
-                    eprintln!("model load failed: {e}");
-                    return ExitCode::FAILURE;
-                }
-            }
+    // GPU-only (mirrors the daemon) — no CPU fallback.
+    let ctx = match load_ctx(&speech.path) {
+        Ok((c, backend)) => {
+            eprintln!("model loaded on {backend}");
+            c
         }
         Err(e) => {
             eprintln!("model load failed: {e}");

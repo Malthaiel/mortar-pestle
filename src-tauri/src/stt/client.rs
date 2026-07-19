@@ -108,13 +108,11 @@ pub struct EchoPayload {
     pub text: String,
 }
 
-/// `load_model` request `args`. `use_gpu` (Phase 5 Force-CPU): absent/None = auto
-/// (GPU-first, CPU fallback), Some(false) = force CPU, Some(true) = force GPU.
+/// `load_model` request `args`. The Phase 5 `use_gpu` (Force-CPU) field was REMOVED
+/// 2026-07-19 — transcription is GPU-only, no backend choice on the wire.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoadModelArgs {
     pub name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub use_gpu: Option<bool>,
 }
 
 /// `model_loaded` event `data` (emitted once SF2 implements `load_model`).
@@ -143,8 +141,6 @@ pub struct StartDictationArgs {
     pub vad_threshold: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hangover_ms: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub use_gpu: Option<bool>,
 }
 
 /// `stop_dictation` request `args` — none (field-less marker, serializes to `{}`).

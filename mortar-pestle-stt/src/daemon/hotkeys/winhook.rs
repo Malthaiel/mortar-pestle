@@ -178,7 +178,7 @@ fn handle_press(ctx: &ControlContext) {
     }
     let model = ctx.last_model().unwrap_or_else(|| DEFAULT_MODEL.to_string());
     log::info!("winhook: dictate press → start_dictation (model={model})");
-    if let Err(e) = dictation::start(ctx, HOTKEY_CONN_ID, model, None, None, None, DictationSource::Hotkey) {
+    if let Err(e) = dictation::start(ctx, HOTKEY_CONN_ID, model, None, None, DictationSource::Hotkey) {
         log::warn!("winhook: dictate start failed: [{}] {}", e.code, e.message);
     }
 }

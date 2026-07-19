@@ -137,7 +137,7 @@ fn handle_press(ctx: &ControlContext, shortcut_id: &str) {
     // settings.stt sliders / force-cpu apply to UI-driven dictation; the daemon stays
     // config-less). Source::Hotkey tags the terminal `dictation_committed` for the
     // host's daily-log sink.
-    if let Err(e) = dictation::start(ctx, HOTKEY_CONN_ID, model, None, None, None, DictationSource::Hotkey) {
+    if let Err(e) = dictation::start(ctx, HOTKEY_CONN_ID, model, None, None, DictationSource::Hotkey) {
         log::warn!("hotkeys: dictate start failed: [{}] {}", e.code, e.message);
     }
 }
