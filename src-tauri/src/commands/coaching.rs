@@ -287,6 +287,20 @@ async fn audio_stream_count(path: &Path) -> Result<usize, VaultError> {
     Ok(String::from_utf8_lossy(&out.stdout).lines().filter(|l| !l.trim().is_empty()).count())
 }
 
+/// How many audio tracks a recording has — backs the Comms/Mic Track dropdowns.
+/// The guard in `coaching_extract_audio` only catches an OUT-OF-RANGE track; a
+/// wrong-but-existing one still yields a silently empty transcript, so the picker
+/// is populated from the file itself rather than typed free-hand.
+#[tauri::command]
+pub async fn coaching_audio_track_count(video: String) -> Result<usize, VaultError> {
+    if video.is_empty() {
+        return Err(VaultError::Invalid("path required".into()));
+    }
+    let canonical = std::fs::canonicalize(PathBuf::from(&video))
+        .map_err(|_| VaultError::NotFound(format!("Recording not found: {video}")))?;
+    audio_stream_count(&canonical).await
+}
+
 /// `track` (sub-plan 6 SF2) optionally selects a single 0-based audio stream via
 /// `-map 0:a:<track>` — the OBS isolated-track layout carries mic / Discord comms on
 /// separate streams. Omitted / negative = the previous whole-audio downmix (sub-plan 4

@@ -69,6 +69,7 @@
     "allow-coaching-rename-scrim-dir",
     "allow-export-report-file",
     "allow-coaching-extract-audio",
+    "allow-coaching-audio-track-count",
     "allow-deadlock-fetch-match",
     "allow-coaching-classify-match",
     "allow-coaching-agent-run",

@@ -628,6 +628,33 @@ export function EditField({ label, value, onChange, onCommit, placeholder, right
   );
 }
 
+// Track picker — EditField's shell with a CandySelect fed by the recording's REAL
+// audio-track count (coaching_audio_track_count). Free-text indices produced two
+// failures: out-of-range (opaque ffmpeg "Stream map '' matches no streams", now
+// guarded in Rust) and wrong-but-existing (an empty wav → a silently empty
+// transcript, no error at all). Only picking from the file itself kills the second.
+// Labels carry both numberings — ffmpeg counts audio from 0, OBS labels from 1.
+// `count` 0 = no recording set yet / probe failed.
+export function TrackField({ label, value, count, onChange }) {
+  const options = Array.from({ length: count }, (_, i) => ({
+    value: String(i),
+    label: `Track ${i} (OBS ${i + 1})`,
+  }));
+  return (
+    <div style={{ marginBottom: candyGap(8, true) }}>
+      <div style={labelStyle}>{label}</div>
+      <CandySelect
+        value={String(value ?? '')}
+        options={options}
+        onChange={onChange}
+        title={label}
+        placeholder={count ? 'Pick a track' : 'Set a VOD Review first'}
+        disabled={!count}
+      />
+    </div>
+  );
+}
+
 export function MiniBtn({ icon: Icon, title, onClick, active, shape = 'icon', style }) {
   return (
     <button className={`candy-btn${active ? ' is-active' : ''}`} data-shape={shape} title={title} onClick={onClick}

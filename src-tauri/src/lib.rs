@@ -812,6 +812,7 @@ pub fn run() {
             commands::coaching::coaching_rename_scrim_dir,
             commands::coaching::export_report_file,
             commands::coaching::coaching_extract_audio,
+            commands::coaching::coaching_audio_track_count,
             commands::coaching::deadlock_fetch_match,
             commands::coaching::coaching_classify_match,
             commands::coaching::coaching_agent_run,

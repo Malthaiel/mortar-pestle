@@ -5,7 +5,7 @@
 // AppWindow popup): roster, track indices, your name, and the matchup fields.
 // Saving rides scrimShared's per-file useDocSave loop against Overview.md only.
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, invoke } from '@host/api.js';
 import { navigate } from '@host/router.js';
 import { encodePagePath } from '@host/components/SidebarBrowser.jsx';
@@ -26,7 +26,7 @@ import {
   useCommsJobBridge, updateTeamProgress, notify, pickFile, trackIndex,
   loadTrackDefaults, saveTrackDefault, loadYourName, LS_YOUNAME_KEY,
   mergeOverview, overviewPath, matchPath,
-  EditField, MiniBtn, SaveTag, RosterEditor,
+  EditField, TrackField, MiniBtn, SaveTag, RosterEditor,
   wrap, inner, sectionTitle,
   MP4_FILTERS, NOTES_FILTERS, STT_MODEL, readTeamStore,
 } from './scrimShared.jsx';
@@ -43,6 +43,7 @@ export default function OverviewPage({ folder, accent, nav = navigate, overlay =
   const [reportPhase, setReportPhase] = useState('');
   const [yourName, setYourName] = useState(loadYourName);
   const [trackDefaults, setTrackDefaults] = useState(loadTrackDefaults);
+  const [trackCount, setTrackCount] = useState(0);
   const vodRef = useRef(false);
   const reportRef = useRef(false);
 
@@ -54,6 +55,19 @@ export default function OverviewPage({ folder, accent, nav = navigate, overlay =
     base,
     onFiled: (target, p) => { if (target === 'vod') { setScrimField('VOD Review', p); flushSave(); } },
   });
+
+  // Probe the chosen VOD for its real audio-track count so the Comms/Mic pickers
+  // can only offer tracks that exist. 0 = nothing picked yet, or the probe failed
+  // (which disables the pickers rather than silently offering bad indices).
+  const vodPath = String(doc?.scrim?.['VOD Review'] || '').trim();
+  useEffect(() => {
+    if (!vodPath) { setTrackCount(0); return; }
+    let live = true;
+    invoke('coaching_audio_track_count', { video: vodPath })
+      .then((n) => { if (live) setTrackCount(Number(n) || 0); })
+      .catch(() => { if (live) setTrackCount(0); });
+    return () => { live = false; };
+  }, [vodPath]);
 
   // Extract VOD Comms — the Rust-owned comms job, kind 'vod'; completion lands in
   // the bridge below (finishVodJob is disk-based in scrimShared).
@@ -265,12 +279,10 @@ export default function OverviewPage({ folder, accent, nav = navigate, overlay =
         <div style={{ ...sectionTitle, marginTop: 20, marginBottom: 8 }}>Coaching Setup</div>
         <RosterEditor team={fm['Coached Team'] || fm['Team 1'] || ''} />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 14 }}>
-          <EditField label="Comms Track" value={fm['Comms Track']} onChange={(v) => setFm('Comms Track', v)}
-            onCommit={() => { flushSave(); saveTrackDefault('comms', docRef.current?.frontmatter?.['Comms Track'] || ''); setTrackDefaults(loadTrackDefaults()); }}
-            placeholder={trackDefaults.comms !== '' ? `default ${trackDefaults.comms}` : 'OBS track # (e.g. 4)'} />
-          <EditField label="Mic Track" value={fm['Mic Track']} onChange={(v) => setFm('Mic Track', v)}
-            onCommit={() => { flushSave(); saveTrackDefault('mic', docRef.current?.frontmatter?.['Mic Track'] || ''); setTrackDefaults(loadTrackDefaults()); }}
-            placeholder={trackDefaults.mic !== '' ? `default ${trackDefaults.mic}` : 'OBS track # (e.g. 1)'} />
+          <TrackField label="Comms Track" value={fm['Comms Track'] ?? trackDefaults.comms} count={trackCount}
+            onChange={(v) => { setFm('Comms Track', v); flushSave(); saveTrackDefault('comms', v); setTrackDefaults(loadTrackDefaults()); }} />
+          <TrackField label="Mic Track" value={fm['Mic Track'] ?? trackDefaults.mic} count={trackCount}
+            onChange={(v) => { setFm('Mic Track', v); flushSave(); saveTrackDefault('mic', v); setTrackDefaults(loadTrackDefaults()); }} />
         </div>
         <EditField label="Your Name (mic track)" value={yourName} onChange={setYourName}
           onCommit={() => { try { localStorage.setItem(LS_YOUNAME_KEY, yourName || ''); } catch { /* private mode */ } }}

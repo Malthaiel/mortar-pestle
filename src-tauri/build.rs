@@ -74,6 +74,7 @@ fn main() {
         "coaching_rename_scrim_dir",
         "export_report_file",
         "coaching_extract_audio",
+        "coaching_audio_track_count",
         "deadlock_fetch_match",
         "coaching_classify_match",
         "coaching_agent_run",
