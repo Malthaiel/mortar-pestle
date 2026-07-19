@@ -10,6 +10,8 @@
 // segments are recording-clock ms (parseSegments). recording = game + offsetS (the match's
 // `Comms Offset` field). All functions are tolerant — bad input degrades to empty, never throws.
 
+import { parseOrRetry } from './aiRetry.js';
+
 // Whole-second time → m:ss (standalone so the Node harness needs no matchData import).
 export function mmss(s) {
   const v = Number(s);
@@ -201,10 +203,7 @@ export async function judgeTeamfights(invoke, { fights, coachedTeam = '', roster
     cliPath: agents.claudeCliPath || '',
   };
   const call = (userPrompt) => invoke('coaching_classify_match', { ...base, userPrompt });
-  try {
-    return parseVerdicts(await call(user), fights);
-  } catch (err) {
-    const retry = `${user}\n\nYour previous response failed to parse (${err.message}). Respond with ONLY the JSON object, nothing else.`;
-    return parseVerdicts(await call(retry), fights);
-  }
+  // parse failure → one reprompt; transport failure (timeout/auth) → straight through, no retry.
+  return parseOrRetry(call, user, (raw) => parseVerdicts(raw, fights),
+    'Respond with ONLY the JSON object, nothing else.');
 }

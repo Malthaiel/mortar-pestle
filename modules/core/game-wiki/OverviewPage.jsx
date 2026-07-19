@@ -174,7 +174,14 @@ export default function OverviewPage({ folder, accent, nav = navigate, overlay =
       const transcriptBlock = buildTranscriptBlock(norm.segments);
 
       setReportPhase('Analyzing');
-      const draft = await generateReport(invoke, { transcriptBlock, teams: { opponent }, coachedTeam, priorActionItems, notesBlock, brainContext: brain.text, matchDigests, coachNotesBlock, prior }, agents);
+      // Land every raw draft emission on disk before it is parsed — this call is the pipeline's
+      // most expensive, and a contract slip used to discard it with nothing recoverable.
+      const rawPath = scrimSidecarPath(folder, 'vodraw');
+      const draft = await generateReport(invoke, {
+        transcriptBlock, teams: { opponent }, coachedTeam, priorActionItems, notesBlock,
+        brainContext: brain.text, matchDigests, coachNotesBlock, prior,
+        onRaw: (raw) => api.savePage(rawPath, raw, null, 'gamewiki'),
+      }, agents);
 
       setReportPhase('Fact-checking');
       const { report, ran: verified } = await verifyReport(invoke, { report: draft, matchDigests, lexicon }, agents);

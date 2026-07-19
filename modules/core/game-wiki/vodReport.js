@@ -15,6 +15,8 @@
 //   references inside md are literal [m:ss] tokens the view swaps for jump chips.
 
 // Whole-second time → m:ss (standalone so the Node harness needs no matchData import).
+import { parseOrRetry } from './aiRetry.js';
+
 export function mmss(s) {
   const v = Number(s);
   if (!Number.isFinite(v) || v < 0) return '0:00';
@@ -413,13 +415,11 @@ export async function normalizeTranscript(invoke, segments, lexicon, agents = {}
     const user = buildNormalizePrompt(segs, lexicon);
     const call = (userPrompt) => invoke('coaching_classify_match', { ...base, userPrompt });
     try {
-      corrections = parseCorrections(await call(user));
+      corrections = await parseOrRetry(call, user, parseCorrections, 'Respond with ONLY the JSON array, nothing else.');
     } catch (err) {
-      try {
-        corrections = parseCorrections(await call(`${user}\n\nYour previous response failed to parse (${err.message}). Respond with ONLY the JSON array, nothing else.`));
-      } catch (err2) {
-        return keep(`Pass 0 discarded: unparseable corrections (${err2.message})`);
-      }
+      // parse-failed-twice OR a transport failure (timeout/auth/upstream) — either way this pass
+      // is an enhancer, so ship the transcript un-normalized rather than block the report.
+      return keep(`Pass 0 discarded: ${err.message}`);
     }
   }
 
@@ -525,11 +525,7 @@ export async function verifyReport(invoke, { report, matchDigests = [], lexicon 
   });
   let findings;
   try {
-    try {
-      findings = parseFindings(await call(user));
-    } catch (err) {
-      findings = parseFindings(await call(`${user}\n\nYour previous response failed to parse (${err.message}). Respond with ONLY the JSON object, nothing else.`));
-    }
+    findings = await parseOrRetry(call, user, parseFindings, 'Respond with ONLY the JSON object, nothing else.');
   } catch (err2) {
     const out = mapStrings(report, (s) => s);
     out.meta = out.meta || { passes: [], brainSections: [], warnings: [], findings: [] };
@@ -541,7 +537,7 @@ export async function verifyReport(invoke, { report, matchDigests = [], lexicon 
 
 // DI'd invoke (like autoClassify.classifyMoments) → generate + parse + reconcile. Reprompt-once on a
 // parse failure, then let a second failure throw. Opus via the alias the Rust side maps to claude-opus-4-8.
-export async function generateReport(invoke, { transcriptBlock, teams, coachedTeam, priorActionItems = [], notesBlock = '', brainContext = '', matchDigests = [], coachNotesBlock = '', prior = null }, agents = {}) {
+export async function generateReport(invoke, { transcriptBlock, teams, coachedTeam, priorActionItems = [], notesBlock = '', brainContext = '', matchDigests = [], coachNotesBlock = '', prior = null, onRaw = null }, agents = {}) {
   const user = buildReportPrompt({ transcriptBlock, teams, coachedTeam, priorActionItems, notesBlock, brainContext, matchDigests, coachNotesBlock });
   const base = {
     systemPrompt: VOD_REPORT_SYSTEM_PROMPT,
@@ -550,13 +546,10 @@ export async function generateReport(invoke, { transcriptBlock, teams, coachedTe
     cliPath: agents.claudeCliPath || '',
   };
   const call = (userPrompt) => invoke('coaching_classify_match', { ...base, userPrompt });
-  let report;
-  try {
-    report = parseReport(await call(user));
-  } catch (err) {
-    const retry = `${user}\n\nYour previous response failed to parse (${err.message}). Respond with ONLY the JSON object, nothing else.`;
-    report = parseReport(await call(retry));
-  }
+  // The one pass that must not degrade — a failed draft is a failed report, so this throws.
+  // onRaw persists each raw emission first: the draft is the single most expensive call in the
+  // pipeline and a double parse failure used to discard it entirely.
+  const report = await parseOrRetry(call, user, parseReport, 'Respond with ONLY the JSON object, nothing else.', onRaw);
   report.schemaVersion = REPORT_SCHEMA_VERSION; // stamp regardless of what the model echoed
   return prior ? reconcileReport(report, prior) : report;
 }

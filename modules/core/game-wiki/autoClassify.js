@@ -13,6 +13,7 @@
 
 import { extractObjectives, extractSeries, sideName, heroName, clock } from './matchData.js';
 import { CLASSIFICATIONS, secFromClock, formatTimedBullet } from './noteCompile.js';
+import { parseOrRetry } from './aiRetry.js';
 
 // Deadlock side label → side id (0 = Amber, 1 = Sapphire). The API metadata carries
 // no mapping from a real team NAME to a side, so the coached side is a user input
@@ -339,12 +340,9 @@ export async function classifyMoments(invoke, digest, agents = {}, opts = {}) {
   };
   const call = (userPrompt) => invoke('coaching_classify_match', { ...base, userPrompt });
   const notes = opts.userNotes || [];
-  try {
-    return parseMergedClassifications(await call(user), digest, notes);
-  } catch (err) {
-    const retry = `${user}\n\nYour previous response failed to parse (${err.message}). Respond with ONLY the JSON array, nothing else.`;
-    return parseMergedClassifications(await call(retry), digest, notes); // throws again if still bad
-  }
+  // parse failure → one reprompt; transport failure (timeout/auth) → straight through, no retry.
+  return parseOrRetry(call, user, (raw) => parseMergedClassifications(raw, digest, notes),
+    'Respond with ONLY the JSON array, nothing else.');
 }
 
 // ── SF3: reconcile review state + render the AI section + the .md setter ─────

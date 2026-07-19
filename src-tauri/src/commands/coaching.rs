@@ -612,7 +612,10 @@ async fn classify_via_api(system: &str, user: &str, model: &str) -> Result<Strin
     Ok(text)
 }
 
-const CLASSIFY_CLI_TIMEOUT_SECS: u64 = 5 * 60; // one-shot reasoning; hung CLI = kill + loud error
+// 20 min: the schema-v2 analyst report (playerCards + macro + commsGrade + sections) is a
+// 10k+ token single emission over a full VOD transcript — the old 5 min killed it mid-write,
+// twice (once per retry), losing ~20 min of billed generation with nothing on disk.
+const CLASSIFY_CLI_TIMEOUT_SECS: u64 = 20 * 60; // one-shot reasoning; hung CLI = kill + loud error
 const AGENT_RUN_TIMEOUT_SECS: u64 = 20 * 60; // tool-using verify loops legitimately run long
 
 async fn classify_via_cli(

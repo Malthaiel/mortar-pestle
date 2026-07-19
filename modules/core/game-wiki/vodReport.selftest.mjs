@@ -153,8 +153,18 @@ const badInvoke = async () => { calls++; return 'not json at all'; };
 const r2 = await normalizeTranscript(badInvoke, segs, 'lex');
 assert.equal(calls, 2);
 assert.equal(r2.discarded, true);
-assert.ok(/unparseable/.test(r2.warning));
+assert.ok(/no JSON array/.test(r2.warning));
 assert.equal(r2.segments[0].text, 'infernal is fed');
+
+// transport failure (CLI timeout kill) discards WITHOUT a reprompt — retrying a timeout just
+// resends a longer prompt into the same wall and double-bills the run.
+let tcalls = 0;
+const deadInvoke = async () => { tcalls++; throw new Error('claude timed out after 1200s (killed)'); };
+const r2b = await normalizeTranscript(deadInvoke, segs, 'lex');
+assert.equal(tcalls, 1, 'transport failure must not be retried');
+assert.equal(r2b.discarded, true);
+assert.ok(/timed out/.test(r2b.warning));
+assert.equal(r2b.segments[0].text, 'infernal is fed');
 
 // rewrite-drift discard: corrections > max(10, 30% of segments)
 const segs40 = Array.from({ length: 40 }, (_, i) => ({ t0Ms: i, text: `line ${i}`, speaker: 'A' }));
