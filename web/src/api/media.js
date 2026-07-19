@@ -36,22 +36,35 @@ export function libraryAbs(rel) {
 let _mediaBaseUrl = null;
 let _mediaToken = null;
 let _mediaBaseUrlPromise = null;
+// `media_server_port` returns None until the axum listener has bound (lib.rs).
+// The packaged build reaches this module before that happens — dev doesn't, since
+// Vite's startup covers the gap — and the old code cached that miss for the whole
+// session. Every media URL then resolved to null, and `<video>.src = null` loads
+// the literal string "null" and reports MEDIA_ERR_SRC_NOT_SUPPORTED (code 4),
+// which reads exactly like a codec problem. Poll instead of caching the miss; the
+// module-load prime below therefore also un-sticks the sync `mediaHttpUrl` path,
+// whose callers re-render on the ready event this fires.
+async function resolveMediaBase(tries = 20, delayMs = 150) {
+  for (let i = 0; i < tries; i++) {
+    let info = null;
+    try { info = await invoke('media_server_port'); }
+    catch (e) { console.error('[media] port resolve failed:', e); }
+    if (info && typeof info.port === 'number' && info.port > 0) {
+      _mediaBaseUrl = `http://127.0.0.1:${info.port}`;
+      _mediaToken = info.token;
+      if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+        window.dispatchEvent(new CustomEvent('agentic:media-server-ready', { detail: { baseUrl: _mediaBaseUrl } }));
+      }
+      return _mediaBaseUrl;
+    }
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+  _mediaBaseUrlPromise = null; // 3 s of misses: let a later caller start over
+  return null;
+}
 async function mediaBaseUrl() {
   if (_mediaBaseUrl) return _mediaBaseUrl;
-  if (!_mediaBaseUrlPromise) {
-    _mediaBaseUrlPromise = invoke('media_server_port')
-      .then((info) => {
-        if (info && typeof info.port === 'number' && info.port > 0) {
-          _mediaBaseUrl = `http://127.0.0.1:${info.port}`;
-          _mediaToken = info.token;
-          if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
-            window.dispatchEvent(new CustomEvent('agentic:media-server-ready', { detail: { baseUrl: _mediaBaseUrl } }));
-          }
-        }
-        return _mediaBaseUrl;
-      })
-      .catch(() => null);
-  }
+  if (!_mediaBaseUrlPromise) _mediaBaseUrlPromise = resolveMediaBase();
   return _mediaBaseUrlPromise;
 }
 // Prime the cache on module load so consumers can call mediaUrlSync.

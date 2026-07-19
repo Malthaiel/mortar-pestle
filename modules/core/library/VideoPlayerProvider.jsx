@@ -235,7 +235,17 @@ export function VideoPlayerProvider({ children }) {
     const onEnded = () => handleEnded();
     const onError = () => {
       if (!v.error) return; // ignore the empty-error fired on src clear
-      setStreamError('Playback error (code ' + v.error.code + ')');
+      // The bare code told us nothing across three debugging sessions. Carry the
+      // engine's own message plus the URL it actually tried — release builds
+      // no-op devtools, so this string is the only diagnostic that reaches prod.
+      const detail = [
+        'code ' + v.error.code,
+        v.error.message || '(no message)',
+        'src=' + (v.currentSrc || v.getAttribute('src') || '(none)'),
+        'net=' + v.networkState + ' ready=' + v.readyState,
+      ].join(' | ');
+      console.error('[video] playback error:', detail, v.error);
+      setStreamError('Playback error (' + detail + ')');
     };
     v.addEventListener('timeupdate', onTime);
     v.addEventListener('play', onPlay);

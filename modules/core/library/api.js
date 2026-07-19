@@ -66,7 +66,12 @@ export const videoApi = {
   videoStreamURL:    async (abs, audio = 0) => {
     await awaitMediaBaseUrl();
     const r = await _api.invoke('video_start_transcode', { abs, audio });
-    return { ...r, url: rewriteAssetToHttp(r.url) };
+    const url = rewriteAssetToHttp(r.url);
+    // rewriteAssetToHttp yields null when the media-server port never resolved.
+    // Assigning that to <video>.src loads the literal string "null" and surfaces
+    // as MEDIA_ERR_SRC_NOT_SUPPORTED — a real cause wearing a codec bug's mask.
+    if (!url) throw new Error('media server URL unavailable (port not resolved) for ' + r.url);
+    return { ...r, url };
   },
   videoSubsURL:      async (abs, stream = 0) => {
     await awaitMediaBaseUrl();
