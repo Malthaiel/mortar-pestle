@@ -15,7 +15,9 @@
 use std::path::Path;
 use std::path::PathBuf;
 
+use tauri::Emitter;
 use tauri_plugin_opener::OpenerExt;
+use tokio::io::AsyncBufReadExt;
 use tokio::process::Command as TokioCommand;
 
 use crate::commands::vault::VaultError;
@@ -423,6 +425,9 @@ pub enum DeadlockError {
     Network(String),
     Upstream(String),
     Auth(String),
+    /// The CLI was killed at the wall. Carries whatever text had already streamed in, so a long
+    /// paid run is salvageable instead of silently discarded (the frontend persists `partial`).
+    Timeout { message: String, partial: String },
 }
 
 impl serde::Serialize for DeadlockError {
@@ -435,10 +440,14 @@ impl serde::Serialize for DeadlockError {
             DeadlockError::Network(m) => ("NETWORK", m.as_str()),
             DeadlockError::Upstream(m) => ("UPSTREAM", m.as_str()),
             DeadlockError::Auth(m) => ("AUTH", m.as_str()),
+            DeadlockError::Timeout { message, .. } => ("TIMEOUT", message.as_str()),
         };
-        let mut map = s.serialize_map(Some(2))?;
+        let mut map = s.serialize_map(Some(3))?;
         map.serialize_entry("code", code)?;
         map.serialize_entry("message", message)?;
+        if let DeadlockError::Timeout { partial, .. } = self {
+            map.serialize_entry("partial", partial)?;
+        }
         map.end()
     }
 }
@@ -537,12 +546,13 @@ pub async fn coaching_classify_match(
     backend: String,
     model: String,
     cli_path: String,
+    app: tauri::AppHandle,
 ) -> Result<String, DeadlockError> {
     if user_prompt.trim().is_empty() {
         return Err(DeadlockError::Invalid("empty classify prompt".into()));
     }
     if backend == "claude-cli" {
-        classify_via_cli(&system_prompt, &user_prompt, &model, &cli_path).await
+        classify_via_cli(&system_prompt, &user_prompt, &model, &cli_path, &app).await
     } else {
         classify_via_api(&system_prompt, &user_prompt, &model).await
     }
@@ -623,9 +633,10 @@ async fn classify_via_cli(
     user: &str,
     model: &str,
     cli_path: &str,
+    app: &tauri::AppHandle,
 ) -> Result<String, DeadlockError> {
     // No tools, default cwd: pure reasoning over the prompt.
-    run_claude_cli(system, user, model, cli_path, None, None, CLASSIFY_CLI_TIMEOUT_SECS).await
+    run_claude_cli(system, user, model, cli_path, None, None, CLASSIFY_CLI_TIMEOUT_SECS, app).await
 }
 
 /// Read-only, tool-using one-shot for the Analyst verify pass (Pass 2). Distinct from
@@ -639,6 +650,7 @@ pub async fn coaching_agent_run(
     user_prompt: String,
     model: String,
     cli_path: String,
+    app: tauri::AppHandle,
 ) -> Result<String, DeadlockError> {
     if user_prompt.trim().is_empty() {
         return Err(DeadlockError::Invalid("empty agent-run prompt".into()));
@@ -655,6 +667,7 @@ pub async fn coaching_agent_run(
         Some(cwd),
         Some("Read,Grep,Glob"),
         AGENT_RUN_TIMEOUT_SECS,
+        &app,
     )
     .await
 }
@@ -670,6 +683,7 @@ async fn run_claude_cli(
     cwd: Option<std::path::PathBuf>,
     allowed_tools: Option<&str>,
     timeout_secs: u64,
+    app: &tauri::AppHandle,
 ) -> Result<String, DeadlockError> {
     use tokio::io::AsyncWriteExt;
     // Reuse design.rs's resolver: configured path → PATH lookup → platform
@@ -683,11 +697,15 @@ async fn run_claude_cli(
     let sp_file = crate::commands::design::SystemPromptFile::new(system)
         .map_err(|e| DeadlockError::Network(format!("stage system prompt: {e}")))?;
 
-    // --print --output-format json → one { type:"result", result, is_error } object.
+    // --output-format stream-json (mirrors design.rs's agent_chat): the answer arrives as
+    // text_delta events instead of one lump at the end, so a kill at the wall keeps whatever
+    // streamed in — the old `json` mode discarded a fully-billed 20-minute generation.
     let mut cmd = TokioCommand::new(&resolved);
     cmd.arg("--print")
         .arg("--output-format")
-        .arg("json")
+        .arg("stream-json")
+        .arg("--include-partial-messages")
+        .arg("--verbose")
         .arg("--no-session-persistence")
         .arg("--setting-sources")
         .arg("")
@@ -728,21 +746,62 @@ async fn run_claude_cli(
         drop(stdin);
     }
 
-    let out = tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), child.wait_with_output())
-        .await
-        .map_err(|_| DeadlockError::Network(format!("claude timed out after {timeout_secs}s (killed)")))?
-        .map_err(|e| DeadlockError::Network(format!("claude wait: {e}")))?;
-    if !out.status.success() {
-        return Err(DeadlockError::Upstream(format!("claude exited {}", out.status)));
+    // Accumulate text_delta chunks as they land. `text` is the answer-so-far at every instant, so
+    // the timeout arm below can hand it back instead of throwing the run away. `emit` (when the
+    // caller supplied a channel) reports bytes-so-far to the UI, which otherwise shows one frozen
+    // phase word for the whole run with no way to tell working from hung.
+    let mut text = String::new();
+    let mut result_err: Option<DeadlockError> = None;
+    let read = async {
+        let Some(stdout) = child.stdout.take() else { return };
+        let mut lines = tokio::io::BufReader::new(stdout).lines();
+        let mut last_emit = 0usize;
+        while let Ok(Some(line)) = lines.next_line().await {
+            let Ok(v) = serde_json::from_str::<serde_json::Value>(&line) else { continue };
+            match v.get("type").and_then(|t| t.as_str()).unwrap_or("") {
+                "stream_event" => {
+                    let Some(ev) = v.get("event") else { continue };
+                    if ev.get("type").and_then(|t| t.as_str()) != Some("content_block_delta") { continue }
+                    let Some(d) = ev.get("delta") else { continue };
+                    if d.get("type").and_then(|t| t.as_str()) != Some("text_delta") { continue }
+                    if let Some(s) = d.get("text").and_then(|t| t.as_str()) {
+                        text.push_str(s);
+                        // throttled to ~1 event per 2 KB — a per-delta emit floods the IPC bridge
+                        if text.len() - last_emit >= 2048 {
+                            last_emit = text.len();
+                            let _ = app.emit("coaching-progress", serde_json::json!({ "chars": text.len() }));
+                        }
+                    }
+                }
+                "result" => {
+                    if v.get("is_error").and_then(|b| b.as_bool()).unwrap_or(false) {
+                        let msg = v.get("result").and_then(|s| s.as_str()).unwrap_or("claude error");
+                        result_err = Some(DeadlockError::Upstream(format!("claude: {msg}")));
+                    } else if text.trim().is_empty() {
+                        // non-streaming fallback: some CLI versions only fill the final result
+                        if let Some(s) = v.get("result").and_then(|s| s.as_str()) { text.push_str(s); }
+                    }
+                }
+                _ => {}
+            }
+        }
+    };
+
+    match tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), read).await {
+        Ok(()) => {}
+        Err(_) => {
+            return Err(DeadlockError::Timeout {
+                message: format!(
+                    "claude timed out after {timeout_secs}s (killed) — {} characters had been written",
+                    text.len()
+                ),
+                partial: text,
+            })
+        }
     }
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    let v: serde_json::Value = serde_json::from_str(&stdout)
-        .map_err(|e| DeadlockError::Upstream(format!("Malformed claude JSON: {e}")))?;
-    if v.get("is_error").and_then(|b| b.as_bool()).unwrap_or(false) {
-        let msg = v.get("result").and_then(|s| s.as_str()).unwrap_or("claude error");
-        return Err(DeadlockError::Upstream(format!("claude: {msg}")));
+    if let Some(e) = result_err {
+        return Err(e);
     }
-    let text = v.get("result").and_then(|s| s.as_str()).unwrap_or("").to_string();
     if text.trim().is_empty() {
         return Err(DeadlockError::Upstream("claude returned empty result".into()));
     }

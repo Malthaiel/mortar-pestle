@@ -6,11 +6,13 @@
 // Saving rides scrimShared's per-file useDocSave loop against Overview.md only.
 
 import { useEffect, useRef, useState } from 'react';
+import { listen } from '@tauri-apps/api/event';
 import { api, invoke } from '@host/api.js';
 import { navigate } from '@host/router.js';
 import { encodePagePath } from '@host/components/SidebarBrowser.jsx';
 import RecordButton from '@modules/studio/overlay/RecordButton.jsx';
 import { IconFolder, IconPlayCircle } from '@host/components/icons.jsx';
+import ConfirmModal from '@host/components/ui/ConfirmModal.jsx';
 import { useSettings } from '@host/hooks/useSettings.js';
 import { parseOverview, serializeOverview, parseMatchFile } from './scrimSchema.js';
 import { sidecarPath, scrimSidecarPath } from './matchData.js';
@@ -31,6 +33,25 @@ import {
   MP4_FILTERS, NOTES_FILTERS, STT_MODEL, readTeamStore,
 } from './scrimShared.jsx';
 
+// Plain-language size estimate for the report gate. Calibrated on one measured run (2026-07-19):
+// a 58,877-char transcript across 3 full-size calls ate roughly a quarter of a 5-hour Claude Pro
+// session window. Deliberately a rough anchor, not a cost model — it is labelled as a guess in the
+// dialog, and the only number stated as fact is the transcript's own size.
+const MEASURED_CHARS = 58877;
+const MEASURED_CALLS = 3;
+const MEASURED_SHARE = 0.25;
+export function reportCostNote(segments, cachedNorm) {
+  const chars = segments.reduce((n, s) => n + String(s?.text ?? '').length, 0);
+  const calls = (cachedNorm ? 0 : 1) + 2; // normalize (cache-skippable) + draft + fact-check
+  const share = MEASURED_SHARE * (chars / MEASURED_CHARS) * (calls / MEASURED_CALLS);
+  const pct = share >= 0.1 ? `${Math.round(share * 100)}%` : 'a few percent';
+  return [
+    `This review is ${segments.length.toLocaleString()} lines, about ${(Math.round(chars / 5 / 100) * 100).toLocaleString()} words.`,
+    `The whole thing gets sent to Claude ${calls} times${cachedNorm ? ' (the name clean-up is already saved, so that pass is skipped)' : ''}, and can take up to 20 minutes.`,
+    `On the Claude Pro plan without an API key, a run this size will probably eat around ${pct} of a 5-hour session. That last number is a rough guess from one earlier run, not a measurement.`,
+  ];
+}
+
 export default function OverviewPage({ folder, accent, nav = navigate, overlay = false }) {
   const { settings } = useSettings();
   const { doc, err, saveState, docRef, applyEdit, flushSave, flushIfDirty, reload } =
@@ -41,6 +62,8 @@ export default function OverviewPage({ folder, accent, nav = navigate, overlay =
   const [vodBusy, setVodBusy] = useState({ on: false, phase: '' });
   const [reporting, setReporting] = useState(false);
   const [reportPhase, setReportPhase] = useState('');
+  const [costGate, setCostGate] = useState(null); // { segments, cachedNorm } while the size gate is up
+  const [reportChars, setReportChars] = useState(0); // characters streamed in the current pass
   const [yourName, setYourName] = useState(loadYourName);
   const [trackDefaults, setTrackDefaults] = useState(loadTrackDefaults);
   const [trackCount, setTrackCount] = useState(0);
@@ -68,6 +91,17 @@ export default function OverviewPage({ folder, accent, nav = navigate, overlay =
       .catch(() => { if (live) setTrackCount(0); });
     return () => { live = false; };
   }, [vodPath]);
+
+  // The CLI streams its answer (coaching.rs run_claude_cli), so the button can show it arriving
+  // instead of one frozen phase word for up to 20 minutes — the only way to tell working from hung.
+  useEffect(() => {
+    if (!reporting) { setReportChars(0); return; }
+    const sub = listen('coaching-progress', (e) => setReportChars(Number(e?.payload?.chars) || 0));
+    return () => { sub.then((un) => un()).catch(() => {}); };
+  }, [reporting]);
+
+  // Each pass restarts the character count — it measures the current call, not the whole run.
+  useEffect(() => { setReportChars(0); }, [reportPhase]);
 
   // Extract VOD Comms — the Rust-owned comms job, kind 'vod'; completion lands in
   // the bridge below (finishVodJob is disk-based in scrimShared).
@@ -111,13 +145,27 @@ export default function OverviewPage({ folder, accent, nav = navigate, overlay =
 
   // Generate Report — Analyst pipeline (normalize → draft → verify), folder-scoped
   // sidecars, per-match digests from the Matches/ listing.
-  const generateVodReport = async () => {
+  // The button opens a size gate first: these runs are 2-3 Claude calls each carrying the WHOLE
+  // transcript, on subscription auth, and a run can eat a big slice of a session window. Read the
+  // transcript here so the estimate is real, then hand the parsed segments to the pipeline.
+  const askVodReport = async () => {
     if (reportRef.current) return;
     const commsPath = scrimSidecarPath(folder, 'vodcomms');
     let segments;
     try { segments = parseCommsSidecar((await api.getRawFileMeta(commsPath, 'gamewiki')).content).segments; }
     catch { notify('error', 'No VOD comms', 'Extract VOD Comms first — the report reads that transcript.'); return; }
     if (!segments.length) { notify('error', 'Empty transcript', 'The VOD comms transcript has no segments to report on.'); return; }
+    // Pass 0 is skipped when the cached .vodnorm matches this transcript — one less full-size call.
+    let cachedNorm = false;
+    try {
+      const c = JSON.parse((await api.getRawFileMeta(scrimSidecarPath(folder, 'vodnorm'), 'gamewiki')).content);
+      cachedNorm = c.hash === transcriptHash(segments);
+    } catch { /* no cache */ }
+    setCostGate({ segments, cachedNorm });
+  };
+
+  const generateVodReport = async (segments) => {
+    if (reportRef.current) return;
     reportRef.current = true; setReporting(true);
     try {
       const fm = docRef.current?.frontmatter || {};
@@ -201,10 +249,16 @@ export default function OverviewPage({ folder, accent, nav = navigate, overlay =
       updateTeamProgress(coachedTeam).catch(() => {});
       notify('success', 'Report generated', `${count} action item${count === 1 ? '' : 's'}.`);
     } catch (e) {
+      // A timeout carries whatever streamed in before the kill — land it so a fully-billed run is
+      // recoverable by hand rather than silently discarded (the old behaviour).
+      if (e?.code === 'TIMEOUT' && e?.partial) {
+        await api.savePage(scrimSidecarPath(folder, 'vodraw'), e.partial, null, 'gamewiki').catch(() => {});
+      }
       const msg = {
         AUTH: ['AI backend not configured', 'Add an Anthropic API key or Claude CLI in Settings → Agents.'],
         NETWORK: ['Network error', e?.message || 'Could not reach the model.'],
         UPSTREAM: ['Model error', e?.message || 'The model returned an unexpected response.'],
+        TIMEOUT: ['Report timed out', `${e?.message || 'The model ran past the time limit.'}${e?.partial ? ' — the partial answer was saved next to the scrim.' : ''}`],
       }[e?.code] || ['Report failed', e?.message || String(e)];
       notify('error', msg[0], msg[1]);
     } finally {
@@ -264,12 +318,16 @@ export default function OverviewPage({ folder, accent, nav = navigate, overlay =
           )}
           <button className="candy-btn" data-shape="chip"
             disabled={reporting || !scrim['VOD Comms'] || !aiConfigured}
-            onClick={generateVodReport}
+            onClick={askVodReport}
             title={!scrim['VOD Comms'] ? 'Extract VOD Comms first — the report reads that transcript'
               : !aiConfigured ? 'Configure an AI backend in Settings → Agents (API key or Claude CLI)'
                 : 'Generate Report — Claude organizes the review into an action list'}
             style={reporting ? { opacity: 0.6, cursor: 'progress' } : undefined}>
-            <span className="candy-face">{reporting ? (reportPhase || 'Asking Claude') : 'Generate Report'}</span>
+            <span className="candy-face">
+              {reporting
+                ? `${reportPhase || 'Asking Claude'}${reportChars ? ` ${Math.round(reportChars / 1000)}k` : ''}`
+                : 'Generate Report'}
+            </span>
           </button>
           <button className="candy-btn" data-shape="chip" onClick={addVodNotes}
             title="Add player-written notes (.md/.txt) to feed the next report generation">
@@ -303,6 +361,19 @@ export default function OverviewPage({ folder, accent, nav = navigate, overlay =
           <EditField label="Scheduled" value={fm['Scheduled']} onChange={(v) => setFm('Scheduled', v)} onCommit={flushSave} placeholder="e.g. 7:00 PM" />
         </div>
       </div>
+      <ConfirmModal
+        open={!!costGate}
+        title="Generate this report?"
+        confirmLabel="Generate"
+        onCancel={() => setCostGate(null)}
+        onConfirm={() => { const g = costGate; setCostGate(null); generateVodReport(g.segments); }}
+      >
+        {costGate && (
+          <div style={{ fontSize: 12.5, lineHeight: 1.5, color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {reportCostNote(costGate.segments, costGate.cachedNorm).map((line, i) => <span key={i}>{line}</span>)}
+          </div>
+        )}
+      </ConfirmModal>
     </div>
   );
 }
