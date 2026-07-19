@@ -270,6 +270,23 @@ fn prune_comms_cache(dir: &Path) {
 /// re-extract of the same file is a no-op fast-path (the heavy, re-runnable pass is STT,
 /// not extraction). Mirrors `video_transcode::extract_subs_sync`.
 ///
+/// Count the audio streams in `path` via ffprobe — the reality check behind
+/// [`coaching_extract_audio`]'s track guard. A probe that fails to spawn or returns
+/// nothing yields 0, which makes any explicit track request fail loudly (correct:
+/// we could not prove the requested track exists).
+async fn audio_stream_count(path: &Path) -> Result<usize, VaultError> {
+    let out = TokioCommand::new(crate::tool_path::resolve("ffprobe"))
+        .args(["-v", "error", "-select_streams", "a", "-show_entries", "stream=index", "-of", "csv=p=0"])
+        // `\\?\`-strip: ffprobe rejects the Windows verbatim path canonicalize() returns.
+        .arg(crate::tool_path::native_str(&path.to_string_lossy()))
+        .stdin(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .await
+        .map_err(|e| VaultError::Io(format!("ffprobe spawn: {e}")))?;
+    Ok(String::from_utf8_lossy(&out.stdout).lines().filter(|l| !l.trim().is_empty()).count())
+}
+
 /// `track` (sub-plan 6 SF2) optionally selects a single 0-based audio stream via
 /// `-map 0:a:<track>` — the OBS isolated-track layout carries mic / Discord comms on
 /// separate streams. Omitted / negative = the previous whole-audio downmix (sub-plan 4
@@ -297,6 +314,31 @@ pub async fn coaching_extract_audio(video: String, track: Option<i32>) -> Result
         return Ok(out_path.to_string_lossy().into_owned());
     }
     let partial = out_path.with_extension("wav.part");
+
+    // Validate the requested track against the FILE before shelling ffmpeg. An
+    // out-of-range `-map 0:a:<n>` dies with an opaque "Stream map '' matches no
+    // streams" that names neither the track nor the file (hit live 2026-07-19:
+    // `Comms Track: 4` against a 4-track VOD, i.e. valid indices 0..=3).
+    //
+    // The track number is a REMEMBERED GLOBAL (frontend localStorage
+    // `gw-coach-tracks`) applied to every later recording, so one layout change
+    // silently points it at a stream that doesn't exist.
+    //
+    // Deliberately NOT the tolerant `0:a:<n>?` form used by video_transcode.rs:
+    // there, dropping a missing audio track still leaves a watchable video. Here
+    // a tolerant map yields an EMPTY wav and therefore a silently empty
+    // transcript — failing loudly is the whole point.
+    if let Some(t) = sel {
+        let n = audio_stream_count(&canonical).await?;
+        if t as usize >= n {
+            return Err(VaultError::Invalid(format!(
+                "Audio track {t} doesn't exist in this recording. It has {n} audio track(s), \
+                 numbered 0 to {}. Note they're counted from 0 here, while OBS labels them from 1 \
+                 — so OBS track 1 is 0 here.",
+                n.saturating_sub(1)
+            )));
+        }
+    }
 
     let mut args: Vec<String> = vec![
         "-hide_banner".into(),
