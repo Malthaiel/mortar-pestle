@@ -20,6 +20,10 @@ const TTL: Duration = Duration::from_secs(30);
 #[derive(Debug, Clone, Serialize)]
 pub struct VideoStream {
     pub codec: Option<String>,
+    /// Raw ffprobe `pix_fmt`. Bit depth lives here and nowhere else in the
+    /// probe — the player lane needs it because WebView2 decodes no 10-bit
+    /// video at all, not even in an otherwise-supported codec (Hi10P h264).
+    pub pix_fmt: Option<String>,
     pub width: Option<i64>,
     pub height: Option<i64>,
     /// avg_frame_rate (num/den), falling back to r_frame_rate when avg is
@@ -161,6 +165,7 @@ pub fn summarize(data: &Value) -> ProbeResult {
         .iter()
         .map(|s| VideoStream {
             codec: s.get("codec_name").and_then(|v| v.as_str()).map(String::from),
+            pix_fmt: s.get("pix_fmt").and_then(|v| v.as_str()).map(String::from),
             width: s.get("width").and_then(|v| v.as_i64()),
             height: s.get("height").and_then(|v| v.as_i64()),
             fps: parse_fps(s),

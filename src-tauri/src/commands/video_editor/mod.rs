@@ -21,7 +21,7 @@ mod project;
 pub use project::*;
 mod lut;
 pub use lut::*;
-mod probe;
+pub(crate) mod probe; // caps_cached is reused by the player transcode lane
 pub use probe::*;
 mod parity_harness;
 pub use parity_harness::*;
@@ -81,6 +81,8 @@ pub async fn vedit_remux_start(
             color_primaries: v0.and_then(|v| v.color_primaries.clone()),
             color_transfer: v0.and_then(|v| v.color_transfer.clone()),
             color_range: v0.and_then(|v| v.color_range.clone()),
+            encoder: None,   // editor proxy stays on libx264
+            playback: false, // keeps the 1 s GOP the scrub path depends on
         })
     } else {
         None

@@ -26,6 +26,7 @@ use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
 
 use sha1::{Digest, Sha1};
+use tauri::Emitter;
 use tokio::process::{Child as TokioChild, Command as TokioCommand};
 
 use crate::commands::vault::VaultError;
@@ -161,6 +162,36 @@ pub struct ProxyScale {
     pub color_primaries: Option<String>,
     pub color_transfer: Option<String>,
     pub color_range: Option<String>,
+    /// Video encoder to use. `None` = libx264 (the editor lane's default).
+    /// The player lane passes a hardware encoder when the caps probe proved
+    /// one works, since it re-encodes whole 24-minute episodes.
+    pub encoder: Option<String>,
+    /// Playback tuning instead of editor tuning: no 1-second GOP (that exists
+    /// only to bound editor scrub latency, and inflates a whole-episode encode
+    /// several-fold) and a slightly looser CRF. The editor lane passes false.
+    pub playback: bool,
+}
+
+/// Video codecs the WebView2 `<video>` element can actually decode, and only
+/// at 8-bit. Anything outside this set — HEVC above all, which is what most
+/// modern anime releases ship — decodes to a black picture while the AAC audio
+/// and the sidecar VTT subtitles play normally, because those two never touch
+/// the video decoder. Such sources must be re-encoded, not stream-copied.
+///
+/// Deliberately a safe-list: an unrecognized codec re-encodes (slow but
+/// correct) rather than stream-copying into a silent black frame.
+pub fn is_web_safe(codec: Option<&str>, pix_fmt: Option<&str>) -> bool {
+    let Some(codec) = codec else { return false };
+    if !matches!(codec, "h264" | "vp8" | "vp9" | "av1") {
+        return false;
+    }
+    // ffprobe spells bit depth into the pix_fmt name: yuv420p is 8-bit,
+    // yuv420p10le / p010le / yuv444p12le etc. are not. Absent pix_fmt is
+    // treated as unsafe — same reasoning as the codec safe-list.
+    match pix_fmt {
+        Some(p) => !p.contains("10") && !p.contains("12") && !p.contains("16"),
+        None => false,
+    }
 }
 
 pub fn compute_subs_hash(abs: &str, stream: Option<i64>, mtime_ms: i64) -> String {
@@ -210,20 +241,46 @@ fn build_transcode_argv(
     let a = audio.unwrap_or(0).max(0);
     args.push(format!("0:a:{a}?"));
     if let Some(p) = proxy {
+        let enc = p.encoder.as_deref().unwrap_or("libx264");
         args.extend([
             "-vf".into(),
             "scale=1920:1080:force_original_aspect_ratio=decrease:force_divisible_by=2".into(),
             "-c:v".into(),
-            "libx264".into(),
-            "-preset".into(),
-            "veryfast".into(),
-            "-crf".into(),
-            "18".into(),
-            "-g".into(),
-            format!("{}", (p.fps.round() as i64).max(1)),
-            "-pix_fmt".into(),
-            "yuv420p".into(),
+            enc.into(),
         ]);
+        // Rate control is encoder-specific: NVENC rejects -crf/-preset veryfast
+        // outright, and x264 has no -cq. Matches the export lane's convention
+        // in commands/video_editor/mod.rs.
+        if enc.ends_with("_nvenc") {
+            args.extend([
+                "-preset".into(),
+                "p4".into(),
+                "-rc".into(),
+                "vbr".into(),
+                "-cq".into(),
+                if p.playback { "24".into() } else { "20".into() },
+                "-b:v".into(),
+                "0".into(),
+            ]);
+        } else {
+            args.extend([
+                "-preset".into(),
+                "veryfast".into(),
+                "-crf".into(),
+                if p.playback { "20".into() } else { "18".into() },
+            ]);
+        }
+        // 1 s GOP bounds the editor's accurate-seek scrub latency. The player
+        // seeks natively in a finished file, so it keeps the encoder default —
+        // a 1 s GOP over a whole episode multiplies the output size for no gain.
+        if !p.playback {
+            args.extend(["-g".into(), format!("{}", (p.fps.round() as i64).max(1))]);
+        }
+        args.extend(["-pix_fmt".into(), "yuv420p".into()]);
+        // Machine-readable progress on stdout. Only the re-encode lane asks for
+        // it: a copy remux finishes before a spinner would even render, and
+        // stdout stays null there so nothing has to drain it.
+        args.extend(["-progress".into(), "pipe:1".into(), "-nostats".into()]);
         for (flag, val) in [
             ("-colorspace", &p.color_space),
             ("-color_primaries", &p.color_primaries),
@@ -292,6 +349,65 @@ mod remux_argv_tests {
     use super::*;
     use std::path::Path;
 
+    fn playback_proxy(encoder: Option<&str>) -> ProxyScale {
+        ProxyScale {
+            fps: 23.976,
+            color_space: None,
+            color_primaries: None,
+            color_transfer: None,
+            color_range: None,
+            encoder: encoder.map(String::from),
+            playback: true,
+        }
+    }
+
+    /// The Frieren S2 bug: HEVC Main 10 was stream-copied into MP4, so WebView2
+    /// showed a black picture while AAC audio and VTT subs played fine.
+    #[test]
+    fn web_safe_gates_the_copy_remux() {
+        // The source that broke: Erai-raws HEVC Main 10.
+        assert!(!is_web_safe(Some("hevc"), Some("yuv420p10le")));
+        // The control that always worked: SubsPlease h264 High 8-bit.
+        assert!(is_web_safe(Some("h264"), Some("yuv420p")));
+        // 10-bit disqualifies even an otherwise-supported codec (Hi10P).
+        assert!(!is_web_safe(Some("h264"), Some("yuv420p10le")));
+        // Safe-list, not a block-list: unknown codecs re-encode.
+        assert!(!is_web_safe(Some("vc1"), Some("yuv420p")));
+        assert!(!is_web_safe(None, Some("yuv420p")));
+        assert!(!is_web_safe(Some("h264"), None));
+        assert!(is_web_safe(Some("vp9"), Some("yuv420p")));
+        assert!(is_web_safe(Some("av1"), Some("yuv420p")));
+    }
+
+    #[test]
+    fn reencode_argv_is_encoder_appropriate() {
+        let x264 = playback_proxy(None);
+        let a = build_transcode_argv("in.mkv", None, Path::new("out.mp4"), true, Some(&x264));
+        let j = a.join(" ");
+        // Never stream-copy a source that reached the re-encode lane.
+        assert!(!j.contains("-c:v copy"));
+        assert!(j.contains("-c:v libx264"));
+        assert!(j.contains("-crf 20")); // playback CRF, not the editor's 18
+        assert!(j.contains("-pix_fmt yuv420p")); // 10-bit in must be 8-bit out
+        assert!(!j.contains("-g ")); // no 1 s GOP on a whole-episode encode
+
+        let nv = playback_proxy(Some("h264_nvenc"));
+        let b = build_transcode_argv("in.mkv", None, Path::new("out.mp4"), true, Some(&nv));
+        let j = b.join(" ");
+        assert!(j.contains("-c:v h264_nvenc"));
+        // NVENC rejects both of these outright — the bug this branch prevents.
+        assert!(!j.contains("-crf"));
+        assert!(!j.contains("veryfast"));
+        assert!(j.contains("-rc vbr -cq 24"));
+
+        // Editor lane must be byte-identical to before: crf 18 + 1 s GOP.
+        let ed = ProxyScale { playback: false, ..playback_proxy(None) };
+        let c = build_transcode_argv("in.mkv", None, Path::new("out.mp4"), true, Some(&ed));
+        let j = c.join(" ");
+        assert!(j.contains("-crf 18"));
+        assert!(j.contains("-g 24"));
+    }
+
     #[test]
     fn remux_keeps_all_tracks() {
         let args = build_remux_argv("in.mkv", Path::new("out.mp4"));
@@ -322,7 +438,12 @@ pub(crate) fn spawn_ffmpeg_to_file(
     let child = TokioCommand::new(crate::tool_path::resolve("ffmpeg"))
         .args(&args)
         .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
+        // Piped only for the re-encode lane, which emits `-progress` lines there.
+        .stdout(if proxy.is_some() {
+            std::process::Stdio::piped()
+        } else {
+            std::process::Stdio::null()
+        })
         .stderr(std::process::Stdio::piped())
         .kill_on_drop(true)
         .spawn()
@@ -344,6 +465,8 @@ pub fn start_or_reuse(
     audio: Option<i64>,
     duration: Option<f64>,
     copy_audio: bool,
+    proxy: Option<ProxyScale>,
+    app: Option<tauri::AppHandle>,
 ) -> Result<(), VaultError> {
     // 1. Fast-path under lock.
     {
@@ -356,7 +479,10 @@ pub fn start_or_reuse(
     }
 
     // 2. Spawn outside lock.
-    let child = spawn_ffmpeg_to_file(&abs, audio, &cache_path, copy_audio, None)?;
+    let mut child = spawn_ffmpeg_to_file(&abs, audio, &cache_path, copy_audio, proxy.as_ref())?;
+    // Take stdout before the supervisor consumes the child. Only the re-encode
+    // lane has one; wait_with_output() then simply sees an empty stdout.
+    let progress_pipe = child.stdout.take();
     let new_pid = child
         .id()
         .ok_or_else(|| VaultError::Io("spawned child has no PID".into()))?;
@@ -391,8 +517,53 @@ pub fn start_or_reuse(
         signal_term(pid);
     }
 
+    if let (Some(app), Some(pipe), Some(total)) = (app, progress_pipe, duration) {
+        spawn_progress_reader(app, hash.clone(), total, pipe);
+    }
+
     spawn_supervisor(hash, started_at, child);
     Ok(())
+}
+
+/// Stream ffmpeg's `-progress` output to the frontend as a 0-100 percentage.
+///
+/// A whole-episode re-encode takes ~1 minute on a hardware encoder and several
+/// on libx264 — long enough that a featureless spinner reads as a hang. Copy
+/// remuxes never get here (no `-progress`, no piped stdout, so no reader).
+///
+/// ffmpeg writes repeating `key=value` blocks; `out_time_us` is the position
+/// reached in the *output* timeline, which against the probed source duration
+/// is the completion fraction.
+fn spawn_progress_reader(
+    app: tauri::AppHandle,
+    hash: String,
+    total_secs: f64,
+    pipe: tokio::process::ChildStdout,
+) {
+    use tokio::io::{AsyncBufReadExt, BufReader};
+    if total_secs <= 0.0 {
+        return;
+    }
+    tauri::async_runtime::spawn(async move {
+        let mut lines = BufReader::new(pipe).lines();
+        let mut last_sent = -1i64;
+        while let Ok(Some(line)) = lines.next_line().await {
+            let Some(us) = line.strip_prefix("out_time_us=") else { continue };
+            let Ok(us) = us.trim().parse::<f64>() else { continue };
+            let pct = ((us / 1_000_000.0) / total_secs * 100.0).clamp(0.0, 100.0);
+            // Whole-percent throttle: ffmpeg emits a block ~2×/second and the
+            // frontend only renders an integer.
+            let whole = pct as i64;
+            if whole == last_sent {
+                continue;
+            }
+            last_sent = whole;
+            let _ = app.emit(
+                "video-transcode-progress",
+                serde_json::json!({ "hash": hash, "pct": whole }),
+            );
+        }
+    });
 }
 
 fn spawn_supervisor(hash: String, captured_started: Instant, child: TokioChild) {
@@ -717,6 +888,8 @@ mod tests {
             color_primaries: Some("bt709".into()),
             color_transfer: None,
             color_range: Some("tv".into()),
+            encoder: None,
+            playback: false,
         };
         let argv = build_transcode_argv("/v.mkv", Some(0), Path::new("/tmp/o.mp4"), false, Some(&proxy));
         let cv = argv.iter().position(|s| s == "-c:v").expect("has -c:v");

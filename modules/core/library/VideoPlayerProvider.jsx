@@ -14,6 +14,7 @@
 import {
   createContext, useContext, useEffect, useMemo, useRef, useState, useCallback,
 } from 'react';
+import { listen } from '@tauri-apps/api/event';
 import { videoApi } from './api.js';
 import VideoControls from './VideoControls.jsx';
 import SubtitleOverlay from './SubtitleOverlay.jsx';
@@ -123,6 +124,10 @@ export function VideoPlayerProvider({ children }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(0);         // from probe (full episode duration)
   const [preparing, setPreparing] = useState(false);   // remux in progress → show spinner
+  // 0-100 while a source that WebView2 can't decode (HEVC, 10-bit) is being
+  // re-encoded — a whole-episode job, unlike the near-instant copy remux.
+  // Stays null for copy remuxes, which emit no progress at all.
+  const [prepPct, setPrepPct] = useState(null);
   const [streamError, setStreamError] = useState(null);
   const [refreshing, setRefreshing] = useState(false); // stream-refresh in flight (vs first-load)
   const [reloadNonce, setReloadNonce] = useState(0);   // bump → src effect reloads the same episode
@@ -187,6 +192,18 @@ export function VideoPlayerProvider({ children }) {
   // Stream refresh always leaves `preparing` true while reloading; clear the
   // refreshing flag the moment preparing resolves (metadata loaded or errored).
   useEffect(() => { if (!preparing) setRefreshing(false); }, [preparing]);
+
+  // Re-encode progress from the backend. The event carries the transcode hash,
+  // but the frontend never learns its own hash (video_start_transcode resolves
+  // only once the job is finished), so the latest percentage simply wins.
+  // ponytail: last-writer-wins, fine for one prep at a time; key by hash if the
+  // popped-out player ever prepares a different episode simultaneously.
+  useEffect(() => {
+    const un = listen('video-transcode-progress', e => {
+      if (e.payload && typeof e.payload.pct === 'number') setPrepPct(e.payload.pct);
+    });
+    return () => { un.then(f => f()).catch(() => {}); };
+  }, []);
 
   // Periodically persist position (every 5s) and mark-watched at 90 %.
   useEffect(() => {
@@ -270,6 +287,7 @@ export function VideoPlayerProvider({ children }) {
       v.load();
       setStreamError(null);
       setPreparing(false);
+      setPrepPct(null);
       return;
     }
     let cancelled = false;
@@ -277,6 +295,7 @@ export function VideoPlayerProvider({ children }) {
     let timeoutId = null;
     setStreamError(null);
     setPreparing(true);
+    setPrepPct(null); // stale percentage from the previous episode must not show
     videoApi.videoStreamURL(currentEpisode.fileAbs, audioIdx).then(
       r => {
         if (cancelled) return;
@@ -595,7 +614,7 @@ export function VideoPlayerProvider({ children }) {
     // subtitles
     subSettings, subSync, cues, subsUrl,
     // error + loading surface (set by the stream-start effect)
-    streamError, preparing, refreshing,
+    streamError, preparing, refreshing, prepPct,
     // actions
     playSeries, playEpisodeAt, toggle, seek, skip, next, prev,
     setVolume, setSpeed, setAudioTrack, setSubtitleTrack, refresh,
@@ -607,7 +626,7 @@ export function VideoPlayerProvider({ children }) {
     series, currentEpisode, episodeIdx, probe,
     videoTime, effectiveTime, duration,
     isPlaying, volume, speed, audioIdx, subIdx, mode, playerOpen,
-    subSettings, subSync, cues, subsUrl, streamError, preparing, refreshing,
+    subSettings, subSync, cues, subsUrl, streamError, preparing, refreshing, prepPct,
     playSeries, playEpisodeAt, toggle, seek, skip, next, prev,
     setVolume, setSpeed, setAudioTrack, setSubtitleTrack, refresh,
     requestFullscreen, closePlayer,
@@ -773,7 +792,14 @@ function ModalHost() {
           letterSpacing: '0.06em',
           zIndex: 1700,
           pointerEvents: 'none',
-        }}>{v.refreshing ? 'Refreshing…' : 'Preparing episode…'}</div>
+        }}>{v.refreshing
+          ? 'Refreshing…'
+          : v.prepPct != null
+            // Only a re-encode reports progress, and only that case is slow
+            // enough to need explaining — say why the wait exists and that it
+            // is a one-off, not a stall.
+            ? `Converting this episode so it will play here — ${v.prepPct}%`
+            : 'Preparing episode…'}</div>
       )}
 
       {/* Top gradient + title + window buttons (overlay, fades on idle). */}
