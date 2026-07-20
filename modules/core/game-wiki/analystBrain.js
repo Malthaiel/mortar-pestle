@@ -208,9 +208,10 @@ export function sectionOf(md, heading) {
   return (j === -1 ? body : body.slice(0, j)).trim();
 }
 
-// Prior report TL;DRs for a coached team: walk Coaching/Scrim FOLDERS (schema v2 —
+// Prior report takeaways for a coached team: walk Coaching/Scrim FOLDERS (schema v2 —
 // a scrim is a folder holding Overview.md + .vodreport.json), keep the ones whose
-// Overview frontmatter names this team. Newest last.
+// Overview frontmatter names this team. Newest last. Reads the "VOD Takeaways" section
+// (mandatory since 2026-07-19); pre-takeaways reports fall back to their tldr field.
 // ponytail: folder-name order ≈ chronology (names carry a date suffix); a real date sort can
 // come with a real need.
 export async function collectPriorTldrs(api, coachedTeam, max = 3) {
@@ -227,7 +228,10 @@ export async function collectPriorTldrs(api, coachedTeam, max = 3) {
     if (!m || norm(m[1]) !== norm(coachedTeam)) continue;
     try {
       const rep = JSON.parse((await api.getRawFileMeta(`${dir}/.vodreport.json`, 'gamewiki')).content);
-      if (rep && String(rep.tldr || '').trim()) out.push({ scrim: base, tldr: String(rep.tldr) });
+      const take = (Array.isArray(rep?.sections) ? rep.sections : [])
+        .find((s) => s?.id === 'vod-takeaways' || /^vod takeaways$/i.test(String(s?.heading || '').trim()));
+      const text = String(take?.md || rep?.tldr || '').trim();
+      if (text) out.push({ scrim: base, tldr: text });
     } catch { /* no report for this scrim */ }
   }
   return out.slice(-Math.max(0, max));
@@ -276,7 +280,7 @@ export async function buildBrainContext(api, { coachedTeam = '', priorTldrMax = 
     } catch { /* no progress sidecar yet */ }
     push('TEAM PROGRESS', progress && cap(progress), `.teamprogress.${team}.json`);
     const tldrs = await collectPriorTldrs(api, team, priorTldrMax);
-    push('PRIOR REPORT TLDRS', tldrs.length ? cap(tldrs.map((t) => `${t.scrim}: ${t.tldr}`).join('\n')) : null, 'prior reports');
+    push('PRIOR REPORT TAKEAWAYS', tldrs.length ? cap(tldrs.map((t) => `${t.scrim}:\n${t.tldr}`).join('\n\n')) : null, 'prior reports');
   }
 
   return { text: parts.join('\n\n'), sections, warnings };

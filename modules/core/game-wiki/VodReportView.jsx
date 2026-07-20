@@ -6,7 +6,7 @@
 // "generate first" prompt; bad JSON → error. New component approved 2026-07-09 (reuses AppWindow +
 // candy-btn + native checkboxes — no new primitive).
 //
-// VOD Report Sections rework (2026-07-13): the TL;DR tab is the full Report page — TL;DR header +
+// VOD Report Sections rework (2026-07-13): the 'tldr' tab id is the full Report page (TL;DR itself retired 2026-07-19) —
 // dynamic AI-invented sections rendered as GFM markdown (react-markdown + remark-gfm + .gamewiki-md,
 // the GameWikiPage pattern). [m:ss] tokens everywhere (sections, Action Items, Q&A) render as
 // clickable TimeChips that jump to the Segments tab, scroll the moment into view, and flash it with
@@ -83,7 +83,7 @@ export function linkTimeTokens(md) {
 
 // Sections offered by the Export popover, in emit order (matches serializeReportMarkdown).
 const EXPORT_SECTIONS = [
-  { id: 'report', label: 'Report + TL;DR' },
+  { id: 'report', label: 'Report' },
   { id: 'actions', label: 'Action Items' },
   { id: 'qa', label: 'Q&A' },
   { id: 'keep', label: 'Keep Doing' },
@@ -123,7 +123,7 @@ function collectRefs(r) {
   const s = new Set([REF.tempoRead, REF.laneMap, REF.overall]);
   for (const it of r.actionItems || []) s.add(REF.action(it));
   for (const c of r.playerCards || []) {
-    for (const f of ['laneVerdict', 'soulsCurveRead', 'itemCritique']) s.add(REF.pcField(c, f));
+    for (const f of ['laneVerdict', 'soulsCurveRead', 'itemCritique', 'coaching']) s.add(REF.pcField(c, f));
     for (const d of c.deathAnalysis || []) s.add(REF.death(c, d));
     for (const t of c.drills || []) s.add(REF.drill(c, t));
   }
@@ -581,11 +581,9 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
           <>
             {tab === 'tldr' && (
               <div className="gamewiki-md">
-                <h2 style={{ marginTop: 0 }}>TL;DR</h2>
-                {r.tldr ? <p>{r.tldr}</p> : <Empty>No summary.</Empty>}
-                {sections.map((sec) => (
+                {sections.map((sec, si) => (
                   <div key={sec.id}>
-                    <h2>{sec.heading}</h2>
+                    <h2 style={si === 0 ? { marginTop: 0 } : undefined}>{sec.heading}</h2>
                     <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{linkTimeTokens(sec.md)}</ReactMarkdown>
                   </div>
                 ))}
@@ -623,6 +621,15 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
                             <FindingList findings={r.meta.findings} path={`playerCards[${i}].itemCritique`} />
                             <MarkLine refId={REF.pcField(c, 'itemCritique')} entries={feedback.entries} />
                           </Labeled>
+                          {c.coaching && (
+                            <Labeled label="Coaching" mark={<MarkChip refId={REF.pcField(c, 'coaching')} aiText={c.coaching} entries={feedback.entries} accent={accent} onOpen={openMark} active={isActive(REF.pcField(c, 'coaching'))} />}>
+                              <div className="gamewiki-md">
+                                <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{linkTimeTokens(c.coaching)}</ReactMarkdown>
+                              </div>
+                              <FindingList findings={r.meta.findings} path={`playerCards[${i}].coaching`} />
+                              <MarkLine refId={REF.pcField(c, 'coaching')} entries={feedback.entries} />
+                            </Labeled>
+                          )}
                           {(c.deathAnalysis || []).length > 0 && (
                             <Labeled label="Deaths">
                               {c.deathAnalysis.map((d, j) => (

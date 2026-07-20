@@ -78,6 +78,9 @@ const fix = new Map([
   // schema v2 scrims: folder per scrim, Overview.md + .vodreport.json inside
   ['Deadlock/Coaching/Scrim/Alpha VS Beta (07-01-26)/Overview.md', '---\nCoached Team: Alpha\n---\nbody'],
   ['Deadlock/Coaching/Scrim/Alpha VS Beta (07-01-26)/.vodreport.json', JSON.stringify({ tldr: 'Lost lanes, won fights.' })],
+  // takeaways section preferred over tldr when both exist
+  ['Deadlock/Coaching/Scrim/Alpha VS Epsilon (07-10-26)/Overview.md', '---\nCoached Team: Alpha\n---\nbody'],
+  ['Deadlock/Coaching/Scrim/Alpha VS Epsilon (07-10-26)/.vodreport.json', JSON.stringify({ tldr: 'Stale digest.', sections: [{ id: 'vod-takeaways', heading: 'VOD Takeaways', md: '1. Group up.' }] })],
   ['Deadlock/Coaching/Scrim/Gamma VS Delta (07-05-26)/Overview.md', '---\nCoached Team: Gamma\n---\nbody'],
 ]);
 const fixApi = {
@@ -100,13 +103,14 @@ assert.ok(ctx.text.includes('[MISSING: Corrections.md ## Distilled]'), 'missing 
 assert.deepEqual(ctx.warnings, ['[MISSING: Corrections.md ## Distilled]']);
 assert.ok(ctx.text.includes('=== TEAM PAGE ===') && ctx.text.includes('Alpha — Team Progress'));
 assert.ok(ctx.text.includes('=== TEAM PROGRESS ===') && ctx.text.includes('ward river') && !ctx.text.includes('done thing'));
-assert.ok(ctx.text.includes('=== PRIOR REPORT TLDRS ===') && ctx.text.includes('Lost lanes, won fights.'));
+assert.ok(ctx.text.includes('=== PRIOR REPORT TAKEAWAYS ===') && ctx.text.includes('Lost lanes, won fights.'), 'tldr fallback for pre-takeaways reports');
+assert.ok(ctx.text.includes('1. Group up.') && !ctx.text.includes('Stale digest.'), 'takeaways section preferred over tldr');
 assert.equal(ctx.sections.length, 8);
 assert.equal(ctx.sections.filter((s) => s.present).length, 7); // Corrections.md absent by design
 const noTeam = await buildBrainContext(fixApi, {});
 assert.ok(!noTeam.text.includes('=== TEAM PAGE ===')); // team sections only with a coached team
 const tldrs = await collectPriorTldrs(fixApi, 'alpha  '); // normalized team match
-assert.equal(tldrs.length, 1);
+assert.equal(tldrs.length, 2);
 // deterministic across runs
 assert.equal(ctx.text, (await buildBrainContext(fixApi, { coachedTeam: 'Alpha' })).text);
 

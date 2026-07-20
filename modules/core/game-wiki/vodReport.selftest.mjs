@@ -246,7 +246,7 @@ const exRep = parseReport(JSON.stringify({
 
 const mdAll = serializeReportMarkdown(exRep, new Set(['report', 'actions', 'qa', 'keep', 'debates', 'followups']), 'Scrim 2026-07-13');
 assert.ok(mdAll.startsWith('# Scrim 2026-07-13\n'));
-assert.ok(mdAll.includes('## TL;DR'));
+assert.ok(!mdAll.includes('## TL;DR'), 'TL;DR retired from export');
 assert.ok(mdAll.includes('## Tempo'));
 assert.ok(mdAll.includes('[2:05]'), 'plain [m:ss] token survives');
 assert.ok(mdAll.includes('- [x] ward river ×2 @Sam [1:15] [3:40]'), 'done action item with count+player+stamps');
@@ -260,7 +260,7 @@ assert.ok(mdAll.includes('still no wards [6:00]'), 'followup evidence indented')
 
 // selection omits unchecked sections
 const mdSome = serializeReportMarkdown(exRep, new Set(['report']), 'X');
-assert.ok(mdSome.includes('## TL;DR'));
+assert.ok(mdSome.includes('## Tempo'));
 assert.ok(!mdSome.includes('## Action Items'));
 assert.ok(!mdSome.includes('## Q&A'));
 

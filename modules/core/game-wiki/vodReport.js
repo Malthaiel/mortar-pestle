@@ -7,7 +7,7 @@
 //
 // Report JSON shape (what Claude returns, what VodReportView renders, what the .vodreport sidecar
 // stores):
-//   { tldr, sections:[{id, heading, md}],
+//   { sections:[{id, heading, md}],   (tldr: retired 2026-07-19 — coerced for old sidecars, never generated/shown)
 //     actionItems:[{id, text, count, timestamps[], player?, metric?, status}],
 //     qa:[{q, a, askedBy, t}], keepDoing[], debates[], followUps:[{priorItem, verdict, evidence}] }
 //   status ∈ 'pending' | 'done' — the checkbox state, reconciled across regenerates by stable id.
@@ -58,13 +58,12 @@ export const VOD_REPORT_SYSTEM_PROMPT = [
   '- Cross-reference talk against data: when a player asserts something ("we were even in souls"), check it',
   '  against the digest curves and say whether the data agrees.',
   '- Comms grading = transcript claims checked against digest events, callout by callout.',
-  '- Layered depth: tldr is a 2-minute read; playerCards / macro / commsGrade carry the full analysis.',
+  '- Layered depth: sections are the quick read; playerCards / macro / commsGrade carry the full analysis.',
   '- Never invent content not present in the transcript, notes, digest, or brain.',
   '',
   'Return ONLY a single JSON object (no markdown, no code fences, no commentary) with EXACTLY these keys:',
   '{',
   '  "schemaVersion": 2,',
-  '  "tldr": string,                    // 1-3 sentence digest of the whole review',
   '  "playerCards": [                   // one per COACHED-team player (opponents only if discussed)',
   '    { "player": string,              // player name (transcript speaker) or hero name if unnamed',
   '      "hero": string,                // canonical hero name from the digest',
@@ -72,6 +71,7 @@ export const VOD_REPORT_SYSTEM_PROMPT = [
   '      "laneVerdict": string,         // won/lost/even + why, grounded in the lane souls curve',
   '      "soulsCurveRead": string,      // their economic arc: farm pace, spikes, droughts, vs counterpart',
   '      "itemCritique": string,        // build-order judgement vs the game state and patch digest',
+  '      "coaching": string,            // GFM markdown; frameworks/loops taught specifically to THIS player ("" if none)',
   '      "deathAnalysis": [ { "t": string, "what": string, "why": string, "lesson": string } ],',
   '      "drills": [string] },          // concrete practice items for this player',
   '  ],',
@@ -110,12 +110,34 @@ export const VOD_REPORT_SYSTEM_PROMPT = [
   '',
   'Rules: every timestamp is an m:ss string copied from the transcript. Never invent content not in the',
   'transcript or notes. Merge duplicate action items and bump their count instead of repeating. If a section has',
-  'nothing, use an empty array (or "" for tldr). Keep it tight — this is a coach\'s cheat sheet, not a summary essay.',
+  'nothing, use an empty array. Keep it tight — this is a coach\'s cheat sheet, not a summary essay.',
+  'The readers are busy players: short beats thorough prose everywhere.',
+  '',
+  'Say-it-once: every insight has exactly ONE home (a section, a player-card field, or an action item).',
+  'Anywhere else it is a one-line pointer ("see the <heading> section"), never re-explained.',
+  '',
+  'Length caps (hard limits):',
+  '- laneVerdict, soulsCurveRead, itemCritique: at most 2 sentences each.',
+  '- deathAnalysis: only the 3 most instructive deaths per player; what/why/lesson one sentence each.',
+  '- commsGrade.callouts: the 10 most instructive at most.',
+  '- qa answers: at most 2 sentences.',
+  '- keepDoing and debates entries: one line each.',
   '',
   'Section rules:',
-  '- NEVER compress a taught framework. When the coach lays out steps, a sequence, or a plan, reproduce',
-  '  EVERY step, in order, faithful to the coach\'s wording, inside that topic\'s section. Summarizing a',
-  '  taught sequence is a failure.',
+  '- At most 5 topic sections plus the mandatory final "VOD Takeaways" section. Only the biggest topics;',
+  '  minor asides fold into action items or are dropped.',
+  '- Each section md is at most 150 words. Prefer bullets and tables over prose.',
+  '- A topic aimed at ONE player (their hero\'s gameplay loop, individual coaching) is NEVER a team section —',
+  '  it goes in that player\'s "coaching" field instead, full step list intact.',
+  '- Principle lists (points that share a topic but are not a sequence): order by importance, split into a',
+  '  "**Core**" sub-list (the 3-5 game-deciding points) and a "**Side notes**" sub-list (the rest).',
+  '- Taught framework or SEQUENCE: reproduce EVERY step, in original order, as a numbered list, one short line per',
+  '  step, no prose around the list. Dropping a step is a failure; padding a step into sentences is also a failure.',
+  '- A live worked example from the coach (a draft read hero by hero, an item plan) ALWAYS gets its own section,',
+  '  table-formatted where the material fits a table — never summarize it away.',
+  '- The LAST section is always {"id": "vod-takeaways", "heading": "VOD Takeaways"}: a numbered list of one-line',
+  '  takeaways from the reviewed game, most important first — the game-review digest, kept separate from the',
+  '  taught-lesson sections above it.',
   '- Steps live in their section only. If the coach also assigned it as homework, emit exactly ONE action',
   '  item that references the section ("apply the <heading> plan — see the <heading> section"), never the',
   '  steps themselves.',
@@ -168,6 +190,7 @@ export function coerceReport(obj) {
     playerCards: arr(o.playerCards).map((c) => ({
       player: str(c?.player), hero: str(c?.hero), lane: str(c?.lane),
       laneVerdict: str(c?.laneVerdict), soulsCurveRead: str(c?.soulsCurveRead), itemCritique: str(c?.itemCritique),
+      coaching: str(c?.coaching),
       deathAnalysis: arr(c?.deathAnalysis).map((d) => ({ t: str(d?.t), what: str(d?.what), why: str(d?.why), lesson: str(d?.lesson) })),
       drills: arr(c?.drills).map(String),
     })).filter((c) => c.player || c.hero),
@@ -256,7 +279,6 @@ export function serializeReportMarkdown(report, selected, name, segments = []) {
   blocks.push(`# ${String(name ?? '').trim() || 'VOD Review'}`);
 
   if (sel('report')) {
-    blocks.push(`## TL;DR\n\n${String(r.tldr ?? '').trim() || '_(no summary)_'}`);
     for (const sec of (Array.isArray(r.sections) ? r.sections : [])) {
       const h = String(sec?.heading ?? '').trim();
       const md = String(sec?.md ?? '').trim();
