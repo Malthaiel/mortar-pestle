@@ -415,12 +415,13 @@ export default function OverviewPage({ folder, accent, nav = navigate, overlay =
             title={reportElsewhere ? 'A report is already generating for another scrim — one at a time'
               : !scrim['VOD Comms'] ? 'Extract VOD Comms first — the report reads that transcript'
                 : !aiConfigured ? 'Configure an AI backend in Settings → Agents (API key or Claude CLI)'
-                  : 'Generate Report — Claude organizes the review into an action list'}
+                  : scrim['VOD Report'] ? 'Regenerate Report — re-runs the pipeline and overwrites the current report (your action-item ticks are kept)'
+                    : 'Generate Report — Claude organizes the review into an action list'}
             style={reporting ? { opacity: 0.6, cursor: 'progress' } : undefined}>
             <span className="candy-face">
               {reporting
                 ? `${reportJob.phase || 'Asking Claude'}${reportJob.chars ? ` ${Math.round(reportJob.chars / 1000)}k` : ''}`
-                : 'Generate Report'}
+                : scrim['VOD Report'] ? 'Regenerate Report' : 'Generate Report'}
             </span>
           </button>
           <button className="candy-btn" data-shape="chip" onClick={addVodNotes}
