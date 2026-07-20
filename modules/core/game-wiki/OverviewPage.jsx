@@ -5,7 +5,7 @@
 // AppWindow popup): roster, track indices, your name, and the matchup fields.
 // Saving rides scrimShared's per-file useDocSave loop against Overview.md only.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { api, invoke } from '@host/api.js';
 import { navigate } from '@host/router.js';
@@ -52,6 +52,43 @@ export function reportCostNote(segments, cachedNorm) {
   ];
 }
 
+// ── Report run state, module-scope (survives leaving the page) ───────────────
+// generateVodReport below is a plain async chain, so it keeps running when this
+// page unmounts — hash routing never reloads the webview. Verified live: a run
+// kept streaming across a page switch and landed both its .vodreport sidecar and
+// the Overview label on disk. What did NOT survive was the BUTTON: `reporting`
+// and `reportPhase` were component state, so a remount repainted "Generate
+// Report" over a live run, and a second click would start a whole second run —
+// run_claude_cli has no mutex, so nothing downstream would have caught it.
+// Hoisting the state out of the component is the entire fix. One run app-wide,
+// same shape as the Rust-owned comms job.
+// ponytail: dev-only — Vite swaps this module on every save, which would wipe a
+// live run's state (the exact bug). Sharing ONE store object through the HMR data
+// bag keeps the old module's running pipeline talking to the new module's button.
+// `import.meta.hot` is undefined in a prod build, so this collapses to the literal.
+const reportStore = import.meta.hot?.data.reportStore
+  || { snap: { folder: null, phase: '', chars: 0 }, subs: new Set() };
+if (import.meta.hot) import.meta.hot.data.reportStore = reportStore;
+
+const setReportJob = (patch) => {
+  reportStore.snap = { ...reportStore.snap, ...patch };
+  reportStore.subs.forEach((f) => f());
+};
+const subscribeReport = (f) => { reportStore.subs.add(f); return () => reportStore.subs.delete(f); };
+const getReportSnap = () => reportStore.snap;
+
+// The CLI streams its answer (coaching.rs run_claude_cli), so the button can show it arriving
+// instead of one frozen phase word for up to 20 minutes — the only way to tell working from hung.
+// Attached once at module scope rather than per-mount: a page-scoped listener died with the page,
+// which is why the character count vanished on navigation along with everything else. The flag
+// lives on the shared store so an HMR swap re-uses the listener instead of stacking a new one.
+if (!reportStore.listening) {
+  reportStore.listening = true;
+  listen('coaching-progress', (e) => {
+    if (reportStore.snap.folder) setReportJob({ chars: Number(e?.payload?.chars) || 0 });
+  }).catch(() => { reportStore.listening = false; });
+}
+
 export default function OverviewPage({ folder, accent, nav = navigate, overlay = false }) {
   const { settings } = useSettings();
   const { doc, err, saveState, docRef, applyEdit, flushSave, flushIfDirty, reload } =
@@ -60,15 +97,17 @@ export default function OverviewPage({ folder, accent, nav = navigate, overlay =
   const [sttUp, setSttUp] = useSttUp();
   const aiConfigured = useAiConfigured(settings);
   const [vodBusy, setVodBusy] = useState({ on: false, phase: '' });
-  const [reporting, setReporting] = useState(false);
-  const [reportPhase, setReportPhase] = useState('');
   const [costGate, setCostGate] = useState(null); // { segments, cachedNorm } while the size gate is up
-  const [reportChars, setReportChars] = useState(0); // characters streamed in the current pass
   const [yourName, setYourName] = useState(loadYourName);
   const [trackDefaults, setTrackDefaults] = useState(loadTrackDefaults);
   const [trackCount, setTrackCount] = useState(0);
   const vodRef = useRef(false);
-  const reportRef = useRef(false);
+
+  // Whose run is it: this scrim's (show the phase), or another scrim's (grey the
+  // button out — one report at a time, app-wide).
+  const reportJob = useSyncExternalStore(subscribeReport, getReportSnap);
+  const reporting = reportJob.folder === folder;
+  const reportElsewhere = reportJob.folder != null && !reporting;
 
   const base = folder.split('/').pop();
   const setFm = (k, v) => applyEdit((o) => ({ ...o, frontmatter: { ...o.frontmatter, [k]: v } }));
@@ -91,17 +130,6 @@ export default function OverviewPage({ folder, accent, nav = navigate, overlay =
       .catch(() => { if (live) setTrackCount(0); });
     return () => { live = false; };
   }, [vodPath]);
-
-  // The CLI streams its answer (coaching.rs run_claude_cli), so the button can show it arriving
-  // instead of one frozen phase word for up to 20 minutes — the only way to tell working from hung.
-  useEffect(() => {
-    if (!reporting) { setReportChars(0); return; }
-    const sub = listen('coaching-progress', (e) => setReportChars(Number(e?.payload?.chars) || 0));
-    return () => { sub.then((un) => un()).catch(() => {}); };
-  }, [reporting]);
-
-  // Each pass restarts the character count — it measures the current call, not the whole run.
-  useEffect(() => { setReportChars(0); }, [reportPhase]);
 
   // Extract VOD Comms — the Rust-owned comms job, kind 'vod'; completion lands in
   // the bridge below (finishVodJob is disk-based in scrimShared).
@@ -149,7 +177,7 @@ export default function OverviewPage({ folder, accent, nav = navigate, overlay =
   // transcript, on subscription auth, and a run can eat a big slice of a session window. Read the
   // transcript here so the estimate is real, then hand the parsed segments to the pipeline.
   const askVodReport = async () => {
-    if (reportRef.current) return;
+    if (reportStore.snap.folder) return;
     const commsPath = scrimSidecarPath(folder, 'vodcomms');
     let segments;
     try { segments = parseCommsSidecar((await api.getRawFileMeta(commsPath, 'gamewiki')).content).segments; }
@@ -165,8 +193,11 @@ export default function OverviewPage({ folder, accent, nav = navigate, overlay =
   };
 
   const generateVodReport = async (segments) => {
-    if (reportRef.current) return;
-    reportRef.current = true; setReporting(true);
+    if (reportStore.snap.folder) return;
+    setReportJob({ folder, phase: '', chars: 0 });
+    // Where the user was when they pressed Generate. A run can take 20 minutes; if they
+    // have moved on since, finishing must not yank them out of whatever they moved on to.
+    const hashAtStart = window.location.hash;
     try {
       const fm = docRef.current?.frontmatter || {};
       const coachedTeam = fm['Coached Team'] || fm['Team 1'] || '';
@@ -181,7 +212,7 @@ export default function OverviewPage({ folder, accent, nav = navigate, overlay =
       let notesBlock = '';
       try { notesBlock = (await api.getRawFileMeta(scrimSidecarPath(folder, 'vodnotes'), 'gamewiki')).content; } catch { /* no notes */ }
 
-      setReportPhase('Normalizing');
+      setReportJob({ phase: 'Normalizing', chars: 0 });
       let lexicon = '';
       try {
         lexicon = (await api.getRawFileMeta(LEXICON_PATH, 'gamewiki')).content;
@@ -221,7 +252,7 @@ export default function OverviewPage({ folder, accent, nav = navigate, overlay =
       }
       const transcriptBlock = buildTranscriptBlock(norm.segments);
 
-      setReportPhase('Analyzing');
+      setReportJob({ phase: 'Analyzing', chars: 0 });
       // Land every raw draft emission on disk before it is parsed — this call is the pipeline's
       // most expensive, and a contract slip used to discard it with nothing recoverable.
       const rawPath = scrimSidecarPath(folder, 'vodraw');
@@ -231,21 +262,24 @@ export default function OverviewPage({ folder, accent, nav = navigate, overlay =
         onRaw: (raw) => api.savePage(rawPath, raw, null, 'gamewiki'),
       }, agents);
 
-      setReportPhase('Fact-checking');
+      setReportJob({ phase: 'Fact-checking', chars: 0 });
       const { report, ran: verified } = await verifyReport(invoke, { report: draft, matchDigests, lexicon }, agents);
 
       report.meta.passes = [...(norm.discarded ? [] : ['normalize']), 'draft', ...(verified ? ['verify'] : [])];
       report.meta.brainSections = brain.sections.filter((s) => s.present).map((s) => s.label);
       report.meta.warnings = [...brain.warnings, ...(norm.warning ? [norm.warning] : []), ...report.meta.warnings];
 
-      setReportPhase('Saving');
+      setReportJob({ phase: 'Saving', chars: 0 });
       await api.savePage(scPath, JSON.stringify(report), null, 'gamewiki');
 
       const stamp = new Date().toISOString().slice(0, 10);
       const count = (report.actionItems || []).length;
       applyEdit((o) => ({ ...o, scrim: { ...o.scrim, 'VOD Report': `generated ${stamp} · ${count} item${count === 1 ? '' : 's'}` } }));
       flushSave();
-      nav('/game-wiki/' + encodePagePath(`${folder}/Report/tldr`));
+      // Only pull the user to the report if they never left the page that started the run.
+      // A 20-minute run that finishes after they've moved on must not hijack where they are —
+      // the toast tells them it's ready and Open Report is waiting on the scrim.
+      if (window.location.hash === hashAtStart) nav('/game-wiki/' + encodePagePath(`${folder}/Report/tldr`));
       updateTeamProgress(coachedTeam).catch(() => {});
       notify('success', 'Report generated', `${count} action item${count === 1 ? '' : 's'}.`);
     } catch (e) {
@@ -262,7 +296,7 @@ export default function OverviewPage({ folder, accent, nav = navigate, overlay =
       }[e?.code] || ['Report failed', e?.message || String(e)];
       notify('error', msg[0], msg[1]);
     } finally {
-      reportRef.current = false; setReporting(false); setReportPhase('');
+      setReportJob({ folder: null, phase: '', chars: 0 });
     }
   };
 
@@ -317,15 +351,16 @@ export default function OverviewPage({ folder, accent, nav = navigate, overlay =
             <button className="candy-btn" data-shape="chip" onClick={cancelVod} title="Cancel"><span className="candy-face">×</span></button>
           )}
           <button className="candy-btn" data-shape="chip"
-            disabled={reporting || !scrim['VOD Comms'] || !aiConfigured}
+            disabled={reporting || reportElsewhere || !scrim['VOD Comms'] || !aiConfigured}
             onClick={askVodReport}
-            title={!scrim['VOD Comms'] ? 'Extract VOD Comms first — the report reads that transcript'
-              : !aiConfigured ? 'Configure an AI backend in Settings → Agents (API key or Claude CLI)'
-                : 'Generate Report — Claude organizes the review into an action list'}
+            title={reportElsewhere ? 'A report is already generating for another scrim — one at a time'
+              : !scrim['VOD Comms'] ? 'Extract VOD Comms first — the report reads that transcript'
+                : !aiConfigured ? 'Configure an AI backend in Settings → Agents (API key or Claude CLI)'
+                  : 'Generate Report — Claude organizes the review into an action list'}
             style={reporting ? { opacity: 0.6, cursor: 'progress' } : undefined}>
             <span className="candy-face">
               {reporting
-                ? `${reportPhase || 'Asking Claude'}${reportChars ? ` ${Math.round(reportChars / 1000)}k` : ''}`
+                ? `${reportJob.phase || 'Asking Claude'}${reportJob.chars ? ` ${Math.round(reportJob.chars / 1000)}k` : ''}`
                 : 'Generate Report'}
             </span>
           </button>
