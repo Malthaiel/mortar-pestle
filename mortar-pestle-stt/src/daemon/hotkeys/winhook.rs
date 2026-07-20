@@ -47,13 +47,47 @@ const DICTATE_VK: u32 = 0x77;
 /// the host UI keys the snapshot identically across platforms).
 const DICTATE_ID: &str = "dictate";
 
+/// The wire id for the SCRIM-note push-to-talk shortcut — the configurable second
+/// bind. Unlike `dictate` this one is remappable (`can_configure: true`).
+const DICTATE_SCRIM_ID: &str = "dictate_scrim";
+
+/// The scrim-note virtual-key, set by the host's `set_scrim_key` op. `0` = unbound
+/// (the hook ignores it entirely), which is also the pre-handshake state — so a
+/// host that never sets it behaves exactly like the single-key build.
+///
+/// An atomic, NOT a channel: the hook callback reads it on every keystroke and the
+/// socket handler writes it, so a lock-free load is both the simplest wiring and
+/// the only one safe inside a low-level hook callback.
+static SCRIM_VK: AtomicU32 = AtomicU32::new(0);
+
+/// Set the scrim-note key (a Win32 virtual-key code; `0` unbinds). Called from the
+/// socket `set_scrim_key` handler.
+pub fn set_scrim_vk(vk: u32) {
+    SCRIM_VK.store(vk, Ordering::Release);
+    log::info!("winhook: scrim key set to VK={vk:#x}");
+}
+
+/// The current scrim-note key (`0` = unbound) — read by `publish_snapshot`.
+pub fn scrim_vk() -> u32 {
+    SCRIM_VK.load(Ordering::Acquire)
+}
+
+/// Which bind produced an edge — the drainer starts the matching dictation source.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Bind {
+    Dictate,
+    Scrim,
+}
+
 /// Press/release edges posted from the captureless hook callback to the async drainer.
-/// `true` = press, `false` = release.
-static EDGE_TX: OnceLock<mpsc::UnboundedSender<bool>> = OnceLock::new();
+/// `(bind, true)` = press, `(bind, false)` = release.
+static EDGE_TX: OnceLock<mpsc::UnboundedSender<(Bind, bool)>> = OnceLock::new();
 
 /// Debounce: a held key produces a WM_KEYDOWN storm; only the rising/falling edges
-/// cross this gate, so dictation starts/stops exactly once per physical hold.
+/// cross this gate, so dictation starts/stops exactly once per physical hold. One
+/// flag PER BIND — they're independent holds and must not share a latch.
 static KEY_DOWN: AtomicBool = AtomicBool::new(false);
+static SCRIM_KEY_DOWN: AtomicBool = AtomicBool::new(false);
 
 /// The hook thread's Win32 thread id — lets the drainer `PostThreadMessageW(WM_QUIT)`
 /// to break the message pump for a clean unhook on shutdown. 0 until the thread is up.
@@ -64,7 +98,7 @@ static HOOK_TID: AtomicU32 = AtomicU32::new(0);
 pub fn spawn(ctx: ControlContext, rebind_rx: mpsc::UnboundedReceiver<()>) {
     publish_snapshot(&ctx);
 
-    let (edge_tx, edge_rx) = mpsc::unbounded_channel::<bool>();
+    let (edge_tx, edge_rx) = mpsc::unbounded_channel::<(Bind, bool)>();
     // First-wins: the daemon spawns hotkeys exactly once, so set() always succeeds.
     // Set BEFORE the hook thread starts so the callback never sees an empty cell.
     let _ = EDGE_TX.set(edge_tx);
@@ -115,19 +149,29 @@ fn hook_thread() {
 unsafe extern "system" fn hook_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     if code >= 0 {
         let kb = &*(lparam as *const KBDLLHOOKSTRUCT);
-        if kb.vkCode == DICTATE_VK {
+        // Resolve which bind this key is. The scrim VK is checked SECOND so that a
+        // scrim key mistakenly set to F8 can never shadow the fixed dictate bind.
+        let scrim_vk = SCRIM_VK.load(Ordering::Acquire);
+        let bind = if kb.vkCode == DICTATE_VK {
+            Some((Bind::Dictate, &KEY_DOWN))
+        } else if scrim_vk != 0 && kb.vkCode == scrim_vk {
+            Some((Bind::Scrim, &SCRIM_KEY_DOWN))
+        } else {
+            None
+        };
+        if let Some((bind, latch)) = bind {
             match wparam as u32 {
                 WM_KEYDOWN | WM_SYSKEYDOWN => {
-                    if !KEY_DOWN.swap(true, Ordering::AcqRel) {
+                    if !latch.swap(true, Ordering::AcqRel) {
                         if let Some(tx) = EDGE_TX.get() {
-                            let _ = tx.send(true);
+                            let _ = tx.send((bind, true));
                         }
                     }
                 }
                 WM_KEYUP | WM_SYSKEYUP => {
-                    if KEY_DOWN.swap(false, Ordering::AcqRel) {
+                    if latch.swap(false, Ordering::AcqRel) {
                         if let Some(tx) = EDGE_TX.get() {
-                            let _ = tx.send(false);
+                            let _ = tx.send((bind, false));
                         }
                     }
                 }
@@ -142,14 +186,14 @@ unsafe extern "system" fn hook_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -
 /// channel closed) post WM_QUIT to the hook thread for a clean unhook.
 async fn drain(
     ctx: ControlContext,
-    mut edge_rx: mpsc::UnboundedReceiver<bool>,
+    mut edge_rx: mpsc::UnboundedReceiver<(Bind, bool)>,
     mut rebind_rx: mpsc::UnboundedReceiver<()>,
 ) {
     loop {
         tokio::select! {
             edge = edge_rx.recv() => match edge {
-                Some(true) => handle_press(&ctx),
-                Some(false) => handle_release(&ctx),
+                Some((bind, true)) => handle_press(&ctx, bind),
+                Some((_, false)) => handle_release(&ctx),
                 None => break, // hook thread / sender gone
             },
             msg = rebind_rx.recv() => match msg {
@@ -171,14 +215,20 @@ async fn drain(
 /// PRESS → start a hotkey-sourced dictation with the last-loaded model (config-less
 /// daemon; falls back to the registry default). `busy` is logged + ignored — a hotkey
 /// cannot error-respond. Mirrors portal.rs::handle_press.
-fn handle_press(ctx: &ControlContext) {
+fn handle_press(ctx: &ControlContext, bind: Bind) {
+    // The bind chosen at PRESS decides the source for the whole hold — release is
+    // just `stop`, so a session can never change its destination mid-utterance.
+    let source = match bind {
+        Bind::Dictate => DictationSource::Hotkey,
+        Bind::Scrim => DictationSource::HotkeyScrim,
+    };
     if ctx.is_dictating() {
-        log::info!("winhook: dictate press ignored — already dictating");
+        log::info!("winhook: {} press ignored — already dictating", source.as_str());
         return;
     }
     let model = ctx.last_model().unwrap_or_else(|| DEFAULT_MODEL.to_string());
-    log::info!("winhook: dictate press → start_dictation (model={model})");
-    if let Err(e) = dictation::start(ctx, HOTKEY_CONN_ID, model, None, None, DictationSource::Hotkey) {
+    log::info!("winhook: {} press → start_dictation (model={model})", source.as_str());
+    if let Err(e) = dictation::start(ctx, HOTKEY_CONN_ID, model, None, None, source) {
         log::warn!("winhook: dictate start failed: [{}] {}", e.code, e.message);
     }
 }
@@ -190,19 +240,47 @@ fn handle_release(ctx: &ControlContext) {
     dictation::stop(ctx);
 }
 
-/// Publish the fixed-trigger snapshot so the host renders the push-to-talk row.
-/// `can_configure:false` surfaces that Windows v1 cannot remap (not hidden).
+/// Human label for a Win32 virtual-key, for the snapshot's `trigger_description`.
+/// Covers F1-F24 (the realistic push-to-talk range) and printable ASCII; anything
+/// else falls back to hex, which is still unambiguous in the UI.
+fn vk_label(vk: u32) -> String {
+    match vk {
+        0x70..=0x87 => format!("F{}", vk - 0x6F), // VK_F1 = 0x70 … VK_F24 = 0x87
+        0x30..=0x39 | 0x41..=0x5A => ((vk as u8) as char).to_string(), // 0-9, A-Z
+        other => format!("VK {other:#04x}"),
+    }
+}
+
+/// Re-publish the snapshot after the scrim bind changes, so the Settings row
+/// reflects the new key without a daemon restart.
+pub fn republish(ctx: &ControlContext) {
+    publish_snapshot(ctx);
+}
+
+/// Publish the trigger snapshot so the host renders the push-to-talk rows.
+/// `can_configure:true` — the scrim bind is remappable; `dictate` stays fixed at F8.
 fn publish_snapshot(ctx: &ControlContext) {
     let snap = HotkeysSnapshot {
         bound: true,
         portal_version: 0, // no portal on Windows
-        can_configure: false,
-        shortcuts: vec![Shortcut {
-            id: DICTATE_ID.to_owned(),
-            description: "Push-to-talk dictation".to_owned(),
-            trigger_description: "F8 (hold)".to_owned(),
-            reserved: false,
-        }],
+        can_configure: true, // the SCRIM bind is remappable (dictate stays fixed)
+        shortcuts: vec![
+            Shortcut {
+                id: DICTATE_ID.to_owned(),
+                description: "Push-to-talk dictation".to_owned(),
+                trigger_description: "F8 (hold)".to_owned(),
+                reserved: false,
+            },
+            Shortcut {
+                id: DICTATE_SCRIM_ID.to_owned(),
+                description: "Push-to-talk scrim note".to_owned(),
+                trigger_description: match scrim_vk() {
+                    0 => "unbound".to_owned(),
+                    vk => format!("{} (hold)", vk_label(vk)),
+                },
+                reserved: false,
+            },
+        ],
         last_error: None,
     };
     ctx.set_hotkeys(snap.clone());

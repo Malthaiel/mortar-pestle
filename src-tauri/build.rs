@@ -297,6 +297,7 @@ fn main() {
         "stt_diarize_file",
         "stt_start_dictation",
         "stt_stop_dictation",
+        "stt_set_scrim_key",
         "stt_cancel",
         "stt_unload",
         "stt_status",

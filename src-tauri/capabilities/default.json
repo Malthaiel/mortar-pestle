@@ -296,6 +296,7 @@
     "allow-stt-diarize-file",
     "allow-stt-start-dictation",
     "allow-stt-stop-dictation",
+    "allow-stt-set-scrim-key",
     "allow-stt-cancel",
     "allow-stt-unload",
     "allow-stt-status",

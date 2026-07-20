@@ -22,6 +22,19 @@ const DEFAULT_MODEL = 'base.en';
 const SttCtx = createContext(null);
 export const useStt = () => useContext(SttCtx);
 
+// Win32 virtual-key for a keybind-registry chord key, or 0 when it can't be
+// expressed as one (the daemon's hook matches a single plain key, so chords and
+// exotic keys are simply unbound rather than silently half-working).
+// VK_F1 = 0x70 … VK_F24 = 0x87; letters/digits are their ASCII uppercase codes.
+export function vkFromBindingKey(key) {
+  if (typeof key !== 'string') return 0;
+  const k = key.trim().toLowerCase();
+  const fn = /^f([1-9]|1\d|2[0-4])$/.exec(k);
+  if (fn) return 0x6F + Number(fn[1]);
+  if (/^[a-z0-9]$/.test(k)) return k.toUpperCase().charCodeAt(0);
+  return 0;
+}
+
 function notify({ title, message, accent = 'var(--accent)', iconKey = 'bell', type = 'info', duration = 3000 }) {
   if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') return;
   window.dispatchEvent(new CustomEvent('agentic:notify', {
@@ -139,6 +152,16 @@ export default function SttProvider({ api, children }) {
   // log host-side (the relay); here we just mirror it into the panel + toast.
   const recordingRef = useRef(false);
   useEffect(() => { recordingRef.current = recording; }, [recording]);
+
+  // Push the SCRIM push-to-talk bind down to the daemon. The daemon holds it in
+  // memory only, so this re-sends on every engine (re)start as well as on rebind —
+  // otherwise a supervisor restart silently drops the scrim key. A chord or an
+  // unmappable key sends 0, which unbinds rather than half-working.
+  const scrimVk = vkFromBindingKey(settings?.keybinds?.['stt.scrim-note']?.key);
+  useEffect(() => {
+    if (engine?.state !== 'running') return;
+    api.invoke('stt_set_scrim_key', { vk: scrimVk }).catch(() => { /* engine down; re-sent on next start */ });
+  }, [engine?.state, scrimVk, api]);
   const hotkeyDictatingRef = useRef(false);
   useEffect(() => {
     const subs = [
@@ -176,11 +199,13 @@ export default function SttProvider({ api, children }) {
         setRecording(false); setMode('idle'); setVu(0);
         hotkeyDictatingRef.current = false;
       }),
-      listen('stt-dictation-saved', (e) => {
+      // Hotkey transcript typed into the focused window. Only the FAILURE toasts —
+      // a success is self-evident (the words are on screen where the user is
+      // looking), and a toast for every dictation would be pure noise.
+      listen('stt-dictation-typed', (e) => {
         if (!aliveRef.current) return;
-        const p = e.payload || {};
-        if (p.ok) notify({ title: 'Dictation saved', message: 'Added to today’s Quick Notes' });
-        else notify({ type: 'error', title: 'Dictation not saved', message: 'Couldn’t write to today’s log', accent: 'var(--error)', iconKey: 'alert', duration: 4500 });
+        if (e.payload?.ok) return;
+        notify({ type: 'error', title: 'Dictation not typed', message: 'The focused window rejected the input', accent: 'var(--error)', iconKey: 'alert', duration: 4500 });
       }),
     ];
     return () => { subs.forEach((pr) => pr.then((un) => un()).catch(() => {})); };

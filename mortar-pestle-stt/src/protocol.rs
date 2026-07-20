@@ -218,11 +218,18 @@ pub struct DictationStarted {
 }
 
 /// `dictation_committed` event — the terminal transcript of a HOTKEY-driven
-/// dictation (the daily-log sink trigger; UI-driven dictation never emits it — its
-/// per-call Channel owns the `final`). Carries the full transcript text.
+/// dictation (UI-driven dictation never emits it — its per-call Channel owns the
+/// `final`). Carries the full transcript plus the `source` the host routes on:
+/// `hotkey` → typed into the focused window, `hotkey_scrim` → a live-scrim note.
+///
+/// `source` is `#[serde(default)]` so a transcript from an OLDER daemon (which
+/// emitted `{"text":…}` with no source) still decodes — it lands as `""`, which
+/// the host treats as the plain `hotkey` path rather than dropping the transcript.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DictationCommitted {
     pub text: String,
+    #[serde(default)]
+    pub source: String,
 }
 
 #[cfg(test)]
@@ -391,8 +398,15 @@ mod tests {
         );
         let ds = DictationStarted { source: "hotkey".into() };
         assert_eq!(serde_json::to_string(&ds).unwrap(), r#"{"source":"hotkey"}"#);
-        let dc = DictationCommitted { text: "hello world".into() };
-        assert_eq!(serde_json::to_string(&dc).unwrap(), r#"{"text":"hello world"}"#);
+        let dc = DictationCommitted { text: "hello world".into(), source: "hotkey".into() };
+        assert_eq!(
+            serde_json::to_string(&dc).unwrap(),
+            r#"{"text":"hello world","source":"hotkey"}"#
+        );
+        // An OLD daemon's payload (no `source`) must still decode — the host falls
+        // back to the plain hotkey path rather than losing the transcript.
+        let legacy: DictationCommitted = serde_json::from_str(r#"{"text":"hi"}"#).unwrap();
+        assert_eq!(legacy.source, "");
     }
 }
 

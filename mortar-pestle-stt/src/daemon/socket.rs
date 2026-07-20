@@ -458,6 +458,24 @@ fn dispatch(ctx: &ControlContext, conn_id: u64, req: Request) -> Response {
             Err(e) => err_response(req.id, ProtoError::new("internal", e)),
         },
 
+        // Set the SCRIM push-to-talk bind (`args.vk` = a Win32 virtual-key; 0 unbinds).
+        // Windows-only — the Linux portal owns its own binds, so this is a no-op there.
+        // Echoes the refreshed snapshot so the caller sees the new trigger immediately.
+        "set_scrim_key" => {
+            let vk = req.args.get("vk").and_then(|v| v.as_u64());
+            match vk {
+                Some(vk) if vk <= u32::MAX as u64 => {
+                    crate::daemon::hotkeys::set_scrim_key(ctx, vk as u32);
+                    let hotkeys = serde_json::to_value(ctx.hotkeys_snapshot()).unwrap_or(Value::Null);
+                    Response { id: req.id, ok: true, data: Some(json!({ "hotkeys": hotkeys })), error: None }
+                }
+                _ => err_response(
+                    req.id,
+                    ProtoError::new("bad_args", "set_scrim_key needs a numeric `vk`".to_string()),
+                ),
+            }
+        }
+
         "shutdown" => {
             // Tell the worker to drop its model + exit, then wake `serve`'s accept loop
             // so the process exits (and `daemon::run` joins the worker).

@@ -39,6 +39,18 @@ export const KEYBIND_REGISTRY = [
     label: 'Toggle keyboard shortcuts overlay',
     default: { kind: 'chord', key: '?', modifiers: [] },
   },
+  // GLOBAL push-to-talk, not an in-app chord: this row is edited here but is
+  // enforced by the STT daemon's system-wide keyboard hook, so it fires even when
+  // Mortar & Pestle is unfocused. SttProvider watches it and pushes the matching
+  // Win32 virtual-key to the daemon. Modifiers are ignored (the hook matches ONE
+  // plain key), so keep the default modifier-less. The sibling F8 dictate bind is
+  // fixed in the daemon and deliberately absent — there is nothing to edit.
+  {
+    id: 'stt.scrim-note',
+    group: 'Voice',
+    label: 'Hold to dictate a note onto the live scrim',
+    default: { kind: 'chord', key: 'f9', modifiers: [] },
+  },
   {
     id: 'browser.new-tab',
     group: 'Browser',

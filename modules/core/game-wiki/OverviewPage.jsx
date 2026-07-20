@@ -13,12 +13,15 @@ import { encodePagePath } from '@host/components/SidebarBrowser.jsx';
 import RecordButton from '@modules/studio/overlay/RecordButton.jsx';
 import { IconFolder, IconPlayCircle } from '@host/components/icons.jsx';
 import ConfirmModal from '@host/components/ui/ConfirmModal.jsx';
+import Popover from '@host/components/ui/Popover.jsx';
+import { PrimaryBtn, OutlinedBtn } from '@host/components/ui/Button.jsx';
+import { save } from '@tauri-apps/plugin-dialog';
 import { useSettings } from '@host/hooks/useSettings.js';
 import { parseOverview, serializeOverview, parseMatchFile } from './scrimSchema.js';
 import { sidecarPath, scrimSidecarPath } from './matchData.js';
 import { compileNotes, renderCoachingSummary } from './noteCompile.js';
 import { parseCommsSidecar } from './commsCompile.js';
-import { buildTranscriptBlock, generateReport, normalizeTranscript, transcriptHash, verifyReport } from './vodReport.js';
+import { buildTranscriptBlock, generateReport, normalizeTranscript, transcriptHash, verifyReport, serializeReportMarkdown, coerceReport, applyCorrections, EXPORT_SECTIONS } from './vodReport.js';
 import { buildMatchDigest } from './matchDigest.js';
 import { buildBrainContext, buildLexicon, lexiconStale, LEXICON_PATH } from './analystBrain.js';
 import { getNotes } from './scrimSchema.js';
@@ -101,6 +104,14 @@ export default function OverviewPage({ folder, accent, nav = navigate, overlay =
   const [yourName, setYourName] = useState(loadYourName);
   const [trackDefaults, setTrackDefaults] = useState(loadTrackDefaults);
   const [trackCount, setTrackCount] = useState(0);
+  // Export-to-.md popover (report → Markdown). Mirrors the section picker the report view used to
+  // hold — this is now the app's only Export entry point. Sidecars are read on demand at export time.
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportAnchor, setExportAnchor] = useState(null);
+  const [exportSel, setExportSel] = useState(() => new Set(['report', 'actions', 'qa']));
+  const [exportDest, setExportDest] = useState('');
+  const [exportErr, setExportErr] = useState('');
+  const [exportBusy, setExportBusy] = useState(false);
   const vodRef = useRef(false);
 
   // Whose run is it: this scrim's (show the phase), or another scrim's (grey the
@@ -319,6 +330,54 @@ export default function OverviewPage({ folder, accent, nav = navigate, overlay =
     }
   };
 
+  // Export the stored report to a Markdown file. This page never holds the parsed report, so the
+  // .vodreport sidecar is read on export; Segments, when ticked, get the same .vodnorm name-fixes the
+  // report view applies so the exported transcript matches what's shown there.
+  const openExport = (e) => {
+    if (exportOpen) { setExportOpen(false); return; } // toggle — outsideExempt keeps this click in
+    setExportErr('');
+    setExportAnchor(e.currentTarget.getBoundingClientRect());
+    setExportOpen(true);
+  };
+  const pickExportDest = async () => {
+    setExportErr('');
+    try {
+      const p = await save({ defaultPath: `${base} VOD Review.md`, filters: [{ name: 'Markdown', extensions: ['md'] }] });
+      if (p) setExportDest(p.toLowerCase().endsWith('.md') ? p : `${p}.md`);
+    } catch (e) { setExportErr(String(e?.message || e)); }
+  };
+  const toggleSection = (id) => setExportSel((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const doExport = async () => {
+    if (!exportDest || exportSel.size === 0 || exportBusy) return;
+    setExportBusy(true);
+    setExportErr('');
+    try {
+      const report = coerceReport(JSON.parse((await api.getRawFileMeta(scrimSidecarPath(folder, 'vodreport'), 'gamewiki')).content));
+      let segments = [];
+      if (exportSel.has('segments')) {
+        try {
+          segments = parseCommsSidecar((await api.getRawFileMeta(scrimSidecarPath(folder, 'vodcomms'), 'gamewiki')).content).segments;
+          try {
+            const c = JSON.parse((await api.getRawFileMeta(scrimSidecarPath(folder, 'vodnorm'), 'gamewiki')).content);
+            if (c.hash === transcriptHash(segments) && Array.isArray(c.corrections)) segments = applyCorrections(segments, c.corrections).segments;
+          } catch { /* no norm cache → raw transcript */ }
+        } catch { /* transcript unavailable → serializer writes an unavailable note */ }
+      }
+      const md = serializeReportMarkdown(report, exportSel, `${base} VOD Review`, segments);
+      await invoke('export_report_file', { path: exportDest, content: md, reveal: true });
+      notify('success', 'Exported', exportDest);
+      setExportOpen(false);
+    } catch (e) {
+      setExportErr(String(e?.message || e));
+    } finally {
+      setExportBusy(false);
+    }
+  };
+
   const paneInner = overlay ? { padding: 8, fontFamily: 'var(--font-mono)', '--accent': accent } : { ...inner, '--accent': accent };
   if (err) return <div style={wrap}><div style={paneInner}><p style={{ color: 'var(--error)' }}>Couldn’t open this scrim: {err}</p></div></div>;
   if (!doc) return <div style={wrap}><div style={paneInner}><p style={{ color: 'var(--text-muted)' }}>Loading</p></div></div>;
@@ -373,6 +432,11 @@ export default function OverviewPage({ folder, accent, nav = navigate, overlay =
               <span className="candy-face">Open Report</span>
             </button>
           )}
+          {scrim['VOD Report'] && (
+            <button className="candy-btn" data-shape="chip" data-export-trigger onClick={openExport} title="Export this report to a Markdown file">
+              <span className="candy-face">Export</span>
+            </button>
+          )}
         </div>
 
         {/* Coaching Setup — the old AppWindow popup content, inline (Phase 4). */}
@@ -409,6 +473,40 @@ export default function OverviewPage({ folder, accent, nav = navigate, overlay =
           </div>
         )}
       </ConfirmModal>
+      <Popover
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        outsideExempt="[data-export-trigger]"
+        accent={accent}
+        showClose
+        title="Export VOD Review"
+        style={exportAnchor ? { position: 'fixed', left: Math.min(exportAnchor.left, window.innerWidth - 308), top: Math.min(exportAnchor.bottom + 6, window.innerHeight - 300), width: 300, zIndex: 100000 } : { display: 'none' }}
+        bodyStyle={{ padding: 14 }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>Sections to export:</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {EXPORT_SECTIONS.map((s) => (
+              <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--text)', cursor: 'pointer' }}>
+                <input type="checkbox" checked={exportSel.has(s.id)} onChange={() => toggleSection(s.id)} style={{ accentColor: accent || 'var(--accent)' }} />
+                {s.label}
+              </label>
+            ))}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ flex: 1, minWidth: 0, fontSize: 11.5, fontFamily: 'var(--font-mono)', color: exportDest ? 'var(--text)' : 'var(--text-faint)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={exportDest}>
+              {exportDest || 'No destination chosen'}
+            </div>
+            <OutlinedBtn small onClick={pickExportDest} disabled={exportBusy}>Choose</OutlinedBtn>
+          </div>
+          {exportErr && <div style={{ fontSize: 11.5, color: 'var(--error)' }}>{exportErr}</div>}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <PrimaryBtn small accent={accent} onClick={doExport} disabled={!exportDest || exportSel.size === 0 || exportBusy}>
+              {exportBusy ? 'Exporting' : 'Export'}
+            </PrimaryBtn>
+          </div>
+        </div>
+      </Popover>
     </div>
   );
 }

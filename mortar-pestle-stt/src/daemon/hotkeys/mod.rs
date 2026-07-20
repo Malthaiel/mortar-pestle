@@ -39,3 +39,16 @@ pub fn spawn(ctx: ControlContext, rebind_rx: mpsc::UnboundedReceiver<()>) {
 /// unconditional call site compiling.
 #[cfg(not(any(target_os = "linux", target_os = "windows")))]
 pub fn spawn(_ctx: ControlContext, _rebind_rx: mpsc::UnboundedReceiver<()>) {}
+
+/// Set the SCRIM push-to-talk bind to a Win32 virtual-key (`0` unbinds) and
+/// re-publish the hotkeys snapshot. Windows-only; every other platform ignores it
+/// (Linux binds live in the portal), so the `set_scrim_key` socket verb needs no
+/// `cfg` at its call site.
+#[cfg(target_os = "windows")]
+pub fn set_scrim_key(ctx: &ControlContext, vk: u32) {
+    winhook::set_scrim_vk(vk);
+    winhook::republish(ctx);
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn set_scrim_key(_ctx: &ControlContext, _vk: u32) {}

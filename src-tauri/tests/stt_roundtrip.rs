@@ -391,11 +391,17 @@ fn dictation_started_golden_roundtrips() {
 
 #[test]
 fn dictation_committed_golden_roundtrips() {
-    const GOLDEN: &str = r#"{"text":"hello world"}"#;
+    const GOLDEN: &str = r#"{"text":"hello world","source":"hotkey"}"#;
     let d: DictationCommitted = assert_byte_roundtrip(GOLDEN);
     assert_eq!(d.text, "hello world");
-    let made = DictationCommitted { text: "hello world".into() };
+    assert_eq!(d.source, "hotkey");
+    let made = DictationCommitted { text: "hello world".into(), source: "hotkey".into() };
     assert_eq!(serde_json::to_string(&made).unwrap(), GOLDEN);
+
+    // An OLD daemon's payload (pre-split, no `source`) must still decode — the host
+    // falls back to the plain hotkey path rather than losing the transcript.
+    let legacy: DictationCommitted = serde_json::from_str(r#"{"text":"hi"}"#).unwrap();
+    assert_eq!(legacy.source, "");
 }
 
 // ── Scrim Coaching sub-plan 6 (SF2) diarization payloads ─────────────────────

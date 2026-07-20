@@ -274,6 +274,17 @@ export function reconcileReport(fresh, prior) {
 // when 'segments' is selected. section.md bodies are emitted RAW — their [m:ss]
 // tokens are plain text in the file (the in-app linkTimeTokens/TimeChip transform
 // is render-only and must NOT run on export). Empty selection → ''.
+// Sections offered by the Export popover, in emit order (matches the ORDER list below).
+export const EXPORT_SECTIONS = [
+  { id: 'report', label: 'Report' },
+  { id: 'actions', label: 'Action Items' },
+  { id: 'qa', label: 'Q&A' },
+  { id: 'keep', label: 'Keep Doing' },
+  { id: 'debates', label: 'Debates' },
+  { id: 'followups', label: 'Follow-ups' },
+  { id: 'segments', label: 'Segments (transcript)' },
+];
+
 export function serializeReportMarkdown(report, selected, name, segments = []) {
   const r = report || {};
   const sel = (id) => !!selected?.has(id);

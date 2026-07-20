@@ -26,6 +26,10 @@ pub mod render;
 #[cfg(any(target_os = "linux", target_os = "windows"))]
 pub mod stt;
 pub mod tool_path;
+/// Push-to-talk sink: type a dictated transcript into the focused window via
+/// `SendInput`. Windows-only (the `windows` crate is a cfg(windows) dep).
+#[cfg(windows)]
+pub mod typing;
 /// Win32 Job Object die-with-app safety net (KILL_ON_JOB_CLOSE). Windows-only;
 /// compiled out on Linux (the `windows` crate is a cfg(windows) dep).
 #[cfg(windows)]
@@ -485,7 +489,24 @@ pub fn run() {
                                     // coached-team note in the scrim overlay instead of
                                     // appending to today's Quick Notes. Otherwise the
                                     // existing daily-log sink path is unchanged.
-                                    if let Some(t) = crate::overlay::state::current_live_target() {
+                                    // Route on the SOURCE (which key was held), not on
+                                    // whether a scrim is live: the scrim bind makes a
+                                    // scrim note, the dictate bind (F8) always types.
+                                    // An older daemon sends no `source` — that decodes
+                                    // to "" and takes the type-into-focus path.
+                                    let source = ev
+                                        .data
+                                        .get("source")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("");
+                                    log::info!(
+                                        "stt: dictation_committed len={} source={source:?}",
+                                        text.len()
+                                    );
+                                    let live = crate::overlay::state::current_live_target();
+                                    // A scrim note with NO live scrim has nowhere to go —
+                                    // fall through to typing rather than dropping it.
+                                    if let (true, Some(t)) = (source == "hotkey_scrim", live) {
                                         let _ = bridge_app.emit(
                                             "overlay-dictation-committed",
                                             serde_json::json!({
@@ -496,20 +517,30 @@ pub fn run() {
                                             }),
                                         );
                                     } else {
-                                        let ds = crate::parsers::daily::today_str();
-                                        let (ok, err) =
-                                            match crate::parsers::sessions::append_quick_note(&ds, &text)
-                                            {
-                                                Ok(_) => (true, None),
-                                                Err(e) => {
-                                                    log::warn!("stt: daily-log sink failed: {e:?}");
-                                                    (false, Some(format!("{e:?}")))
-                                                }
-                                            };
+                                        // Focused-window SINK: type the transcript into
+                                        // whatever box has keyboard focus (terminal,
+                                        // browser field, the M&P app itself — no special
+                                        // case). Replaces the former daily-log append.
+                                        // A trailing space so back-to-back dictations
+                                        // don't glue together.
+                                        let typed = format!("{} ", text.trim());
+                                        let sent = crate::typing::type_text(&typed);
+                                        let want = typed.encode_utf16().count() * 2;
+                                        let ok = sent == want;
+                                        log::info!("stt: focus sink sent {sent}/{want} events");
+                                        if !ok {
+                                            log::warn!(
+                                                "stt: focus sink REJECTED \
+                                                 (foreground window likely elevated)"
+                                            );
+                                        }
                                         let _ = bridge_app.emit(
-                                            "stt-dictation-saved",
+                                            "stt-dictation-typed",
                                             serde_json::json!({
-                                                "ok": ok, "ds": ds, "text": text, "error": err,
+                                                "ok": ok, "text": text,
+                                                "error": if ok { None } else {
+                                                    Some("focused window rejected the input")
+                                                },
                                             }),
                                         );
                                     }
@@ -962,6 +993,7 @@ pub fn run() {
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::stt::stt_diarize_file,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::stt::stt_start_dictation,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::stt::stt_stop_dictation,
+            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::stt::stt_set_scrim_key,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::stt::stt_cancel,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::stt::stt_unload,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::stt::stt_status,

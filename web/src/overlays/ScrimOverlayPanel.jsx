@@ -121,6 +121,26 @@ export default function ScrimOverlayPanel() {
     }
   }, []);
 
+  // Live target — mirrors the Rust cell so the End Live control can show/hide. Rust
+  // emits `overlay-live-target` on BOTH go-live and go-offline, so this one listener
+  // covers a target set from the match page as well as one cleared here.
+  const [live, setLive] = useState(null);
+  useEffect(() => {
+    invoke('overlay_get_live_target').then(setLive).catch(() => {});
+    const sub = listen('overlay-live-target', (e) => setLive(e.payload ?? null));
+    return () => { sub.then((un) => un()).catch(() => {}); };
+  }, []);
+
+  // End Live — clear the Rust cell AND the persisted target. Both are required:
+  // without the localStorage clear, the mount effect above re-publishes the very
+  // target we just cleared the next time this overlay opens (which is exactly why
+  // a live scrim used to be impossible to switch off).
+  const endLive = useCallback(() => {
+    try { localStorage.removeItem(DICTATION_TARGET_KEY); } catch { /* private mode */ }
+    invoke('overlay_go_offline').catch(() => {});
+    setLive(null);
+  }, []);
+
   // Dictation / screenshot fallback: when the target match page is NOT the page
   // currently open here, finish the capture on disk (scrimShared helpers). A
   // mounted MatchPage handles its own events through its save loop.
@@ -218,6 +238,15 @@ export default function ScrimOverlayPanel() {
               {renderTickerGroup('b')}
             </div>
           </div>
+          {/* End Live — only while a scrim IS live; the scrim push-to-talk bind
+              routes to it until this clears. */}
+          {live && (
+            <button type="button" data-no-drag className="candy-btn" data-size="small"
+              title="Stop routing scrim voice notes to this match"
+              aria-label="End live scrim" onClick={endLive}>
+              End Live
+            </button>
+          )}
         </div>
 
         {/* Body — shared tree rail + shared page pane, local selection. */}

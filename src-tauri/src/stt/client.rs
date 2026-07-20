@@ -247,11 +247,18 @@ pub struct DictationStarted {
 }
 
 /// `dictation_committed` event `data` — the terminal transcript of a HOTKEY-driven
-/// dictation (the daily-log sink trigger; UI-driven dictation never emits it — its
-/// per-call Channel owns the `final`). Carries the full transcript text.
+/// dictation (UI-driven dictation never emits it — its per-call Channel owns the
+/// `final`). Carries the full transcript plus the `source` the host routes on:
+/// `hotkey` → typed into the focused window, `hotkey_scrim` → a live-scrim note.
+///
+/// `source` is `#[serde(default)]` so a transcript from an OLDER daemon (which
+/// emitted `{"text":…}` with no source) still decodes — it lands as `""`, which
+/// the host treats as the plain `hotkey` path rather than dropping the transcript.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DictationCommitted {
     pub text: String,
+    #[serde(default)]
+    pub source: String,
 }
 
 // ---------------------------------------------------------------------------

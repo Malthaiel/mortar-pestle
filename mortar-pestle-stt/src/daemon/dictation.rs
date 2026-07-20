@@ -53,22 +53,32 @@ use crate::resample::{rms, Resampler16k, TARGET_RATE};
 use crate::vad::{EmitCursor, SegmentMs, VadChunker, DEFAULT_HANGOVER_MS, DEFAULT_THRESHOLD};
 use crate::whisper::{load_ctx, transcribe_pcm};
 
-/// Who initiated a dictation — drives the terminal routing. A `Hotkey` session also
-/// emits `dictation_committed` so the host appends the transcript to today's Quick
-/// Notes (the daemon can't write the vault); a `Client` session relies on its
-/// per-call Channel for the `final` and never auto-appends.
+/// Who initiated a dictation — drives the terminal routing. BOTH hotkey sources
+/// emit `dictation_committed` (the daemon can't write the vault or reach the
+/// focused window, so the host does the work); they differ only in the `source`
+/// string the host routes on: `Hotkey` → typed into the focused window,
+/// `HotkeyScrim` → a timestamped note on the live scrim. A `Client` session
+/// relies on its per-call Channel for the `final` and never commits.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DictationSource {
     Client,
     Hotkey,
+    HotkeyScrim,
 }
 
 impl DictationSource {
-    fn as_str(self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             DictationSource::Client => "client",
             DictationSource::Hotkey => "hotkey",
+            DictationSource::HotkeyScrim => "hotkey_scrim",
         }
+    }
+
+    /// Whether this source's terminal transcript needs a `dictation_committed`
+    /// (i.e. the HOST must act on it — no per-call Channel is carrying it).
+    fn commits(self) -> bool {
+        matches!(self, DictationSource::Hotkey | DictationSource::HotkeyScrim)
     }
 }
 
@@ -329,11 +339,12 @@ fn consume(
         transcript.len()
     );
 
-    // Terminal event(s). A HOTKEY-driven session also emits `dictation_committed` so
-    // the host appends the transcript to today's Quick Notes (the daemon can't write
-    // the vault); a client session's per-call Channel owns the `final` instead.
-    if matches!(source, DictationSource::Hotkey) {
-        emit_committed(&events, transcript.clone());
+    // Terminal event(s). A HOTKEY-driven session also emits `dictation_committed`
+    // carrying its source, which is what the host routes on (typed into the focused
+    // window vs. a live-scrim note); a client session's per-call Channel owns the
+    // `final` instead.
+    if source.commits() {
+        emit_committed(&events, transcript.clone(), source);
     }
     emit_final(&events, transcript);
 }
@@ -366,8 +377,9 @@ fn emit_started(events: &broadcast::Sender<Event>, source: DictationSource) {
 
 /// Emit `dictation_committed {text}` — a HOTKEY session's terminal transcript for the
 /// host's daily-log sink (UI-driven dictation never emits this).
-fn emit_committed(events: &broadcast::Sender<Event>, text: String) {
-    if let Ok(data) = serde_json::to_value(DictationCommitted { text }) {
+fn emit_committed(events: &broadcast::Sender<Event>, text: String, source: DictationSource) {
+    let source = source.as_str().to_string();
+    if let Ok(data) = serde_json::to_value(DictationCommitted { text, source }) {
         let _ = events.send(Event { event: "dictation_committed".to_string(), data });
     }
 }
