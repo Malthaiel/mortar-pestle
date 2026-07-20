@@ -9,6 +9,11 @@ assert.equal(mmss(0), '0:00');
 assert.equal(mmss(75), '1:15');
 assert.equal(mmss(-3), '0:00');
 assert.equal(mmss('abc'), '0:00');
+// hour boundary — must read exactly as YouTube renders the same second
+assert.equal(mmss(3599), '59:59');
+assert.equal(mmss(3600), '1:00:00');
+assert.equal(mmss(4045), '1:07:25');
+assert.equal(mmss(3644), '1:00:44');
 
 // slugId deterministic
 assert.equal(slugId('Rotate MID after first tower!'), 'rotate-mid-after-first-tower');

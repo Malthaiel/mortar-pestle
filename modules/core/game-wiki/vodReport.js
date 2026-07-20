@@ -3,7 +3,9 @@
 // autoClassify.js / deathAudit.js. Turns a diarized VOD-review transcript (the post-match session
 // where the coach + players talk through the game) into an actionable coaching report via Claude,
 // reusing the generic coaching_classify_match(systemPrompt, userPrompt, backend, model, cliPath)
-// bridge (no new Rust). Opus by default — a condensed report is ~2-4k tokens, well under 16k out.
+// bridge (no new Rust). Opus by default. Section length is UNCAPPED (the 2026-07-19 caps were
+// reverted 2026-07-20 — see VOD_REPORT_SYSTEM_PROMPT); the real ceiling is the 32k max_tokens in
+// coaching.rs classify_via_api, and the draft call gets the full 20-min wall to reach it.
 //
 // Report JSON shape (what Claude returns, what VodReportView renders, what the .vodreport sidecar
 // stores):
@@ -14,14 +16,20 @@
 //   sections = dynamic per-scrim topic pages (taught lessons/frameworks) in GFM markdown; time
 //   references inside md are literal [m:ss] tokens the view swaps for jump chips.
 
-// Whole-second time → m:ss (standalone so the Node harness needs no matchData import).
+// Whole-second time → m:ss, or h:mm:ss once past the hour (standalone so the Node harness needs no
+// matchData import). The hour part is REQUIRED: these stamps are read next to the same VOD uploaded
+// to YouTube, and YouTube renders 4045s as "1:07:25" — a bare "67:25" makes the notes and the video
+// disagree on every moment past 1:00:00 (a 71-minute review put 32 such stamps in one report).
 import { parseOrRetry } from './aiRetry.js';
 
 export function mmss(s) {
   const v = Number(s);
   if (!Number.isFinite(v) || v < 0) return '0:00';
   const w = Math.floor(v);
-  return `${Math.floor(w / 60)}:${String(w % 60).padStart(2, '0')}`;
+  const h = Math.floor(w / 3600);
+  const m = Math.floor(w / 60) % 60;
+  const ss = String(w % 60).padStart(2, '0');
+  return h ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
 }
 
 // Deterministic stable id from an item's text: lets reconcile match carried-forward items even if
@@ -58,7 +66,8 @@ export const VOD_REPORT_SYSTEM_PROMPT = [
   '- Cross-reference talk against data: when a player asserts something ("we were even in souls"), check it',
   '  against the digest curves and say whether the data agrees.',
   '- Comms grading = transcript claims checked against digest events, callout by callout.',
-  '- Layered depth: sections are the quick read; playerCards / macro / commsGrade carry the full analysis.',
+  '- Layered depth: sections carry the taught material and the game review; playerCards / macro / commsGrade',
+  '  carry the per-player and per-moment analysis.',
   '- Never invent content not present in the transcript, notes, digest, or brain.',
   '',
   'Return ONLY a single JSON object (no markdown, no code fences, no commentary) with EXACTLY these keys:',
@@ -90,54 +99,49 @@ export const VOD_REPORT_SYSTEM_PROMPT = [
   '    { "id": string,                  // short stable kebab-case slug of the heading',
   '      "heading": string,             // name the section after the topic itself ("Tempo", "Gaining a Lead", ...)',
   '      "md": string }                 // full GFM markdown body: bullets, numbered steps, tables all allowed;',
-  '                                     // cite moments as literal [m:ss] tokens copied from the transcript',
+  '                                     // cite moments as literal [time] tokens copied from the transcript',
   '  ],',
   '  "actionItems": [                   // concrete things to change; DEDUPE near-identical asks',
   '    { "id": string,                  // short stable kebab-case slug of the item; REUSE a prior id if given one',
   '      "text": string,                // the action, imperative ("rotate mid after first tower")',
   '      "count": number,               // how many distinct moments raised it (>=1)',
-  '      "timestamps": [string],        // every m:ss where it came up',
+  '      "timestamps": [string],        // every transcript time where it came up',
   '      "player": string|null,         // the player it targets, or null if team-wide',
   '      "metric": string|null,         // leave null (measurable-goal mapping is a later phase)',
   '      "status": "pending" }          // always "pending" — the app owns done/pending',
   '  ],',
-  '  "qa": [ { "q": string, "a": string, "askedBy": string, "t": string } ],  // player question -> coach answer, t = m:ss',
+  '  "qa": [ { "q": string, "a": string, "askedBy": string, "t": string } ],  // player question -> coach answer, t = transcript time',
   '  "keepDoing": [string],             // things praised / working well',
   '  "debates": [string],               // points raised but left unresolved',
   '  "followUps": [ { "priorItem": string, "verdict": "resolved"|"persisting"|"unclear", "evidence": string } ],',
   '  "meta": { "warnings": [string] }   // anything you could not verify or had to assume',
   '}',
   '',
-  'Rules: every timestamp is an m:ss string copied from the transcript. Never invent content not in the',
-  'transcript or notes. Merge duplicate action items and bump their count instead of repeating. If a section has',
-  'nothing, use an empty array. Keep it tight — this is a coach\'s cheat sheet, not a summary essay.',
-  'The readers are busy players: short beats thorough prose everywhere.',
+  'Rules: every timestamp is a time string copied VERBATIM from the transcript, hour part included past',
+  '1:00:00 (m:ss under the hour, h:mm:ss over it) — never reformat or recompute one. Never invent content not',
+  'in the transcript or notes. Merge duplicate action items and bump their count instead of repeating. If a',
+  'section has nothing, use an empty array. Keep it tight — this is a coach\'s cheat sheet, not a summary essay.',
   '',
   'Say-it-once: every insight has exactly ONE home (a section, a player-card field, or an action item).',
-  'Anywhere else it is a one-line pointer ("see the <heading> section"), never re-explained.',
-  '',
-  'Length caps (hard limits):',
-  '- laneVerdict, soulsCurveRead, itemCritique: at most 2 sentences each.',
-  '- deathAnalysis: only the 3 most instructive deaths per player; what/why/lesson one sentence each.',
-  '- commsGrade.callouts: the 10 most instructive at most.',
-  '- qa answers: at most 2 sentences.',
-  '- keepDoing and debates entries: one line each.',
+  'Anywhere else it is a one-line pointer ("see the <heading> section"), never re-explained. A Q&A answer is',
+  'the exception — it may restate its section\'s conclusion in brief, because the question deserves an answer.',
   '',
   'Section rules:',
-  '- At most 5 topic sections plus the mandatory final "VOD Takeaways" section. Only the biggest topics;',
-  '  minor asides fold into action items or are dropped.',
-  '- Each section md is at most 150 words. Prefer bullets and tables over prose.',
+  '- One section per substantial topic taught or discussed at length — as many as the session warrants, no cap.',
+  '  Minor asides fold into action items or are dropped.',
+  '- Sections carry real explanatory detail, not headline bullets. Each point states the principle, the reasoning',
+  '  behind it, and the concrete example or consequence from this session, with its time stamp inline. House',
+  '  style: a short **bolded lead phrase** then the explanation — as prose, as bullets, or as a table, whichever',
+  '  the material fits. A point compressed to a bare assertion is a failure.',
+  '- Game-review material (soul distribution, itemization, what went wrong this game) is a normal detailed',
+  '  section like any taught lesson — never a list of one-line takeaways.',
   '- A topic aimed at ONE player (their hero\'s gameplay loop, individual coaching) is NEVER a team section —',
   '  it goes in that player\'s "coaching" field instead, full step list intact.',
-  '- Principle lists (points that share a topic but are not a sequence): order by importance, split into a',
-  '  "**Core**" sub-list (the 3-5 game-deciding points) and a "**Side notes**" sub-list (the rest).',
-  '- Taught framework or SEQUENCE: reproduce EVERY step, in original order, as a numbered list, one short line per',
-  '  step, no prose around the list. Dropping a step is a failure; padding a step into sentences is also a failure.',
+  '- NEVER compress a taught framework. When the coach lays out steps, a sequence, or a plan, reproduce',
+  '  EVERY step, in order, faithful to the coach\'s wording, inside that topic\'s section. Summarizing a',
+  '  taught sequence is a failure.',
   '- A live worked example from the coach (a draft read hero by hero, an item plan) ALWAYS gets its own section,',
   '  table-formatted where the material fits a table — never summarize it away.',
-  '- The LAST section is always {"id": "vod-takeaways", "heading": "VOD Takeaways"}: a numbered list of one-line',
-  '  takeaways from the reviewed game, most important first — the game-review digest, kept separate from the',
-  '  taught-lesson sections above it.',
   '- Steps live in their section only. If the coach also assigned it as homework, emit exactly ONE action',
   '  item that references the section ("apply the <heading> plan — see the <heading> section"), never the',
   '  steps themselves.',

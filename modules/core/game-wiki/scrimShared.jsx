@@ -18,7 +18,7 @@ import {
   parseOverview, serializeOverview, parseMatchFile, serializeMatchFile, ensureNotes,
 } from './scrimSchema.js';
 import { sidecarPath, scrimSidecarPath, clock, extractSpatial } from './matchData.js';
-import { parseTimedNote, formatTimedBullet, sortByTimeAsc, secFromClock } from './noteCompile.js';
+import { parseTimedNote, formatTimedBullet, sortByTimeAsc, secFromClock, TIME_PREFIX_RE } from './noteCompile.js';
 import { parseCommsSidecar, parseSegments, buildCommsSidecar, renderCommsSummary } from './commsCompile.js';
 import { alignDiarization, mergeTranscripts, labelForCluster, speakerColor } from './diarize.js';
 import { matchClusters, parseVoiceprints, DEFAULT_THRESHOLD } from './voiceprints.js';
@@ -731,7 +731,7 @@ export function NotesEditor({ bullets, onChange, onCommit, storageKey, overlay, 
   };
   const setAt = (i, nb) => onChange(bullets.map((x, j) => (j === i ? nb : x)));
   const onText = (row, raw) => {
-    const m = /^\[(\d{1,2}):([0-5]\d)\]\s*/.exec(raw);
+    const m = TIME_PREFIX_RE.exec(raw);
     const atSec = m ? Number(m[1]) * 60 + Number(m[2]) : null;
     setAt(row._i, formatTimedBullet({ atSec, classification: row.classification, text: m ? raw.slice(m[0].length) : raw }));
   };

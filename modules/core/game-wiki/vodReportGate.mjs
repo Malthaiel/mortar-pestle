@@ -9,6 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { parseMishears } from './analystBrain.js';
+import { mmss } from './vodReport.js';
 
 const GW = path.join(process.env.APPDATA, 'dev.malthaiel.mortar-pestle', 'GameWiki', 'Deadlock');
 const reportPath = process.argv[2];
@@ -31,7 +32,11 @@ const mishears = parseMishears(lex); // [[wrong, right]], skips header/separator
 // ── gather report text + structured hero fields + timestamps ─────────────────
 const allText = JSON.stringify(report);
 const heroFields = (report.playerCards || []).map((c) => (c.hero || '').trim()).filter(Boolean);
-const stamps = [...allText.matchAll(/\b(\d{1,2}):([0-5]\d)\b/g)].map((m) => Number(m[1]) * 60 + Number(m[2]));
+// Optional leading hour group: mmss() emits h:mm:ss past 1:00:00, and pre-2026-07-20 sidecars stored
+// the same moment as a bare `67:25`. Both forms must resolve to the same second or a long review's
+// stamps all read as "outside the transcript".
+const stamps = [...allText.matchAll(/\b(?:(\d{1,2}):)?(\d{1,2}):([0-5]\d)\b/g)]
+  .map((m) => (Number(m[1]) || 0) * 3600 + Number(m[2]) * 60 + Number(m[3]));
 
 // ── vodcomms segments (transcript ground truth) ──────────────────────────────
 // Schema v2 (GameWiki Unification): the report lives at `<scrim folder>/.vodreport.json`,
@@ -50,8 +55,7 @@ const heroMisses = heroFields.filter((h) => !canon.has(h.toLowerCase()));
 const mishearHits = mishears
   .filter(([wrong]) => wrong && new RegExp(`\\b${wrong.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(allText))
   .map(([wrong, right]) => `"${wrong}" (should be "${right}")`);
-const badStamps = [...new Set(stamps)].filter((s) => !inSeg(s))
-  .map((s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`);
+const badStamps = [...new Set(stamps)].filter((s) => !inSeg(s)).map(mmss);
 
 const pass = heroMisses.length === 0 && mishearHits.length === 0 && badStamps.length === 0;
 console.log('Lexicon entries:', canon.size, '| learned mishears:', mishears.length, '| transcript segs:', segs.length, `(0–${(spanEnd / 60000).toFixed(0)}min)`);

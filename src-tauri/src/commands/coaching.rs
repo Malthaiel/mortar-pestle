@@ -511,7 +511,10 @@ pub async fn deadlock_fetch_match(match_id: String) -> Result<serde_json::Value,
 // (settings.agents.authBackend): the Anthropic API key, or the `claude` CLI.
 
 const ANTHROPIC_MESSAGES_URL: &str = "https://api.anthropic.com/v1/messages";
-const CLASSIFY_TIMEOUT_SECS: u64 = 180; // a reasoned classify can run a while; non-streaming
+// Matches CLASSIFY_CLI_TIMEOUT_SECS. Non-streaming, so the whole answer arrives at once: an
+// un-capped VOD report (section length caps reverted 2026-07-20) is a long high-effort generation
+// and the old 180s wall failed the draft outright rather than waiting for it.
+const CLASSIFY_TIMEOUT_SECS: u64 = 20 * 60;
 
 /// settings.agents.model alias → Anthropic model id (defaults to the current best Opus).
 fn classify_model_id(alias: &str) -> &'static str {

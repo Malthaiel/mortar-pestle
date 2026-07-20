@@ -35,17 +35,11 @@ import { speakerColor } from './diarize.js';
 import { save } from '@tauri-apps/plugin-dialog';
 import Popover from '@host/components/ui/Popover.jsx';
 import { PrimaryBtn, OutlinedBtn } from '@host/components/ui/Button.jsx';
-import { serializeReportMarkdown, coerceReport, slugId, transcriptHash, applyCorrections } from './vodReport.js';
+import { serializeReportMarkdown, coerceReport, slugId, transcriptHash, applyCorrections, mmss } from './vodReport.js';
 import { openAnalyst } from '@host/agents/analyst/AnalystProvider.jsx';
 
 const muted = { color: 'var(--text-muted)', fontSize: 13 };
 const macroBtnCluster = { flexShrink: 0, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center' };
-
-// Milliseconds → m:ss (raw-segment timestamp). "0:00" for missing/NaN. Mirrors CommsTranscriptView.
-function mmss(ms) {
-  const v = Number.isFinite(Number(ms)) ? Math.max(0, Math.floor(Number(ms) / 1000)) : 0;
-  return `${Math.floor(v / 60)}:${String(v % 60).padStart(2, '0')}`;
-}
 
 function RailButton({ active, accent, onClick, disabled, children, ...rest }) {
   return (
@@ -71,13 +65,15 @@ function TimeChip({ t, onJump }) {
   );
 }
 
-// Turn literal [m:ss] tokens into markdown links (#seg-m:ss) so react-markdown's `a` override can
-// render them as TimeChips. Fence-aware (mirror GameWikiPage.transformWikilinks): code spans/blocks
-// pass through untouched. `(?!\()` leaves real markdown links like [1:15](url) alone.
+// Turn literal [m:ss] / [h:mm:ss] tokens into markdown links (#seg-<t>) so react-markdown's `a`
+// override can render them as TimeChips. Fence-aware (mirror GameWikiPage.transformWikilinks): code
+// spans/blocks pass through untouched. `(?!\()` leaves real markdown links like [1:15](url) alone.
+// The optional third group matches the hour form mmss() emits past 1:00:00; older sidecars stored
+// bare `60:44` for the same moment and still match the two-part form.
 export function linkTimeTokens(md) {
   return String(md ?? '')
     .split(/(```[\s\S]*?```|`[^`]*`)/g)
-    .map((seg, i) => (i % 2 === 1 ? seg : seg.replace(/\[(\d+:\d{2})\](?!\()/g, '[$1](#seg-$1)')))
+    .map((seg, i) => (i % 2 === 1 ? seg : seg.replace(/\[(\d+:\d{2}(?::\d{2})?)\](?!\()/g, '[$1](#seg-$1)')))
     .join('');
 }
 
@@ -424,8 +420,9 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
     const t = pendingJumpRef.current;
     if (tab !== 'segments' || !t || !Array.isArray(segments) || !segments.length) return;
     pendingJumpRef.current = null;
-    const [m, s] = t.split(':').map(Number);
-    const tSec = (m || 0) * 60 + (s || 0);
+    // Fold any number of colon-separated parts, so h:mm:ss and m:ss both resolve (a two-part
+    // destructure read "1:07:25" as 67 seconds and jumped a chip to the wrong end of the VOD).
+    const tSec = t.split(':').map(Number).reduce((acc, n) => acc * 60 + (Number.isFinite(n) ? n : 0), 0);
     let idx = segments.findIndex((seg) => Math.floor((Number(seg.t0Ms) || 0) / 1000) === tSec);
     if (idx === -1) idx = segments.findIndex((seg) => (Number(seg.t0Ms) || 0) >= tSec * 1000);
     if (idx === -1) idx = segments.length - 1;
@@ -569,7 +566,7 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12.5, lineHeight: 1.55 }}>
                 {segments.map((s, i) => (
                   <div key={i} data-seg-idx={i} style={{ display: 'flex', gap: 8, marginBottom: 3, alignItems: 'baseline' }}>
-                    <span style={{ color: 'var(--text-muted)', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{mmss(s.t0Ms)}</span>
+                    <span style={{ color: 'var(--text-muted)', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{mmss((Number(s.t0Ms) || 0) / 1000)}</span>
                     <span style={{ flexShrink: 0, minWidth: 64, fontWeight: 600, color: speakerColor(s.speaker) }}>{s.speaker || '—'}</span>
                     <span style={{ color: 'var(--text)', wordBreak: 'break-word' }}>{s.text || '·'}</span>
                   </div>

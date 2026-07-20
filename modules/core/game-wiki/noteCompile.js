@@ -47,12 +47,17 @@ export function parseNote(bullet) {
 }
 
 // A leading `[m:ss]` token stamped onto a note bullet by the Notes timer (sub-plan 5).
-// 1–2 digit minutes + 2-digit seconds; anything else is plain text (no prefix).
-export const TIME_PREFIX_RE = /^\[(\d{1,2}):([0-5]\d)\]\s*/;
+// Up to 3 minute digits + 2-digit seconds; anything else is plain text (no prefix).
+// NOT h:mm:ss — this is the in-game clock, which Deadlock's own HUD counts straight up
+// past 60 ("67:25"), so a note must read the way the game reads. (The VOD-review timeline
+// is the opposite case and does carry hours — see vodReport.mmss.) The third digit matters
+// because clock() emits "100:05" for a 100-minute game and the old \d{1,2} bound rejected
+// it, so parseTimedNote dropped the stamp and formatTimedBullet's round-trip broke.
+export const TIME_PREFIX_RE = /^\[(\d{1,3}):([0-5]\d)\]\s*/;
 
 // "7:42" → 462 seconds; null when not a clean m:ss.
 export function secFromClock(str) {
-  const m = /^(\d{1,2}):([0-5]\d)$/.exec(String(str ?? '').trim());
+  const m = /^(\d{1,3}):([0-5]\d)$/.exec(String(str ?? '').trim());
   return m ? Number(m[1]) * 60 + Number(m[2]) : null;
 }
 

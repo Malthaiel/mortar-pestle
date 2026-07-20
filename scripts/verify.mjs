@@ -13,6 +13,17 @@
 // Re-including `--lib`/`--tests` is a separate follow-up (see the plan's
 // Maintenance notes) that must first isolate the offending unit test.
 import { spawnSync } from 'node:child_process';
+import { readdirSync } from 'node:fs';
+
+// The coaching pipeline's pure-ESM harnesses. DISCOVERED, not enumerated: a new
+// selftest joins the baseline by existing. (The hardcoded `files` list in the syntax
+// step below is the cautionary counter-example — it has to be hand-grown, and these
+// eight selftests sat outside `verify` entirely until 2026-07-20 for exactly that reason.)
+const SELFTEST_DIR = 'modules/core/game-wiki';
+const selftests = readdirSync(SELFTEST_DIR)
+  .filter((f) => f.endsWith('.selftest.mjs'))
+  .sort()
+  .map((f) => `${SELFTEST_DIR}/${f}`);
 
 // npm resolves to npm.cmd on Windows; spawnSync with shell:false won't find a
 // bare `npm` there. Pick the platform binary explicitly (CI + dev are Windows).
@@ -37,6 +48,12 @@ const steps = [
   { name: 'web: drag math',                cmd: NPM, args: ['--prefix', 'web', 'run', 'check-drag'] },
   { name: 'web: planner time/frame math',  cmd: NPM, args: ['--prefix', 'web', 'run', 'check-time'] },
   { name: 'web: path marshalling',         cmd: NPM, args: ['--prefix', 'web', 'run', 'check-path'] },
+  {
+    name: 'game-wiki selftests',
+    cmd: process.execPath, // node
+    baseArgs: [],
+    files: selftests,
+  },
   {
     name: 'js syntax check (pure utils)',
     cmd: process.execPath, // node
