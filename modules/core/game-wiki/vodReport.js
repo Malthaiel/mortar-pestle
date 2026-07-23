@@ -372,6 +372,9 @@ export function reconcileReport(fresh, prior) {
 // Sections offered by the Export popover, in emit order (matches the ORDER list below).
 export const EXPORT_SECTIONS = [
   { id: 'report', label: 'Report' },
+  { id: 'players', label: 'Player Cards' },
+  { id: 'macro', label: 'Macro' },
+  { id: 'comms', label: 'Comms Grade' },
   { id: 'actions', label: 'Action Items' },
   { id: 'qa', label: 'Q&A' },
   { id: 'keep', label: 'Keep Doing' },
@@ -383,7 +386,7 @@ export const EXPORT_SECTIONS = [
 export function serializeReportMarkdown(report, selected, name, segments = []) {
   const r = report || {};
   const sel = (id) => !!selected?.has(id);
-  const ORDER = ['report', 'actions', 'qa', 'keep', 'debates', 'followups', 'segments'];
+  const ORDER = ['report', 'players', 'macro', 'comms', 'actions', 'qa', 'keep', 'debates', 'followups', 'segments'];
   if (!ORDER.some(sel)) return '';
   const blocks = [];
   blocks.push(`# ${String(name ?? '').trim() || 'VOD Review'}`);
@@ -395,6 +398,56 @@ export function serializeReportMarkdown(report, selected, name, segments = []) {
       if (!h && !md) continue;
       blocks.push(`## ${h || 'Section'}\n\n${md}`);
     }
+  }
+  if (sel('players')) {
+    const cards = Array.isArray(r.playerCards) ? r.playerCards : [];
+    blocks.push('## Player Cards\n\n' + (cards.length
+      ? cards.map((c) => {
+          const name = `${String(c?.hero || c?.player || '').trim()}${c?.player && c.player !== c.hero ? ` (${c.player})` : ''}`;
+          const L = [`### ${name || 'Player'}${c?.lane ? ` — ${c.lane}` : ''}`];
+          if (String(c?.laneVerdict ?? '').trim()) L.push(`- **Lane verdict:** ${c.laneVerdict.trim()}`);
+          if (String(c?.soulsCurveRead ?? '').trim()) L.push(`- **Souls curve:** ${c.soulsCurveRead.trim()}`);
+          if (String(c?.itemCritique ?? '').trim()) L.push(`- **Items:** ${c.itemCritique.trim()}`);
+          if (String(c?.coaching ?? '').trim()) L.push(`- **Coaching:** ${c.coaching.trim()}`);
+          for (const d of (Array.isArray(c?.deathAnalysis) ? c.deathAnalysis : [])) {
+            const parts = [d?.what, d?.why, d?.lesson ? `Lesson: ${d.lesson}` : ''].map((x) => String(x ?? '').trim()).filter(Boolean);
+            if (parts.length) L.push(`- **Death${d?.t ? ` [${d.t}]` : ''}:** ${parts.join(' — ')}`);
+          }
+          const drills = (Array.isArray(c?.drills) ? c.drills : []).map(String).filter(Boolean);
+          if (drills.length) L.push(`- **Drills:** ${drills.join('; ')}`);
+          return L.join('\n');
+        }).join('\n\n')
+      : '_(none)_'));
+  }
+  if (sel('macro')) {
+    const m = r.macro || {};
+    const L = ['## Macro'];
+    if (String(m.tempoRead ?? '').trim()) L.push(`**Tempo:** ${m.tempoRead.trim()}`);
+    if (String(m.laneMap ?? '').trim()) L.push(`**Lane map:** ${m.laneMap.trim()}`);
+    const ows = Array.isArray(m.objectiveWindows) ? m.objectiveWindows : [];
+    if (ows.length) {
+      L.push('**Objective windows:**');
+      for (const w of ows) L.push(`- ${w?.t ? `[${w.t}] ` : ''}${String(w?.event ?? '').trim()}${w?.verdict ? ` — ${w.verdict}` : ''}${String(w?.why ?? '').trim() ? ` (${w.why.trim()})` : ''}`);
+    }
+    const sws = Array.isArray(m.swings) ? m.swings : [];
+    if (sws.length) {
+      L.push('**Tempo swings:**');
+      for (const s of sws) L.push(`- ${s?.t ? `[${s.t}] ` : ''}${String(s?.direction ?? '').trim()}${String(s?.cause ?? '').trim() ? ` — ${s.cause.trim()}` : ''}`);
+    }
+    blocks.push(L.length > 1 ? L.join('\n\n') : '## Macro\n\n_(none)_');
+  }
+  if (sel('comms')) {
+    const cg = r.commsGrade || {};
+    const L = ['## Comms Grade'];
+    if (String(cg.overall ?? '').trim()) L.push(`**Overall:** ${cg.overall.trim()}`);
+    const cos = Array.isArray(cg.callouts) ? cg.callouts : [];
+    if (cos.length) {
+      L.push('**Callouts:**');
+      for (const c of cos) L.push(`- ${c?.t ? `[${c.t}] ` : ''}**${String(c?.who ?? '').trim()}:** ${String(c?.call ?? '').trim()}${String(c?.verdict ?? '').trim() ? ` — ${c.verdict.trim()}` : ''}${String(c?.evidence ?? '').trim() ? ` (${c.evidence.trim()})` : ''}`);
+    }
+    const missed = (Array.isArray(cg.missed) ? cg.missed : []).map(String).filter(Boolean);
+    if (missed.length) { L.push('**Missed calls:**'); for (const mm of missed) L.push(`- ${mm}`); }
+    blocks.push(L.length > 1 ? L.join('\n\n') : '## Comms Grade\n\n_(none)_');
   }
   if (sel('actions')) {
     const items = Array.isArray(r.actionItems) ? r.actionItems : [];

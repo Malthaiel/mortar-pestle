@@ -316,4 +316,20 @@ const mdSeg = serializeReportMarkdown(exRep, new Set(['segments']), 'X', [{ t0Ms
 assert.ok(mdSeg.includes('## Segments (transcript)'));
 assert.ok(mdSeg.includes('2:05 Coach hello'));
 
+// M18 export parity: Player Cards / Macro / Comms Grade now serialize (were omitted entirely before).
+const exRep2 = parseReport(JSON.stringify({
+  playerCards: [{ player: 'Sam', hero: 'Vindicta', lane: 'Lane 1', laneVerdict: 'won lane [3:00]', soulsCurveRead: '', itemCritique: 'greedy', coaching: 'play safer', deathAnalysis: [{ t: '12:00', what: 'dove', why: 'no vision', lesson: 'ward' }], drills: ['last-hit drill'] }],
+  macro: { tempoRead: 'slow start [5:00]', laneMap: 'standard', objectiveWindows: [{ t: '20:00', event: 'mid boss', verdict: 'contestable', why: 'cooldowns up' }], swings: [{ t: '25:00', direction: 'ours', cause: 'good fight' }] },
+  commsGrade: { overall: 'quiet [8:00]', callouts: [{ t: '9:00', who: 'Sam', call: 'rotate', verdict: 'good', evidence: 'saved a life' }], missed: ['no ult call'] },
+}));
+const mdCards = serializeReportMarkdown(exRep2, new Set(['players', 'macro', 'comms']), 'X');
+assert.ok(mdCards.includes('## Player Cards'), 'player cards H2');
+assert.ok(mdCards.includes('### Vindicta (Sam) — Lane 1') && mdCards.includes('**Lane verdict:** won lane [3:00]'), 'player card body + raw stamp');
+assert.ok(mdCards.includes('**Death [12:00]:** dove — no vision — Lesson: ward'), 'death line');
+assert.ok(mdCards.includes('## Macro') && mdCards.includes('**Tempo:** slow start [5:00]') && mdCards.includes('- [20:00] mid boss — contestable (cooldowns up)'), 'macro body');
+assert.ok(mdCards.includes('## Comms Grade') && mdCards.includes('**Overall:** quiet [8:00]') && mdCards.includes('- [9:00] **Sam:** rotate — good (saved a life)') && mdCards.includes('- no ult call'), 'comms body');
+// empty player/macro/comms → _(none)_, not a crash
+const mdEmpty = serializeReportMarkdown(parseReport('{}'), new Set(['players', 'macro', 'comms']), 'X');
+assert.ok(mdEmpty.includes('## Player Cards\n\n_(none)_') && mdEmpty.includes('## Macro\n\n_(none)_') && mdEmpty.includes('## Comms Grade\n\n_(none)_'), 'empty sections degrade');
+
 console.log('vodReport.selftest: all assertions passed');
