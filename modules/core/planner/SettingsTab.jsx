@@ -13,6 +13,7 @@
 
 import { useModuleSettings } from '@host/hooks/useSettings.js';
 import { AccentGrid, HexInput } from '@host/components/ui/AccentPicker.jsx';
+import { Seg } from '@host/components/ui/index.js';
 import { AnimationField } from '@host/components/settings/AnimationRows.jsx';
 
 const inputStyle = {
@@ -87,6 +88,20 @@ export default function SettingsTab({ settings: hostSettings, setSetting: setHos
           hint={'Smart title case for session names on create and rename — "take out the trash" becomes "Take Out the Trash".'}>
           <ToggleButton on={settings.autoCaps === true} accent={accent}
             onToggle={() => setSetting('autoCaps', settings.autoCaps !== true)}/>
+        </SettingRow>
+      </SectionBand>
+
+      <SectionBand title="Calendar">
+        <SettingRow anchor="set-timeFormat24h" label="Time format">
+          <Seg
+            value={hostSettings?.timeFormat24h !== false}
+            options={[
+              { value: true,  label: '24h' },
+              { value: false, label: '12h' },
+            ]}
+            onChange={v => setHostSetting?.('timeFormat24h', v)}
+            accent={accent}
+          />
         </SettingRow>
       </SectionBand>
 
