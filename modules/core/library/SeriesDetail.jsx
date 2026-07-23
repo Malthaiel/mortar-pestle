@@ -173,6 +173,10 @@ export default function SeriesDetail({ accent, seriesPath }) {
   // a secondary Download button next to Play. Without this the Download path vanished
   // the moment ONE episode landed, since flatStartIdx>=0 swaps the primary to Play.
   const canGrabMore = !dlActive && (series.airing || visibleEpisodes.some(e => !e.available));
+  // Fully-downloaded, idle, non-airing title: the visible download button hides
+  // (nothing to grab), so offer a re-download path in the ⋯ menu for re-grabbing a
+  // corrupt or better rip.
+  const canRedownload = flatStartIdx >= 0 && !dlActive && !canGrabMore && !!series.providerId;
   // Pre-flight qBittorrent, then open the torrent picker (owned re-download path).
   const onDownload = async () => {
     if (!series.providerId) return;
@@ -341,17 +345,18 @@ export default function SeriesDetail({ accent, seriesPath }) {
             <button type="button" data-own-press title="More…" className="candy-btn" data-shape="icon"
               onClick={(e) => {
                 const r = e.currentTarget.getBoundingClientRect();
-                openContextMenu({ x: r.left, y: r.bottom + 4 }, [
-                  { label: 'Uninstall…', onClick: async () => {
-                    const qbit = await videoApi.qbitStatus().catch(() => null);
-                    if (!qbit || !qbit.connected) {
-                      notify({ type: 'anime-download', title: 'Uninstall blocked', message: `${(qbit && qbit.error) || 'qBittorrent isn’t reachable.'} Start it in Settings → Anime, then retry.`, accent: 'var(--text)', iconKey: 'alert', duration: 7000 });
-                      return;
-                    }
-                    setDeleteFiles(true);
-                    setConfirmOpen(true);
-                  } },
-                ], { accent });
+                const items = [];
+                if (canRedownload) items.push({ label: 'Re-download…', onClick: onDownload });
+                items.push({ label: 'Uninstall…', onClick: async () => {
+                  const qbit = await videoApi.qbitStatus().catch(() => null);
+                  if (!qbit || !qbit.connected) {
+                    notify({ type: 'anime-download', title: 'Uninstall blocked', message: `${(qbit && qbit.error) || 'qBittorrent isn’t reachable.'} Start it in Settings → Anime, then retry.`, accent: 'var(--text)', iconKey: 'alert', duration: 7000 });
+                    return;
+                  }
+                  setDeleteFiles(true);
+                  setConfirmOpen(true);
+                } });
+                openContextMenu({ x: r.left, y: r.bottom + 4 }, items, { accent });
               }}>
               <span className="candy-face">⋯</span>
             </button>
