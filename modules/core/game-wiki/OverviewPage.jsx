@@ -21,7 +21,7 @@ import { parseOverview, serializeOverview, parseMatchFile } from './scrimSchema.
 import { sidecarPath, scrimSidecarPath } from './matchData.js';
 import { compileNotes, renderCoachingSummary } from './noteCompile.js';
 import { parseCommsSidecar } from './commsCompile.js';
-import { buildTranscriptBlock, generateReport, normalizeTranscript, transcriptHash, verifyReport, serializeReportMarkdown, coerceReport, applyCorrections, EXPORT_SECTIONS } from './vodReport.js';
+import { buildTranscriptBlock, generateReport, normalizeTranscript, transcriptHash, verifyReport, validateStamps, serializeReportMarkdown, coerceReport, applyCorrections, EXPORT_SECTIONS } from './vodReport.js';
 import { buildMatchDigest } from './matchDigest.js';
 import { buildBrainContext, buildLexicon, lexiconStale, LEXICON_PATH } from './analystBrain.js';
 import { getNotes } from './scrimSchema.js';
@@ -200,7 +200,18 @@ export default function OverviewPage({ folder, accent, nav = navigate, overlay =
       const c = JSON.parse((await api.getRawFileMeta(scrimSidecarPath(folder, 'vodnorm'), 'gamewiki')).content);
       cachedNorm = c.hash === transcriptHash(segments);
     } catch { /* no cache */ }
-    setCostGate({ segments, cachedNorm });
+    // Match-data presence for the gate's data-free warning: a readable match sidecar = Run Process ran.
+    // Empty → the report runs from the transcript alone (buildReportPrompt emits its NO-MATCH-DATA block).
+    let hasMatchData = false;
+    try {
+      const list = await api.listFolderRaw(`${folder}/Matches`, 'gamewiki').catch(() => null);
+      for (const f of list?.files || []) {
+        const k = Number((f.match(/^Match (\d+)\.md$/) || [])[1]);
+        if (!Number.isFinite(k) || k <= 0) continue;
+        try { JSON.parse((await api.getRawFileMeta(sidecarPath(folder, k), 'gamewiki')).content); hasMatchData = true; break; } catch { /* no data for this match */ }
+      }
+    } catch { /* no Matches folder */ }
+    setCostGate({ segments, cachedNorm, noMatchData: !hasMatchData });
   };
 
   const generateVodReport = async (segments) => {
@@ -219,7 +230,7 @@ export default function OverviewPage({ folder, accent, nav = navigate, overlay =
       let prior = null;
       try { prior = JSON.parse((await api.getRawFileMeta(scPath, 'gamewiki')).content); } catch { /* first run */ }
       let priorActionItems = [];
-      try { priorActionItems = openHomework(JSON.parse((await api.getRawFileMeta(teamSidecarPath(coachedTeam), 'gamewiki')).content)); } catch { /* no team memory yet */ }
+      try { priorActionItems = openHomework(JSON.parse((await api.getRawFileMeta(teamSidecarPath(coachedTeam), 'gamewiki')).content), { excludeScrim: base }); } catch { /* no team memory yet */ }
       let notesBlock = '';
       try { notesBlock = (await api.getRawFileMeta(scrimSidecarPath(folder, 'vodnotes'), 'gamewiki')).content; } catch { /* no notes */ }
 
@@ -274,7 +285,12 @@ export default function OverviewPage({ folder, accent, nav = navigate, overlay =
       }, agents);
 
       setReportJob({ phase: 'Fact-checking', chars: 0 });
-      const { report, ran: verified } = await verifyReport(invoke, { report: draft, matchDigests, lexicon }, agents);
+      const { report, ran: verified } = await verifyReport(invoke, { report: draft, matchDigests, lexicon, segments }, agents);
+
+      // In-pipeline stamp check: any m:ss the model invented (not in the transcript) surfaces as one
+      // warning line instead of shipping silently as a clickable-but-dead chip.
+      const badStamps = validateStamps(report, segments);
+      if (badStamps.length) report.meta.warnings = [...(report.meta.warnings || []), `${badStamps.length} stamp${badStamps.length === 1 ? '' : 's'} outside the transcript: ${badStamps.join(', ')}`];
 
       report.meta.passes = [...(norm.discarded ? [] : ['normalize']), 'draft', ...(verified ? ['verify'] : [])];
       report.meta.brainSections = brain.sections.filter((s) => s.present).map((s) => s.label);
@@ -470,6 +486,9 @@ export default function OverviewPage({ folder, accent, nav = navigate, overlay =
       >
         {costGate && (
           <div style={{ fontSize: 12.5, lineHeight: 1.5, color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {costGate.noMatchData && (
+              <span style={{ color: 'var(--error)' }}>No match data attached (no Match ID / Run Process). The report will run from the review transcript only — souls-curve verdicts, item-timing checks and comms cross-checks are skipped.</span>
+            )}
             {reportCostNote(costGate.segments, costGate.cachedNorm).map((line, i) => <span key={i}>{line}</span>)}
           </div>
         )}

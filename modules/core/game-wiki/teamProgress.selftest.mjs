@@ -69,6 +69,31 @@ const open = openHomework(agg);
 assert.ok(!open.some((o) => normIssue(o.text) === normIssue('Save ult for retreats')));
 assert.ok(open.length >= 1);
 
+// M1 followUps self-loop guard: homework carries source scrims; openHomework({excludeScrim}) drops
+// issues sourced ONLY from the excluded scrim (its own items) but keeps cross-scrim ones.
+const loopScrims = [
+  { date: '2026-07-01', folder: 'ScrimA', report: { actionItems: [
+    { text: 'Contest mid boss', player: null, status: 'pending' },   // ScrimA only
+    { text: 'Ward the river', player: 'Alex', status: 'pending' },    // also raised in ScrimB
+  ] }, metrics: {} },
+  { date: '2026-07-08', folder: 'ScrimB', report: { actionItems: [
+    { text: 'Ward the river', player: 'Alex', status: 'pending' },    // recurs → sources [A, B]
+    { text: 'Rotate on pings', player: null, status: 'pending' },     // ScrimB only
+  ] }, metrics: {} },
+];
+const loopAgg = aggregateTeam({ team: 'Loop', scrims: loopScrims });
+assert.deepEqual(loopAgg.homework.find((h) => normIssue(h.text) === normIssue('Contest mid boss')).sources, ['ScrimA']);
+assert.deepEqual([...loopAgg.homework.find((h) => normIssue(h.text) === normIssue('Ward the river')).sources].sort(), ['ScrimA', 'ScrimB']);
+assert.equal(openHomework(loopAgg).length, 3, 'no excludeScrim → all three open issues');
+const openA = openHomework(loopAgg, { excludeScrim: 'ScrimA' });
+assert.ok(!openA.some((o) => normIssue(o.text) === normIssue('Contest mid boss')), 'ScrimA-only item excluded');
+assert.ok(openA.some((o) => normIssue(o.text) === normIssue('Ward the river')), 'cross-scrim item kept');
+assert.ok(openA.some((o) => normIssue(o.text) === normIssue('Rotate on pings')), 'other scrim solo item kept');
+// legacy single-scrim sidecar (no sources key, scrimCount 1) → excludeScrim drops everything (self-loop-safe)
+const soloAgg = aggregateTeam({ team: 'Solo', scrims: [{ date: '2026-07-01', folder: 'Solo1', report: { actionItems: [{ text: 'Solo item', status: 'pending' }] }, metrics: {} }] });
+soloAgg.homework = soloAgg.homework.map((h) => { const { sources, ...rest } = h; return rest; }); // simulate a pre-sources sidecar
+assert.equal(openHomework(soloAgg, { excludeScrim: 'Solo1' }).length, 0, 'legacy single-scrim self-loop excluded');
+
 // recurringLessons (VOD Report Sections): headings folded across scrims, repeats counted, all kept
 const lessonScrims = [
   { date: '2026-07-01', report: { actionItems: [], sections: [{ id: 'tempo', heading: 'Tempo', md: 'x' }] }, metrics: {} },

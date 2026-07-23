@@ -32,6 +32,29 @@ export function mmss(s) {
   return h ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
 }
 
+// Deterministic stamp validation (ported from vodReportGate.mjs so it runs in-pipeline, not just in
+// the standalone gate): every m:ss / h:mm:ss token anywhere in the report must land inside a real
+// vodcomms segment (±5s). Returns the offending stamps as mmss text, deduped ([] when clean or when
+// no segments are supplied). `matchSummaries` is excluded — its game-clock times aren't VOD stamps
+// (owned by the deterministic match digest; added with M24), so validating them here is a false positive.
+export function validateStamps(report, segments = []) {
+  const segs = (Array.isArray(segments) ? segments : []).filter((s) => s && Number.isFinite(Number(s.t0Ms)));
+  if (!segs.length) return [];
+  const { matchSummaries, ...rest } = report || {};
+  void matchSummaries;
+  const text = JSON.stringify(rest);
+  const stamps = [...text.matchAll(/\b(?:(\d{1,2}):)?(\d{1,2}):([0-5]\d)\b/g)]
+    .map((m) => (Number(m[1]) || 0) * 3600 + Number(m[2]) * 60 + Number(m[3]));
+  const spanEnd = Math.max(...segs.map((s) => Number(s.t1Ms) || 0));
+  const TOL = 5000; // segments are ~2.5s apart; ±5s covers rounding
+  const inSeg = (sec) => {
+    const ms = sec * 1000;
+    if (ms < 0 || ms > spanEnd + TOL) return false;
+    return segs.some((s) => ms >= Number(s.t0Ms) - TOL && ms <= Number(s.t1Ms) + TOL);
+  };
+  return [...new Set(stamps)].filter((s) => !inSeg(s)).map(mmss);
+}
+
 // Deterministic stable id from an item's text: lets reconcile match carried-forward items even if
 // Claude forgets to echo the prior id (same wording → same id). Lowercased, non-alnum → '-', capped.
 export function slugId(text) {
@@ -221,8 +244,18 @@ export function buildReportPrompt({ transcriptBlock, teams = {}, coachedTeam = '
   if (String(brainContext).trim()) {
     lines.push('', '=== ANALYST BRAIN ===', String(brainContext).trim());
   }
-  for (const dg of (Array.isArray(matchDigests) ? matchDigests : [])) {
-    if (String(dg ?? '').trim()) lines.push('', '=== MATCH DATA DIGEST ===', String(dg).trim());
+  const digests = (Array.isArray(matchDigests) ? matchDigests : []).filter((dg) => String(dg ?? '').trim());
+  for (const dg of digests) lines.push('', '=== MATCH DATA DIGEST ===', String(dg).trim());
+  // No match data attached (no Match ID / Run Process) → run from the transcript alone. Suppress the
+  // filler the data-grounded schema comments otherwise pull ("no individual curve discussed" ×5) and
+  // make commsGrade name its evidence basis, so the empty-data run degrades honestly instead of guessing.
+  if (!digests.length) {
+    lines.push('',
+      '=== NO MATCH DATA ATTACHED ===',
+      'This report has NO match-data digest. Work from the VOD review transcript alone:',
+      '- Leave playerCards[].soulsCurveRead and playerCards[].laneVerdict as "" unless the review itself voiced that read — never write filler like "no individual curve discussed"; an empty field renders as "Not analyzed."',
+      '- Ground commsGrade only in what the review session evidenced, and open commsGrade.overall by naming that basis, e.g. "(review-talk evidence only) ...".',
+      '- Make no claim that cross-references match data (souls curves, item timings, objective damage, net-worth swings) — none is available this run.');
   }
   if (String(coachNotesBlock).trim()) {
     lines.push('', 'Coach\'s tagged in-game notes (chess.com-style classifications):', String(coachNotesBlock).trim());
@@ -593,11 +626,24 @@ function mapStrings(v, f, key = '') {
 
 // Auto-apply "exact" name fixes (global substring replace); everything else → meta.findings
 // + a meta.warnings line. Returns a new report; the input is untouched.
-export function applyFindings(report, findings) {
+export function applyFindings(report, findings, segments = []) {
   let out = mapStrings(report, (s) => s);
   const flagged = [];
+  // Timestamp findings (M4): a verified [m:ss]→[m:ss] correction whose FIXED stamp lands in a real
+  // segment and whose WRONG stamp appears exactly once auto-applies like an "exact" fix — otherwise the
+  // known-wrong stamp ships in the section body with its correction buried in the warnings bar. Guarded
+  // by the segment list (no segments → never auto-applies, stays flag-only).
+  const segs = (Array.isArray(segments) ? segments : []).filter((s) => s && Number.isFinite(Number(s.t0Ms)));
+  const spanEnd = segs.length ? Math.max(...segs.map((s) => Number(s.t1Ms) || 0)) : 0;
+  const TOL = 5000;
+  const stampRe = /\b(?:\d{1,2}:)?\d{1,2}:[0-5]\d\b/;
+  const stampSec = (str) => { const m = String(str).match(/\b(?:(\d{1,2}):)?(\d{1,2}):([0-5]\d)\b/); return m ? (Number(m[1]) || 0) * 3600 + Number(m[2]) * 60 + Number(m[3]) : null; };
+  const inSeg = (sec) => { if (sec == null || !segs.length) return false; const ms = sec * 1000; if (ms < 0 || ms > spanEnd + TOL) return false; return segs.some((s) => ms >= Number(s.t0Ms) - TOL && ms <= Number(s.t1Ms) + TOL); };
+  const isTimestampFix = (f) => f.field === 'timestamp' && f.fix && f.issue !== f.fix
+    && stampRe.test(f.issue) && stampRe.test(f.fix) && inSeg(stampSec(f.fix))
+    && JSON.stringify(out).split(f.issue).length === 2; // wrong stamp is unique → safe global replace
   for (const f of (Array.isArray(findings) ? findings : [])) {
-    if (f.confidence === 'exact' && f.fix && f.issue !== f.fix) {
+    if ((f.confidence === 'exact' && f.fix && f.issue !== f.fix) || isTimestampFix(f)) {
       out = mapStrings(out, (s) => s.split(f.issue).join(f.fix));
     } else {
       flagged.push(f);
@@ -614,7 +660,7 @@ export function applyFindings(report, findings) {
 
 // The pass: coaching_agent_run (tool-armed CLI) → parse → apply. Reprompt-once, then degrade
 // with a warning — the draft ships un-verified rather than not at all.
-export async function verifyReport(invoke, { report, matchDigests = [], lexicon = '' }, agents = {}) {
+export async function verifyReport(invoke, { report, matchDigests = [], lexicon = '', segments = [] }, agents = {}) {
   const user = buildVerifyPrompt({ report, matchDigests, lexicon });
   const call = (userPrompt) => invoke('coaching_agent_run', {
     systemPrompt: VERIFY_SYSTEM_PROMPT,
@@ -631,7 +677,7 @@ export async function verifyReport(invoke, { report, matchDigests = [], lexicon 
     out.meta.warnings = [...(out.meta.warnings || []), `Pass 2 skipped: ${err2.message}`];
     return { report: out, findings: [], ran: false };
   }
-  return { report: applyFindings(report, findings), findings, ran: true };
+  return { report: applyFindings(report, findings, segments), findings, ran: true };
 }
 
 // DI'd invoke (like autoClassify.classifyMoments) → generate + parse + reconcile. Reprompt-once on a

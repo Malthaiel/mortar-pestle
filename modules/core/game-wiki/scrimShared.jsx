@@ -594,7 +594,7 @@ export async function updateTeamProgress(team) {
         commsJumbled: haveTf && tfFights ? Math.round((tfJumbled / tfFights) * 100) / 100 : null,
         commsMissed: haveTf && tfFights ? Math.round((tfMissed / tfFights) * 100) / 100 : null,
       };
-      scrims.push({ date: fm['Date'] || '', report, metrics });
+      scrims.push({ date: fm['Date'] || '', report, metrics, folder: dir });
     }
     const agg = aggregateTeam({ team, scrims });
     const stamp = new Date().toISOString().slice(0, 10);

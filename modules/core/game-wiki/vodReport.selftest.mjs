@@ -2,7 +2,7 @@
 // Covers the parts that break silently — transcript formatting, tolerant parse (fenced + noisy),
 // coercion of a missing id, and checkbox reconcile across a regenerate.
 import assert from 'node:assert/strict';
-import { mmss, slugId, buildTranscriptBlock, buildReportPrompt, parseReport, reconcileReport, serializeReportMarkdown, buildNormalizePrompt, parseCorrections, applyCorrections, transcriptHash, normalizeTranscript, parseFindings, applyFindings, verifyReport } from './vodReport.js';
+import { mmss, slugId, buildTranscriptBlock, buildReportPrompt, parseReport, reconcileReport, serializeReportMarkdown, buildNormalizePrompt, parseCorrections, applyCorrections, transcriptHash, normalizeTranscript, parseFindings, applyFindings, verifyReport, validateStamps } from './vodReport.js';
 
 // mmss
 assert.equal(mmss(0), '0:00');
@@ -234,6 +234,45 @@ const vr2 = await verifyReport(async () => { throw new Error('CLI walled'); }, {
 assert.equal(vr2.ran, false);
 assert.ok(vr2.report.meta.warnings.some((w) => w.includes('Pass 2 skipped')));
 assert.equal(vr2.report.playerCards[0].hero, 'Grey Talom'); // draft shipped unmodified
+
+// ── WS1 final improvements (M2 data-free prompt, M3 stamp validation, M4 timestamp auto-apply) ──
+
+// M2: a data-free run (no digests) emits the NO-MATCH-DATA addendum; a run WITH a digest does not.
+const dataFreePrompt = buildReportPrompt({ transcriptBlock: '[0:00] A: hi', matchDigests: [] });
+assert.ok(dataFreePrompt.includes('NO MATCH DATA ATTACHED'), 'data-free prompt carries the addendum');
+assert.ok(dataFreePrompt.includes('review-talk evidence only'), 'addendum names the commsGrade basis');
+assert.ok(!dataFreePrompt.includes('MATCH DATA DIGEST'), 'no digest header when data-free');
+const dataPrompt = buildReportPrompt({ transcriptBlock: '[0:00] A: hi', matchDigests: ['Match 1: souls 21k at 10:00'] });
+assert.ok(!dataPrompt.includes('NO MATCH DATA ATTACHED'), 'digest present → no addendum');
+assert.ok(dataPrompt.includes('MATCH DATA DIGEST'), 'digest present → digest header');
+
+// M3: validateStamps flags m:ss outside the transcript, passes real ones, no-ops without segments,
+// and skips the matchSummaries subtree (its game-clock times aren't VOD stamps — M24 forward-compat).
+const stampSegs = [{ t0Ms: 0, t1Ms: 3000 }, { t0Ms: 60000, t1Ms: 63000 }]; // 0:00–0:03 and 1:00–1:03
+assert.deepEqual(validateStamps({ sections: [{ id: 's', heading: 'H', md: 'good at [0:01] and [1:02]' }] }, stampSegs), [], 'real stamps clean');
+const badStamps = validateStamps({ sections: [{ id: 's', heading: 'H', md: 'invented [45:00] moment' }] }, stampSegs);
+assert.ok(badStamps.includes('45:00'), 'invented stamp flagged');
+assert.deepEqual(validateStamps({ sections: [{ id: 's', heading: 'H', md: '[45:00]' }] }, []), [], 'no segments → no-op');
+assert.deepEqual(validateStamps({ sections: [], matchSummaries: [{ match: 1, summary: 'won a fight at 12:34 game clock' }] }, stampSegs), [], 'matchSummaries stamps skipped');
+
+// M4: a field:'timestamp' finding whose FIXED stamp is real and WRONG stamp is unique auto-applies;
+// an ambiguous (non-unique) wrong stamp or a fix outside the transcript stays flag-only.
+const tsSegs = [{ t0Ms: 0, t1Ms: 3000 }, { t0Ms: 1600000, t1Ms: 1610000 }]; // 0:00–0:03, 26:40–26:50
+const tsFixed = applyFindings(
+  { sections: [{ id: 's', heading: 'H', md: 'the play at [27:49] was the turn' }], meta: { warnings: [], findings: [] } },
+  [{ ref: 'sections[s].md', field: 'timestamp', issue: '[27:49]', fix: '[26:49]', confidence: 'likely' }], tsSegs);
+assert.ok(JSON.stringify(tsFixed).includes('[26:49]') && !JSON.stringify(tsFixed).includes('[27:49]'), 'unique timestamp fix auto-applied');
+assert.equal(tsFixed.meta.findings.length, 0, 'auto-applied → not flagged');
+const ambOut = applyFindings(
+  { sections: [{ id: 's', heading: 'H', md: 'at [27:49] and again [27:49]' }], meta: { warnings: [], findings: [] } },
+  [{ field: 'timestamp', issue: '[27:49]', fix: '[26:49]', confidence: 'likely' }], tsSegs);
+assert.ok(JSON.stringify(ambOut).includes('[27:49]'), 'ambiguous stamp not rewritten');
+assert.equal(ambOut.meta.findings.length, 1, 'ambiguous stamp flagged instead');
+const unrealOut = applyFindings(
+  { sections: [{ id: 's', heading: 'H', md: 'at [27:49]' }], meta: { warnings: [], findings: [] } },
+  [{ field: 'timestamp', issue: '[27:49]', fix: '[99:00]', confidence: 'likely' }], tsSegs);
+assert.ok(JSON.stringify(unrealOut).includes('[27:49]'), 'fix outside transcript not applied');
+assert.equal(unrealOut.meta.findings.length, 1, 'unreal fix flagged instead');
 
 // ── Export to markdown (serializeReportMarkdown) ─────────────────────────────
 

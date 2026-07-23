@@ -69,15 +69,18 @@ export function aggregateTeam({ team, scrims = [] }) {
   const n = ordered.length;
 
   // Recurring issues: normIssue(text) -> the scrim indexes (asc) that raised it, keeping a display text.
-  const issueMap = new Map(); // key -> { text, idxs:[], statuses:[], players:Set }
+  // `folders` tracks WHICH scrims raised each issue so openHomework can exclude a scrim's own items
+  // when feeding it back as prior action items (else a regenerate echoes its own list as "persisting").
+  const issueMap = new Map(); // key -> { text, idxs:[], statuses:[], players:Set, folders:Set }
   ordered.forEach((s, i) => {
     for (const it of (s.report && s.report.actionItems) || []) {
       const key = normIssue(it.text);
       if (!key) continue;
-      if (!issueMap.has(key)) issueMap.set(key, { text: it.text, idxs: [], statuses: [], players: new Set() });
+      if (!issueMap.has(key)) issueMap.set(key, { text: it.text, idxs: [], statuses: [], players: new Set(), folders: new Set() });
       const e = issueMap.get(key);
       e.idxs.push(i); e.statuses.push(it.status || 'pending');
       if (it.player) e.players.add(it.player);
+      if (s.folder) e.folders.add(s.folder);
       e.text = it.text; // latest wording wins
     }
   });
@@ -91,9 +94,11 @@ export function aggregateTeam({ team, scrims = [] }) {
     .sort((a, b) => b.streak - a.streak || b.scrims - a.scrims);
 
   // Homework ledger: every distinct issue, latest status = status in its most recent scrim.
+  // `sources` = the scrim folders that raised it (openHomework drops an issue whose ONLY source is
+  // the scrim being generated — that's the self-loop guard).
   const homework = [...issueMap.values()].map((e) => {
     const latest = e.statuses[e.statuses.length - 1] || 'pending';
-    return { text: e.text, scrims: e.idxs.length, done: latest === 'done' };
+    return { text: e.text, scrims: e.idxs.length, done: latest === 'done', sources: [...e.folders] };
   }).sort((a, b) => Number(a.done) - Number(b.done) || b.scrims - a.scrims);
 
   // Per-player cards: issues that name a player (report `player` field), + their open count.
@@ -208,6 +213,19 @@ export function renderTeamPage(agg, stamp = '') {
 
 // The team's currently-OPEN homework (pending issues) → priorActionItems for a fresh VOD report's
 // follow-up loop (sub-plan 11's empty-tolerant slot). Reads the stored aggregate sidecar object.
-export function openHomework(agg) {
-  return ((agg && agg.homework) || []).filter((h) => !h.done).map((h) => ({ id: normIssue(h.text), text: h.text }));
+// `excludeScrim` (a scrim folder basename) drops issues whose ONLY source is that scrim: without it,
+// regenerating scrim X feeds X's own action items back as "prior" → the model reports them as
+// persisting follow-ups, duplicating the action list (the followUps self-loop). Legacy sidecars
+// (no `sources`) can't prove self-only membership, so they're kept unless the team has just one scrim.
+export function openHomework(agg, { excludeScrim = null } = {}) {
+  const solo = (agg?.scrimCount || 0) <= 1;
+  return ((agg && agg.homework) || [])
+    .filter((h) => !h.done)
+    .filter((h) => {
+      if (!excludeScrim) return true;
+      const src = Array.isArray(h.sources) ? h.sources : null;
+      if (!src || !src.length) return !solo; // no sources → self-loop-safe only when other scrims exist
+      return !(src.length === 1 && src[0] === excludeScrim); // only source is the excluded scrim → drop
+    })
+    .map((h) => ({ id: normIssue(h.text), text: h.text }));
 }
