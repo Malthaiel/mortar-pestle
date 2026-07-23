@@ -169,6 +169,10 @@ export default function SeriesDetail({ accent, seriesPath }) {
       default: return null;
     }
   })();
+  // Owned but still missing episodes (or an airing show that'll get more) → surface
+  // a secondary Download button next to Play. Without this the Download path vanished
+  // the moment ONE episode landed, since flatStartIdx>=0 swaps the primary to Play.
+  const canGrabMore = !dlActive && (series.airing || visibleEpisodes.some(e => !e.available));
   // Pre-flight qBittorrent, then open the torrent picker (owned re-download path).
   const onDownload = async () => {
     if (!series.providerId) return;
@@ -308,9 +312,16 @@ export default function SeriesDetail({ accent, seriesPath }) {
               }}
             />
             {flatStartIdx >= 0 ? (
-              <button onClick={onPlayAll} className="candy-btn is-primary" style={{ cursor: 'pointer' }}>
-                <span className="candy-face" style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><IconPlay size={14}/> {nextUnwatched >= 0 ? 'Resume' : 'Play'}</span>
-              </button>
+              <>
+                <button onClick={onPlayAll} className="candy-btn is-primary" style={{ cursor: 'pointer' }}>
+                  <span className="candy-face" style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><IconPlay size={14}/> {nextUnwatched >= 0 ? 'Resume' : 'Play'}</span>
+                </button>
+                {canGrabMore && (
+                  <button onClick={onDownload} title="Download more episodes" data-own-press className="candy-btn" data-shape="icon" style={{ cursor: 'pointer' }}>
+                    <span className="candy-face"><IconDownload size={16}/></span>
+                  </button>
+                )}
+              </>
             ) : dlActive ? (
               <button disabled className="candy-btn is-primary" style={{ cursor: 'default', opacity: 0.6 }}>
                 <span className="candy-face">{dlLabel}</span>
