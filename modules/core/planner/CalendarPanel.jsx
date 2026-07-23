@@ -1127,8 +1127,12 @@ export default function CalendarPanel({
         // below, which would corrupt a midnight-ending frame block to 00:00).
         onFrameCreate?.(d.ds, hm(s), hm(eMins), d.name.trim());
       } else {
-        const startTime = `${pad(Math.floor(s / 60))}:${pad(s % 60)}`;
-        const endTime = `${pad(Math.floor(eMins / 60) % 24)}:${pad(eMins % 60)}`;
+        // hm() yields "24:00" for a midnight end (1440) — the end-of-day
+        // sentinel the backend preserves and the renderer/timer read as
+        // 1440 mins. The old `% 24` template wrapped 1440 → "00:00", which
+        // drew as a negative-height sliver (the block "disappeared").
+        const startTime = hm(s);
+        const endTime = hm(eMins);
         onSessionCreate?.(d.ds, startTime, endTime, d.name.trim());
       }
     }

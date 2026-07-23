@@ -74,13 +74,28 @@ pub fn load_store(path: &Path) -> Store {
     let Ok(text) = fs::read_to_string(path) else {
         return empty_store();
     };
-    match serde_json::from_str::<Store>(&text) {
+    let mut store = match serde_json::from_str::<Store>(&text) {
         Ok(s) => s,
         Err(e) => {
             log::warn!("sessions.json parse failed ({e}) — treating as empty; next write auto-heals");
-            empty_store()
+            return empty_store();
+        }
+    };
+    // Heal legacy midnight ends. A session ending exactly at midnight was
+    // written as end "00:00" by the old create path (a `% 24` wrap on 1440),
+    // which the renderer/timer read as start-of-day (0 mins) → a
+    // negative-height sliver (the block visibly "disappeared"). The canonical
+    // end-of-day sentinel is "24:00" (1440), which `duration_mins` already
+    // treats as midnight, so durMin is unchanged. Rewrite in-memory; the next
+    // mutating command persists the healed form (same auto-heal model above).
+    for list in store.days.values_mut() {
+        for s in list.iter_mut() {
+            if s.end == "00:00" && s.start != "00:00" {
+                s.end = "24:00".to_string();
+            }
         }
     }
+    store
 }
 
 pub fn persist_store(path: &Path, store: &Store) -> Result<(), VaultError> {
@@ -660,6 +675,26 @@ mod tests {
             end: end.into(),
             notes: notes.map(String::from),
         }
+    }
+
+    #[test]
+    fn load_store_heals_legacy_midnight_end() {
+        let p = temp_store_path();
+        // The old create path wrote a midnight end as "00:00" (a `% 24` wrap on
+        // 1440), which the renderer/timer read as start-of-day (0 mins) → the
+        // block drew as a negative-height sliver and visibly "disappeared".
+        append_inner(&p, "2026-07-23", input("Coaching", "23:00", "00:00", None), "ts").unwrap();
+        // durMin was always correct on disk (duration_mins wraps past midnight):
+        assert_eq!(load_store(&p).days["2026-07-23"][0].dur_min, 60);
+        // load_store rewrites the end to the canonical "24:00" sentinel in-memory.
+        let s = &load_store(&p).days["2026-07-23"][0];
+        assert_eq!(s.end, "24:00");
+        assert_eq!(s.dur_min, 60); // unchanged — duration_mins treats 24:00 as midnight too
+        // A session that merely *starts* at 00:00 keeps its real end (untouched).
+        append_inner(&p, "2026-07-23", input("Early", "00:00", "00:30", None), "ts").unwrap();
+        let day = &load_store(&p).days["2026-07-23"];
+        assert_eq!(day.iter().find(|s| s.task == "Early").unwrap().end, "00:30");
+        let _ = fs::remove_file(&p);
     }
 
     #[test]
