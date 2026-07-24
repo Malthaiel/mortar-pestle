@@ -1,10 +1,10 @@
-//! The engine thread: owns every libobs object and is the ONLY thread that
+﻿//! The engine thread: owns every libobs object and is the ONLY thread that
 //! calls `obs_*` after init. Socket tasks send [`Cmd`]s over a std mpsc and
 //! await tokio oneshot replies; state pushes go out on the tokio broadcast
 //! bus as `state_changed` events (capture daemon architecture, third
 //! instance).
 //!
-//! GPL corpus — record-pipeline semantics ported from the OBS frontend's
+//! GPL corpus â€” record-pipeline semantics ported from the OBS frontend's
 //! basic output handler (reference clone, tag 32.1.2).
 
 use std::ffi::{CStr, CString};
@@ -86,29 +86,37 @@ pub enum Cmd {
     PauseRecord { paused: bool, reply: Reply },
     SplitRecord { reply: Reply },
     /// INTERNAL: posted by the muxer's file_changed signal callback (split
-    /// rollover) — never arrives from the socket, carries no reply.
+    /// rollover) â€” never arrives from the socket, carries no reply.
     FileChanged { path: String },
     // --- SP4 replay-buffer verbs (S3) ---
     StartReplay { reply: Reply },
     StopReplay { reply: Reply },
     SaveReplay { reply: Reply },
-    /// INTERNAL: posted by the replay output's `saved` signal callback — never
+    /// INTERNAL: posted by the replay output's `saved` signal callback â€” never
     /// arrives from the socket, carries no reply.
     ReplaySaved,
     // --- SP5 streaming: service model (SF1) ---
     GetStreamServices { reply: Reply },
     GetStreamService { reply: Reply },
     SetStreamService { service: Value, reply: Reply },
+    // --- SP5 streaming: go live (SF2) ---
+    StartStream { reply: Reply },
+    StopStream { reply: Reply },
+    GetStreamStats { reply: Reply },
+    /// INTERNAL: posted by the stream output's signal callbacks â€” never
+    /// arrives from the socket, carries no reply. `code` is meaningful only
+    /// for `stop`, where it is an `OBS_OUTPUT_*` value.
+    StreamSignal { kind: &'static str, code: i64 },
     Shutdown { reply: Reply },
 }
 
 /// Signal-callback context: libobs signals fire on output/muxer threads,
-/// which may ONLY post back to the engine thread — never call obs_* there.
+/// which may ONLY post back to the engine thread â€” never call obs_* there.
 struct SignalCtx {
     tx: mpsc::Sender<Cmd>,
 }
 
-/// `file_changed(string next_file)` — ffmpeg_muxer mux.c:104, mp4_output
+/// `file_changed(string next_file)` â€” ffmpeg_muxer mux.c:104, mp4_output
 /// mp4-output.c:333 (verified both, OBS 32.1.2).
 unsafe extern "C" fn on_file_changed(param: *mut std::ffi::c_void, cd: *mut ffi::calldata_t) {
     unsafe {
@@ -122,7 +130,7 @@ unsafe extern "C" fn on_file_changed(param: *mut std::ffi::c_void, cd: *mut ffi:
     }
 }
 
-/// `saved()` (no params) — the replay_buffer output emits it after a buffer
+/// `saved()` (no params) â€” the replay_buffer output emits it after a buffer
 /// write completes. The path is fetched via the `get_last_replay` proc back
 /// on the engine thread (post a Cmd; never call obs_* on the signal thread).
 unsafe extern "C" fn on_replay_saved(param: *mut std::ffi::c_void, _cd: *mut ffi::calldata_t) {
@@ -132,13 +140,105 @@ unsafe extern "C" fn on_replay_saved(param: *mut std::ffi::c_void, _cd: *mut ffi
     }
 }
 
+/// The stream output's six lifecycle signals. All share one [`SignalCtx`] and
+/// do nothing but post the kind back to the engine thread, which owns every
+/// transition â€” libobs fires these on the output/network thread.
+unsafe fn post_stream(param: *mut std::ffi::c_void, kind: &'static str, code: i64) {
+    unsafe {
+        let ctx = &*(param as *const SignalCtx);
+        let _ = ctx.tx.send(Cmd::StreamSignal { kind, code });
+    }
+}
+
+unsafe extern "C" fn on_stream_starting(p: *mut std::ffi::c_void, _cd: *mut ffi::calldata_t) {
+    unsafe { post_stream(p, "starting", 0) }
+}
+unsafe extern "C" fn on_stream_start(p: *mut std::ffi::c_void, _cd: *mut ffi::calldata_t) {
+    unsafe { post_stream(p, "start", 0) }
+}
+unsafe extern "C" fn on_stream_stopping(p: *mut std::ffi::c_void, _cd: *mut ffi::calldata_t) {
+    unsafe { post_stream(p, "stopping", 0) }
+}
+unsafe extern "C" fn on_stream_reconnect(p: *mut std::ffi::c_void, _cd: *mut ffi::calldata_t) {
+    unsafe { post_stream(p, "reconnect", 0) }
+}
+unsafe extern "C" fn on_stream_reconnect_success(p: *mut std::ffi::c_void, _cd: *mut ffi::calldata_t) {
+    unsafe { post_stream(p, "reconnect_success", 0) }
+}
+
+/// `stop(ptr output, int code)` â€” obs.h:6827. `calldata_get_int` is a static
+/// inline bindgen skips; it is exactly this read of the `long long` slot.
+unsafe extern "C" fn on_stream_stop(p: *mut std::ffi::c_void, cd: *mut ffi::calldata_t) {
+    unsafe {
+        let mut code: i64 = 0;
+        ffi::calldata_get_data(
+            cd,
+            c"code".as_ptr(),
+            &mut code as *mut i64 as *mut std::ffi::c_void,
+            std::mem::size_of::<i64>(),
+        );
+        post_stream(p, "stop", code);
+    }
+}
+
+/// (signal name, callback) â€” connected in `start_stream`, disconnected in
+/// `release_stream`. One table so the two loops can never drift apart.
+const STREAM_SIGNALS: [(&CStr, ffi::signal_callback_t); 6] = [
+    (c"starting", Some(on_stream_starting)),
+    (c"start", Some(on_stream_start)),
+    (c"stopping", Some(on_stream_stopping)),
+    (c"stop", Some(on_stream_stop)),
+    (c"reconnect", Some(on_stream_reconnect)),
+    (c"reconnect_success", Some(on_stream_reconnect_success)),
+];
+
+/// Disconnect the signals, then drop every libobs handle the run owns. A free
+/// function, not a method, so it can be called while `self.stream` is taken.
+///
+/// SAFETY: the output must already be inactive (or never started).
+unsafe fn release_stream(run: StreamRun) {
+    unsafe {
+        if !run.sig_ctx.is_null() {
+            let sh = ffi::obs_output_get_signal_handler(run.output);
+            if !sh.is_null() {
+                for (name, cb) in STREAM_SIGNALS {
+                    ffi::signal_handler_disconnect(sh, name.as_ptr(), cb, run.sig_ctx as *mut std::ffi::c_void);
+                }
+            }
+            drop(Box::from_raw(run.sig_ctx));
+        }
+        ffi::obs_output_release(run.output);
+        ffi::obs_service_release(run.service);
+        ffi::obs_encoder_release(run.venc);
+        ffi::obs_encoder_release(run.aenc);
+    }
+}
+
+/// `OBS_OUTPUT_*` stop codes â†’ something a human can act on. `SUCCESS` is a
+/// clean stop and carries no message.
+fn stop_code_message(code: i64) -> Option<String> {
+    let msg = match code as i32 {
+        0 => return None,
+        ffi::OBS_OUTPUT_BAD_PATH => "Bad stream URL or path.",
+        ffi::OBS_OUTPUT_CONNECT_FAILED => "Could not reach the streaming server.",
+        ffi::OBS_OUTPUT_INVALID_STREAM => "The server rejected the stream key.",
+        ffi::OBS_OUTPUT_DISCONNECTED => "Disconnected from the streaming server.",
+        ffi::OBS_OUTPUT_UNSUPPORTED => "The server does not support this codec or format.",
+        ffi::OBS_OUTPUT_NO_SPACE => "Out of disk space.",
+        ffi::OBS_OUTPUT_ENCODE_ERROR => "The encoder failed.",
+        ffi::OBS_OUTPUT_HDR_DISABLED => "HDR is not supported by this service.",
+        _ => "The stream stopped unexpectedly.",
+    };
+    Some(format!("{msg} (code {code})"))
+}
+
 struct RecordingRun {
     output: *mut ffi::obs_output,
     path: String,
     started: Instant,
     paused_at: Option<Instant>,
     paused_total: Duration,
-    /// file_changed signal context (Box::into_raw) — disconnected + reboxed
+    /// file_changed signal context (Box::into_raw) â€” disconnected + reboxed
     /// in stop_record. Null if the connect was skipped.
     sig_ctx: *mut SignalCtx,
 }
@@ -152,22 +252,42 @@ impl RecordingRun {
     }
 }
 
-/// One encode session shared by every output (record + replay) — the OBS
+/// One encode session shared by every output (record + replay) â€” the OBS
 /// SimpleOutput model. Doubling a 1080p60 encode for a second output is the
 /// failure this prevents; the honest consequence (surfaced in the UI) is that
 /// encoder/video settings are locked while ANY consumer is active.
 struct EncoderSet {
     venc: *mut ffi::obs_encoder,
-    /// (mixer/track index, encoder) — one ffmpeg_aac per enabled RecTracks bit.
+    /// (mixer/track index, encoder) â€” one ffmpeg_aac per enabled RecTracks bit.
     aencs: Vec<(u32, *mut ffi::obs_encoder)>,
 }
 
 /// The armed replay buffer (S3): a `replay_buffer` output feeding the shared
-/// [`EncoderSet`]. Present ⇒ `replay_armed()`; dropped on stop_replay/teardown.
+/// [`EncoderSet`]. Present â‡’ `replay_armed()`; dropped on stop_replay/teardown.
 struct ReplayRun {
     output: *mut ffi::obs_output,
-    /// `saved` signal context (Box::into_raw) — disconnected + reboxed in
+    /// `saved` signal context (Box::into_raw) â€” disconnected + reboxed in
     /// stop_replay. Null if the connect was skipped.
+    sig_ctx: *mut SignalCtx,
+}
+
+/// A connecting/live stream (SP5 SF2). Route A: it owns its OWN CBR encoder
+/// pair, deliberately outside the shared record [`EncoderSet`], so a recording
+/// keeps its CRF quality while the stream runs at the service's bitrate. The
+/// cost â€” two encode sessions when both run â€” is the accepted trade (Ledger L7).
+struct StreamRun {
+    output: *mut ffi::obs_output,
+    service: *mut ffi::obs_service,
+    venc: *mut ffi::obs_encoder,
+    aenc: *mut ffi::obs_encoder,
+    /// Set on the `start` signal â€” uptime counts from when libobs said live,
+    /// and is deliberately NOT reset by a reconnect.
+    started: Option<Instant>,
+    /// connecting | live | reconnecting | stopping
+    status: &'static str,
+    reconnects: u32,
+    /// Shared by all six signal connects (Box::into_raw) â€” disconnected and
+    /// reboxed exactly once, in `release_stream`.
     sig_ctx: *mut SignalCtx,
 }
 
@@ -177,17 +297,24 @@ struct Engine {
     scenes: Vec<(String, *mut ffi::obs_scene)>,
     current: Option<String>,
     desktop_audio: *mut ffi::obs_source,
-    /// (id, display) — ephemeral preview swapchains on app-owned HWNDs.
+    /// (id, display) â€” ephemeral preview swapchains on app-owned HWNDs.
     /// Never persisted, never in StateSnapshot: a respawned engine starts
     /// with zero displays and the app re-creates them on its alive edge.
     displays: Vec<(String, *mut ffi::obs_display_t)>,
     /// Monitor-picker temp sources: (monitor id, label, PRIVATE source ptr).
-    /// Private → never saved by obs_save_sources, so the autosave path can't
+    /// Private â†’ never saved by obs_save_sources, so the autosave path can't
     /// leak them into the collection. inc_showing held while open (WGC gate).
     picker: Vec<(String, String, *mut ffi::obs_source)>,
     recording: Option<RecordingRun>,
     /// Armed replay buffer, if any (S3). Shares the EncoderSet with recording.
     replay: Option<ReplayRun>,
+    /// The live stream (SP5 SF2) â€” concurrent with recording, never folded
+    /// into the top-level `state` enum.
+    stream: Option<StreamRun>,
+    /// Why the last stream died, kept AFTER the run is torn down so an
+    /// unsolicited death still surfaces instead of silently reading idle.
+    /// Cleared by the next start_stream.
+    stream_error: Option<String>,
     finalizing: bool,
     last_error: Option<ProtoError>,
     events: broadcast::Sender<Event>,
@@ -203,7 +330,7 @@ struct Engine {
 
 fn cstring(s: &str) -> CString {
     // Interior NULs can arrive via protocol JSON; strip them rather than blanking
-    // the whole name (unwrap_or_default would) — the daemon must never panic.
+    // the whole name (unwrap_or_default would) â€” the daemon must never panic.
     CString::new(s.replace('\0', "")).unwrap_or_default()
 }
 
@@ -264,6 +391,8 @@ pub fn spawn(
                 picker: Vec::new(),
                 recording: None,
                 replay: None,
+                stream: None,
+                stream_error: None,
                 finalizing: false,
                 last_error: None,
                 events,
@@ -443,7 +572,7 @@ impl Engine {
                 let ok = r.is_ok();
                 self.finish_ephemeral(reply, r);
                 if ok {
-                    // Video geometry may have moved the canvas — full push.
+                    // Video geometry may have moved the canvas â€” full push.
                     self.push_state();
                 }
             }
@@ -497,8 +626,8 @@ impl Engine {
                 self.finish_ephemeral(reply, r);
             }
             Cmd::FileChanged { path } => {
-                // Split rollover (muxer thread → posted here). The finished
-                // segment is a complete file — announce it like a save.
+                // Split rollover (muxer thread â†’ posted here). The finished
+                // segment is a complete file â€” announce it like a save.
                 if let Some(run) = self.recording.as_mut() {
                     let finished = std::mem::replace(&mut run.path, path);
                     let auto_remux = self.profile.get_bool("Video", "AutoRemux", false);
@@ -544,6 +673,26 @@ impl Engine {
                 let r = self.set_stream_service(&service);
                 self.finish_ephemeral(reply, r);
             }
+            Cmd::StartStream { reply } => {
+                let r = self.start_stream();
+                let ok = r.is_ok();
+                self.finish_ephemeral(reply, r);
+                if ok {
+                    self.push_state();
+                }
+            }
+            Cmd::StopStream { reply } => {
+                let r = self.stop_stream();
+                self.finish_ephemeral(reply, r);
+                self.push_state();
+            }
+            Cmd::GetStreamStats { reply } => {
+                let r = self.get_stream_stats();
+                self.finish_ephemeral(reply, r);
+            }
+            Cmd::StreamSignal { kind, code } => {
+                self.on_stream_signal(kind, code);
+            }
             Cmd::DisplayCreate { id, hwnd, width, height, reply } => {
                 let r = self.display_create(&id, hwnd, width, height);
                 self.finish_ephemeral(reply, r);
@@ -579,7 +728,7 @@ impl Engine {
     }
 
     /// `finish` minus autosave/state-push, for verbs that touch no collection
-    /// state — display_resize arrives at rAF rate during layout drags; the
+    /// state â€” display_resize arrives at rAF rate during layout drags; the
     /// full path would rewrite the collection JSON and spam identical
     /// state_changed events dozens of times per second.
     fn finish_ephemeral(&mut self, reply: Reply, r: Result<Value, ProtoError>) {
@@ -635,17 +784,35 @@ impl Engine {
             scenes,
             recording: rec,
             replay: ReplayInfo { armed: self.replay_armed() },
-            stream: StreamInfo::idle(),
+            stream: self.stream_info(),
             caps: CapsInfo { encoders: self.caps_encoders.clone() },
             obs_version: self.core.version_string(),
             last_error: self.last_error.clone(),
         }
     }
 
-    /// Armed ⇔ a live `replay_buffer` output exists. Gates the shared-encoder
+    /// Armed â‡” a live `replay_buffer` output exists. Gates the shared-encoder
     /// idle drop and the output-settings lock.
     fn replay_armed(&self) -> bool {
         self.replay.is_some()
+    }
+
+    /// Stream half of the snapshot. With no run, `stream_error` decides
+    /// between a clean `idle` and an `error` that outlived its output.
+    fn stream_info(&self) -> StreamInfo {
+        match &self.stream {
+            Some(run) => StreamInfo {
+                status: run.status.into(),
+                elapsed_ns: run.started.map_or(0, |t| t.elapsed().as_nanos() as u64),
+                error: None,
+                reconnects: run.reconnects,
+            },
+            None => StreamInfo {
+                status: if self.stream_error.is_some() { "error" } else { "idle" }.into(),
+                error: self.stream_error.clone(),
+                ..StreamInfo::idle()
+            },
+        }
     }
 
     // --- scenes/sources -----------------------------------------------------
@@ -717,7 +884,7 @@ impl Engine {
             .find_scene(scene)
             .ok_or_else(|| ProtoError::bad_request(format!("no scene '{scene}'")))?;
         // obs_source_create does NOT dedupe names, and duplicates break name
-        // addressing — auto-suffix and reply the final name (v2 contract).
+        // addressing â€” auto-suffix and reply the final name (v2 contract).
         let final_name = unsafe { free_name(name) };
         unsafe {
             let cid = cstring(id);
@@ -729,7 +896,7 @@ impl Engine {
                 return Err(ProtoError::internal(format!("obs_source_create('{id}') null")));
             }
             // monitor_capture's DEFAULT monitor_id is the "DUMMY" sentinel
-            // (duplicator-monitor-capture.c:379) — OBS's properties dialog
+            // (duplicator-monitor-capture.c:379) â€” OBS's properties dialog
             // swaps in a real monitor when opened; created programmatically it
             // captures nothing forever (eternal black frames). When the caller
             // didn't pick one, resolve the first real monitor from the
@@ -747,7 +914,7 @@ impl Engine {
                 // Default method to WGC (2), not OBS's AUTO: AUTO prefers DXGI
                 // duplication, which dies with DXGI_ERROR_UNSUPPORTED (887A0004)
                 // on HAGS/hybrid-GPU boxes like the dev machine. WGC is the
-                // modern path (Win10 1903+ — our floor).
+                // modern path (Win10 1903+ â€” our floor).
                 if settings.get("method").is_none() {
                     fixes.insert("method".into(), Value::from(2));
                 }
@@ -803,7 +970,7 @@ impl Engine {
             }
             let data = data_from_value(settings);
             if replace {
-                // Whole-settings restore (undo path): replace, don't merge —
+                // Whole-settings restore (undo path): replace, don't merge â€”
                 // a merge would leave ghost keys from the undone edit behind.
                 ffi::obs_source_reset_settings(src, data);
             } else {
@@ -817,7 +984,7 @@ impl Engine {
 
     // --- SP3 scene-graph verbs ------------------------------------------------
 
-    /// Every item verb resolves through this ONE helper — find_sceneitem_by_id
+    /// Every item verb resolves through this ONE helper â€” find_sceneitem_by_id
     /// does not recurse into groups, so a hand-rolled deep find is the single
     /// place group addressing can go wrong (risk ledger #6).
     fn with_item<F>(&self, scene: &str, id: i64, f: F) -> Result<Value, ProtoError>
@@ -950,7 +1117,7 @@ impl Engine {
                 return Err(ProtoError::bad_request(format!("no source '{source_name}'")));
             }
             // Direct self-nesting guard (A into A). Deeper cycles are excluded
-            // by the UI (Scene ▸ lists other scenes only) — documented limit.
+            // by the UI (Scene â–¸ lists other scenes only) â€” documented limit.
             if src == ffi::obs_scene_get_source(scene_ptr) {
                 ffi::obs_source_release(src);
                 return Err(ProtoError::bad_request("cannot nest a scene into itself"));
@@ -1169,7 +1336,7 @@ impl Engine {
         }
     }
 
-    /// Fresh-box guard: with no persisted collection the program is empty —
+    /// Fresh-box guard: with no persisted collection the program is empty â€”
     /// the preview renders black and start_record errors "no current scene".
     fn ensure_default_scene(&mut self) {
         if self.scenes.is_empty() {
@@ -1181,7 +1348,7 @@ impl Engine {
 
     /// Desktop Audio is a REGULAR persisted source (round-trips through the
     /// collection like everything else): reuse the loaded one by name, create
-    /// it only on a fresh start. Runs AFTER load_collection — creating it
+    /// it only on a fresh start. Runs AFTER load_collection â€” creating it
     /// before load duplicated it on every boot (obs_save_sources saves it,
     /// obs_load_sources restores it, attach created a second).
     fn ensure_desktop_audio(&mut self) {
@@ -1197,8 +1364,8 @@ impl Engine {
                 }
             }
             ffi::obs_set_output_source(1, src);
-            // SP4 fixed track map (full matrix UI is SP6): desktop → track 1.
-            // Set on adopt too — collections predating SP4 have no mixer mask.
+            // SP4 fixed track map (full matrix UI is SP6): desktop â†’ track 1.
+            // Set on adopt too â€” collections predating SP4 have no mixer mask.
             ffi::obs_source_set_audio_mixers(src, 0b01);
             self.desktop_audio = src; // owned ref either way; released in teardown
         }
@@ -1228,7 +1395,7 @@ impl Engine {
     // Ephemeral preview swapchains bound to app-owned HWNDs. obs_display_create
     // and _destroy enter the graphics context themselves (obs-display.c), so
     // they are engine-thread-safe; the registered draw callback fires on OBS's
-    // internal graphics thread. The engine trusts the app's u64 — a garbage or
+    // internal graphics thread. The engine trusts the app's u64 â€” a garbage or
     // stale HWND fails the D3D11 swapchain create and surfaces as a clean
     // internal error.
 
@@ -1268,7 +1435,7 @@ impl Engine {
     }
 
     /// Idempotent by design: after an engine respawn the app tears down ids
-    /// this (new) engine never had — missing is Ok, not bad_request.
+    /// this (new) engine never had â€” missing is Ok, not bad_request.
     fn display_destroy(&mut self, id: &str) -> Result<Value, ProtoError> {
         self.remove_display(id);
         Ok(json!({}))
@@ -1284,7 +1451,7 @@ impl Engine {
     // --- recording (SP4: profile-driven) --------------------------------------
 
     /// Create the shared encode session from the current profile, if absent.
-    /// Reused by record and (S3) replay — never build a second 1080p60 encode.
+    /// Reused by record and (S3) replay â€” never build a second 1080p60 encode.
     fn ensure_encoders(&mut self) -> Result<(), ProtoError> {
         if self.encoders.is_some() {
             return Ok(());
@@ -1360,9 +1527,9 @@ impl Engine {
         }
     }
 
-    /// OBS SimpleOutput quality→settings port: HQ=CRF16, standard=CRF23,
+    /// OBS SimpleOutput qualityâ†’settings port: HQ=CRF16, standard=CRF23,
     /// resolution-eased by CalcCRF; Lossless = x264 qp0 in-container (the
-    /// utvideo-AVI branch is deliberately not mirrored — one pipeline,
+    /// utvideo-AVI branch is deliberately not mirrored â€” one pipeline,
     /// multi-track intact; parity-table note).
     fn simple_encoder_plan(&self) -> (String, Value) {
         let quality = self.profile.get_or("SimpleOutput", "RecQuality", "HQ").to_string();
@@ -1389,8 +1556,8 @@ impl Engine {
         (id, settings)
     }
 
-    /// Simple-family → first REGISTERED libobs id (never hardcode one nvenc
-    /// variant — ids move across OBS releases; enumeration is truth).
+    /// Simple-family â†’ first REGISTERED libobs id (never hardcode one nvenc
+    /// variant â€” ids move across OBS releases; enumeration is truth).
     fn resolve_encoder_id(&self, family: &str) -> String {
         let candidates: &[&str] = match family {
             "nvenc" => &["obs_nvenc_h264_tex", "jim_nvenc", "ffmpeg_nvenc"],
@@ -1404,13 +1571,13 @@ impl Engine {
             }
         }
         if family != "x264" {
-            log::warn!("simple encoder family '{family}' not available — falling back to obs_x264");
+            log::warn!("simple encoder family '{family}' not available â€” falling back to obs_x264");
         }
         "obs_x264".into()
     }
 
     /// `dir`/`stem` override the profile's captures dir + FilenameFormatting for
-    /// this one recording (scrim auto-filing) — both still create_dir_all /
+    /// this one recording (scrim auto-filing) â€” both still create_dir_all /
     /// sanitize / unique_path like the defaults.
     fn start_record(&mut self, dir: Option<&str>, stem: Option<&str>) -> Result<Value, ProtoError> {
         if self.recording.is_some() {
@@ -1533,7 +1700,7 @@ impl Engine {
         unsafe {
             ffi::obs_output_stop(run.output);
             // Single-flight verbs: block the engine thread until the muxer
-            // finalizes (poll, 15 s ceiling — matches capture's finalize arc).
+            // finalizes (poll, 15 s ceiling â€” matches capture's finalize arc).
             let deadline = Instant::now() + Duration::from_secs(15);
             while ffi::obs_output_active(run.output) && Instant::now() < deadline {
                 std::thread::sleep(Duration::from_millis(50));
@@ -1566,7 +1733,7 @@ impl Engine {
     }
 
     /// Pause/resume the active recording (idempotent). The elapsed clock
-    /// freezes across the span — both the engine (paused_total) and the UI
+    /// freezes across the span â€” both the engine (paused_total) and the UI
     /// chip (re-anchor on the paused edge) account for it.
     fn pause_record(&mut self, paused: bool) -> Result<Value, ProtoError> {
         let run = self.recording.as_mut().ok_or_else(|| ProtoError::bad_request("not recording"))?;
@@ -1589,7 +1756,7 @@ impl Engine {
         Ok(json!({}))
     }
 
-    /// Manual split — the muxer's `split_file` proc. Only meaningful when the
+    /// Manual split â€” the muxer's `split_file` proc. Only meaningful when the
     /// output was started with file splitting enabled; the proc reports that
     /// via its out param and we surface an honest error instead of a no-op.
     fn split_record(&mut self) -> Result<Value, ProtoError> {
@@ -1626,8 +1793,8 @@ impl Engine {
     /// Arm the replay buffer: a `replay_buffer` output on the shared
     /// [`EncoderSet`] keeping the last RecRBTime seconds / RecRBSize MB.
     /// Idempotent when already armed. The filename `format` keeps its date
-    /// tokens UNexpanded — libobs stamps them at save time; only `%game` is
-    /// pre-expanded here (arm-time game ≈ save-time game).
+    /// tokens UNexpanded â€” libobs stamps them at save time; only `%game` is
+    /// pre-expanded here (arm-time game â‰ˆ save-time game).
     fn start_replay(&mut self) -> Result<Value, ProtoError> {
         if self.replay.is_some() {
             return Ok(json!({}));
@@ -1685,7 +1852,7 @@ impl Engine {
                 self.drop_encoders_if_idle();
                 return Err(ProtoError::internal(msg));
             }
-            // `saved` fires on a libobs thread → the callback only posts a Cmd.
+            // `saved` fires on a libobs thread â†’ the callback only posts a Cmd.
             let sig_ctx = {
                 let sh = ffi::obs_output_get_signal_handler(output);
                 if sh.is_null() {
@@ -1704,7 +1871,7 @@ impl Engine {
             self.replay = Some(ReplayRun { output, sig_ctx });
         }
         self.last_error = None;
-        log::info!("replay armed: {time}s / {size}MB → {}", dir.display());
+        log::info!("replay armed: {time}s / {size}MB â†’ {}", dir.display());
         Ok(json!({}))
     }
 
@@ -1737,7 +1904,7 @@ impl Engine {
     }
 
     /// Fire the `save` proc (fire-and-forget): the write is async; the `saved`
-    /// signal (→ Cmd::ReplaySaved → replay_saved) announces the finished file.
+    /// signal (â†’ Cmd::ReplaySaved â†’ replay_saved) announces the finished file.
     fn save_replay(&mut self) -> Result<Value, ProtoError> {
         let run = self.replay.as_ref().ok_or_else(|| ProtoError::bad_request("replay not armed"))?;
         unsafe {
@@ -1785,14 +1952,14 @@ impl Engine {
     // --- streaming: service model (SP5 SF1) ------------------------------------
 
     /// The rtmp-services catalog, resolved the same way libobs resolves its own
-    /// data — RELATIVE to the `bin/64bit` cwd contract, never an absolute path
+    /// data â€” RELATIVE to the `bin/64bit` cwd contract, never an absolute path
     /// composed here. Passed through as raw JSON: it is 84 services of a
     /// ~200-field vendor schema that the UI shapes, so typing it engine-side
     /// would buy nothing and rot on every OBS bump.
     fn get_stream_services(&self) -> Result<Value, ProtoError> {
         const CATALOG: &str = "../../data/obs-plugins/rtmp-services/services.json";
         let text = std::fs::read_to_string(CATALOG).map_err(|e| {
-            // The cwd is the whole story when this fails — name it in the error
+            // The cwd is the whole story when this fails â€” name it in the error
             // rather than making the next reader guess which dir we were in.
             let cwd = std::env::current_dir().map(|p| p.display().to_string()).unwrap_or_default();
             ProtoError::internal(format!("{CATALOG} (cwd {cwd}): {e}"))
@@ -1802,7 +1969,7 @@ impl Engine {
     }
 
     /// Current service, or `null` when never configured (absence is a state,
-    /// not an error — the UI renders its empty form off it).
+    /// not an error â€” the UI renders its empty form off it).
     fn get_stream_service(&self) -> Result<Value, ProtoError> {
         match std::fs::read_to_string(service_path()) {
             Ok(t) => serde_json::from_str(&t)
@@ -1812,7 +1979,7 @@ impl Engine {
     }
 
     /// Persist `{type, settings}` verbatim (atomic tmp+rename, as Profile::save).
-    /// The engine keeps the body OPAQUE — `rtmp_common`, `rtmp_custom`, and the
+    /// The engine keeps the body OPAQUE â€” `rtmp_common`, `rtmp_custom`, and the
     /// later url/whip types differ only in their settings keys, so SF4/SF5 add
     /// service types without touching this. The key rides in plaintext exactly
     /// as OBS stores it; SF7 upgrades storage, not shape.
@@ -1838,11 +2005,237 @@ impl Engine {
         Ok(json!({}))
     }
 
+    // --- streaming: go live (SP5 SF2) ------------------------------------------
+
+    /// Route A encoder plan (M3.2 FORK T3, settled by `[SimpleOutput]
+    /// RecQuality != "Stream"` on this profile): a CBR pair built fresh for the
+    /// stream, never the shared record [`EncoderSet`]. CBR is what every RTMP
+    /// service wants; the recording keeps its CRF quality untouched.
+    fn stream_encoder_plan(&self) -> (String, Value) {
+        let rec_family = self.profile.get_or("SimpleOutput", "RecEncoder", "x264").to_string();
+        let family = self.profile.get_or("SimpleOutput", "StreamEncoder", &rec_family).to_string();
+        let bitrate = self.profile.get_u32("SimpleOutput", "VBitrate", 2500);
+        let mut settings = json!({ "rate_control": "CBR", "bitrate": bitrate, "keyint_sec": 2 });
+        if family == "x264" {
+            settings["preset"] = json!("veryfast");
+        }
+        (self.resolve_encoder_id(&family), settings)
+    }
+
+    /// Build the service + a dedicated encoder pair + `rtmp_output`, wire the
+    /// six lifecycle signals, and start. Status then rides the signals â€” this
+    /// verb returns as soon as libobs accepts the start, NOT when the stream is
+    /// live (connecting is a real state the UI shows).
+    fn start_stream(&mut self) -> Result<Value, ProtoError> {
+        if self.stream.is_some() {
+            return Err(ProtoError::busy("already streaming"));
+        }
+        if self.current.is_none() {
+            return Err(ProtoError::bad_request("no current scene"));
+        }
+        let cfg = self.get_stream_service()?;
+        let obj = cfg
+            .as_object()
+            .ok_or_else(|| ProtoError::bad_request("no stream service configured"))?;
+        let svc_type = obj
+            .get("type")
+            .and_then(Value::as_str)
+            .ok_or_else(|| ProtoError::bad_request("stream service has no type"))?
+            .to_string();
+        let svc_settings = obj.get("settings").cloned().unwrap_or_else(|| json!({}));
+
+        let (venc_id, venc_settings) = self.stream_encoder_plan();
+        let abitrate = self.profile.get_u32("SimpleOutput", "ABitrate", 160);
+        // SF6 makes these configurable; the defaults are OBS's own.
+        let retries = self.profile.get_u32("Output", "MaxRetries", 25) as i32;
+        let retry_sec = self.profile.get_u32("Output", "RetryDelay", 2) as i32;
+
+        self.stream_error = None;
+        unsafe {
+            let sdata = data_from_value(&svc_settings);
+            let sid = cstring(&svc_type);
+            let sname = cstring("bcast_service");
+            let service = ffi::obs_service_create(sid.as_ptr(), sname.as_ptr(), sdata, std::ptr::null_mut());
+            ffi::obs_data_release(sdata);
+            if service.is_null() {
+                return Err(ProtoError::internal(format!("service '{svc_type}' create failed")));
+            }
+
+            // Service clamps (max bitrate, forced codec) land on the STREAM
+            // encoder settings only â€” the record EncoderSet is never touched.
+            let vdata = data_from_value(&venc_settings);
+            let adata = data_from_value(&json!({ "bitrate": abitrate }));
+            ffi::obs_service_apply_encoder_settings(service, vdata, adata);
+
+            let vid = cstring(&venc_id);
+            let venc = ffi::obs_video_encoder_create(vid.as_ptr(), c"bcast_stream_venc".as_ptr(), vdata, std::ptr::null_mut());
+            let aenc = ffi::obs_audio_encoder_create(c"ffmpeg_aac".as_ptr(), c"bcast_stream_aenc".as_ptr(), adata, 0, std::ptr::null_mut());
+            ffi::obs_data_release(vdata);
+            ffi::obs_data_release(adata);
+            if venc.is_null() || aenc.is_null() {
+                if !venc.is_null() {
+                    ffi::obs_encoder_release(venc);
+                }
+                if !aenc.is_null() {
+                    ffi::obs_encoder_release(aenc);
+                }
+                ffi::obs_service_release(service);
+                return Err(ProtoError::internal(format!("stream encoder '{venc_id}' create failed")));
+            }
+            ffi::obs_encoder_set_video(venc, ffi::obs_get_video());
+            ffi::obs_encoder_set_audio(aenc, ffi::obs_get_audio());
+
+            let out_settings = data_from_value(&json!({}));
+            let output = ffi::obs_output_create(c"rtmp_output".as_ptr(), c"stream_out".as_ptr(), out_settings, std::ptr::null_mut());
+            ffi::obs_data_release(out_settings);
+            if output.is_null() {
+                ffi::obs_encoder_release(venc);
+                ffi::obs_encoder_release(aenc);
+                ffi::obs_service_release(service);
+                return Err(ProtoError::internal("rtmp_output create failed"));
+            }
+
+            // Ordering mirrors start_record's rec_out, plus the stream-only
+            // legs: encoders, then service, then reconnect settings â€” all
+            // BEFORE start, or libobs silently ignores them.
+            ffi::obs_output_set_video_encoder(output, venc);
+            ffi::obs_output_set_audio_encoder(output, aenc, 0);
+            ffi::obs_output_set_service(output, service);
+            ffi::obs_output_set_reconnect_settings(output, retries, retry_sec);
+
+            // Signals connect BEFORE start so `starting`/`start` can't be missed.
+            let sig_ctx = {
+                let sh = ffi::obs_output_get_signal_handler(output);
+                if sh.is_null() {
+                    std::ptr::null_mut()
+                } else {
+                    let ctx = Box::into_raw(Box::new(SignalCtx { tx: self.cmd_tx.clone() }));
+                    for (name, cb) in STREAM_SIGNALS {
+                        ffi::signal_handler_connect(sh, name.as_ptr(), cb, ctx as *mut std::ffi::c_void);
+                    }
+                    ctx
+                }
+            };
+
+            if !ffi::obs_output_start(output) {
+                let err = ffi::obs_output_get_last_error(output);
+                let msg = if err.is_null() {
+                    "obs_output_start (stream) failed".to_string()
+                } else {
+                    CStr::from_ptr(err).to_string_lossy().into_owned()
+                };
+                release_stream(StreamRun {
+                    output,
+                    service,
+                    venc,
+                    aenc,
+                    started: None,
+                    status: "connecting",
+                    reconnects: 0,
+                    sig_ctx,
+                });
+                return Err(ProtoError::internal(msg));
+            }
+
+            log::info!("stream starting: service={svc_type} encoder={venc_id}");
+            self.stream = Some(StreamRun {
+                output,
+                service,
+                venc,
+                aenc,
+                started: None,
+                status: "connecting",
+                reconnects: 0,
+                sig_ctx,
+            });
+        }
+        self.last_error = None;
+        Ok(json!({}))
+    }
+
+    fn stop_stream(&mut self) -> Result<Value, ProtoError> {
+        let run = self.stream.take().ok_or_else(|| ProtoError::bad_request("not streaming"))?;
+        unsafe {
+            ffi::obs_output_stop(run.output);
+            // Single-flight, same as stop_record: hold the engine thread until
+            // libobs has torn the connection down, so the release below cannot
+            // race the network thread. The `stop` signal still fires, finds no
+            // run, and returns â€” that is what prevents a double free.
+            let deadline = Instant::now() + Duration::from_secs(10);
+            while ffi::obs_output_active(run.output) && Instant::now() < deadline {
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            release_stream(run);
+        }
+        self.stream_error = None;
+        log::info!("stream stopped by request");
+        Ok(json!({}))
+    }
+
+    /// Raw output counters (SP5 SF3). Deliberately a POLL verb, not an event:
+    /// the frontend asks every 2 s while live and does its own delta math for
+    /// kbps, so the engine reports counters and owns no timer. Idle answers
+    /// `{active:false}` â€” absence of a stream is not an error.
+    fn get_stream_stats(&self) -> Result<Value, ProtoError> {
+        let Some(run) = self.stream.as_ref() else {
+            return Ok(json!({ "active": false }));
+        };
+        // All obs_* on the engine thread, off the run's owned handle â€” never a
+        // pointer cached in a socket task, which a reconnect would dangle.
+        unsafe {
+            Ok(json!({
+                "active": true,
+                "status": run.status,
+                "total_bytes": ffi::obs_output_get_total_bytes(run.output),
+                "frames_dropped": ffi::obs_output_get_frames_dropped(run.output),
+                "total_frames": ffi::obs_output_get_total_frames(run.output),
+                "congestion": ffi::obs_output_get_congestion(run.output),
+                "reconnects": run.reconnects,
+                "elapsed_ns": run.started.map_or(0, |t| t.elapsed().as_nanos() as u64),
+            }))
+        }
+    }
+
+    /// Every libobs stream signal lands here, on the engine thread. Each arm
+    /// ends in a state push â€” a missed push is what leaves the UI stuck on
+    /// `connecting` while the log says live.
+    fn on_stream_signal(&mut self, kind: &'static str, code: i64) {
+        if kind == "stop" {
+            // Unsolicited death (retries exhausted, server hung up). A
+            // requested stop already took the run, so this is a no-op there.
+            let Some(run) = self.stream.take() else { return };
+            self.stream_error = stop_code_message(code);
+            if let Some(e) = &self.stream_error {
+                log::warn!("stream stopped: {e}");
+            }
+            unsafe { release_stream(run) };
+            self.push_state();
+            return;
+        }
+        let Some(run) = self.stream.as_mut() else { return };
+        match kind {
+            "starting" => run.status = "connecting",
+            "start" => {
+                run.status = "live";
+                run.started = Some(Instant::now());
+            }
+            "stopping" => run.status = "stopping",
+            "reconnect" => run.status = "reconnecting",
+            "reconnect_success" => {
+                run.status = "live";
+                run.reconnects += 1;
+            }
+            _ => return,
+        }
+        log::info!("stream signal '{kind}' â†’ {}", run.status);
+        self.push_state();
+    }
+
     // --- output settings (SP4) -------------------------------------------------
 
     /// Merge a `{section: {key: value}}` patch into the profile. Video /
     /// encoder sections are locked while any output is active (shared encode
-    /// session — the UI surfaces the disarm affordance); [Output] keys
+    /// session â€” the UI surfaces the disarm affordance); [Output] keys
     /// (filename template, mode) are always accepted.
     fn set_output_settings(&mut self, patch: &Value) -> Result<Value, ProtoError> {
         let touches = |sec: &str| {
@@ -1852,10 +2245,14 @@ impl Engine {
                 .map(|o| !o.is_empty())
                 .unwrap_or(false)
         };
-        let active = self.recording.is_some() || self.finalizing || self.replay_armed();
+        // A live stream counts as active too: it holds its own encoders but
+        // shares the video pipeline, so a reset_video underneath it would kill
+        // the broadcast mid-flight.
+        let active =
+            self.recording.is_some() || self.finalizing || self.replay_armed() || self.stream.is_some();
         if active && (touches("Video") || touches("SimpleOutput") || touches("AdvOut")) {
             return Err(ProtoError::busy(
-                "stop recording / disarm replay before changing output settings",
+                "stop streaming / recording, disarm replay before changing output settings",
             ));
         }
         self.profile.apply_patch(patch);
@@ -1863,14 +2260,14 @@ impl Engine {
             .save()
             .map_err(|e| ProtoError::internal(format!("profile save: {e}")))?;
         if touches("Video") {
-            // Fully idle here (guard above) — geometry/fps re-apply is safe.
+            // Fully idle here (guard above) â€” geometry/fps re-apply is safe.
             crate::obs::reset_video(&video_cfg_from(&self.profile)).map_err(ProtoError::internal)?;
         }
         self.drop_encoders_if_idle();
         Ok(json!({ "profile": self.profile.to_json() }))
     }
 
-    /// Encoder props for the advanced output page — the SAME PropSpec wire
+    /// Encoder props for the advanced output page â€” the SAME PropSpec wire
     /// shape as source get_properties, rendered by the same form.
     fn get_encoder_properties(&self, id: &str) -> Result<Value, ProtoError> {
         unsafe {
@@ -1958,7 +2355,7 @@ impl Engine {
             ffi::obs_data_array_release(arr);
             ffi::obs_data_release(root);
         }
-        // Scene ORDER sidecar — obs_save_sources order is not ours to control,
+        // Scene ORDER sidecar â€” obs_save_sources order is not ours to control,
         // and the UI's scene list order is user-meaningful (reorder_scenes).
         let names: Vec<&str> = self.scenes.iter().map(|(n, _)| n.as_str()).collect();
         if let Ok(json) = serde_json::to_string(&names) {
@@ -2030,10 +2427,13 @@ impl Engine {
             unsafe { ffi::obs_display_destroy(d) };
         }
         self.picker_close();
+        if self.stream.is_some() {
+            let _ = self.stop_stream();
+        }
         if self.recording.is_some() {
             let _ = self.stop_record();
         }
-        // Disarm replay before the encoder drop — the idle guard blocks the
+        // Disarm replay before the encoder drop â€” the idle guard blocks the
         // release while a replay output is still alive.
         if self.replay.is_some() {
             let _ = self.stop_replay();
@@ -2054,13 +2454,13 @@ impl Engine {
                 ffi::obs_scene_release(scene);
             }
         }
-        // self.core drops here → obs_shutdown.
+        // self.core drops here â†’ obs_shutdown.
     }
 }
 
 // --- SP4 free helpers --------------------------------------------------------
 
-/// `[Video]` profile section → the obs_reset_video geometry.
+/// `[Video]` profile section â†’ the obs_reset_video geometry.
 fn video_cfg_from(p: &Profile) -> VideoCfg {
     VideoCfg {
         base_w: p.get_u32("Video", "BaseCX", 1920),
@@ -2071,7 +2471,7 @@ fn video_cfg_from(p: &Profile) -> VideoCfg {
     }
 }
 
-/// RecFormat2 → (libobs output type id, file extension). Frontend mapping
+/// RecFormat2 â†’ (libobs output type id, file extension). Frontend mapping
 /// port: hybrid containers are the obs-outputs muxers, everything else rides
 /// ffmpeg_muxer with the extension selecting the format.
 fn container_for(fmt: &str) -> (&'static str, &'static str) {
@@ -2124,7 +2524,7 @@ fn unique_path(dir: &std::path::Path, stem: &str, ext: &str) -> PathBuf {
 }
 
 /// Boot-time video encoder enumeration (h264/hevc/av1, non-deprecated,
-/// non-internal) — snapshot caps + simple-family resolution both read this.
+/// non-internal) â€” snapshot caps + simple-family resolution both read this.
 unsafe fn enumerate_encoder_types() -> Vec<EncoderInfo> {
     let mut out = Vec::new();
     unsafe {
@@ -2161,7 +2561,7 @@ unsafe fn enumerate_encoder_types() -> Vec<EncoderInfo> {
     out
 }
 
-/// First non-sentinel entry of a source's "monitor_id" list property —
+/// First non-sentinel entry of a source's "monitor_id" list property â€”
 /// enumerated by the plugin itself, so ordering matches the OBS UI (primary
 /// first). None when the property is missing or only "DUMMY" exists.
 unsafe fn first_real_monitor_id(src: *mut ffi::obs_source) -> Option<String> {
@@ -2192,7 +2592,7 @@ unsafe fn first_real_monitor_id(src: *mut ffi::obs_source) -> Option<String> {
     }
 }
 
-// libobs graphics API — exported by obs.dll but outside the bindgen allowlist
+// libobs graphics API â€” exported by obs.dll but outside the bindgen allowlist
 // (`obs_.*` only; see scripts/regen-bindings.ps1). Hand-declared, matching
 // graphics/graphics.h signatures (vsnprintf-extern precedent in obs/mod.rs).
 unsafe extern "C" {
@@ -2202,7 +2602,7 @@ unsafe extern "C" {
     fn gs_projection_pop();
     fn gs_ortho(left: f32, right: f32, top: f32, bottom: f32, znear: f32, zfar: f32);
     fn gs_set_viewport(x: i32, y: i32, width: i32, height: i32);
-    // libobs base allocator — calldata stacks are balloc'd; calldata_free is
+    // libobs base allocator â€” calldata stacks are balloc'd; calldata_free is
     // a static inline (no export), so its one-line body is ported below.
     fn bfree(ptr: *mut std::ffi::c_void);
 }
@@ -2220,9 +2620,9 @@ unsafe fn calldata_free_rs(cd: &mut ffi::calldata_t) {
     cd.capacity = 0;
 }
 
-/// Display draw callback — runs on OBS's internal graphics thread; body is
+/// Display draw callback â€” runs on OBS's internal graphics thread; body is
 /// pure gs calls + obs_render_main_texture. The region is exact-fit (app
-/// sizes it to the canvas aspect), so there is no letterbox math here —
+/// sizes it to the canvas aspect), so there is no letterbox math here â€”
 /// ortho over the full base canvas, viewport over the full display. param is
 /// null: one static fn serves every display, no Rust context lifetime.
 unsafe extern "C" fn draw_main(_param: *mut std::ffi::c_void, cx: u32, cy: u32) {
@@ -2244,14 +2644,14 @@ unsafe extern "C" fn draw_main(_param: *mut std::ffi::c_void, cx: u32, cy: u32) 
     }
 }
 
-/// serde_json Value → owned obs_data (caller releases).
+/// serde_json Value â†’ owned obs_data (caller releases).
 unsafe fn data_from_value(v: &Value) -> *mut ffi::obs_data {
     let json = if v.is_null() { "{}".to_string() } else { v.to_string() };
     let c = cstring(&json);
     unsafe { ffi::obs_data_create_from_json(c.as_ptr()) }
 }
 
-/// v2 enumeration: wire order = obs_scene_enum_items order (BOTTOM→TOP of
+/// v2 enumeration: wire order = obs_scene_enum_items order (BOTTOMâ†’TOP of
 /// the render stack); group children nest under `children` with corners
 /// composed through the group's draw transform (canvas space either way).
 unsafe fn enum_scene_sources(scene: *mut ffi::obs_scene) -> Vec<SourceInfo> {
@@ -2331,9 +2731,9 @@ unsafe fn enum_scene_sources(scene: *mut ffi::obs_scene) -> Vec<SourceInfo> {
     ctx.out
 }
 
-/// Deep item lookup — obs_scene_find_sceneitem_by_id does NOT recurse into
+/// Deep item lookup â€” obs_scene_find_sceneitem_by_id does NOT recurse into
 /// groups, so this is the one place group addressing lives (risk #6: every
-/// item verb routes through with_item → here).
+/// item verb routes through with_item â†’ here).
 unsafe fn find_item_deep(scene: *mut ffi::obs_scene, id: i64) -> Option<*mut ffi::obs_sceneitem_t> {
     struct FindCtx {
         id: i64,
@@ -2377,7 +2777,7 @@ unsafe fn name_taken(name: &str) -> bool {
     }
 }
 
-/// First free "<base>" / "<base> N" (N from 2) — obs_source_create doesn't
+/// First free "<base>" / "<base> N" (N from 2) â€” obs_source_create doesn't
 /// dedupe and duplicates break name addressing.
 unsafe fn free_name(base: &str) -> String {
     unsafe {
@@ -2489,7 +2889,7 @@ unsafe fn source_settings_json(src: *mut ffi::obs_source) -> Value {
 }
 
 /// Monitor list via a throwaway PRIVATE monitor_capture's own "monitor_id"
-/// property list (first_real_monitor_id generalized — plugin-enumerated, so
+/// property list (first_real_monitor_id generalized â€” plugin-enumerated, so
 /// ordering matches the OBS UI: primary first). Returns (id, label) pairs.
 unsafe fn enumerate_monitors() -> Vec<(String, String)> {
     unsafe {
@@ -2526,7 +2926,7 @@ unsafe fn enumerate_monitors() -> Vec<(String, String)> {
     }
 }
 
-/// obs_properties → PropSpec JSON list (recursing groups). The wire shape the
+/// obs_properties â†’ PropSpec JSON list (recursing groups). The wire shape the
 /// PropertiesForm renders; omitted keys = null-absent.
 unsafe fn props_to_json(props: *mut ffi::obs_properties_t) -> Vec<Value> {
     unsafe {

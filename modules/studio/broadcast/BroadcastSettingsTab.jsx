@@ -182,18 +182,23 @@ export default function BroadcastSettingsTab({ accent, initialSection, onNavigat
     });
   };
   const setSvcField = (k, v) => saveService(svcType, { ...svcSet, [k]: v });
-  // Switching service resets the server — a Twitch ingest URL is meaningless
-  // to YouTube. Default to the service's first listed server; SF7's bandwidth
-  // wizard is what picks the *best* one.
+  // Switching to a DIFFERENT service clears the server — a Twitch ingest URL is
+  // meaningless to YouTube. Two things this must not do, both observed live:
+  //  1. Re-picking the service already selected wiped a deliberate server
+  //     choice (Ashburn → whatever came first in the catalog).
+  //  2. Defaulting to `servers[0]` is not "nearest", it is ALPHABETICAL —
+  //     Twitch's list starts at "Asia: Hong Kong", and the catalog carries no
+  //     auto/recommended entry (OBS synthesises its own). A silently wrong
+  //     continent still streams, just badly, so an empty server that forces a
+  //     pick is the honest default. SF7's bandwidth wizard picks the best one.
   const pickService = (name) => {
-    const entry = svcCatalog.find((s) => s.name === name);
-    saveService('rtmp_common', { ...svcSet, service: name, server: entry?.servers?.[0]?.url || '' });
+    if (name === svcName) return;                         // no-op, never a reset
+    saveService('rtmp_common', { ...svcSet, service: name, server: '' });
   };
   const setSvcMode = (t) => {
     if (t === svcType) return;
     if (t === 'rtmp_custom') { saveService('rtmp_custom', { server: '', key: svcSet.key || '' }); return; }
-    const entry = svcCatalog.find((s) => s.name === 'Twitch') || svcCatalog[0];
-    saveService('rtmp_common', { service: entry?.name || '', server: entry?.servers?.[0]?.url || '', key: svcSet.key || '' });
+    saveService('rtmp_common', { service: svcName || '', server: svcSet.server || '', key: svcSet.key || '' });
   };
 
   const splitOn = g('AdvOut', 'RecSplitFile', 'false') === 'true';

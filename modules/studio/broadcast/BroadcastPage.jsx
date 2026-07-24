@@ -89,6 +89,63 @@ export default function BroadcastPage({ api, accent }) {
   const onReplayArm = useCallback(() => runVerb(armed ? 'stop_replay' : 'start_replay'), [runVerb, armed]);
   const onReplaySave = useCallback(() => runVerb('save_replay'), [runVerb]);
 
+  // Go live (SP5 SF2). Both directions confirm — starting broadcasts to the
+  // public, stopping cuts off everyone watching. The service name is fetched
+  // at click time rather than polled: it changes only in Settings, and one
+  // read on a deliberate click is cheaper than holding it in state.
+  const streamStatus = (alive && snapshot?.stream?.status) || 'idle';
+  const streamLive = streamStatus === 'live' || streamStatus === 'reconnecting';
+  const streaming = streamLive || streamStatus === 'connecting';
+  const [confirmStream, setConfirmStream] = useState(null); // { stopping, service } | null
+  const onGoLive = useCallback(async () => {
+    if (streaming) { setConfirmStream({ stopping: true }); return; }
+    let svc = null;
+    try {
+      svc = await verb(api, 'get_stream_service');
+    } catch {
+      // Fall through — start_stream will surface the real error as a toast.
+    }
+    if (!svc) {
+      toast('Not set up yet', 'Choose a streaming service in Settings ▸ Broadcast ▸ Stream first.');
+      return;
+    }
+    const s = svc.settings || {};
+    // A catalog service with no ingest picked would connect-fail 3 seconds in.
+    // Say so up front instead (the picker leaves it empty on purpose — see
+    // BroadcastSettingsTab's pickService).
+    if (svc.type === 'rtmp_common' && !s.server) {
+      toast('Pick a server', 'Choose an ingest server in Settings ▸ Broadcast ▸ Stream — the one closest to you.');
+      return;
+    }
+    setConfirmStream({ stopping: false, service: s.service || s.server || 'your streaming service' });
+  }, [api, streaming]);
+
+  // Telemetry (SP5 SF3): the engine reports raw counters, we do the rate math.
+  // A poll, not an event stream — no engine timer, no new event type. A failed
+  // poll skips one beat instead of killing the interval; the interval exists
+  // only while there is something to measure.
+  const [streamStats, setStreamStats] = useState(null);
+  useEffect(() => {
+    if (!streamLive) { setStreamStats(null); return undefined; }
+    let dead = false;
+    let prev = null;
+    const tick = () => {
+      verb(api, 'get_stream_stats').then((s) => {
+        if (dead || !s?.active) return;
+        const at = Date.now();
+        // bytes*8 / ms = kbit/s. Needs two samples, so the first read has none.
+        const kbps = prev && at > prev.at
+          ? Math.max(0, Math.round(((s.total_bytes - prev.bytes) * 8) / (at - prev.at)))
+          : null;
+        prev = { bytes: s.total_bytes, at };
+        setStreamStats({ ...s, kbps });
+      }).catch(() => {});
+    };
+    tick();
+    const t = setInterval(tick, 2000);
+    return () => { dead = true; clearInterval(t); };
+  }, [api, streamLive]);
+
   // Page-scoped keydown → record/replay/pause/split (event-time chord resolution
   // so a Settings rebind applies instantly; video-editor makeEditorKeydown idiom).
   // Handlers ride a ref so the once-registered listener calls the latest closure;
@@ -247,6 +304,18 @@ export default function BroadcastPage({ api, accent }) {
         onSplit={onSplit}
         onReplayArm={onReplayArm}
         onReplaySave={onReplaySave}
+        streamStatus={streamStatus}
+        streamElapsedNs={snapshot?.stream?.elapsed_ns || 0}
+        streamError={snapshot?.stream?.error || null}
+        streamStats={streamStats}
+        onGoLive={onGoLive}
+        confirmStream={confirmStream}
+        onConfirmStream={() => {
+          const stopping = confirmStream?.stopping;
+          setConfirmStream(null);
+          runVerb(stopping ? 'stop_stream' : 'start_stream');
+        }}
+        onCancelStream={() => setConfirmStream(null)}
         lastError={error || snapshot?.last_error || null}
         accent={accent}
       />
