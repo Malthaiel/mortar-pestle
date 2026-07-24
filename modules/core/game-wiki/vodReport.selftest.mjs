@@ -2,7 +2,7 @@
 // Covers the parts that break silently — transcript formatting, tolerant parse (fenced + noisy),
 // coercion of a missing id, and checkbox reconcile across a regenerate.
 import assert from 'node:assert/strict';
-import { mmss, slugId, buildTranscriptBlock, buildReportPrompt, parseReport, reconcileReport, serializeReportMarkdown, buildNormalizePrompt, parseCorrections, applyCorrections, transcriptHash, normalizeTranscript, parseFindings, applyFindings, verifyReport, validateStamps, collapseStampRuns } from './vodReport.js';
+import { mmss, slugId, buildTranscriptBlock, buildReportPrompt, parseReport, reconcileReport, serializeReportMarkdown, buildNormalizePrompt, parseCorrections, applyCorrections, transcriptHash, normalizeTranscript, parseFindings, applyFindings, verifyReport, validateStamps, collapseStampRuns, serializeTfComms, coerceReport, VOD_REPORT_SYSTEM_PROMPT, VERIFY_SYSTEM_PROMPT } from './vodReport.js';
 
 // mmss
 assert.equal(mmss(0), '0:00');
@@ -82,7 +82,7 @@ assert.equal(v1.schemaVersion, 1);
 assert.deepEqual(v1.playerCards, []);
 assert.deepEqual(v1.macro, { tempoRead: '', objectiveWindows: [], laneMap: '', swings: [] });
 assert.deepEqual(v1.commsGrade, { overall: '', callouts: [], missed: [] });
-assert.deepEqual(v1.meta, { passes: [], brainSections: [], warnings: [], findings: [] });
+assert.deepEqual(v1.meta, { passes: [], brainSections: [], warnings: [], speakerMap: {}, findings: [] });
 
 // v2 payload round-trips; malformed card entries are cleaned, empty cards dropped
 const v2 = parseReport(JSON.stringify({
@@ -351,5 +351,55 @@ assert.ok(mdCards.includes('## Comms Grade') && mdCards.includes('**Overall:** q
 // empty player/macro/comms → _(none)_, not a crash
 const mdEmpty = serializeReportMarkdown(parseReport('{}'), new Set(['players', 'macro', 'comms']), 'X');
 assert.ok(mdEmpty.includes('## Player Cards\n\n_(none)_') && mdEmpty.includes('## Macro\n\n_(none)_') && mdEmpty.includes('## Comms Grade\n\n_(none)_'), 'empty sections degrade');
+
+// --- WS2 -------------------------------------------------------------------
+// M11: tfcomms judgments serialize to one compact block. Neutral (unjudged) calls are dropped;
+// a fight with nothing judged shows only in the header count.
+const tfFights = [
+  { id: 'f1', tStart: 220, tEnd: 245, jumble: { label: 'Jumbled' },
+    calls: [{ speaker: 'Sam', atGame: 222, text: 'go mid', verdict: 'wrong', note: 'fight was lost' },
+            { speaker: 'Ash', atGame: 230, text: 'nothing', verdict: null, note: '' }],
+    missed: [{ what: 'no retreat call', shouldSay: 'back off' }] },
+  { id: 'f2', tStart: 600, tEnd: 610, calls: [{ speaker: 'Ash', atGame: 601, text: 'idle', verdict: null }], missed: [] },
+];
+const tfBlock = serializeTfComms(tfFights, 'Match 1');
+assert.ok(tfBlock.startsWith('=== IN-GAME COMMS JUDGMENTS (Match 1) ==='), 'tfcomms block header');
+assert.ok(tfBlock.includes('2 fights reviewed, 1 call judged, 1 missed call'), 'tfcomms header counts');
+assert.ok(tfBlock.includes('GAME clock'), 'tfcomms warns the times are game clock, not VOD stamps');
+assert.ok(tfBlock.includes('Fight 3:40-4:05 (Jumbled):'.replace('-', '–')), 'judged fight line with jumble label');
+assert.ok(tfBlock.includes('wrong - Sam 3:42: go mid [fight was lost]'.replace(' - ', ' — ')), 'judged call line');
+assert.ok(tfBlock.includes('missed - no retreat call (should have said: "back off")'.replace(' - ', ' — ')), 'missed call line');
+assert.ok(!tfBlock.includes('idle') && !tfBlock.includes('nothing'), 'unjudged calls omitted');
+assert.ok(!tfBlock.includes('10:00'), 'a fight with nothing judged emits no body line');
+assert.equal(serializeTfComms([], 'Match 1'), '', 'no fights -> empty block, prompt omits it');
+assert.equal(serializeTfComms(null), '', 'garbage input -> empty block');
+
+// the block reaches the prompt only when passed, and stays out otherwise
+const promptTf = buildReportPrompt({ transcriptBlock: 't', tfCommsBlocks: [tfBlock] });
+assert.ok(promptTf.includes('IN-GAME COMMS JUDGMENTS (Match 1)'), 'tfcomms block lands in the user prompt');
+assert.ok(!buildReportPrompt({ transcriptBlock: 't' }).includes('IN-GAME COMMS JUDGMENTS'), 'no tfcomms -> no block');
+
+// M6: meta.speakerMap coerces (v1/v2 sidecars have none -> {}), garbage shapes degrade instead of crashing
+assert.deepEqual(coerceReport({}).meta.speakerMap, {}, 'absent speakerMap -> {}');
+assert.deepEqual(coerceReport({ meta: { speakerMap: [] } }).meta.speakerMap, {}, 'array speakerMap -> {}');
+const sm = coerceReport({ meta: { speakerMap: { 'Speaker 3': { name: 'Celeste', confidence: 'high', evidence: '[12:04] named' }, 'Speaker 5': { name: 'Ash' } } } }).meta.speakerMap;
+assert.deepEqual(sm['Speaker 3'], { name: 'Celeste', confidence: 'high', evidence: '[12:04] named' }, 'full mapping survives');
+assert.deepEqual(sm['Speaker 5'], { name: 'Ash', confidence: 'low', evidence: '' }, 'partial mapping defaults to low confidence');
+
+// M5-M13: every WS2 rule block is present in the system prompt, and nothing pre-existing was lost.
+for (const needle of [
+  'Attribution fidelity', 'Speaker identity', 'meta.speakerMap', 'Debate & nuance fidelity',
+  'Causal chains stay joined', 'PROCEDURE for praise', 'Habits with history', 'Prose hygiene',
+  'Comms Grade grades IN-GAME comms', 'Say-it-once, player cards specifically',
+  'Order "sections" as a story',
+]) assert.ok(VOD_REPORT_SYSTEM_PROMPT.includes(needle), `WS2 rule present: ${needle}`);
+for (const kept of [
+  'Canonical names ONLY', 'ANALYST BRAIN is for GROUNDING ONLY', 'PROCEDURE for qa',
+  'Quote sparingly', 'Quoting less changes WORDING ONLY', 'NEVER compress a taught framework',
+]) assert.ok(VOD_REPORT_SYSTEM_PROMPT.includes(kept), `pre-existing rule kept: ${kept}`);
+
+// M4 latent: the verify prompt now tells the model which field name makes a stamp fix auto-applicable.
+assert.ok(VERIFY_SYSTEM_PROMPT.includes('"timestamp"') && VERIFY_SYSTEM_PROMPT.includes('Timestamp corrections'),
+  'verify prompt instructs field:"timestamp" for stamp fixes');
 
 console.log('vodReport.selftest: all assertions passed');

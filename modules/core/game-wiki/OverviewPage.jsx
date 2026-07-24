@@ -21,7 +21,7 @@ import { parseOverview, serializeOverview, parseMatchFile } from './scrimSchema.
 import { sidecarPath, scrimSidecarPath } from './matchData.js';
 import { compileNotes, renderCoachingSummary } from './noteCompile.js';
 import { parseCommsSidecar } from './commsCompile.js';
-import { buildTranscriptBlock, generateReport, normalizeTranscript, transcriptHash, verifyReport, validateStamps, serializeReportMarkdown, coerceReport, applyCorrections, EXPORT_SECTIONS } from './vodReport.js';
+import { buildTranscriptBlock, generateReport, normalizeTranscript, transcriptHash, verifyReport, validateStamps, serializeReportMarkdown, serializeTfComms, coerceReport, applyCorrections, EXPORT_SECTIONS } from './vodReport.js';
 import { buildMatchDigest } from './matchDigest.js';
 import { buildBrainContext, buildLexicon, lexiconStale, LEXICON_PATH } from './analystBrain.js';
 import { getNotes } from './scrimSchema.js';
@@ -259,9 +259,17 @@ export default function OverviewPage({ folder, accent, nav = navigate, overlay =
         .sort((a, b) => a - b);
       const matchDigests = [];
       const coachNotes = [];
+      const tfCommsBlocks = [];
       for (const k of ns) {
         try { matchDigests.push(buildMatchDigest(JSON.parse((await api.getRawFileMeta(sidecarPath(folder, k), 'gamewiki')).content), { label: `Match ${k}` })); }
         catch { /* no match data for this one */ }
+        // M11: the Teamfight Comms review, when it has been run for this match — commsGrade grades
+        // in-game callouts off these judgments instead of guessing from review-session talk.
+        try {
+          const tf = JSON.parse((await api.getRawFileMeta(sidecarPath(folder, k, 'tfcomms'), 'gamewiki')).content);
+          const block = serializeTfComms(tf.fights || [], `Match ${k}`);
+          if (block) tfCommsBlocks.push(block);
+        } catch { /* no comms review for this match */ }
         try {
           const m = parseMatchFile((await api.getRawFileMeta(matchPath(folder, k), 'gamewiki')).content, k);
           const bullets = getNotes(m)?.bullets || [];
@@ -286,7 +294,7 @@ export default function OverviewPage({ folder, accent, nav = navigate, overlay =
       const rawPath = scrimSidecarPath(folder, 'vodraw');
       const draft = await generateReport(invoke, {
         transcriptBlock, teams: { opponent }, coachedTeam, priorActionItems, notesBlock,
-        brainContext: brain.text, matchDigests, coachNotesBlock, prior,
+        brainContext: brain.text, matchDigests, coachNotesBlock, tfCommsBlocks, prior,
         onRaw: (raw) => api.savePage(rawPath, raw, null, 'gamewiki'),
       }, agents);
 

@@ -169,7 +169,11 @@ export const VOD_REPORT_SYSTEM_PROMPT = [
   '  "keepDoing": [string],             // things praised / working well',
   '  "debates": [string],               // points raised but left unresolved',
   '  "followUps": [ { "priorItem": string, "verdict": "resolved"|"persisting"|"unclear", "evidence": string } ],',
-  '  "meta": { "warnings": [string] }   // anything you could not verify or had to assume',
+  '  "meta": {',
+  '    "warnings": [string],            // anything you could not verify or had to assume',
+  '    "speakerMap": {}                 // resolved transcript labels, see Speaker identity below:',
+  '                                     // { "Speaker 3": { "name": "Celeste", "confidence": "high"|"low", "evidence": "[12:04] addressed by name" } }',
+  '  }',
   '}',
   '',
   'Rules: every timestamp is a time string copied VERBATIM from the transcript, hour part included past',
@@ -185,6 +189,11 @@ export const VOD_REPORT_SYSTEM_PROMPT = [
   'NOT thin qa down to a token few (a real review has as many qa entries as questions were asked and answered);',
   'placing the fuller explanation in a section is correct, but the qa entry still gets made, restating the',
   'conclusion in brief. Only skip a question that is throwaway trivia the coach brushed off.',
+  '',
+  'Say-it-once, player cards specifically: when a section owns a topic (a build, an item plan, a draft read),',
+  'that player\'s "itemCritique" / "coaching" states the VERDICT in at most two sentences plus a pointer ("see',
+  'the <heading> section"). It never re-lists the build steps, re-argues the case, or reproduces the section\'s',
+  'table. Re-explaining an owning section inside a player card is the failure this rule exists to stop.',
   '',
   'PROCEDURE for qa — do this as a deliberate sweep, not from memory: read the transcript end-to-end and, for',
   'every question a player asked aloud that the coach or a teammate then answered, emit one qa entry. This',
@@ -216,7 +225,68 @@ export const VOD_REPORT_SYSTEM_PROMPT = [
   'make a section gain explanation, never lose points. Judge the finished report by whether it covers the same',
   'ground as one written with quotes, in fewer borrowed words.',
   '',
+  'Attribution fidelity — a point keeps the voice that raised it:',
+  '- When authorship changes the meaning, name WHO: a player who proposed an idea, diagnosed their own',
+  '  mistake, disagreed, or asked for something is named ("the Celeste player suggested holding the ult").',
+  '  Silently absorbing a player\'s insight into the coach\'s voice is a misattribution, not a simplification.',
+  '- Scope it: routine coach analysis stays unattributed. Do NOT grow an "X said" prefix on every line —',
+  '  attribute proposals, self-diagnoses, purchases/actions, disagreements and questions only.',
+  '- Actions belong to their actor. An item ONE player bought never lands on another player\'s card, and a',
+  '  death, rotation or call is credited to the player who made it.',
+  '- A question two players asked together names both askers in "askedBy".',
+  '- Name the concrete person, never a vague stand-in ("an outside observer", "someone", "a viewer").',
+  '',
+  'Speaker identity — resolve labels before writing:',
+  '- The transcript may label talkers "Speaker N". Resolve each to a real name using the roster in the team',
+  '  context plus the transcript itself: self-reference ("my Infernus died there"), being addressed by name,',
+  '  POV ownership of a play, or the coach naming them.',
+  '- Map ONLY on two independent clues. A confidently wrong name is worse than no name; one weak clue is not',
+  '  a mapping.',
+  '- NO user-facing field may contain "Speaker N" — not playerCards[].player, qa[].askedBy, commsGrade',
+  '  callouts, section prose, keepDoing, debates or action items. Unresolved → a role descriptor instead',
+  '  ("the Celeste player", "the mid-laner"), never the raw label.',
+  '- Record every mapping you made in meta.speakerMap with its confidence and the evidence that proves it.',
+  '  Resolved nothing → leave it {}.',
+  '',
+  'Debate & nuance fidelity:',
+  '- When a topic had sides, keep the sides straight: each argument stays attributed to whoever argued it.',
+  '  Never merge two positions into one voice, and never cross-wire an argument onto the person who opposed it.',
+  '- Preserve accepted alternatives: when the coach allows a secondary line ("that order also works if you are',
+  '  behind"), the alternative survives into the report — not just the primary.',
+  '- Keep credibility citations attached to their claim ("what <player/team> runs").',
+  '- When a speaker CHANGED position during the review, record the shift (before → after), not only the',
+  '  end state.',
+  '- Keep conditionals and magnitude words that change the lesson: "many times", "contestable — cooldowns were',
+  '  up", "only when ahead". Dropping the qualifier turns a conditional lesson into a false absolute.',
+  '',
+  'Causal chains stay joined: when the review links moments into a chain (a technique miss → the enemy escapes',
+  '→ the ability whiffs → the fight is lost), state the FULL chain once in the section that owns its lesson, and',
+  'leave a one-line pointer from every other topic it touches ("same sequence as the <heading> section"). Halves',
+  'of one causal story sitting in two sections with neither naming the other is the failure.',
+  '',
+  'PROCEDURE for praise — a deliberate end-to-end sweep, exactly like the qa sweep: read the transcript through',
+  'and capture EVERY voiced positive. Team-wide praise goes in "keepDoing"; praise of ONE player — including a',
+  'single good buy or one good play — goes in that player\'s card. A review that praised people and a report with',
+  'an empty keepDoing means the sweep was skipped.',
+  '',
+  'Habits with history: when the review states a RECURRING pattern and its age ("he has never bought that since',
+  'the rework", "he does this every game"), capture it AS a habit WITH the stated age — in the player card\'s',
+  '"coaching", or in "followUps" as a persisting pattern. Never flatten a long-running habit into a this-game note.',
+  '',
+  'Prose hygiene:',
+  '- Never narrate your own reasoning, corrections, or uncertainty ("...actually", "wait —", "kills were 16 to',
+  '  North\'s... actually 16-vs-31"). State the settled fact only.',
+  '- Every number pair names its side: "31–16 in North\'s favor", never a bare ambiguous "16 to 31".',
+  '',
+  'Comms Grade grades IN-GAME comms — the callouts made during the matches, not how the review session talked:',
+  '- When "IN-GAME COMMS JUDGMENTS" blocks are attached, ground commsGrade in them FIRST: cite judged fights and',
+  '  missed calls by their game time, and fold in whatever the review said about comms on top.',
+  '- With no judgment block attached, grade only what the review session itself evidenced and open',
+  '  commsGrade.overall with "(review-talk evidence only)".',
+  '',
   'Section rules:',
+  '- Order "sections" as a story: what decided the game (macro, economy, the game review) first, then the taught',
+  '  lessons and frameworks, then forward-looking plans (next draft, handoffs, what to practice) last.',
   '- One section per substantial topic taught or discussed at length — as many as the session warrants, no cap.',
   '  Minor asides fold into action items or are dropped.',
   '- Sections carry real explanatory detail, not headline bullets. Each point states the principle, the reasoning',
@@ -257,10 +327,35 @@ export const VOD_REPORT_SYSTEM_PROMPT = [
   '  the transcript wins.',
 ].join('\n');
 
+// M11: compact the .tfcomms judgment sidecar into one prompt block so commsGrade grades IN-GAME comms
+// instead of review-session talk. Only judged calls (verdict set) and missed calls survive — neutral
+// callouts are the bulk of a fight and carry no judgment, so dumping them would only cost tokens. A
+// fight with nothing judged collapses into the header count.
+export function serializeTfComms(fights, label = '') {
+  const fs = (Array.isArray(fights) ? fights : []).filter((f) => f && typeof f === 'object');
+  if (!fs.length) return '';
+  const lines = [];
+  let judged = 0;
+  let missedN = 0;
+  for (const f of fs) {
+    const calls = (Array.isArray(f.calls) ? f.calls : []).filter((c) => c && c.verdict);
+    const missed = (Array.isArray(f.missed) ? f.missed : []).filter((m) => m && (m.what || m.shouldSay));
+    judged += calls.length;
+    missedN += missed.length;
+    if (!calls.length && !missed.length) continue;
+    const jl = f.jumble && f.jumble.label ? ` (${f.jumble.label})` : '';
+    lines.push(`Fight ${mmss(Number(f.tStart) || 0)}–${mmss(Number(f.tEnd) || 0)}${jl}:`);
+    for (const c of calls) lines.push(`  ${c.verdict} — ${c.speaker || '?'} ${mmss(Number(c.atGame) || 0)}: ${c.text || ''}${c.note ? ` [${c.note}]` : ''}`);
+    for (const m of missed) lines.push(`  missed — ${m.what || ''}${m.shouldSay ? ` (should have said: "${m.shouldSay}")` : ''}`);
+  }
+  const head = `${fs.length} fights reviewed, ${judged} call${judged === 1 ? '' : 's'} judged, ${missedN} missed call${missedN === 1 ? '' : 's'}. Times are GAME clock, not VOD stamps.`;
+  return [`=== IN-GAME COMMS JUDGMENTS${label ? ` (${label})` : ''} ===`, head, ...lines].join('\n');
+}
+
 // Build the user prompt: transcript + team context + any prior action items to follow up on.
 // priorActionItems is [] until sub-plan 12 (Team Progress) feeds it — the follow-up block is
 // simply omitted when empty (empty-tolerant), so nothing to rework when D lands.
-export function buildReportPrompt({ transcriptBlock, teams = {}, coachedTeam = '', priorActionItems = [], notesBlock = '', brainContext = '', matchDigests = [], coachNotesBlock = '' }) {
+export function buildReportPrompt({ transcriptBlock, teams = {}, coachedTeam = '', priorActionItems = [], notesBlock = '', brainContext = '', matchDigests = [], coachNotesBlock = '', tfCommsBlocks = [] }) {
   const lines = [];
   lines.push(`Coached team: ${coachedTeam || '(unnamed)'}${teams.opponent ? ` vs ${teams.opponent}` : ''}.`);
   if (String(brainContext).trim()) {
@@ -268,6 +363,9 @@ export function buildReportPrompt({ transcriptBlock, teams = {}, coachedTeam = '
   }
   const digests = (Array.isArray(matchDigests) ? matchDigests : []).filter((dg) => String(dg ?? '').trim());
   for (const dg of digests) lines.push('', '=== MATCH DATA DIGEST ===', String(dg).trim());
+  for (const tf of (Array.isArray(tfCommsBlocks) ? tfCommsBlocks : [])) {
+    if (String(tf ?? '').trim()) lines.push('', String(tf).trim());
+  }
   // No match data attached (no Match ID / Run Process) → run from the transcript alone. Suppress the
   // filler the data-grounded schema comments otherwise pull ("no individual curve discussed" ×5) and
   // make commsGrade name its evidence basis, so the empty-data run degrades honestly instead of guessing.
@@ -331,6 +429,13 @@ export function coerceReport(obj) {
       passes: arr(o.meta?.passes).map(String),
       brainSections: arr(o.meta?.brainSections).map(String),
       warnings: arr(o.meta?.warnings).map(String),
+      // M6: resolved "Speaker N" → roster name, with the evidence behind each mapping. v1/v2 sidecars
+      // have none; an absent or non-object value coerces to {} so the view never branches on undefined.
+      speakerMap: o.meta?.speakerMap && typeof o.meta.speakerMap === 'object' && !Array.isArray(o.meta.speakerMap)
+        ? Object.fromEntries(Object.entries(o.meta.speakerMap).map(([k, v]) => [String(k), {
+          name: str(v?.name), confidence: v?.confidence === 'high' ? 'high' : 'low', evidence: str(v?.evidence),
+        }]))
+        : {},
       // non-auto-applied Pass-2 findings the view renders as inline flags
       findings: arr(o.meta?.findings).map((f) => ({
         ref: str(f?.ref), field: str(f?.field), issue: str(f?.issue), fix: str(f?.fix),
@@ -659,6 +764,10 @@ export const VERIFY_SYSTEM_PROMPT = [
   'proves it (a Fact/ page path, a digest line, or a transcript timestamp).',
   'Use "exact" ONLY for unambiguous canonical-name spelling fixes. Flag, never rewrite,',
   'anything judgemental. No problems found → {"findings": []}.',
+  'Timestamp corrections: when the wrong value IS a [m:ss] / [h:mm:ss] stamp, set "field" to exactly',
+  '"timestamp", "issue" to the wrong stamp as written in the draft, and "fix" to the right one. That',
+  'exact field value is what lets a verified stamp correction be APPLIED instead of only flagged — any',
+  'other field name ships the known-wrong stamp in the report body.',
 ].join('\n');
 
 export function buildVerifyPrompt({ report, matchDigests = [], lexicon = '' }) {
@@ -758,8 +867,8 @@ export async function verifyReport(invoke, { report, matchDigests = [], lexicon 
 
 // DI'd invoke (like autoClassify.classifyMoments) → generate + parse + reconcile. Reprompt-once on a
 // parse failure, then let a second failure throw. Opus via the alias the Rust side maps to claude-opus-4-8.
-export async function generateReport(invoke, { transcriptBlock, teams, coachedTeam, priorActionItems = [], notesBlock = '', brainContext = '', matchDigests = [], coachNotesBlock = '', prior = null, onRaw = null }, agents = {}) {
-  const user = buildReportPrompt({ transcriptBlock, teams, coachedTeam, priorActionItems, notesBlock, brainContext, matchDigests, coachNotesBlock });
+export async function generateReport(invoke, { transcriptBlock, teams, coachedTeam, priorActionItems = [], notesBlock = '', brainContext = '', matchDigests = [], coachNotesBlock = '', tfCommsBlocks = [], prior = null, onRaw = null }, agents = {}) {
+  const user = buildReportPrompt({ transcriptBlock, teams, coachedTeam, priorActionItems, notesBlock, brainContext, matchDigests, coachNotesBlock, tfCommsBlocks });
   const base = {
     systemPrompt: VOD_REPORT_SYSTEM_PROMPT,
     backend: agents.authBackend || 'api-key',
