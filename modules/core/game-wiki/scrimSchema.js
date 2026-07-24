@@ -156,7 +156,7 @@ export function emptyMatch(n, coachedTeam, enemyTeam) {
   if (enemyTeam && enemyTeam !== coachedTeam) notes.push({ kind: 'notes', team: enemyTeam, bullets: [] });
   return {
     n,
-    fields: { 'Match ID': '', 'Time': '', 'Amber': '', 'Sapphire': '', 'Scrim Recording': '', 'Scoreboard': '' },
+    fields: { 'Match ID': '', 'Time': '', 'Amber': '', 'Sapphire': '', 'Scrim Recording': '', 'Review Recording': '', 'Scoreboard': '' },
     subsections: [
       ...notes,
       { kind: 'opaque', heading: 'Match Data', body: '_(populated on Run Process)_' },

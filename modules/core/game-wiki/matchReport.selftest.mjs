@@ -4,9 +4,9 @@
 // tolerant parse, and coercion defaults that keep the view from branching on undefined.
 import assert from 'node:assert/strict';
 import {
-  MATCH_REPORT_SCHEMA_VERSION, MATCH_REPORT_SYSTEM_PROMPT, TAGS, splitTag, collectClaims,
-  buildMatchReportPrompt, coerceMatchReport, parseMatchReport, generateMatchReport, linkTagTokens,
-  enforceFirstReport,
+  MATCH_REPORT_SCHEMA_VERSION, MATCH_REPORT_SYSTEM_PROMPT, buildMatchReportSystemPrompt, TAGS,
+  splitTag, collectClaims, buildMatchReportPrompt, coerceMatchReport, parseMatchReport,
+  generateMatchReport, linkTagTokens, enforceFirstReport,
 } from './matchReport.js';
 import { sidecarPath } from './matchData.js';
 
@@ -61,6 +61,14 @@ for (const present of ['"actionItems"', '"qa"', '"debates"', '"followUps"', '"ke
 }
 // ...but qa/followUps are declared ALWAYS empty (Process 2 owns them)
 assert.equal((MATCH_REPORT_SYSTEM_PROMPT.match(/ALWAYS the empty array/g) || []).length, 2, 'qa + followUps schema lines both state the invariant');
+
+// M5: the data-free build REPLACES the data-grounded schema comments — never appends around them
+const dfPrompt = buildMatchReportSystemPrompt({ dataFree: true });
+assert.ok(dfPrompt.includes('NO MATCH DATA THIS RUN'), 'data-free prompt carries the rule block');
+assert.ok(!dfPrompt.includes('off the lane souls curve'), 'data-grounded laneVerdict comment replaced, not kept');
+assert.ok(dfPrompt.includes('"laneVerdict"') && dfPrompt.includes('"swings"'), 'schema keys survive the swap');
+assert.ok(!MATCH_REPORT_SYSTEM_PROMPT.includes('NO MATCH DATA THIS RUN'), 'default prompt has no data-free text');
+assert.equal(buildMatchReportSystemPrompt(), MATCH_REPORT_SYSTEM_PROMPT, 'no-arg build IS the default prompt');
 
 // --- parse + coerce --------------------------------------------------------
 const full = {
@@ -133,6 +141,10 @@ assert.equal(gen.playerCards[0].hero, 'Infernus');
 assert.deepEqual(gen.qa, [], 'generate enforces the first-report invariant even when the model emits qa');
 assert.deepEqual(gen.followUps, [], 'generate enforces the first-report invariant even when the model emits followUps');
 assert.equal(gen.actionItems.length, 1, 'analyst actionItems pass through generate');
+
+// M5: an empty digest flips the sent system prompt to the data-free variant
+await generateMatchReport(fakeInvoke, { digest: '', coachedTeam: 'North' }, { model: 'opus' });
+assert.ok(seen.args.systemPrompt.includes('NO MATCH DATA THIS RUN'), 'empty digest sends the data-free schema');
 
 // one bad emission reprompts, the retry lands
 let calls = 0;

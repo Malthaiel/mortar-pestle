@@ -82,8 +82,8 @@ const loopScrims = [
   ] }, metrics: {} },
 ];
 const loopAgg = aggregateTeam({ team: 'Loop', scrims: loopScrims });
-assert.deepEqual(loopAgg.homework.find((h) => normIssue(h.text) === normIssue('Contest mid boss')).sources, ['ScrimA']);
-assert.deepEqual([...loopAgg.homework.find((h) => normIssue(h.text) === normIssue('Ward the river')).sources].sort(), ['ScrimA', 'ScrimB']);
+assert.deepEqual(loopAgg.homework.find((h) => normIssue(h.text) === normIssue('Contest mid boss')).sources, [{ scrim: 'ScrimA', match: null }]);
+assert.deepEqual([...loopAgg.homework.find((h) => normIssue(h.text) === normIssue('Ward the river')).sources].map((s) => s.scrim).sort(), ['ScrimA', 'ScrimB']);
 assert.equal(openHomework(loopAgg).length, 3, 'no excludeScrim → all three open issues');
 const openA = openHomework(loopAgg, { excludeScrim: 'ScrimA' });
 assert.ok(!openA.some((o) => normIssue(o.text) === normIssue('Contest mid boss')), 'ScrimA-only item excluded');
@@ -93,6 +93,42 @@ assert.ok(openA.some((o) => normIssue(o.text) === normIssue('Rotate on pings')),
 const soloAgg = aggregateTeam({ team: 'Solo', scrims: [{ date: '2026-07-01', folder: 'Solo1', report: { actionItems: [{ text: 'Solo item', status: 'pending' }] }, metrics: {} }] });
 soloAgg.homework = soloAgg.homework.map((h) => { const { sources, ...rest } = h; return rest; }); // simulate a pre-sources sidecar
 assert.equal(openHomework(soloAgg, { excludeScrim: 'Solo1' }).length, 0, 'legacy single-scrim self-loop excluded');
+// old-format sidecar (string sources, pre-M6): scrim-grain exclusion still lands; match-grain
+// exclusion never matches a scrim-level source (those items are a different report, not the final's own)
+const strAgg = { scrimCount: 2, homework: [{ text: 'Old item', done: false, sources: ['ScrimA'] }] };
+assert.equal(openHomework(strAgg, { excludeScrim: 'ScrimA' }).length, 0, 'old string sources normalize + exclude at scrim grain');
+assert.equal(openHomework(strAgg, { excludeScrim: 'ScrimA', excludeMatch: 2 }).length, 1, 'a scrim-level source is not a match source');
+
+// M6 match grain: per-match FINAL reports aggregate with {scrim, match} sources; regenerating one
+// match's final must not see its own items, while a sibling match's stay genuine priors; the same
+// issue across two matches of one scrim folds into ONE entry listing both sources.
+const m6Scrims = [
+  { date: '2026-07-10', folder: 'ScrimC', report: null, metrics: {}, matchReports: [
+    { n: 1, report: { actionItems: [
+      { text: 'Track ult cooldowns', player: null, status: 'pending' },
+      { text: 'Buy Knockdown into Vindicta', player: 'Sam', status: 'pending' },
+    ], sections: [{ heading: 'Tempo', md: 'x' }] } },
+    { n: 3, report: { actionItems: [
+      { text: 'Track ult cooldowns', player: null, status: 'pending' },
+      { text: 'Stop face-checking bushes', player: null, status: 'pending' },
+    ], sections: [{ heading: 'Tempo', md: 'y' }] } },
+  ] },
+];
+const m6Agg = aggregateTeam({ team: 'C', scrims: m6Scrims });
+const folded = m6Agg.homework.find((h) => normIssue(h.text) === normIssue('Track ult cooldowns'));
+assert.deepEqual(folded.sources.map((s) => s.match).sort(), [1, 3], 'same issue across matches folds into one entry, both sources kept');
+assert.equal(folded.scrims, 1, 'two matches in one scrim = one scrim occurrence, not two');
+const openM3 = openHomework(m6Agg, { excludeScrim: 'ScrimC', excludeMatch: 3 });
+assert.ok(!openM3.some((o) => normIssue(o.text) === normIssue('Stop face-checking bushes')), 'the regenerated match’s own item excluded');
+assert.ok(openM3.some((o) => normIssue(o.text) === normIssue('Track ult cooldowns')), 'folded cross-match item kept (Match 1 source remains)');
+assert.ok(openM3.some((o) => normIssue(o.text) === normIssue('Buy Knockdown into Vindicta')), 'sibling match’s item kept as a genuine prior');
+// the self-loop, dead: a team whose only final is the regenerated match → zero priors
+const m6Solo = aggregateTeam({ team: 'D', scrims: [{ date: '2026-07-11', folder: 'ScrimD', report: null, metrics: {}, matchReports: [
+  { n: 1, report: { actionItems: [{ text: 'Solo match item', status: 'pending' }] } },
+] }] });
+assert.equal(openHomework(m6Solo, { excludeScrim: 'ScrimD', excludeMatch: 1 }).length, 0, 'regenerate sees none of its own items as prior');
+// matchfinal sections feed recurringLessons, once per scrim even when taught in two matches
+assert.deepEqual(m6Agg.recurringLessons, [{ heading: 'Tempo', count: 1, dates: ['2026-07-10'] }], 'a heading in two matches of one scrim = one date entry');
 
 // recurringLessons (VOD Report Sections): headings folded across scrims, repeats counted, all kept
 const lessonScrims = [

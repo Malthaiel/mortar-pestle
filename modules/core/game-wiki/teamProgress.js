@@ -62,26 +62,41 @@ export function sumMatchMetrics(list = []) {
   return { ...t, soulLead: Math.round(t.soulLead / list.length) };
 }
 
-// Fold the per-scrim list (each { date, report, metrics:{...+calloutRate,silentDeaths} }) into the
-// aggregate the sidecar stores + the page renders. Input need not be sorted — sorted here by date asc.
+// Fold the per-scrim list into the aggregate the sidecar stores + the page renders. Each scrim entry
+// is { date, report, matchReports, metrics:{...+calloutRate,silentDeaths}, folder }: `report` is the
+// legacy scrim-level .vodreport (kept so pre-match-pipeline data never vanishes), `matchReports` is
+// the per-match FINAL reports ([{ n, report }] — M6: matchfinal sidecars only; first reports feed
+// nothing). Input need not be sorted — sorted here by date asc.
 export function aggregateTeam({ team, scrims = [] }) {
   const ordered = [...scrims].sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
   const n = ordered.length;
 
+  // Every report a scrim contributes, with the {scrim, match} source each item will carry
+  // (match: null = the legacy scrim-level report). Same-issue items across matches of one scrim
+  // fold into ONE map entry listing both sources — that's the within-scrim dedupe (conservative:
+  // normIssue exact match only; different wording keeps both).
+  const reportsOf = (s) => [
+    ...(s.report ? [{ report: s.report, match: null }] : []),
+    ...((Array.isArray(s.matchReports) ? s.matchReports : []).map((mr) => ({ report: mr.report, match: mr.n ?? null }))),
+  ];
+
   // Recurring issues: normIssue(text) -> the scrim indexes (asc) that raised it, keeping a display text.
-  // `folders` tracks WHICH scrims raised each issue so openHomework can exclude a scrim's own items
-  // when feeding it back as prior action items (else a regenerate echoes its own list as "persisting").
-  const issueMap = new Map(); // key -> { text, idxs:[], statuses:[], players:Set, folders:Set }
+  // `sources` tracks WHICH {scrim, match} raised each issue so openHomework can exclude a match's own
+  // items when feeding it back as prior action items (else a regenerate echoes its own list as "persisting").
+  const issueMap = new Map(); // key -> { text, idxs:[], statuses:[], players:Set, sources:Map }
   ordered.forEach((s, i) => {
-    for (const it of (s.report && s.report.actionItems) || []) {
-      const key = normIssue(it.text);
-      if (!key) continue;
-      if (!issueMap.has(key)) issueMap.set(key, { text: it.text, idxs: [], statuses: [], players: new Set(), folders: new Set() });
-      const e = issueMap.get(key);
-      e.idxs.push(i); e.statuses.push(it.status || 'pending');
-      if (it.player) e.players.add(it.player);
-      if (s.folder) e.folders.add(s.folder);
-      e.text = it.text; // latest wording wins
+    for (const { report, match } of reportsOf(s)) {
+      for (const it of (report && report.actionItems) || []) {
+        const key = normIssue(it.text);
+        if (!key) continue;
+        if (!issueMap.has(key)) issueMap.set(key, { text: it.text, idxs: [], statuses: [], players: new Set(), sources: new Map() });
+        const e = issueMap.get(key);
+        if (e.idxs[e.idxs.length - 1] !== i) e.idxs.push(i); // two matches, one scrim = one scrim index
+        e.statuses.push(it.status || 'pending');
+        if (it.player) e.players.add(it.player);
+        if (s.folder) e.sources.set(`${s.folder}#${match ?? ''}`, { scrim: s.folder, match });
+        e.text = it.text; // latest wording wins
+      }
     }
   });
 
@@ -94,11 +109,11 @@ export function aggregateTeam({ team, scrims = [] }) {
     .sort((a, b) => b.streak - a.streak || b.scrims - a.scrims);
 
   // Homework ledger: every distinct issue, latest status = status in its most recent scrim.
-  // `sources` = the scrim folders that raised it (openHomework drops an issue whose ONLY source is
-  // the scrim being generated — that's the self-loop guard).
+  // `sources` = the {scrim, match} pairs that raised it (openHomework drops an issue whose ONLY
+  // source is the match being generated — that's the self-loop guard, at match grain since M6).
   const homework = [...issueMap.values()].map((e) => {
     const latest = e.statuses[e.statuses.length - 1] || 'pending';
-    return { text: e.text, scrims: e.idxs.length, done: latest === 'done', sources: [...e.folders] };
+    return { text: e.text, scrims: e.idxs.length, done: latest === 'done', sources: [...e.sources.values()] };
   }).sort((a, b) => Number(a.done) - Number(b.done) || b.scrims - a.scrims);
 
   // Per-player cards: issues that name a player (report `player` field), + their open count.
@@ -118,13 +133,17 @@ export function aggregateTeam({ team, scrims = [] }) {
   // (a one-scrim lesson is still a ledger entry), sorted most-repeated first then most-recent.
   const lessonMap = new Map(); // key -> { heading, dates:[] }
   ordered.forEach((s) => {
-    for (const sec of (s.report && s.report.sections) || []) {
-      const key = normIssue(sec.heading);
-      if (!key) continue;
-      if (!lessonMap.has(key)) lessonMap.set(key, { heading: sec.heading, dates: [] });
-      const e = lessonMap.get(key);
-      e.dates.push(s.date || '');
-      e.heading = sec.heading; // latest wording wins
+    const seen = new Set(); // a heading taught in two matches of one scrim = one date entry
+    for (const { report } of reportsOf(s)) {
+      for (const sec of (report && report.sections) || []) {
+        const key = normIssue(sec.heading);
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        if (!lessonMap.has(key)) lessonMap.set(key, { heading: sec.heading, dates: [] });
+        const e = lessonMap.get(key);
+        e.dates.push(s.date || '');
+        e.heading = sec.heading; // latest wording wins
+      }
     }
   });
   const recurringLessons = [...lessonMap.values()]
@@ -211,21 +230,31 @@ export function renderTeamPage(agg, stamp = '') {
   return L.join('\n');
 }
 
-// The team's currently-OPEN homework (pending issues) → priorActionItems for a fresh VOD report's
+// The team's currently-OPEN homework (pending issues) → priorActionItems for a fresh report's
 // follow-up loop (sub-plan 11's empty-tolerant slot). Reads the stored aggregate sidecar object.
-// `excludeScrim` (a scrim folder basename) drops issues whose ONLY source is that scrim: without it,
-// regenerating scrim X feeds X's own action items back as "prior" → the model reports them as
-// persisting follow-ups, duplicating the action list (the followUps self-loop). Legacy sidecars
-// (no `sources`) can't prove self-only membership, so they're kept unless the team has just one scrim.
-export function openHomework(agg, { excludeScrim = null } = {}) {
+// `excludeScrim` (+ optional `excludeMatch`, M6) drops issues whose EVERY source is the excluded
+// scope: without it, regenerating a report feeds its own action items back as "prior" → the model
+// reports them as persisting follow-ups, duplicating the action list (the followUps self-loop).
+// Match grain means regenerating Match 2's final still sees Match 1's items as genuine priors.
+// Filtering is source-membership ONLY, never text/id equality. Sources may be old-format strings
+// (pre-M6 aggregates) — normalized here; a source with match:null (a legacy scrim-level report)
+// only matches a scrim-grain exclusion. Legacy entries with NO sources can't prove self-only
+// membership, so they're kept unless the team has just one scrim.
+export function openHomework(agg, { excludeScrim = null, excludeMatch = null } = {}) {
   const solo = (agg?.scrimCount || 0) <= 1;
+  const norm = (x) => (typeof x === 'string' ? { scrim: x, match: null } : { scrim: x?.scrim, match: x?.match ?? null });
+  const excluded = (x) => {
+    const s = norm(x);
+    if (s.scrim !== excludeScrim) return false;
+    return excludeMatch == null ? true : s.match === excludeMatch;
+  };
   return ((agg && agg.homework) || [])
     .filter((h) => !h.done)
     .filter((h) => {
       if (!excludeScrim) return true;
       const src = Array.isArray(h.sources) ? h.sources : null;
       if (!src || !src.length) return !solo; // no sources → self-loop-safe only when other scrims exist
-      return !(src.length === 1 && src[0] === excludeScrim); // only source is the excluded scrim → drop
+      return !src.every(excluded); // every source is the excluded scope → drop
     })
     .map((h) => ({ id: normIssue(h.text), text: h.text }));
 }

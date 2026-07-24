@@ -26,7 +26,8 @@ import { buildMomentsDigest, classifyMoments, reconcile, renderAutoClassificatio
 import { buildFights, judgeTeamfights, summarize } from './teamfightComms.js';
 import { buildMatchDigest } from './matchDigest.js';
 import { buildBrainContext } from './analystBrain.js';
-import { serializeTfComms, buildTranscriptBlock, generateReport } from './vodReport.js';
+import ConfirmModal from '@host/components/ui/ConfirmModal.jsx';
+import { serializeTfComms, buildTranscriptBlock, generateReport, validateStamps } from './vodReport.js';
 import { generateMatchReport, coerceMatchReport } from './matchReport.js';
 import { openHomework, teamSidecarPath } from './teamProgress.js';
 import { readStopwatch } from './useStopwatch.js';
@@ -110,6 +111,7 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
     base: folder.split('/').pop(),
     onFiled: (target, p) => {
       if (target === `match:${n}`) { applyEdit((m) => ({ ...m, fields: { ...m.fields, 'Scrim Recording': p } })); flushSave(); }
+      if (target === `review:${n}`) { applyEdit((m) => ({ ...m, fields: { ...m.fields, 'Review Recording': p } })); flushSave(); }
     },
   });
 
@@ -157,12 +159,49 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
   const mfKey = `${folder}#${n}#final`;
   const mfRunning = matchReportJob.key === mfKey;
 
+  // ── M5: pre-generate gates — confirm dialogs, never hard blocks ──
+  // One ConfirmModal at a time from a queue; confirming the last one runs the job. Cancel anywhere
+  // aborts the whole run. Reuses the app's ConfirmModal (the module's existing confirm pattern).
+  const [gate, setGate] = useState(null); // { queue: [{title, message, confirmLabel}], run }
+  const runGated = (gates, run) => {
+    const queue = gates.filter(Boolean);
+    if (!queue.length) { run(); return; }
+    setGate({ queue, run });
+  };
+  // M5c: any voice cluster of ≥20 segments still labeled "Speaker N" → nudge (both recordings).
+  const unlabeledGate = async (path) => {
+    try {
+      const segs = parseSegments((await api.getRawFileMeta(path, 'gamewiki')).content);
+      const counts = new Map();
+      for (const s of segs) {
+        const sp = String(s.speaker || '');
+        if (/^Speaker \d+$/.test(sp)) counts.set(sp, (counts.get(sp) || 0) + 1);
+      }
+      const k = [...counts.values()].filter((c) => c >= 20).length;
+      return k ? {
+        title: `${k} speaker${k === 1 ? ' is' : 's are'} unlabeled`,
+        message: 'Label them in the Speakers panel for named coaching, or generate anyway.',
+        confirmLabel: 'Generate anyway',
+      } : null;
+    } catch { return null; } // no transcript → nothing to nudge about
+  };
+
   // ── Match Report (WS4 M22) — the Analyst's own per-match coaching report ──
   const runMatchReport = async () => {
     if (matchReportStore.snap.key) return; // one run app-wide, like the scrim report
-    let raw;
+    let raw = null;
     try { raw = JSON.parse((await api.getRawFileMeta(sidecarPath(folder, n), 'gamewiki')).content); }
-    catch { notify('error', 'No match data', 'Run Process first — the report is written from the match data.'); return; }
+    catch { /* M5a: data-free run allowed behind the confirm below */ }
+    runGated([
+      raw ? null : {
+        title: 'No match data attached',
+        message: 'The first report will run from comms only — data verdicts will be skipped. Generate anyway?',
+        confirmLabel: 'Generate anyway',
+      },
+      await unlabeledGate(sidecarPath(folder, n, 'comms')),
+    ], () => doMatchReport(raw));
+  };
+  const doMatchReport = async (raw) => {
     setMatchReportJob(mrKey);
     try {
       const agents = await resolveAgents(settings);
@@ -176,10 +215,10 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
         tfCommsBlock = serializeTfComms(tf.fights || [], `Match ${n}`);
       } catch { /* no comms review for this match */ }
       // The diarized in-game comms transcript (Recording A) — Process 1's primary comms evidence.
-      let commsBlock = '';
-      try {
-        commsBlock = buildTranscriptBlock(parseSegments((await api.getRawFileMeta(sidecarPath(folder, n, 'comms'), 'gamewiki')).content));
-      } catch { /* no comms transcript for this match */ }
+      // Segments kept for the M7 stamp check below.
+      let commsSegs = [];
+      try { commsSegs = parseSegments((await api.getRawFileMeta(sidecarPath(folder, n, 'comms'), 'gamewiki')).content); } catch { /* no comms transcript for this match */ }
+      const commsBlock = buildTranscriptBlock(commsSegs);
       let coachNotesBlock = '';
       try {
         const bullets = getNotes(docRef.current)?.bullets || [];
@@ -187,9 +226,13 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
       } catch { /* no notes */ }
 
       const report = await generateMatchReport(invoke, {
-        digest: buildMatchDigest(raw, { label: `Match ${n}` }),
+        digest: raw ? buildMatchDigest(raw, { label: `Match ${n}` }) : '', // '' flips the data-free schema (M5a)
         coachedTeam: team, commsBlock, tfCommsBlock, coachNotesBlock, brainContext: brain.text,
       }, agents);
+      // M7a: every stamp must land in a real segment (±5s) — permissive pre-M18: game-clock times
+      // inside the recording span pass; offenders are one warning line, never a block.
+      const badStamps = validateStamps(report, commsSegs);
+      if (badStamps.length) report.meta.warnings.push(`stamps not found in the comms recording (±5s): ${badStamps.join(', ')}`);
       report.meta.warnings = [...brain.warnings, ...(report.meta.warnings || [])];
       report.generated = new Date().toISOString().slice(0, 10);
       report.model = agents.model;
@@ -213,12 +256,31 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
     if (matchReportStore.snap.key) return; // one AI run app-wide, shared with Process 1
     const review = await resolveReviewTranscript(api, folder, n);
     if (!review) { notify('error', 'No review recording', 'Record or extract this match’s VOD-review comms first.'); return; }
+    let hasFirst = true;
+    try { await api.getRawFileMeta(sidecarPath(folder, n, 'matchreport'), 'gamewiki'); } catch { hasFirst = false; }
+    runGated([
+      // M8: legacy adoption is consented, never silent — the scrim-level transcript is read-only.
+      review.scrimLevel ? {
+        title: 'Use the scrim’s review recording?',
+        message: 'This match has no review recording of its own. Read the scrim-level VOD review as this match’s review source? The file is only read — never moved or changed.',
+        confirmLabel: 'Use it',
+      } : null,
+      hasFirst ? null : { // M5b — allowed per locked decision 4
+        title: 'No first report',
+        message: 'The final report will come from the review + match data only. Generate anyway?',
+        confirmLabel: 'Generate anyway',
+      },
+      await unlabeledGate(review.path),
+    ], () => doMatchFinal(review));
+  };
+  const doMatchFinal = async (review) => {
     setMatchReportJob(mfKey);
     try {
       const agents = await resolveAgents(settings);
       const team = coachedRef.current;
       const brain = await buildBrainContext(api, { coachedTeam: team });
-      const transcriptBlock = buildTranscriptBlock(parseSegments((await api.getRawFileMeta(review.path, 'gamewiki')).content));
+      const reviewSegs = parseSegments((await api.getRawFileMeta(review.path, 'gamewiki')).content);
+      const transcriptBlock = buildTranscriptBlock(reviewSegs);
       // The first report rides along as the reconciliation reference — optional by design (locked
       // decision 4: allowed without one; M5 adds the warning dialog for that edge).
       let firstReportBlock = '';
@@ -231,12 +293,12 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
         const b = serializeTfComms(tf.fights || [], `Match ${n}`);
         if (b) tfCommsBlocks = [b];
       } catch { /* no comms review */ }
-      // Machine-carry (M4b): open homework as priorActionItems, this scrim excluded — the scrim-grain
-      // self-loop guard that exists today; M6 tightens the exclude to {scrim, match} sources.
+      // Machine-carry (M4b): open homework as priorActionItems, THIS match excluded (M6 match-grain
+      // self-loop guard — Match 1's items stay genuine priors when Match 2 regenerates).
       let priorActionItems = [];
       try {
         const agg = JSON.parse((await api.getRawFileMeta(teamSidecarPath(team), 'gamewiki')).content);
-        priorActionItems = openHomework(agg, { excludeScrim: folder.split('/').pop() });
+        priorActionItems = openHomework(agg, { excludeScrim: folder.split('/').pop(), excludeMatch: n });
       } catch { /* no team progress yet */ }
       // Keep action-item done-state across regenerates (abort condition 2: ids are user data).
       let prior = null;
@@ -245,6 +307,12 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
         transcriptBlock, coachedTeam: team, firstReportBlock, priorActionItems,
         brainContext: brain.text, matchDigests, tfCommsBlocks, prior,
       }, agents);
+      // M7a: validate every stamp against the UNION of both recordings' segments — permissive until
+      // M18 tags stamps by source; offenders are one warning line, never a block.
+      let commsSegs = [];
+      try { commsSegs = parseSegments((await api.getRawFileMeta(sidecarPath(folder, n, 'comms'), 'gamewiki')).content); } catch { /* no comms transcript */ }
+      const badStamps = validateStamps(report, [...reviewSegs, ...commsSegs]);
+      if (badStamps.length) report.meta.warnings.push(`stamps not found in either recording (±5s): ${badStamps.join(', ')}`);
       report.meta.warnings = [...brain.warnings, ...(report.meta.warnings || [])];
       report.generated = new Date().toISOString().slice(0, 10);
       report.model = agents.model;
@@ -354,6 +422,7 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
     }
   };
   const cancelComms = () => { if (commsRef.current) { setCommsBusy((b) => ({ ...b, phase: 'Cancelling' })); invoke('comms_job_cancel').catch(() => {}); } };
+  const cancelReview = () => { if (reviewRef.current) { setReviewBusy((b) => ({ ...b, phase: 'Cancelling' })); invoke('comms_job_cancel').catch(() => {}); } };
 
   useCommsJobBridge({
     scrimFolder: folder,
@@ -364,6 +433,50 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
     onFinished: (p) => {
       if (p.kind === 'match' && Number(p.matchN) === n) {
         writeMerged((mm) => mm).then(() => setCommsRelabelKey((k) => k + 1)).catch(() => {});
+      }
+    },
+  });
+
+  // ── Extract Review Comms — Recording B's twin of Extract Comms (job kind 'review'; the finisher
+  //    writes the per-match .reviewcomms sidecar, so Process 2 stops needing the M8 legacy fallback) ──
+  const [reviewBusy, setReviewBusy] = useState({ on: false, phase: '' });
+  const reviewRef = useRef(false);
+  const extractReview = async () => {
+    const m = docRef.current;
+    if (!m || reviewRef.current || commsRef.current) return;
+    const video = String(m.fields['Review Recording'] || '').trim();
+    if (!video) { notify('error', 'No review recording', 'Set a Review Recording (.mp4) for this match first.'); return; }
+    let up = false;
+    try { up = (await invoke('stt_status')) != null; } catch { up = false; }
+    if (!up) { setSttUp(false); notify('error', 'Speech engine unavailable', 'The transcription engine is not running — reopen the app and try again.'); return; }
+    const ofm = await readOverviewFm(folder);
+    const defs = loadTrackDefaults();
+    const commsIdx = trackIndex(ofm['Comms Track'] ?? defs.comms);
+    const micIdx = trackIndex(ofm['Mic Track'] ?? defs.mic);
+    if (commsIdx == null) { notify('error', 'No comms track', 'Set the Comms Track on the scrim Overview so the review voices can be separated.'); return; }
+    reviewRef.current = true; setReviewBusy({ on: true, phase: 'Extracting audio' });
+    try {
+      await flushIfDirty();
+      const coached = ofm['Coached Team'] || ofm['Team 1'] || '';
+      const store = await readTeamStore(coached);
+      await invoke('comms_job_start', {
+        video, commsTrack: commsIdx, micTrack: micIdx, model: STT_MODEL,
+        maxSpeakers: (store.roster || []).length || 8, scrimPath: folder, kind: 'review', matchN: n,
+      });
+    } catch (e) {
+      reviewRef.current = false; setReviewBusy({ on: false, phase: '' });
+      notify('error', 'Extract Review Comms failed', e?.message || String(e));
+    }
+  };
+
+  useCommsJobBridge({
+    scrimFolder: folder,
+    filter: (p) => p.kind === 'review' && Number(p.matchN) === n,
+    setBusy: (b) => { reviewRef.current = b.on; setReviewBusy(b); },
+    // finishReviewJob wrote .reviewcomms — re-probe so the Final Report button enables live.
+    onFinished: (p) => {
+      if (p.kind === 'review' && Number(p.matchN) === n) {
+        resolveReviewTranscript(api, folder, n).then((r) => setRvReady(!!r)).catch(() => {});
       }
     },
   });
@@ -611,7 +724,7 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
                 </button>
               )}
               <button className="candy-btn" data-shape="chip"
-                disabled={commsBusy.on || running || !m.fields['Scrim Recording'] || !sttUp}
+                disabled={commsBusy.on || reviewBusy.on || running || !m.fields['Scrim Recording'] || !sttUp}
                 onClick={extractComms}
                 title={!m.fields['Scrim Recording']
                   ? 'Set a Scrim Recording (.mp4) for this match first'
@@ -624,7 +737,20 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
                 <button className="candy-btn" data-shape="chip" onClick={cancelComms} title="Cancel transcription"><span className="candy-face">×</span></button>
               )}
               <button className="candy-btn" data-shape="chip"
-                disabled={running || commsBusy.on}
+                disabled={reviewBusy.on || commsBusy.on || running || !m.fields['Review Recording'] || !sttUp}
+                onClick={extractReview}
+                title={!m.fields['Review Recording']
+                  ? 'Set a Review Recording (.mp4) for this match first'
+                  : !sttUp ? 'Speech engine unavailable — reopen the app'
+                    : 'Extract Review — transcribe this match’s VOD-review recording'}
+                style={reviewBusy.on ? { opacity: 0.6, cursor: 'progress' } : undefined}>
+                <span className="candy-face">{reviewBusy.on ? (reviewBusy.phase || 'Working') : 'Extract Review'}</span>
+              </button>
+              {reviewBusy.on && (
+                <button className="candy-btn" data-shape="chip" onClick={cancelReview} title="Cancel transcription"><span className="candy-face">×</span></button>
+              )}
+              <button className="candy-btn" data-shape="chip"
+                disabled={running || commsBusy.on || reviewBusy.on}
                 onClick={runProcess}
                 title="Run Process — pull this match's data from deadlock-api by Match ID"
                 style={running ? { opacity: 0.6, cursor: 'progress' } : undefined}>
@@ -647,6 +773,15 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
               )}
               <MiniBtn icon={IconFolder} title="Select .mp4" onClick={async () => { const p = await pickFile(MP4_FILTERS); if (p) { setMatchField('Scrim Recording', p); flushSave(); } }} />
               {m.fields['Scrim Recording'] && <MiniBtn icon={IconPlayCircle} title="Open recording" onClick={() => invoke('coaching_open_path', { path: m.fields['Scrim Recording'] }).catch(() => {})} />}
+            </>} />
+          <EditField label="Review Recording" value={m.fields['Review Recording']} onChange={(v) => setMatchField('Review Recording', v)} onCommit={flushSave} placeholder="/path/to/match-review.mp4"
+            right={<>
+              {!overlay && (
+                <RecordButton recording={rec.recTarget === `review:${n}`} disabled={rec.busyElsewhere(`review:${n}`) || !rec.alive} accent={accent}
+                  onToggle={() => (rec.recTarget === `review:${n}` ? rec.stop() : rec.start({ kind: 'review', n }))} />
+              )}
+              <MiniBtn icon={IconFolder} title="Select .mp4" onClick={async () => { const p = await pickFile(MP4_FILTERS); if (p) { setMatchField('Review Recording', p); flushSave(); } }} />
+              {m.fields['Review Recording'] && <MiniBtn icon={IconPlayCircle} title="Open recording" onClick={() => invoke('coaching_open_path', { path: m.fields['Review Recording'] }).catch(() => {})} />}
             </>} />
           <EditField label="Scoreboard" value={m.fields['Scoreboard']} onChange={(v) => setMatchField('Scoreboard', v)} onCommit={flushSave} placeholder="/path/to/scoreboard.png"
             right={<MiniBtn icon={IconFolder} title="Select screenshot" onClick={async () => { const p = await pickFile(IMG_FILTERS); if (p) { setMatchField('Scoreboard', p); flushSave(); } }} />} />
@@ -746,10 +881,10 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
             <div style={labelStyle}>First Report</div>
             <div className="candy-chip-row">
               <button className="candy-btn" data-shape="chip"
-                disabled={!populated || !aiConfigured || mrRunning || mfRunning || running || commsBusy.on || classifying || reviewing}
+                disabled={!aiConfigured || mrRunning || mfRunning || running || commsBusy.on || reviewBusy.on || classifying || reviewing}
                 onClick={runMatchReport}
-                title={!populated ? 'Run Process first — the report is written from the match data'
-                  : !aiConfigured ? 'Configure an AI backend in Settings → Agents (API key or Claude CLI)'
+                title={!aiConfigured ? 'Configure an AI backend in Settings → Agents (API key or Claude CLI)'
+                  : !populated ? 'No match data yet — generating asks first, then runs from comms only'
                     : 'First Report (Process 1) — the Analyst’s own coaching report on this match, every claim tagged [data] / [grounded] / [analyst]'}
                 style={mrRunning ? { opacity: 0.6, cursor: 'progress' } : undefined}>
                 <span className="candy-face">{mrRunning ? 'Asking Claude' : mrReady ? 'Regenerate First Report' : 'Generate First Report'}</span>
@@ -760,14 +895,14 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
                 </button>
               )}
             </div>
-            {!populated && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: candyGap(8) }}>Pull match data first (Run Process), then Generate First Report.</div>}
+            {!populated && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: candyGap(8) }}>No match data yet — Run Process first for data verdicts, or generate from comms only.</div>}
             {populated && !hasComms && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: candyGap(8) }}>No comms review attached — the report will skip its comms grade rather than guess it.</div>}
           </div>
           <div style={{ marginTop: 8 }}>
             <div style={labelStyle}>Final Report</div>
             <div className="candy-chip-row">
               <button className="candy-btn" data-shape="chip"
-                disabled={!rvReady || !aiConfigured || mfRunning || mrRunning || running || commsBusy.on || classifying || reviewing}
+                disabled={!rvReady || !aiConfigured || mfRunning || mrRunning || running || commsBusy.on || reviewBusy.on || classifying || reviewing}
                 onClick={runMatchFinal}
                 title={!rvReady ? 'Record this match’s VOD review first — the final report is written from it'
                   : !aiConfigured ? 'Configure an AI backend in Settings → Agents (API key or Claude CLI)'
@@ -807,6 +942,22 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
         {review && (
           <ReviewModal accent={accent} teamName={review.teamName} items={review.items}
             onSave={(kept, dropped) => saveReview(review.teamName, kept, dropped)} onClose={() => setReview(null)} />
+        )}
+        {/* M5/M8 gate queue — one confirm at a time; the last confirm runs the generate, cancel aborts. */}
+        {gate && gate.queue.length > 0 && (
+          <ConfirmModal open
+            title={gate.queue[0].title}
+            message={gate.queue[0].message}
+            confirmLabel={gate.queue[0].confirmLabel || 'Generate anyway'}
+            cancelLabel="Cancel"
+            onConfirm={() => {
+              const rest = gate.queue.slice(1);
+              if (rest.length) { setGate({ ...gate, queue: rest }); return; }
+              const go = gate.run;
+              setGate(null);
+              go();
+            }}
+            onCancel={() => setGate(null)} />
         )}
       </div>
     </div>

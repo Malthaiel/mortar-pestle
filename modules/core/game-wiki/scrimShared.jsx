@@ -397,13 +397,15 @@ export function useScrimRecord({ base, onFiled }) {
     }
     if (snap?.current_scene !== cfg.name) await bReq('set_current_scene', { name: cfg.name });
   };
-  const start = async (target) => { // {kind:'match', n} | {kind:'vod'}
+  const start = async (target) => { // {kind:'match', n} | {kind:'vod'} | {kind:'review', n}
     try {
       const dir = await invoke('coaching_scrim_dir', { base });
-      await ensureScrimScene(target.kind === 'vod' ? 'screen' : 'game');
-      const stem = target.kind === 'vod' ? `${base} — VOD Review` : `${base} — Match ${target.n}`;
+      await ensureScrimScene(target.kind === 'match' ? 'game' : 'screen'); // reviews film the screen
+      const stem = target.kind === 'vod' ? `${base} — VOD Review`
+        : target.kind === 'review' ? `${base} — Match ${target.n} Review`
+          : `${base} — Match ${target.n}`;
       await bReq('start_record', { dir, stem });
-      setRecTarget(target.kind === 'vod' ? 'vod' : `match:${target.n}`);
+      setRecTarget(target.kind === 'match' ? `match:${target.n}` : target.kind === 'review' ? `review:${target.n}` : 'vod');
     } catch (e) {
       notify('error', 'Record failed', e?.message || String(e));
     }
@@ -478,6 +480,28 @@ export async function finishVodJob(scrimFolder, result, setPhase = () => {}) {
   notify('success', 'VOD comms extracted', `${merged.length} segments · ${voices} voice${voices === 1 ? '' : 's'}${named ? ` · ${named} auto-named` : ''}${result.micSkipped ? ' · coach mic silent, skipped' : ''}.`);
 }
 
+// Post-process + persist a finished per-match REVIEW comms job (Recording B): same voice pipeline as
+// the scrim-level VOD job, but the transcript lands in the per-match .reviewcomms sidecar — the file
+// resolveReviewTranscript serves to Process 2 and the Review Segments leaf. No Overview bullet; the
+// sidecar on disk IS the state (rvReady probes it).
+export async function finishReviewJob(scrimFolder, matchN, result, setPhase = () => {}) {
+  const fm = await readOverviewFm(scrimFolder);
+  const coachedTeam = fm['Coached Team'] || fm['Team 1'] || '';
+  const store = await readTeamStore(coachedTeam);
+  const nameMap = matchClusters(result.diarization?.clusters || [], store.prints || {}, DEFAULT_THRESHOLD);
+  const aligned = alignDiarization(result.commsSegments || [], result.diarization?.segments || []);
+  const coachName = loadYourName() || 'Coach';
+  const merged = mergeTranscripts({ micSegments: result.micSegments || [], commsSegments: aligned, micSpeaker: coachName, nameMap });
+  setPhase('Saving');
+  await api.savePage(sidecarPath(scrimFolder, matchN, 'reviewcomms'), JSON.stringify(buildCommsSidecar({ segments: merged, clusters: result.diarization?.clusters || [], micSpeaker: coachName })), null, 'gamewiki');
+  const voices = result.diarization?.numSpeakers ?? (result.diarization?.clusters || []).length;
+  const named = Object.values(nameMap).filter(Boolean).length;
+  notify('success', 'Review comms extracted', `Match ${matchN} — ${merged.length} segments · ${voices} voice${voices === 1 ? '' : 's'}${named ? ` · ${named} auto-named` : ''}${result.micSkipped ? ' · coach mic silent, skipped' : ''}.`);
+}
+
+// One place for the per-kind failure title (three notify sites below).
+const jobFailTitle = (kind) => (kind === 'vod' ? 'Extract VOD Comms failed' : kind === 'review' ? 'Extract Review Comms failed' : 'Extract Comms failed');
+
 // Comms-job bridge (gate-blocker 2): follow + finish the Rust-owned comms job from
 // ANY mount. Re-attaches on mount (a running job restores the busy UI; a
 // done-unconsumed one is finished right here), and the global progress/done events
@@ -498,10 +522,11 @@ export function useCommsJobBridge({ scrimFolder, filter, setBusy, onFinished }) 
       try {
         const setPhase = (t) => { if (!dead && filter(p)) setBusy({ on: true, phase: t }); };
         if (p.kind === 'vod') await finishVodJob(scrimFolder, result, setPhase);
+        else if (p.kind === 'review') await finishReviewJob(scrimFolder, p.matchN, result, setPhase);
         else await finishMatchJob(scrimFolder, p.matchN, result, setPhase);
         if (!dead) onFinished?.(p);
       } catch (e) {
-        notify('error', p.kind === 'vod' ? 'Extract VOD Comms failed' : 'Extract Comms failed', e?.message || String(e));
+        notify('error', jobFailTitle(p.kind), e?.message || String(e));
       } finally { clearBusy(p); }
     };
     (async () => {
@@ -512,7 +537,7 @@ export function useCommsJobBridge({ scrimFolder, filter, setBusy, onFinished }) 
       else {
         // stale error/cancelled job whose done event died with the old webview
         await invoke('comms_job_clear').catch(() => {});
-        if (st.status === 'error') notify('error', st.kind === 'vod' ? 'Extract VOD Comms failed' : 'Extract Comms failed', st.error || 'unknown error');
+        if (st.status === 'error') notify('error', jobFailTitle(st.kind), st.error || 'unknown error');
       }
     })();
     const subs = [
@@ -527,8 +552,8 @@ export function useCommsJobBridge({ scrimFolder, filter, setBusy, onFinished }) 
         if (p.ok) { finish(p); return; }
         invoke('comms_job_clear').catch(() => {});
         clearBusy(p);
-        if (p.cancelled) notify('success', p.kind === 'vod' ? 'VOD comms cancelled' : 'Comms cancelled', 'Transcription was cancelled — nothing saved.');
-        else notify('error', p.kind === 'vod' ? 'Extract VOD Comms failed' : 'Extract Comms failed', p.error || 'unknown error');
+        if (p.cancelled) notify('success', p.kind === 'vod' ? 'VOD comms cancelled' : p.kind === 'review' ? 'Review comms cancelled' : 'Comms cancelled', 'Transcription was cancelled — nothing saved.');
+        else notify('error', jobFailTitle(p.kind), p.error || 'unknown error');
       }),
     ];
     return () => { dead = true; subs.forEach((s) => s.then((un) => un())); };
@@ -557,6 +582,10 @@ export async function updateTeamProgress(team) {
       let report = null;
       try { report = JSON.parse((await api.getRawFileMeta(scrimSidecarPath(folder, 'vodreport'), 'gamewiki')).content); } catch { /* no report yet */ }
 
+      // M6: per-match FINAL reports are the aggregation unit now (first reports feed nothing;
+      // the legacy scrim-level report above stays so old data never vanishes).
+      const matchReports = [];
+
       const mlist = await api.listFolderRaw(`${folder}/Matches`, 'gamewiki').catch(() => null);
       const ns = (mlist?.files || [])
         .map((f) => Number((f.match(/^Match (\d+)\.md$/) || [])[1]))
@@ -571,6 +600,7 @@ export async function updateTeamProgress(team) {
         try { m = parseMatchFile((await api.getRawFileMeta(matchPath(folder, n), 'gamewiki')).content, n); } catch { continue; }
         const { coachedSide } = sideFromTeamFields(m.fields, coached);
         if (coachedSide == null) continue;
+        try { matchReports.push({ n, report: JSON.parse((await api.getRawFileMeta(sidecarPath(folder, n, 'matchfinal'), 'gamewiki')).content) }); } catch { /* no final report for this match */ }
         let raw = null;
         try { raw = JSON.parse((await api.getRawFileMeta(sidecarPath(folder, n), 'gamewiki')).content); } catch { continue; }
         perMatch.push(matchMetrics(raw, coachedSide));
@@ -589,7 +619,7 @@ export async function updateTeamProgress(team) {
           if (s.fights) { haveTf = true; tfFights += s.fights; tfJumbled += (s.jumbled || 0); tfMissed += (s.missed || 0); }
         } catch { /* no comms review for this match */ }
       }
-      if (!perMatch.length && !report) continue;
+      if (!perMatch.length && !report && !matchReports.length) continue;
       const metrics = {
         ...sumMatchMetrics(perMatch),
         calloutRate: haveComms && durTotalS > 0 ? Math.round((segTotal / (durTotalS / 60)) * 10) / 10 : null,
@@ -597,7 +627,7 @@ export async function updateTeamProgress(team) {
         commsJumbled: haveTf && tfFights ? Math.round((tfJumbled / tfFights) * 100) / 100 : null,
         commsMissed: haveTf && tfFights ? Math.round((tfMissed / tfFights) * 100) / 100 : null,
       };
-      scrims.push({ date: fm['Date'] || '', report, metrics, folder: dir });
+      scrims.push({ date: fm['Date'] || '', report, matchReports, metrics, folder: dir });
     }
     const agg = aggregateTeam({ team, scrims });
     const stamp = new Date().toISOString().slice(0, 10);

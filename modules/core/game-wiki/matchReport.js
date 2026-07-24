@@ -58,7 +58,12 @@ export function collectClaims(report) {
   return out;
 }
 
-export const MATCH_REPORT_SYSTEM_PROMPT = [
+// M5: the system prompt is built per run. `dataFree` (no Match ID / empty digest) REPLACES the
+// data-grounded schema comment lines and the data-grounding rule — not appends to them — because the
+// schema comments otherwise outweigh any addendum and the model fills data-only fields with filler
+// ("no individual curve discussed" ×5, the audit's finding 2). Data-free = empty fields, never filler.
+export function buildMatchReportSystemPrompt({ dataFree = false } = {}) {
+  return [
   'You are an elite Deadlock analyst writing a coaching report on ONE match. You are given a deterministic',
   'match-data digest (scoreboard, souls curves, item builds, deaths, objectives, damage focus), optionally the',
   'diarized in-game comms transcript (speaker-labeled, timestamped [m:ss]), optionally a judged in-game comms',
@@ -83,8 +88,16 @@ export const MATCH_REPORT_SYSTEM_PROMPT = [
   '',
   'Grounding rules:',
   '- Canonical names ONLY: every hero, item, and ability name matches the lexicon spelling exactly.',
-  '- Only claim what the data supports. No curve granularity for a lane → leave laneVerdict "" rather than',
-  '  guessing; an empty field renders as "Not analyzed." and costs nothing. Filler costs trust.',
+  ...(dataFree ? [
+    '- NO MATCH DATA THIS RUN — the digest is absent. Nothing can earn a [data] tag: a claim only the',
+    '  scoreboard could prove has no place in this report. Leave every data-only field empty ("" / []):',
+    '  laneVerdict, soulsCurveRead, deathAnalysis, objectiveWindows, swings — unless the comms transcript',
+    '  itself voiced that read. NEVER write filler like "no individual curve discussed" — an empty field',
+    '  renders as "Not analyzed." and costs nothing. Filler costs trust.',
+  ] : [
+    '- Only claim what the data supports. No curve granularity for a lane → leave laneVerdict "" rather than',
+    '  guessing; an empty field renders as "Not analyzed." and costs nothing. Filler costs trust.',
+  ]),
   '- Times from the DIGEST are GAME clock (match time), written m:ss or h:mm:ss. Times from the in-game',
   '  comms transcript are recording stamps — cite them as literal [m:ss] tokens copied VERBATIM from the',
   '  transcript. There is no VOD review here, and never invent a moment neither source contains.',
@@ -100,19 +113,35 @@ export const MATCH_REPORT_SYSTEM_PROMPT = [
   '    { "player": string,              // player name if known, else the hero name',
   '      "hero": string,                // canonical hero name from the digest',
   '      "lane": string,                // assigned lane from the digest',
-  '      "laneVerdict": string,         // won/lost/even + why, off the lane souls curve ("" when the data cannot say)',
-  '      "soulsCurveRead": string,      // their economic arc: farm pace, spikes, droughts, vs counterpart',
-  '      "itemCritique": string,        // build-order judgement vs the game state and patch digest',
-  '      "coaching": string,            // GFM markdown; what THIS player should change ("" if nothing stands out)',
-  '      "deathAnalysis": [ { "t": string, "what": string, "why": string, "lesson": string } ],  // t = GAME clock',
-  '      "drills": [string] },          // concrete practice items for this player',
-  '  ],',
-  '  "macro": {',
-  '    "tempoRead": string,             // the match\'s tempo story, grounded in swings + objectives',
-  '    "objectiveWindows": [ { "t": string, "event": string, "verdict": string, "why": string } ],',
-  '    "laneMap": string,               // which lanes won/lost and how that shaped the map',
-  '    "swings": [ { "t": string, "direction": string, "cause": string } ]',
-  '  },',
+  ...(dataFree ? [
+    '      "laneVerdict": string,         // "" this run — the souls curve does not exist; fill ONLY if comms voiced it',
+    '      "soulsCurveRead": string,      // "" this run — no souls data exists',
+    '      "itemCritique": string,        // "" unless comms or the patch digest evidence a build read',
+    '      "coaching": string,            // GFM markdown; what THIS player should change ("" if nothing stands out)',
+    '      "deathAnalysis": [ { "t": string, "what": string, "why": string, "lesson": string } ],  // [] this run unless a death was talked through in comms (t = comms [m:ss])',
+    '      "drills": [string] },          // concrete practice items for this player',
+    '  ],',
+    '  "macro": {',
+    '    "tempoRead": string,             // only what the comms evidenced — no data story exists this run',
+    '    "objectiveWindows": [ { "t": string, "event": string, "verdict": string, "why": string } ],  // [] unless comms called the window',
+    '    "laneMap": string,               // "" unless comms voiced the lane picture',
+    '    "swings": [ { "t": string, "direction": string, "cause": string } ]  // [] unless comms marked the swing',
+    '  },',
+  ] : [
+    '      "laneVerdict": string,         // won/lost/even + why, off the lane souls curve ("" when the data cannot say)',
+    '      "soulsCurveRead": string,      // their economic arc: farm pace, spikes, droughts, vs counterpart',
+    '      "itemCritique": string,        // build-order judgement vs the game state and patch digest',
+    '      "coaching": string,            // GFM markdown; what THIS player should change ("" if nothing stands out)',
+    '      "deathAnalysis": [ { "t": string, "what": string, "why": string, "lesson": string } ],  // t = GAME clock',
+    '      "drills": [string] },          // concrete practice items for this player',
+    '  ],',
+    '  "macro": {',
+    '    "tempoRead": string,             // the match\'s tempo story, grounded in swings + objectives',
+    '    "objectiveWindows": [ { "t": string, "event": string, "verdict": string, "why": string } ],',
+    '    "laneMap": string,               // which lanes won/lost and how that shaped the map',
+    '    "swings": [ { "t": string, "direction": string, "cause": string } ]',
+    '  },',
+  ]),
   '  "commsGrade": {                    // "" / [] throughout when no in-game comms block was attached',
   '    "overall": string,               // letter grade + one-line justification',
   '    "callouts": [ { "t": string, "who": string, "call": string, "verdict": string, "evidence": string } ],',
@@ -150,7 +179,11 @@ export const MATCH_REPORT_SYSTEM_PROMPT = [
   '- Every number pair names its side ("31-16 in North\'s favor"), and never narrate your own reasoning',
   '  ("...actually", "wait —") — state the settled claim.',
   '- Empty is better than filler. An array with nothing real in it is [].',
-].join('\n');
+  ].join('\n');
+}
+
+// The default (data-bearing) prompt — the shape selftests and any static reader see.
+export const MATCH_REPORT_SYSTEM_PROMPT = buildMatchReportSystemPrompt();
 
 // User prompt: digest + optional in-game comms transcript + optional comms judgments + optional
 // coach notes + brain. The transcript block arrives raw (buildTranscriptBlock output); the header
@@ -262,8 +295,9 @@ export function enforceFirstReport(report) {
 // throw: a failed draft is a failed report, and the caller owns the error toast.
 export async function generateMatchReport(invoke, { digest, coachedTeam = '', commsBlock = '', tfCommsBlock = '', coachNotesBlock = '', brainContext = '', onRaw = null }, agents = {}) {
   const user = buildMatchReportPrompt({ digest, coachedTeam, commsBlock, tfCommsBlock, coachNotesBlock, brainContext });
+  // M5: an empty digest flips the schema itself to the data-free variant (see the builder's comment).
   const call = (userPrompt) => invoke('coaching_classify_match', {
-    systemPrompt: MATCH_REPORT_SYSTEM_PROMPT,
+    systemPrompt: buildMatchReportSystemPrompt({ dataFree: !String(digest ?? '').trim() }),
     userPrompt,
     backend: agents.authBackend || 'api-key',
     model: agents.model || 'opus',
