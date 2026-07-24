@@ -17,10 +17,10 @@ use tokio::sync::{broadcast, oneshot};
 
 use crate::bindings as ffi;
 use crate::daemon::namer;
-use crate::daemon::profile::{record_encoder_path, Profile};
+use crate::daemon::profile::{record_encoder_path, service_path, Profile};
 use crate::daemon::protocol::{
     CanvasInfo, CapsInfo, Crop, EncoderInfo, Event, ProtoError, RecordingInfo, ReplayInfo,
-    SceneInfo, SourceInfo, StateSnapshot, Transform, PROTO_VERSION,
+    SceneInfo, SourceInfo, StateSnapshot, StreamInfo, Transform, PROTO_VERSION,
 };
 use crate::obs::overlay::{self, M4};
 use crate::obs::{app_config_dir, screenshot, ObsCore, VideoCfg};
@@ -95,6 +95,10 @@ pub enum Cmd {
     /// INTERNAL: posted by the replay output's `saved` signal callback — never
     /// arrives from the socket, carries no reply.
     ReplaySaved,
+    // --- SP5 streaming: service model (SF1) ---
+    GetStreamServices { reply: Reply },
+    GetStreamService { reply: Reply },
+    SetStreamService { service: Value, reply: Reply },
     Shutdown { reply: Reply },
 }
 
@@ -528,6 +532,18 @@ impl Engine {
             Cmd::ReplaySaved => {
                 self.replay_saved();
             }
+            Cmd::GetStreamServices { reply } => {
+                let r = self.get_stream_services();
+                self.finish_ephemeral(reply, r);
+            }
+            Cmd::GetStreamService { reply } => {
+                let r = self.get_stream_service();
+                self.finish_ephemeral(reply, r);
+            }
+            Cmd::SetStreamService { service, reply } => {
+                let r = self.set_stream_service(&service);
+                self.finish_ephemeral(reply, r);
+            }
             Cmd::DisplayCreate { id, hwnd, width, height, reply } => {
                 let r = self.display_create(&id, hwnd, width, height);
                 self.finish_ephemeral(reply, r);
@@ -619,6 +635,7 @@ impl Engine {
             scenes,
             recording: rec,
             replay: ReplayInfo { armed: self.replay_armed() },
+            stream: StreamInfo::idle(),
             caps: CapsInfo { encoders: self.caps_encoders.clone() },
             obs_version: self.core.version_string(),
             last_error: self.last_error.clone(),
@@ -1763,6 +1780,62 @@ impl Engine {
             });
             self.push_state();
         }
+    }
+
+    // --- streaming: service model (SP5 SF1) ------------------------------------
+
+    /// The rtmp-services catalog, resolved the same way libobs resolves its own
+    /// data — RELATIVE to the `bin/64bit` cwd contract, never an absolute path
+    /// composed here. Passed through as raw JSON: it is 84 services of a
+    /// ~200-field vendor schema that the UI shapes, so typing it engine-side
+    /// would buy nothing and rot on every OBS bump.
+    fn get_stream_services(&self) -> Result<Value, ProtoError> {
+        const CATALOG: &str = "../../data/obs-plugins/rtmp-services/services.json";
+        let text = std::fs::read_to_string(CATALOG).map_err(|e| {
+            // The cwd is the whole story when this fails — name it in the error
+            // rather than making the next reader guess which dir we were in.
+            let cwd = std::env::current_dir().map(|p| p.display().to_string()).unwrap_or_default();
+            ProtoError::internal(format!("{CATALOG} (cwd {cwd}): {e}"))
+        })?;
+        serde_json::from_str(&text)
+            .map_err(|e| ProtoError::internal(format!("services.json parse: {e}")))
+    }
+
+    /// Current service, or `null` when never configured (absence is a state,
+    /// not an error — the UI renders its empty form off it).
+    fn get_stream_service(&self) -> Result<Value, ProtoError> {
+        match std::fs::read_to_string(service_path()) {
+            Ok(t) => serde_json::from_str(&t)
+                .map_err(|e| ProtoError::internal(format!("service.json parse: {e}"))),
+            Err(_) => Ok(Value::Null),
+        }
+    }
+
+    /// Persist `{type, settings}` verbatim (atomic tmp+rename, as Profile::save).
+    /// The engine keeps the body OPAQUE — `rtmp_common`, `rtmp_custom`, and the
+    /// later url/whip types differ only in their settings keys, so SF4/SF5 add
+    /// service types without touching this. The key rides in plaintext exactly
+    /// as OBS stores it; SF7 upgrades storage, not shape.
+    fn set_stream_service(&mut self, service: &Value) -> Result<Value, ProtoError> {
+        let obj = service
+            .as_object()
+            .ok_or_else(|| ProtoError::bad_request("service must be an object"))?;
+        if !obj.get("type").is_some_and(Value::is_string) {
+            return Err(ProtoError::bad_request("service.type must be a string"));
+        }
+        let path = service_path();
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir)
+                .map_err(|e| ProtoError::internal(format!("profile dir: {e}")))?;
+        }
+        let body = serde_json::to_string_pretty(service)
+            .map_err(|e| ProtoError::internal(format!("service encode: {e}")))?;
+        let tmp = path.with_extension("json.tmp");
+        std::fs::write(&tmp, body).map_err(|e| ProtoError::internal(format!("service write: {e}")))?;
+        std::fs::rename(&tmp, &path)
+            .map_err(|e| ProtoError::internal(format!("service rename: {e}")))?;
+        log::info!("stream service set: type={}", obj["type"]);
+        Ok(json!({}))
     }
 
     // --- output settings (SP4) -------------------------------------------------

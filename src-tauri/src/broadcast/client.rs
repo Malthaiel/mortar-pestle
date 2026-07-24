@@ -89,9 +89,10 @@ impl ProtoError {
 }
 
 /// The sole UI truth (Overview cross-cutting contract #1) — mirror of the
-/// engine's `StateSnapshot`, proto v3 (SP4): canvas + per-item identity,
+/// engine's `StateSnapshot`, proto v4 (SP5): canvas + per-item identity,
 /// flags, transform/crop, engine-computed corners, group children, plus
-/// record pause state, replay arm state, and boot-enumerated encoder caps.
+/// record pause state, replay arm state, boot-enumerated encoder caps, and
+/// streaming status.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StateSnapshot {
     /// Protocol version, bumped on breaking wire changes.
@@ -105,6 +106,9 @@ pub struct StateSnapshot {
     /// SP4: replay-buffer arm state (default-absent on a pre-v3 engine).
     #[serde(default)]
     pub replay: ReplayInfo,
+    /// SP5: streaming status (default-absent on a pre-v4 engine).
+    #[serde(default)]
+    pub stream: StreamInfo,
     /// SP4: boot-enumerated video encoder capabilities.
     #[serde(default)]
     pub caps: CapsInfo,
@@ -192,6 +196,25 @@ pub struct RecordingInfo {
 pub struct ReplayInfo {
     #[serde(default)]
     pub armed: bool,
+}
+
+/// SP5 mirror — streaming status (engine `StreamInfo`). A sub-struct, not a
+/// `state` value: a stream runs concurrently with a recording. Default is the
+/// idle shape so a pre-v4 engine's snapshot still decodes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StreamInfo {
+    /// idle | connecting | live | reconnecting | stopping | error
+    pub status: String,
+    pub elapsed_ns: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    pub reconnects: u32,
+}
+
+impl Default for StreamInfo {
+    fn default() -> Self {
+        StreamInfo { status: "idle".into(), elapsed_ns: 0, error: None, reconnects: 0 }
+    }
 }
 
 /// SP4 mirror — boot-enumerated encoder caps (engine `CapsInfo`).

@@ -26,6 +26,7 @@ const SECTIONS = [
   { id: 'output', label: 'Output' },
   { id: 'recording', label: 'Recording' },
   { id: 'replay', label: 'Replay' },
+  { id: 'stream', label: 'Stream' },
 ];
 const QUALITY_OPTS = [
   { value: 'Stream', label: 'Streaming (SP5)' },
@@ -73,6 +74,30 @@ function NameField({ value, accent, onCommit }) {
   );
 }
 
+// Stream key / custom-URL field: masked by default with a reveal toggle, and
+// commit-on-blur like NameField. Not a shared primitive — TextInput already
+// takes `type`, so the whole "password field" is one piece of local state.
+function SecretField({ value, accent, placeholder, onCommit }) {
+  const [draft, setDraft] = useState(value);
+  const [shown, setShown] = useState(false);
+  useEffect(() => { setDraft(value); }, [value]);
+  return (
+    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+      <TextInput
+        value={draft} accent={accent} placeholder={placeholder}
+        type={shown ? 'text' : 'password'}
+        style={{ flex: 1, minWidth: 0, fontFamily: 'var(--font-mono)' }}
+        onChange={(v) => setDraft(typeof v === 'string' ? v : v?.target?.value)}
+        onBlur={() => { if (draft !== value) onCommit(draft); }}
+        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); e.stopPropagation(); }}
+      />
+      <OutlinedBtn small onClick={() => setShown((s) => !s)} title={shown ? 'Hide' : 'Show'}>
+        {shown ? 'Hide' : 'Show'}
+      </OutlinedBtn>
+    </div>
+  );
+}
+
 export default function BroadcastSettingsTab({ accent, initialSection, onNavigateSection }) {
   const api = useMemo(() => createApi('broadcast'), []);
   const { snapshot, engine } = useBroadcastState(api);
@@ -87,11 +112,16 @@ export default function BroadcastSettingsTab({ accent, initialSection, onNavigat
   const [encoders, setEncoders] = useState([]);
   const [paths, setPaths] = useState(null);
   const [remuxOpen, setRemuxOpen] = useState(false);
+  const [svcCatalog, setSvcCatalog] = useState([]); // services[] from the OBS rtmp-services catalog
+  const [svc, setSvc] = useState(null);             // { type, settings } | null (never configured)
 
   const refetchProfile = () => verb(api, 'get_output_settings').then((r) => setProfile(r?.profile || {})).catch(() => {});
+  const refetchService = () => verb(api, 'get_stream_service').then((r) => setSvc(r || null)).catch(() => {});
   useEffect(() => {
     refetchProfile();
+    refetchService();
     verb(api, 'list_encoders').then((r) => setEncoders(Array.isArray(r?.encoders) ? r.encoders : [])).catch(() => {});
+    verb(api, 'get_stream_services').then((r) => setSvcCatalog(Array.isArray(r?.services) ? r.services : [])).catch(() => {});
     api.invoke('broadcast_paths').then(setPaths).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -126,6 +156,45 @@ export default function BroadcastSettingsTab({ accent, initialSection, onNavigat
   const container = g('SimpleOutput', 'RecFormat2', 'hybrid_mp4');
   const remuxable = container === 'mkv';
   const autoRemux = g('Video', 'AutoRemux', 'false') === 'true';
+
+  // --- stream service (SP5 SF1) ---
+  // The engine keeps service.json opaque, so the whole shape lives here: mode
+  // is just the `type` field, and everything else is `settings` keys.
+  const svcType = svc?.type === 'rtmp_custom' ? 'rtmp_custom' : 'rtmp_common';
+  const svcSet = svc?.settings || {};
+  const svcName = svcSet.service || '';
+  const svcEntry = svcCatalog.find((s) => s.name === svcName);
+  const serviceOpts = useMemo(
+    // Common services first (the catalog's own `common` flag), catalog order
+    // within each group. 84 rows is fine unvirtualized — CandySelect's
+    // type-ahead is the search.
+    () => [...svcCatalog].sort((a, b) => (b.common === true) - (a.common === true)).map((s) => ({ value: s.name, label: s.name })),
+    [svcCatalog],
+  );
+  const serverOpts = (svcEntry?.servers || []).map((s) => ({ value: s.url, label: s.name }));
+
+  const saveService = (type, settings) => {
+    const next = { type, settings };
+    setSvc(next);                                       // optimistic, as applyPatch
+    verb(api, 'set_stream_service', { service: next }).catch((e) => {
+      toast('Broadcast', (e && e.message) || 'Stream settings rejected');
+      refetchService();
+    });
+  };
+  const setSvcField = (k, v) => saveService(svcType, { ...svcSet, [k]: v });
+  // Switching service resets the server — a Twitch ingest URL is meaningless
+  // to YouTube. Default to the service's first listed server; SF7's bandwidth
+  // wizard is what picks the *best* one.
+  const pickService = (name) => {
+    const entry = svcCatalog.find((s) => s.name === name);
+    saveService('rtmp_common', { ...svcSet, service: name, server: entry?.servers?.[0]?.url || '' });
+  };
+  const setSvcMode = (t) => {
+    if (t === svcType) return;
+    if (t === 'rtmp_custom') { saveService('rtmp_custom', { server: '', key: svcSet.key || '' }); return; }
+    const entry = svcCatalog.find((s) => s.name === 'Twitch') || svcCatalog[0];
+    saveService('rtmp_common', { service: entry?.name || '', server: entry?.servers?.[0]?.url || '', key: svcSet.key || '' });
+  };
 
   const splitOn = g('AdvOut', 'RecSplitFile', 'false') === 'true';
   const rawSplitType = g('AdvOut', 'RecSplitFileType', 'Time');
@@ -225,6 +294,27 @@ export default function BroadcastSettingsTab({ accent, initialSection, onNavigat
           <Row label="Max size"><CandySelect value={g('SimpleOutput', 'RecRBSize', '512')} options={RBSIZE_OPTS} onChange={(v) => set('SimpleOutput', 'RecRBSize', v)} title="Memory cap for the buffer" /></Row>
           <Row label="File prefix"><NameField value={g('SimpleOutput', 'RecRBPrefix', 'Replay')} accent={accent} onCommit={(v) => set('SimpleOutput', 'RecRBPrefix', v)} /></Row>
           <div style={muted}>Arm and save the replay buffer from the composer bar (or Meta+Shift+S).</div>
+        </SectionBand>
+      )}
+
+      {section === 'stream' && (
+        <SectionBand title="Stream" anchor="set-bcast-stream">
+          <Row label="Destination">
+            <Seg
+              options={[{ value: 'rtmp_common', label: 'Service' }, { value: 'rtmp_custom', label: 'Custom RTMP' }]}
+              value={svcType} accent={accent} onChange={setSvcMode}
+            />
+          </Row>
+          {svcType === 'rtmp_common' ? (
+            <>
+              <Row label="Service"><CandySelect value={svcName} options={serviceOpts} onChange={pickService} placeholder="Pick a service" title="Streaming service — start typing to jump" /></Row>
+              <Row label="Server"><CandySelect value={svcSet.server || ''} options={serverOpts} onChange={(v) => setSvcField('server', v)} placeholder="Pick a server" title="Ingest server — closest is usually best" /></Row>
+            </>
+          ) : (
+            <Row label="Server URL"><NameField value={svcSet.server || ''} accent={accent} onCommit={(v) => setSvcField('server', v)} /></Row>
+          )}
+          <Row label="Stream key"><SecretField value={svcSet.key || ''} accent={accent} placeholder="Paste your stream key" onCommit={(v) => setSvcField('key', v)} /></Row>
+          <div style={muted}>The key is stored as plain text in the engine profile folder, exactly as OBS stores it.</div>
         </SectionBand>
       )}
 

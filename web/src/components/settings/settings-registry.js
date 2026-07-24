@@ -91,6 +91,7 @@ export const PAGE_SECTIONS = {
       { id: 'output',    label: 'Output' },
       { id: 'recording', label: 'Recording' },
       { id: 'replay',    label: 'Replay' },
+      { id: 'stream',    label: 'Stream' },
     ],
   },
 };

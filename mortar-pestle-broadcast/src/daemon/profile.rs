@@ -65,6 +65,14 @@ pub fn record_encoder_path() -> PathBuf {
     app_config_dir().join("profiles").join("Default").join("recordEncoder.json")
 }
 
+/// The stream service (SP5), beside basic.ini under OBS's own filename and
+/// shape — `{type, settings}` — so an OBS profile round-trips through SP11's
+/// import wizard unchanged. The ONE dir constant for the profile directory is
+/// this file's; nothing else may compose that path.
+pub fn service_path() -> PathBuf {
+    app_config_dir().join("profiles").join("Default").join("service.json")
+}
+
 impl Profile {
     /// Load (or start empty), then seed any missing DEFAULTS and persist the
     /// seed so first boot leaves a complete file on disk.

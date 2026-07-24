@@ -352,6 +352,12 @@ async fn dispatch(req: Request, cmd_tx: &mpsc::Sender<Cmd>) -> Response {
         "stop_record" => Ok(Cmd::StopRecord { reply: tx }),
         "pause_record" => need_bool(&args, "paused").map(|paused| Cmd::PauseRecord { paused, reply: tx }),
         "split_record" => Ok(Cmd::SplitRecord { reply: tx }),
+        "get_stream_services" => Ok(Cmd::GetStreamServices { reply: tx }),
+        "get_stream_service" => Ok(Cmd::GetStreamService { reply: tx }),
+        "set_stream_service" => Ok(Cmd::SetStreamService {
+            service: args.get("service").cloned().unwrap_or(Value::Null),
+            reply: tx,
+        }),
         "start_replay" => Ok(Cmd::StartReplay { reply: tx }),
         "stop_replay" => Ok(Cmd::StopReplay { reply: tx }),
         "save_replay" => Ok(Cmd::SaveReplay { reply: tx }),

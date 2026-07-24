@@ -44,6 +44,16 @@
 //! {path} event). New events: `replay_saved` {path}; `saved` gains
 //! `auto_remux: bool`. Snapshot: `recording.paused`, `replay.armed`,
 //! `caps.encoders` (boot-enumerated video encoder types).
+//!
+//! SP5 (proto v4) — streaming. The service is persisted engine-side in OBS's
+//! own `service.json` beside `basic.ini`, and the engine keeps its body
+//! OPAQUE (`{type, settings}`) so new destination types are additive:
+//! `get_stream_services` → the raw rtmp-services catalog;
+//! `get_stream_service` → `{type, settings}` or `null` when unconfigured;
+//! `set_stream_service` {service}. Snapshot gains `stream: StreamInfo` — a
+//! SUB-STRUCT, because streaming is concurrent with recording and the
+//! top-level `state` enum cannot express two activities at once. Every later
+//! SP5 addition is additive (new fields, serde defaults) — no second bump.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -117,6 +127,7 @@ pub struct StateSnapshot {
     pub scenes: Vec<SceneInfo>,
     pub recording: RecordingInfo,
     pub replay: ReplayInfo,
+    pub stream: StreamInfo,
     pub caps: CapsInfo,
     pub obs_version: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -218,6 +229,28 @@ pub struct Crop {
     pub bottom: i32,
 }
 
+/// Streaming status (SP5) — orthogonal to BOTH `state` and `recording`. A
+/// stream runs concurrently with a recording, so this is a sub-struct and the
+/// top-level `state` enum is deliberately untouched: one enum cannot hold two
+/// simultaneous activities.
+#[derive(Debug, Clone, Serialize)]
+pub struct StreamInfo {
+    /// idle | connecting | live | reconnecting | stopping | error
+    pub status: String,
+    pub elapsed_ns: u64,
+    /// Human-mapped `OBS_OUTPUT_*` stop code, when the stream died badly.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    /// Successful reconnects this session (uptime does NOT reset across one).
+    pub reconnects: u32,
+}
+
+impl StreamInfo {
+    pub fn idle() -> Self {
+        StreamInfo { status: "idle".into(), elapsed_ns: 0, error: None, reconnects: 0 }
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct RecordingInfo {
     pub active: bool,
@@ -228,4 +261,4 @@ pub struct RecordingInfo {
     pub elapsed_ns: u64,
 }
 
-pub const PROTO_VERSION: u32 = 3;
+pub const PROTO_VERSION: u32 = 4;
