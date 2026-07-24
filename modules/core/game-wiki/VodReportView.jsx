@@ -72,7 +72,7 @@ function TimeChip({ t, onJump }) {
 export function linkTimeTokens(md) {
   return String(md ?? '')
     .split(/(```[\s\S]*?```|`[^`]*`)/g)
-    .map((seg, i) => (i % 2 === 1 ? seg : seg.replace(/\[(\d+:\d{2}(?::\d{2})?)\](?!\()/g, '[$1](#seg-$1)')))
+    .map((seg, i) => (i % 2 === 1 ? seg : seg.replace(/\[(\d+:\d{2}(?::\d{2})?(?:–\d+:\d{2}(?::\d{2})?)?)\](?!\()/g, '[$1](#seg-$1)')))
     .join('');
 }
 
@@ -93,6 +93,7 @@ const REF = {
   overall: 'comms:overall',
   callout: (c) => `comms:callout:${c.t}:${c.who}`,
   missed: (text) => `comms:missed:${slugId(text)}`,
+  qa: (x) => `qa:${slugId(x.q)}`,
 };
 
 // Every ref the current report can render — feedback entries outside this set are "unmatched".
@@ -108,6 +109,7 @@ function collectRefs(r) {
   for (const x of r.macro?.swings || []) s.add(REF.swing(x));
   for (const c of r.commsGrade?.callouts || []) s.add(REF.callout(c));
   for (const m of r.commsGrade?.missed || []) s.add(REF.missed(m));
+  for (const x of r.qa || []) s.add(REF.qa(x));
   return s;
 }
 
@@ -396,7 +398,8 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
     pendingJumpRef.current = null;
     // Fold any number of colon-separated parts, so h:mm:ss and m:ss both resolve (a two-part
     // destructure read "1:07:25" as 67 seconds and jumped a chip to the wrong end of the VOD).
-    const tSec = t.split(':').map(Number).reduce((acc, n) => acc * 60 + (Number.isFinite(n) ? n : 0), 0);
+    // M15 range token ([first–last]): jump to the range START (left of the en-dash).
+    const tSec = t.split('–')[0].split(':').map(Number).reduce((acc, n) => acc * 60 + (Number.isFinite(n) ? n : 0), 0);
     let idx = segments.findIndex((seg) => Math.floor((Number(seg.t0Ms) || 0) / 1000) === tSec);
     if (idx === -1) idx = segments.findIndex((seg) => (Number(seg.t0Ms) || 0) >= tSec * 1000);
     if (idx === -1) idx = segments.length - 1;
@@ -424,6 +427,19 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
     },
   };
 
+  // M14: render [m:ss] / [m:ss–m:ss] tokens in COMPACT one-line fields as clickable TimeChips WITHOUT
+  // a markdown pipeline — the pre-blessed fork (markdown mangles stray */_ and adds <p> margins that
+  // break the cards). Split on the stamp token (single token or an en-dash range from M15), chip the
+  // matches, plain-span the rest. Sections + player-card coaching keep full markdown (linkTimeTokens).
+  const stamped = useCallback((text) => {
+    const s = String(text ?? '');
+    if (!s) return null;
+    return s.split(/(\[\d+:\d{2}(?::\d{2})?(?:–\d+:\d{2}(?::\d{2})?)?\])/).map((part, i) => {
+      const m = part.match(/^\[(\d+:\d{2}(?::\d{2})?(?:–\d+:\d{2}(?::\d{2})?)?)\]$/);
+      return m ? <TimeChip key={i} t={m[1]} onJump={jumpToSegment} /> : <span key={i}>{part}</span>;
+    });
+  }, [jumpToSegment]);
+
   const runRail = async (kind, fn) => {
     if (!fn || busy) return;
     setBusy(kind);
@@ -437,6 +453,11 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
   const r = report || {};
   const sections = r.sections || [];
   const followUps = r.followUps || [];
+  // M16 warnings drawer: split meta.warnings into verify-pass corrections (the `verify: ` prefix
+  // applyFindings emits) vs data caveats (brain/norm/digest/speaker/stamp-outside — everything else).
+  const warnings = r.meta?.warnings || [];
+  const verifyWarnings = warnings.filter((w) => w.startsWith('verify:'));
+  const dataCaveats = warnings.filter((w) => !w.startsWith('verify:'));
   const TABS = [
     { id: 'tldr', label: 'Report' },
     { id: 'players', label: `Player Cards${(r.playerCards || []).length ? ` (${r.playerCards.length})` : ''}` },
@@ -461,14 +482,31 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
     <>
       {/* Content pane */}
       <div ref={paneRef} style={{ flex: 1, minWidth: 0, padding: '20px 24px', overflowY: 'auto' }}>
-        {/* meta.warnings bar + unmatched-corrections drawer (Move 12/13) — every tab but Segments */}
-        {status === 'ready' && tab !== 'segments' && ((r.meta?.warnings || []).length > 0 || unmatched.length > 0) && (
-          <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', marginBottom: 14, background: 'var(--surface-2)' }}>
-            {(r.meta?.warnings || []).map((w, i) => (
-              <div key={i} style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{w}</div>
-            ))}
+        {/* M16 warnings drawer (was the always-open bar): Report tab only, collapsed by default,
+            split into verify corrections + data caveats, with the unmatched-corrections drawer nested. */}
+        {status === 'ready' && tab === 'tldr' && (warnings.length > 0 || unmatched.length > 0) && (
+          <details style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', marginBottom: 14, background: 'var(--surface-2)' }}>
+            <summary style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)', cursor: 'pointer' }}>
+              Report notes ({warnings.length + unmatched.length})
+            </summary>
+            {verifyWarnings.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-2)', marginBottom: 3 }}>Verify corrections</div>
+                {verifyWarnings.map((w, i) => (
+                  <div key={i} style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{w}</div>
+                ))}
+              </div>
+            )}
+            {dataCaveats.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-2)', marginBottom: 3 }}>Data caveats</div>
+                {dataCaveats.map((w, i) => (
+                  <div key={i} style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{w}</div>
+                ))}
+              </div>
+            )}
             {unmatched.length > 0 && (
-              <details style={{ marginTop: (r.meta?.warnings || []).length ? 6 : 0 }}>
+              <details style={{ marginTop: 8 }}>
                 <summary style={{ fontSize: 11.5, color: 'var(--text-2)', cursor: 'pointer' }}>
                   Unmatched corrections ({unmatched.length}) — saved feedback whose item changed in a regenerate
                 </summary>
@@ -479,7 +517,7 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
                 ))}
               </details>
             )}
-          </div>
+          </details>
         )}
         {tab !== 'segments' && status === 'loading' && <Empty>Loading report…</Empty>}
         {tab !== 'segments' && status === 'missing' && <Empty>No report yet — click Generate Report on the scrim first.</Empty>}
@@ -506,6 +544,9 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
                 {sections.map((sec, si) => (
                   <div key={sec.id}>
                     <h2 style={si === 0 ? { marginTop: 0 } : undefined}>{sec.heading}</h2>
+                    {/* M17: section-ref verify findings (sections[<id>] / .md) render under the heading,
+                        not only buried in the warnings drawer. FindingList matches path / path. / path[. */}
+                    <FindingList findings={r.meta.findings} path={`sections[${sec.id}]`} />
                     <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{linkTimeTokens(sec.md)}</ReactMarkdown>
                   </div>
                 ))}
@@ -529,17 +570,17 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
                       {isOpen && (
                         <div style={{ padding: '0 8px' }}>
                           <Labeled label="Lane verdict" mark={<MarkChip refId={REF.pcField(c, 'laneVerdict')} aiText={c.laneVerdict} entries={feedback.entries} accent={accent} onOpen={openMark} active={isActive(REF.pcField(c, 'laneVerdict'))} />}>
-                            {c.laneVerdict || 'Not analyzed.'}
+                            {c.laneVerdict ? stamped(c.laneVerdict) : 'Not analyzed.'}
                             <FindingList findings={r.meta.findings} path={`playerCards[${i}].laneVerdict`} />
                             <MarkLine refId={REF.pcField(c, 'laneVerdict')} entries={feedback.entries} />
                           </Labeled>
                           <Labeled label="Souls curve" mark={<MarkChip refId={REF.pcField(c, 'soulsCurveRead')} aiText={c.soulsCurveRead} entries={feedback.entries} accent={accent} onOpen={openMark} active={isActive(REF.pcField(c, 'soulsCurveRead'))} />}>
-                            {c.soulsCurveRead || 'Not analyzed.'}
+                            {c.soulsCurveRead ? stamped(c.soulsCurveRead) : 'Not analyzed.'}
                             <FindingList findings={r.meta.findings} path={`playerCards[${i}].soulsCurveRead`} />
                             <MarkLine refId={REF.pcField(c, 'soulsCurveRead')} entries={feedback.entries} />
                           </Labeled>
                           <Labeled label="Items" mark={<MarkChip refId={REF.pcField(c, 'itemCritique')} aiText={c.itemCritique} entries={feedback.entries} accent={accent} onOpen={openMark} active={isActive(REF.pcField(c, 'itemCritique'))} />}>
-                            {c.itemCritique || 'Not analyzed.'}
+                            {c.itemCritique ? stamped(c.itemCritique) : 'Not analyzed.'}
                             <FindingList findings={r.meta.findings} path={`playerCards[${i}].itemCritique`} />
                             <MarkLine refId={REF.pcField(c, 'itemCritique')} entries={feedback.entries} />
                           </Labeled>
@@ -594,14 +635,14 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
               <div className="vod-half-frame">
                 <Labeled label="Tempo">
                   <MacroCard refId={REF.tempoRead} aiText={r.macro.tempoRead} active={isActive(REF.tempoRead)} onOpen={openMark}>
-                    <div>{r.macro.tempoRead || 'Not analyzed.'}</div>
+                    <div>{r.macro.tempoRead ? stamped(r.macro.tempoRead) : 'Not analyzed.'}</div>
                     <FindingList findings={r.meta.findings} path="macro.tempoRead" />
                     <MarkLine refId={REF.tempoRead} entries={feedback.entries} />
                   </MacroCard>
                 </Labeled>
                 <Labeled label="Lane map">
                   <MacroCard refId={REF.laneMap} aiText={r.macro.laneMap} active={isActive(REF.laneMap)} onOpen={openMark}>
-                    <div>{r.macro.laneMap || 'Not analyzed.'}</div>
+                    <div>{r.macro.laneMap ? stamped(r.macro.laneMap) : 'Not analyzed.'}</div>
                     <FindingList findings={r.meta.findings} path="macro.laneMap" />
                     <MarkLine refId={REF.laneMap} entries={feedback.entries} />
                   </MacroCard>
@@ -622,7 +663,7 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
                         {w.why && (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 8, color: 'var(--text-2)' }}>
                             <span style={{ flexShrink: 0, width: 5, height: 5, borderRadius: '50%', background: 'currentColor' }} />
-                            <span>{w.why}</span>
+                            <span>{stamped(w.why)}</span>
                           </div>
                         )}
                         <FindingList findings={r.meta.findings} path={`macro.objectiveWindows[${i}]`} />
@@ -636,7 +677,7 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
                     {r.macro.swings.map((s, i) => (
                       <MacroCard key={i} refId={REF.swing(s)} aiText={`${s.direction} ${s.cause}`} active={isActive(REF.swing(s))} onOpen={openMark}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, lineHeight: 1.5 }}>
-                          <span>{s.direction}{s.cause ? ` — ${s.cause}` : ''}</span>
+                          <span>{s.direction}{s.cause ? <> — {stamped(s.cause)}</> : ''}</span>
                           <span style={macroBtnCluster}>
                             <TimeChip t={s.t} onJump={jumpToSegment} />
                           </span>
@@ -653,7 +694,7 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
             {tab === 'comms' && (r.commsGrade?.overall || (r.commsGrade?.callouts || []).length || (r.commsGrade?.missed || []).length ? (
               <div>
                 <Labeled label="Overall" mark={<MarkChip refId={REF.overall} aiText={r.commsGrade.overall} entries={feedback.entries} accent={accent} onOpen={openMark} active={isActive(REF.overall)} />}>
-                  <b>{r.commsGrade.overall || 'Not graded.'}</b>
+                  <b>{r.commsGrade.overall ? stamped(r.commsGrade.overall) : 'Not graded.'}</b>
                   <FindingList findings={r.meta.findings} path="commsGrade.overall" />
                   <MarkLine refId={REF.overall} entries={feedback.entries} />
                 </Labeled>
@@ -664,9 +705,9 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
                         <div style={{ lineHeight: 1.5 }}>
                           <TimeChip t={c.t} onJump={jumpToSegment} />
                           <MarkChip refId={REF.callout(c)} aiText={c.call} entries={feedback.entries} accent={accent} onOpen={openMark} active={isActive(REF.callout(c))} />
-                          <span><b>{c.who}:</b> {c.call}</span>
+                          <span><b>{c.who}:</b> {stamped(c.call)}</span>
                         </div>
-                        {(c.verdict || c.evidence) && <div style={{ color: 'var(--text-2)', marginTop: 2 }}>{c.verdict}{c.evidence ? ` — ${c.evidence}` : ''}</div>}
+                        {(c.verdict || c.evidence) && <div style={{ color: 'var(--text-2)', marginTop: 2 }}>{stamped(c.verdict)}{c.evidence ? <> — {stamped(c.evidence)}</> : ''}</div>}
                         <FindingList findings={r.meta.findings} path={`commsGrade.callouts[${i}]`} />
                         <MarkLine refId={REF.callout(c)} entries={feedback.entries} />
                       </div>
@@ -679,7 +720,7 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
                       <div key={i} style={{ marginTop: i ? 6 : 0 }}>
                         <div style={{ lineHeight: 1.5 }}>
                           <MarkChip refId={REF.missed(m)} aiText={m} entries={feedback.entries} accent={accent} onOpen={openMark} active={isActive(REF.missed(m))} />
-                          <span>{m}</span>
+                          <span>{stamped(m)}</span>
                         </div>
                         <FindingList findings={r.meta.findings} path={`commsGrade.missed[${i}]`} />
                         <MarkLine refId={REF.missed(m)} entries={feedback.entries} />
@@ -717,19 +758,24 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 {r.qa.map((x, i) => (
                   <div key={i}>
-                    <div style={{ fontSize: 13.5 }}><TimeChip t={x.t} onJump={jumpToSegment} /><b>{x.askedBy || 'Q'}:</b> {x.q}</div>
+                    <div style={{ fontSize: 13.5 }}>
+                      <TimeChip t={x.t} onJump={jumpToSegment} />
+                      <MarkChip refId={REF.qa(x)} aiText={x.q} entries={feedback.entries} accent={accent} onOpen={openMark} active={isActive(REF.qa(x))} />
+                      <b>{x.askedBy || 'Q'}:</b> {x.q}
+                    </div>
                     <div style={{ fontSize: 13.5, color: 'var(--text-2)', marginTop: 3, paddingLeft: 10, borderLeft: '2px solid var(--border)' }}>{x.a}</div>
+                    <MarkLine refId={REF.qa(x)} entries={feedback.entries} />
                   </div>
                 ))}
               </div>
             ) : <Empty>No questions raised.</Empty>)}
 
             {tab === 'keep' && ((r.keepDoing || []).length ? (
-              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13.5, lineHeight: 1.7 }}>{r.keepDoing.map((x, i) => <li key={i}>{x}</li>)}</ul>
+              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13.5, lineHeight: 1.7 }}>{r.keepDoing.map((x, i) => <li key={i}>{stamped(x)}</li>)}</ul>
             ) : <Empty>Nothing flagged.</Empty>)}
 
             {tab === 'debates' && ((r.debates || []).length ? (
-              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13.5, lineHeight: 1.7 }}>{r.debates.map((x, i) => <li key={i}>{x}</li>)}</ul>
+              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13.5, lineHeight: 1.7 }}>{r.debates.map((x, i) => <li key={i}>{stamped(x)}</li>)}</ul>
             ) : <Empty>No unresolved debates.</Empty>)}
 
             {tab === 'followups' && (
@@ -737,8 +783,8 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
                 {followUps.map((f, i) => (
                   <div key={i} style={{ fontSize: 13.5 }}>
                     <span style={{ color: f.verdict === 'resolved' ? 'var(--ok, #4caf50)' : f.verdict === 'persisting' ? 'var(--error)' : 'var(--text-muted)', fontWeight: 600, marginRight: 6 }}>{f.verdict}</span>
-                    {f.priorItem}
-                    {f.evidence && <div style={{ color: 'var(--text-muted)', marginTop: 2, paddingLeft: 10 }}>{f.evidence}</div>}
+                    {stamped(f.priorItem)}
+                    {f.evidence && <div style={{ color: 'var(--text-muted)', marginTop: 2, paddingLeft: 10 }}>{stamped(f.evidence)}</div>}
                   </div>
                 ))}
               </div>

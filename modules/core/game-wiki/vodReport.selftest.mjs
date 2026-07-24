@@ -2,7 +2,7 @@
 // Covers the parts that break silently — transcript formatting, tolerant parse (fenced + noisy),
 // coercion of a missing id, and checkbox reconcile across a regenerate.
 import assert from 'node:assert/strict';
-import { mmss, slugId, buildTranscriptBlock, buildReportPrompt, parseReport, reconcileReport, serializeReportMarkdown, buildNormalizePrompt, parseCorrections, applyCorrections, transcriptHash, normalizeTranscript, parseFindings, applyFindings, verifyReport, validateStamps } from './vodReport.js';
+import { mmss, slugId, buildTranscriptBlock, buildReportPrompt, parseReport, reconcileReport, serializeReportMarkdown, buildNormalizePrompt, parseCorrections, applyCorrections, transcriptHash, normalizeTranscript, parseFindings, applyFindings, verifyReport, validateStamps, collapseStampRuns } from './vodReport.js';
 
 // mmss
 assert.equal(mmss(0), '0:00');
@@ -273,6 +273,26 @@ const unrealOut = applyFindings(
   [{ field: 'timestamp', issue: '[27:49]', fix: '[99:00]', confidence: 'likely' }], tsSegs);
 assert.ok(JSON.stringify(unrealOut).includes('[27:49]'), 'fix outside transcript not applied');
 assert.equal(unrealOut.meta.findings.length, 1, 'unreal fix flagged instead');
+
+// ── M15: collapse stamp runs ─────────────────────────────────────────────────
+// A run of ≥3 whitespace-separated [m:ss] stamps within ≤45s gaps folds to one [first–last] range;
+// fewer than 3, a >45s gap, or prose between, leaves the individual stamps. Idempotent on ranges.
+assert.equal(collapseStampRuns('the fight [1:00] [1:20] [1:35] [1:50] ended'), 'the fight [1:00–1:50] ended', '4-run within 45s folds');
+assert.equal(collapseStampRuns('[0:00] [0:10] [0:20] [0:30] [0:40] [0:50] [1:00]'), '[0:00–1:00]', '7-run folds to one range');
+assert.equal(collapseStampRuns('here [2:00] and later [5:00]'), 'here [2:00] and later [5:00]', 'prose between → untouched');
+assert.equal(collapseStampRuns('two only [3:00] [3:20]'), 'two only [3:00] [3:20]', '2-run stays individual');
+assert.equal(collapseStampRuns('[1:00] [1:20] [3:00] [3:15] [3:30]'), '[1:00] [1:20] [3:00–3:30]', '>45s gap splits; only the tight ≥3 sub-run folds');
+assert.equal(collapseStampRuns('no stamps here'), 'no stamps here', 'no stamps → identity');
+assert.equal(collapseStampRuns('[1:00–1:50]'), '[1:00–1:50]', 'range token idempotent');
+// coerceReport applies it to prose fields but leaves the single-stamp .t fields alone
+const m15rep = parseReport(JSON.stringify({
+  keepDoing: ['chained [4:00] [4:20] [4:35] focus'],
+  macro: { swings: [{ t: '5:00', direction: 'ours', cause: 'won [9:00] [9:20] [9:40] teamfight' }] },
+  actionItems: [], qa: [], debates: [], followUps: [],
+}));
+assert.equal(m15rep.keepDoing[0], 'chained [4:00–4:35] focus', 'coerce folds keepDoing run');
+assert.equal(m15rep.macro.swings[0].cause, 'won [9:00–9:40] teamfight', 'coerce folds swings.cause run');
+assert.equal(m15rep.macro.swings[0].t, '5:00', 'single-stamp .t field untouched');
 
 // ── Export to markdown (serializeReportMarkdown) ─────────────────────────────
 

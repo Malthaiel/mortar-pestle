@@ -32,6 +32,28 @@ export function mmss(s) {
   return h ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
 }
 
+// M15: collapse a whitespace-separated run of ≥3 bracketed [m:ss] stamps whose consecutive gaps are
+// all ≤45s into one [first–last] range (en-dash). Runs of <3, or broken by a >45s (or backward) gap,
+// keep their individual chips; only stamps separated by whitespace alone fold (a chain on one point),
+// never two references with prose between them. Idempotent — a range token holds an en-dash so it no
+// longer matches the single-stamp run regex. The view (linkTimeTokens + M14 stamped + jumpToSegment)
+// reads the range token and jumps to its start.
+export function collapseStampRuns(text) {
+  const s = String(text ?? '');
+  if (!s) return s;
+  const toSec = (t) => t.split(':').map(Number).reduce((a, n) => a * 60 + (Number.isFinite(n) ? n : 0), 0);
+  return s.replace(/\[\d+:\d{2}(?::\d{2})?\](?:\s+\[\d+:\d{2}(?::\d{2})?\])+/g, (run) => {
+    const stamps = run.match(/\[\d+:\d{2}(?::\d{2})?\]/g).map((b) => b.slice(1, -1));
+    const groups = [[stamps[0]]];
+    for (let i = 1; i < stamps.length; i++) {
+      const gap = toSec(stamps[i]) - toSec(stamps[i - 1]);
+      if (gap >= 0 && gap <= 45) groups[groups.length - 1].push(stamps[i]);
+      else groups.push([stamps[i]]);
+    }
+    return groups.map((g) => (g.length >= 3 ? `[${g[0]}–${g[g.length - 1]}]` : g.map((t) => `[${t}]`).join(' '))).join(' ');
+  });
+}
+
 // Deterministic stamp validation (ported from vodReportGate.mjs so it runs in-pipeline, not just in
 // the standalone gate): every m:ss / h:mm:ss token anywhere in the report must land inside a real
 // vodcomms segment (±5s). Returns the offending stamps as mmss text, deduped ([] when clean or when
@@ -282,27 +304,28 @@ export function coerceReport(obj) {
   const o = obj && typeof obj === 'object' ? obj : {};
   const arr = (v) => (Array.isArray(v) ? v : []);
   const str = (v) => String(v ?? '');
+  const prose = (v) => collapseStampRuns(str(v)); // M15: fold [m:ss] runs to ranges in free-text fields
   return {
     // absent (v1 sidecars) → 1; fresh model output says 2. The view branches on this.
     schemaVersion: Number(o.schemaVersion) > 0 ? Math.floor(Number(o.schemaVersion)) : 1,
     tldr: typeof o.tldr === 'string' ? o.tldr : '',
     playerCards: arr(o.playerCards).map((c) => ({
       player: str(c?.player), hero: str(c?.hero), lane: str(c?.lane),
-      laneVerdict: str(c?.laneVerdict), soulsCurveRead: str(c?.soulsCurveRead), itemCritique: str(c?.itemCritique),
-      coaching: str(c?.coaching),
+      laneVerdict: prose(c?.laneVerdict), soulsCurveRead: prose(c?.soulsCurveRead), itemCritique: prose(c?.itemCritique),
+      coaching: prose(c?.coaching),
       deathAnalysis: arr(c?.deathAnalysis).map((d) => ({ t: str(d?.t), what: str(d?.what), why: str(d?.why), lesson: str(d?.lesson) })),
       drills: arr(c?.drills).map(String),
     })).filter((c) => c.player || c.hero),
     macro: {
-      tempoRead: str(o.macro?.tempoRead),
-      objectiveWindows: arr(o.macro?.objectiveWindows).map((w) => ({ t: str(w?.t), event: str(w?.event), verdict: str(w?.verdict), why: str(w?.why) })),
-      laneMap: str(o.macro?.laneMap),
-      swings: arr(o.macro?.swings).map((s) => ({ t: str(s?.t), direction: str(s?.direction), cause: str(s?.cause) })),
+      tempoRead: prose(o.macro?.tempoRead),
+      objectiveWindows: arr(o.macro?.objectiveWindows).map((w) => ({ t: str(w?.t), event: str(w?.event), verdict: str(w?.verdict), why: prose(w?.why) })),
+      laneMap: prose(o.macro?.laneMap),
+      swings: arr(o.macro?.swings).map((s) => ({ t: str(s?.t), direction: str(s?.direction), cause: prose(s?.cause) })),
     },
     commsGrade: {
-      overall: str(o.commsGrade?.overall),
-      callouts: arr(o.commsGrade?.callouts).map((c) => ({ t: str(c?.t), who: str(c?.who), call: str(c?.call), verdict: str(c?.verdict), evidence: str(c?.evidence) })),
-      missed: arr(o.commsGrade?.missed).map(String),
+      overall: prose(o.commsGrade?.overall),
+      callouts: arr(o.commsGrade?.callouts).map((c) => ({ t: str(c?.t), who: str(c?.who), call: prose(c?.call), verdict: prose(c?.verdict), evidence: prose(c?.evidence) })),
+      missed: arr(o.commsGrade?.missed).map(prose),
     },
     meta: {
       passes: arr(o.meta?.passes).map(String),
@@ -317,7 +340,7 @@ export function coerceReport(obj) {
     sections: arr(o.sections).map((s) => ({
       id: String(s?.id || slugId(s?.heading)),
       heading: String(s?.heading ?? ''),
-      md: String(s?.md ?? ''),
+      md: prose(s?.md),
     })).filter((s) => s.heading || s.md),
     actionItems: arr(o.actionItems).map((it) => ({
       id: String(it?.id || slugId(it?.text)),
@@ -329,9 +352,9 @@ export function coerceReport(obj) {
       status: it?.status === 'done' ? 'done' : 'pending',
     })),
     qa: arr(o.qa).map((x) => ({ q: String(x?.q ?? ''), a: String(x?.a ?? ''), askedBy: x?.askedBy ? String(x.askedBy) : null, t: x?.t ? String(x.t) : null })),
-    keepDoing: arr(o.keepDoing).map(String),
-    debates: arr(o.debates).map(String),
-    followUps: arr(o.followUps).map((f) => ({ priorItem: String(f?.priorItem ?? ''), verdict: ['resolved', 'persisting', 'unclear'].includes(f?.verdict) ? f.verdict : 'unclear', evidence: String(f?.evidence ?? '') })),
+    keepDoing: arr(o.keepDoing).map(prose),
+    debates: arr(o.debates).map(prose),
+    followUps: arr(o.followUps).map((f) => ({ priorItem: prose(f?.priorItem), verdict: ['resolved', 'persisting', 'unclear'].includes(f?.verdict) ? f.verdict : 'unclear', evidence: prose(f?.evidence) })),
   };
 }
 

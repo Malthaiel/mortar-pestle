@@ -211,7 +211,13 @@ export default function OverviewPage({ folder, accent, nav = navigate, overlay =
         try { JSON.parse((await api.getRawFileMeta(sidecarPath(folder, k), 'gamewiki')).content); hasMatchData = true; break; } catch { /* no data for this match */ }
       }
     } catch { /* no Matches folder */ }
-    setCostGate({ segments, cachedNorm, noMatchData: !hasMatchData });
+    // M21: soft nudge — count clusters still on a raw "Speaker N" label with enough talk-time to
+    // matter (≥20 segments). Named coaching needs them relabeled in the Comms Transcript; this is a
+    // nudge folded into the cost gate (no hard gate, no second modal), not a blocker.
+    const speakerCounts = {};
+    for (const s of segments) { const sp = s.speaker || ''; speakerCounts[sp] = (speakerCounts[sp] || 0) + 1; }
+    const unlabeledSpeakers = Object.entries(speakerCounts).filter(([sp, n]) => /^Speaker \d+$/.test(sp) && n >= 20).length;
+    setCostGate({ segments, cachedNorm, noMatchData: !hasMatchData, unlabeledSpeakers });
   };
 
   const generateVodReport = async (segments) => {
@@ -488,6 +494,9 @@ export default function OverviewPage({ folder, accent, nav = navigate, overlay =
           <div style={{ fontSize: 12.5, lineHeight: 1.5, color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: 8 }}>
             {costGate.noMatchData && (
               <span style={{ color: 'var(--error)' }}>No match data attached (no Match ID / Run Process). The report will run from the review transcript only — souls-curve verdicts, item-timing checks and comms cross-checks are skipped.</span>
+            )}
+            {costGate.unlabeledSpeakers > 0 && (
+              <span style={{ color: 'var(--text-2)' }}>{costGate.unlabeledSpeakers} speaker{costGate.unlabeledSpeakers === 1 ? '' : 's'} still on a "Speaker N" label — relabel them in the Comms Transcript for named coaching, or generate anyway.</span>
             )}
             {reportCostNote(costGate.segments, costGate.cachedNorm).map((line, i) => <span key={i}>{line}</span>)}
           </div>
