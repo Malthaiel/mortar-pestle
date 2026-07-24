@@ -41,6 +41,7 @@
 //! `final` — the daemon NEVER panics on a model problem.
 
 use std::sync::mpsc::Receiver;
+use std::sync::{Arc, Mutex};
 
 use tokio::sync::broadcast;
 use whisper_rs::WhisperContext;
@@ -299,7 +300,7 @@ fn consume(
                 for (t0_ms, t1_ms) in newly {
                     transcribe_and_emit_segment(
                         &events,
-                        speech.as_ref(),
+                        speech.as_deref(),
                         resampler.buffer(),
                         t0_ms,
                         t1_ms,
@@ -317,7 +318,7 @@ fn consume(
         for (t0_ms, t1_ms) in newly {
             transcribe_and_emit_segment(
                 &events,
-                speech.as_ref(),
+                speech.as_deref(),
                 resampler.buffer(),
                 t0_ms,
                 t1_ms,
@@ -482,7 +483,44 @@ fn init_vad(events: &broadcast::Sender<Event>, threshold: f32, hangover_ms: u32)
 /// `whisper::load_ctx` GPU-only selection). Returns `None` on ANY failure after emitting
 /// an `error` — the session then streams `vu` + empty-text VAD `segment`s and still emits
 /// the terminal `final`; the daemon NEVER panics on a model problem.
-fn init_speech(events: &broadcast::Sender<Event>, model: &str) -> Option<WhisperContext> {
+/// The RESIDENT speech context, keyed by model name. Loading a `WhisperContext` reads
+/// the whole ggml file (~0.5 GB) and builds its graph — ~20 s cold, and it was being
+/// paid on EVERY dictation session (later ones only felt fast because Windows still had
+/// the file in page cache). Held for the daemon's lifetime and reused; a different model
+/// name evicts the old one. `warm_speech` pays the cost once at daemon start so even the
+/// first push-to-talk is instant.
+/// ponytail: one slot, not an LRU — the daemon uses exactly one speech model at a time.
+static SPEECH_CACHE: Mutex<Option<(String, Arc<WhisperContext>)>> = Mutex::new(None);
+
+/// Preload the speech model off-thread at daemon start so the first push-to-talk doesn't
+/// pay the ~20 s load. Errors are swallowed (the receiver is dropped, so the `error`
+/// events go nowhere) — a failed warm just leaves the cache empty and `init_speech`
+/// retries on the real session, emitting the error there.
+pub fn warm_speech(model: String) {
+    std::thread::spawn(move || {
+        let (tx, mut rx) = broadcast::channel(16);
+        if init_speech(&tx, &model).is_some() {
+            log::info!("dictation: speech model `{model}` pre-warmed");
+            return;
+        }
+        // Warm failed — the `error` events would otherwise vanish into a channel
+        // nobody reads. Drain them to the log so a broken warm is diagnosable.
+        while let Ok(ev) = rx.try_recv() {
+            log::warn!("dictation: pre-warm of `{model}` failed: {} {}", ev.event, ev.data);
+        }
+    });
+}
+
+fn init_speech(events: &broadcast::Sender<Event>, model: &str) -> Option<Arc<WhisperContext>> {
+    // Resident-context hit: skip the fetch + load entirely.
+    if let Ok(cache) = SPEECH_CACHE.lock() {
+        if let Some((name, ctx)) = cache.as_ref() {
+            if name == model {
+                return Some(Arc::clone(ctx));
+            }
+        }
+    }
+
     let ensured = match ensure_model(model, |pct| {
         if let Ok(data) = serde_json::to_value(Progress { pct }) {
             let _ = events.send(Event { event: "progress".to_string(), data });
@@ -502,6 +540,10 @@ fn init_speech(events: &broadcast::Sender<Event>, model: &str) -> Option<Whisper
     match load_ctx(&ensured.path) {
         Ok((ctx, backend)) => {
             log::info!("dictation: speech model `{model}` loaded (backend={backend})");
+            let ctx = Arc::new(ctx);
+            if let Ok(mut cache) = SPEECH_CACHE.lock() {
+                *cache = Some((model.to_string(), Arc::clone(&ctx)));
+            }
             Some(ctx)
         }
         Err(e) => {

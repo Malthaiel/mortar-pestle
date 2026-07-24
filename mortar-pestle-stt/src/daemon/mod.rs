@@ -72,6 +72,11 @@ pub fn run(_args: &[String]) -> ExitCode {
         // Best-effort: an unavailable backend just disables global PTT.
         hotkeys::spawn(ctx.clone(), rebind_rx);
 
+        // Pre-warm the resident speech context off-thread so the FIRST push-to-talk
+        // doesn't pay the ~20 s cold model load (the hotkey path uses `last_model`,
+        // which is unset at boot → DEFAULT_MODEL, exactly what we warm here).
+        dictation::warm_speech(crate::models::DEFAULT_MODEL.to_string());
+
         match socket::serve(ctx).await {
             Ok(()) => {
                 // `serve` returned because a `shutdown` op broke the accept loop; that

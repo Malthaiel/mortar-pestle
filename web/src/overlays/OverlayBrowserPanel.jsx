@@ -16,7 +16,6 @@ import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import useOverlayPanelDrag from './useOverlayPanelDrag.js';
 import useOverlayPanelResize from './useOverlayPanelResize.js';
-import { ContextMenuProvider } from '../context-menu/ContextMenuProvider.jsx';
 import { useSettings } from '../hooks/useSettings.js';
 import { IconGlobe, IconX } from '../components/icons.jsx';
 import BrowserPage from '@modules/core/browser/BrowserPage.jsx';
@@ -71,26 +70,24 @@ export default function OverlayBrowserPanel({ visible }) {
   // fade's START (a native HWND can't ride a DOM opacity fade) while the panel
   // chrome fades with the host.
   return (
-    <ContextMenuProvider openCommandPalette={() => {}} openSettings={() => {}} accent={accent}>
-      <div className="video-cinema" style={{ position: 'absolute', top: 0, left: 0, background: 'transparent', padding: 0, ...dragStyle }}>
-        <div className="candy-card ov-browser-panel" style={{ width: size.w, height: size.h }}>
-          {/* Header (drag handle) — title · close */}
-          <div className="candy-center-row ov-browser-head" {...pumpDragProps} style={{ touchAction: 'none' }}>
-            <span className="ov-browser-title section-title"><IconGlobe size={13} /> Browser</span>
-            <button type="button" data-no-drag className="candy-btn" data-shape="icon" data-size="small" title="Close browser panel" aria-label="Close browser panel" onClick={() => setPanelOpen(false)}>
-              <span className="candy-face"><IconX size={13} /></span>
-            </button>
-          </div>
-          {/* Body — tab tree beside the full browser chrome */}
-          <div className="ov-browser-body">
-            <div className="ov-browser-side"><TabSidebar api={shimApi} accent={accent} /></div>
-            <div className="ov-browser-main">
-              {visible && <BrowserPage api={shimApi} accent={accent} rest="" inOverlay syncRef={syncRef} />}
-            </div>
-          </div>
-          <div className="ov-resize-handle" data-no-drag {...pumpResizeProps} title="Resize" />
+    <div className="video-cinema" style={{ position: 'absolute', top: 0, left: 0, background: 'transparent', padding: 0, ...dragStyle }}>
+      <div className="candy-card ov-browser-panel" style={{ width: size.w, height: size.h }}>
+        {/* Header (drag handle) — title · close */}
+        <div className="candy-center-row ov-browser-head" {...pumpDragProps} style={{ touchAction: 'none' }}>
+          <span className="ov-browser-title section-title"><IconGlobe size={13} /> Browser</span>
+          <button type="button" data-no-drag className="candy-btn" data-shape="icon" data-size="small" title="Close browser panel" aria-label="Close browser panel" onClick={() => setPanelOpen(false)}>
+            <span className="candy-face"><IconX size={13} /></span>
+          </button>
         </div>
+        {/* Body — tab tree beside the full browser chrome */}
+        <div className="ov-browser-body">
+          <div className="ov-browser-side"><TabSidebar api={shimApi} accent={accent} /></div>
+          <div className="ov-browser-main">
+            {visible && <BrowserPage api={shimApi} accent={accent} rest="" inOverlay syncRef={syncRef} />}
+          </div>
+        </div>
+        <div className="ov-resize-handle" data-no-drag {...pumpResizeProps} title="Resize" />
       </div>
-    </ContextMenuProvider>
+    </div>
   );
 }

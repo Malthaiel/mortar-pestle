@@ -51,14 +51,15 @@ const DICTATE_ID: &str = "dictate";
 /// bind. Unlike `dictate` this one is remappable (`can_configure: true`).
 const DICTATE_SCRIM_ID: &str = "dictate_scrim";
 
-/// The scrim-note virtual-key, set by the host's `set_scrim_key` op. `0` = unbound
-/// (the hook ignores it entirely), which is also the pre-handshake state — so a
-/// host that never sets it behaves exactly like the single-key build.
+/// The scrim-note virtual-key, remappable via the host's `set_scrim_key` op
+/// (`0` unbinds it entirely). Defaults to F9 (`VK_F9 = 0x78`), the neighbour of the
+/// fixed F8 dictate bind: nothing in the host called `set_scrim_key`, so a `0`
+/// default left scrim dictation dead out of the box with no way to reach it.
 ///
 /// An atomic, NOT a channel: the hook callback reads it on every keystroke and the
 /// socket handler writes it, so a lock-free load is both the simplest wiring and
 /// the only one safe inside a low-level hook callback.
-static SCRIM_VK: AtomicU32 = AtomicU32::new(0);
+static SCRIM_VK: AtomicU32 = AtomicU32::new(0x78);
 
 /// Set the scrim-note key (a Win32 virtual-key code; `0` unbinds). Called from the
 /// socket `set_scrim_key` handler.
@@ -125,7 +126,10 @@ fn hook_thread() {
         return;
     }
     HOOK_TID.store(unsafe { GetCurrentThreadId() }, Ordering::Release);
-    log::info!("winhook: WH_KEYBOARD_LL installed (VK={DICTATE_VK:#x}); message pump running");
+    log::info!(
+        "winhook: WH_KEYBOARD_LL installed (dictate VK={DICTATE_VK:#x}, scrim VK={:#x}); message pump running",
+        scrim_vk()
+    );
 
     // Message pump — required for the LL hook to fire. GetMessageW returns 0 on
     // WM_QUIT, >0 for a message, -1 on error; any non-positive result ends the pump.

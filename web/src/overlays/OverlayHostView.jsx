@@ -25,6 +25,8 @@ import StudioOverlayLauncher from './StudioOverlayLauncher.jsx';
 import OverlaySettingsPanel from './OverlaySettingsPanel.jsx';
 import SettingsOverlayLauncher from './SettingsOverlayLauncher.jsx';
 import useSmartClickThrough from './useSmartClickThrough.js';
+import { ContextMenuProvider } from '../context-menu/ContextMenuProvider.jsx';
+import { useSettings } from '../hooks/useSettings.js';
 
 // Minimal module-api shim for the host-mounted SttProvider. It only needs
 // invoke (all stt_* calls are cross-window-safe Tauri invokes) and events.on
@@ -46,6 +48,13 @@ function useTransparentRoot() {
 
 export default function OverlayHostView() {
   useTransparentRoot();
+  // ONE context-menu engine for the whole host (was: none, so every tree right-click
+  // AND the GameWikiRail Sort dropdown hit useContextMenu's EMPTY fallback and silently
+  // no-op'd; the browser panel carried a private provider of its own). It wraps OUTSIDE
+  // the transformed sheet below — the menu is position:fixed, which a CSS transform
+  // would re-anchor. Chrome callbacks are inert here: the host has no command palette
+  // and no settings route.
+  const { settings } = useSettings();
   // The floating drag clone is portaled to <body>, OUTSIDE the panel's
   // .video-cinema token scope. Put .video-cinema on <body> so the clone inherits
   // the same dark tokens the panel uses (it sets CSS vars only — no layout rules).
@@ -144,6 +153,7 @@ export default function OverlayHostView() {
   }, [visible]);
 
   return (
+    <ContextMenuProvider openCommandPalette={() => {}} openSettings={() => {}} accent={settings.accentColor}>
     <div ref={rootRef} style={{
       position: 'fixed', inset: 0, overflow: 'hidden',
       opacity: visible ? 1 : 0,
@@ -174,5 +184,6 @@ export default function OverlayHostView() {
         </div>
       )}
     </div>
+    </ContextMenuProvider>
   );
 }
