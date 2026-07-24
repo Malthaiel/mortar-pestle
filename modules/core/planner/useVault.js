@@ -48,7 +48,10 @@ export function useVault({ viewMode, pivotDate, customDays }) {
       const all = [];
       for (const ds of dayMap.keys()) {
         if (ds === todayStr()) {
-          if (today.exists) all.push(...today.sessions.map(s => ({ ...s, dateKey: ds })));
+          // NOT gated on today.exists — sessions live in sessions.json (D5),
+          // independent of the daily-note markdown. Gating them on the note
+          // made every session on a note-less day vanish from the calendar.
+          all.push(...(today.sessions || []).map(s => ({ ...s, dateKey: ds })));
         } else if (days[ds]?.exists) {
           all.push(...days[ds].sessions.map(s => ({ ...s, dateKey: ds })));
         }

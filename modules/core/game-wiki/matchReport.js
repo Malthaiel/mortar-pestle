@@ -1,0 +1,219 @@
+// Per-match AI coaching report (WS4 M22 of the VOD Report Final Improvements plan). The scrim VOD
+// report reports ONLY what the coach said; this one is the opposite by design — the Analyst's own
+// reads ARE the product. What keeps that honest is provenance: every claim opens with a literal
+// [data] / [grounded] / [analyst] tag, so a machine opinion can never be mistaken for a scoreboard
+// fact. The scrim report later stamps these claims confirmed/overridden (M24) and the view banners
+// them until it does (M23).
+//
+// Mirrors vodReport.js deliberately (same prompt→parse→coerce→generate shape, same parseOrRetry,
+// same coaching_classify_match invoke) — a reader who knows one knows this one. Differences: no
+// actionItems (homework is a scrim-level decision), no qa (nobody asked anything — there is no
+// review session), no followUps (teamProgress ignores these sidecars entirely, M25), and times are
+// GAME clock, never VOD stamps, so nothing here is a jumpable TimeChip.
+import { parseOrRetry } from './aiRetry.js';
+
+export const MATCH_REPORT_SCHEMA_VERSION = 1;
+
+export const TAGS = ['data', 'grounded', 'analyst'];
+
+// Claims carry their provenance as a literal prefix token in the string ("[data] Infernus hit 20k
+// souls at 18:40"). A prefix token beats a parallel structured field: the model writes it inline
+// where it is thinking about the claim, it survives export and copy-paste as plain text, and one
+// regex recovers it for the view. Unknown or absent tag → tag '' and the text untouched.
+const TAG_RE = /^\s*\[(data|grounded|analyst)\]\s*/i;
+
+export function splitTag(text) {
+  const s = String(text ?? '');
+  const m = s.match(TAG_RE);
+  return m ? { tag: m[1].toLowerCase(), text: s.slice(m[0].length) } : { tag: '', text: s };
+}
+
+// Every tagged claim in the report, flattened — feeds M24's reconciliation (the scrim report judges
+// each [analyst] read) and M25's verify pass (which checks [data] claims against the digest).
+export function collectClaims(report) {
+  const out = [];
+  const walk = (v, path) => {
+    if (typeof v === 'string') {
+      const { tag, text } = splitTag(v);
+      if (tag) out.push({ ref: path, tag, text });
+      return;
+    }
+    if (Array.isArray(v)) { v.forEach((x, i) => walk(x, `${path}[${i}]`)); return; }
+    if (v && typeof v === 'object') { for (const [k, x] of Object.entries(v)) walk(x, path ? `${path}.${k}` : k); }
+  };
+  walk(report && typeof report === 'object' ? report : {}, '');
+  return out;
+}
+
+export const MATCH_REPORT_SYSTEM_PROMPT = [
+  'You are an elite Deadlock analyst writing a coaching report on ONE match. You are given a deterministic',
+  'match-data digest (scoreboard, souls curves, item builds, deaths, objectives, damage focus), optionally a',
+  'judged in-game comms block, optionally the coach\'s tagged in-game notes, and an ANALYST BRAIN (charter,',
+  'canonical lexicon, patch digest, taught concepts, distilled corrections).',
+  '',
+  'Unlike a VOD-review report, YOUR OWN READS ARE THE JOB. Nobody reviewed this match on camera — there is no',
+  'coach transcript to organize. Judge the match: who won their lane and why, where the game turned, which',
+  'builds were wrong, which deaths were avoidable. Say the thing you actually believe.',
+  '',
+  'PROVENANCE — the one hard rule. Every claim you write opens with a literal tag naming where it came from:',
+  '- [data]     — a deterministic fact straight from the match digest. Nothing but digest values.',
+  '                "[data] Infernus finished 20.4k souls, 3.1k behind his lane counterpart."',
+  '- [grounded] — a claim checked against the patch digest, taught concepts, or distilled corrections in the',
+  '                brain. Name the source inside the claim.',
+  '                "[grounded] Metal Skin\'s reflect was cut in the 07-02 patch, so that buy is worse than it reads."',
+  '- [analyst]  — your own judgement, read or recommendation. Correct or not, it is YOURS.',
+  '                "[analyst] The lane was lost on the second wave, not in the first fight."',
+  'Every string field in the report starts with exactly one of those three tags. A claim you cannot tag is a',
+  'claim you cannot support — cut it. NEVER tag a judgement [data] to make it look harder than it is; that',
+  'inversion is the single failure this report format exists to prevent.',
+  '',
+  'Grounding rules:',
+  '- Canonical names ONLY: every hero, item, and ability name matches the lexicon spelling exactly.',
+  '- Only claim what the data supports. No curve granularity for a lane → leave laneVerdict "" rather than',
+  '  guessing; an empty field renders as "Not analyzed." and costs nothing. Filler costs trust.',
+  '- Times are GAME clock (match time), written m:ss or h:mm:ss. There is no VOD here — never cite a review',
+  '  timestamp, and never invent a moment the digest does not contain.',
+  '- The in-game comms block, when present, is the ONLY evidence for commsGrade. With no block, leave',
+  '  commsGrade.overall "" — do not grade comms you were never shown.',
+  '- The coach\'s tagged in-game notes, when present, outrank your read of the same moment: the coach was',
+  '  watching live. Where you disagree, say so as [analyst] and name the note.',
+  '',
+  'Return ONLY a single JSON object (no markdown, no code fences, no commentary) with EXACTLY these keys:',
+  '{',
+  '  "schemaVersion": 1,',
+  '  "playerCards": [                   // one per COACHED-team player (opponents only when they explain something)',
+  '    { "player": string,              // player name if known, else the hero name',
+  '      "hero": string,                // canonical hero name from the digest',
+  '      "lane": string,                // assigned lane from the digest',
+  '      "laneVerdict": string,         // won/lost/even + why, off the lane souls curve ("" when the data cannot say)',
+  '      "soulsCurveRead": string,      // their economic arc: farm pace, spikes, droughts, vs counterpart',
+  '      "itemCritique": string,        // build-order judgement vs the game state and patch digest',
+  '      "coaching": string,            // GFM markdown; what THIS player should change ("" if nothing stands out)',
+  '      "deathAnalysis": [ { "t": string, "what": string, "why": string, "lesson": string } ],  // t = GAME clock',
+  '      "drills": [string] },          // concrete practice items for this player',
+  '  ],',
+  '  "macro": {',
+  '    "tempoRead": string,             // the match\'s tempo story, grounded in swings + objectives',
+  '    "objectiveWindows": [ { "t": string, "event": string, "verdict": string, "why": string } ],',
+  '    "laneMap": string,               // which lanes won/lost and how that shaped the map',
+  '    "swings": [ { "t": string, "direction": string, "cause": string } ]',
+  '  },',
+  '  "commsGrade": {                    // "" / [] throughout when no in-game comms block was attached',
+  '    "overall": string,               // letter grade + one-line justification',
+  '    "callouts": [ { "t": string, "who": string, "call": string, "verdict": string, "evidence": string } ],',
+  '    "missed": [string]               // moments the data says demanded a call that never came',
+  '  },',
+  '  "sections": [                      // one entry per substantial topic this match raises',
+  '    { "id": string,                  // short stable kebab-case slug of the heading',
+  '      "heading": string,             // name the section after the topic ("Losing the Mid Lane", "The 24:00 Fight")',
+  '      "md": string }                 // full GFM markdown body; bullets, numbered steps and tables all allowed',
+  '  ],',
+  '  "keepDoing": [string],             // what this team did well, by name',
+  '  "meta": { "warnings": [string] }   // anything you could not verify or had to assume',
+  '}',
+  '',
+  'Writing rules — the same house style as the scrim report:',
+  '- Section order tells the story: what decided the match first, then the lessons in it, then what to practice.',
+  '- House style for a section point: a **bolded lead that is a self-contained takeaway** ending with a colon,',
+  '  readable on its own, with the proof/numbers/example after it. A bare topic label ("**Shred.**") is a failure.',
+  '- Prose economy: state the reasoning ONCE, in the fewest words that still teach it. Density, not fewer points.',
+  '- Say-it-once: every insight has exactly ONE home. Anywhere else it is a one-line pointer ("see the <heading>',
+  '  section") — a player card never re-argues a section it points at.',
+  '- Actions belong to their actor: an item ONE player bought never lands on another player\'s card.',
+  '- Every number pair names its side ("31-16 in North\'s favor"), and never narrate your own reasoning',
+  '  ("...actually", "wait —") — state the settled claim.',
+  '- Empty is better than filler. An array with nothing real in it is [].',
+].join('\n');
+
+// User prompt: digest + optional in-game comms judgments + optional coach notes + brain.
+export function buildMatchReportPrompt({ digest = '', coachedTeam = '', tfCommsBlock = '', coachNotesBlock = '', brainContext = '' }) {
+  const lines = [`Coached team: ${coachedTeam || '(unnamed)'}.`];
+  if (String(brainContext).trim()) lines.push('', '=== ANALYST BRAIN ===', String(brainContext).trim());
+  if (String(tfCommsBlock).trim()) lines.push('', String(tfCommsBlock).trim());
+  if (String(coachNotesBlock).trim()) {
+    lines.push('', 'Coach\'s tagged in-game notes (chess.com-style classifications):', String(coachNotesBlock).trim());
+  }
+  if (!String(tfCommsBlock).trim()) {
+    lines.push('', '=== NO IN-GAME COMMS ATTACHED ===',
+      'No comms review was run for this match. Leave commsGrade.overall "" and its arrays empty — grading comms you were never shown is exactly the invented claim this report format forbids.');
+  }
+  lines.push('', '=== MATCH DATA DIGEST ===', String(digest).trim() || '(no digest)');
+  return lines.join('\n');
+}
+
+// Same contract as vodReport.coerceReport: guarantee every key exists so the view never branches on
+// undefined, and never throw on a malformed model payload.
+export function coerceMatchReport(obj) {
+  const o = obj && typeof obj === 'object' ? obj : {};
+  const arr = (v) => (Array.isArray(v) ? v : []);
+  const str = (v) => String(v ?? '');
+  return {
+    schemaVersion: Number(o.schemaVersion) > 0 ? Math.floor(Number(o.schemaVersion)) : MATCH_REPORT_SCHEMA_VERSION,
+    playerCards: arr(o.playerCards).map((c) => ({
+      player: str(c?.player), hero: str(c?.hero), lane: str(c?.lane),
+      laneVerdict: str(c?.laneVerdict), soulsCurveRead: str(c?.soulsCurveRead), itemCritique: str(c?.itemCritique),
+      coaching: str(c?.coaching),
+      deathAnalysis: arr(c?.deathAnalysis).map((d) => ({ t: str(d?.t), what: str(d?.what), why: str(d?.why), lesson: str(d?.lesson) })),
+      drills: arr(c?.drills).map(String),
+    })).filter((c) => c.player || c.hero),
+    macro: {
+      tempoRead: str(o.macro?.tempoRead),
+      objectiveWindows: arr(o.macro?.objectiveWindows).map((w) => ({ t: str(w?.t), event: str(w?.event), verdict: str(w?.verdict), why: str(w?.why) })),
+      laneMap: str(o.macro?.laneMap),
+      swings: arr(o.macro?.swings).map((s) => ({ t: str(s?.t), direction: str(s?.direction), cause: str(s?.cause) })),
+    },
+    commsGrade: {
+      overall: str(o.commsGrade?.overall),
+      callouts: arr(o.commsGrade?.callouts).map((c) => ({ t: str(c?.t), who: str(c?.who), call: str(c?.call), verdict: str(c?.verdict), evidence: str(c?.evidence) })),
+      missed: arr(o.commsGrade?.missed).map(String),
+    },
+    sections: arr(o.sections).map((s) => ({
+      id: String(s?.id || slug(s?.heading)),
+      heading: str(s?.heading),
+      md: str(s?.md),
+    })).filter((s) => s.heading || s.md),
+    keepDoing: arr(o.keepDoing).map(String),
+    meta: {
+      warnings: arr(o.meta?.warnings).map(String),
+      // M24 writes reconciliation verdicts back here after a scrim report judges this match's
+      // [analyst] claims; until then the view banners the report as not-yet-coach-reviewed.
+      reviewed: str(o.meta?.reviewed),
+      reconciliation: arr(o.meta?.reconciliation).map((r) => ({
+        claim: str(r?.claim),
+        verdict: ['confirmed', 'overridden', 'unaddressed'].includes(r?.verdict) ? r.verdict : 'unaddressed',
+        note: str(r?.note),
+      })),
+    },
+  };
+}
+
+function slug(text) {
+  return String(text ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48);
+}
+
+// Tolerant parse mirroring vodReport.parseReport: strip a fence, slice the outermost {…}, coerce.
+export function parseMatchReport(text) {
+  let t = String(text ?? '').trim();
+  const fence = t.match(/^```[a-z]*\s*\n([\s\S]*?)\n```$/i);
+  if (fence) t = fence[1].trim();
+  const a = t.indexOf('{');
+  const b = t.lastIndexOf('}');
+  if (a === -1 || b === -1 || b <= a) throw new Error('no JSON object in model output');
+  return coerceMatchReport(JSON.parse(t.slice(a, b + 1)));
+}
+
+// DI'd invoke (like generateReport) → generate + parse. Reprompts once, then lets the second failure
+// throw: a failed draft is a failed report, and the caller owns the error toast.
+export async function generateMatchReport(invoke, { digest, coachedTeam = '', tfCommsBlock = '', coachNotesBlock = '', brainContext = '', onRaw = null }, agents = {}) {
+  const user = buildMatchReportPrompt({ digest, coachedTeam, tfCommsBlock, coachNotesBlock, brainContext });
+  const call = (userPrompt) => invoke('coaching_classify_match', {
+    systemPrompt: MATCH_REPORT_SYSTEM_PROMPT,
+    userPrompt,
+    backend: agents.authBackend || 'api-key',
+    model: agents.model || 'opus',
+    cliPath: agents.claudeCliPath || '',
+  });
+  const report = await parseOrRetry(call, user, parseMatchReport, 'Respond with ONLY the JSON object, nothing else.', onRaw);
+  report.schemaVersion = MATCH_REPORT_SCHEMA_VERSION; // stamp regardless of what the model echoed
+  return report;
+}

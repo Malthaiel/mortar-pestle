@@ -51,13 +51,20 @@ export function scrimFolderOf(p) {
     .replace(/\.md$/, '');
 }
 
-// Match-level sidecar: `<folder>/Matches/.matchdata.Match 1.json` (`kind: 'comms'` →
-// `.commstranscript.…`; `'autoclass'`; `'tfcomms'`). Dot-prefix keeps it out of the tree
-// (scan_dir hides dotfiles); the folder scopes the scrim, so the name no longer carries
-// the scrim base.
+// Match-level sidecar: `<folder>/Matches/.matchdata.Match 1.json`. Dot-prefix keeps it out of the
+// tree (scan_dir hides dotfiles); the folder scopes the scrim, so the name no longer carries the
+// scrim base. An unknown kind falls back to matchdata (was a ternary chain; a map so a new kind is
+// one line, not a fifth nesting level).
+const SIDECAR_PREFIX = {
+  matchdata: 'matchdata',
+  comms: 'commstranscript',
+  autoclass: 'autoclass',
+  tfcomms: 'tfcomms',
+  matchreport: 'matchreport', // WS4 M22: the per-match AI coaching report
+};
+
 export function sidecarPath(scrim, matchN, kind = 'matchdata') {
-  const prefix = kind === 'comms' ? 'commstranscript' : kind === 'autoclass' ? 'autoclass' : kind === 'tfcomms' ? 'tfcomms' : 'matchdata';
-  return `${scrimFolderOf(scrim)}/Matches/.${prefix}.Match ${matchN}.json`;
+  return `${scrimFolderOf(scrim)}/Matches/.${SIDECAR_PREFIX[kind] || 'matchdata'}.Match ${matchN}.json`;
 }
 
 // Scrim-level twin (no per-match suffix): the VOD Review recording is one file for the

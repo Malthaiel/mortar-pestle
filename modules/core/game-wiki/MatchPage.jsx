@@ -8,7 +8,7 @@
 // dictation live-target (this match) — persisted so F8 keeps landing here while
 // other pages are browsed.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Channel } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { api, invoke } from '@host/api.js';
@@ -24,6 +24,10 @@ import { labelForCluster } from './diarize.js';
 import { enrollPrint } from './voiceprints.js';
 import { buildMomentsDigest, classifyMoments, reconcile, renderAutoClassification, sideFromTeamFields, mergedItemToBullet } from './autoClassify.js';
 import { buildFights, judgeTeamfights, summarize } from './teamfightComms.js';
+import { buildMatchDigest } from './matchDigest.js';
+import { buildBrainContext } from './analystBrain.js';
+import { serializeTfComms } from './vodReport.js';
+import { generateMatchReport } from './matchReport.js';
 import { readStopwatch } from './useStopwatch.js';
 import CommsTranscriptView from './CommsTranscriptView.jsx';
 import TeamfightCommsView from './TeamfightCommsView.jsx';
@@ -39,6 +43,21 @@ import {
   wrap, inner, card, sectionTitle, labelStyle,
   MP4_FILTERS, IMG_FILTERS, STT_MODEL,
 } from './scrimShared.jsx';
+
+// WS4 M22: the match-report run is minutes long, so its state lives at module scope — the same fix
+// (and the same HMR data-bag trick) the scrim report's store uses in OverviewPage: navigating away
+// mid-run must not kill the job, and a Vite module swap must not orphan it. Keyed by "<folder>#<n>"
+// so two matches can't both claim the one running slot.
+const matchReportStore = import.meta.hot?.data.matchReportStore
+  || { snap: { key: null }, subs: new Set() };
+if (import.meta.hot) import.meta.hot.data.matchReportStore = matchReportStore;
+
+const setMatchReportJob = (key) => {
+  matchReportStore.snap = { key };
+  matchReportStore.subs.forEach((f) => f());
+};
+const subscribeMatchReport = (f) => { matchReportStore.subs.add(f); return () => matchReportStore.subs.delete(f); };
+const getMatchReportSnap = () => matchReportStore.snap;
 
 export default function MatchPage({ folder, n, accent, overlay = false }) {
   const { settings } = useSettings();
@@ -100,6 +119,66 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
       .catch(() => { if (!c) setTfReady(false); });
     return () => { c = true; };
   }, [folder, n]);
+
+  // Same probe for the .matchreport sidecar (WS4 M22) — a generated report should still be there
+  // after a nav away and back, so the chip is driven by disk, not by whether this mount ran the job.
+  const [mrReady, setMrReady] = useState(false);
+  useEffect(() => {
+    let c = false;
+    api.getRawFileMeta(sidecarPath(folder, n, 'matchreport'), 'gamewiki')
+      .then(() => { if (!c) setMrReady(true); })
+      .catch(() => { if (!c) setMrReady(false); });
+    return () => { c = true; };
+  }, [folder, n]);
+  const matchReportJob = useSyncExternalStore(subscribeMatchReport, getMatchReportSnap);
+  const mrKey = `${folder}#${n}`;
+  const mrRunning = matchReportJob.key === mrKey;
+
+  // ── Match Report (WS4 M22) — the Analyst's own per-match coaching report ──
+  const runMatchReport = async () => {
+    if (matchReportStore.snap.key) return; // one run app-wide, like the scrim report
+    let raw;
+    try { raw = JSON.parse((await api.getRawFileMeta(sidecarPath(folder, n), 'gamewiki')).content); }
+    catch { notify('error', 'No match data', 'Run Process first — the report is written from the match data.'); return; }
+    setMatchReportJob(mrKey);
+    try {
+      const agents = await resolveAgents(settings);
+      const team = coachedRef.current;
+      const brain = await buildBrainContext(api, { coachedTeam: team });
+      // The comms judgments are optional input; with none, the prompt's no-comms guard tells the
+      // model to leave commsGrade empty rather than grade a fight it was never shown.
+      let tfCommsBlock = '';
+      try {
+        const tf = JSON.parse((await api.getRawFileMeta(sidecarPath(folder, n, 'tfcomms'), 'gamewiki')).content);
+        tfCommsBlock = serializeTfComms(tf.fights || [], `Match ${n}`);
+      } catch { /* no comms review for this match */ }
+      let coachNotesBlock = '';
+      try {
+        const bullets = getNotes(docRef.current)?.bullets || [];
+        if (bullets.length) coachNotesBlock = renderCoachingSummary(compileNotes(bullets));
+      } catch { /* no notes */ }
+
+      const report = await generateMatchReport(invoke, {
+        digest: buildMatchDigest(raw, { label: `Match ${n}` }),
+        coachedTeam: team, tfCommsBlock, coachNotesBlock, brainContext: brain.text,
+      }, agents);
+      report.meta.warnings = [...brain.warnings, ...(report.meta.warnings || [])];
+      report.generated = new Date().toISOString().slice(0, 10);
+      report.model = agents.model;
+      await api.savePage(sidecarPath(folder, n, 'matchreport'), JSON.stringify(report), null, 'gamewiki');
+      setMrReady(true);
+      notify('success', 'Match report ready', `${report.sections.length} section${report.sections.length === 1 ? '' : 's'} · ${report.playerCards.length} player card${report.playerCards.length === 1 ? '' : 's'}.`);
+    } catch (e) {
+      const msg = {
+        AUTH: ['AI backend not configured', 'Add an Anthropic API key or Claude CLI in Settings → Agents.'],
+        NETWORK: ['Network error', e?.message || 'Could not reach the model.'],
+        UPSTREAM: ['Model error', e?.message || 'The model returned an unexpected response.'],
+      }[e?.code] || ['Match report failed', e?.message || String(e)];
+      notify('error', msg[0], msg[1]);
+    } finally {
+      setMatchReportJob(null);
+    }
+  };
 
   // ── Run Process — deadlock-api fetch → sidecar + opaque summaries + series Score ──
   const runProcess = async () => {
@@ -579,6 +658,22 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
               )}
             </div>
             {populated && !hasComms && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: candyGap(8) }}>Extract Comms first, then Review Comms.</div>}
+          </div>
+          <div style={{ marginTop: 8 }}>
+            <div style={labelStyle}>Match Report</div>
+            <div className="candy-chip-row">
+              <button className="candy-btn" data-shape="chip"
+                disabled={!populated || !aiConfigured || mrRunning || running || commsBusy.on || classifying || reviewing}
+                onClick={runMatchReport}
+                title={!populated ? 'Run Process first — the report is written from the match data'
+                  : !aiConfigured ? 'Configure an AI backend in Settings → Agents (API key or Claude CLI)'
+                    : 'Match Report — the Analyst’s own coaching report on this match, every claim tagged [data] / [grounded] / [analyst]'}
+                style={mrRunning ? { opacity: 0.6, cursor: 'progress' } : undefined}>
+                <span className="candy-face">{mrRunning ? 'Asking Claude' : mrReady ? 'Regenerate Report' : 'Match Report'}</span>
+              </button>
+            </div>
+            {!populated && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: candyGap(8) }}>Pull match data first (Run Process), then Match Report.</div>}
+            {populated && !hasComms && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: candyGap(8) }}>No comms review attached — the report will skip its comms grade rather than guess it.</div>}
           </div>
         </div>
 
