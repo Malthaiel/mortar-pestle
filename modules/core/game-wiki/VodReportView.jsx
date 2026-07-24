@@ -87,6 +87,11 @@ function TagChip({ tag }) {
 // one of the two chips at some settings, and a source is exactly the "which of several kinds is
 // this?" question that palette exists to answer. Same colours the Feedback board's statuses use.
 const SOURCE_HUE = { review: 'var(--hue-amber)', comms: 'var(--hue-green)' };
+// ...and the same TREATMENT, 1-1 with StatusBadge: the hue at 48% into --surface-3, held on the
+// inline --cbtn-band so the band and frame darken WITH the face instead of staying grey under a
+// tinted top. Inline is also what makes it survive `data-shape="chip"`'s :hover rule, which
+// outranks a class-level colour and would otherwise flip the chip back to grey on hover.
+const sourceBand = (hue) => `color-mix(in oklch, ${hue} 48%, var(--surface-3))`;
 
 function TimeChip({ t, source, onJump }) {
   if (!t) return null;
@@ -96,10 +101,15 @@ function TimeChip({ t, source, onJump }) {
     <button type="button" data-own-press className="candy-btn" data-shape="chip"
       title={`Jump to ${t} in ${where}`}
       onClick={(e) => { e.preventDefault(); e.stopPropagation(); onJump?.(t); }}
-      style={{ verticalAlign: 'baseline', marginRight: 4, '--cbtn-depth': 'calc(var(--candy-depth-small) * 0.9375)' }}>
+      style={{
+        verticalAlign: 'baseline', marginRight: 4, '--cbtn-depth': 'calc(var(--candy-depth-small) * 0.9375)',
+        ...(hue ? { '--cbtn-band': sourceBand(hue) } : null),
+      }}>
       <span className="candy-face" style={{
         fontSize: 11, fontFamily: 'var(--font-mono)', padding: '1px 5px', lineHeight: 1.25,
-        ...(hue ? { background: `color-mix(in oklch, ${hue} 14%, transparent)` } : null),
+        // A sourceless chip (the scrim report's one recording) keeps the plain candy face it always
+        // had — there is no kind to tell apart there, so there is nothing for a hue to say.
+        ...(hue ? { background: 'var(--cbtn-band)', color: 'var(--text)' } : null),
       }}>{t}</span>
     </button>
   );
