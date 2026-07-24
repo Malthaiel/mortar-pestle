@@ -169,6 +169,8 @@ export const VOD_REPORT_SYSTEM_PROMPT = [
   '  "keepDoing": [string],             // things praised / working well',
   '  "debates": [string],               // points raised but left unresolved',
   '  "followUps": [ { "priorItem": string, "verdict": "resolved"|"persisting"|"unclear", "evidence": string } ],',
+  '  "reconciliation": [ { "claim": string, "verdict": "confirmed"|"overridden", "note": string, "stamp": string } ],',
+  '                                     // ONLY when a FIRST REPORT (ANALYST) block was given — see the reconciliation rule; else []',
   '  "meta": {',
   '    "warnings": [string],            // anything you could not verify or had to assume',
   '    "speakerMap": {}                 // resolved transcript labels, see Speaker identity below:',
@@ -325,6 +327,14 @@ export const VOD_REPORT_SYSTEM_PROMPT = [
   '- Use markdown tables where the discussion is tabular (e.g. behind-in-souls vs ahead-in-souls behaviors).',
   '- Player-written notes (when provided) are supplementary source material for sections; on any conflict',
   '  the transcript wins.',
+  '',
+  'RECONCILIATION — only when a === FIRST REPORT (ANALYST) === block is present. For each notable [analyst]',
+  'claim in it that the review session actually addressed, record one entry in "reconciliation": verdict',
+  '"confirmed" when the review agrees with the read, "overridden" when it corrects it; "note" states the',
+  'review\'s position in your words (brief), "stamp" is the review moment that settles it. Claims the review',
+  'never touched are OMITTED — reconciliation is never padded. With no first-report block, "reconciliation"',
+  'is []. The first report is REFERENCE for reconciliation and continuity, never source text to copy — the',
+  'review transcript is the primary source of this report.',
 ].join('\n');
 
 // M11: compact the .tfcomms judgment sidecar into one prompt block so commsGrade grades IN-GAME comms
@@ -355,7 +365,7 @@ export function serializeTfComms(fights, label = '') {
 // Build the user prompt: transcript + team context + any prior action items to follow up on.
 // priorActionItems is [] until sub-plan 12 (Team Progress) feeds it — the follow-up block is
 // simply omitted when empty (empty-tolerant), so nothing to rework when D lands.
-export function buildReportPrompt({ transcriptBlock, teams = {}, coachedTeam = '', priorActionItems = [], notesBlock = '', brainContext = '', matchDigests = [], coachNotesBlock = '', tfCommsBlocks = [] }) {
+export function buildReportPrompt({ transcriptBlock, teams = {}, coachedTeam = '', priorActionItems = [], notesBlock = '', brainContext = '', matchDigests = [], coachNotesBlock = '', tfCommsBlocks = [], firstReportBlock = '' }) {
   const lines = [];
   lines.push(`Coached team: ${coachedTeam || '(unnamed)'}${teams.opponent ? ` vs ${teams.opponent}` : ''}.`);
   if (String(brainContext).trim()) {
@@ -365,6 +375,15 @@ export function buildReportPrompt({ transcriptBlock, teams = {}, coachedTeam = '
   for (const dg of digests) lines.push('', '=== MATCH DATA DIGEST ===', String(dg).trim());
   for (const tf of (Array.isArray(tfCommsBlocks) ? tfCommsBlocks : [])) {
     if (String(tf ?? '').trim()) lines.push('', String(tf).trim());
+  }
+  // M4 Process 2: the analyst's first report rides along as REFERENCE — reconciliation source and
+  // continuity, never copy material. The hard rule is restated inline because this block is the
+  // biggest single input and the most tempting thing to re-narrate.
+  if (String(firstReportBlock).trim()) {
+    lines.push('', '=== FIRST REPORT (ANALYST) ===',
+      'Reference ONLY: reconcile its [analyst] claims against the review session and keep continuity.',
+      'NEVER copy its text as source material — the review transcript below is the primary source.',
+      String(firstReportBlock).trim());
   }
   // No match data attached (no Match ID / Run Process) → run from the transcript alone. Suppress the
   // filler the data-grounded schema comments otherwise pull ("no individual curve discussed" ×5) and
@@ -460,6 +479,15 @@ export function coerceReport(obj) {
     keepDoing: arr(o.keepDoing).map(prose),
     debates: arr(o.debates).map(prose),
     followUps: arr(o.followUps).map((f) => ({ priorItem: prose(f?.priorItem), verdict: ['resolved', 'persisting', 'unclear'].includes(f?.verdict) ? f.verdict : 'unclear', evidence: prose(f?.evidence) })),
+    // M4: the final report's judgment of the first report's [analyst] claims. Old sidecars (v1/v2,
+    // and every first report) default to [] and render unchanged — the banner just stays analyst-side.
+    reconciliation: arr(o.reconciliation).map((x) => ({
+      claim: str(x?.claim),
+      verdict: x?.verdict === 'overridden' ? 'overridden' : 'confirmed',
+      note: str(x?.note),
+      stamp: str(x?.stamp),
+    })),
+    generated: str(o.generated), // set by the caller at save time; the banner dates "Coach-reviewed" from it
   };
 }
 
@@ -867,8 +895,10 @@ export async function verifyReport(invoke, { report, matchDigests = [], lexicon 
 
 // DI'd invoke (like autoClassify.classifyMoments) → generate + parse + reconcile. Reprompt-once on a
 // parse failure, then let a second failure throw. Opus via the alias the Rust side maps to claude-opus-4-8.
-export async function generateReport(invoke, { transcriptBlock, teams, coachedTeam, priorActionItems = [], notesBlock = '', brainContext = '', matchDigests = [], coachNotesBlock = '', tfCommsBlocks = [], prior = null, onRaw = null }, agents = {}) {
-  const user = buildReportPrompt({ transcriptBlock, teams, coachedTeam, priorActionItems, notesBlock, brainContext, matchDigests, coachNotesBlock, tfCommsBlocks });
+// M4: this is also Process 2's entry — called per match with the review transcriptBlock, one-element
+// matchDigests, and firstReportBlock (reconciliation reference); saved as .matchfinal by the caller.
+export async function generateReport(invoke, { transcriptBlock, teams, coachedTeam, priorActionItems = [], notesBlock = '', brainContext = '', matchDigests = [], coachNotesBlock = '', tfCommsBlocks = [], firstReportBlock = '', prior = null, onRaw = null }, agents = {}) {
+  const user = buildReportPrompt({ transcriptBlock, teams, coachedTeam, priorActionItems, notesBlock, brainContext, matchDigests, coachNotesBlock, tfCommsBlocks, firstReportBlock });
   const base = {
     systemPrompt: VOD_REPORT_SYSTEM_PROMPT,
     backend: agents.authBackend || 'api-key',

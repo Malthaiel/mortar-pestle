@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import {
   MATCH_REPORT_SCHEMA_VERSION, MATCH_REPORT_SYSTEM_PROMPT, TAGS, splitTag, collectClaims,
   buildMatchReportPrompt, coerceMatchReport, parseMatchReport, generateMatchReport, linkTagTokens,
+  enforceFirstReport,
 } from './matchReport.js';
 import { sidecarPath } from './matchData.js';
 
@@ -44,14 +45,22 @@ assert.ok(noComms.includes('=== NO IN-GAME COMMS ATTACHED ==='), 'missing comms 
 assert.ok(noComms.includes('Coached team: (unnamed).'));
 assert.ok(buildMatchReportPrompt({}).includes('(no digest)'), 'digestless build still produces a prompt');
 
+// M3: the in-game comms transcript is a first-class input — labeled, and it alone defuses the guard
+const withTranscript = buildMatchReportPrompt({ digest: '## d', commsBlock: '[0:12] Sam: rotating mid' });
+assert.ok(withTranscript.includes('=== IN-GAME COMMS TRANSCRIPT ==='), 'transcript block labeled');
+assert.ok(withTranscript.includes('[0:12] Sam: rotating mid'), 'transcript content reaches the prompt');
+assert.ok(!withTranscript.includes('NO IN-GAME COMMS ATTACHED'), 'transcript alone defuses the no-comms guard');
+
 // the system prompt carries its non-negotiables
 for (const needle of ['[data]', '[grounded]', '[analyst]', 'PROVENANCE', 'YOUR OWN READS ARE THE JOB', 'GAME clock']) {
   assert.ok(MATCH_REPORT_SYSTEM_PROMPT.includes(needle), `system prompt states: ${needle}`);
 }
-// the scrim report's exclusions must NOT appear here — no homework, no Q&A, no follow-ups
-for (const absent of ['"actionItems"', '"qa"', '"followUps"']) {
-  assert.ok(!MATCH_REPORT_SYSTEM_PROMPT.includes(absent), `match report schema omits ${absent}`);
+// M3: full report shape — the final must be able to replace this 1:1
+for (const present of ['"actionItems"', '"qa"', '"debates"', '"followUps"', '"keepDoing"']) {
+  assert.ok(MATCH_REPORT_SYSTEM_PROMPT.includes(present), `match report schema carries ${present}`);
 }
+// ...but qa/followUps are declared ALWAYS empty (Process 2 owns them)
+assert.equal((MATCH_REPORT_SYSTEM_PROMPT.match(/ALWAYS the empty array/g) || []).length, 2, 'qa + followUps schema lines both state the invariant');
 
 // --- parse + coerce --------------------------------------------------------
 const full = {
@@ -60,7 +69,11 @@ const full = {
   macro: { tempoRead: '[data] slow', objectiveWindows: [{ t: '20:00', event: 'mid boss', verdict: 'lost', why: '[analyst] no setup' }], laneMap: '', swings: [{ t: '25:00', direction: 'theirs', cause: '[data] wipe' }] },
   commsGrade: { overall: '', callouts: [], missed: [] },
   sections: [{ heading: 'Losing the Mid Lane', md: '**The lane was lost on wave two:** ...' }, { heading: '', md: '' }],
+  actionItems: [{ text: '[analyst] rotate mid after first tower', count: 2, timestamps: ['4:10', '12:33'], player: 'Sam' }],
+  qa: [{ q: 'should not survive', a: 'Process 1 has no review session' }],
   keepDoing: ['[data] 8 denies'],
+  debates: ['[analyst] Rapid Recharge vs Boundless on Infernus is a real fork'],
+  followUps: [{ priorItem: 'should not survive', verdict: 'persisting', evidence: 'x' }],
   meta: { warnings: ['no comms attached'] },
 };
 const rep = parseMatchReport('```json\n' + JSON.stringify(full) + '\n```');
@@ -76,8 +89,26 @@ assert.deepEqual(empty.playerCards, []);
 assert.deepEqual(empty.macro, { tempoRead: '', objectiveWindows: [], laneMap: '', swings: [] });
 assert.deepEqual(empty.commsGrade, { overall: '', callouts: [], missed: [] });
 assert.deepEqual(empty.keepDoing, []);
+assert.deepEqual(empty.actionItems, [], 'M3 full-shape keys default');
+assert.deepEqual(empty.qa, []);
+assert.deepEqual(empty.debates, []);
+assert.deepEqual(empty.followUps, []);
 assert.deepEqual(empty.meta, { warnings: [], reviewed: '', reconciliation: [] }, 'M24 reconciliation keys default');
 assert.deepEqual(coerceMatchReport(null).sections, [], 'garbage input coerces to an empty report');
+
+// M3 coerce details: stable id slugged from text when missing (never re-keyed), status/verdict degrade
+const ai = coerceMatchReport({ actionItems: [{ text: '[analyst] Rotate mid!', status: 'bogus' }], followUps: [{ priorItem: 'x', verdict: 'nonsense' }] });
+assert.equal(ai.actionItems[0].id, 'analyst-rotate-mid', 'missing id slugged from the text');
+assert.equal(ai.actionItems[0].status, 'pending', 'unknown status degrades to pending');
+assert.equal(ai.actionItems[0].count, 1, 'missing count floors at 1');
+assert.equal(ai.followUps[0].verdict, 'unclear', 'unknown followUp verdict degrades');
+
+// Process 1 invariant: enforceFirstReport strips qa/followUps no matter what the model emitted
+const enforced = enforceFirstReport(coerceMatchReport(full));
+assert.deepEqual(enforced.qa, [], 'first report never carries qa');
+assert.deepEqual(enforced.followUps, [], 'first report never carries followUps');
+assert.equal(enforced.actionItems.length, 1, 'analyst actionItems survive enforcement');
+assert.equal(enforced.debates.length, 1, 'debates survive enforcement');
 
 // M24 write-back shape survives a round trip, and a bogus verdict falls back to unaddressed
 const reconciled = coerceMatchReport({ meta: { reviewed: '2026-07-24', reconciliation: [{ claim: 'lane lost early', verdict: 'confirmed', note: 'coach agreed [14:02]' }, { claim: 'x', verdict: 'nonsense' }] } });
@@ -99,6 +130,9 @@ assert.equal(seen.cmd, 'coaching_classify_match', 'routes through the existing m
 assert.equal(seen.args.systemPrompt, MATCH_REPORT_SYSTEM_PROMPT);
 assert.equal(gen.schemaVersion, MATCH_REPORT_SCHEMA_VERSION, 'version stamped regardless of model echo');
 assert.equal(gen.playerCards[0].hero, 'Infernus');
+assert.deepEqual(gen.qa, [], 'generate enforces the first-report invariant even when the model emits qa');
+assert.deepEqual(gen.followUps, [], 'generate enforces the first-report invariant even when the model emits followUps');
+assert.equal(gen.actionItems.length, 1, 'analyst actionItems pass through generate');
 
 // one bad emission reprompts, the retry lands
 let calls = 0;

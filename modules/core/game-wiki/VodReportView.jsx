@@ -530,19 +530,29 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
   const warnings = r.meta?.warnings || [];
   const verifyWarnings = warnings.filter((w) => w.startsWith('verify:'));
   const dataCaveats = warnings.filter((w) => !w.startsWith('verify:'));
-  // M24 writes these back after a scrim review judges this match's claims; absent → unreviewed.
-  const reviewStamp = isMatch ? (r.meta?.reviewed || '') : '';
-  const reconciliation = r.meta?.reconciliation || [];
+  // M4: a rendered .matchfinal IS the coach-reviewed report — its top-level reconciliation (written
+  // by Process 2) drives the banner. The old meta.reviewed/meta.reconciliation writeback keys remain
+  // as a fallback so any pre-restructure sidecar still banners instead of breaking.
+  const isFinal = isMatch && /\.matchfinal\./.test(String(sidecarPath || ''));
+  const reviewed = isFinal || !!(isMatch && r.meta?.reviewed);
+  const reviewStamp = isMatch ? ((isFinal && r.generated) || r.meta?.reviewed || '') : '';
+  const reconciliation = (Array.isArray(r.reconciliation) && r.reconciliation.length ? r.reconciliation : r.meta?.reconciliation) || [];
   const reviewCounts = {
     confirmed: reconciliation.filter((x) => x.verdict === 'confirmed').length,
     overridden: reconciliation.filter((x) => x.verdict === 'overridden').length,
   };
   const TABS = isMatch ? [
+    // M3: the full tab set (minus Segments — those are tree leaves per match), so the first report's
+    // analyst actionItems/debates show and a .matchfinal replaces it 1:1 with Q&A + follow-ups live.
     { id: 'tldr', label: 'Report' },
     { id: 'players', label: `Player Cards${(r.playerCards || []).length ? ` (${r.playerCards.length})` : ''}` },
     { id: 'macro', label: 'Macro' },
     { id: 'comms', label: 'Comms Grade' },
+    { id: 'actions', label: `Action Items${(r.actionItems || []).length ? ` (${r.actionItems.length})` : ''}` },
+    { id: 'qa', label: `Q&A${(r.qa || []).length ? ` (${r.qa.length})` : ''}` },
     { id: 'keep', label: 'Keep Doing' },
+    { id: 'debates', label: 'Debates' },
+    ...(followUps.length ? [{ id: 'followups', label: `Follow-ups (${followUps.length})` }] : []),
   ] : [
     { id: 'tldr', label: 'Report' },
     { id: 'players', label: `Player Cards${(r.playerCards || []).length ? ` (${r.playerCards.length})` : ''}` },
@@ -573,12 +583,12 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
             never be mistaken for coached truth. Every tab, not just Report: the claims are everywhere. */}
         {isMatch && status === 'ready' && (
           <div style={{
-            border: `1px solid ${reviewStamp ? 'var(--border)' : 'var(--accent)'}`,
+            border: `1px solid ${reviewed ? 'var(--border)' : 'var(--accent)'}`,
             borderRadius: 8, padding: '7px 11px', marginBottom: 14, fontSize: 12,
-            color: reviewStamp ? 'var(--text-muted)' : 'var(--text-2)', background: 'var(--surface-2)',
+            color: reviewed ? 'var(--text-muted)' : 'var(--text-2)', background: 'var(--surface-2)',
           }}>
-            {reviewStamp
-              ? `Coach-reviewed ${reviewStamp} — ${reviewCounts.confirmed} read${reviewCounts.confirmed === 1 ? '' : 's'} confirmed, ${reviewCounts.overridden} overridden.`
+            {reviewed
+              ? `Coach-reviewed${reviewStamp ? ` ${reviewStamp}` : ''} — ${reviewCounts.confirmed} read${reviewCounts.confirmed === 1 ? '' : 's'} confirmed, ${reviewCounts.overridden} overridden.`
               : 'Analyst report — not yet coach-reviewed. Claims marked [analyst] are the model’s own reads.'}
           </div>
         )}
@@ -620,7 +630,7 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
           </details>
         )}
         {tab !== 'segments' && status === 'loading' && <Empty>Loading report…</Empty>}
-        {tab !== 'segments' && status === 'missing' && <Empty>{isMatch ? 'No report yet — click Match Report on this match first.' : 'No report yet — click Generate Report on the scrim first.'}</Empty>}
+        {tab !== 'segments' && status === 'missing' && <Empty>{isMatch ? 'No report yet — click Generate First Report on this match first.' : 'No report yet — click Generate Report on the scrim first.'}</Empty>}
         {tab !== 'segments' && status === 'parse-error' && <div style={{ color: 'var(--error)', fontSize: 13 }}>Couldn’t parse the stored report.</div>}
         {tab === 'segments' && (
           segments === null ? <Empty>Loading segments…</Empty>

@@ -83,6 +83,21 @@ assert.deepEqual(v1.playerCards, []);
 assert.deepEqual(v1.macro, { tempoRead: '', objectiveWindows: [], laneMap: '', swings: [] });
 assert.deepEqual(v1.commsGrade, { overall: '', callouts: [], missed: [] });
 assert.deepEqual(v1.meta, { passes: [], brainSections: [], warnings: [], speakerMap: {}, findings: [] });
+assert.deepEqual(v1.reconciliation, [], 'M4: old sidecars default reconciliation to [] and keep rendering');
+
+// M4 reconciliation coerce: shape kept, bogus verdict degrades to confirmed, and the prompt/schema carry it
+const rec = coerceReport({ reconciliation: [{ claim: 'lane lost on wave 2', verdict: 'overridden', note: 'coach: it was the gank path', stamp: '14:02' }, { claim: 'x', verdict: 'bogus' }], generated: '2026-07-24' });
+assert.deepEqual(rec.reconciliation[0], { claim: 'lane lost on wave 2', verdict: 'overridden', note: 'coach: it was the gank path', stamp: '14:02' });
+assert.equal(rec.reconciliation[1].verdict, 'confirmed', 'unknown verdict degrades, never throws');
+assert.equal(rec.generated, '2026-07-24', 'generated survives coercion — the banner dates from it');
+assert.ok(VOD_REPORT_SYSTEM_PROMPT.includes('"reconciliation"'), 'schema names reconciliation');
+assert.ok(VOD_REPORT_SYSTEM_PROMPT.includes('RECONCILIATION —'), 'prompt carries the reconciliation rule');
+
+// M4 first-report reference block: labeled + reference-only rule inline; absent when empty
+const pFinal = buildReportPrompt({ transcriptBlock: 'T', firstReportBlock: '{"sections":[]}' });
+assert.ok(pFinal.includes('=== FIRST REPORT (ANALYST) ==='), 'first report block labeled');
+assert.ok(pFinal.includes('NEVER copy its text as source material'), 'reference-only rule rides inline');
+assert.ok(!buildReportPrompt({ transcriptBlock: 'T' }).includes('FIRST REPORT (ANALYST)'), 'no first report -> no block');
 
 // v2 payload round-trips; malformed card entries are cleaned, empty cards dropped
 const v2 = parseReport(JSON.stringify({

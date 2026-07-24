@@ -1,15 +1,17 @@
-// Per-match AI coaching report (WS4 M22 of the VOD Report Final Improvements plan). The scrim VOD
-// report reports ONLY what the coach said; this one is the opposite by design — the Analyst's own
-// reads ARE the product. What keeps that honest is provenance: every claim opens with a literal
-// [data] / [grounded] / [analyst] tag, so a machine opinion can never be mistaken for a scoreboard
-// fact. The scrim report later stamps these claims confirmed/overridden (M24) and the view banners
-// them until it does (M23).
+// Process 1 — the per-match FIRST report (M3 of the VOD Report Final Improvements plan). The scrim
+// VOD report reports ONLY what the coach said; this one is the opposite by design — the Analyst's
+// own reads ARE the product, written from the match-data digest + the in-game comms transcript
+// (+ the judged teamfight-comms block when present), before any VOD review happens. What keeps that
+// honest is provenance: every claim opens with a literal [data] / [grounded] / [analyst] tag, so a
+// machine opinion can never be mistaken for a scoreboard fact. Process 2 (the coach-voiced final,
+// .matchfinal — M4) replaces this report in every view and reconciles its [analyst] claims
+// confirmed/overridden; this sidecar stays on disk as the analyst's record.
 //
 // Mirrors vodReport.js deliberately (same prompt→parse→coerce→generate shape, same parseOrRetry,
-// same coaching_classify_match invoke) — a reader who knows one knows this one. Differences: no
-// actionItems (homework is a scrim-level decision), no qa (nobody asked anything — there is no
-// review session), no followUps (teamProgress ignores these sidecars entirely, M25), and times are
-// GAME clock, never VOD stamps, so nothing here is a jumpable TimeChip.
+// same coaching_classify_match invoke) — a reader who knows one knows this one. Differences: the
+// FULL report shape (so the final can replace it 1:1), but qa and followUps are ALWAYS [] here
+// (nobody asked anything — there is no review session yet; both belong to Process 2), and
+// actionItems are the analyst's own suggestions, every one [analyst]-tagged.
 import { parseOrRetry } from './aiRetry.js';
 
 export const MATCH_REPORT_SCHEMA_VERSION = 1;
@@ -58,9 +60,10 @@ export function collectClaims(report) {
 
 export const MATCH_REPORT_SYSTEM_PROMPT = [
   'You are an elite Deadlock analyst writing a coaching report on ONE match. You are given a deterministic',
-  'match-data digest (scoreboard, souls curves, item builds, deaths, objectives, damage focus), optionally a',
-  'judged in-game comms block, optionally the coach\'s tagged in-game notes, and an ANALYST BRAIN (charter,',
-  'canonical lexicon, patch digest, taught concepts, distilled corrections).',
+  'match-data digest (scoreboard, souls curves, item builds, deaths, objectives, damage focus), optionally the',
+  'diarized in-game comms transcript (speaker-labeled, timestamped [m:ss]), optionally a judged in-game comms',
+  'block, optionally the coach\'s tagged in-game notes, and an ANALYST BRAIN (charter, canonical lexicon,',
+  'patch digest, taught concepts, distilled corrections).',
   '',
   'Unlike a VOD-review report, YOUR OWN READS ARE THE JOB. Nobody reviewed this match on camera — there is no',
   'coach transcript to organize. Judge the match: who won their lane and why, where the game turned, which',
@@ -82,10 +85,11 @@ export const MATCH_REPORT_SYSTEM_PROMPT = [
   '- Canonical names ONLY: every hero, item, and ability name matches the lexicon spelling exactly.',
   '- Only claim what the data supports. No curve granularity for a lane → leave laneVerdict "" rather than',
   '  guessing; an empty field renders as "Not analyzed." and costs nothing. Filler costs trust.',
-  '- Times are GAME clock (match time), written m:ss or h:mm:ss. There is no VOD here — never cite a review',
-  '  timestamp, and never invent a moment the digest does not contain.',
-  '- The in-game comms block, when present, is the ONLY evidence for commsGrade. With no block, leave',
-  '  commsGrade.overall "" — do not grade comms you were never shown.',
+  '- Times from the DIGEST are GAME clock (match time), written m:ss or h:mm:ss. Times from the in-game',
+  '  comms transcript are recording stamps — cite them as literal [m:ss] tokens copied VERBATIM from the',
+  '  transcript. There is no VOD review here, and never invent a moment neither source contains.',
+  '- The in-game comms transcript and the judged comms block, when present, are the ONLY evidence for',
+  '  commsGrade. With neither, leave commsGrade.overall "" — do not grade comms you were never shown.',
   '- The coach\'s tagged in-game notes, when present, outrank your read of the same moment: the coach was',
   '  watching live. Where you disagree, say so as [analyst] and name the note.',
   '',
@@ -119,7 +123,19 @@ export const MATCH_REPORT_SYSTEM_PROMPT = [
   '      "heading": string,             // name the section after the topic ("Losing the Mid Lane", "The 24:00 Fight")',
   '      "md": string }                 // full GFM markdown body; bullets, numbered steps and tables all allowed',
   '  ],',
+  '  "actionItems": [                   // YOUR OWN suggestions — concrete things to change; DEDUPE near-identical asks',
+  '    { "id": string,                  // short stable kebab-case slug of the item',
+  '      "text": string,                // the action, imperative, [analyst]-tagged like every other claim',
+  '      "count": number,               // how many distinct moments raised it (>=1)',
+  '      "timestamps": [string],        // transcript [m:ss] stamps where it shows; [] without a transcript',
+  '      "player": string|null,         // the player it targets, or null if team-wide',
+  '      "metric": string|null,         // leave null (measurable-goal mapping is a later phase)',
+  '      "status": "pending" }          // always "pending" — the app owns done/pending',
+  '  ],',
+  '  "qa": [],                          // ALWAYS the empty array — no review session happened; Q&A belongs to Process 2',
   '  "keepDoing": [string],             // what this team did well, by name',
+  '  "debates": [string],               // genuinely two-sided calls you cannot settle from the data alone',
+  '  "followUps": [],                   // ALWAYS the empty array — prior-homework judging belongs to Process 2',
   '  "meta": { "warnings": [string] }   // anything you could not verify or had to assume',
   '}',
   '',
@@ -136,17 +152,20 @@ export const MATCH_REPORT_SYSTEM_PROMPT = [
   '- Empty is better than filler. An array with nothing real in it is [].',
 ].join('\n');
 
-// User prompt: digest + optional in-game comms judgments + optional coach notes + brain.
-export function buildMatchReportPrompt({ digest = '', coachedTeam = '', tfCommsBlock = '', coachNotesBlock = '', brainContext = '' }) {
+// User prompt: digest + optional in-game comms transcript + optional comms judgments + optional
+// coach notes + brain. The transcript block arrives raw (buildTranscriptBlock output); the header
+// is added here so every input section is labeled in one place.
+export function buildMatchReportPrompt({ digest = '', coachedTeam = '', commsBlock = '', tfCommsBlock = '', coachNotesBlock = '', brainContext = '' }) {
   const lines = [`Coached team: ${coachedTeam || '(unnamed)'}.`];
   if (String(brainContext).trim()) lines.push('', '=== ANALYST BRAIN ===', String(brainContext).trim());
+  if (String(commsBlock).trim()) lines.push('', '=== IN-GAME COMMS TRANSCRIPT ===', String(commsBlock).trim());
   if (String(tfCommsBlock).trim()) lines.push('', String(tfCommsBlock).trim());
   if (String(coachNotesBlock).trim()) {
     lines.push('', 'Coach\'s tagged in-game notes (chess.com-style classifications):', String(coachNotesBlock).trim());
   }
-  if (!String(tfCommsBlock).trim()) {
+  if (!String(commsBlock).trim() && !String(tfCommsBlock).trim()) {
     lines.push('', '=== NO IN-GAME COMMS ATTACHED ===',
-      'No comms review was run for this match. Leave commsGrade.overall "" and its arrays empty — grading comms you were never shown is exactly the invented claim this report format forbids.');
+      'No comms transcript or comms review exists for this match. Leave commsGrade.overall "" and its arrays empty — grading comms you were never shown is exactly the invented claim this report format forbids.');
   }
   lines.push('', '=== MATCH DATA DIGEST ===', String(digest).trim() || '(no digest)');
   return lines.join('\n');
@@ -183,7 +202,25 @@ export function coerceMatchReport(obj) {
       heading: str(s?.heading),
       md: str(s?.md),
     })).filter((s) => s.heading || s.md),
+    // Full-shape keys (M3) so a .matchfinal rendered through this coercer keeps them; stable ids
+    // feed reconciliation — same id fallback as vodReport.slugId (never re-key on regenerate).
+    actionItems: arr(o.actionItems).map((it) => ({
+      id: String(it?.id || slug(it?.text)),
+      text: str(it?.text),
+      count: Number(it?.count) > 0 ? Math.floor(Number(it.count)) : 1,
+      timestamps: arr(it?.timestamps).map(String),
+      player: it?.player ? String(it.player) : null,
+      metric: it?.metric ? String(it.metric) : null,
+      status: it?.status === 'done' ? 'done' : 'pending',
+    })),
+    qa: arr(o.qa).map((x) => ({ q: str(x?.q), a: str(x?.a), askedBy: x?.askedBy ? String(x.askedBy) : null, t: x?.t ? String(x.t) : null })),
     keepDoing: arr(o.keepDoing).map(String),
+    debates: arr(o.debates).map(String),
+    followUps: arr(o.followUps).map((f) => ({
+      priorItem: str(f?.priorItem),
+      verdict: ['resolved', 'persisting', 'unclear'].includes(f?.verdict) ? f.verdict : 'unclear',
+      evidence: str(f?.evidence),
+    })),
     meta: {
       warnings: arr(o.meta?.warnings).map(String),
       // M24 writes reconciliation verdicts back here after a scrim report judges this match's
@@ -213,10 +250,18 @@ export function parseMatchReport(text) {
   return coerceMatchReport(JSON.parse(t.slice(a, b + 1)));
 }
 
+// Process 1 invariant (M3): a FIRST report never carries Q&A or follow-ups — no review session
+// happened, and both belong to Process 2. Enforced in code, not just the prompt.
+export function enforceFirstReport(report) {
+  report.qa = [];
+  report.followUps = [];
+  return report;
+}
+
 // DI'd invoke (like generateReport) → generate + parse. Reprompts once, then lets the second failure
 // throw: a failed draft is a failed report, and the caller owns the error toast.
-export async function generateMatchReport(invoke, { digest, coachedTeam = '', tfCommsBlock = '', coachNotesBlock = '', brainContext = '', onRaw = null }, agents = {}) {
-  const user = buildMatchReportPrompt({ digest, coachedTeam, tfCommsBlock, coachNotesBlock, brainContext });
+export async function generateMatchReport(invoke, { digest, coachedTeam = '', commsBlock = '', tfCommsBlock = '', coachNotesBlock = '', brainContext = '', onRaw = null }, agents = {}) {
+  const user = buildMatchReportPrompt({ digest, coachedTeam, commsBlock, tfCommsBlock, coachNotesBlock, brainContext });
   const call = (userPrompt) => invoke('coaching_classify_match', {
     systemPrompt: MATCH_REPORT_SYSTEM_PROMPT,
     userPrompt,
@@ -226,5 +271,5 @@ export async function generateMatchReport(invoke, { digest, coachedTeam = '', tf
   });
   const report = await parseOrRetry(call, user, parseMatchReport, 'Respond with ONLY the JSON object, nothing else.', onRaw);
   report.schemaVersion = MATCH_REPORT_SCHEMA_VERSION; // stamp regardless of what the model echoed
-  return report;
+  return enforceFirstReport(report);
 }

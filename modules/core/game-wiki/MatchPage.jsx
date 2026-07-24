@@ -17,7 +17,7 @@ import { IconFolder, IconPlayCircle } from '@host/components/icons.jsx';
 import { candyGap } from '@host/util/candy.js';
 import { useSettings } from '@host/hooks/useSettings.js';
 import { parseMatchFile, serializeMatchFile, mergeMatch, getNotes, ensureNotes } from './scrimSchema.js';
-import { sidecarPath, renderSummary, MATCH_DATA_PLACEHOLDER, clock, extractMeta, fmtLocalTime, extractSpatial } from './matchData.js';
+import { sidecarPath, renderSummary, MATCH_DATA_PLACEHOLDER, clock, extractMeta, fmtLocalTime, extractSpatial, resolveReviewTranscript } from './matchData.js';
 import { compileNotes, renderCoachingSummary, parseTimedNote, sortByTimeAsc } from './noteCompile.js';
 import { parseSegments, parseCommsSidecar, buildCommsSidecar, renderCommsSummary } from './commsCompile.js';
 import { labelForCluster } from './diarize.js';
@@ -26,8 +26,9 @@ import { buildMomentsDigest, classifyMoments, reconcile, renderAutoClassificatio
 import { buildFights, judgeTeamfights, summarize } from './teamfightComms.js';
 import { buildMatchDigest } from './matchDigest.js';
 import { buildBrainContext } from './analystBrain.js';
-import { serializeTfComms } from './vodReport.js';
-import { generateMatchReport } from './matchReport.js';
+import { serializeTfComms, buildTranscriptBlock, generateReport } from './vodReport.js';
+import { generateMatchReport, coerceMatchReport } from './matchReport.js';
+import { openHomework, teamSidecarPath } from './teamProgress.js';
 import { readStopwatch } from './useStopwatch.js';
 import CommsTranscriptView from './CommsTranscriptView.jsx';
 import TeamfightCommsView from './TeamfightCommsView.jsx';
@@ -136,6 +137,26 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
   const mrKey = `${folder}#${n}`;
   const mrRunning = matchReportJob.key === mrKey;
 
+  // M4: same probe for the .matchfinal sidecar — the final replaces the first in every view.
+  const [mfReady, setMfReady] = useState(false);
+  useEffect(() => {
+    let c = false;
+    api.getRawFileMeta(sidecarPath(folder, n, 'matchfinal'), 'gamewiki')
+      .then(() => { if (!c) setMfReady(true); })
+      .catch(() => { if (!c) setMfReady(false); });
+    return () => { c = true; };
+  }, [folder, n]);
+  // Review-transcript presence (per-match .reviewcomms, or the single-match legacy fallback) gates
+  // the Final Report button — Process 2 is written FROM the review session.
+  const [rvReady, setRvReady] = useState(false);
+  useEffect(() => {
+    let c = false;
+    resolveReviewTranscript(api, folder, n).then((r) => { if (!c) setRvReady(!!r); }).catch(() => { if (!c) setRvReady(false); });
+    return () => { c = true; };
+  }, [folder, n]);
+  const mfKey = `${folder}#${n}#final`;
+  const mfRunning = matchReportJob.key === mfKey;
+
   // ── Match Report (WS4 M22) — the Analyst's own per-match coaching report ──
   const runMatchReport = async () => {
     if (matchReportStore.snap.key) return; // one run app-wide, like the scrim report
@@ -154,6 +175,11 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
         const tf = JSON.parse((await api.getRawFileMeta(sidecarPath(folder, n, 'tfcomms'), 'gamewiki')).content);
         tfCommsBlock = serializeTfComms(tf.fights || [], `Match ${n}`);
       } catch { /* no comms review for this match */ }
+      // The diarized in-game comms transcript (Recording A) — Process 1's primary comms evidence.
+      let commsBlock = '';
+      try {
+        commsBlock = buildTranscriptBlock(parseSegments((await api.getRawFileMeta(sidecarPath(folder, n, 'comms'), 'gamewiki')).content));
+      } catch { /* no comms transcript for this match */ }
       let coachNotesBlock = '';
       try {
         const bullets = getNotes(docRef.current)?.bullets || [];
@@ -162,7 +188,7 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
 
       const report = await generateMatchReport(invoke, {
         digest: buildMatchDigest(raw, { label: `Match ${n}` }),
-        coachedTeam: team, tfCommsBlock, coachNotesBlock, brainContext: brain.text,
+        coachedTeam: team, commsBlock, tfCommsBlock, coachNotesBlock, brainContext: brain.text,
       }, agents);
       report.meta.warnings = [...brain.warnings, ...(report.meta.warnings || [])];
       report.generated = new Date().toISOString().slice(0, 10);
@@ -176,6 +202,61 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
         NETWORK: ['Network error', e?.message || 'Could not reach the model.'],
         UPSTREAM: ['Model error', e?.message || 'The model returned an unexpected response.'],
       }[e?.code] || ['Match report failed', e?.message || String(e)];
+      notify('error', msg[0], msg[1]);
+    } finally {
+      setMatchReportJob(null);
+    }
+  };
+
+  // ── Final Report (M4, Process 2) — coach-voiced, written FROM the review; replaces the first ──
+  const runMatchFinal = async () => {
+    if (matchReportStore.snap.key) return; // one AI run app-wide, shared with Process 1
+    const review = await resolveReviewTranscript(api, folder, n);
+    if (!review) { notify('error', 'No review recording', 'Record or extract this match’s VOD-review comms first.'); return; }
+    setMatchReportJob(mfKey);
+    try {
+      const agents = await resolveAgents(settings);
+      const team = coachedRef.current;
+      const brain = await buildBrainContext(api, { coachedTeam: team });
+      const transcriptBlock = buildTranscriptBlock(parseSegments((await api.getRawFileMeta(review.path, 'gamewiki')).content));
+      // The first report rides along as the reconciliation reference — optional by design (locked
+      // decision 4: allowed without one; M5 adds the warning dialog for that edge).
+      let firstReportBlock = '';
+      try { firstReportBlock = JSON.stringify(coerceMatchReport(JSON.parse((await api.getRawFileMeta(sidecarPath(folder, n, 'matchreport'), 'gamewiki')).content))); } catch { /* no first report */ }
+      let matchDigests = [];
+      try { matchDigests = [buildMatchDigest(JSON.parse((await api.getRawFileMeta(sidecarPath(folder, n), 'gamewiki')).content), { label: `Match ${n}` })]; } catch { /* no match data */ }
+      let tfCommsBlocks = [];
+      try {
+        const tf = JSON.parse((await api.getRawFileMeta(sidecarPath(folder, n, 'tfcomms'), 'gamewiki')).content);
+        const b = serializeTfComms(tf.fights || [], `Match ${n}`);
+        if (b) tfCommsBlocks = [b];
+      } catch { /* no comms review */ }
+      // Machine-carry (M4b): open homework as priorActionItems, this scrim excluded — the scrim-grain
+      // self-loop guard that exists today; M6 tightens the exclude to {scrim, match} sources.
+      let priorActionItems = [];
+      try {
+        const agg = JSON.parse((await api.getRawFileMeta(teamSidecarPath(team), 'gamewiki')).content);
+        priorActionItems = openHomework(agg, { excludeScrim: folder.split('/').pop() });
+      } catch { /* no team progress yet */ }
+      // Keep action-item done-state across regenerates (abort condition 2: ids are user data).
+      let prior = null;
+      try { prior = JSON.parse((await api.getRawFileMeta(sidecarPath(folder, n, 'matchfinal'), 'gamewiki')).content); } catch { /* first final */ }
+      const report = await generateReport(invoke, {
+        transcriptBlock, coachedTeam: team, firstReportBlock, priorActionItems,
+        brainContext: brain.text, matchDigests, tfCommsBlocks, prior,
+      }, agents);
+      report.meta.warnings = [...brain.warnings, ...(report.meta.warnings || [])];
+      report.generated = new Date().toISOString().slice(0, 10);
+      report.model = agents.model;
+      await api.savePage(sidecarPath(folder, n, 'matchfinal'), JSON.stringify(report), null, 'gamewiki');
+      setMfReady(true);
+      notify('success', 'Final report ready', `${report.reconciliation.length} analyst read${report.reconciliation.length === 1 ? '' : 's'} reconciled · ${report.sections.length} section${report.sections.length === 1 ? '' : 's'}.`);
+    } catch (e) {
+      const msg = {
+        AUTH: ['AI backend not configured', 'Add an Anthropic API key or Claude CLI in Settings → Agents.'],
+        NETWORK: ['Network error', e?.message || 'Could not reach the model.'],
+        UPSTREAM: ['Model error', e?.message || 'The model returned an unexpected response.'],
+      }[e?.code] || ['Final report failed', e?.message || String(e)];
       notify('error', msg[0], msg[1]);
     } finally {
       setMatchReportJob(null);
@@ -662,25 +743,45 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
             {populated && !hasComms && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: candyGap(8) }}>Extract Comms first, then Review Comms.</div>}
           </div>
           <div style={{ marginTop: 8 }}>
-            <div style={labelStyle}>Match Report</div>
+            <div style={labelStyle}>First Report</div>
             <div className="candy-chip-row">
               <button className="candy-btn" data-shape="chip"
-                disabled={!populated || !aiConfigured || mrRunning || running || commsBusy.on || classifying || reviewing}
+                disabled={!populated || !aiConfigured || mrRunning || mfRunning || running || commsBusy.on || classifying || reviewing}
                 onClick={runMatchReport}
                 title={!populated ? 'Run Process first — the report is written from the match data'
                   : !aiConfigured ? 'Configure an AI backend in Settings → Agents (API key or Claude CLI)'
-                    : 'Match Report — the Analyst’s own coaching report on this match, every claim tagged [data] / [grounded] / [analyst]'}
+                    : 'First Report (Process 1) — the Analyst’s own coaching report on this match, every claim tagged [data] / [grounded] / [analyst]'}
                 style={mrRunning ? { opacity: 0.6, cursor: 'progress' } : undefined}>
-                <span className="candy-face">{mrRunning ? 'Asking Claude' : mrReady ? 'Regenerate Report' : 'Match Report'}</span>
+                <span className="candy-face">{mrRunning ? 'Asking Claude' : mrReady ? 'Regenerate First Report' : 'Generate First Report'}</span>
               </button>
-              {mrReady && !mrRunning && (
+              {mrReady && !mfReady && !mrRunning && (
                 <button className="candy-btn" data-shape="chip" onClick={() => setMrOpen(true)} title="Open this match's analyst report">
                   <span className="candy-face">Open Report</span>
                 </button>
               )}
             </div>
-            {!populated && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: candyGap(8) }}>Pull match data first (Run Process), then Match Report.</div>}
+            {!populated && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: candyGap(8) }}>Pull match data first (Run Process), then Generate First Report.</div>}
             {populated && !hasComms && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: candyGap(8) }}>No comms review attached — the report will skip its comms grade rather than guess it.</div>}
+          </div>
+          <div style={{ marginTop: 8 }}>
+            <div style={labelStyle}>Final Report</div>
+            <div className="candy-chip-row">
+              <button className="candy-btn" data-shape="chip"
+                disabled={!rvReady || !aiConfigured || mfRunning || mrRunning || running || commsBusy.on || classifying || reviewing}
+                onClick={runMatchFinal}
+                title={!rvReady ? 'Record this match’s VOD review first — the final report is written from it'
+                  : !aiConfigured ? 'Configure an AI backend in Settings → Agents (API key or Claude CLI)'
+                    : 'Final Report (Process 2) — the coach-voiced report written from the review session; replaces the first report in every view'}
+                style={mfRunning ? { opacity: 0.6, cursor: 'progress' } : undefined}>
+                <span className="candy-face">{mfRunning ? 'Asking Claude' : mfReady ? 'Regenerate Final Report' : 'Generate Final Report'}</span>
+              </button>
+              {mfReady && !mfRunning && (
+                <button className="candy-btn" data-shape="chip" onClick={() => setMrOpen(true)} title="Open this match's final (coach-reviewed) report">
+                  <span className="candy-face">Open Report</span>
+                </button>
+              )}
+            </div>
+            {!rvReady && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: candyGap(8) }}>No review recording yet — the final report is written from the VOD-review session.</div>}
           </div>
         </div>
 
@@ -695,12 +796,12 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
         {mrOpen && (
           <VodReportView
             variant="match"
-            sidecarPath={sidecarPath(folder, n, 'matchreport')}
+            sidecarPath={sidecarPath(folder, n, mfReady ? 'matchfinal' : 'matchreport')}
             feedbackPath={sidecarPath(folder, n, 'matchfeedback')}
             mdPath={matchPath(folder, n)}
             accent={accent}
             onClose={() => setMrOpen(false)}
-            onRegenerate={runMatchReport}
+            onRegenerate={mfReady ? runMatchFinal : runMatchReport}
           />
         )}
         {review && (
