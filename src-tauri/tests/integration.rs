@@ -43,7 +43,6 @@ use app_lib::parsers::sessions::append_freeform_note;
 use app_lib::parsers::tasks::toggle_today_task;
 use app_lib::parsers::daily::{update_plan_block, PlanBlockInput};
 use app_lib::parsers::quick_notes::locate_quick_note;
-use app_lib::parsers::sessions::{append_session, delete_session, SessionInput};
 
 const FIXTURE_DS: &str = "2026-05-15";
 
@@ -230,9 +229,12 @@ fn integration_sidebar_set_order_creates_and_round_trips() {
 }
 
 // ─── Planner writer-command characterization (plan 022) ──────────────────────
-// locate_quick_note (pure stale guard), update_plan_block (fenced splice),
-// delete_session (multi-line block drain) — ports the writer contracts that the
-// Fastify-era parity tests covered before SF12 retired the Node harness.
+// locate_quick_note (pure stale guard), update_plan_block (fenced splice) —
+// ports the writer contracts that the Fastify-era parity tests covered before
+// SF12 retired the Node harness. The delete_session case that lived here was
+// dropped when D5 moved sessions out of the daily-note markdown into
+// sessions.json; its replacement is covered by
+// `commands::sessions::tests::update_delete_note_and_desync`.
 
 // ─── locate_quick_note: pure stale-projection guard (quick_notes.rs) ─────────
 // No vault/env needed — operates on a &[String].
@@ -351,42 +353,3 @@ Type: Daily-Log
     assert_eq!(r.error.as_deref(), Some("plan block not found"));
 }
 
-// ─── delete_session: multi-line block drain + capture (sessions.rs) ──────────
-
-#[test]
-fn integration_delete_session_drains_whole_block_keeps_siblings() {
-    let _g = common::env_lock();
-    set_today(FIXTURE_DS);
-    // Empty vault; append two sessions (the first with a sub-note → a multi-line
-    // block), then delete the first by its "<start>:::<end>:::<task>" id.
-    let v = setup_vault("---\nType: Daily-Log\n---\n");
-
-    append_session(
-        FIXTURE_DS,
-        SessionInput { task: "Task A".into(), start: "09:00".into(), end: "10:30".into(),
-            notes: Some("recall the API shape".into()) },
-        None,
-    )
-    .unwrap();
-    append_session(
-        FIXTURE_DS,
-        SessionInput { task: "Task B".into(), start: "11:00".into(), end: "11:30".into(), notes: None },
-        None,
-    )
-    .unwrap();
-
-    let r = delete_session(FIXTURE_DS, "09:00:::10:30:::Task A", None).unwrap();
-
-    assert!(r.ok, "expected ok, got {:?}", r.error);
-    let block = r.removed_block.expect("removed_block captured");
-    assert!(block.contains("Task A"), "captured block has the bullet\n{block}");
-    assert!(block.contains("recall the API shape"), "captured block has the sub-note (multi-line)\n{block}");
-    assert!(r.line_hint.is_some(), "line hint for restore placement");
-    assert_eq!(r.heading.as_deref(), Some("## Sessions"));
-
-    let content = std::fs::read_to_string(&v.daily_path).unwrap();
-    // Block-drain, not just bullet-removal: the sub-note line is gone too.
-    assert!(!content.contains("recall the API shape"), "sub-note drained\n{content}");
-    // Sibling session preserved.
-    assert!(content.contains("Task B"), "second session intact\n{content}");
-}

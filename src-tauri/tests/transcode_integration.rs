@@ -121,7 +121,9 @@ fn transcode_writes_complete_file() {
     let abs = mkv.display().to_string();
     let hash = compute_hash(&abs, Some(0), mtime);
     let out = transcode_path(&hash).unwrap();
-    start_or_reuse(hash.clone(), out.clone(), abs, Some(0), Some(3.0), true).unwrap();
+    // Trailing None, None = no proxy downscale, no AppHandle for progress events
+    // (both added after these tests were written; None keeps the original path).
+    start_or_reuse(hash.clone(), out.clone(), abs, Some(0), Some(3.0), true, None, None).unwrap();
 
     let grew = wait_until(Duration::from_secs(30), || {
         std::fs::metadata(&out).map(|m| m.len() > 0).unwrap_or(false)
@@ -165,8 +167,8 @@ fn concurrent_starts_coexist() {
 
     // Two windows preparing different episodes at once (under the cap) must
     // BOTH run — h2's start no longer SIGTERMs h1's in-flight remux.
-    start_or_reuse(h1.clone(), transcode_path(&h1).unwrap(), abs1, Some(0), Some(3.0), true).unwrap();
-    start_or_reuse(h2.clone(), transcode_path(&h2).unwrap(), abs2, Some(0), Some(3.0), true).unwrap();
+    start_or_reuse(h1.clone(), transcode_path(&h1).unwrap(), abs1, Some(0), Some(3.0), true, None, None).unwrap();
+    start_or_reuse(h2.clone(), transcode_path(&h2).unwrap(), abs2, Some(0), Some(3.0), true, None, None).unwrap();
 
     // h1 must never be killed: it completes (or is still running), never Failed.
     let h1_done = wait_until(Duration::from_secs(30), || {
