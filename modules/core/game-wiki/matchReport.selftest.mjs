@@ -101,7 +101,7 @@ assert.deepEqual(empty.actionItems, [], 'M3 full-shape keys default');
 assert.deepEqual(empty.qa, []);
 assert.deepEqual(empty.debates, []);
 assert.deepEqual(empty.followUps, []);
-assert.deepEqual(empty.meta, { warnings: [], reviewed: '', reconciliation: [] }, 'M24 reconciliation keys default');
+assert.deepEqual(empty.meta, { warnings: [], speakerMap: {}, reviewed: '', reconciliation: [] }, 'M24 reconciliation + M10 speakerMap keys default');
 assert.deepEqual(coerceMatchReport(null).sections, [], 'garbage input coerces to an empty report');
 
 // M3 coerce details: stable id slugged from text when missing (never re-keyed), status/verdict degrade
@@ -162,5 +162,25 @@ assert.equal(linkTagTokens('`[data] in code`'), '`[data] in code`', 'code spans 
 assert.equal(linkTagTokens('```\n[data] fenced\n```'), '```\n[data] fenced\n```', 'fenced blocks pass through untouched');
 assert.equal(linkTagTokens('[12:00] no tag'), '[12:00] no tag', 'a timestamp is not a tag');
 assert.equal(linkTagTokens(null), '', 'null degrades');
+
+// M9/M10: the analyst prompt carries the attribution + speaker-identity blocks (the P1 half of WS2),
+// and the data-free variant keeps them — neither rule depends on match data existing.
+for (const needle of [
+  'Attribution fidelity', 'Actions belong to their actor', 'Name the concrete person',
+  'Speaker identity', 'meta.speakerMap', 'NO user-facing field may contain "Speaker N"',
+]) {
+  assert.ok(MATCH_REPORT_SYSTEM_PROMPT.includes(needle), `P1 rule present: ${needle}`);
+  assert.ok(buildMatchReportSystemPrompt({ dataFree: true }).includes(needle), `P1 rule survives data-free: ${needle}`);
+}
+
+// M10: speakerMap coerces exactly like the scrim report's, so one reader serves both reports.
+assert.deepEqual(coerceMatchReport({}).meta.speakerMap, {}, 'absent speakerMap -> {}');
+assert.deepEqual(coerceMatchReport({ meta: { speakerMap: [] } }).meta.speakerMap, {}, 'array speakerMap -> {}');
+const msm = coerceMatchReport({ meta: { speakerMap: {
+  'Speaker 3': { name: 'Celeste', confidence: 'high', evidence: '[12:04] addressed by name' },
+  'Speaker 7': { name: 'Ash' },
+} } }).meta.speakerMap;
+assert.deepEqual(msm['Speaker 3'], { name: 'Celeste', confidence: 'high', evidence: '[12:04] addressed by name' }, 'full mapping survives');
+assert.deepEqual(msm['Speaker 7'], { name: 'Ash', confidence: 'low', evidence: '' }, 'partial mapping defaults to low confidence');
 
 console.log('matchReport.selftest: all assertions passed');

@@ -417,4 +417,33 @@ for (const kept of [
 assert.ok(VERIFY_SYSTEM_PROMPT.includes('"timestamp"') && VERIFY_SYSTEM_PROMPT.includes('Timestamp corrections'),
   'verify prompt instructs field:"timestamp" for stamp fixes');
 
+// M17: the carry-forward index coerces (old sidecars have none -> []), normalizes its three kinds,
+// and DROPS an entry whose kind the model garbled rather than mis-bucketing it in the M24 export.
+assert.deepEqual(coerceReport({}).carry, [], 'absent carry -> []');
+const carried = coerceReport({
+  carry: [
+    { kind: 'habit', text: 'never buys Counterspell since the rework', player: 'Matt', stamp: '[27:49]' },
+    { kind: 'PLAN', text: 'draft shred into the next comp' },
+    { kind: 'debate', text: 'Rapid Recharge on Infernus left unsettled', player: null, stamp: '' },
+    { kind: 'lesson', text: 'a this-match lesson does not carry' },
+    { kind: 'habit', text: '' },
+  ],
+}).carry;
+assert.equal(carried.length, 3, 'unknown kind and empty text are dropped');
+assert.deepEqual(carried[0], { kind: 'habit', text: 'never buys Counterspell since the rework', player: 'Matt', stamp: '[27:49]' });
+assert.deepEqual(carried[1], { kind: 'plan', text: 'draft shred into the next comp', player: null, stamp: '' }, 'kind lower-cases, player/stamp default');
+assert.ok(VOD_REPORT_SYSTEM_PROMPT.includes('CARRY-FORWARD') && VOD_REPORT_SYSTEM_PROMPT.includes('"carry": ['),
+  'M17 carry rule + schema key are both in the prompt');
+
+// A .matchfinal is written by THIS coercer and — since the kind-routed read in VodReportView — read
+// back by it too. The banner's confirmed/overridden counts and its date die if either key is lost,
+// which is exactly what the variant-routed read used to do.
+const finalRoundTrip = coerceReport({
+  schemaVersion: 2, generated: '2026-07-24T18:00:00Z',
+  reconciliation: [{ claim: 'lane lost on wave two', verdict: 'overridden', note: 'the coach put it on the first fight', stamp: '[8:12]' }],
+});
+assert.equal(finalRoundTrip.generated, '2026-07-24T18:00:00Z', 'matchfinal generated stamp survives coercion');
+assert.equal(finalRoundTrip.reconciliation.length, 1, 'matchfinal reconciliation survives coercion');
+assert.equal(finalRoundTrip.reconciliation[0].verdict, 'overridden');
+
 console.log('vodReport.selftest: all assertions passed');

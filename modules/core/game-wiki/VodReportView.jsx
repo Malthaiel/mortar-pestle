@@ -307,6 +307,12 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
   // no homework and nobody asked a question), stamps render as inert game clock, claims carry a
   // provenance chip, and the header banners whether a coach has reviewed the machine's reads yet.
   const isMatch = variant === 'match';
+  // A .matchfinal is WRITTEN by generateReport → coerceReport, so it carries the SCRIM schema:
+  // top-level `reconciliation`, `generated`, `tldr`, `meta.findings` / `meta.speakerMap`. Coercing it
+  // with coerceMatchReport (which has none of those keys) silently zeroed the banner's confirmed/
+  // overridden counts and dropped every verify finding. Route the coercer by SIDECAR KIND, not by
+  // variant: only the analyst FIRST report (.matchreport) uses the match coercer.
+  const isFinal = isMatch && /\.matchfinal\./.test(String(sidecarPath || ''));
   const [state, setState] = useState({ status: 'loading' });
   const [report, setReport] = useState(null);
   const [segments, setSegments] = useState(null); // null = loading, [] = none/unavailable
@@ -336,12 +342,12 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
         if (cancelled) return;
         let raw;
         try { raw = JSON.parse(r.content); } catch { setState({ status: 'parse-error' }); return; }
-        setReport(isMatch ? coerceMatchReport(raw) : coerceReport(raw)); // v1 sidecars gain safe v2 defaults — no undefined-access
+        setReport(isMatch && !isFinal ? coerceMatchReport(raw) : coerceReport(raw)); // v1 sidecars gain safe v2 defaults — no undefined-access
         setState({ status: 'ready' });
       })
       .catch(() => { if (!cancelled) setState({ status: 'missing' }); });
     return () => { cancelled = true; };
-  }, [sidecarPath, reloadKey, isMatch]);
+  }, [sidecarPath, reloadKey, isMatch, isFinal]);
 
   // Diarized segments the report was built from (.vodcomms sidecar) — read-only here;
   // relabeling lives in ScrimViewer's CommsTranscriptView. Missing/bad → [] (degrades to a gap).
@@ -531,9 +537,9 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
   const verifyWarnings = warnings.filter((w) => w.startsWith('verify:'));
   const dataCaveats = warnings.filter((w) => !w.startsWith('verify:'));
   // M4: a rendered .matchfinal IS the coach-reviewed report — its top-level reconciliation (written
-  // by Process 2) drives the banner. The old meta.reviewed/meta.reconciliation writeback keys remain
-  // as a fallback so any pre-restructure sidecar still banners instead of breaking.
-  const isFinal = isMatch && /\.matchfinal\./.test(String(sidecarPath || ''));
+  // by Process 2, preserved by the kind-routed coercer above) drives the banner. The old
+  // meta.reviewed/meta.reconciliation writeback keys remain as a fallback so any pre-restructure
+  // sidecar still banners instead of breaking.
   const reviewed = isFinal || !!(isMatch && r.meta?.reviewed);
   const reviewStamp = isMatch ? ((isFinal && r.generated) || r.meta?.reviewed || '') : '';
   const reconciliation = (Array.isArray(r.reconciliation) && r.reconciliation.length ? r.reconciliation : r.meta?.reconciliation) || [];

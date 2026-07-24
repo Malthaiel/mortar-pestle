@@ -165,7 +165,11 @@ export function buildMatchReportSystemPrompt({ dataFree = false } = {}) {
   '  "keepDoing": [string],             // what this team did well, by name',
   '  "debates": [string],               // genuinely two-sided calls you cannot settle from the data alone',
   '  "followUps": [],                   // ALWAYS the empty array — prior-homework judging belongs to Process 2',
-  '  "meta": { "warnings": [string] }   // anything you could not verify or had to assume',
+  '  "meta": {',
+  '    "warnings": [string],            // anything you could not verify or had to assume',
+  '    "speakerMap": {}                 // resolved comms labels, see Speaker identity below:',
+  '                                     // { "Speaker 3": { "name": "Celeste", "confidence": "high"|"low", "evidence": "[12:04] addressed by name" } }',
+  '  }',
   '}',
   '',
   'Writing rules — the same house style as the scrim report:',
@@ -175,10 +179,32 @@ export function buildMatchReportSystemPrompt({ dataFree = false } = {}) {
   '- Prose economy: state the reasoning ONCE, in the fewest words that still teach it. Density, not fewer points.',
   '- Say-it-once: every insight has exactly ONE home. Anywhere else it is a one-line pointer ("see the <heading>',
   '  section") — a player card never re-argues a section it points at.',
-  '- Actions belong to their actor: an item ONE player bought never lands on another player\'s card.',
   '- Every number pair names its side ("31-16 in North\'s favor"), and never narrate your own reasoning',
   '  ("...actually", "wait —") — state the settled claim.',
   '- Empty is better than filler. An array with nothing real in it is [].',
+  '',
+  'Attribution fidelity — a point keeps the voice that raised it:',
+  '- When authorship changes the meaning, name WHO: a player who called a play, proposed an idea,',
+  '  diagnosed their own mistake, or argued against a teammate is named ("the Celeste player called the',
+  '  rotation early"). Absorbing a player\'s in-game read into your own [analyst] voice is a',
+  '  misattribution, not a simplification.',
+  '- Scope it: your own analysis stays unattributed. Do NOT grow an "X said" prefix on every line —',
+  '  attribute calls, proposals, self-diagnoses, purchases/actions and disagreements only.',
+  '- Actions belong to their actor. An item ONE player bought never lands on another player\'s card, and',
+  '  a death, rotation or call is credited to the player who made it.',
+  '- Name the concrete person, never a vague stand-in ("someone", "a player", "an outside observer").',
+  '',
+  'Speaker identity — resolve comms labels before writing:',
+  '- The comms transcript may label talkers "Speaker N". Resolve each to a real name using the roster in',
+  '  the team context plus the transcript itself: self-reference ("my Infernus died there"), being',
+  '  addressed by name, POV ownership of a play, or the digest (who died, who was where, when they spoke).',
+  '- Map ONLY on two independent clues. A confidently wrong name is worse than no name; one weak clue is',
+  '  not a mapping.',
+  '- NO user-facing field may contain "Speaker N" — not playerCards[].player, commsGrade callouts, section',
+  '  prose, keepDoing, debates or action items. Unresolved → a role descriptor instead ("the Celeste',
+  '  player", "the mid-laner"), never the raw label.',
+  '- Record every mapping you made in meta.speakerMap with its confidence and the evidence that proves',
+  '  it. Resolved nothing → leave it {}.',
   ].join('\n');
 }
 
@@ -256,6 +282,13 @@ export function coerceMatchReport(obj) {
     })),
     meta: {
       warnings: arr(o.meta?.warnings).map(String),
+      // M10: resolved "Speaker N" → roster name with the evidence behind each mapping. Same shape as
+      // coerceReport's so one reader serves both reports; absent / non-object → {}.
+      speakerMap: o.meta?.speakerMap && typeof o.meta.speakerMap === 'object' && !Array.isArray(o.meta.speakerMap)
+        ? Object.fromEntries(Object.entries(o.meta.speakerMap).map(([k, v]) => [String(k), {
+          name: str(v?.name), confidence: v?.confidence === 'high' ? 'high' : 'low', evidence: str(v?.evidence),
+        }]))
+        : {},
       // M24 writes reconciliation verdicts back here after a scrim report judges this match's
       // [analyst] claims; until then the view banners the report as not-yet-coach-reviewed.
       reviewed: str(o.meta?.reviewed),

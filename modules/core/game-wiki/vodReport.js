@@ -171,6 +171,8 @@ export const VOD_REPORT_SYSTEM_PROMPT = [
   '  "followUps": [ { "priorItem": string, "verdict": "resolved"|"persisting"|"unclear", "evidence": string } ],',
   '  "reconciliation": [ { "claim": string, "verdict": "confirmed"|"overridden", "note": string, "stamp": string } ],',
   '                                     // ONLY when a FIRST REPORT (ANALYST) block was given — see the reconciliation rule; else []',
+  '  "carry": [ { "kind": "habit"|"plan"|"debate", "text": string, "player": string|null, "stamp": string } ],',
+  '                                     // carry-forward index — see the CARRY-FORWARD rule; else []',
   '  "meta": {',
   '    "warnings": [string],            // anything you could not verify or had to assume',
   '    "speakerMap": {}                 // resolved transcript labels, see Speaker identity below:',
@@ -335,6 +337,20 @@ export const VOD_REPORT_SYSTEM_PROMPT = [
   'never touched are OMITTED — reconciliation is never padded. With no first-report block, "reconciliation"',
   'is []. The first report is REFERENCE for reconciliation and continuity, never source text to copy — the',
   'review transcript is the primary source of this report.',
+  '',
+  'CARRY-FORWARD — the "carry" index. Three kinds of thing outlive this match, and the scrim\'s exported',
+  'carry-forward sheet is compiled mechanically from this index alone:',
+  '- "habit"  — a recurring pattern WITH its stated age ("he has not bought Counterspell since the rework").',
+  '- "plan"   — something aimed at the NEXT scrim or session rather than at this match ("draft a shred item',
+  '             into the next comp").',
+  '- "debate" — a two-sided call the review left genuinely unresolved.',
+  'Each entry copies the wording of a point you ALREADY wrote elsewhere in the report, EXACTLY as written.',
+  'The index points AT content; it never invents, rewrites or summarizes it, and it is never a new section —',
+  'nothing in the report body changes because an entry exists. "player" is the player it belongs to, or null',
+  'when team-wide; "stamp" is the transcript moment, "" when there is none.',
+  'Index ONLY those three kinds. A normal action item, a praise line, or a lesson taught about THIS match',
+  'does not belong here. When in doubt, leave it out — an unindexed point still lives in the report in full.',
+  'Nothing that outlives this match was voiced → "carry" is [].',
 ].join('\n');
 
 // M11: compact the .tfcomms judgment sidecar into one prompt block so commsGrade grades IN-GAME comms
@@ -487,6 +503,16 @@ export function coerceReport(obj) {
       note: str(x?.note),
       stamp: str(x?.stamp),
     })),
+    // M17: the carry-forward index — the ONLY input to the scrim's mechanical Carry-Forward export
+    // (M24), never rendered in the report view. Old sidecars have none and default to []. An entry
+    // whose kind the model garbled is DROPPED rather than mis-bucketed: the point itself still lives
+    // in the report body, so the index losing a pointer costs a line in the export, not content.
+    carry: arr(o.carry).map((c) => ({
+      kind: String(c?.kind ?? '').toLowerCase(),
+      text: str(c?.text),
+      player: c?.player ? String(c.player) : null,
+      stamp: str(c?.stamp),
+    })).filter((c) => c.text && ['habit', 'plan', 'debate'].includes(c.kind)),
     generated: str(o.generated), // set by the caller at save time; the banner dates "Coach-reviewed" from it
   };
 }
