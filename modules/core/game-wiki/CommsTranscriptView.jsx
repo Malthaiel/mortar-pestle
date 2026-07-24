@@ -13,9 +13,10 @@
 // reassigns that whole voice cluster (onReassign → ScrimViewer.reassignCluster, which retrains the
 // voiceprint + relabels every segment of the cluster). Mic segments aren't relabelable.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '@host/api.js';
 import { parseCommsSidecar } from './commsCompile.js';
+import { segIndexForStamp } from './vodReport.js';
 import { speakerColor } from './diarize.js';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
 
@@ -27,9 +28,10 @@ function mmss(ms) {
   return `${Math.floor(v / 60)}:${String(v % 60).padStart(2, '0')}`;
 }
 
-export default function CommsTranscriptView({ sidecarPath, roster = [], onReassign }) {
+export default function CommsTranscriptView({ sidecarPath, roster = [], onReassign, jumpTo = null }) {
   const [state, setState] = useState({ status: 'loading' });
   const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,6 +46,27 @@ export default function CommsTranscriptView({ sidecarPath, roster = [], onReassi
     return () => { cancelled = true; };
   }, [sidecarPath]);
 
+  // M18: a report stamp chip asked for this moment. The transcript is collapsed by default, so open
+  // it first, then scroll the row in and flash it — double-rAF plus one retry, the same mechanic the
+  // report view's own segment jump uses, because the row only exists once the expand has rendered.
+  useEffect(() => {
+    if (!jumpTo || state.status !== 'ready') return undefined;
+    setOpen(true);
+    const idx = segIndexForStamp(state.vm?.segments || [], jumpTo);
+    if (idx < 0) return undefined;
+    let timer = null;
+    const tryFlash = () => {
+      const el = rootRef.current?.querySelector(`[data-seg-idx="${idx}"]`);
+      if (!el) return false;
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      el.classList.add('settings-search-flash');
+      timer = setTimeout(() => el.classList.remove('settings-search-flash'), 1200);
+      return true;
+    };
+    requestAnimationFrame(() => requestAnimationFrame(() => { if (!tryFlash()) timer = setTimeout(tryFlash, 150); }));
+    return () => { if (timer) clearTimeout(timer); };
+  }, [jumpTo, state]);
+
   const { status, vm } = state;
   if (status === 'loading') return <div style={{ ...muted, marginTop: 4 }}>Loading transcript…</div>;
   if (status === 'missing') return <div style={{ ...muted, marginTop: 4 }}>Transcript file unavailable — re-run Extract Comms.</div>;
@@ -55,7 +78,7 @@ export default function CommsTranscriptView({ sidecarPath, roster = [], onReassi
   const hasSpeakers = segs.some((s) => s.speaker != null);
   const relabelOptions = [{ value: '', label: 'Unknown' }, ...roster.map((n) => ({ value: n, label: n }))];
   return (
-    <div style={{ marginTop: 4 }}>
+    <div ref={rootRef} style={{ marginTop: 4 }}>
       <button type="button" className="candy-btn" data-shape="chip"
         onClick={() => setOpen((o) => !o)}
         title={open ? 'Collapse transcript' : 'Expand transcript'}>
@@ -71,7 +94,7 @@ export default function CommsTranscriptView({ sidecarPath, roster = [], onReassi
           {segs.map((s, i) => {
             const canRelabel = !!onReassign && s.cluster != null; // mic (cluster null) = you, not relabelable
             return (
-              <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 3, alignItems: 'baseline' }}>
+              <div key={i} data-seg-idx={i} style={{ display: 'flex', gap: 8, marginBottom: 3, alignItems: 'baseline' }}>
                 <span style={{ color: 'var(--text-muted)', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{mmss(s.t0Ms)}</span>
                 {hasSpeakers && (canRelabel
                   ? (

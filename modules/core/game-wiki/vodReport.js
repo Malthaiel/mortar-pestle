@@ -32,6 +32,36 @@ export function mmss(s) {
   return h ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
 }
 
+// M18 — a stamp token may carry a one-letter SOURCE glued to the time: "r" = the VOD-review
+// recording, "c" = the in-game comms recording, no letter = game clock. Untagged is deliberately
+// INERT (renders as muted, unclickable game clock) rather than guessed from which process wrote the
+// report: a chip that is missing is a smaller failure than a chip that jumps to the wrong moment, so
+// the model has to opt a stamp IN to being a link. A range token (M19) carries its letter on the end.
+export const STAMP_SOURCE = { r: 'review', c: 'comms', '': 'clock' };
+const STAMP_BODY = '\\[\\d+:\\d{2}(?::\\d{2})?(?:–\\d+:\\d{2}(?::\\d{2})?)?[rc]?\\]';
+export const STAMP_SPLIT_RE = new RegExp(`(${STAMP_BODY})`, 'g'); // split() keeps the token as its own part
+const STAMP_ONE_RE = /^\[(\d+:\d{2}(?::\d{2})?(?:–\d+:\d{2}(?::\d{2})?)?)([rc]?)\]$/;
+
+// "[27:49r]" -> { t: "27:49", letter: "r", source: "review" }. null when it is not a stamp token.
+export function parseStamp(token) {
+  const m = String(token ?? '').match(STAMP_ONE_RE);
+  return m ? { t: m[1], letter: m[2], source: STAMP_SOURCE[m[2]] } : null;
+}
+
+// The segment a stamp points at: exact whole-second start, else the first segment at/after it, else
+// the last row (-1 only when there are no segments at all). Shared by every jump target — the scrim
+// report's own Segments tab and the per-match Comms/Review Segments pages — so a chip and the row it
+// lands on can never disagree. A range token ([first–last]) lands on its START.
+export function segIndexForStamp(segments, t) {
+  const segs = Array.isArray(segments) ? segments : [];
+  if (!segs.length) return -1;
+  const tSec = String(t ?? '').split('–')[0].split(':').map(Number)
+    .reduce((acc, n) => acc * 60 + (Number.isFinite(n) ? n : 0), 0);
+  let i = segs.findIndex((s) => Math.floor((Number(s.t0Ms) || 0) / 1000) === tSec);
+  if (i === -1) i = segs.findIndex((s) => (Number(s.t0Ms) || 0) >= tSec * 1000);
+  return i === -1 ? segs.length - 1 : i;
+}
+
 // M15: collapse a whitespace-separated run of ≥3 bracketed [m:ss] stamps whose consecutive gaps are
 // all ≤45s into one [first–last] range (en-dash). Runs of <3, or broken by a >45s (or backward) gap,
 // keep their individual chips; only stamps separated by whitespace alone fold (a chain on one point),
@@ -42,15 +72,20 @@ export function collapseStampRuns(text) {
   const s = String(text ?? '');
   if (!s) return s;
   const toSec = (t) => t.split(':').map(Number).reduce((a, n) => a * 60 + (Number.isFinite(n) ? n : 0), 0);
-  return s.replace(/\[\d+:\d{2}(?::\d{2})?\](?:\s+\[\d+:\d{2}(?::\d{2})?\])+/g, (run) => {
-    const stamps = run.match(/\[\d+:\d{2}(?::\d{2})?\]/g).map((b) => b.slice(1, -1));
+  return s.replace(/\[\d+:\d{2}(?::\d{2})?[rc]?\](?:\s+\[\d+:\d{2}(?::\d{2})?[rc]?\])+/g, (run) => {
+    const stamps = run.match(/\[\d+:\d{2}(?::\d{2})?[rc]?\]/g).map(parseStamp);
     const groups = [[stamps[0]]];
     for (let i = 1; i < stamps.length; i++) {
-      const gap = toSec(stamps[i]) - toSec(stamps[i - 1]);
-      if (gap >= 0 && gap <= 45) groups[groups.length - 1].push(stamps[i]);
+      const gap = toSec(stamps[i].t) - toSec(stamps[i - 1].t);
+      // M18: never fold across SOURCES. Two recordings' stamps look alike but a range spanning them
+      // would claim a stretch of one recording that the other half never happened in.
+      const sameSource = stamps[i].letter === stamps[i - 1].letter;
+      if (sameSource && gap >= 0 && gap <= 45) groups[groups.length - 1].push(stamps[i]);
       else groups.push([stamps[i]]);
     }
-    return groups.map((g) => (g.length >= 3 ? `[${g[0]}–${g[g.length - 1]}]` : g.map((t) => `[${t}]`).join(' '))).join(' ');
+    return groups.map((g) => (g.length >= 3
+      ? `[${g[0].t}–${g[g.length - 1].t}${g[0].letter}]`
+      : g.map((x) => `[${x.t}${x.letter}]`).join(' '))).join(' ');
   });
 }
 
@@ -65,7 +100,10 @@ export function validateStamps(report, segments = []) {
   const { matchSummaries, ...rest } = report || {};
   void matchSummaries;
   const text = JSON.stringify(rest);
-  const stamps = [...text.matchAll(/\b(?:(\d{1,2}):)?(\d{1,2}):([0-5]\d)\b/g)]
+  // Trailing `(?!\d)` rather than `\b`: M18 glues a source letter onto the time ("27:49r"), and a
+  // word boundary between a digit and a letter does not exist — `\b` here would have silently
+  // stopped validating every tagged stamp, which is exactly the set worth validating.
+  const stamps = [...text.matchAll(/\b(?:(\d{1,2}):)?(\d{1,2}):([0-5]\d)(?!\d)/g)]
     .map((m) => (Number(m[1]) || 0) * 3600 + Number(m[2]) * 60 + Number(m[3]));
   const spanEnd = Math.max(...segs.map((s) => Number(s.t1Ms) || 0));
   const TOL = 5000; // segments are ~2.5s apart; ±5s covers rounding
@@ -184,6 +222,15 @@ export const VOD_REPORT_SYSTEM_PROMPT = [
   '1:00:00 (m:ss under the hour, h:mm:ss over it) — never reformat or recompute one. Never invent content not',
   'in the transcript or notes. Merge duplicate action items and bump their count instead of repeating. If a',
   'section has nothing, use an empty array. Keep it tight — this is a coach\'s cheat sheet, not a summary essay.',
+  '',
+  'Stamp sources: every [m:ss] token carries a one-letter source glued to the time, no space — "r" when the',
+  'moment is in the VOD-REVIEW transcript (the coach talking over the game), "c" when it is in the IN-GAME',
+  'COMMS transcript (the players talking during the match). A GAME-CLOCK time — match time from the digest,',
+  '"the mid boss at 12:00" — carries NO letter, because there is no recording behind it. Examples: [27:49r],',
+  '[8:12c], [12:00]. That letter is what makes a stamp clickable: an "r" stamp opens the review recording at',
+  'that moment, a "c" stamp opens the in-game recording, and a bare stamp stays plain text. A wrong letter',
+  'lands the coach in the wrong recording, so when you are not certain which transcript a moment came from,',
+  'leave the letter off. Ranges keep one letter at the end: [27:49–28:20r].',
   '',
   'Say-it-once: every insight has exactly ONE home (a section, a player-card field, or an action item).',
   'Anywhere else it is a one-line pointer ("see the <heading> section"), never re-explained. The "qa" field is',

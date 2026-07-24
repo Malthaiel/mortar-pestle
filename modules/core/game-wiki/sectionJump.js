@@ -22,3 +22,16 @@ export function takeSectionJump(scrim) {
 }
 
 export function subscribeSectionJump(fn) { subs.add(fn); return () => subs.delete(fn); }
+
+// M18 — the same one-shot trick for a stamp chip. A match report's Comms/Review Segments are their
+// own routed pages, not a tab inside the report, so clicking a chip navigates AWAY and the target
+// page has to be told which moment to flash. No subscribe half: the segments page mounts fresh on
+// that navigation and takes the request on mount. Keyed by the match page path, same as above.
+let pendingSeg = null; // { key, stamp } | null
+
+export function requestSegmentJump(key, stamp) { pendingSeg = { key, stamp }; }
+
+export function takeSegmentJump(key) {
+  if (pendingSeg && pendingSeg.key === key) { const s = pendingSeg.stamp; pendingSeg = null; return s; }
+  return null;
+}

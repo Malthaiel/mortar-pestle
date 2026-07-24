@@ -34,9 +34,9 @@ import { parseSegments } from './commsCompile.js';
 import { speakerColor } from './diarize.js';
 import Popover from '@host/components/ui/Popover.jsx';
 import { PrimaryBtn, OutlinedBtn } from '@host/components/ui/Button.jsx';
-import { coerceReport, slugId, transcriptHash, applyCorrections, mmss } from './vodReport.js';
+import { coerceReport, slugId, transcriptHash, applyCorrections, mmss, parseStamp, segIndexForStamp, STAMP_SPLIT_RE } from './vodReport.js';
 import { coerceMatchReport, splitTag, linkTagTokens } from './matchReport.js';
-import { subscribeSectionJump, takeSectionJump } from './sectionJump.js';
+import { subscribeSectionJump, takeSectionJump, requestSegmentJump } from './sectionJump.js';
 import { openAnalyst } from '@host/agents/analyst/AnalystProvider.jsx';
 
 const muted = { color: 'var(--text-muted)', fontSize: 13 };
@@ -79,14 +79,21 @@ function TagChip({ tag }) {
   );
 }
 
-function TimeChip({ t, onJump }) {
+// M18: `source` is the recording the stamp came from — 'comms' (in-game talk) keeps the plain chip
+// the coach already knows, 'review' (VOD-review talk) wears a faint accent wash. Two recordings, one
+// chip shape: the wash is the only tell, so a line of chips still reads as one row of times.
+function TimeChip({ t, source, onJump }) {
   if (!t) return null;
+  const where = source === 'review' ? 'Review Segments' : source === 'comms' ? 'Comms Segments' : 'Segments';
   return (
     <button type="button" data-own-press className="candy-btn" data-shape="chip"
-      title={`Jump to ${t} in Segments`}
+      title={`Jump to ${t} in ${where}`}
       onClick={(e) => { e.preventDefault(); e.stopPropagation(); onJump?.(t); }}
       style={{ verticalAlign: 'baseline', marginRight: 4, '--cbtn-depth': 'calc(var(--candy-depth-small) * 0.9375)' }}>
-      <span className="candy-face" style={{ fontSize: 11, fontFamily: 'var(--font-mono)', padding: '1px 5px', lineHeight: 1.25 }}>{t}</span>
+      <span className="candy-face" style={{
+        fontSize: 11, fontFamily: 'var(--font-mono)', padding: '1px 5px', lineHeight: 1.25,
+        ...(source === 'review' ? { background: 'color-mix(in oklch, var(--accent) 14%, transparent)' } : null),
+      }}>{t}</span>
     </button>
   );
 }
@@ -95,11 +102,12 @@ function TimeChip({ t, onJump }) {
 // override can render them as TimeChips. Fence-aware (mirror GameWikiPage.transformWikilinks): code
 // spans/blocks pass through untouched. `(?!\()` leaves real markdown links like [1:15](url) alone.
 // The optional third group matches the hour form mmss() emits past 1:00:00; older sidecars stored
-// bare `60:44` for the same moment and still match the two-part form.
+// bare `60:44` for the same moment and still match the two-part form. M18: an optional trailing
+// source letter (r/c) rides along inside the href so the renderer can route the chip.
 export function linkTimeTokens(md) {
   return String(md ?? '')
     .split(/(```[\s\S]*?```|`[^`]*`)/g)
-    .map((seg, i) => (i % 2 === 1 ? seg : seg.replace(/\[(\d+:\d{2}(?::\d{2})?(?:–\d+:\d{2}(?::\d{2})?)?)\](?!\()/g, '[$1](#seg-$1)')))
+    .map((seg, i) => (i % 2 === 1 ? seg : seg.replace(/\[(\d+:\d{2}(?::\d{2})?(?:–\d+:\d{2}(?::\d{2})?)?[rc]?)\](?!\()/g, '[$1](#seg-$1)')))
     .join('');
 }
 
@@ -436,13 +444,7 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
     const t = pendingJumpRef.current;
     if (tab !== 'segments' || !t || !Array.isArray(segments) || !segments.length) return;
     pendingJumpRef.current = null;
-    // Fold any number of colon-separated parts, so h:mm:ss and m:ss both resolve (a two-part
-    // destructure read "1:07:25" as 67 seconds and jumped a chip to the wrong end of the VOD).
-    // M15 range token ([first–last]): jump to the range START (left of the en-dash).
-    const tSec = t.split('–')[0].split(':').map(Number).reduce((acc, n) => acc * 60 + (Number.isFinite(n) ? n : 0), 0);
-    let idx = segments.findIndex((seg) => Math.floor((Number(seg.t0Ms) || 0) / 1000) === tSec);
-    if (idx === -1) idx = segments.findIndex((seg) => (Number(seg.t0Ms) || 0) >= tSec * 1000);
-    if (idx === -1) idx = segments.length - 1;
+    const idx = segIndexForStamp(segments, t); // shared with the per-match segments pages (M18)
     const tryFlash = () => {
       const el = paneRef.current?.querySelector(`[data-seg-idx="${idx}"]`);
       if (!el) return false;
@@ -487,13 +489,42 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
     // jump requested before the headings rendered re-runs once they exist. Avoids a TDZ on `sections`.
   }, [sectionTick, tab, report]);
 
+  // M18: a match's two transcripts are their own routed pages (locked decision 10), so a chip jump is
+  // a NAVIGATION, not a tab switch inside this view — stash the moment for the page that is about to
+  // mount, then let inline tab routing take us there. The page flashes the row itself.
+  const jumpToMatchSegments = useCallback((source, t) => {
+    requestSegmentJump(mdPath, t);
+    setTab(source === 'review' ? 'review-segments' : 'comms-segments');
+  }, [mdPath, setTab]);
+
+  // One stamp renderer for both paths (markdown links and the compact one-line fields). A SCRIM
+  // report is unchanged: one Segments tab, every stamp clickable. A match report routes on the
+  // token's source letter — review/comms chips jump to that recording's page, and an untagged stamp
+  // stays the inert game clock every match stamp was before M18. Popup mode (no `inline`) has no
+  // route to navigate, so its chips stay inert too; the tree is where reports are read.
+  const renderStamp = useCallback((token, key) => {
+    const p = parseStamp(`[${token}]`);
+    if (!p) return null;
+    if (!isMatch) return <TimeChip key={key} t={p.t} onJump={jumpToSegment} />;
+    if (p.source === 'clock' || !inline) return <GameClock key={key} t={p.t} />;
+    return <TimeChip key={key} t={p.t} source={p.source} onJump={() => jumpToMatchSegments(p.source, p.t)} />;
+  }, [isMatch, inline, jumpToSegment, jumpToMatchSegments]);
+
+  // The structured single-stamp fields (a death's .t, an objective window, a callout, an action
+  // item's timestamps, a Q&A moment) store a BARE time — "5:00", no brackets, no source letter — so
+  // they route through the same renderer by being re-bracketed. In a scrim report that is the chip
+  // it always was; in a match report an untagged stamp is inert, which also closes a dead click:
+  // these chips used to call jumpToSegment in a match view, whose Segments tab does not exist there,
+  // landing the coach on a blank pane with no active tab.
+  const stampChip = useCallback((t, key) => renderStamp(String(t ?? ''), key), [renderStamp]);
+
   // react-markdown overrides: #seg- links (from linkTimeTokens) render as TimeChips; external
   // links open in a new window; everything else inherits .gamewiki-md typography.
   const mdComponents = {
     a: ({ href, children, ...rest }) => {
       const h = href || '';
       if (h.startsWith('#tag-')) return <TagChip tag={h.slice(5)} />;
-      if (h.startsWith('#seg-')) return isMatch ? <GameClock t={h.slice(5)} /> : <TimeChip t={h.slice(5)} onJump={jumpToSegment} />;
+      if (h.startsWith('#seg-')) return renderStamp(h.slice(5));
       if (/^https?:\/\//i.test(h)) return <a href={h} target="_blank" rel="noreferrer" {...rest}>{children}</a>;
       return <a href={h} {...rest}>{children}</a>;
     },
@@ -510,13 +541,11 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
     // into a chip, so the claim itself reads clean; the stamps behind it are game clock, not VOD.
     let tag = '';
     if (isMatch) ({ tag, text: s } = splitTag(s));
-    const parts = s.split(/(\[\d+:\d{2}(?::\d{2})?(?:–\d+:\d{2}(?::\d{2})?)?\])/).map((part, i) => {
-      const m = part.match(/^\[(\d+:\d{2}(?::\d{2})?(?:–\d+:\d{2}(?::\d{2})?)?)\]$/);
-      if (!m) return <span key={i}>{part}</span>;
-      return isMatch ? <GameClock key={i} t={m[1]} /> : <TimeChip key={i} t={m[1]} onJump={jumpToSegment} />;
-    });
+    const parts = s.split(STAMP_SPLIT_RE).map((part, i) => (
+      parseStamp(part) ? renderStamp(part.slice(1, -1), i) : <span key={i}>{part}</span>
+    ));
     return tag ? [<TagChip key="tag" tag={tag} />, ...parts] : parts;
-  }, [jumpToSegment, isMatch]);
+  }, [renderStamp, isMatch]);
 
   const runRail = async (kind, fn) => {
     if (!fn || busy) return;
@@ -714,7 +743,7 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
                               {c.deathAnalysis.map((d, j) => (
                                 <div key={j} style={{ marginTop: j ? 8 : 0 }}>
                                   <div style={{ lineHeight: 1.5 }}>
-                                    <TimeChip t={d.t} onJump={jumpToSegment} />
+                                    {stampChip(d.t)}
                                     <MarkChip refId={REF.death(c, d)} aiText={d.what} entries={feedback.entries} accent={accent} onOpen={openMark} active={isActive(REF.death(c, d))} />
                                     <span>{d.what}</span>
                                   </div>
@@ -773,7 +802,7 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
                             {w.verdict && <div style={{ fontSize: 13, color: 'var(--text-2)', marginTop: 2 }}>— {w.verdict}</div>}
                           </div>
                           <span style={macroBtnCluster}>
-                            <TimeChip t={w.t} onJump={jumpToSegment} />
+                            {stampChip(w.t)}
                           </span>
                         </div>
                         {w.why && (
@@ -795,7 +824,7 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, lineHeight: 1.5 }}>
                           <span>{s.direction}{s.cause ? <> — {stamped(s.cause)}</> : ''}</span>
                           <span style={macroBtnCluster}>
-                            <TimeChip t={s.t} onJump={jumpToSegment} />
+                            {stampChip(s.t)}
                           </span>
                         </div>
                         <FindingList findings={r.meta.findings} path={`macro.swings[${i}]`} />
@@ -819,7 +848,7 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
                     {r.commsGrade.callouts.map((c, i) => (
                       <div key={i} style={{ marginTop: i ? 12 : 0 }}>
                         <div style={{ lineHeight: 1.5 }}>
-                          <TimeChip t={c.t} onJump={jumpToSegment} />
+                          {stampChip(c.t)}
                           <MarkChip refId={REF.callout(c)} aiText={c.call} entries={feedback.entries} accent={accent} onOpen={openMark} active={isActive(REF.callout(c))} />
                           <span><b>{c.who}:</b> {stamped(c.call)}</span>
                         </div>
@@ -859,7 +888,7 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
                         {it.player && <span style={{ fontSize: 11.5, color: 'var(--accent)', marginLeft: 6 }}>@{it.player}</span>}
                       </span>
                       <span style={{ display: 'block', marginTop: 3 }}>
-                        {(it.timestamps || []).map((t, i) => <TimeChip key={i} t={t} onJump={jumpToSegment} />)}
+                        {(it.timestamps || []).map((t, i) => stampChip(t, i))}
                         <MarkChip refId={REF.action(it)} aiText={it.text} entries={feedback.entries} accent={accent} onOpen={openMark} active={isActive(REF.action(it))} />
                       </span>
                       <FindingList findings={r.meta.findings} path={`actionItems[${(r.actionItems || []).indexOf(it)}]`} />
@@ -875,7 +904,7 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
                 {r.qa.map((x, i) => (
                   <div key={i}>
                     <div style={{ fontSize: 13.5 }}>
-                      <TimeChip t={x.t} onJump={jumpToSegment} />
+                      {stampChip(x.t)}
                       <MarkChip refId={REF.qa(x)} aiText={x.q} entries={feedback.entries} accent={accent} onOpen={openMark} active={isActive(REF.qa(x))} />
                       <b>{x.askedBy || 'Q'}:</b> {x.q}
                     </div>

@@ -30,6 +30,7 @@ import ConfirmModal from '@host/components/ui/ConfirmModal.jsx';
 import { serializeTfComms, buildTranscriptBlock, generateReport, validateStamps } from './vodReport.js';
 import { generateMatchReport, coerceMatchReport } from './matchReport.js';
 import { openHomework, teamSidecarPath } from './teamProgress.js';
+import { exportCarryForward } from './carryForward.js';
 import { readStopwatch } from './useStopwatch.js';
 import CommsTranscriptView from './CommsTranscriptView.jsx';
 import TeamfightCommsView from './TeamfightCommsView.jsx';
@@ -317,6 +318,10 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
       report.generated = new Date().toISOString().slice(0, 10);
       report.model = agents.model;
       await api.savePage(sidecarPath(folder, n, 'matchfinal'), JSON.stringify(report), null, 'gamewiki');
+      // M24 auto-refresh: onlyIfExists means the sheet is REFRESHED, never conjured — a scrim that
+      // never asked for a carry-forward stays without one. Swallowed on failure by design: the final
+      // report already landed, so a sheet that could not be rewritten must not read as a failed run.
+      await exportCarryForward(api, folder, { scrim: folder.split('/').pop(), date: report.generated, onlyIfExists: true }).catch(() => {});
       setMfReady(true);
       notify('success', 'Final report ready', `${report.reconciliation.length} analyst read${report.reconciliation.length === 1 ? '' : 's'} reconciled · ${report.sections.length} section${report.sections.length === 1 ? '' : 's'}.`);
     } catch (e) {

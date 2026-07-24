@@ -183,4 +183,12 @@ const msm = coerceMatchReport({ meta: { speakerMap: {
 assert.deepEqual(msm['Speaker 3'], { name: 'Celeste', confidence: 'high', evidence: '[12:04] addressed by name' }, 'full mapping survives');
 assert.deepEqual(msm['Speaker 7'], { name: 'Ash', confidence: 'low', evidence: '' }, 'partial mapping defaults to low confidence');
 
+// M18: the analyst prompt teaches the stamp-source letter, and teaches that "r" is not its to write
+// — Process 1 has never seen a VOD review, so an "r" stamp out of it would link to nothing.
+for (const needle of ['Stamp sources', '[8:12c]', 'never', 'clickable']) {
+  assert.ok(MATCH_REPORT_SYSTEM_PROMPT.includes(needle), `P1 stamp-source rule states: ${needle}`);
+  assert.ok(buildMatchReportSystemPrompt({ dataFree: true }).includes(needle), `P1 stamp-source rule survives data-free: ${needle}`);
+}
+assert.ok(!MATCH_REPORT_SYSTEM_PROMPT.includes('[27:49r]'), 'P1 never shows an "r" stamp as an example to copy');
+
 console.log('matchReport.selftest: all assertions passed');

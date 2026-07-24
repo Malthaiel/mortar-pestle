@@ -2,7 +2,7 @@
 // Covers the parts that break silently — transcript formatting, tolerant parse (fenced + noisy),
 // coercion of a missing id, and checkbox reconcile across a regenerate.
 import assert from 'node:assert/strict';
-import { mmss, slugId, buildTranscriptBlock, buildReportPrompt, parseReport, reconcileReport, serializeReportMarkdown, buildNormalizePrompt, parseCorrections, applyCorrections, transcriptHash, normalizeTranscript, parseFindings, applyFindings, verifyReport, validateStamps, collapseStampRuns, serializeTfComms, coerceReport, VOD_REPORT_SYSTEM_PROMPT, VERIFY_SYSTEM_PROMPT } from './vodReport.js';
+import { mmss, slugId, buildTranscriptBlock, buildReportPrompt, parseReport, reconcileReport, serializeReportMarkdown, buildNormalizePrompt, parseCorrections, applyCorrections, transcriptHash, normalizeTranscript, parseFindings, applyFindings, verifyReport, validateStamps, collapseStampRuns, parseStamp, segIndexForStamp, serializeTfComms, coerceReport, VOD_REPORT_SYSTEM_PROMPT, VERIFY_SYSTEM_PROMPT } from './vodReport.js';
 
 // mmss
 assert.equal(mmss(0), '0:00');
@@ -308,6 +308,43 @@ const m15rep = parseReport(JSON.stringify({
 assert.equal(m15rep.keepDoing[0], 'chained [4:00–4:35] focus', 'coerce folds keepDoing run');
 assert.equal(m15rep.macro.swings[0].cause, 'won [9:00–9:40] teamfight', 'coerce folds swings.cause run');
 assert.equal(m15rep.macro.swings[0].t, '5:00', 'single-stamp .t field untouched');
+
+// ── M18: stamp sources ───────────────────────────────────────────────────────
+// A stamp may glue a source letter to the time: r = VOD review, c = in-game comms, none = game
+// clock. Untagged parses as 'clock' ON PURPOSE — that is what makes an unmarked stamp render inert
+// instead of guessing a recording and jumping the coach somewhere the moment never happened.
+assert.deepEqual(parseStamp('[27:49r]'), { t: '27:49', letter: 'r', source: 'review' });
+assert.deepEqual(parseStamp('[8:12c]'), { t: '8:12', letter: 'c', source: 'comms' });
+assert.deepEqual(parseStamp('[12:00]'), { t: '12:00', letter: '', source: 'clock' });
+assert.deepEqual(parseStamp('[1:07:25r]'), { t: '1:07:25', letter: 'r', source: 'review' }, 'hour form keeps its letter');
+assert.deepEqual(parseStamp('[27:49–28:20r]'), { t: '27:49–28:20', letter: 'r', source: 'review' }, 'range keeps one letter');
+assert.equal(parseStamp('27:49'), null, 'bare time is not a stamp token');
+assert.equal(parseStamp('[27:49x]'), null, 'unknown letter is not a stamp token');
+
+// collapseStampRuns folds a tagged run and keeps the letter on the range, but NEVER folds across
+// sources — a range spanning two recordings would claim a stretch of one that the other half of the
+// run never happened in.
+assert.equal(collapseStampRuns('[1:00r] [1:20r] [1:35r] [1:50r]'), '[1:00–1:50r]', 'same-source run folds, letter kept');
+assert.equal(collapseStampRuns('[1:00r] [1:20c] [1:35r]'), '[1:00r] [1:20c] [1:35r]', 'mixed sources never fold');
+assert.equal(collapseStampRuns('[1:00c] [1:20c] [1:35c] [4:00r] [4:20r] [4:35r]'), '[1:00–1:35c] [4:00–4:35r]', 'two same-source runs fold separately');
+assert.equal(collapseStampRuns('[1:00] [1:20] [1:35r]'), '[1:00] [1:20] [1:35r]', 'untagged never folds into a tagged stamp');
+
+// validateStamps still sees a tagged stamp: the trailing `\b` it used to end on does not exist
+// between a digit and a letter, so `27:49r` would have gone silently unvalidated.
+assert.ok(validateStamps({ sections: [{ id: 's', heading: 'H', md: 'invented [45:00r]' }] }, stampSegs).includes('45:00'), 'tagged invented stamp still flagged');
+assert.deepEqual(validateStamps({ sections: [{ id: 's', heading: 'H', md: 'real [0:01c] and [1:02r]' }] }, stampSegs), [], 'tagged real stamps clean');
+
+// segIndexForStamp: exact whole-second start, else the first segment at/after, else the last row.
+const jumpSegs = [{ t0Ms: 0 }, { t0Ms: 60000 }, { t0Ms: 120000 }];
+assert.equal(segIndexForStamp(jumpSegs, '1:00'), 1, 'exact start matches');
+assert.equal(segIndexForStamp(jumpSegs, '0:30'), 1, 'falls forward to the next segment');
+assert.equal(segIndexForStamp(jumpSegs, '9:99'), 2, 'past the end lands on the last row');
+assert.equal(segIndexForStamp(jumpSegs, '1:00–1:40'), 1, 'a range jumps to its START');
+assert.equal(segIndexForStamp([], '1:00'), -1, 'no segments → nothing to jump to');
+
+// Both prompts have to TEACH the encoding or the model never emits a letter and every chip dies.
+assert.ok(VOD_REPORT_SYSTEM_PROMPT.includes('Stamp sources:'), 'P2 prompt carries the Stamp sources rule');
+assert.ok(VOD_REPORT_SYSTEM_PROMPT.includes('[27:49r]') && VOD_REPORT_SYSTEM_PROMPT.includes('[8:12c]'), 'P2 rule shows both letters by example');
 
 // ── Export to markdown (serializeReportMarkdown) ─────────────────────────────
 

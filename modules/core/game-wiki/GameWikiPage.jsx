@@ -29,6 +29,7 @@ import OverviewPage from './OverviewPage.jsx';
 import MatchPage from './MatchPage.jsx';
 import VodReportView from './VodReportView.jsx';
 import CommsTranscriptView from './CommsTranscriptView.jsx';
+import { takeSegmentJump } from './sectionJump.js';
 
 // Drop a leading YAML frontmatter block (the Rust reader strips it too).
 function stripFrontmatter(src) {
@@ -117,6 +118,9 @@ function MatchReportPane({ folder, n, tab, rest, accent, nav }) {
 // scrim-level .vodcomms on single-match scrims).
 function MatchSegmentsPane({ folder, n, review, accent }) {
   const [resolved, setResolved] = useState(review ? undefined : { path: sidecarPath(folder, n, 'comms'), scrimLevel: false });
+  // M18: a stamp chip in the report navigated here and left the moment behind. One-shot, taken once
+  // on mount (this pane is freshly mounted by that navigation) so a later manual visit is not hijacked.
+  const [jumpTo] = useState(() => takeSegmentJump(matchPath(folder, n)));
   useEffect(() => {
     if (!review) { setResolved({ path: sidecarPath(folder, n, 'comms'), scrimLevel: false }); return undefined; }
     let cancelled = false;
@@ -140,7 +144,7 @@ function MatchSegmentsPane({ folder, n, review, accent }) {
           {resolved.scrimLevel && (
             <p style={{ opacity: 0.6, fontSize: 12 }}>Scrim-level review recording (adopted for this single-match scrim).</p>
           )}
-          <CommsTranscriptView sidecarPath={resolved.path} />
+          <CommsTranscriptView sidecarPath={resolved.path} jumpTo={jumpTo} />
         </>
       )}
     </Shell>
