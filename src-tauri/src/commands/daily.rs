@@ -38,6 +38,9 @@ pub struct RecentNotesOut {
 #[tauri::command]
 pub fn daily_get_today(app: AppHandle) -> DailyNote {
     let ds = today_str();
+    // A missing daily note used to leave the whole day in `no-note` state (no
+    // tasks, no plan blocks). Create it on first read so every day has one.
+    crate::parsers::daily::ensure_daily_note(&ds);
     let mut note = read_daily_note(&ds);
     // Sessions live in sessions.json (D5), not the daily-note markdown.
     if let Ok(path) = crate::commands::sessions::sessions_file(&app) {

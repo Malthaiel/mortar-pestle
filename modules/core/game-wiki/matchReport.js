@@ -28,6 +28,17 @@ export function splitTag(text) {
   return m ? { tag: m[1].toLowerCase(), text: s.slice(m[0].length) } : { tag: '', text: s };
 }
 
+// M23 twin of VodReportView.linkTimeTokens: turn the literal provenance tags inside a section's
+// markdown into #tag- links so the view's existing `a` override renders them as chips. Reusing the
+// link channel means markdown, tables and lists keep working — no second renderer. Fence-aware, and
+// `(?!\()` leaves a real markdown link like [data](url) alone.
+export function linkTagTokens(md) {
+  return String(md ?? '')
+    .split(/(```[\s\S]*?```|`[^`]*`)/g)
+    .map((seg, i) => (i % 2 === 1 ? seg : seg.replace(/\[(data|grounded|analyst)\](?!\()/g, '[$1](#tag-$1)')))
+    .join('');
+}
+
 // Every tagged claim in the report, flattened — feeds M24's reconciliation (the scrim report judges
 // each [analyst] read) and M25's verify pass (which checks [data] claims against the digest).
 export function collectClaims(report) {

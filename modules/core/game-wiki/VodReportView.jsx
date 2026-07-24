@@ -35,6 +35,7 @@ import { speakerColor } from './diarize.js';
 import Popover from '@host/components/ui/Popover.jsx';
 import { PrimaryBtn, OutlinedBtn } from '@host/components/ui/Button.jsx';
 import { coerceReport, slugId, transcriptHash, applyCorrections, mmss } from './vodReport.js';
+import { coerceMatchReport, splitTag, linkTagTokens } from './matchReport.js';
 import { subscribeSectionJump, takeSectionJump } from './sectionJump.js';
 import { openAnalyst } from '@host/agents/analyst/AnalystProvider.jsx';
 
@@ -53,6 +54,31 @@ function RailButton({ active, accent, onClick, disabled, children, ...rest }) {
 
 // m:ss stamp as a clickable candy chip — click jumps to the Segments tab and flashes the moment.
 // One behavior for every stamp in the popup (sections, Action Items, Q&A).
+// WS4 M23: a match report's times are GAME clock — there is no VOD behind them, so nothing to jump
+// to. Same slot as a TimeChip, deliberately inert and muted so the difference reads at a glance.
+function GameClock({ t }) {
+  return (
+    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.92em', color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+      [{t}]
+    </span>
+  );
+}
+
+// The provenance tag opening every match-report claim ([data] / [grounded] / [analyst]). Muted for
+// the two sourced classes, accented for [analyst] — the one class that is the machine's own opinion
+// and the only one a coach needs to argue with.
+function TagChip({ tag }) {
+  const own = tag === 'analyst';
+  return (
+    <span style={{
+      fontSize: 10.5, fontWeight: 600, letterSpacing: 0.3, textTransform: 'uppercase',
+      padding: '1px 5px', borderRadius: 4, marginRight: 5, verticalAlign: 'baseline',
+      color: own ? 'var(--accent)' : 'var(--text-muted)',
+      border: `1px solid ${own ? 'var(--accent)' : 'var(--border)'}`,
+    }}>{tag}</span>
+  );
+}
+
 function TimeChip({ t, onJump }) {
   if (!t) return null;
   return (
@@ -273,7 +299,14 @@ function ReportArtifactTree({ tabs, tab, onTab, accent, reveal }) {
   return <TreeSidebar nodes={nodes} controller={controller} buttons={buttons} accent={accent} />;
 }
 
-export default function VodReportView({ sidecarPath, commsPath, normPath, feedbackPath, mdPath, accent, onClose, onRegenerate, onAddNotes, inline = false, tab: tabProp, onTabChange, onTabsChange }) {
+export default function VodReportView({ sidecarPath, commsPath, normPath, feedbackPath, mdPath, accent, onClose, onRegenerate, onAddNotes, inline = false, tab: tabProp, onTabChange, onTabsChange, variant = 'scrim' }) {
+  // WS4 M23: one prop, not a second view. A match report renders through the SAME player cards,
+  // macro cards, comms grade, sections and Mark machinery — reproducing ~250 lines of that in a
+  // sibling component to avoid a handful of branches would be the expensive way round. What the
+  // variant changes: which coercer parses the sidecar, which tabs exist (a match has no transcript,
+  // no homework and nobody asked a question), stamps render as inert game clock, claims carry a
+  // provenance chip, and the header banners whether a coach has reviewed the machine's reads yet.
+  const isMatch = variant === 'match';
   const [state, setState] = useState({ status: 'loading' });
   const [report, setReport] = useState(null);
   const [segments, setSegments] = useState(null); // null = loading, [] = none/unavailable
@@ -303,12 +336,12 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
         if (cancelled) return;
         let raw;
         try { raw = JSON.parse(r.content); } catch { setState({ status: 'parse-error' }); return; }
-        setReport(coerceReport(raw)); // v1 sidecars gain safe v2 defaults — no undefined-access
+        setReport(isMatch ? coerceMatchReport(raw) : coerceReport(raw)); // v1 sidecars gain safe v2 defaults — no undefined-access
         setState({ status: 'ready' });
       })
       .catch(() => { if (!cancelled) setState({ status: 'missing' }); });
     return () => { cancelled = true; };
-  }, [sidecarPath, reloadKey]);
+  }, [sidecarPath, reloadKey, isMatch]);
 
   // Diarized segments the report was built from (.vodcomms sidecar) — read-only here;
   // relabeling lives in ScrimViewer's CommsTranscriptView. Missing/bad → [] (degrades to a gap).
@@ -453,7 +486,8 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
   const mdComponents = {
     a: ({ href, children, ...rest }) => {
       const h = href || '';
-      if (h.startsWith('#seg-')) return <TimeChip t={h.slice(5)} onJump={jumpToSegment} />;
+      if (h.startsWith('#tag-')) return <TagChip tag={h.slice(5)} />;
+      if (h.startsWith('#seg-')) return isMatch ? <GameClock t={h.slice(5)} /> : <TimeChip t={h.slice(5)} onJump={jumpToSegment} />;
       if (/^https?:\/\//i.test(h)) return <a href={h} target="_blank" rel="noreferrer" {...rest}>{children}</a>;
       return <a href={h} {...rest}>{children}</a>;
     },
@@ -464,13 +498,19 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
   // break the cards). Split on the stamp token (single token or an en-dash range from M15), chip the
   // matches, plain-span the rest. Sections + player-card coaching keep full markdown (linkTimeTokens).
   const stamped = useCallback((text) => {
-    const s = String(text ?? '');
+    let s = String(text ?? '');
     if (!s) return null;
-    return s.split(/(\[\d+:\d{2}(?::\d{2})?(?:–\d+:\d{2}(?::\d{2})?)?\])/).map((part, i) => {
+    // M23: in a match report the leading [data]/[grounded]/[analyst] tag is lifted out of the prose
+    // into a chip, so the claim itself reads clean; the stamps behind it are game clock, not VOD.
+    let tag = '';
+    if (isMatch) ({ tag, text: s } = splitTag(s));
+    const parts = s.split(/(\[\d+:\d{2}(?::\d{2})?(?:–\d+:\d{2}(?::\d{2})?)?\])/).map((part, i) => {
       const m = part.match(/^\[(\d+:\d{2}(?::\d{2})?(?:–\d+:\d{2}(?::\d{2})?)?)\]$/);
-      return m ? <TimeChip key={i} t={m[1]} onJump={jumpToSegment} /> : <span key={i}>{part}</span>;
+      if (!m) return <span key={i}>{part}</span>;
+      return isMatch ? <GameClock key={i} t={m[1]} /> : <TimeChip key={i} t={m[1]} onJump={jumpToSegment} />;
     });
-  }, [jumpToSegment]);
+    return tag ? [<TagChip key="tag" tag={tag} />, ...parts] : parts;
+  }, [jumpToSegment, isMatch]);
 
   const runRail = async (kind, fn) => {
     if (!fn || busy) return;
@@ -490,7 +530,20 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
   const warnings = r.meta?.warnings || [];
   const verifyWarnings = warnings.filter((w) => w.startsWith('verify:'));
   const dataCaveats = warnings.filter((w) => !w.startsWith('verify:'));
-  const TABS = [
+  // M24 writes these back after a scrim review judges this match's claims; absent → unreviewed.
+  const reviewStamp = isMatch ? (r.meta?.reviewed || '') : '';
+  const reconciliation = r.meta?.reconciliation || [];
+  const reviewCounts = {
+    confirmed: reconciliation.filter((x) => x.verdict === 'confirmed').length,
+    overridden: reconciliation.filter((x) => x.verdict === 'overridden').length,
+  };
+  const TABS = isMatch ? [
+    { id: 'tldr', label: 'Report' },
+    { id: 'players', label: `Player Cards${(r.playerCards || []).length ? ` (${r.playerCards.length})` : ''}` },
+    { id: 'macro', label: 'Macro' },
+    { id: 'comms', label: 'Comms Grade' },
+    { id: 'keep', label: 'Keep Doing' },
+  ] : [
     { id: 'tldr', label: 'Report' },
     { id: 'players', label: `Player Cards${(r.playerCards || []).length ? ` (${r.playerCards.length})` : ''}` },
     { id: 'macro', label: 'Macro' },
@@ -514,6 +567,21 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
     <>
       {/* Content pane */}
       <div ref={paneRef} style={{ flex: 1, minWidth: 0, padding: '20px 24px', overflowY: 'auto' }}>
+        {/* M23 guardrail 2: a match report is the machine's own opinion until a coach's scrim review
+            has judged its [analyst] claims (M24 writes meta.reviewed + meta.reconciliation back onto
+            this sidecar). Until then the banner says so plainly — an unreviewed machine read must
+            never be mistaken for coached truth. Every tab, not just Report: the claims are everywhere. */}
+        {isMatch && status === 'ready' && (
+          <div style={{
+            border: `1px solid ${reviewStamp ? 'var(--border)' : 'var(--accent)'}`,
+            borderRadius: 8, padding: '7px 11px', marginBottom: 14, fontSize: 12,
+            color: reviewStamp ? 'var(--text-muted)' : 'var(--text-2)', background: 'var(--surface-2)',
+          }}>
+            {reviewStamp
+              ? `Coach-reviewed ${reviewStamp} — ${reviewCounts.confirmed} read${reviewCounts.confirmed === 1 ? '' : 's'} confirmed, ${reviewCounts.overridden} overridden.`
+              : 'Analyst report — not yet coach-reviewed. Claims marked [analyst] are the model’s own reads.'}
+          </div>
+        )}
         {/* M16 warnings drawer (was the always-open bar): Report tab only, collapsed by default,
             split into verify corrections + data caveats, with the unmatched-corrections drawer nested. */}
         {status === 'ready' && tab === 'tldr' && (warnings.length > 0 || unmatched.length > 0) && (
@@ -552,7 +620,7 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
           </details>
         )}
         {tab !== 'segments' && status === 'loading' && <Empty>Loading report…</Empty>}
-        {tab !== 'segments' && status === 'missing' && <Empty>No report yet — click Generate Report on the scrim first.</Empty>}
+        {tab !== 'segments' && status === 'missing' && <Empty>{isMatch ? 'No report yet — click Match Report on this match first.' : 'No report yet — click Generate Report on the scrim first.'}</Empty>}
         {tab !== 'segments' && status === 'parse-error' && <div style={{ color: 'var(--error)', fontSize: 13 }}>Couldn’t parse the stored report.</div>}
         {tab === 'segments' && (
           segments === null ? <Empty>Loading segments…</Empty>
@@ -579,7 +647,7 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
                     {/* M17: section-ref verify findings (sections[<id>] / .md) render under the heading,
                         not only buried in the warnings drawer. FindingList matches path / path. / path[. */}
                     <FindingList findings={r.meta.findings} path={`sections[${sec.id}]`} />
-                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{linkTimeTokens(sec.md)}</ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{isMatch ? linkTagTokens(linkTimeTokens(sec.md)) : linkTimeTokens(sec.md)}</ReactMarkdown>
                   </div>
                 ))}
                 {!sections.length && (
@@ -619,7 +687,7 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
                           {c.coaching && (
                             <Labeled label="Coaching" mark={<MarkChip refId={REF.pcField(c, 'coaching')} aiText={c.coaching} entries={feedback.entries} accent={accent} onOpen={openMark} active={isActive(REF.pcField(c, 'coaching'))} />}>
                               <div className="gamewiki-md">
-                                <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{linkTimeTokens(c.coaching)}</ReactMarkdown>
+                                <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{isMatch ? linkTagTokens(linkTimeTokens(c.coaching)) : linkTimeTokens(c.coaching)}</ReactMarkdown>
                               </div>
                               <FindingList findings={r.meta.findings} path={`playerCards[${i}].coaching`} />
                               <MarkLine refId={REF.pcField(c, 'coaching')} entries={feedback.entries} />

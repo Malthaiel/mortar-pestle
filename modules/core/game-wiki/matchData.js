@@ -61,6 +61,7 @@ const SIDECAR_PREFIX = {
   autoclass: 'autoclass',
   tfcomms: 'tfcomms',
   matchreport: 'matchreport', // WS4 M22: the per-match AI coaching report
+  matchfeedback: 'matchfeedback', // WS4 M23: coach Mark/Wrong corrections on that report
 };
 
 export function sidecarPath(scrim, matchN, kind = 'matchdata') {

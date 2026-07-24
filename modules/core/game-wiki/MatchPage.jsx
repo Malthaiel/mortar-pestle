@@ -31,6 +31,7 @@ import { generateMatchReport } from './matchReport.js';
 import { readStopwatch } from './useStopwatch.js';
 import CommsTranscriptView from './CommsTranscriptView.jsx';
 import TeamfightCommsView from './TeamfightCommsView.jsx';
+import VodReportView from './VodReportView.jsx';
 import MatchViewPopup from './MatchViewPopup.jsx';
 import ReviewModal from './ReviewModal.jsx';
 import {
@@ -123,6 +124,7 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
   // Same probe for the .matchreport sidecar (WS4 M22) — a generated report should still be there
   // after a nav away and back, so the chip is driven by disk, not by whether this mount ran the job.
   const [mrReady, setMrReady] = useState(false);
+  const [mrOpen, setMrOpen] = useState(false);
   useEffect(() => {
     let c = false;
     api.getRawFileMeta(sidecarPath(folder, n, 'matchreport'), 'gamewiki')
@@ -671,6 +673,11 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
                 style={mrRunning ? { opacity: 0.6, cursor: 'progress' } : undefined}>
                 <span className="candy-face">{mrRunning ? 'Asking Claude' : mrReady ? 'Regenerate Report' : 'Match Report'}</span>
               </button>
+              {mrReady && !mrRunning && (
+                <button className="candy-btn" data-shape="chip" onClick={() => setMrOpen(true)} title="Open this match's analyst report">
+                  <span className="candy-face">Open Report</span>
+                </button>
+              )}
             </div>
             {!populated && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: candyGap(8) }}>Pull match data first (Run Process), then Match Report.</div>}
             {populated && !hasComms && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: candyGap(8) }}>No comms review attached — the report will skip its comms grade rather than guess it.</div>}
@@ -682,6 +689,19 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
         )}
         {tfOpen && (
           <TeamfightCommsView sidecarPath={sidecarPath(folder, n, 'tfcomms')} accent={accent} onClose={() => setTfOpen(false)} />
+        )}
+        {/* WS4 M23: the SAME report view, variant="match" — no commsPath/normPath (a match has no VOD
+            transcript, so the view's segments loader degrades to none and the Segments tab is gone). */}
+        {mrOpen && (
+          <VodReportView
+            variant="match"
+            sidecarPath={sidecarPath(folder, n, 'matchreport')}
+            feedbackPath={sidecarPath(folder, n, 'matchfeedback')}
+            mdPath={matchPath(folder, n)}
+            accent={accent}
+            onClose={() => setMrOpen(false)}
+            onRegenerate={runMatchReport}
+          />
         )}
         {review && (
           <ReviewModal accent={accent} teamName={review.teamName} items={review.items}

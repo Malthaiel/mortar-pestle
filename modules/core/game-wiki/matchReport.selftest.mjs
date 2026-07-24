@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 import {
   MATCH_REPORT_SCHEMA_VERSION, MATCH_REPORT_SYSTEM_PROMPT, TAGS, splitTag, collectClaims,
-  buildMatchReportPrompt, coerceMatchReport, parseMatchReport, generateMatchReport,
+  buildMatchReportPrompt, coerceMatchReport, parseMatchReport, generateMatchReport, linkTagTokens,
 } from './matchReport.js';
 import { sidecarPath } from './matchData.js';
 
@@ -106,5 +106,15 @@ const flakyInvoke = async () => { calls += 1; return calls === 1 ? 'sorry, here 
 const retried = await generateMatchReport(flakyInvoke, { digest: '## d' });
 assert.equal(calls, 2, 'a parse failure reprompts exactly once');
 assert.equal(retried.playerCards[0].hero, 'Infernus');
+
+// M23: tags inside section markdown become #tag- links so the view's existing `a` override chips
+// them — the same channel linkTimeTokens uses, so tables/lists/markdown keep working.
+assert.equal(linkTagTokens('[analyst] lane lost early'), '[analyst](#tag-analyst) lane lost early');
+assert.equal(linkTagTokens('- [data] 20k souls\n- [grounded] patch cut it'), '- [data](#tag-data) 20k souls\n- [grounded](#tag-grounded) patch cut it');
+assert.equal(linkTagTokens('[data](http://x) already a link'), '[data](http://x) already a link', 'a real markdown link is left alone');
+assert.equal(linkTagTokens('`[data] in code`'), '`[data] in code`', 'code spans pass through untouched');
+assert.equal(linkTagTokens('```\n[data] fenced\n```'), '```\n[data] fenced\n```', 'fenced blocks pass through untouched');
+assert.equal(linkTagTokens('[12:00] no tag'), '[12:00] no tag', 'a timestamp is not a tag');
+assert.equal(linkTagTokens(null), '', 'null degrades');
 
 console.log('matchReport.selftest: all assertions passed');

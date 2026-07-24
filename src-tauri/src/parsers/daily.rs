@@ -49,6 +49,30 @@ pub fn daily_path(ds: &str) -> PathBuf {
     daily_dir().join(format!("{}.md", ds))
 }
 
+/// Create `ds`'s daily note from the skeleton when it doesn't exist yet; no-op
+/// when it does. Section set + order matches what the writers expect
+/// (`migrate_session_notes` asserts Upcoming → Session Notes → Plan Fence).
+/// `## Vault Activity` is retired and deliberately absent. Best-effort: a
+/// failure just leaves `exists: false`, the same state as before.
+pub fn ensure_daily_note(ds: &str) {
+    let p = daily_path(ds);
+    if p.exists() {
+        return;
+    }
+    if let Some(dir) = p.parent() {
+        if fs::create_dir_all(dir).is_err() {
+            return;
+        }
+    }
+    let month = ds.get(..7).unwrap_or(ds);
+    let body = format!(
+        "---\nType: Daily-Log\nDate: {ds}\nMonth: {month}\n---\n\n\
+         ## Focus Block\n\n## Quick Notes\n\n## Tasks\n\n\
+         ## Upcoming\n\n## Session Notes\n\n## Plan Fence\n\n```plan\n```\n"
+    );
+    let _ = atomic_write(&p, body.as_bytes());
+}
+
 #[derive(Serialize, Debug)]
 pub struct Task {
     pub raw: String,
