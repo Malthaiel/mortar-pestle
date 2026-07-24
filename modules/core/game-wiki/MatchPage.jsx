@@ -505,7 +505,7 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}><SaveTag state={saveState} /></div>
         <div style={cardBox}>
           <div style={{ marginBottom: candyGap(8) }}>
-            <div style={sectionTitle}>Match {n}</div>
+            <div style={sectionTitle}>{m.fields['Name'] || `Match ${n}`}</div>
             <div className="candy-chip-row" style={{ marginTop: 4 }}>
               {overlay && (
                 <button className="candy-btn" data-shape="chip" onClick={takeScoreboardShot}

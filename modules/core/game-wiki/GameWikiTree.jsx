@@ -3,15 +3,18 @@
 // primitives so it's pixel-identical to the vault tree, backed by the lazy
 // useGameWikiTree hook. The gamewiki vault is read-only reference EXCEPT
 // Deadlock/Coaching/Scrim — a scrim is a FOLDER (GameWiki Unification 2026-07-16:
-// Overview.md + Matches/Match <n>.md + dot-sidecars), so scrim folders get a
-// right-click Rename / Delete, Matches/ grows a "+ New Match" trailing row, and
-// two VIRTUAL groups (Report/ + Coaching/ — sidecar-driven panes, never real .md)
-// are injected per scrim. Every other node stays menu-less.
+// Overview.md + Matches/Match <n>.md + dot-sidecars). M1 (VOD Report Final
+// Improvements): each match renders as a FOLDER node with report-section +
+// segments children; the old scrim-level Report/ + Coaching/ virtual groups and
+// the "+ New Match" trailing row are gone. M2: scrim + match folders carry
+// right-click menus (New Match / Rename / Delete, scrim adds Export
+// Carry-Forward) through the app-wide useContextMenu primitive. Every other
+// node stays menu-less.
 //
 // The tree hook + New Scrim modal live in GameWikiRail (the shared composition
 // both surfaces mount); this component takes `tree` + `onNewScrim` as props.
 
-import { useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { navigate } from '@host/router.js';
 import { api, invoke } from '@host/api.js';
 import { useSettings } from '@host/hooks/useSettings.js';
@@ -24,24 +27,32 @@ import {
   AnimCtx, SuffixCtx, REVEAL, GAP, MUTED,
   CandyHeader, TreeRow, TreeChildren, Collapsible, StaggerChild,
 } from '@host/components/vault-tree/treeKit.jsx';
-import { parseOverview, newMatchContent } from './scrimSchema.js';
-import { scrimSidecarPath } from './matchData.js';
+import { parseOverview, parseMatchFile, serializeMatchFile, newMatchContent } from './scrimSchema.js';
+import { sidecarPath, matchPath } from './matchData.js';
 import { requestSectionJump } from './sectionJump.js';
 
 export const SCRIM_BASE = 'Deadlock/Coaching/Scrim';
 
-// The virtual scrim sub-views. Ids double as route tails
-// (/game-wiki/<scrim>/Report/<id>) — GameWikiPage dispatches on them. Split of
-// ScrimViewer's DEFAULT_REPORT_TABS (REPORT_GROUP / COACHING_GROUP); custom tabs a
-// generated report publishes beyond these render in the pane's own tab strip.
-export const REPORT_VIEWS = [
-  { id: 'tldr', label: 'Report' }, { id: 'players', label: 'Player Cards' },
-  { id: 'macro', label: 'Macro' }, { id: 'comms', label: 'Comms Grade' },
+// The per-match report views (M1). Ids double as route tails
+// (/game-wiki/<scrim>/Matches/Match <n>/<id>) — GameWikiPage dispatches on them,
+// VodReportView (variant="match") renders them as tabs. Section children under
+// the Report leaf jump via the sectionJump bridge, keyed by the match page path.
+export const MATCH_VIEWS = [
+  { id: 'tldr', label: 'Report' },
+  { id: 'players', label: 'Player Cards' },
+  { id: 'macro', label: 'Macro' },
+  { id: 'comms', label: 'Comms Grade' },
+  { id: 'actions', label: 'Action Items' },
+  { id: 'qa', label: 'Q&A' },
+  { id: 'keep', label: 'Keep Doing' },
+  { id: 'debates', label: 'Debates' },
+  { id: 'followups', label: 'Follow-ups' },
 ];
-export const COACHING_VIEWS = [
-  { id: 'actions', label: 'Action Items' }, { id: 'qa', label: 'Q&A' },
-  { id: 'keep', label: 'Keep Doing' }, { id: 'debates', label: 'Debates' },
-  { id: 'followups', label: 'Follow-ups' }, { id: 'segments', label: 'Segments' },
+// The two transcript pages (M1, locked decision 10): comms stamps land in Comms
+// Segments, review stamps in Review Segments — separate leaves, never one page.
+export const SEGMENT_VIEWS = [
+  { id: 'comms-segments', label: 'Comms Segments' },
+  { id: 'review-segments', label: 'Review Segments' },
 ];
 
 // "<base>" when vp is a scrim folder (direct subfolder of SCRIM_BASE), else null.
@@ -51,50 +62,112 @@ function scrimBaseOf(vp) {
   return rest && !rest.includes('/') ? rest : null;
 }
 
-// The scrim folder when vp is a scrim's Matches/ folder, else null.
-function matchesScrimOf(vp) {
-  if (!vp || !vp.endsWith('/Matches')) return null;
-  const scrim = vp.slice(0, -'/Matches'.length);
-  return scrimBaseOf(scrim) ? scrim : null;
+// Scrim-scoped tree services (listings, display labels, menus, match ops) —
+// context, not prop-drilling: TreeBody/MatchGroup sit several layers under the
+// component that owns the state (same reason treeKit's AnimCtx is a context).
+const ScrimCtx = createContext(null);
+
+// One disk listing per scrim: match numbers + the sidecar filenames (dot-files
+// are invisible to vault_get_folder, so the tree's normal fetch can't see them)
+// + the scrim-root files (.vodcomms presence gates the Review Segments leaf for
+// legacy single-match scrims; Carry-Forward.md renders when present).
+async function fetchScrimListing(scrim) {
+  const [matches, root] = await Promise.all([
+    api.listFolderRaw(`${scrim}/Matches`, 'gamewiki').catch(() => null),
+    api.listFolderRaw(scrim, 'gamewiki').catch(() => null),
+  ]);
+  const files = matches?.files || [];
+  const ns = files
+    .map((f) => Number((f.match(/^Match (\d+)\.md$/) || [])[1]))
+    .filter((x) => Number.isFinite(x) && x > 0)
+    .sort((a, b) => a - b);
+  // Display names (M2: rename edits the display name only; the folder key stays
+  // Match N). Read from each match file's Name field — small files, read once
+  // per listing refresh.
+  const labels = {};
+  await Promise.all(ns.map(async (n) => {
+    try {
+      const m = parseMatchFile((await api.getRawFileMeta(matchPath(scrim, n), 'gamewiki')).content, n);
+      if (String(m.fields?.Name || '').trim()) labels[n] = String(m.fields.Name).trim();
+    } catch { /* unreadable match file → default label */ }
+  }));
+  return {
+    ns,
+    labels,
+    sidecars: new Set(files.filter((f) => f.startsWith('.'))),
+    rootFiles: new Set(root?.files || []),
+  };
 }
 
-// A virtual Report/Coaching group — CandyHeader + static leaf rows (no disk
-// children; useGameWikiTree skips fetching these paths). Expansion rides the same
-// expanded Set as real folders, so persistence + collapse-all just work.
-function VirtualGroup({ scrimPath, name, views, tree, accent, currentPath, nav }) {
-  const vp = `${scrimPath}/${name}`;
+// A match folder (M1) — CandyHeader + the flattened children: Overview, then
+// (when a report sidecar exists) the report views with a section sub-nav under
+// Report, then the two segments leaves. Expansion rides the tree's expanded Set
+// keyed by the virtual path, so persistence + collapse-all just work.
+function MatchGroup({ scrimPath, n, tree, accent, currentPath, nav }) {
+  const ctx = useContext(ScrimCtx);
+  const listing = ctx.listings[scrimPath];
+  const hasSc = (prefix) => !!listing?.sidecars.has(`.${prefix}.Match ${n}.json`);
+  // Final replaces first everywhere (locked decision 2) — the tree reads whichever wins.
+  const reportKind = hasSc('matchfinal') ? 'matchfinal' : hasSc('matchreport') ? 'matchreport' : null;
+  const hasComms = hasSc('commstranscript');
+  const hasReview = hasSc('reviewcomms')
+    || (listing?.ns.length === 1 && listing.rootFiles.has('.vodcomms.json')); // M8 legacy adoption, single-match only
+  const vp = `${scrimPath}/Matches/Match ${n}`;
   const open = tree.isOpen(vp);
-  // M20: the Report group's "Report" (tldr) leaf gets the generated report's sections as a sub-nav.
-  // Load them from the .vodreport sidecar once this group is open (Report group only; Coaching stays flat).
-  const [sections, setSections] = useState([]);
+  const label = listing?.labels[n] || `Match ${n}`;
+
+  // Report meta for the section sub-nav + the Follow-ups leaf (hidden when the
+  // report has none — same rule as the report view's tab strip). Read when the
+  // group opens, like the retired VirtualGroup did.
+  const [rmeta, setRmeta] = useState({ sections: [], followUps: 0 });
   useEffect(() => {
-    if (name !== 'Report' || !open) return undefined;
+    if (!open || !reportKind) return undefined;
     let cancelled = false;
-    api.getRawFileMeta(scrimSidecarPath(scrimPath, 'vodreport'), 'gamewiki')
+    api.getRawFileMeta(sidecarPath(scrimPath, n, reportKind), 'gamewiki')
       .then((r) => {
         if (cancelled) return;
         try {
           const j = JSON.parse(r.content);
-          setSections((j.sections || []).filter((s) => s?.id && s?.heading).map((s) => ({ id: String(s.id), heading: String(s.heading) })));
-        } catch { setSections([]); }
+          setRmeta({
+            sections: (j.sections || []).filter((s) => s?.id && s?.heading).map((s) => ({ id: String(s.id), heading: String(s.heading) })),
+            followUps: (j.followUps || []).length,
+          });
+        } catch { setRmeta({ sections: [], followUps: 0 }); }
       })
-      .catch(() => { if (!cancelled) setSections([]); });
+      .catch(() => { if (!cancelled) setRmeta({ sections: [], followUps: 0 }); });
     return () => { cancelled = true; };
-  }, [name, open, scrimPath]);
+  }, [open, reportKind, scrimPath, n]);
+
+  const go = (id) => nav('/game-wiki/' + encodePagePath(id ? `${vp}/${id}` : vp));
+  const rows = [];
+  rows.push(<TreeRow key="overview" label="Overview" accent={accent} selected={currentPath === vp} onClick={() => go(null)} />);
+  if (reportKind) {
+    for (const v of MATCH_VIEWS) {
+      if (v.id === 'followups' && !rmeta.followUps) continue;
+      rows.push(v.id === 'tldr' && rmeta.sections.length
+        ? <ReportSectionLeaf key={v.id} vp={vp} view={v} sections={rmeta.sections}
+            jumpKey={matchPath(scrimPath, n)} tree={tree} accent={accent} currentPath={currentPath} nav={nav} />
+        : <TreeRow key={v.id} label={v.label} accent={accent}
+            selected={currentPath === `${vp}/${v.id}`} onClick={() => go(v.id)} />);
+    }
+  }
+  for (const v of SEGMENT_VIEWS) {
+    const present = v.id === 'comms-segments' ? hasComms : hasReview;
+    rows.push(present
+      ? <TreeRow key={v.id} label={v.label} accent={accent}
+          selected={currentPath === `${vp}/${v.id}`} onClick={() => go(v.id)} />
+      : <div key={v.id} style={MUTED}>{v.label} — no recording yet</div>);
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
-      <CandyHeader label={name} open={open} accent={accent} onToggle={() => tree.toggle(vp)}/>
-      <Collapsible open={open} count={views.length}>
+      <CandyHeader label={label} open={open} accent={accent}
+        onToggle={() => tree.toggle(vp)}
+        onContextMenu={(e) => ctx.openMatchMenu(e, scrimPath, n, label)} />
+      <Collapsible open={open} count={rows.length}>
         <TreeChildren>
-          {views.map((v, i) => (
-            <StaggerChild key={v.id} index={i} count={views.length} open={open}>
-              {v.id === 'tldr' && sections.length
-                ? <ReportSectionLeaf vp={vp} view={v} sections={sections} scrimPath={scrimPath}
-                    tree={tree} accent={accent} currentPath={currentPath} nav={nav}/>
-                : <TreeRow label={v.label} accent={accent}
-                    selected={currentPath === `${vp}/${v.id}`}
-                    onClick={() => nav('/game-wiki/' + encodePagePath(`${vp}/${v.id}`))}/>}
-            </StaggerChild>
+          {rows.map((el, i) => (
+            <StaggerChild key={el.key} index={i} count={rows.length} open={open}>{el}</StaggerChild>
           ))}
         </TreeChildren>
       </Collapsible>
@@ -102,15 +175,16 @@ function VirtualGroup({ scrimPath, name, views, tree, accent, currentPath, nav }
   );
 }
 
-// M20: the Report (tldr) leaf as an expandable sub-group — the label opens the Report tab, the caret
-// reveals the section sub-nav. A section navigates to the Report tab (if not already there) and asks
-// the content pane to scroll that heading into view via the module-scope sectionJump bridge. Shares
-// the tree's expanded Set (keyed by the virtual path) like the Report/Coaching groups do.
-function ReportSectionLeaf({ vp, view, sections, scrimPath, tree, accent, currentPath, nav }) {
+// The Report (tldr) leaf as an expandable sub-group — the label opens the Report
+// tab, the caret reveals the section sub-nav. A section navigates to the Report
+// tab and asks the content pane to scroll that heading into view via the
+// module-scope sectionJump bridge (keyed by the match page path, which is the
+// mdPath the match report view consumes). Shares the tree's expanded Set.
+function ReportSectionLeaf({ vp, view, sections, jumpKey, tree, accent, currentPath, nav }) {
   const key = `${vp}/${view.id}`;
   const open = tree.isOpen(key);
   const goReport = () => nav('/game-wiki/' + encodePagePath(key));
-  const goSection = (id) => { goReport(); requestSectionJump(scrimPath, id); };
+  const goSection = (id) => { goReport(); requestSectionJump(jumpKey, id); };
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
       <CandyHeader label={view.label} open={open} accent={accent}
@@ -128,67 +202,60 @@ function ReportSectionLeaf({ vp, view, sections, scrimPath, tree, accent, curren
   );
 }
 
-function TreeBody({ node, tree, accent, currentPath, open, openMenu, nav, onNewMatch, animateOnMount = true }) {
+function TreeBody({ node, tree, accent, currentPath, open, openMenu, nav, animateOnMount = true }) {
+  const ctx = useContext(ScrimCtx);
   const [entered, setEntered] = useState(!animateOnMount);
   useEffect(() => {
     const r = requestAnimationFrame(() => setEntered(true));
     return () => cancelAnimationFrame(r);
   }, []);
+  const scrimBase = scrimBaseOf(node.vaultPath);
+  useEffect(() => {
+    if (scrimBase && open) ctx.ensureListing(node.vaultPath);
+  }, [scrimBase, open, node.vaultPath, ctx]);
   const shown = entered && open;
   const entry = tree.childrenOf(node.vaultPath);
   let nodes = entry?.nodes || [];
   const loading = !entry || entry.loading;
-  const scrimBase = scrimBaseOf(node.vaultPath);
-  const matchesScrim = matchesScrimOf(node.vaultPath);
+  let ns = [];
   if (scrimBase) {
-    // Fixed scrim-folder order: Overview page, Matches/, then anything stray.
-    const rank = (c) => (!c.isFolder && c.name === 'Overview') ? 0 : (c.isFolder && c.name === 'Matches') ? 1 : 2;
+    // M1 scrim shape: slim Overview first, then the match folders (from the raw
+    // listing — the Matches/ disk folder itself no longer renders), then any
+    // remaining real files (Carry-Forward.md when the M24 export has run).
+    nodes = nodes.filter((c) => !(c.isFolder && c.name === 'Matches'));
+    const rank = (c) => ((!c.isFolder && c.name === 'Overview') ? 0 : 2);
     nodes = nodes.slice().sort((a, b) => rank(a) - rank(b));
-  } else if (matchesScrim) {
-    // Numeric match order (localeCompare puts "Match 10" before "Match 2").
-    const num = (s) => Number((s.match(/(\d+)/) || [])[1] || 0);
-    nodes = nodes.slice().sort((a, b) => num(a.name) - num(b.name) || a.name.localeCompare(b.name));
+    ns = ctx.listings[node.vaultPath]?.ns || [];
   }
-  const extras = scrimBase ? 2 : matchesScrim ? 1 : 0;
-  const n = nodes.length + extras;
+  const pre = scrimBase ? nodes.filter((c) => !c.isFolder && c.name === 'Overview') : nodes;
+  const post = scrimBase ? nodes.filter((c) => !(!c.isFolder && c.name === 'Overview')) : [];
+  const n = pre.length + ns.length + post.length;
   let inner;
   if (loading && n === 0) inner = <div style={MUTED}>…</div>;
   else if (n === 0) inner = <div style={MUTED}>empty</div>;
   else {
+    let i = 0;
+    const child = (el) => { const k = i++; return <StaggerChild key={el.key} index={k} count={n} open={shown}>{el}</StaggerChild>; };
     inner = [
-      ...nodes.map((child, i) => (
-        <StaggerChild key={child.vaultPath} index={i} count={n} open={shown}>
-          <TreeNode node={child} tree={tree} accent={accent} currentPath={currentPath}
-            openMenu={openMenu} nav={nav} onNewMatch={onNewMatch}/>
-        </StaggerChild>
-      )),
-      ...(scrimBase ? [
-        <StaggerChild key="virtual:report" index={nodes.length} count={n} open={shown}>
-          <VirtualGroup scrimPath={node.vaultPath} name="Report" views={REPORT_VIEWS}
-            tree={tree} accent={accent} currentPath={currentPath} nav={nav}/>
-        </StaggerChild>,
-        <StaggerChild key="virtual:coaching" index={nodes.length + 1} count={n} open={shown}>
-          <VirtualGroup scrimPath={node.vaultPath} name="Coaching" views={COACHING_VIEWS}
-            tree={tree} accent={accent} currentPath={currentPath} nav={nav}/>
-        </StaggerChild>,
-      ] : []),
-      ...(matchesScrim ? [
-        <StaggerChild key="virtual:new-match" index={nodes.length} count={n} open={shown}>
-          <TreeRow label="+ New Match" accent={accent} onClick={() => onNewMatch(matchesScrim)}/>
-        </StaggerChild>,
-      ] : []),
+      ...pre.map((c) => child(<TreeNode key={c.vaultPath} node={c} tree={tree} accent={accent}
+        currentPath={currentPath} openMenu={openMenu} nav={nav}/>)),
+      ...ns.map((k) => child(<MatchGroup key={`match:${k}`} scrimPath={node.vaultPath} n={k}
+        tree={tree} accent={accent} currentPath={currentPath} nav={nav}/>)),
+      ...post.map((c) => child(<TreeNode key={c.vaultPath} node={c} tree={tree} accent={accent}
+        currentPath={currentPath} openMenu={openMenu} nav={nav}/>)),
     ];
   }
   return <TreeChildren>{inner}</TreeChildren>;
 }
 
-function TreeNode({ node, tree, accent, currentPath, openMenu, nav, onNewMatch }) {
+function TreeNode({ node, tree, accent, currentPath, openMenu, nav }) {
+  const ctx = useContext(ScrimCtx);
   if (node.isFolder) {
     const open = tree.isOpen(node.vaultPath);
     const entry = tree.childrenOf(node.vaultPath);
     const mounted = open || !!entry;
     const scrimBase = scrimBaseOf(node.vaultPath);
-    const extras = scrimBase ? 2 : matchesScrimOf(node.vaultPath) ? 1 : 0;
+    const extras = scrimBase ? (ctx.listings[node.vaultPath]?.ns.length || 0) : 0;
     const count = (entry?.nodes?.length || 0) + extras;
     const hasMenu = node.vaultPath === SCRIM_BASE || !!scrimBase;
     return (
@@ -198,7 +265,7 @@ function TreeNode({ node, tree, accent, currentPath, openMenu, nav, onNewMatch }
           onContextMenu={hasMenu ? (e) => openMenu(e, node) : undefined}/>
         <Collapsible open={open} count={count}>
           {mounted && <TreeBody open={open} node={node} tree={tree} accent={accent}
-            currentPath={currentPath} openMenu={openMenu} nav={nav} onNewMatch={onNewMatch}/>}
+            currentPath={currentPath} openMenu={openMenu} nav={nav}/>}
         </Collapsible>
       </div>
     );
@@ -216,6 +283,73 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
   const anim = REVEAL[settings.vaultTreeReveal] || REVEAL.normal;
   const currentPath = route?.page === 'game-wiki' ? (route.rest || '') : '';
   const [modal, setModal] = useState(null);
+  const [listings, setListings] = useState({});
+  const listingsRef = useRef(listings);
+  listingsRef.current = listings;
+
+  const refreshListing = useCallback(async (scrim) => {
+    const l = await fetchScrimListing(scrim);
+    setListings((L) => ({ ...L, [scrim]: l }));
+    return l;
+  }, []);
+  const ensureListing = useCallback((scrim) => {
+    if (!listingsRef.current[scrim]) refreshListing(scrim).catch(() => {});
+  }, [refreshListing]);
+
+  // "New Match" (M2: context-menu only — the trailing "+ New Match" row is gone):
+  // next n from the Matches/ listing, team names from Overview.md.
+  const doNewMatch = async (scrimFolder) => {
+    try {
+      const res = await api.listFolderRaw(`${scrimFolder}/Matches`, 'gamewiki').catch(() => null);
+      const n = Math.max(0, ...(res?.files || []).map((f) => Number((f.match(/^Match (\d+)\.md$/) || [])[1] || 0))) + 1;
+      const ov = await api.getRawFileMeta(`${scrimFolder}/Overview.md`, 'gamewiki');
+      const fm = parseOverview(ov.content).frontmatter || {};
+      const coached = fm['Coached Team'] || fm['Team 1'] || '';
+      const enemy = (fm['Team 1'] === coached ? fm['Team 2'] : fm['Team 1']) || '';
+      await api.savePage(`${scrimFolder}/Matches/Match ${n}.md`, newMatchContent(n, coached, enemy), 0, 'gamewiki');
+      await refreshListing(scrimFolder);
+      nav('/game-wiki/' + encodePagePath(`${scrimFolder}/Matches/Match ${n}`));
+    } catch (e) { console.warn('new match failed', e); }
+  };
+
+  // M2 match rename: display name ONLY — written to the match file's Name field;
+  // the folder key (file name, sidecar names, routes) stays `Match N` so nothing
+  // keyed to the index can dangle.
+  const doRenameMatch = async (scrim, n, name) => {
+    const trimmed = String(name ?? '').trim();
+    try {
+      const p = matchPath(scrim, n);
+      const r = await api.getRawFileMeta(p, 'gamewiki');
+      const m = parseMatchFile(r.content, n);
+      const fields = { ...m.fields };
+      if (trimmed && trimmed !== `Match ${n}`) fields.Name = trimmed;
+      else delete fields.Name; // blank or the default → back to "Match N"
+      await api.savePage(p, serializeMatchFile({ ...m, fields }), r.mtime ?? null, 'gamewiki');
+      await refreshListing(scrim);
+      setModal(null);
+    } catch (e) {
+      setModal({ kind: 'rename-match', scrim, n, label: name, err: String(e?.message || e) });
+    }
+  };
+
+  // M2 match delete: the match page AND every dot-sidecar keyed to its index
+  // (reports, transcripts, classifications) — the confirm modal names that.
+  const doDeleteMatch = async (scrim, n) => {
+    try {
+      const listing = listingsRef.current[scrim] || await refreshListing(scrim);
+      const suffix = `.Match ${n}.json`;
+      for (const f of listing.sidecars) {
+        if (f.endsWith(suffix)) await api.deleteFile(`${scrim}/Matches/${f}`, 'gamewiki').catch(() => {});
+      }
+      await api.deleteFile(`${scrim}/Matches/Match ${n}.md`, 'gamewiki');
+      await refreshListing(scrim);
+      setModal(null);
+      const vp = `${scrim}/Matches/Match ${n}`;
+      if (currentPath === vp || currentPath.startsWith(vp + '/')) nav('/game-wiki/' + encodePagePath(`${scrim}/Overview`));
+    } catch (e) {
+      setModal({ kind: 'delete-match', scrim, n, err: String(e?.message || e) });
+    }
+  };
 
   const openMenu = (e, node) => {
     if (node.vaultPath === SCRIM_BASE) {
@@ -231,7 +365,14 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
     }
     const base = scrimBaseOf(node.vaultPath);
     if (!base) return;
+    // M2 scrim menu (locked decision 9): New Match / Export Carry-Forward /
+    // Rename / Delete. Export enables once a final report exists (M24 wires the
+    // compiler; until then the item stays disabled — no finals can exist yet).
+    const hasFinals = [...(listingsRef.current[node.vaultPath]?.sidecars || [])].some((f) => f.startsWith('.matchfinal.'));
     openContextMenu(e, [
+      { label: 'New Match', icon: IconPlus, onClick: () => doNewMatch(node.vaultPath) },
+      { label: 'Export Carry-Forward', icon: IconFile, disabled: !hasFinals, onClick: () => {} },
+      { divider: true },
       { label: 'Rename…', icon: IconFile, onClick: () => setModal({ kind: 'rename', base }) },
       { label: 'Delete', icon: IconX, danger: true, onClick: () => setModal({ kind: 'delete', base }) },
       { divider: true },
@@ -240,19 +381,13 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
     ], { accent });
   };
 
-  // "+ New Match": next n from the Matches/ listing, team names from Overview.md.
-  const doNewMatch = async (scrimFolder) => {
-    try {
-      const res = await api.listFolderRaw(`${scrimFolder}/Matches`, 'gamewiki').catch(() => null);
-      const n = Math.max(0, ...(res?.files || []).map((f) => Number((f.match(/^Match (\d+)\.md$/) || [])[1] || 0))) + 1;
-      const ov = await api.getRawFileMeta(`${scrimFolder}/Overview.md`, 'gamewiki');
-      const fm = parseOverview(ov.content).frontmatter || {};
-      const coached = fm['Coached Team'] || fm['Team 1'] || '';
-      const enemy = (fm['Team 1'] === coached ? fm['Team 2'] : fm['Team 1']) || '';
-      await api.savePage(`${scrimFolder}/Matches/Match ${n}.md`, newMatchContent(n, coached, enemy), 0, 'gamewiki');
-      await tree.refresh(`${scrimFolder}/Matches`);
-      nav('/game-wiki/' + encodePagePath(`${scrimFolder}/Matches/Match ${n}`));
-    } catch (e) { console.warn('new match failed', e); }
+  // M2 match menu (locked decision 9): New Match / Rename / Delete.
+  const openMatchMenu = (e, scrim, n, label) => {
+    openContextMenu(e, [
+      { label: 'New Match', icon: IconPlus, onClick: () => doNewMatch(scrim) },
+      { label: 'Rename…', icon: IconFile, onClick: () => setModal({ kind: 'rename-match', scrim, n, label }) },
+      { label: 'Delete', icon: IconX, danger: true, onClick: () => setModal({ kind: 'delete-match', scrim, n }) },
+    ], { accent });
   };
 
   // Folder rename. The recordings folder follows the scrim name, and recording
@@ -301,53 +436,70 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
   };
 
   return (
-    <AnimCtx.Provider value={anim}>
-      <SuffixCtx.Provider value={false}>
-        <div style={{
-          display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0,
-          '--candy-depth-nav': 'calc(var(--candy-depth) * 0.85)',
-        }}>
+    <ScrimCtx.Provider value={{ listings, ensureListing, refreshListing, openMatchMenu }}>
+      <AnimCtx.Provider value={anim}>
+        <SuffixCtx.Provider value={false}>
           <div style={{
-            flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden',
-            display: 'flex', flexDirection: 'column', gap: GAP, padding: '0 8px',
+            display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0,
+            '--candy-depth-nav': 'calc(var(--candy-depth) * 0.85)',
           }}>
-            {tree.games == null && <div style={MUTED}>…</div>}
-            {tree.games != null && tree.games.length === 0 && <div style={MUTED}>no games</div>}
-            {(tree.games || []).map((g) => {
-              const open = tree.isOpen(g.vaultPath);
-              const entry = tree.childrenOf(g.vaultPath);
-              const mounted = open || !!entry;
-              const count = entry?.nodes?.length || 0;
-              return (
-                <div key={g.vaultPath} style={{ display: 'flex', flexDirection: 'column' }}>
-                  <CandyHeader label={g.name} open={open} onToggle={() => tree.toggle(g.vaultPath)} accent={accent}/>
-                  <Collapsible open={open} count={count}>
-                    {mounted && <TreeBody open={open} animateOnMount={false} node={g}
-                      tree={tree} accent={accent} currentPath={currentPath}
-                      openMenu={openMenu} nav={nav} onNewMatch={doNewMatch}/>}
-                  </Collapsible>
-                </div>
-              );
-            })}
-            <div aria-hidden style={{ flexShrink: 0, height: 9 }}/>
-          </div>
+            <div style={{
+              flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden',
+              display: 'flex', flexDirection: 'column', gap: GAP, padding: '0 8px',
+            }}>
+              {tree.games == null && <div style={MUTED}>…</div>}
+              {tree.games != null && tree.games.length === 0 && <div style={MUTED}>no games</div>}
+              {(tree.games || []).map((g) => {
+                const open = tree.isOpen(g.vaultPath);
+                const entry = tree.childrenOf(g.vaultPath);
+                const mounted = open || !!entry;
+                const count = entry?.nodes?.length || 0;
+                return (
+                  <div key={g.vaultPath} style={{ display: 'flex', flexDirection: 'column' }}>
+                    <CandyHeader label={g.name} open={open} onToggle={() => tree.toggle(g.vaultPath)} accent={accent}/>
+                    <Collapsible open={open} count={count}>
+                      {mounted && <TreeBody open={open} animateOnMount={false} node={g}
+                        tree={tree} accent={accent} currentPath={currentPath}
+                        openMenu={openMenu} nav={nav}/>}
+                    </Collapsible>
+                  </div>
+                );
+              })}
+              <div aria-hidden style={{ flexShrink: 0, height: 9 }}/>
+            </div>
 
-          {modal?.kind === 'rename' && (
-            <NameInputModal open title={`Rename ${modal.base}`} label="New name" confirmLabel="Rename" initialValue={modal.base}
-              onCancel={() => setModal(null)}
-              onSubmit={(name) => doRename(modal.base, name)}/>
-          )}
-          {modal?.kind === 'delete' && (
-            <ConfirmModal open title={`Delete ${modal.base}?`}
-              message={modal.err
-                ? `Last attempt failed: ${modal.err}`
-                : 'Sends the whole scrim folder (Overview, matches, and ALL sidecar data — match data, comms transcripts, VOD report, feedback, notes) to the Recycle Bin as one item.'}
-              confirmLabel="Delete" cancelLabel="Cancel"
-              onCancel={() => setModal(null)}
-              onConfirm={() => doDelete(modal.base)}/>
-          )}
-        </div>
-      </SuffixCtx.Provider>
-    </AnimCtx.Provider>
+            {modal?.kind === 'rename' && (
+              <NameInputModal open title={`Rename ${modal.base}`} label="New name" confirmLabel="Rename" initialValue={modal.base}
+                onCancel={() => setModal(null)}
+                onSubmit={(name) => doRename(modal.base, name)}/>
+            )}
+            {modal?.kind === 'delete' && (
+              <ConfirmModal open title={`Delete ${modal.base}?`}
+                message={modal.err
+                  ? `Last attempt failed: ${modal.err}`
+                  : 'Sends the whole scrim folder (Overview, matches, and ALL sidecar data — match data, comms transcripts, reports, feedback, notes) to the Recycle Bin as one item.'}
+                confirmLabel="Delete" cancelLabel="Cancel"
+                onCancel={() => setModal(null)}
+                onConfirm={() => doDelete(modal.base)}/>
+            )}
+            {modal?.kind === 'rename-match' && (
+              <NameInputModal open title={`Rename Match ${modal.n}`} label="Display name" confirmLabel="Rename"
+                initialValue={modal.label || `Match ${modal.n}`}
+                onCancel={() => setModal(null)}
+                onSubmit={(name) => doRenameMatch(modal.scrim, modal.n, name)}/>
+            )}
+            {modal?.kind === 'delete-match' && (
+              <ConfirmModal open title={`Delete Match ${modal.n}?`}
+                message={modal.err
+                  ? `Last attempt failed: ${modal.err}`
+                  : `Deletes Match ${modal.n} and its reports/recordings metadata (match data, comms + review transcripts, classifications, reports). Recordings on disk are not touched.`}
+                confirmLabel="Delete" cancelLabel="Cancel"
+                onCancel={() => setModal(null)}
+                onConfirm={() => doDeleteMatch(modal.scrim, modal.n)}/>
+            )}
+          </div>
+        </SuffixCtx.Provider>
+      </AnimCtx.Provider>
+    </ScrimCtx.Provider>
   );
 }

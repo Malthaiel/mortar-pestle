@@ -11,11 +11,13 @@ import { sortNodes } from '@host/components/vault-tree/useVaultTree.js';
 const LS_KEY = 'gamewiki:tree:expanded';
 const LS_SORT = 'gamewiki:tree:sort';
 
-// Virtual scrim sub-folders (Report/ + Coaching/ under a scrim folder — GameWiki
-// Unification): they expand like disk folders (same expanded Set, so collapse-all
-// and persistence cover them) but have NO disk children — never fetch them
-// (vault_get_folder would just 404 into an empty cache entry).
-const VIRTUAL_RE = /^Deadlock\/Coaching\/Scrim\/[^/]+\/(Report|Coaching)$/;
+// Virtual scrim sub-folders: match groups (`Matches/Match N`, plus their Report
+// leaf's `/tldr` sub-key) expand like disk folders — same expanded Set, so
+// collapse-all and persistence cover them — but have NO disk children; never
+// fetch them (vault_get_folder would just 404 into an empty cache entry). The
+// Report|Coaching arm covers stale persisted keys from the retired scrim-level
+// virtual groups (pre match-folder tree) so a localStorage restore stays quiet.
+const VIRTUAL_RE = /^Deadlock\/Coaching\/Scrim\/[^/]+\/(Report|Coaching|Matches\/Match \d+(\/tldr)?)$/;
 
 function loadExpanded() {
   try {

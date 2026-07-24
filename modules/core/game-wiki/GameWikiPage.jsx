@@ -23,11 +23,12 @@ import { navigate } from '@host/router.js';
 import { encodePagePath } from '@host/components/SidebarBrowser.jsx';
 import PageTitleHeader from '@host/components/PageTitleHeader.jsx';
 import { getGameWikiIndex, resolveTarget } from './gamewikiIndex.js';
-import { SCRIM_BASE, REPORT_VIEWS, COACHING_VIEWS } from './GameWikiTree.jsx';
-import { scrimSidecarPath } from './matchData.js';
+import { SCRIM_BASE } from './GameWikiTree.jsx';
+import { sidecarPath, resolveReviewTranscript, matchPath } from './matchData.js';
 import OverviewPage from './OverviewPage.jsx';
 import MatchPage from './MatchPage.jsx';
 import VodReportView from './VodReportView.jsx';
+import CommsTranscriptView from './CommsTranscriptView.jsx';
 
 // Drop a leading YAML frontmatter block (the Rust reader strips it too).
 function stripFrontmatter(src) {
@@ -84,6 +85,68 @@ const mdComponents = (nav) => ({
   },
 });
 
+// M1: the inline per-match report pane. Final replaces first (locked decision 2):
+// render the .matchfinal sidecar when it exists, else .matchreport (whose view
+// banners itself as not-yet-coach-reviewed). Probed per mount — a fresh generate
+// remounts via the route key.
+function MatchReportPane({ folder, n, tab, rest, accent, nav }) {
+  const [sp, setSp] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    api.getRawFileMeta(sidecarPath(folder, n, 'matchfinal'), 'gamewiki')
+      .then(() => { if (!cancelled) setSp(sidecarPath(folder, n, 'matchfinal')); })
+      .catch(() => { if (!cancelled) setSp(sidecarPath(folder, n, 'matchreport')); });
+    return () => { cancelled = true; };
+  }, [folder, n]);
+  if (!sp) return <Shell accent={accent}><p style={{ opacity: 0.6 }}>Loading…</p></Shell>;
+  const onTabChange = (t) => {
+    const to = `${folder}/Matches/Match ${n}/${t}`;
+    if (to !== rest) nav('/game-wiki/' + encodePagePath(to));
+  };
+  return (
+    <VodReportView inline variant="match" tab={tab} onTabChange={onTabChange}
+      sidecarPath={sp}
+      feedbackPath={sidecarPath(folder, n, 'matchfeedback')}
+      mdPath={matchPath(folder, n)} accent={accent} />
+  );
+}
+
+// M1: the two per-match transcript pages (locked decision 10 — comms and review
+// stamps land on separate pages). Comms reads the match's own transcript; review
+// resolves through the ONE accessor (per-match .reviewcomms, else the M8-adopted
+// scrim-level .vodcomms on single-match scrims).
+function MatchSegmentsPane({ folder, n, review, accent }) {
+  const [resolved, setResolved] = useState(review ? undefined : { path: sidecarPath(folder, n, 'comms'), scrimLevel: false });
+  useEffect(() => {
+    if (!review) { setResolved({ path: sidecarPath(folder, n, 'comms'), scrimLevel: false }); return undefined; }
+    let cancelled = false;
+    setResolved(undefined);
+    resolveReviewTranscript(api, folder, n)
+      .then((r) => { if (!cancelled) setResolved(r); })
+      .catch(() => { if (!cancelled) setResolved(null); });
+    return () => { cancelled = true; };
+  }, [review, folder, n]);
+  const title = review ? 'Review Segments' : 'Comms Segments';
+  return (
+    <Shell accent={accent} header={<PageTitleHeader title={title} accent={accent} />}>
+      {resolved === undefined && <p style={{ opacity: 0.6 }}>Loading…</p>}
+      {resolved === null && (
+        <p style={{ opacity: 0.7 }}>
+          {review ? 'No review recording for this match yet.' : 'No comms transcript for this match yet.'}
+        </p>
+      )}
+      {resolved && (
+        <>
+          {resolved.scrimLevel && (
+            <p style={{ opacity: 0.6, fontSize: 12 }}>Scrim-level review recording (adopted for this single-match scrim).</p>
+          )}
+          <CommsTranscriptView sidecarPath={resolved.path} />
+        </>
+      )}
+    </Shell>
+  );
+}
+
 function Shell({ children, accent, header }) {
   return (
     <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
@@ -133,24 +196,19 @@ export default function GameWikiPage({ rest, accent, nav = navigate, overlay = f
 
   if (isScrim) {
     if (scrimTail === 'Overview') return <OverviewPage folder={scrimFolder} accent={accent} nav={nav} overlay={overlay} />;
-    const mm = scrimTail.match(/^Matches\/Match (\d+)$/);
-    if (mm) return <MatchPage key={`${scrimFolder}/${mm[1]}`} folder={scrimFolder} n={Number(mm[1])} accent={accent} overlay={overlay} />;
-    const rv = scrimTail.match(/^(Report|Coaching)\/([\w-]+)$/);
-    if (rv) {
-      const onTabChange = (t) => {
-        const group = REPORT_VIEWS.some((v) => v.id === t) ? 'Report'
-          : COACHING_VIEWS.some((v) => v.id === t) ? 'Coaching' : 'Report';
-        const to = `${scrimFolder}/${group}/${t}`;
-        if (to !== rest) nav('/game-wiki/' + encodePagePath(to));
-      };
-      return (
-        <VodReportView inline tab={rv[2]} onTabChange={onTabChange}
-          sidecarPath={scrimSidecarPath(scrimFolder, 'vodreport')}
-          commsPath={scrimSidecarPath(scrimFolder, 'vodcomms')}
-          normPath={scrimSidecarPath(scrimFolder, 'vodnorm')}
-          feedbackPath={scrimSidecarPath(scrimFolder, 'vodfeedback')}
-          mdPath={scrimFolder} accent={accent} />
-      );
+    // M1: per-match routes. Bare `Matches/Match N` = the match Overview (editor);
+    // a tail = a report view (VodReportView variant=match tab) or a segments page.
+    const mm = scrimTail.match(/^Matches\/Match (\d+)(?:\/([\w-]+))?$/);
+    if (mm) {
+      const n = Number(mm[1]);
+      const tail = mm[2] || null;
+      if (!tail) return <MatchPage key={`${scrimFolder}/${n}`} folder={scrimFolder} n={n} accent={accent} overlay={overlay} />;
+      if (tail === 'comms-segments' || tail === 'review-segments') {
+        return <MatchSegmentsPane key={`${scrimFolder}/${n}/${tail}`} folder={scrimFolder} n={n}
+          review={tail === 'review-segments'} accent={accent} />;
+      }
+      return <MatchReportPane key={`${scrimFolder}/${n}`} folder={scrimFolder} n={n}
+        tab={tail} rest={rest} accent={accent} nav={nav} />;
     }
     // A stray real file inside a scrim folder — fall through to the reader shape
     // is not worth supporting; point at the tree instead.

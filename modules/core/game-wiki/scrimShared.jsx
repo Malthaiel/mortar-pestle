@@ -17,7 +17,7 @@ import { IconPlus, IconMic } from '@host/components/icons.jsx';
 import {
   parseOverview, serializeOverview, parseMatchFile, serializeMatchFile, ensureNotes,
 } from './scrimSchema.js';
-import { sidecarPath, scrimSidecarPath, clock, extractSpatial } from './matchData.js';
+import { sidecarPath, scrimSidecarPath, clock, extractSpatial, matchPath } from './matchData.js';
 import { parseTimedNote, formatTimedBullet, sortByTimeAsc, secFromClock, TIME_PREFIX_RE } from './noteCompile.js';
 import { parseCommsSidecar, parseSegments, buildCommsSidecar, renderCommsSummary } from './commsCompile.js';
 import { alignDiarization, mergeTranscripts, labelForCluster, speakerColor } from './diarize.js';
@@ -122,7 +122,10 @@ export const removeBtn = { border: 'none', background: 'transparent', color: 'va
 // ── Per-file doc helpers ─────────────────────────────────────────────────────
 
 export const overviewPath = (scrimFolder) => `${scrimFolder}/Overview.md`;
-export const matchPath = (scrimFolder, n) => `${scrimFolder}/Matches/Match ${n}.md`;
+// matchPath moved to matchData.js (path-helpers home — the tree needs it and
+// importing this JSX module from GameWikiTree would close an import cycle);
+// re-exported so existing consumers keep working.
+export { matchPath };
 
 // Overview merge: user-edited regions (frontmatter + ## Scrim bullets) from local,
 // extraBlocks from fresh when present (mirrors mergeScrim's extraBlocks rule).
