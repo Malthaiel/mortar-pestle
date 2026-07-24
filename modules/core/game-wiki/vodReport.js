@@ -90,29 +90,52 @@ export function collapseStampRuns(text) {
 }
 
 // Deterministic stamp validation (ported from vodReportGate.mjs so it runs in-pipeline, not just in
-// the standalone gate): every m:ss / h:mm:ss token anywhere in the report must land inside a real
-// vodcomms segment (±5s). Returns the offending stamps as mmss text, deduped ([] when clean or when
-// no segments are supplied). `matchSummaries` is excluded — its game-clock times aren't VOD stamps
-// (owned by the deterministic match digest; added with M24), so validating them here is a false positive.
+// the standalone gate). `segments` comes in two shapes:
+//   • an ARRAY — the scrim report's one recording: every m:ss / h:mm:ss token in the report must land
+//     inside one of these segments (±5s), source letters ignored.
+//   • { review, comms } — a match report (M18): each stamp is checked against its OWN recording, read
+//     from the source letter glued to the time ("27:49r"). A bare time is a game clock — no recording
+//     behind it — and is skipped, as is a tagged stamp whose recording was not supplied; both follow
+//     the array form's long-standing "nothing to check against → no-op" contract.
+// Returns the offending stamps as mmss text, deduped ([] when clean). `matchSummaries` is excluded —
+// its game-clock times aren't VOD stamps (owned by the deterministic match digest; added with M24),
+// so validating them here is a false positive.
 export function validateStamps(report, segments = []) {
-  const segs = (Array.isArray(segments) ? segments : []).filter((s) => s && Number.isFinite(Number(s.t0Ms)));
-  if (!segs.length) return [];
+  const clean = (a) => (Array.isArray(a) ? a : []).filter((s) => s && Number.isFinite(Number(s.t0Ms)));
+  const TOL = 5000; // segments are ~2.5s apart; ±5s covers rounding
+  const checker = (segs) => {
+    if (!segs.length) return null;
+    const spanEnd = Math.max(...segs.map((s) => Number(s.t1Ms) || 0));
+    return (sec) => {
+      const ms = sec * 1000;
+      if (ms < 0 || ms > spanEnd + TOL) return false;
+      return segs.some((s) => ms >= Number(s.t0Ms) - TOL && ms <= Number(s.t1Ms) + TOL);
+    };
+  };
   const { matchSummaries, ...rest } = report || {};
   void matchSummaries;
-  const text = JSON.stringify(rest);
+  // A range token (M19) carries its letter once, on the END: "[27:49–28:20r]". Split it into two
+  // tagged stamps first so the START is validated against the right recording instead of reading as
+  // an untagged game clock.
+  const text = JSON.stringify(rest)
+    .replace(/\[(\d+:\d{2}(?::\d{2})?)–(\d+:\d{2}(?::\d{2})?)([rc]?)\]/g, (_m, a, b, l) => `[${a}${l}] [${b}${l}]`);
   // Trailing `(?!\d)` rather than `\b`: M18 glues a source letter onto the time ("27:49r"), and a
   // word boundary between a digit and a letter does not exist — `\b` here would have silently
   // stopped validating every tagged stamp, which is exactly the set worth validating.
-  const stamps = [...text.matchAll(/\b(?:(\d{1,2}):)?(\d{1,2}):([0-5]\d)(?!\d)/g)]
-    .map((m) => (Number(m[1]) || 0) * 3600 + Number(m[2]) * 60 + Number(m[3]));
-  const spanEnd = Math.max(...segs.map((s) => Number(s.t1Ms) || 0));
-  const TOL = 5000; // segments are ~2.5s apart; ±5s covers rounding
-  const inSeg = (sec) => {
-    const ms = sec * 1000;
-    if (ms < 0 || ms > spanEnd + TOL) return false;
-    return segs.some((s) => ms >= Number(s.t0Ms) - TOL && ms <= Number(s.t1Ms) + TOL);
-  };
-  return [...new Set(stamps)].filter((s) => !inSeg(s)).map(mmss);
+  const RE = /\b(?:(\d{1,2}):)?(\d{1,2}):([0-5]\d)(?!\d)([rc]?)/g;
+  const secs = (m) => (Number(m[1]) || 0) * 3600 + Number(m[2]) * 60 + Number(m[3]);
+  if (Array.isArray(segments)) {
+    const inSeg = checker(clean(segments));
+    if (!inSeg) return [];
+    return [...new Set([...text.matchAll(RE)].map(secs))].filter((s) => !inSeg(s)).map(mmss);
+  }
+  const inSource = { review: checker(clean(segments?.review)), comms: checker(clean(segments?.comms)) };
+  const bad = new Set();
+  for (const m of text.matchAll(RE)) {
+    const inSeg = inSource[STAMP_SOURCE[m[4]]]; // no letter → 'clock' → undefined → skipped
+    if (inSeg && !inSeg(secs(m))) bad.add(secs(m));
+  }
+  return [...bad].map(mmss);
 }
 
 // Deterministic stable id from an item's text: lets reconcile match carried-forward items even if
@@ -231,6 +254,11 @@ export const VOD_REPORT_SYSTEM_PROMPT = [
   'that moment, a "c" stamp opens the in-game recording, and a bare stamp stays plain text. A wrong letter',
   'lands the coach in the wrong recording, so when you are not certain which transcript a moment came from,',
   'leave the letter off. Ranges keep one letter at the end: [27:49–28:20r].',
+  'The short time fields hold a BARE time with NO brackets — deathAnalysis "t", objectiveWindows "t",',
+  'swings "t", callouts "t", an action item\'s "timestamps" entries, and a qa "t" — and they take the',
+  'same letter: write 8:12c or 27:49r there, never [8:12c]. The letter makes those times clickable too;',
+  'a bare one stays plain text. A swings or objectiveWindows "t" read off the digest is game clock, so',
+  'it keeps no letter.',
   '',
   'Say-it-once: every insight has exactly ONE home (a section, a player-card field, or an action item).',
   'Anywhere else it is a one-line pointer ("see the <heading> section"), never re-explained. The "qa" field is',

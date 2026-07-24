@@ -516,7 +516,14 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
   // it always was; in a match report an untagged stamp is inert, which also closes a dead click:
   // these chips used to call jumpToSegment in a match view, whose Segments tab does not exist there,
   // landing the coach on a blank pane with no active tab.
-  const stampChip = useCallback((t, key) => renderStamp(String(t ?? ''), key), [renderStamp]);
+  // Brackets are stripped first and anything unparseable falls back to the muted game clock: the
+  // model sometimes writes "[8:12]" in a field the schema says is bare, and re-bracketing that to
+  // "[[8:12]]" matches no stamp at all, so renderStamp returned null and the time vanished from the
+  // card. A time we cannot route is still a time the coach should see.
+  const stampChip = useCallback((t, key) => {
+    const raw = String(t ?? '').trim().replace(/^\[|\]$/g, '');
+    return raw ? (renderStamp(raw, key) || <GameClock key={key} t={raw} />) : null;
+  }, [renderStamp]);
 
   // react-markdown overrides: #seg- links (from linkTimeTokens) render as TimeChips; external
   // links open in a new window; everything else inherits .gamewiki-md typography.

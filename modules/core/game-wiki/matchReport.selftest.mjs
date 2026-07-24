@@ -190,5 +190,11 @@ for (const needle of ['Stamp sources', '[8:12c]', 'never', 'clickable']) {
   assert.ok(buildMatchReportSystemPrompt({ dataFree: true }).includes(needle), `P1 stamp-source rule survives data-free: ${needle}`);
 }
 assert.ok(!MATCH_REPORT_SYSTEM_PROMPT.includes('[27:49r]'), 'P1 never shows an "r" stamp as an example to copy');
+// The structured single-stamp fields hold a bare time, so the letter rule has to reach them by name
+// or a death's or callout's moment can never become clickable.
+for (const needle of ['The short time fields hold a BARE time', 'write 8:12c there']) {
+  assert.ok(MATCH_REPORT_SYSTEM_PROMPT.includes(needle), `P1 bare-field stamp rule states: ${needle}`);
+  assert.ok(buildMatchReportSystemPrompt({ dataFree: true }).includes(needle), `P1 bare-field stamp rule survives data-free: ${needle}`);
+}
 
 console.log('matchReport.selftest: all assertions passed');

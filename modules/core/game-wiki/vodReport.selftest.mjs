@@ -334,6 +334,19 @@ assert.equal(collapseStampRuns('[1:00] [1:20] [1:35r]'), '[1:00] [1:20] [1:35r]'
 assert.ok(validateStamps({ sections: [{ id: 's', heading: 'H', md: 'invented [45:00r]' }] }, stampSegs).includes('45:00'), 'tagged invented stamp still flagged');
 assert.deepEqual(validateStamps({ sections: [{ id: 's', heading: 'H', md: 'real [0:01c] and [1:02r]' }] }, stampSegs), [], 'tagged real stamps clean');
 
+// M25 tightening: given a {review, comms} pair instead of one flat array, each stamp is checked
+// against the recording its OWN letter names — a review-only moment can no longer pass by happening
+// to land inside the in-game recording, which is exactly what the concatenated union allowed.
+const srcSegs = { comms: [{ t0Ms: 0, t1Ms: 3000 }], review: [{ t0Ms: 600000, t1Ms: 603000 }] }; // 0:00–0:03 in-game, 10:00–10:03 review
+const bySrc = (md) => validateStamps({ sections: [{ id: 's', heading: 'H', md }] }, srcSegs);
+assert.deepEqual(bySrc('real [0:01c] and [10:01r]'), [], 'each stamp inside its own recording is clean');
+assert.deepEqual(bySrc('[10:01c]'), ['10:01'], 'a review moment tagged in-game is flagged');
+assert.deepEqual(bySrc('[0:01r]'), ['0:01'], 'an in-game moment tagged review is flagged');
+assert.deepEqual(bySrc('mid boss at [12:00] and 45:00 flat'), [], 'untagged times are game clock, never checked');
+assert.deepEqual(validateStamps({ sections: [{ id: 's', heading: 'H', md: '[10:01r]' }] }, { comms: srcSegs.comms }), [], 'a recording that was not supplied has nothing to check against');
+assert.deepEqual(bySrc('the run [10:01–10:02r]'), [], 'a real range is clean');
+assert.deepEqual(bySrc('the run [45:00–45:20r]'), ['45:00', '45:20'], 'a range is checked at BOTH ends — its one letter carries to the start');
+
 // segIndexForStamp: exact whole-second start, else the first segment at/after, else the last row.
 const jumpSegs = [{ t0Ms: 0 }, { t0Ms: 60000 }, { t0Ms: 120000 }];
 assert.equal(segIndexForStamp(jumpSegs, '1:00'), 1, 'exact start matches');
@@ -345,6 +358,9 @@ assert.equal(segIndexForStamp([], '1:00'), -1, 'no segments → nothing to jump 
 // Both prompts have to TEACH the encoding or the model never emits a letter and every chip dies.
 assert.ok(VOD_REPORT_SYSTEM_PROMPT.includes('Stamp sources:'), 'P2 prompt carries the Stamp sources rule');
 assert.ok(VOD_REPORT_SYSTEM_PROMPT.includes('[27:49r]') && VOD_REPORT_SYSTEM_PROMPT.includes('[8:12c]'), 'P2 rule shows both letters by example');
+// The structured single-stamp fields hold a bare time, so the letter rule has to reach them by name
+// or a death/callout/qa moment can never become clickable.
+assert.ok(VOD_REPORT_SYSTEM_PROMPT.includes('The short time fields hold a BARE time'), 'P2 rule covers the structured single-stamp fields');
 
 // ── Export to markdown (serializeReportMarkdown) ─────────────────────────────
 

@@ -1,12 +1,16 @@
 // teamProgress.js — Team Progress (Deadlock Scrim Coaching, sub-plan 12). Pure ESM (no React, no
 // @host) so the aggregation + page rendering round-trip through a Node harness. Cross-scrim memory
-// for a coached team: the caller walks the team's scrims, reads each scrim's .vodreport (action items
-// + follow-ups) and per-match .matchdata/.commstranscript sidecars, computes a per-scrim metric
-// bundle, and hands the list here. aggregateTeam folds it into the .teamprogress.<Team>.json sidecar
-// shape; renderTeamPage emits the app-generated Teams/<Team>.md (issues-first, never hand-edited).
+// for a coached team: the caller walks the team's scrims, reads each scrim's per-match .matchfinal
+// reports (action items + follow-ups) plus its .matchdata/.commstranscript sidecars, computes a
+// per-scrim metric bundle, and hands the list here. A legacy scrim-level .vodreport still rides along
+// as one more contributing report (source match: null), so history already aggregated is never lost.
+// aggregateTeam folds it into the .teamprogress.<Team>.json sidecar shape; renderTeamPage emits the
+// app-generated Teams/<Team>.md (issues-first, never hand-edited).
 //
 // Recurrence = normalized-text match of action items across scrims (user-locked 2026-07-09): same
 // normalized text = same problem; a "streak" counts consecutive most-recent scrims that raised it.
+// Every homework entry carries its {scrim, match} sources, which is what lets openHomework exclude the
+// match being regenerated — without it a match's own items come back to it as "prior" (M6).
 // Metrics are TEAM-level — match data identifies players only by slot+hero+team (no display name), so
 // per-player metric trends aren't derivable without a roster->hero map (flagged, deferred).
 

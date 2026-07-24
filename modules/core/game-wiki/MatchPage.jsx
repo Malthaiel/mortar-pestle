@@ -230,9 +230,10 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
         digest: raw ? buildMatchDigest(raw, { label: `Match ${n}` }) : '', // '' flips the data-free schema (M5a)
         coachedTeam: team, commsBlock, tfCommsBlock, coachNotesBlock, brainContext: brain.text,
       }, agents);
-      // M7a: every stamp must land in a real segment (±5s) — permissive pre-M18: game-clock times
-      // inside the recording span pass; offenders are one warning line, never a block.
-      const badStamps = validateStamps(report, commsSegs);
+      // M7a: every stamp must land in a real segment (±5s). Source-aware since M18 — Process 1 only
+      // ever sees the in-game recording, so a "c" stamp is checked against it and a bare game-clock
+      // time is left alone instead of being failed for not existing in a recording.
+      const badStamps = validateStamps(report, { comms: commsSegs });
       if (badStamps.length) report.meta.warnings.push(`stamps not found in the comms recording (±5s): ${badStamps.join(', ')}`);
       report.meta.warnings = [...brain.warnings, ...(report.meta.warnings || [])];
       report.generated = new Date().toISOString().slice(0, 10);
@@ -308,12 +309,13 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
         transcriptBlock, coachedTeam: team, firstReportBlock, priorActionItems,
         brainContext: brain.text, matchDigests, tfCommsBlocks, prior,
       }, agents);
-      // M7a: validate every stamp against the UNION of both recordings' segments — permissive until
-      // M18 tags stamps by source; offenders are one warning line, never a block.
+      // M7a: each stamp is checked against the recording its OWN source letter names (M18) — an "r"
+      // against the review, a "c" against the in-game comms, a bare game-clock time against neither.
+      // The union check this replaced passed a review-only moment that was tagged as in-game comms.
       let commsSegs = [];
       try { commsSegs = parseSegments((await api.getRawFileMeta(sidecarPath(folder, n, 'comms'), 'gamewiki')).content); } catch { /* no comms transcript */ }
-      const badStamps = validateStamps(report, [...reviewSegs, ...commsSegs]);
-      if (badStamps.length) report.meta.warnings.push(`stamps not found in either recording (±5s): ${badStamps.join(', ')}`);
+      const badStamps = validateStamps(report, { review: reviewSegs, comms: commsSegs });
+      if (badStamps.length) report.meta.warnings.push(`stamps not found in the recording they name (±5s): ${badStamps.join(', ')}`);
       report.meta.warnings = [...brain.warnings, ...(report.meta.warnings || [])];
       report.generated = new Date().toISOString().slice(0, 10);
       report.model = agents.model;
