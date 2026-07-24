@@ -1,7 +1,9 @@
 // A user's avatar: a cover image in a circle, else a hue-hashed initial (low-key,
 // 48% colour-mixed into surface-3 — the same treatment as StatusBadge). Centred via
 // line-height:1 + flex. size is the px diameter.
-const HUES = ['#3aa6a0', '#c96a8a', '#7f86d4', '#5bb98c', '#d6a445', '#9b7fd4'];
+// The app's named palette (styles.css --hue-*), never local hexes — slate is left out on purpose,
+// it reads as "no colour" and is the neutral/unknown hue everywhere else.
+const HUES = ['var(--hue-teal)', 'var(--hue-rose)', 'var(--hue-indigo)', 'var(--hue-green)', 'var(--hue-amber)', 'var(--hue-violet)'];
 
 function hueFor(name) {
   let h = 0;

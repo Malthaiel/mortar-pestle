@@ -7,9 +7,10 @@ import StatusDropdown from '@host/components/ui/StatusDropdown.jsx';
 // server-side (is_dev()); this component is only rendered when the caller's
 // profile.role === 'dev', so a non-dev never sees it.
 const STATUSES = ['open', 'under_review', 'planned', 'in_progress', 'done', 'declined'];
+// Same hues as StatusBadge, drawn from the app's named palette (styles.css --hue-*), never local hexes.
 const HUE = {
-  open: '#8a8f98', under_review: '#d6a445', planned: '#9b7fd4',
-  in_progress: 'var(--accent)', done: '#5bb98c', declined: 'var(--error)',
+  open: 'var(--hue-slate)', under_review: 'var(--hue-amber)', planned: 'var(--hue-violet)',
+  in_progress: 'var(--accent)', done: 'var(--hue-green)', declined: 'var(--error)',
 };
 
 export default function DevControls({ fb, post, accent, onChanged }) {

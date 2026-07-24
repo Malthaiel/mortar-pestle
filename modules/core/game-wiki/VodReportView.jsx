@@ -82,9 +82,16 @@ function TagChip({ tag }) {
 // M18: `source` is the recording the stamp came from — 'comms' (in-game talk) keeps the plain chip
 // the coach already knows, 'review' (VOD-review talk) wears a faint accent wash. Two recordings, one
 // chip shape: the wash is the only tell, so a line of chips still reads as one row of times.
+// A stamp's SOURCE is a kind, not a state, so its tell comes from the app's named hue palette
+// (styles.css --hue-*) rather than the accent — the accent is user-pickable and would collide with
+// one of the two chips at some settings, and a source is exactly the "which of several kinds is
+// this?" question that palette exists to answer. Same colours the Feedback board's statuses use.
+const SOURCE_HUE = { review: 'var(--hue-amber)', comms: 'var(--hue-green)' };
+
 function TimeChip({ t, source, onJump }) {
   if (!t) return null;
   const where = source === 'review' ? 'Review Segments' : source === 'comms' ? 'Comms Segments' : 'Segments';
+  const hue = SOURCE_HUE[source];
   return (
     <button type="button" data-own-press className="candy-btn" data-shape="chip"
       title={`Jump to ${t} in ${where}`}
@@ -92,7 +99,7 @@ function TimeChip({ t, source, onJump }) {
       style={{ verticalAlign: 'baseline', marginRight: 4, '--cbtn-depth': 'calc(var(--candy-depth-small) * 0.9375)' }}>
       <span className="candy-face" style={{
         fontSize: 11, fontFamily: 'var(--font-mono)', padding: '1px 5px', lineHeight: 1.25,
-        ...(source === 'review' ? { background: 'color-mix(in oklch, var(--accent) 14%, transparent)' } : null),
+        ...(hue ? { background: `color-mix(in oklch, ${hue} 14%, transparent)` } : null),
       }}>{t}</span>
     </button>
   );

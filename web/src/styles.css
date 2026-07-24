@@ -166,6 +166,20 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
      (formerly raw #d97070 at every consumer; mode-invariant like the hex was). */
   --error:           oklch(0.666 0.132 21.2);
 
+  /* Named hue palette — the app's ONE set of non-accent colors, and the default any surface reaches
+     for when it must tell several KINDS apart (Feedback roadmap statuses, avatar circles, VOD report
+     stamp sources). Draw from here instead of inventing a hex, so a colour retunes in one place.
+     Theme-agnostic on purpose (defined here only; dark inherits) — these are identity colours, not
+     surface colours, and a hue that shifts between themes stops being an identity. NOT a stoplight:
+     good/bad/progress state still follows § No glowing + neutral status palette in DESIGN.md. */
+  --hue-slate:  #8a8f98;
+  --hue-amber:  #d6a445;
+  --hue-violet: #9b7fd4;
+  --hue-green:  #5bb98c;
+  --hue-teal:   #3aa6a0;
+  --hue-rose:   #c96a8a;
+  --hue-indigo: #7f86d4;
+
   /* Deadlock team sides (Match Data render): 0 = Amber Hand, 1 = Sapphire Flame.
      Drives box-score accents, time-series chart lines and the spatial heatmaps. */
   --team-amber:    oklch(0.72 0.15 75);
