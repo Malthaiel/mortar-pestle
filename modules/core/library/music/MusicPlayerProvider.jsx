@@ -144,6 +144,19 @@ export function MusicPlayerProvider({ children }) {
 
   const currentTrack = index >= 0 && index < queue.length ? queue[index] : null;
 
+  // ── Streaming (not-downloaded tracks) ────────────────────────────────────
+  // A queue item with no audio on disk but album metadata (`streamable`) plays
+  // via a fresh googlevideo URL from `music_stream_resolve` — resolved per
+  // play, never persisted (the URLs are IP + time-bound). Resolve failures are
+  // remembered for the session so skip logic walks past them.
+  const failedStreamsRef = useRef(new Set());
+  const [resolvingStream, setResolvingStream] = useState(false);
+  const resolveSeqRef = useRef(0);
+  const streamSrcKeyRef = useRef(null); // stream key currently loaded in <audio>
+  const streamKeyOf = (t) => (t ? `${t.albumPath}|${t.n}` : '');
+  const isPlayable = (t) =>
+    !!t && (t.available || (t.streamable && !failedStreamsRef.current.has(streamKeyOf(t))));
+
   // Wire <audio> element to React state. Human hearing is logarithmic, so we
   // apply a perceptual curve (cubic) — the slider stays linear 0-1 visually
   // but the actual gain ramps up gently at the bottom and aggressively at the
@@ -231,6 +244,7 @@ export function MusicPlayerProvider({ children }) {
           title:      t.title,
           audioPath:  t.audioPath,
           available:  t.available,
+          streamable: !t.available,
           wikilink:   t.wikilink,
           duration:   t.duration,
         }));
@@ -257,30 +271,84 @@ export function MusicPlayerProvider({ children }) {
   // set state and the effect reconciles. Avoids the prior race where a
   // setTimeout(0) play() ran outside the user gesture and was silently
   // rejected by the autoplay policy.
+  // Local files keep the original synchronous path; streamable tracks resolve
+  // a fresh stream URL first, so their branch is async with a stale-guard.
+  const currentTrackKey = currentTrack
+    ? `${currentTrack.albumPath}|${currentTrack.n}|${currentTrack.audioPath || ''}`
+    : '';
   useEffect(() => {
     const a = audioRef.current;
     if (!a) return;
 
-    if (!currentTrack?.audioPath) {
-      if (!a.paused) a.pause();
-      a.removeAttribute('src');
-      a.load();
+    // Local file on disk — synchronous, unchanged.
+    if (currentTrack?.audioPath) {
+      streamSrcKeyRef.current = null;
+      setResolvingStream(false);
+      const want = audioSrcFor(currentTrack.audioPath);
+      if (a.src !== want) {
+        a.src = want;
+        a.load();
+      }
+      if (isPlaying && a.paused) {
+        a.play().catch(err => emitPlayError(currentTrack, err));
+      } else if (!isPlaying && !a.paused) {
+        a.pause();
+      }
       return;
     }
 
-    const want = audioSrcFor(currentTrack.audioPath);
-    if (a.src !== want) {
-      a.src = want;
-      a.load();
+    // Streamable, no file — resolve, then feed the element.
+    if (currentTrack?.streamable) {
+      const key = streamKeyOf(currentTrack);
+      if (streamSrcKeyRef.current === key && a.src) {
+        // Already resolved + loaded (pause/resume of the same stream track).
+        if (isPlaying && a.paused) a.play().catch(err => emitPlayError(currentTrack, err));
+        else if (!isPlaying && !a.paused) a.pause();
+        return;
+      }
+      if (!isPlaying) {
+        // Selected but paused — don't resolve yet; drop any stale audio.
+        if (streamSrcKeyRef.current !== null || a.src) {
+          streamSrcKeyRef.current = null;
+          if (!a.paused) a.pause();
+          a.removeAttribute('src');
+          a.load();
+        }
+        return;
+      }
+      const seq = ++resolveSeqRef.current;
+      setResolvingStream(true);
+      invoke('music_stream_resolve', { albumPath: currentTrack.albumPath, n: currentTrack.n })
+        .then(res => {
+          if (seq !== resolveSeqRef.current) return; // track changed mid-resolve
+          setResolvingStream(false);
+          streamSrcKeyRef.current = key;
+          a.src = res.streamUrl;
+          a.load();
+          a.play().catch(err => emitPlayError(currentTrack, err));
+        })
+        .catch(err => {
+          if (seq !== resolveSeqRef.current) return;
+          setResolvingStream(false);
+          emitPlayError(currentTrack, { message: String(err) });
+          failedStreamsRef.current.add(key);
+          // Decision: toast + skip to the next playable song.
+          const nxt = nextIndexFrom(index);
+          const playable = nxt < 0 ? -1 : skipUnavailable(nxt, +1);
+          if (playable < 0 || playable === index) { setIsPlaying(false); return; }
+          setIndex(playable);
+        });
+      return;
     }
 
-    if (isPlaying && a.paused) {
-      a.play().catch(err => emitPlayError(currentTrack, err));
-    } else if (!isPlaying && !a.paused) {
-      a.pause();
-    }
+    // Nothing playable selected.
+    if (!a.paused) a.pause();
+    a.removeAttribute('src');
+    a.load();
+    streamSrcKeyRef.current = null;
+    setResolvingStream(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentTrack?.audioPath, isPlaying]);
+  }, [currentTrackKey, isPlaying, index]);
 
   // Build a shuffle order whenever the queue changes (or shuffle is toggled
   // on). Only the available tracks participate; missing-audio tracks are
@@ -335,12 +403,13 @@ export function MusicPlayerProvider({ children }) {
   }
 
   function skipUnavailable(start, dir) {
-    // Walk in given direction until we hit an available track or loop back.
+    // Walk in given direction until we hit a playable track (on disk or
+    // streamable) or loop back.
     let i = start;
     const seen = new Set();
     while (i >= 0 && !seen.has(i)) {
       seen.add(i);
-      if (queue[i] && queue[i].available) return i;
+      if (isPlayable(queue[i])) return i;
       i = dir > 0 ? nextIndexFrom(i) : prevIndexFrom(i);
       if (i < 0) return -1;
     }
@@ -350,10 +419,14 @@ export function MusicPlayerProvider({ children }) {
   const handleEnded = useCallback(() => {
     // Record the completed listen before queue advancement. Skip when the
     // track has no usable duration (some MusicBrainz entries omit it).
+    // Streamed listens count too (decision 6) — logged under a stable
+    // `albumPath#n` key since there's no file on disk.
     const ended = queue[index];
-    if (ended?.audioPath && typeof ended.duration === 'number' && ended.duration >= 1) {
+    if ((ended?.audioPath || ended?.streamable)
+        && typeof ended.duration === 'number' && ended.duration >= 1) {
       const secs = Math.round(ended.duration);
-      invoke('music_record_listen', { trackPath: ended.audioPath, durationSec: secs })
+      const trackPath = ended.audioPath || `${ended.albumPath}#${ended.n}`;
+      invoke('music_record_listen', { trackPath, durationSec: secs })
         .catch(err => console.warn('[music] record_listen failed', err));
       setListenMinutesThisMonth(prev => (prev ?? 0) + secs / 60);
     }
@@ -377,22 +450,24 @@ export function MusicPlayerProvider({ children }) {
       title:      t.title,
       audioPath:  t.audioPath,
       available:  t.available,
+      streamable: !t.available,
       wikilink:   t.wikilink,
       duration:   t.duration,
     }));
     let start = startIndex;
-    if (!items[start] || !items[start].available) {
-      // skip forward to first available
+    if (!isPlayable(items[start])) {
+      // skip forward to first playable
       for (let i = start; i < items.length; i++) {
-        if (items[i].available) { start = i; break; }
+        if (isPlayable(items[i])) { start = i; break; }
       }
     }
     // Same-track restart: if the target audio is already loaded, the sync
-    // effect won't re-fire (audioPath identity unchanged after setQueue), so
+    // effect won't re-fire (track identity unchanged after setQueue), so
     // seek to 0 imperatively before flipping state.
     const target = items[start];
     const a = audioRef.current;
-    if (a && target && a.src === audioSrcFor(target.audioPath)) {
+    if (a && target && (a.src === audioSrcFor(target.audioPath) ||
+        (target.streamable && streamSrcKeyRef.current === streamKeyOf(target)))) {
       try { a.currentTime = 0; } catch {}
     }
     setQueue(items);
@@ -402,7 +477,8 @@ export function MusicPlayerProvider({ children }) {
 
   const playSingleTrack = useCallback((track) => {
     const a = audioRef.current;
-    if (a && track && a.src === audioSrcFor(track.audioPath)) {
+    if (a && track && (a.src === audioSrcFor(track.audioPath) ||
+        (track.streamable && streamSrcKeyRef.current === streamKeyOf(track)))) {
       try { a.currentTime = 0; } catch {}
     }
     setQueue([track]);
@@ -416,15 +492,16 @@ export function MusicPlayerProvider({ children }) {
   const playTracks = useCallback((items, startIndex = 0) => {
     if (!items || items.length === 0) return;
     let start = startIndex;
-    if (!items[start] || !items[start].available) {
+    if (!isPlayable(items[start])) {
       for (let i = start; i < items.length; i++) {
-        if (items[i].available) { start = i; break; }
+        if (isPlayable(items[i])) { start = i; break; }
       }
     }
     const target = items[start];
-    if (!target || !target.available) return;
+    if (!isPlayable(target)) return;
     const a = audioRef.current;
-    if (a && a.src === audioSrcFor(target.audioPath)) {
+    if (a && (a.src === audioSrcFor(target.audioPath) ||
+        (target.streamable && streamSrcKeyRef.current === streamKeyOf(target)))) {
       try { a.currentTime = 0; } catch {}
     }
     setQueue(items);
@@ -447,9 +524,11 @@ export function MusicPlayerProvider({ children }) {
 
   const toggle = useCallback(() => {
     const a = audioRef.current;
-    if (!a?.src) return;
+    // A streamable track may not have loaded a src yet (resolve happens on
+    // play) — let the toggle through so the sync effect starts the resolve.
+    if (!a?.src && !currentTrack?.streamable) return;
     setIsPlaying(p => !p);
-  }, []);
+  }, [currentTrack]);
 
   const next = useCallback(() => {
     const nxt = nextIndexFrom(index);
@@ -501,7 +580,7 @@ export function MusicPlayerProvider({ children }) {
 
   const jumpToQueueIndex = useCallback((i) => {
     if (i < 0 || i >= queue.length) return;
-    if (!queue[i].available) return;
+    if (!isPlayable(queue[i])) return;
     // Same-track restart when jumping to the already-selected queue row.
     if (i === index) {
       const a = audioRef.current;
@@ -547,6 +626,8 @@ export function MusicPlayerProvider({ children }) {
     currentTrack, queue, index, isPlaying, position, duration,
     volume, shuffle, repeat,
     listenMinutesThisMonth,
+    // "Finding track" — a streamable track's URL is being resolved right now
+    resolvingStream,
     // actions
     playAlbumTracks, playSingleTrack, playTracks, enqueue, playNext,
     toggle, next, prev, seek, setVolume, cycleRepeat, toggleShuffle,
@@ -554,7 +635,7 @@ export function MusicPlayerProvider({ children }) {
     // web-audio analyser accessor (LiveWaveform consumer)
     getAnalyser,
   }), [currentTrack, queue, index, isPlaying, position, duration, volume, shuffle, repeat,
-        listenMinutesThisMonth,
+        listenMinutesThisMonth, resolvingStream,
         playAlbumTracks, playSingleTrack, playTracks, enqueue, playNext, toggle, next, prev, seek,
         setVolume, cycleRepeat, toggleShuffle, jumpToQueueIndex, reorderQueue, removeFromQueue,
         getAnalyser]);

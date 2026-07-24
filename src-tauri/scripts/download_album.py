@@ -20,6 +20,14 @@ some failed tracks), non-zero only on a fatal error.
 
   download_album.py --rg-mbid <id> --vault <path> [--only-missing] [--max-tracks N]
                     [--metadata-only] [--status S]
+  download_album.py --resolve (--watch-url U | --artist A --track-title T
+                    [--album-title B] [--duration-sec N]) [--album-page P --track-key K]
+
+Resolve mode (streaming): finds one track's YouTube watch URL (cached via
+--watch-url, else the same resolve_source() search the download path uses) and
+prints a direct, playable googlevideo stream URL via `yt-dlp -g` — nothing is
+downloaded. When the search ran, the found watch URL is written back into the
+album page's empty `Track Sources:` line so later plays skip the search.
 
 Metadata-only mode (Add to Library / imports): writes the album page with the
 full MusicBrainz tracklist + cover URL but downloads no audio and writes no
@@ -344,6 +352,88 @@ def album_mix_fallback(album_artist, album_title, track, tokens, expected):
     return watch_url(best) if best else None
 
 
+# ── stream resolve (no download) ─────────────────────────────────────────────
+def ytdlp_stream_url(url, timeout=60):
+    """Direct googlevideo audio URL for `url` via `yt-dlp -g` — nothing
+    downloaded. Same format selector as download_opus so stream and download
+    pick the same upload. The URL is IP + time-bound; callers re-resolve per
+    play, never persist it."""
+    try:
+        out = subprocess.run(
+            ["yt-dlp", "-g", "-f", "bestaudio[ext=webm][acodec=opus]/bestaudio", url],
+            capture_output=True, text=True, timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return None
+    lines = [l.strip() for l in out.stdout.splitlines() if l.strip()]
+    if out.returncode != 0 or not lines:
+        tail = out.stderr.strip().splitlines()
+        log(f"  yt-dlp -g failed: {tail[-1] if tail else 'no output'}")
+        return None
+    return lines[0]
+
+
+def writeback_source(album_page, key, url):
+    """Persist a found watch URL into the album page's empty Track Sources line
+    so later plays skip the search. Best-effort: a miss just means a re-search
+    next play."""
+    try:
+        with open(album_page, encoding="utf-8") as fh:
+            text = fh.read()
+        pat = re.compile(r'^(\s*"' + re.escape(key) + r'":)[ \t]*\r?$', re.MULTILINE)
+        new, count = pat.subn(lambda m: m.group(1) + " " + url, text, count=1)
+        if count:
+            with open(album_page, "w", encoding="utf-8", newline="") as fh:
+                fh.write(new)
+        else:
+            log(f"  writeback: no empty Track Sources line for key {key!r}")
+    except OSError as e:
+        log(f"  writeback failed: {e}")
+
+
+def page_source_for(album_page, nn_prefix):
+    """(key, url) for the album page's Track Sources line whose key starts with
+    `NN - `. The lookup lives HERE, not in Rust: the app's frontmatter parser
+    does scalars/lists only — a nested map like Track Sources never parses."""
+    try:
+        with open(album_page, encoding="utf-8") as fh:
+            for line in fh:
+                m = re.match(r'\s*"(' + re.escape(nn_prefix) + r'[^"]*)":\s*(\S+)?\s*$', line)
+                if m:
+                    return m.group(1), (m.group(2) or "")
+    except OSError as e:
+        log(f"  page_source_for failed: {e}")
+    return None, ""
+
+
+def run_resolve(args):
+    """--resolve mode: one track → {watchUrl, streamUrl} on stdout, no download."""
+    if not shutil.which("yt-dlp"):
+        fatal("required tool not found on PATH: yt-dlp")
+    url = args.watch_url
+    key = args.track_key
+    if not url and args.album_page and args.track_n:
+        key, cached = page_source_for(args.album_page, f"{args.track_n:02d} - ")
+        if cached:
+            url = cached
+    searched = False
+    if not url:
+        if not (args.artist and args.track_title):
+            fatal("--resolve needs --watch-url or --artist + --track-title")
+        track = {"title": args.track_title,
+                 "length_ms": args.duration_sec * 1000 if args.duration_sec else None}
+        url, info = resolve_source(track, args.artist, args.album_title or "", None)
+        if not url:
+            fatal(info or "no YouTube source found")
+        searched = True
+    stream = ytdlp_stream_url(url)
+    if not stream:
+        fatal("no stream URL (yt-dlp -g failed)")
+    if searched and args.album_page and key:
+        writeback_source(args.album_page, key, url)
+    emit({"event": "resolve", "watchUrl": url, "streamUrl": stream})
+
+
 def _run_ytdlp_streaming(dl_args, n):
     """Run yt-dlp, streaming its download progress as NDJSON `progress` events
     (throttled to ~0.4s). Returns the process return code. Lines that don't parse
@@ -601,15 +691,32 @@ def head_ok(url):
 # ── main ─────────────────────────────────────────────────────────────────────
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--rg-mbid", required=True)
-    ap.add_argument("--vault", required=True)
+    ap.add_argument("--rg-mbid")
+    ap.add_argument("--vault")
     ap.add_argument("--only-missing", action="store_true")
     ap.add_argument("--max-tracks", type=int, default=0)
     ap.add_argument("--metadata-only", action="store_true",
                     help="write the album page only; no audio (Add to Library / imports)")
     ap.add_argument("--status", default="Plan-to-Listen",
                     choices=["Plan-to-Listen", "Currently-Listening", "Listened", "Dropped"])
+    # Resolve mode (streaming) — one track, no download, no --rg-mbid/--vault.
+    ap.add_argument("--resolve", action="store_true",
+                    help="resolve one track to a live stream URL; no download")
+    ap.add_argument("--watch-url")
+    ap.add_argument("--artist")
+    ap.add_argument("--album-title")
+    ap.add_argument("--track-title")
+    ap.add_argument("--duration-sec", type=int, default=0)
+    ap.add_argument("--album-page")
+    ap.add_argument("--track-key")
+    ap.add_argument("--track-n", type=int, default=0)
     args = ap.parse_args()
+
+    if args.resolve:
+        run_resolve(args)
+        return
+    if not args.rg_mbid or not args.vault:
+        ap.error("--rg-mbid and --vault are required")
 
     if not args.metadata_only:
         for dep in ("yt-dlp", "ffmpeg", "ffprobe"):

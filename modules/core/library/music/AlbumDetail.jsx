@@ -124,11 +124,12 @@ export default function AlbumDetail({ accent, albumPath }) {
   const playFrom = (idx) => playAlbumTracks(album, idx);
 
   const enqueueAlbum = () => {
-    const items = album.tracks.filter(t => t.available).map(t => ({
+    const items = album.tracks.map(t => ({
       albumPath: album.path, albumTitle: album.title, albumImage: album.image,
       artist: album.artist,
       n: t.n, title: t.title, audioPath: t.audioPath,
-      available: true, wikilink: t.wikilink, duration: t.duration,
+      available: t.available, streamable: !t.available,
+      wikilink: t.wikilink, duration: t.duration,
     }));
     enqueue(items);
   };
@@ -415,12 +416,12 @@ export default function AlbumDetail({ accent, albumPath }) {
                     playing={playingThis && isPlaying}
                     onPlay={() => playFrom(idx)}
                     onEnqueue={() => {
-                      if (!t.available) return;
                       enqueue([{
                         albumPath: album.path, albumTitle: album.title, albumImage: album.image,
                         artist: album.artist,
                         n: t.n, title: t.title, audioPath: t.audioPath,
-                        available: true, wikilink: t.wikilink, duration: t.duration,
+                        available: t.available, streamable: !t.available,
+                        wikilink: t.wikilink, duration: t.duration,
                       }]);
                     }}
                   />
@@ -440,7 +441,6 @@ export default function AlbumDetail({ accent, albumPath }) {
 
 function TrackRow({ track, idx, accent, playing, onPlay, onEnqueue, playlistRef }) {
   const [hover, setHover] = useState(false);
-  const unavailable = !track.available;
   const openPage = (e) => {
     e.stopPropagation();
     if (!track.wikilink) return;
@@ -455,12 +455,11 @@ function TrackRow({ track, idx, accent, playing, onPlay, onEnqueue, playlistRef 
 
   return (
     <div
-      className={'candy-btn' + (playing ? ' is-playing' : '') + (unavailable ? ' is-unavailable' : '')}
+      className={'candy-btn' + (playing ? ' is-playing' : '')}
       data-shape="track"
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      onClick={() => !unavailable && onPlay()}
-      title={unavailable ? 'audio not downloaded' : ''}
+      onClick={() => onPlay()}
       style={{ '--accent': accent || 'var(--accent)' }}
     >
       <div className="candy-face">
@@ -494,9 +493,7 @@ function TrackRow({ track, idx, accent, playing, onPlay, onEnqueue, playlistRef 
       {track.wikilink && (
         <HoverBtn hover={hover} playing={playing} title="Open track page" onClick={openPage}>↗</HoverBtn>
       )}
-      {!unavailable && (
-        <HoverBtn hover={hover} playing={playing} title="Add to queue" onClick={(e) => { e.stopPropagation(); onEnqueue(); }}>+</HoverBtn>
-      )}
+      <HoverBtn hover={hover} playing={playing} title="Add to queue" onClick={(e) => { e.stopPropagation(); onEnqueue(); }}>+</HoverBtn>
 
       {/* Always-visible add-to-playlist (decision #6) */}
       {playlistRef && (

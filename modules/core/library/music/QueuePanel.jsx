@@ -101,8 +101,8 @@ export default function QueuePanel({ open, onClose, accent }) {
               ref={(el) => { rowRefs.current[i] = el; }}
               onMouseEnter={() => setHoverIdx(i)}
               onMouseLeave={() => setHoverIdx(o => (o === i ? null : o))}
-              onClick={() => t.available && jumpToQueueIndex(i)}
-              className={'candy-btn' + (active ? ' is-playing' : '') + (!t.available ? ' is-unavailable' : '')}
+              onClick={() => (t.available || t.streamable) && jumpToQueueIndex(i)}
+              className={'candy-btn' + (active ? ' is-playing' : '') + (!(t.available || t.streamable) ? ' is-unavailable' : '')}
               data-shape="track"
               style={{
                 borderTop: dropOver && dragIdx > i ? `2px solid ${accent}` : undefined,

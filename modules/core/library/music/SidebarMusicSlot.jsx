@@ -26,7 +26,7 @@ export default function SidebarMusicSlot() {
   const accent = 'var(--accent)';
   const {
     currentTrack, isPlaying, position, duration,
-    volume, shuffle, repeat,
+    volume, shuffle, repeat, resolvingStream,
     toggle, next, prev, seek, setVolume, cycleRepeat, toggleShuffle,
   } = useMusicPlayer();
   const [queueOpen, setQueueOpen] = useState(false);
@@ -134,7 +134,9 @@ export default function SidebarMusicSlot() {
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>
               {hasTrack
-                ? (currentTrack.artist + (currentTrack.albumTitle ? ' · ' + currentTrack.albumTitle : ''))
+                ? (resolvingStream
+                    ? 'Finding track'
+                    : currentTrack.artist + (currentTrack.albumTitle ? ' · ' + currentTrack.albumTitle : ''))
                 : ' '}
             </div>
           </div>

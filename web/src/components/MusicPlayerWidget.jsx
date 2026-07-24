@@ -25,7 +25,7 @@ function fmt(t) {
 export default function MusicPlayerWidget() {
   const {
     currentTrack, isPlaying, position, duration,
-    shuffle, repeat, volume,
+    shuffle, repeat, volume, resolvingStream,
     toggle, next, prev, seek, setVolume, toggleShuffle, cycleRepeat,
   } = useMusicPlayer();
   const scrubRef = useRef(null);
@@ -35,7 +35,11 @@ export default function MusicPlayerWidget() {
   const hasTrack = !!currentTrack;
   const cover   = hasTrack ? mediaUrl(currentTrack.albumImage) || null : null;
   const title   = hasTrack ? (currentTrack.title  || '—') : '';
-  const artist  = hasTrack ? (currentTrack.artist || '')  : '';
+  // While a stream track's URL is being fetched, the artist line reads
+  // "Finding track" (decision 5 — plain words, no trailing dots).
+  const artist  = hasTrack
+    ? (resolvingStream ? 'Finding track' : (currentTrack.artist || ''))
+    : '';
 
   const stop = (e) => e.stopPropagation();
   const openAlbum = (e) => {

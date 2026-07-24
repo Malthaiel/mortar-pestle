@@ -39,6 +39,9 @@ function trackToQueueItem(t, pl) {
     title: t.title,
     audioPath: t.audioPath,
     available: t.available,
+    // Streamable needs a real album card to resolve against — playlist rows
+    // whose album is gone (recycled) stay truly unavailable.
+    streamable: !t.available && !!t.albumPath && t.n != null,
     wikilink: t.wikilink || null,
     duration: t.duration ?? null,
   };
@@ -99,18 +102,18 @@ export default function PlaylistDetail({ path, accent }) {
   if (!pl) return <Centered>Not found</Centered>;
 
   const tracks = pl.tracks || [];
-  const playable = tracks.filter((t) => t.available);
   const items = tracks.map((t) => trackToQueueItem(t, pl));
+  const rowPlayable = (i) => !!(items[i] && (items[i].available || items[i].streamable));
+  const playable = items.filter((it) => it.available || it.streamable);
 
   const playAll = () => {
     if (playable.length) playTracks(items, 0);
   };
   const playFrom = (i) => {
-    if (tracks[i]?.available) playTracks(items, i);
+    if (rowPlayable(i)) playTracks(items, i);
   };
   const addToQueue = () => {
-    const av = items.filter((it) => it.available);
-    if (av.length) enqueue(av);
+    if (playable.length) enqueue(playable);
   };
 
   // Optimistic local update + persist (reorder / remove). On failure, reload.
@@ -254,7 +257,11 @@ export default function PlaylistDetail({ path, accent }) {
           </div>
         )}
         {tracks.map((t, i) => {
-          const playingThis = !!currentTrack && currentTrack.audioPath === t.audioPath;
+          // Stream tracks have no audioPath (null === null would light every
+          // stream row) — fall back to album+track identity.
+          const playingThis = !!currentTrack && (currentTrack.audioPath
+            ? currentTrack.audioPath === t.audioPath
+            : currentTrack.albumPath === (t.albumPath || pl.path) && currentTrack.n === t.n);
           const dragging = dragIdx === i;
           const dropOver = overIdx === i && dragIdx !== null && dragIdx !== i;
           const hovering = hoverIdx === i;
@@ -264,15 +271,15 @@ export default function PlaylistDetail({ path, accent }) {
               ref={(el) => { rowRefs.current[i] = el; }}
               onMouseEnter={() => setHoverIdx(i)}
               onMouseLeave={() => setHoverIdx((o) => (o === i ? null : o))}
-              onClick={() => t.available && playFrom(i)}
-              title={t.available ? '' : 'audio not downloaded'}
+              onClick={() => rowPlayable(i) && playFrom(i)}
+              title={rowPlayable(i) ? '' : 'audio not downloaded'}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: 12,
                 padding: '8px 12px',
                 borderRadius: 6,
-                cursor: t.available ? 'pointer' : 'not-allowed',
+                cursor: rowPlayable(i) ? 'pointer' : 'not-allowed',
                 background: playingThis
                   ? `color-mix(in oklch, ${a} 12%, transparent)`
                   : dropOver || hovering
@@ -280,7 +287,7 @@ export default function PlaylistDetail({ path, accent }) {
                     : 'transparent',
                 borderTop: dropOver && dragIdx > i ? `2px solid ${a}` : '2px solid transparent',
                 borderBottom: dropOver && dragIdx < i ? `2px solid ${a}` : '2px solid transparent',
-                opacity: dragging ? 0.4 : t.available ? 1 : 0.5,
+                opacity: dragging ? 0.4 : rowPlayable(i) ? 1 : 0.5,
                 transition: 'background 120ms ease',
               }}
             >

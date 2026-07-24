@@ -221,6 +221,106 @@ pub fn music_download_cancel(job_id: String) -> Result<(), String> {
     Ok(())
 }
 
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamResolve {
+    pub stream_url: String,
+    pub watch_url: String,
+}
+
+/// Resolve one not-downloaded track to a direct, playable googlevideo URL —
+/// the interactive counterpart to the download queue (never routed through the
+/// sequential worker: resolve is per-click, fast, parallel-safe). A cached
+/// watch URL in the album page's `Track Sources` map skips the YouTube search;
+/// when the search runs, the script writes the found URL back into that map so
+/// the next play is fast. Stream URLs are IP + time-bound — callers re-resolve
+/// on every play and never persist them.
+#[tauri::command]
+pub async fn music_stream_resolve(
+    app: AppHandle,
+    album_path: String,
+    n: i64,
+) -> Result<StreamResolve, String> {
+    let Some(script) = resolve_script(&app) else {
+        return Err("download script not found (scripts/download_album.py)".into());
+    };
+
+    // Album context: artist/title/duration for the search path, cached watch
+    // URL + exact Track Sources key for the fast path / writeback.
+    let album = crate::parsers::albums::read_album(&album_path).map_err(|e| format!("{e:?}"))?;
+    let track = album
+        .tracks
+        .iter()
+        .find(|t| t.n == n)
+        .ok_or_else(|| format!("track {n} not found in {album_path}"))?;
+
+    // The cached-URL lookup + writeback both live in the python script (it
+    // owns the page format; the app's frontmatter parser can't read nested
+    // maps like `Track Sources`). Rust just hands it the page + track number
+    // plus the search inputs used when nothing is cached.
+    let abs = std::path::PathBuf::from(crate::commands::vault::library_vault_root())
+        .join(&album_path);
+    if album.artist.is_empty() {
+        return Err("album card has no artist to search with".into());
+    }
+    let mut cmd = crate::commands::proc_util::python_cmd();
+    cmd.arg(&script)
+        .arg("--resolve")
+        .arg("--album-page")
+        .arg(abs.as_os_str())
+        .arg("--track-n")
+        .arg(n.to_string())
+        .arg("--artist")
+        .arg(&album.artist)
+        .arg("--album-title")
+        .arg(&album.title)
+        .arg("--track-title")
+        .arg(&track.title);
+    if let Some(d) = track.duration {
+        cmd.arg("--duration-sec").arg(d.to_string());
+    }
+    cmd.stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    let out = cmd
+        .output()
+        .await
+        .map_err(|e| format!("failed to spawn python3: {e}"))?;
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let mut err_msg: Option<String> = None;
+    for line in stdout.lines() {
+        let Ok(v) = serde_json::from_str::<serde_json::Value>(line) else {
+            continue;
+        };
+        match v.get("event").and_then(|x| x.as_str()) {
+            Some("resolve") => {
+                let stream = v.get("streamUrl").and_then(|x| x.as_str()).unwrap_or("");
+                let watch = v.get("watchUrl").and_then(|x| x.as_str()).unwrap_or("");
+                if !stream.is_empty() {
+                    return Ok(StreamResolve {
+                        stream_url: stream.into(),
+                        watch_url: watch.into(),
+                    });
+                }
+            }
+            Some("error") => {
+                err_msg = v.get("message").and_then(|x| x.as_str()).map(String::from);
+            }
+            _ => {}
+        }
+    }
+    Err(err_msg.unwrap_or_else(|| {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let tail = stderr
+            .lines()
+            .rev()
+            .find(|l| !l.trim().is_empty())
+            .unwrap_or("no output");
+        format!("stream resolve failed: {tail}")
+    }))
+}
+
 async fn run_worker(app: AppHandle) {
     loop {
         let job_id = {
