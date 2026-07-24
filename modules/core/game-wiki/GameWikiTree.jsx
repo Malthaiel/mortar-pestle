@@ -29,6 +29,7 @@ import {
 } from '@host/components/vault-tree/treeKit.jsx';
 import { parseOverview, parseMatchFile, serializeMatchFile, newMatchContent } from './scrimSchema.js';
 import { sidecarPath, matchPath } from './matchData.js';
+import { exportCarryForward } from './carryForward.js';
 import { requestSectionJump } from './sectionJump.js';
 
 export const SCRIM_BASE = 'Deadlock/Coaching/Scrim';
@@ -371,7 +372,18 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
     const hasFinals = [...(listingsRef.current[node.vaultPath]?.sidecars || [])].some((f) => f.startsWith('.matchfinal.'));
     openContextMenu(e, [
       { label: 'New Match', icon: IconPlus, onClick: () => doNewMatch(node.vaultPath) },
-      { label: 'Export Carry-Forward', icon: IconFile, disabled: !hasFinals, onClick: () => {} },
+      {
+        label: 'Export Carry-Forward',
+        icon: IconFile,
+        disabled: !hasFinals,
+        // M24: mechanical, no AI. Writes Carry-Forward.md at the scrim root from every final report
+        // in the scrim, then refreshes the listing so the new node appears without a manual reload.
+        onClick: () => {
+          exportCarryForward(api, node.vaultPath, { scrim: base, date: new Date().toISOString().slice(0, 10) })
+            .then(() => refreshListing(node.vaultPath))
+            .catch(() => {});
+        },
+      },
       { divider: true },
       { label: 'Rename…', icon: IconFile, onClick: () => setModal({ kind: 'rename', base }) },
       { label: 'Delete', icon: IconX, danger: true, onClick: () => setModal({ kind: 'delete', base }) },
