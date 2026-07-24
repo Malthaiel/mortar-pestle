@@ -35,6 +35,7 @@ import { speakerColor } from './diarize.js';
 import Popover from '@host/components/ui/Popover.jsx';
 import { PrimaryBtn, OutlinedBtn } from '@host/components/ui/Button.jsx';
 import { coerceReport, slugId, transcriptHash, applyCorrections, mmss } from './vodReport.js';
+import { subscribeSectionJump, takeSectionJump } from './sectionJump.js';
 import { openAnalyst } from '@host/agents/analyst/AnalystProvider.jsx';
 
 const muted = { color: 'var(--text-muted)', fontSize: 13 };
@@ -416,6 +417,37 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
     }));
   }, [tab, segments]);
 
+  // M20 section sub-nav (cross-pane): the GameWiki tree asks (via the module-scope sectionJump signal)
+  // to scroll a report heading into view. Two entry points — a live signal while this view is mounted
+  // (subscribe), and a request made just before a fresh navigation mounted us (the mdPath effect) — both
+  // take() scrim-scoped/one-shot, stash the id, and bump a tick so the scroll effect runs.
+  const pendingSectionRef = useRef(null);
+  const [sectionTick, setSectionTick] = useState(0);
+  useEffect(() => subscribeSectionJump(() => {
+    const id = takeSectionJump(mdPath);
+    if (id) { pendingSectionRef.current = id; setTab('tldr'); setSectionTick((n) => n + 1); }
+  }), [mdPath, setTab]);
+  useEffect(() => {
+    const id = takeSectionJump(mdPath);
+    if (id) { pendingSectionRef.current = id; setSectionTick((n) => n + 1); }
+  }, [mdPath]);
+  useEffect(() => {
+    const id = pendingSectionRef.current;
+    if (tab !== 'tldr' || !id) return;
+    const tryScroll = () => {
+      const el = paneRef.current?.querySelector(`[data-section-id="${id}"]`);
+      if (!el) return false;
+      pendingSectionRef.current = null;
+      el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      el.classList.add('settings-search-flash');
+      setTimeout(() => el.classList.remove('settings-search-flash'), 1200);
+      return true;
+    };
+    requestAnimationFrame(() => requestAnimationFrame(() => { if (!tryScroll()) setTimeout(tryScroll, 150); }));
+    // `report` (not the later-declared `sections`) is the dep — it changes when the sidecar loads, so a
+    // jump requested before the headings rendered re-runs once they exist. Avoids a TDZ on `sections`.
+  }, [sectionTick, tab, report]);
+
   // react-markdown overrides: #seg- links (from linkTimeTokens) render as TimeChips; external
   // links open in a new window; everything else inherits .gamewiki-md typography.
   const mdComponents = {
@@ -543,7 +575,7 @@ export default function VodReportView({ sidecarPath, commsPath, normPath, feedba
               <div className="gamewiki-md">
                 {sections.map((sec, si) => (
                   <div key={sec.id}>
-                    <h2 style={si === 0 ? { marginTop: 0 } : undefined}>{sec.heading}</h2>
+                    <h2 data-section-id={sec.id} style={si === 0 ? { marginTop: 0 } : undefined}>{sec.heading}</h2>
                     {/* M17: section-ref verify findings (sections[<id>] / .md) render under the heading,
                         not only buried in the warnings drawer. FindingList matches path / path. / path[. */}
                     <FindingList findings={r.meta.findings} path={`sections[${sec.id}]`} />

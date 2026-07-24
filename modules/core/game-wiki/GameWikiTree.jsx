@@ -25,6 +25,8 @@ import {
   CandyHeader, TreeRow, TreeChildren, Collapsible, StaggerChild,
 } from '@host/components/vault-tree/treeKit.jsx';
 import { parseOverview, newMatchContent } from './scrimSchema.js';
+import { scrimSidecarPath } from './matchData.js';
+import { requestSectionJump } from './sectionJump.js';
 
 export const SCRIM_BASE = 'Deadlock/Coaching/Scrim';
 
@@ -62,6 +64,23 @@ function matchesScrimOf(vp) {
 function VirtualGroup({ scrimPath, name, views, tree, accent, currentPath, nav }) {
   const vp = `${scrimPath}/${name}`;
   const open = tree.isOpen(vp);
+  // M20: the Report group's "Report" (tldr) leaf gets the generated report's sections as a sub-nav.
+  // Load them from the .vodreport sidecar once this group is open (Report group only; Coaching stays flat).
+  const [sections, setSections] = useState([]);
+  useEffect(() => {
+    if (name !== 'Report' || !open) return undefined;
+    let cancelled = false;
+    api.getRawFileMeta(scrimSidecarPath(scrimPath, 'vodreport'), 'gamewiki')
+      .then((r) => {
+        if (cancelled) return;
+        try {
+          const j = JSON.parse(r.content);
+          setSections((j.sections || []).filter((s) => s?.id && s?.heading).map((s) => ({ id: String(s.id), heading: String(s.heading) })));
+        } catch { setSections([]); }
+      })
+      .catch(() => { if (!cancelled) setSections([]); });
+    return () => { cancelled = true; };
+  }, [name, open, scrimPath]);
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
       <CandyHeader label={name} open={open} accent={accent} onToggle={() => tree.toggle(vp)}/>
@@ -69,9 +88,38 @@ function VirtualGroup({ scrimPath, name, views, tree, accent, currentPath, nav }
         <TreeChildren>
           {views.map((v, i) => (
             <StaggerChild key={v.id} index={i} count={views.length} open={open}>
-              <TreeRow label={v.label} accent={accent}
-                selected={currentPath === `${vp}/${v.id}`}
-                onClick={() => nav('/game-wiki/' + encodePagePath(`${vp}/${v.id}`))}/>
+              {v.id === 'tldr' && sections.length
+                ? <ReportSectionLeaf vp={vp} view={v} sections={sections} scrimPath={scrimPath}
+                    tree={tree} accent={accent} currentPath={currentPath} nav={nav}/>
+                : <TreeRow label={v.label} accent={accent}
+                    selected={currentPath === `${vp}/${v.id}`}
+                    onClick={() => nav('/game-wiki/' + encodePagePath(`${vp}/${v.id}`))}/>}
+            </StaggerChild>
+          ))}
+        </TreeChildren>
+      </Collapsible>
+    </div>
+  );
+}
+
+// M20: the Report (tldr) leaf as an expandable sub-group — the label opens the Report tab, the caret
+// reveals the section sub-nav. A section navigates to the Report tab (if not already there) and asks
+// the content pane to scroll that heading into view via the module-scope sectionJump bridge. Shares
+// the tree's expanded Set (keyed by the virtual path) like the Report/Coaching groups do.
+function ReportSectionLeaf({ vp, view, sections, scrimPath, tree, accent, currentPath, nav }) {
+  const key = `${vp}/${view.id}`;
+  const open = tree.isOpen(key);
+  const goReport = () => nav('/game-wiki/' + encodePagePath(key));
+  const goSection = (id) => { goReport(); requestSectionJump(scrimPath, id); };
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      <CandyHeader label={view.label} open={open} accent={accent}
+        activeFill={currentPath === key} onActivate={goReport} onToggle={() => tree.toggle(key)}/>
+      <Collapsible open={open} count={sections.length}>
+        <TreeChildren>
+          {sections.map((s, i) => (
+            <StaggerChild key={s.id} index={i} count={sections.length} open={open}>
+              <TreeRow label={s.heading} accent={accent} onClick={() => goSection(s.id)}/>
             </StaggerChild>
           ))}
         </TreeChildren>
