@@ -377,10 +377,12 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
         icon: IconFile,
         disabled: !hasFinals,
         // M24: mechanical, no AI. Writes Carry-Forward.md at the scrim root from every final report
-        // in the scrim, then refreshes the listing so the new node appears without a manual reload.
+        // in the scrim. BOTH caches must be re-read or the new node stays invisible: refreshListing
+        // re-reads Matches/ (match numbers + sidecars), while the scrim folder's own FILE children —
+        // where Carry-Forward.md lands — live in the tree hook's cache and only tree.refresh drops it.
         onClick: () => {
           exportCarryForward(api, node.vaultPath, { scrim: base, date: new Date().toISOString().slice(0, 10) })
-            .then(() => refreshListing(node.vaultPath))
+            .then(() => { tree.refresh(node.vaultPath); return refreshListing(node.vaultPath); })
             .catch(() => {});
         },
       },
