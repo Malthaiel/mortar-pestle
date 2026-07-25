@@ -55,6 +55,9 @@ assert.ok(!withTranscript.includes('NO IN-GAME COMMS ATTACHED'), 'transcript alo
 for (const needle of ['[data]', '[grounded]', '[analyst]', 'PROVENANCE', 'YOUR OWN READS ARE THE JOB', 'GAME clock']) {
   assert.ok(MATCH_REPORT_SYSTEM_PROMPT.includes(needle), `system prompt states: ${needle}`);
 }
+// Same coin-flip the final-report prompt had: a card with every field empty is a shell, not a card.
+assert.ok(MATCH_REPORT_SYSTEM_PROMPT.includes('OMIT a player entirely when every field would be empty'),
+  'P1 omits empty player cards too — both prompts state it, so neither can drift');
 // M3: full report shape — the final must be able to replace this 1:1
 for (const present of ['"actionItems"', '"qa"', '"debates"', '"followUps"', '"keepDoing"']) {
   assert.ok(MATCH_REPORT_SYSTEM_PROMPT.includes(present), `match report schema carries ${present}`);

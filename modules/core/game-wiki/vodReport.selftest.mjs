@@ -105,6 +105,15 @@ assert.ok(pPrior.includes('with ONLY these items'), 'prior-items block points ba
 assert.ok(!buildReportPrompt({ transcriptBlock: 'T' }).includes('Prior action items from earlier scrims'),
   'no priors supplied -> no prior block, so the rule sends followUps to []');
 
+// Session-9 run 2 emitted three name-only player cards (every field "") where run 1 had correctly
+// omitted them and said why — the prompt never picked a side, so the model flipped a coin per run.
+assert.ok(VOD_REPORT_SYSTEM_PROMPT.includes('OMIT a player entirely when every field would be empty'),
+  'empty player cards are omitted, not emitted as name-only shells');
+// The same run's carry entry copied an action item ending "— see the <heading> section"; the exported
+// sheet is read away from the report, where that pointer resolves to nothing.
+assert.ok(VOD_REPORT_SYSTEM_PROMPT.includes('Every carry line must stand alone'),
+  'carry entries drop trailing cross-references');
+
 // M4 first-report reference block: labeled + reference-only rule inline; absent when empty
 const pFinal = buildReportPrompt({ transcriptBlock: 'T', firstReportBlock: '{"sections":[]}' });
 assert.ok(pFinal.includes('=== FIRST REPORT (ANALYST) ==='), 'first report block labeled');
