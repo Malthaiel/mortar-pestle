@@ -208,4 +208,18 @@ for (const needle of ['The short time fields hold a BARE time', 'write 8:12c the
   assert.ok(buildMatchReportSystemPrompt({ dataFree: true }).includes(needle), `P1 bare-field stamp rule survives data-free: ${needle}`);
 }
 
+// A live North run (2026-07-25) emitted two claims of one shape: a real number attached to the wrong
+// subject ("12,655 behind the next-poorest North hero" — 12,655 is the gap to an ENEMY player, the
+// teammate gap is 1,041), and a count taken from the deaths the report itself wrote up rather than
+// from the digest ("killed him three times"; the digest says four, and the report's own Apollo card
+// said four). Both wore a provenance tag, which is exactly what the tag is supposed to make safe.
+// Asserted VERBATIM in vodReport.selftest.mjs too — the two prompts must not drift on this.
+for (const needle of [
+  'A comparison or superlative names the pool it ranges over',
+  'A count comes from the source data, never from the entries you happened to write up',
+]) {
+  assert.ok(MATCH_REPORT_SYSTEM_PROMPT.includes(needle), `P1 comparison/count rule states: ${needle}`);
+  assert.ok(buildMatchReportSystemPrompt({ dataFree: true }).includes(needle), `P1 comparison/count rule survives data-free: ${needle}`);
+}
+
 console.log('matchReport.selftest: all assertions passed');

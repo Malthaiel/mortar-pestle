@@ -509,6 +509,10 @@ assert.deepEqual(sm['Speaker 5'], { name: 'Ash', confidence: 'low', evidence: ''
 for (const needle of [
   'Attribution fidelity', 'Speaker identity', 'meta.speakerMap', 'Debate & nuance fidelity',
   'Causal chains stay joined', 'PROCEDURE for praise', 'Habits with history', 'Prose hygiene',
+  // The live North final report (2026-07-25) dropped the ONE segment stating a loss lesson ("we pushed
+  // up like too far on their Walker that we lost") out of 999. Praise and questions each had a sweep;
+  // lessons — the report's actual product — had none. A single mention is the most losable point there is.
+  'PROCEDURE for lessons', 'a single mention is not a small point',
   'Comms Grade grades IN-GAME comms', 'Say-it-once, player cards specifically',
   'Order "sections" as a story',
 ]) assert.ok(VOD_REPORT_SYSTEM_PROMPT.includes(needle), `WS2 rule present: ${needle}`);
@@ -516,6 +520,13 @@ for (const kept of [
   'Canonical names ONLY', 'ANALYST BRAIN is for GROUNDING ONLY', 'PROCEDURE for qa',
   'Quote sparingly', 'Quoting less changes WORDING ONLY', 'NEVER compress a taught framework',
 ]) assert.ok(VOD_REPORT_SYSTEM_PROMPT.includes(kept), `pre-existing rule kept: ${kept}`);
+
+// Asserted VERBATIM in matchReport.selftest.mjs too — see the note there for the live North run that
+// produced both failures. The two prompts must not drift on this rule.
+for (const needle of [
+  'A comparison or superlative names the pool it ranges over',
+  'A count comes from the source data, never from the entries you happened to write up',
+]) assert.ok(VOD_REPORT_SYSTEM_PROMPT.includes(needle), `P2 comparison/count rule states: ${needle}`);
 
 // M4 latent: the verify prompt now tells the model which field name makes a stamp fix auto-applicable.
 assert.ok(VERIFY_SYSTEM_PROMPT.includes('"timestamp"') && VERIFY_SYSTEM_PROMPT.includes('Timestamp corrections'),
