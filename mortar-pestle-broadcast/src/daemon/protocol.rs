@@ -55,6 +55,25 @@
 //! top-level `state` enum cannot express two activities at once. Every later
 //! SP5 addition is additive (new fields, serde defaults) — no second bump.
 
+//! SP6 (proto v5) — audio mixer. Snapshot gains `audio: AudioInfo`, a third
+//! orthogonal sub-struct (audio state is concurrent with recording AND
+//! streaming). Mutating ops: `set_volume` {source, deflection}, `set_mute`,
+//! `set_monitoring`, `set_balance`, `set_mono`, `set_sync_offset`,
+//! `set_tracks` {source, mask}, `set_global_slot` {channel, device_id},
+//! `set_monitoring_device`, `add_filter`, `remove_filter`, `reorder_filter`,
+//! `set_filter_enabled`. Ephemeral: `subscribe_meters` {on},
+//! `list_audio_devices` {kind}, `list_filter_types` {kind},
+//! `get_filter_properties`, `set_filter_settings`.
+//!
+//! New event `meters` — the ONLY high-rate frame on the wire. One event per
+//! tick carrying EVERY subscribed source (never one event per source per
+//! volmeter callback), 30 Hz, and nothing at all while unsubscribed. Values
+//! are dB, already mapped by libobs's volmeter.
+//!
+//! Fader travel is libobs's own `obs_fader_t` on OBS_FADER_CUBIC — deflection
+//! is computed engine-side by the same code OBS's own UI uses, so "matches
+//! OBS's curve" is true by construction rather than by a ported formula.
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -128,6 +147,7 @@ pub struct StateSnapshot {
     pub recording: RecordingInfo,
     pub replay: ReplayInfo,
     pub stream: StreamInfo,
+    pub audio: AudioInfo,
     pub caps: CapsInfo,
     pub obs_version: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -251,6 +271,91 @@ impl StreamInfo {
     }
 }
 
+/// Audio half of the snapshot (SP6) — orthogonal to `state`, `recording` AND
+/// `stream`: levels and routing are live regardless of what is running.
+#[derive(Debug, Clone, Serialize)]
+pub struct AudioInfo {
+    /// Global monitoring output device (obs_get_audio_monitoring_device).
+    /// `None` = "Default".
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub monitoring_device: Option<DeviceRef>,
+    /// libobs's six global output channels, ALWAYS six entries (channel 1..6),
+    /// empty `source` where the slot is unassigned. Fixed length so the UI
+    /// renders six rows without inventing placeholders.
+    pub globals: Vec<GlobalSlot>,
+    /// Mixer rows: the assigned globals (which survive scene switches) plus
+    /// every audio-capable source in the CURRENT scene. OBS parity.
+    pub sources: Vec<AudioSourceInfo>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DeviceRef {
+    pub id: String,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GlobalSlot {
+    /// 1..=6, matching obs_set_output_source's channel argument.
+    pub channel: u32,
+    /// Assigned source name, or `None` for an empty slot.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    /// libobs input type id backing the slot (wasapi_output_capture etc.).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub input_id: Option<String>,
+}
+
+/// One mixer row. Name-addressed like scenes (audio sources are unique by
+/// name in libobs), NOT item-addressed — the same source can appear in many
+/// scenes but has exactly ONE set of audio settings.
+#[derive(Debug, Clone, Serialize)]
+pub struct AudioSourceInfo {
+    pub name: String,
+    /// libobs source type id.
+    pub id: String,
+    /// True for channels 1..6 — pinned in the mixer across scene switches.
+    pub is_global: bool,
+    pub volume_db: f32,
+    /// 0..1 fader position from libobs's own cubic fader. The UI never
+    /// computes the curve.
+    pub deflection: f32,
+    pub muted: bool,
+    /// none | monitor_only | monitor_and_output
+    pub monitoring: String,
+    /// 0..1, 0.5 = centre.
+    pub balance: f32,
+    pub mono: bool,
+    pub sync_offset_ms: i64,
+    /// 6-bit mixer mask (bit 0 = track 1).
+    pub tracks: u32,
+    /// 1 = mono, 2 = stereo — how many meter bars the row draws.
+    pub channels: u32,
+    /// Ordered; engine order IS signal order.
+    pub filters: Vec<FilterInfo>,
+    /// Push-to-talk / push-to-mute, when bound.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ptt: Option<PttInfo>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct FilterInfo {
+    pub name: String,
+    /// libobs filter type id (e.g. "noise_suppress_filter").
+    pub id: String,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PttInfo {
+    /// ptt | ptm
+    pub mode: String,
+    /// Human bind string, e.g. "Ctrl+Alt+V" (the winhook's own format).
+    pub bind: String,
+    pub press_delay_ms: u32,
+    pub release_delay_ms: u32,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct RecordingInfo {
     pub active: bool,
@@ -261,4 +366,4 @@ pub struct RecordingInfo {
     pub elapsed_ns: u64,
 }
 
-pub const PROTO_VERSION: u32 = 4;
+pub const PROTO_VERSION: u32 = 5;

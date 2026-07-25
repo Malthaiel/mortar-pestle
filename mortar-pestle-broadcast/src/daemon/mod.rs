@@ -4,6 +4,7 @@
 //! so the supervisor adopts the incumbent.
 
 pub mod engine;
+pub mod meters;
 pub mod namer;
 pub mod profile;
 pub mod protocol;

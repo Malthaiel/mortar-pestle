@@ -13,6 +13,7 @@
 // commit on blur.
 
 import { useEffect, useRef, useState } from 'react';
+import { VFader, LevelMeter as Meter, ampToFill } from '@host/components/ui';
 import { trackAudible } from './audio/mix.js';
 import { evaluate } from './keyframes/engine.js';
 
@@ -22,65 +23,11 @@ const paneLabel = {
   color: 'var(--text-faint)', padding: '8px 12px', userSelect: 'none', flexShrink: 0,
 };
 
-// Vertical fader (0..1, top = max). Custom pointer-drag — rotated range inputs
-// are unreliable in WebKitGTK. Draft via onDraft during the gesture; onCommit
-// on release with the final value (read from a ref, never the stale closure).
-function VFader({ value, onDraft, onCommit, accent }) {
-  const trackRef = useRef(null);
-  const draggingRef = useRef(false);
-  const lastRef = useRef(value);
-  const valFrom = (e) => {
-    const r = trackRef.current.getBoundingClientRect();
-    return Math.max(0, Math.min(1, 1 - (e.clientY - r.top) / r.height));
-  };
-  const down = (e) => {
-    e.currentTarget.setPointerCapture(e.pointerId);
-    draggingRef.current = true;
-    const v = valFrom(e); lastRef.current = v; onDraft(v);
-  };
-  const move = (e) => { if (!draggingRef.current) return; const v = valFrom(e); lastRef.current = v; onDraft(v); };
-  const up = () => { if (!draggingRef.current) return; draggingRef.current = false; onCommit(lastRef.current); };
-  const pct = Math.round(Math.max(0, Math.min(1, value)) * 100);
-  return (
-    <div
-      ref={trackRef}
-      onPointerDown={down}
-      onPointerMove={move}
-      onPointerUp={up}
-      onPointerCancel={up}
-      style={{ position: 'relative', width: 24, height: '100%', cursor: 'ns-resize', display: 'flex', justifyContent: 'center' }}
-    >
-      <div style={{ width: 4, height: '100%', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 3 }} />
-      <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', bottom: 0, width: 4, height: `${pct}%`, background: accent, borderRadius: 3, pointerEvents: 'none' }} />
-      <div style={{ position: 'absolute', left: '50%', transform: 'translate(-50%, 50%)', bottom: `${pct}%`, width: 18, height: 10, background: 'var(--text)', borderRadius: 3, boxShadow: '0 1px 3px rgba(0,0,0,0.45)', pointerEvents: 'none' }} />
-    </div>
-  );
-}
-
-// Post-fader meter: an RMS fill (body) + a peak line (tick, red near clip).
-// Heights are written by MixSuite's rAF loop via the callback refs.
-function Meter({ peakRef, rmsRef }) {
-  return (
-    <div style={{ position: 'relative', width: 7, height: '100%', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 3, overflow: 'hidden' }}>
-      <div ref={rmsRef} style={{ position: 'absolute', left: 0, bottom: 0, width: '100%', height: '0%', background: 'color-mix(in oklab, var(--accent) 55%, transparent)' }} />
-      <div ref={peakRef} style={{ position: 'absolute', left: 0, bottom: '0%', width: '100%', height: 2, background: 'var(--text)', pointerEvents: 'none' }} />
-    </div>
-  );
-}
+// VFader + Meter (as LevelMeter) + ampToFill now live in @host/components/ui —
+// promoted for Broadcast's mixer strip (SP6 SF1); imported at the top of this
+// file. `Meter` is the local alias so the JSX below is unchanged.
 
 const dbLabel = (v) => (v <= 0.0001 ? '−∞' : `${20 * Math.log10(v) >= 0 ? '+' : ''}${(20 * Math.log10(v)).toFixed(1)}`);
-
-// Linear amplitude (0..1) → meter fill fraction on a dB scale (floor −60 dB).
-// A LINEAR fill makes normal levels invisible (−24 dB ≈ 0.06 → a 6% nub); on a
-// dB scale that same level reads ~60%, and a fader/mute change sweeps the bar.
-const METER_FLOOR_DB = -60;
-const ampToFill = (a) => {
-  if (!(a > 0)) return 0;
-  const db = 20 * Math.log10(a);
-  if (db <= METER_FLOOR_DB) return 0;
-  if (db >= 0) return 1;
-  return (db - METER_FLOOR_DB) / -METER_FLOOR_DB;
-};
 
 const pillStyle = (on, onColor) => ({
   ...mono, fontSize: 10, width: 22, height: 18, borderRadius: 4, cursor: 'pointer', lineHeight: 1,

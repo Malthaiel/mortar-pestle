@@ -16,4 +16,13 @@ fn main() {
     // modern UCRT; the linkable symbol lives in legacy_stdio_definitions.
     println!("cargo:rustc-link-lib=dylib=legacy_stdio_definitions");
     println!("cargo:rerun-if-changed=obs/lib/obs.lib");
+    // The link-search path above is ABSOLUTE, so it is only valid for the
+    // directory this script last ran in. Narrowing rerun-if-changed to obs.lib
+    // means an unchanged obs.lib lets cargo replay the CACHED output after the
+    // crate moves — a relocated repo or a deleted worktree then fails to link
+    // with "LNK1181: cannot open input file 'obs.lib'" while `cargo check`,
+    // which never links, still passes. Re-run when the manifest dir moves.
+    // (Seen 2026-07-25: a cached path from a deleted `mortar-pestle-wt`
+    // worktree broke every fresh link in the relocated repo.)
+    println!("cargo:rerun-if-env-changed=CARGO_MANIFEST_DIR");
 }

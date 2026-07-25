@@ -384,6 +384,15 @@ pub fn run() {
                                 "state_changed" => {
                                     let _ = bridge_app.emit("broadcast-state", &ev.data);
                                 }
+                                // SP6 audio meters: its OWN channel, deliberately
+                                // not folded into broadcast-state. This arrives at
+                                // 30 Hz while the mixer is open, and the strip
+                                // paints it through refs + rAF; routing it through
+                                // the snapshot channel would re-render the whole
+                                // module on every frame.
+                                "meters" => {
+                                    let _ = bridge_app.emit("broadcast-meters", &ev.data);
+                                }
                                 "saved" => {
                                     // Broadcast-specific signal (unchanged), then run the
                                     // shared Captures pipeline off-thread so the bridge keeps

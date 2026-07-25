@@ -7,20 +7,24 @@
 //! GPL corpus â€” record-pipeline semantics ported from the OBS frontend's
 //! basic output handler (reference clone, tag 32.1.2).
 
+use std::collections::HashMap;
 use std::ffi::{CStr, CString};
 use std::path::PathBuf;
-use std::sync::mpsc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
 use tokio::sync::{broadcast, oneshot};
 
 use crate::bindings as ffi;
+use crate::daemon::meters;
 use crate::daemon::namer;
 use crate::daemon::profile::{record_encoder_path, service_path, Profile};
 use crate::daemon::protocol::{
-    CanvasInfo, CapsInfo, Crop, EncoderInfo, Event, ProtoError, RecordingInfo, ReplayInfo,
-    SceneInfo, SourceInfo, StateSnapshot, StreamInfo, Transform, PROTO_VERSION,
+    AudioInfo, AudioSourceInfo, CanvasInfo, CapsInfo, Crop, DeviceRef, EncoderInfo, Event,
+    FilterInfo, GlobalSlot, ProtoError, RecordingInfo, ReplayInfo, SceneInfo, SourceInfo,
+    StateSnapshot, StreamInfo, Transform, PROTO_VERSION,
 };
 use crate::obs::overlay::{self, M4};
 use crate::obs::{app_config_dir, screenshot, ObsCore, VideoCfg};
@@ -107,6 +111,20 @@ pub enum Cmd {
     /// arrives from the socket, carries no reply. `code` is meaningful only
     /// for `stop`, where it is an `OBS_OUTPUT_*` value.
     StreamSignal { kind: &'static str, code: i64 },
+    // --- SP6 audio mixer ---
+    SetVolume { source: String, deflection: f32, reply: Reply },
+    SetMute { source: String, muted: bool, reply: Reply },
+    SetMonitoring { source: String, kind: String, reply: Reply },
+    SetBalance { source: String, balance: f32, reply: Reply },
+    SetMono { source: String, mono: bool, reply: Reply },
+    SetSyncOffset { source: String, ms: i64, reply: Reply },
+    SetTracks { source: String, mask: u32, reply: Reply },
+    SetGlobalSlot { channel: u32, input_id: String, device_id: String, reply: Reply },
+    SetMonitoringDevice { id: String, name: String, reply: Reply },
+    /// Ephemeral: gates the high-rate `meters` event. Not persisted - a
+    /// respawned engine starts unsubscribed and the app re-subscribes on its
+    /// alive edge, exactly like displays.
+    SubscribeMeters { on: bool, reply: Reply },
     Shutdown { reply: Reply },
 }
 
@@ -326,6 +344,18 @@ struct Engine {
     caps_encoders: Vec<EncoderInfo>,
     /// Self-sender for libobs signal callbacks (they post Cmds, never call obs).
     cmd_tx: mpsc::Sender<Cmd>,
+    // --- SP6 audio ---
+    /// ONE reusable cubic fader, attached → read/written → detached per source.
+    /// libobs's own fader means "matches OBS's curve" holds by construction;
+    /// a fader can only hold one source at a time, hence a scratch object
+    /// rather than a per-source map.
+    scratch_fader: *mut ffi::obs_fader_t,
+    /// Live volmeters while subscribed: (source name, volmeter, leaked slot).
+    volmeters: Vec<(String, *mut ffi::obs_volmeter_t, *mut meters::Slot)>,
+    /// Latest dB frame per source, written by OBS audio threads.
+    meter_sink: meters::Sink,
+    /// Gate for the ticker thread — false means zero pipe traffic.
+    meters_on: Arc<AtomicBool>,
 }
 
 fn cstring(s: &str) -> CString {
@@ -401,7 +431,18 @@ pub fn spawn(
                 encoders: None,
                 caps_encoders: Vec::new(),
                 cmd_tx,
+                scratch_fader: unsafe {
+                    ffi::obs_fader_create(ffi::obs_fader_type_OBS_FADER_CUBIC)
+                },
+                volmeters: Vec::new(),
+                meter_sink: Arc::new(Mutex::new(HashMap::new())),
+                meters_on: Arc::new(AtomicBool::new(false)),
             };
+            meters::spawn_ticker(
+                eng.meter_sink.clone(),
+                eng.meters_on.clone(),
+                eng.events.clone(),
+            );
             eng.caps_encoders = unsafe { enumerate_encoder_types() };
             eng.load_collection();
             eng.ensure_default_scene();
@@ -705,6 +746,47 @@ impl Engine {
                 let r = self.display_destroy(&id);
                 self.finish_ephemeral(reply, r);
             }
+            // --- SP6 audio mixer ---
+            Cmd::SetVolume { source, deflection, reply } => {
+                let r = self.set_volume(&source, deflection);
+                self.finish(reply, r);
+            }
+            Cmd::SetMute { source, muted, reply } => {
+                let r = self.set_mute(&source, muted);
+                self.finish(reply, r);
+            }
+            Cmd::SetMonitoring { source, kind, reply } => {
+                let r = self.set_monitoring(&source, &kind);
+                self.finish(reply, r);
+            }
+            Cmd::SetBalance { source, balance, reply } => {
+                let r = self.set_balance(&source, balance);
+                self.finish(reply, r);
+            }
+            Cmd::SetMono { source, mono, reply } => {
+                let r = self.set_mono(&source, mono);
+                self.finish(reply, r);
+            }
+            Cmd::SetSyncOffset { source, ms, reply } => {
+                let r = self.set_sync_offset(&source, ms);
+                self.finish(reply, r);
+            }
+            Cmd::SetTracks { source, mask, reply } => {
+                let r = self.set_tracks(&source, mask);
+                self.finish(reply, r);
+            }
+            Cmd::SetGlobalSlot { channel, input_id, device_id, reply } => {
+                let r = self.set_global_slot(channel, &input_id, &device_id);
+                self.finish(reply, r);
+            }
+            Cmd::SetMonitoringDevice { id, name, reply } => {
+                let r = self.set_monitoring_device(&id, &name);
+                self.finish(reply, r);
+            }
+            Cmd::SubscribeMeters { on, reply } => {
+                let r = self.subscribe_meters(on);
+                self.finish_ephemeral(reply, r);
+            }
             Cmd::Shutdown { reply } => {
                 let _ = reply.send(Ok(json!({})));
                 return true;
@@ -785,6 +867,7 @@ impl Engine {
             recording: rec,
             replay: ReplayInfo { armed: self.replay_armed() },
             stream: self.stream_info(),
+            audio: self.audio_info(),
             caps: CapsInfo { encoders: self.caps_encoders.clone() },
             obs_version: self.core.version_string(),
             last_error: self.last_error.clone(),
@@ -793,6 +876,320 @@ impl Engine {
 
     /// Armed â‡” a live `replay_buffer` output exists. Gates the shared-encoder
     /// idle drop and the output-settings lock.
+    // --- audio (SP6) --------------------------------------------------------
+
+    /// Mixer rows, OBS parity: the six global channels (which survive scene
+    /// switches) followed by every audio-capable source in the CURRENT scene.
+    /// Name-addressed - one source has exactly ONE set of audio settings no
+    /// matter how many scenes hold it.
+    fn audio_source_names(&self) -> Vec<(String, bool)> {
+        let mut out: Vec<(String, bool)> = Vec::new();
+        unsafe {
+            for ch in 1..=6u32 {
+                let src = ffi::obs_get_output_source(ch);
+                if src.is_null() {
+                    continue;
+                }
+                if let Some(n) = source_name(src) {
+                    if !out.iter().any(|(e, _)| *e == n) {
+                        out.push((n, true));
+                    }
+                }
+                ffi::obs_source_release(src);
+            }
+            if let Some(scene) = self.current_scene_ptr() {
+                for name in scene_audio_source_names(scene) {
+                    if !out.iter().any(|(e, _)| *e == name) {
+                        out.push((name, false));
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    fn current_scene_ptr(&self) -> Option<*mut ffi::obs_scene> {
+        let cur = self.current.as_ref()?;
+        self.scenes.iter().find(|(n, _)| n == cur).map(|(_, s)| *s)
+    }
+
+    fn audio_info(&self) -> AudioInfo {
+        let globals = (1..=6u32)
+            .map(|channel| unsafe {
+                let src = ffi::obs_get_output_source(channel);
+                if src.is_null() {
+                    return GlobalSlot { channel, source: None, input_id: None };
+                }
+                let slot = GlobalSlot {
+                    channel,
+                    source: source_name(src),
+                    input_id: source_type_id(src),
+                };
+                ffi::obs_source_release(src);
+                slot
+            })
+            .collect();
+        let sources = self
+            .audio_source_names()
+            .into_iter()
+            .filter_map(|(name, is_global)| self.audio_source_info(&name, is_global))
+            .collect();
+        AudioInfo { monitoring_device: monitoring_device(), globals, sources }
+    }
+
+    fn audio_source_info(&self, name: &str, is_global: bool) -> Option<AudioSourceInfo> {
+        unsafe {
+            let c = cstring(name);
+            let src = ffi::obs_get_source_by_name(c.as_ptr());
+            if src.is_null() {
+                return None;
+            }
+            // Deflection comes from libobs's OWN cubic fader, not a formula of
+            // ours - attach, read, detach (one scratch fader serves every row).
+            let deflection = if self.scratch_fader.is_null() {
+                0.0
+            } else {
+                ffi::obs_fader_attach_source(self.scratch_fader, src);
+                let d = ffi::obs_fader_get_deflection(self.scratch_fader);
+                ffi::obs_fader_detach_source(self.scratch_fader);
+                d
+            };
+            let flags = ffi::obs_source_get_flags(src);
+            let mono = flags & ffi::OBS_SOURCE_FLAG_FORCE_MONO != 0;
+            let info = AudioSourceInfo {
+                name: name.to_string(),
+                id: source_type_id(src).unwrap_or_default(),
+                is_global,
+                volume_db: ffi::obs_mul_to_db(ffi::obs_source_get_volume(src)),
+                deflection,
+                muted: ffi::obs_source_muted(src),
+                monitoring: monitoring_name(ffi::obs_source_get_monitoring_type(src)).to_string(),
+                balance: ffi::obs_source_get_balance_value(src),
+                mono,
+                // libobs stores nanoseconds; the wire is ms because that is the
+                // unit the OBS dialog shows and the user types.
+                sync_offset_ms: ffi::obs_source_get_sync_offset(src) / 1_000_000,
+                tracks: ffi::obs_source_get_audio_mixers(src),
+                // Bar count only. A force-mono source draws one bar; everything
+                // else draws two. ponytail: the true per-source layout needs a
+                // live volmeter, and the meter event already carries the real
+                // channel count in its array length.
+                channels: if mono { 1 } else { 2 },
+                filters: enum_filters(src),
+                ptt: None, // SF6
+            };
+            ffi::obs_source_release(src);
+            Some(info)
+        }
+    }
+
+    /// Run `f` against a named source, releasing the ref either way. Every
+    /// audio setter routes through here so the release cannot be forgotten in
+    /// one of a dozen near-identical bodies.
+    fn with_source<F>(&mut self, name: &str, f: F) -> Result<Value, ProtoError>
+    where
+        F: FnOnce(*mut ffi::obs_source),
+    {
+        unsafe {
+            let c = cstring(name);
+            let src = ffi::obs_get_source_by_name(c.as_ptr());
+            if src.is_null() {
+                return Err(ProtoError::bad_request(format!("no such source: {name}")));
+            }
+            f(src);
+            ffi::obs_source_release(src);
+        }
+        Ok(json!({}))
+    }
+
+    fn set_volume(&mut self, name: &str, deflection: f32) -> Result<Value, ProtoError> {
+        if self.scratch_fader.is_null() {
+            return Err(ProtoError::internal("fader unavailable"));
+        }
+        let fader = self.scratch_fader;
+        self.with_source(name, |src| unsafe {
+            ffi::obs_fader_attach_source(fader, src);
+            ffi::obs_fader_set_deflection(fader, deflection.clamp(0.0, 1.0));
+            ffi::obs_fader_detach_source(fader);
+        })
+    }
+
+    fn set_mute(&mut self, name: &str, muted: bool) -> Result<Value, ProtoError> {
+        self.with_source(name, |src| unsafe { ffi::obs_source_set_muted(src, muted) })
+    }
+
+    fn set_monitoring(&mut self, name: &str, kind: &str) -> Result<Value, ProtoError> {
+        let t = match kind {
+            "none" => ffi::obs_monitoring_type_OBS_MONITORING_TYPE_NONE,
+            "monitor_only" => ffi::obs_monitoring_type_OBS_MONITORING_TYPE_MONITOR_ONLY,
+            "monitor_and_output" => ffi::obs_monitoring_type_OBS_MONITORING_TYPE_MONITOR_AND_OUTPUT,
+            other => {
+                return Err(ProtoError::bad_request(format!("unknown monitoring type: {other}")))
+            }
+        };
+        self.with_source(name, |src| unsafe { ffi::obs_source_set_monitoring_type(src, t) })
+    }
+
+    fn set_balance(&mut self, name: &str, balance: f32) -> Result<Value, ProtoError> {
+        self.with_source(name, |src| unsafe {
+            ffi::obs_source_set_balance_value(src, balance.clamp(0.0, 1.0))
+        })
+    }
+
+    fn set_mono(&mut self, name: &str, mono: bool) -> Result<Value, ProtoError> {
+        self.with_source(name, |src| unsafe {
+            let flags = ffi::obs_source_get_flags(src);
+            let next = if mono {
+                flags | ffi::OBS_SOURCE_FLAG_FORCE_MONO
+            } else {
+                flags & !ffi::OBS_SOURCE_FLAG_FORCE_MONO
+            };
+            ffi::obs_source_set_flags(src, next);
+        })
+    }
+
+    fn set_sync_offset(&mut self, name: &str, ms: i64) -> Result<Value, ProtoError> {
+        self.with_source(name, |src| unsafe {
+            ffi::obs_source_set_sync_offset(src, ms * 1_000_000)
+        })
+    }
+
+    fn set_tracks(&mut self, name: &str, mask: u32) -> Result<Value, ProtoError> {
+        // Six tracks; a wider mask would silently route nowhere.
+        if mask > 0b111111 {
+            return Err(ProtoError::bad_request("track mask exceeds 6 tracks"));
+        }
+        self.with_source(name, |src| unsafe { ffi::obs_source_set_audio_mixers(src, mask) })
+    }
+
+    /// Assign (or clear, with an empty device id) one of libobs's six global
+    /// audio channels. Adopt-don't-duplicate, exactly like
+    /// `ensure_desktop_audio`: a source of the same name is reused rather than
+    /// recreated, because obs_save_sources/obs_load_sources round-trip these
+    /// and a blind create duplicates the source on every boot.
+    fn set_global_slot(
+        &mut self,
+        channel: u32,
+        input_id: &str,
+        device_id: &str,
+    ) -> Result<Value, ProtoError> {
+        if !(1..=6).contains(&channel) {
+            return Err(ProtoError::bad_request("channel must be 1..6"));
+        }
+        unsafe {
+            if device_id.is_empty() {
+                ffi::obs_set_output_source(channel, std::ptr::null_mut());
+                self.resync_meters();
+                return Ok(json!({}));
+            }
+            let name = global_slot_name(channel);
+            let cname = cstring(&name);
+            let mut src = ffi::obs_get_source_by_name(cname.as_ptr());
+            if src.is_null() {
+                let cid = cstring(input_id);
+                src = ffi::obs_source_create(
+                    cid.as_ptr(),
+                    cname.as_ptr(),
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                );
+                if src.is_null() {
+                    return Err(ProtoError::internal(format!(
+                        "could not create {input_id} for channel {channel}"
+                    )));
+                }
+            }
+            let settings = ffi::obs_data_create();
+            let k = cstring("device_id");
+            let v = cstring(device_id);
+            ffi::obs_data_set_string(settings, k.as_ptr(), v.as_ptr());
+            ffi::obs_source_update(src, settings);
+            ffi::obs_data_release(settings);
+            ffi::obs_set_output_source(channel, src);
+            ffi::obs_source_release(src);
+        }
+        self.resync_meters();
+        Ok(json!({}))
+    }
+
+    fn set_monitoring_device(&mut self, id: &str, name: &str) -> Result<Value, ProtoError> {
+        unsafe {
+            let cn = cstring(if name.is_empty() { "Default" } else { name });
+            let ci = cstring(if id.is_empty() { "default" } else { id });
+            if !ffi::obs_set_audio_monitoring_device(cn.as_ptr(), ci.as_ptr()) {
+                return Err(ProtoError::internal("monitoring device rejected"));
+            }
+        }
+        Ok(json!({}))
+    }
+
+    /// Turn the meter stream on or off. ON attaches one volmeter per current
+    /// mixer row; OFF destroys every volmeter, so libobs stops doing the work
+    /// as well as the pipe going quiet.
+    fn subscribe_meters(&mut self, on: bool) -> Result<Value, ProtoError> {
+        self.detach_volmeters();
+        self.meters_on.store(on, Ordering::Relaxed);
+        if !on {
+            if let Ok(mut m) = self.meter_sink.lock() {
+                m.clear();
+            }
+            return Ok(json!({ "on": false }));
+        }
+        let names = self.audio_source_names();
+        for (name, _) in &names {
+            unsafe { self.attach_volmeter(name) };
+        }
+        Ok(json!({ "on": true, "sources": names.len() }))
+    }
+
+    /// # Safety
+    /// Engine thread only - creates and attaches libobs objects.
+    unsafe fn attach_volmeter(&mut self, name: &str) {
+        let c = cstring(name);
+        let src = ffi::obs_get_source_by_name(c.as_ptr());
+        if src.is_null() {
+            return;
+        }
+        let vm = ffi::obs_volmeter_create(ffi::obs_fader_type_OBS_FADER_CUBIC);
+        if vm.is_null() {
+            ffi::obs_source_release(src);
+            return;
+        }
+        ffi::obs_volmeter_attach_source(vm, src);
+        let channels = ffi::obs_volmeter_get_nr_channels(vm).max(1) as usize;
+        let slot = Box::into_raw(Box::new(meters::Slot {
+            key: name.to_string(),
+            sink: self.meter_sink.clone(),
+            channels,
+        }));
+        ffi::obs_volmeter_add_callback(vm, Some(meters::on_updated), slot as *mut _);
+        self.volmeters.push((name.to_string(), vm, slot));
+        ffi::obs_source_release(src);
+    }
+
+    /// Order matters: remove the callback, destroy the volmeter, and only THEN
+    /// free the slot - freeing first leaves a live callback holding a dangling
+    /// param.
+    fn detach_volmeters(&mut self) {
+        for (_, vm, slot) in std::mem::take(&mut self.volmeters) {
+            unsafe {
+                ffi::obs_volmeter_remove_callback(vm, Some(meters::on_updated), slot as *mut _);
+                ffi::obs_volmeter_detach_source(vm);
+                ffi::obs_volmeter_destroy(vm);
+                meters::free_slot(slot);
+            }
+        }
+    }
+
+    /// Re-attach meters to the CURRENT row set. Called after anything that
+    /// changes which sources are on the mixer (scene switch, source add or
+    /// remove) so a new row is not permanently dead.
+    fn resync_meters(&mut self) {
+        if self.meters_on.load(Ordering::Relaxed) {
+            let _ = self.subscribe_meters(true);
+        }
+    }
+
     fn replay_armed(&self) -> bool {
         self.replay.is_some()
     }
@@ -865,6 +1262,10 @@ impl Engine {
             .ok_or_else(|| ProtoError::bad_request(format!("no scene '{name}'")))?;
         unsafe { ffi::obs_set_output_source(0, ffi::obs_scene_get_source(scene)) };
         self.current = Some(name.into());
+        // The mixer's non-global rows come from the CURRENT scene, so the
+        // volmeter set has to follow the switch or the new rows read silent
+        // forever (SP6).
+        self.resync_meters();
         Ok(json!({}))
     }
 
@@ -2513,11 +2914,21 @@ impl Engine {
             let _ = self.stop_replay();
         }
         self.drop_encoders_if_idle();
+        // Meters before the sources they are attached to (SP6).
+        self.detach_volmeters();
+        self.meters_on.store(false, Ordering::Relaxed);
         self.save_collection();
         unsafe {
-            ffi::obs_set_output_source(0, std::ptr::null_mut());
-            ffi::obs_set_output_source(1, std::ptr::null_mut());
-            ffi::obs_set_output_source(2, std::ptr::null_mut());
+            if !self.scratch_fader.is_null() {
+                ffi::obs_fader_detach_source(self.scratch_fader);
+                ffi::obs_fader_destroy(self.scratch_fader);
+                self.scratch_fader = std::ptr::null_mut();
+            }
+            // 0 = program scene; 1..=6 = the global audio channels (SP6 wired
+            // 3..6, SP1/SP4 wired 1 and 2).
+            for ch in 0..=6u32 {
+                ffi::obs_set_output_source(ch, std::ptr::null_mut());
+            }
             if !self.desktop_audio.is_null() {
                 ffi::obs_source_release(self.desktop_audio);
             }
@@ -3219,5 +3630,124 @@ unsafe fn props_to_json(props: *mut ffi::obs_properties_t) -> Vec<Value> {
             }
         }
         out
+    }
+}
+
+// --- SP6 audio free helpers --------------------------------------------------
+
+/// # Safety
+/// `src` must be a live source ref.
+unsafe fn source_name(src: *mut ffi::obs_source) -> Option<String> {
+    let p = ffi::obs_source_get_name(src);
+    if p.is_null() {
+        return None;
+    }
+    Some(CStr::from_ptr(p).to_string_lossy().into_owned())
+}
+
+/// # Safety
+/// `src` must be a live source ref.
+unsafe fn source_type_id(src: *mut ffi::obs_source) -> Option<String> {
+    let p = ffi::obs_source_get_id(src);
+    if p.is_null() {
+        return None;
+    }
+    Some(CStr::from_ptr(p).to_string_lossy().into_owned())
+}
+
+fn monitoring_name(t: ffi::obs_monitoring_type) -> &'static str {
+    match t {
+        ffi::obs_monitoring_type_OBS_MONITORING_TYPE_MONITOR_ONLY => "monitor_only",
+        ffi::obs_monitoring_type_OBS_MONITORING_TYPE_MONITOR_AND_OUTPUT => "monitor_and_output",
+        _ => "none",
+    }
+}
+
+/// libobs hands back BORROWED strings here - copy, never free.
+fn monitoring_device() -> Option<DeviceRef> {
+    unsafe {
+        let mut name: *const std::os::raw::c_char = std::ptr::null();
+        let mut id: *const std::os::raw::c_char = std::ptr::null();
+        ffi::obs_get_audio_monitoring_device(&mut name, &mut id);
+        if name.is_null() || id.is_null() {
+            return None;
+        }
+        Some(DeviceRef {
+            id: CStr::from_ptr(id).to_string_lossy().into_owned(),
+            name: CStr::from_ptr(name).to_string_lossy().into_owned(),
+        })
+    }
+}
+
+/// Filter chain in signal order (libobs enumerates front to back).
+///
+/// # Safety
+/// `src` must be a live source ref.
+unsafe fn enum_filters(src: *mut ffi::obs_source) -> Vec<FilterInfo> {
+    unsafe extern "C" fn collect(
+        _parent: *mut ffi::obs_source,
+        filter: *mut ffi::obs_source,
+        param: *mut std::ffi::c_void,
+    ) {
+        unsafe {
+            let out = &mut *(param as *mut Vec<FilterInfo>);
+            if filter.is_null() {
+                return;
+            }
+            out.push(FilterInfo {
+                name: source_name(filter).unwrap_or_default(),
+                id: source_type_id(filter).unwrap_or_default(),
+                enabled: ffi::obs_source_enabled(filter),
+            });
+        }
+    }
+    let mut out: Vec<FilterInfo> = Vec::new();
+    ffi::obs_source_enum_filters(src, Some(collect), &mut out as *mut _ as *mut _);
+    out
+}
+
+/// Audio-capable source names in one scene, top level only. Group children are
+/// skipped deliberately: a group is a scene-item construct with no audio of its
+/// own, and its children already appear as their own sources when they carry
+/// audio.
+///
+/// # Safety
+/// `scene` must be a live scene ref.
+unsafe fn scene_audio_source_names(scene: *mut ffi::obs_scene) -> Vec<String> {
+    unsafe extern "C" fn collect(
+        _scene: *mut ffi::obs_scene,
+        item: *mut ffi::obs_scene_item,
+        param: *mut std::ffi::c_void,
+    ) -> bool {
+        unsafe {
+            let out = &mut *(param as *mut Vec<String>);
+            let src = ffi::obs_sceneitem_get_source(item);
+            if src.is_null() {
+                return true;
+            }
+            if ffi::obs_source_get_output_flags(src) & ffi::OBS_SOURCE_AUDIO != 0 {
+                if let Some(n) = source_name(src) {
+                    if !out.contains(&n) {
+                        out.push(n);
+                    }
+                }
+            }
+            true
+        }
+    }
+    let mut out: Vec<String> = Vec::new();
+    ffi::obs_scene_enum_items(scene, Some(collect), &mut out as *mut _ as *mut _);
+    out
+}
+
+/// Names for the six global slots. Channels 1 and 2 keep the names SP1/SP4
+/// already persisted in the collection ("Desktop Audio", "Mic/Aux") - renaming
+/// them would orphan every existing user's saved audio settings.
+fn global_slot_name(channel: u32) -> String {
+    match channel {
+        1 => "Desktop Audio".into(),
+        2 => "Mic/Aux".into(),
+        3 => "Desktop Audio 2".into(),
+        n => format!("Mic/Aux {}", n - 2),
     }
 }

@@ -116,3 +116,123 @@
   width: 100%;
   max-width: 220px;
 }
+
+/* --- SP6 mixer strip ------------------------------------------------------
+   A flex SIBLING of .bcast-main inside .bcast-page (occlusion law: the native
+   preview region is never covered — opening the rail shrinks the preview and
+   the bounds sync follows). */
+.bcast-mixer {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--border);
+  background: var(--bg-elevated, var(--bg));
+}
+
+.bcast-mixer-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  user-select: none;
+}
+.bcast-mixer-tab:hover { color: var(--text); }
+
+.bcast-mixer-count {
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  letter-spacing: 0;
+  opacity: 0.7;
+}
+.bcast-mixer-caret { margin-left: auto; }
+
+/* Horizontal scroll past ~6 strips rather than squeezing them thinner. */
+.bcast-mixer-rail {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+  padding: 8px 12px 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  height: 190px;
+}
+
+.bcast-mixer-empty {
+  color: var(--text-faint);
+  font-size: 12px;
+  padding: 8px 2px;
+}
+
+.bcast-strip {
+  flex: 0 0 auto;
+  width: 96px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  min-height: 0;
+}
+
+.bcast-strip-name {
+  width: 100%;
+  font-size: 11px;
+  text-align: center;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bcast-strip-pin { color: var(--accent); margin-right: 3px; }
+
+/* The meters + fader row is the only part that stretches; everything else is
+   content-height, so the fader absorbs the rail's height. */
+.bcast-strip-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: 5px;
+}
+.bcast-strip-meters { display: flex; gap: 2px; }
+
+.bcast-strip-db {
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  color: var(--text-faint);
+}
+
+.bcast-strip-btns { display: flex; gap: 4px; }
+
+.bcast-strip-btn {
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  width: 22px;
+  height: 18px;
+  line-height: 1;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-faint);
+}
+/* Mute is a STATE (grey→red); solo is a different KIND of thing, so it takes a
+   named hue rather than the accent (colour = kind, grey = state). */
+.bcast-strip-btn.is-on {
+  border-color: var(--hue-red, #d9534f);
+  background: var(--hue-red, #d9534f);
+  color: #fff;
+}
+.bcast-strip-btn.is-solo {
+  border-color: var(--hue-amber, #e0a52e);
+  background: var(--hue-amber, #e0a52e);
+  color: #1a1a1a;
+}

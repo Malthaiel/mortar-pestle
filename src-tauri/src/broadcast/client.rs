@@ -109,6 +109,9 @@ pub struct StateSnapshot {
     /// SP5: streaming status (default-absent on a pre-v4 engine).
     #[serde(default)]
     pub stream: StreamInfo,
+    /// SP6: mixer state (default-absent on a pre-v5 engine).
+    #[serde(default)]
+    pub audio: AudioInfo,
     /// SP4: boot-enumerated video encoder capabilities.
     #[serde(default)]
     pub caps: CapsInfo,
@@ -215,6 +218,73 @@ impl Default for StreamInfo {
     fn default() -> Self {
         StreamInfo { status: "idle".into(), elapsed_ns: 0, error: None, reconnects: 0 }
     }
+}
+
+/// SP6 mirror — mixer state (engine `AudioInfo`). Defaults to empty so a
+/// pre-v5 engine's snapshot still decodes and the strip renders no rows rather
+/// than throwing.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct AudioInfo {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub monitoring_device: Option<DeviceRef>,
+    #[serde(default)]
+    pub globals: Vec<GlobalSlot>,
+    #[serde(default)]
+    pub sources: Vec<AudioSourceInfo>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct DeviceRef {
+    pub id: String,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct GlobalSlot {
+    pub channel: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_id: Option<String>,
+}
+
+/// One mixer row. Name-addressed: a source has ONE set of audio settings no
+/// matter how many scenes hold it.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct AudioSourceInfo {
+    pub name: String,
+    pub id: String,
+    pub is_global: bool,
+    pub volume_db: f32,
+    /// 0..1 position from libobs's own cubic fader — never recomputed app-side.
+    pub deflection: f32,
+    pub muted: bool,
+    /// none | monitor_only | monitor_and_output
+    pub monitoring: String,
+    pub balance: f32,
+    pub mono: bool,
+    pub sync_offset_ms: i64,
+    pub tracks: u32,
+    pub channels: u32,
+    #[serde(default)]
+    pub filters: Vec<FilterInfo>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ptt: Option<PttInfo>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct FilterInfo {
+    pub name: String,
+    pub id: String,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PttInfo {
+    pub mode: String,
+    pub bind: String,
+    pub press_delay_ms: u32,
+    pub release_delay_ms: u32,
 }
 
 /// SP4 mirror — boot-enumerated encoder caps (engine `CapsInfo`).

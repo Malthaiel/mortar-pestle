@@ -16,6 +16,7 @@ import ComposerBar from './ComposerBar.jsx';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { listen } from '@tauri-apps/api/event';
 import Inspector from './Inspector.jsx';
+import MixerStrip from './MixerStrip.jsx';
 import PreviewInteract from './PreviewInteract.jsx';
 import { KEYBIND_ENTRIES } from './index.jsx';
 import { pushUndo, runRedo, runUndo } from './broadcastUndo.js';
@@ -47,6 +48,9 @@ export default function BroadcastPage({ api, accent }) {
   const { snapshot, error, engine, alive } = useBroadcastState(api);
   const ui = useBroadcastUi();
   const [busy, setBusy] = useState(false);
+  // SP6 mixer rail. Collapsed by default: expanded is what turns the 30 Hz
+  // meter stream on, so the quiet state is also the cheap one.
+  const [mixerOpen, setMixerOpen] = useState(false);
   const recording = alive && !!snapshot?.recording?.active;
   const paused = recording && !!snapshot?.recording?.paused;
   const armed = alive && !!snapshot?.replay?.armed;
@@ -296,6 +300,17 @@ export default function BroadcastPage({ api, accent }) {
           <Inspector api={api} snapshot={snapshot} selection={ui.selection} accent={accent} />
         )}
       </div>
+      {/* SP6: the mixer is a flex SIBLING of .bcast-main, so opening it shrinks
+          the preview (which re-syncs the native bounds) instead of covering it. */}
+      {alive && (
+        <MixerStrip
+          api={api}
+          snapshot={snapshot}
+          accent={accent}
+          expanded={mixerOpen}
+          onToggle={() => setMixerOpen((v) => !v)}
+        />
+      )}
       <ComposerBar
         alive={alive}
         recording={recording}

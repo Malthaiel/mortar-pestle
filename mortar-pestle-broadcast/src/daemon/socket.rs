@@ -120,6 +120,13 @@ fn need_i64(args: &Value, key: &str) -> Result<i64, ProtoError> {
         .ok_or_else(|| ProtoError::bad_request(format!("missing number arg '{key}'")))
 }
 
+fn need_f32(args: &Value, key: &str) -> Result<f32, ProtoError> {
+    args.get(key)
+        .and_then(Value::as_f64)
+        .map(|v| v as f32)
+        .ok_or_else(|| ProtoError::bad_request(format!("missing number arg '{key}'")))
+}
+
 fn need_bool(args: &Value, key: &str) -> Result<bool, ProtoError> {
     args.get(key)
         .and_then(Value::as_bool)
@@ -382,6 +389,72 @@ async fn dispatch(req: Request, cmd_tx: &mpsc::Sender<Cmd>) -> Response {
             })
         })(),
         "display_destroy" => need_str(&args, "id").map(|id| Cmd::DisplayDestroy { id, reply: tx }),
+        // --- SP6 audio mixer ---
+        "set_volume" => (|| {
+            Ok(Cmd::SetVolume {
+                source: need_str(&args, "source")?,
+                deflection: need_f32(&args, "deflection")?,
+                reply: tx,
+            })
+        })(),
+        "set_mute" => (|| {
+            Ok(Cmd::SetMute {
+                source: need_str(&args, "source")?,
+                muted: need_bool(&args, "muted")?,
+                reply: tx,
+            })
+        })(),
+        "set_monitoring" => (|| {
+            Ok(Cmd::SetMonitoring {
+                source: need_str(&args, "source")?,
+                kind: need_str(&args, "type")?,
+                reply: tx,
+            })
+        })(),
+        "set_balance" => (|| {
+            Ok(Cmd::SetBalance {
+                source: need_str(&args, "source")?,
+                balance: need_f32(&args, "balance")?,
+                reply: tx,
+            })
+        })(),
+        "set_mono" => (|| {
+            Ok(Cmd::SetMono {
+                source: need_str(&args, "source")?,
+                mono: need_bool(&args, "mono")?,
+                reply: tx,
+            })
+        })(),
+        "set_sync_offset" => (|| {
+            Ok(Cmd::SetSyncOffset {
+                source: need_str(&args, "source")?,
+                ms: need_i64(&args, "ms")?,
+                reply: tx,
+            })
+        })(),
+        "set_tracks" => (|| {
+            Ok(Cmd::SetTracks {
+                source: need_str(&args, "source")?,
+                mask: need_u64(&args, "mask")? as u32,
+                reply: tx,
+            })
+        })(),
+        "set_global_slot" => (|| {
+            Ok(Cmd::SetGlobalSlot {
+                channel: need_u64(&args, "channel")? as u32,
+                // Both optional: an empty device_id CLEARS the slot, and the
+                // input id only matters when the slot has to be created.
+                input_id: opt_str(&args, "input_id").unwrap_or_default(),
+                device_id: opt_str(&args, "device_id").unwrap_or_default(),
+                reply: tx,
+            })
+        })(),
+        "set_monitoring_device" => Ok(Cmd::SetMonitoringDevice {
+            id: opt_str(&args, "id").unwrap_or_default(),
+            name: opt_str(&args, "name").unwrap_or_default(),
+            reply: tx,
+        }),
+        "subscribe_meters" => need_bool(&args, "on").map(|on| Cmd::SubscribeMeters { on, reply: tx }),
         other => Err(ProtoError {
             code: "not_implemented".into(),
             message: format!("unknown op '{other}'"),

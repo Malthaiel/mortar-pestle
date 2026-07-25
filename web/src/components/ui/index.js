@@ -10,6 +10,8 @@ export { Seg, FilterChip } from './Pill.jsx';
 export { renderInline } from './inlineMarkdown.jsx';
 export { TextInput, Select } from './Input.jsx';
 export { Slider } from './Slider.jsx';
+export { default as VFader } from './VFader.jsx';
+export { default as LevelMeter, METER_FLOOR_DB, dbToFill, ampToFill } from './LevelMeter.jsx';
 export { Dot, StatTile, StatChip, FrontmatterChip } from './Stat.jsx';
 export { SectionHeader, EmptyState, LoadingState } from './Section.jsx';
 export { AccentGrid, HexInput, ACCENT_PRESETS, HEX_RE } from './AccentPicker.jsx';
