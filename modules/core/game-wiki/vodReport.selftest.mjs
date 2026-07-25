@@ -2,7 +2,8 @@
 // Covers the parts that break silently — transcript formatting, tolerant parse (fenced + noisy),
 // coercion of a missing id, and checkbox reconcile across a regenerate.
 import assert from 'node:assert/strict';
-import { mmss, slugId, buildTranscriptBlock, buildReportPrompt, parseReport, reconcileReport, serializeReportMarkdown, buildNormalizePrompt, parseCorrections, applyCorrections, transcriptHash, normalizeTranscript, parseFindings, applyFindings, verifyReport, validateStamps, collapseStampRuns, parseStamp, segIndexForStamp, serializeTfComms, coerceReport, VOD_REPORT_SYSTEM_PROMPT, VERIFY_SYSTEM_PROMPT } from './vodReport.js';
+import { mmss, slugId, buildTranscriptBlock, buildReportPrompt, parseReport, reconcileReport, serializeReportMarkdown, buildNormalizePrompt, parseCorrections, applyCorrections, transcriptHash, normalizeTranscript, parseFindings, applyFindings, verifyReport, validateStamps, collapseStampRuns, parseStamp, segIndexForStamp, serializeTfComms, coerceReport, checkProse, generateReport, VOD_REPORT_SYSTEM_PROMPT, VERIFY_SYSTEM_PROMPT } from './vodReport.js';
+import { MATCH_REPORT_SYSTEM_PROMPT } from './matchReport.js';
 
 // mmss
 assert.equal(mmss(0), '0:00');
@@ -574,5 +575,64 @@ await assert.rejects(
 const degraded = await verifyReport(async () => { throw new Error('claude timed out'); }, { report: { sections: [], meta: { warnings: [] } } });
 assert.equal(degraded.ran, false, 'a timeout still degrades rather than aborting');
 assert.ok(degraded.report.meta.warnings.some((w) => w.startsWith('Pass 2 skipped')), 'degrade still warns');
+
+// ---- Wording rules: the report reads as a LESSON, not as minutes of a meeting -------------------
+// The user's complaint was that "He asked for one tried-and-true build per hero he can queue almost
+// every game" reads like a transcript summary. The fix is a voice rule in the prompt; these pin its
+// load-bearing clauses so a later prompt edit cannot quietly drop them.
+for (const needle of [
+  'VOICE — this is a LESSON, not minutes of a meeting',
+  'address them as "you"',
+  'never narrate the session itself',
+  'The teacher voice is REWORDING ONLY',
+  'runs on into its sentence',
+  'PLAIN WORDS, first-read comprehension',
+  'Game terms stay EXACT and untranslated',
+  'Prose economy is TIME-TO-ABSORB, not word count',
+  'chopped stubs read',
+  'never stack two turn-words',
+]) assert.ok(VOD_REPORT_SYSTEM_PROMPT.includes(needle), `P2 voice rule states: ${needle}`);
+// Density must NOT have been traded away for the new flowing voice — every point still survives.
+for (const kept of [
+  'every point and every stamp stays',
+  'reproduced in FULL',
+  'A bare topic label is the',
+]) assert.ok(VOD_REPORT_SYSTEM_PROMPT.includes(kept), `pre-existing density rule kept: ${kept}`);
+// P1 carries the plain-word half of the same house style (it has no single "you" to address).
+assert.ok(MATCH_REPORT_SYSTEM_PROMPT.includes('Prose economy is TIME-TO-ABSORB, not word count'),
+  'P1 carries the absorption rule verbatim');
+assert.ok(MATCH_REPORT_SYSTEM_PROMPT.includes('Game terms (hero, item, ability, map, objective names) stay EXACT'),
+  'P1 keeps game terms exact');
+
+// checkProse — the free deterministic half. One probe per flag, each on prose that trips ONLY it.
+const oneCard = (coaching) => ({ playerCards: [{ player: 'p', coaching }], sections: [], keepDoing: [] });
+const flagsFor = (coaching) => checkProse(oneCard(coaching)).join(' | ');
+assert.match(flagsFor('Rescue Beam synergises with the high ground.'), /fancy wording/, 'fancy word flagged');
+assert.match(flagsFor('He gave up the camp and his rotate was slow.'), /third-person/, 'he/his flagged when one player is coached');
+assert.match(flagsFor('However the camp is worth less, regardless of the timer.'), /two turn-words/, 'doubled turn-word flagged');
+assert.match(flagsFor('Sensitivity was checked before the game.'), /passive voice/, 'passive voice flagged');
+assert.match(flagsFor(`Give the camp up ${'because it is worth far less than the fight '.repeat(5)}.`), /\d+-word sentence/, 'over-long sentence flagged');
+// The approved house voice trips nothing.
+assert.deepEqual(checkProse(oneCard('**Stop cubing yourself** — that is exactly what the enemy wants. Good players will work hard to force it out of you. At your rank they will usually do it by accident, but it hurts you just the same.')), [],
+  'the approved teacher voice raises no style flag');
+// "he/his" is normal prose in a multi-player scrim report — only a solo-coached report owes "you".
+assert.deepEqual(checkProse({ playerCards: [{ player: 'a', coaching: 'He rotated late.' }, { player: 'b', coaching: '' }], sections: [], keepDoing: [] }), [],
+  'multi-player report keeps third person');
+assert.ok(checkProse(oneCard(`bad. ${'However regardless. '.repeat(20)}`)).length <= 8, 'style flags are capped');
+
+// FOLLOW-UPS gate: with no prior action items supplied there is no earlier homework to judge, so
+// invented follow-ups are dropped in code. The live Arndew run produced ten of them against a
+// "[MISSING: prior reports]" input, judged every one "persisting", and looped the session onto itself.
+const inventedFollowUps = JSON.stringify({
+  sections: [], actionItems: [], qa: [], keepDoing: [], debates: [], carry: [],
+  followUps: [{ priorItem: 'stop cubing yourself', verdict: 'persisting', evidence: 'he still does it [7:17r]' }],
+});
+const noPriors = await generateReport(async () => inventedFollowUps, { transcriptBlock: 'T', teams: {}, coachedTeam: '' });
+assert.deepEqual(noPriors.followUps, [], 'follow-ups invented with no prior list are dropped');
+assert.ok(noPriors.meta.warnings.some((w) => w.startsWith('Dropped 1 follow-up')), 'the drop is warned, never silent');
+const withPriors = await generateReport(async () => inventedFollowUps, {
+  transcriptBlock: 'T', teams: {}, coachedTeam: '', priorActionItems: [{ id: 'cube', text: 'stop cubing yourself' }],
+});
+assert.equal(withPriors.followUps.length, 1, 'a supplied prior list still yields follow-ups');
 
 console.log('vodReport.selftest: all assertions passed');

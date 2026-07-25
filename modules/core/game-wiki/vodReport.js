@@ -391,25 +391,42 @@ export const VOD_REPORT_SYSTEM_PROMPT = [
   '- One section per substantial topic taught or discussed at length — as many as the session warrants, no cap.',
   '  Minor asides fold into action items or are dropped.',
   '- Sections carry real explanatory detail, not headline bullets. Each point states the principle, the reasoning',
-  '  behind it, and the concrete example or consequence from this session, with its time stamp inline. House',
-  '  style: a **bolded lead that is a self-contained takeaway** — the reader can read ONLY the bolded lead and',
-  '  get the full point; everything after it is OPTIONAL supporting detail (proof, numbers, example, stamp).',
-  '  Write the lead as ONE complete, readable statement ending with a colon ":" — full readable words, never',
-  '  shorthand ("Position", not "Pos"). A bare topic label is the failure: "**Shred.**" or "**The damage',
-  '  proof.**" force the reader into the body to learn anything. Write "**The team lacked shred (raw DPS):**"',
-  '  and "**Victor did nearly double Infernus\'s damage on fewer souls:**" instead. Keep the lead to one crisp',
-  '  line — a full takeaway, never a crammed paragraph. After it, the explanation follows as prose, bullets, or',
-  '  a table, whichever the material fits.',
-  '- Prose economy: write each point in the fewest words that still teach it. State the reasoning ONCE — never',
-  '  re-phrase the same idea across two or three sentences — and cut narrative framing and color (quoted table-',
-  '  talk like "a lot of people will call...", connectors like "better still", filler like "the thing you actually',
-  '  care about", "worth far more money"). Fold consecutive stamps on one idea into a single range. Keep the',
-  '  principle, one clause of reasoning, the concrete example, and the stamp; drop everything that is only',
-  '  re-statement or flavor. Aim for roughly half the words the point would take written conversationally. This is',
-  '  writing DENSITY, not fewer points and not shorter sections: every point and every stamp stays, and taught',
-  '  frameworks + live worked-example tables are still reproduced in FULL (see the two rules below) — never',
-  '  tighten those. Density applies to the explanatory discussion prose only — NOT to the bolded lead, which',
-  '  stays a complete self-contained takeaway (see House style above), never shrunk to a one-word label.',
+  '  behind it, and the concrete example or consequence from this session, with its time stamp inline.',
+  '- VOICE — this is a LESSON, not minutes of a meeting. Write as a teacher explaining to the player being',
+  '  coached, and address them as "you": "**Stop cubing yourself** — that is exactly what the enemy wants."',
+  '  Never "he"/"his"/"the player", and never narrate the session itself ("he asked for one build per hero",',
+  '  "his own read was correct", "the coach then explained") — state the lesson and let the stamp carry the',
+  '  provenance. When the session coaches SEVERAL players "you" is ambiguous: name each player in team',
+  '  sections and reserve "you" for that player\'s own card. The teacher voice is REWORDING ONLY — it never',
+  '  adds a tip, an example, a reason, or a warmth-flavored aside the coach did not voice, and the attribution',
+  '  rules above still bind (name WHO only where authorship changes the meaning).',
+  '- House style: a **bolded lead** that is a self-contained takeaway AND runs on into its sentence, rather',
+  '  than standing alone as a label with a paragraph under it — "**Give the far camp up.** A tier-two on the',
+  '  far side is worth about 300 souls, and being there for the fight is worth far more." The reader can read',
+  '  ONLY the bolded lead and get the point; everything after it is supporting detail (proof, numbers,',
+  '  example, stamp). Full readable words, never shorthand ("Position", not "Pos"). A bare topic label is the',
+  '  failure: "**Shred.**" or "**The damage proof.**" force the reader into the body to learn anything —',
+  '  write "**The team lacked shred (raw DPS):**" instead. Then 2-4 flowing sentences, or a table where the',
+  '  material fits one.',
+  '- PLAIN WORDS, first-read comprehension. Every sentence must land on the FIRST read for someone with no',
+  '  jargon at all. Take the plain word every time: "works with" not "synergises with", "happens on its own"',
+  '  not "arrives as a side effect", "adds up" not "accumulates", "picks first" not "prioritises", "risky',
+  '  spot" not "compromised position", "much more important" not "infinitely more important", "what top',
+  '  players build" not "meta defaults", "money" not "econ", "your team cannot do it yet" not "beyond the',
+  '  team\'s current execution". Game terms stay EXACT and untranslated — hero, item, ability, map and',
+  '  objective names are precise and the reader knows them (Rescue Beam, Kudzu Connection, Mid-Boss, Walker,',
+  '  second Rift). Write active, never passive: "your sensitivity is fine", not "sensitivity was checked and',
+  '  is not the problem".',
+  '- Prose economy is TIME-TO-ABSORB, not word count. Test every word by deleting it: if nothing is lost in',
+  '  meaning AND nothing in flow, cut it; if it smooths the ride, keep it. "That is exactly what the enemy',
+  '  wants" keeps "exactly"; "it is worth noting that", "in terms of", "essentially", "the thing you actually',
+  '  care about" go. Several ideas MAY share one sentence when they chain naturally — chopped stubs read',
+  '  SLOWER, not faster, because the reader has to reassemble them. Vary the length; a short sentence after',
+  '  two long ones lands the point. Never re-phrase one idea across two sentences, never stack two turn-words',
+  '  on one turn ("However ... ; regardless:" — pick one), and cut quoted table-talk and flavor. Fold',
+  '  consecutive stamps on one idea into a single range. This is writing DENSITY, not fewer points and not',
+  '  shorter sections: every point and every stamp stays, and taught frameworks + live worked-example tables',
+  '  are still reproduced in FULL (see the two rules below) — never tighten those.',
   '- Game-review material (soul distribution, itemization, what went wrong this game) is a normal detailed',
   '  section like any taught lesson — never a list of one-line takeaways.',
   '- A topic aimed at ONE player (their hero\'s gameplay loop, individual coaching) is NEVER a team section —',
@@ -634,6 +651,52 @@ export function parseReport(text) {
   const b = t.lastIndexOf('}');
   if (a === -1 || b === -1 || b <= a) throw new Error('no JSON object in model output');
   return coerceReport(JSON.parse(t.slice(a, b + 1)));
+}
+
+// Deterministic house-style check on the finished report — the FREE half of the wording rules. The
+// prompt states the voice; this proves it landed, with no second paid pass (the user's standing rule:
+// improve the first pass, and any check on it must be deterministic). Flags are advisory strings
+// pushed into meta.warnings with a "[style]" prefix, capped so a drifting run can't wall the box.
+const STYLE_FANCY = [
+  'synergis', 'synergiz', 'accumulat', 'prioritis', 'prioritiz', 'infinitely more',
+  'compromised position', 'meta default', 'off-meta', 'econ ', 'arrives as a side effect',
+  'it is worth noting', 'in terms of', 'essentially', 'the thing you actually care about',
+];
+const STYLE_TURNS = ['however', 'regardless', 'nonetheless', 'that said', 'nevertheless', 'even so'];
+const STYLE_PASSIVE = /\b(?:was|were)\s+\w+(?:ed|en)\b/i;
+const STYLE_MAX_WORDS = 35;
+const STYLE_MAX_FLAGS = 8;
+
+export function checkProse(report) {
+  const r = report && typeof report === 'object' ? report : {};
+  const cards = Array.isArray(r.playerCards) ? r.playerCards : [];
+  // "he/his" is correct prose in a multi-player scrim report; it is only a voice leak when exactly
+  // one player was coached and the whole report should be addressing them as "you".
+  const soloCoached = cards.length === 1;
+  const parts = [
+    ...(Array.isArray(r.sections) ? r.sections : []).map((s) => [`section "${s?.heading || s?.id || ''}"`, s?.md]),
+    ...(Array.isArray(r.keepDoing) ? r.keepDoing : []).map((k) => ['keepDoing', k]),
+    ...cards.map((c) => [`card "${c?.player || ''}"`, `${c?.coaching || ''}\n${c?.itemCritique || ''}`]),
+  ];
+  const flags = [];
+  const add = (where, msg) => { if (flags.length < STYLE_MAX_FLAGS) flags.push(`[style] ${where}: ${msg}`); };
+  for (const [where, raw] of parts) {
+    const text = String(raw ?? '');
+    if (!text.trim()) continue;
+    const lower = text.toLowerCase();
+    for (const w of STYLE_FANCY) if (lower.includes(w)) { add(where, `fancy wording "${w.trim()}" — use the plain word`); break; }
+    if (soloCoached && /\b(?:he|him|his)\b/i.test(text)) add(where, 'third-person "he/his" — the report addresses the coached player as "you"');
+    for (const sentence of text.split(/(?<=[.!?])\s+|\n+/)) {
+      const s = sentence.trim();
+      if (!s) continue;
+      const words = s.split(/\s+/).length;
+      if (words > STYLE_MAX_WORDS) { add(where, `${words}-word sentence — split it`); continue; }
+      const sl = s.toLowerCase();
+      if (STYLE_TURNS.filter((t) => sl.includes(t)).length > 1) add(where, 'two turn-words in one sentence — keep one');
+      else if (STYLE_PASSIVE.test(s)) add(where, `passive voice ("${s.match(STYLE_PASSIVE)[0]}") — write it active`);
+    }
+  }
+  return flags;
 }
 
 // Carry the app-owned checkbox state (status: done/pending) from a prior report onto a fresh one,
@@ -1055,5 +1118,13 @@ export async function generateReport(invoke, { transcriptBlock, teams, coachedTe
   // pipeline and a double parse failure used to discard it entirely.
   const report = await parseOrRetry(call, user, parseReport, 'Respond with ONLY the JSON object, nothing else.', onRaw);
   report.schemaVersion = REPORT_SCHEMA_VERSION; // stamp regardless of what the model echoed
+  // The FOLLOW-UPS prompt rule says "no prior list → []", and a live run broke it anyway: with no
+  // prior report attached it invented ten prior items out of THIS session and judged them all
+  // "persisting" — a self-loop dressed as history. The input is knowable here, so enforce it.
+  if (!priorActionItems.length && report.followUps.length) {
+    report.meta.warnings.push(`Dropped ${report.followUps.length} follow-up(s): no prior action items were supplied, so there is no earlier homework to judge.`);
+    report.followUps = [];
+  }
+  report.meta.warnings.push(...checkProse(report));
   return prior ? reconcileReport(report, prior) : report;
 }
