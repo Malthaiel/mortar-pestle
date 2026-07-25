@@ -14,9 +14,9 @@ import CoverArtCard from './CoverArtCard.jsx';
 import BrowseResultCard from './BrowseResultCard.jsx';
 import CollageCover from './CollageCover.jsx';
 import PosterRow from '@modules/core/library/PosterRow.jsx';
+import { encodePath } from '../paths.js';
+import { navigate as go } from '@host/router.js';
 
-const go = (hash) => { window.location.hash = hash; };
-const encodePath = (p) => p.split('/').map(encodeURIComponent).join('/');
 const toAlbum = (path) => go('/tools/library/music/downloaded/' + encodePath(path));
 const toBrowse = (q, mode) =>
   go('/tools/library/music/browse/' + (mode === 'artists' ? 'artists/' : '') + 'q/' + encodeURIComponent(q));

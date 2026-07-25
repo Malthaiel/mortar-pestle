@@ -12,18 +12,14 @@ import { useMusicPlayer } from './MusicPlayerProvider.jsx';
 import { usePlaylists, refFromPlaylistTrack } from './PlaylistProvider.jsx';
 import PlaylistModal from './PlaylistModal.jsx';
 import CollageCover from './CollageCover.jsx';
+import { encodePath } from '../paths.js';
+import { navigate } from '@host/router.js';
 
 function fmtDur(sec) {
   if (!Number.isFinite(sec) || sec <= 0) return '';
   const m = Math.floor(sec / 60);
   const s = String(Math.floor(sec % 60)).padStart(2, '0');
   return `${m}:${s}`;
-}
-function navigate(p) {
-  window.location.hash = p;
-}
-function encodePath(p) {
-  return p.split('/').map(encodeURIComponent).join('/');
 }
 
 // PlaylistTrack → player queue item. Each track keeps its own album cover/artist

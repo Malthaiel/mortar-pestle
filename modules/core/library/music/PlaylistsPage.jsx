@@ -8,19 +8,14 @@ import { usePlaylists } from './PlaylistProvider.jsx';
 import CollageCover from './CollageCover.jsx';
 import PlaylistModal from './PlaylistModal.jsx';
 import PlaylistDetail from './PlaylistDetail.jsx';
+import { encodePath } from '../paths.js';
+import { navigate } from '@host/router.js';
 
 const GRID = {
   display: 'grid',
   gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))',
   gap: 12,
 };
-
-function navigate(path) {
-  window.location.hash = path;
-}
-function encodePath(p) {
-  return p.split('/').map(encodeURIComponent).join('/');
-}
 
 export default function PlaylistsPage({ accent, rest }) {
   if (rest) return <PlaylistDetail path={rest} accent={accent} />;

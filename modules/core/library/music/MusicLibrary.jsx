@@ -7,9 +7,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { musicApi } from './api.js';
 import { useMusicPlayer } from './MusicPlayerProvider.jsx';
 import CoverArtCard from './CoverArtCard.jsx';
+import { encodePath } from '../paths.js';
+import { navigate as go } from '@host/router.js';
 
-const go = (hash) => { window.location.hash = hash; };
-const encodePath = (p) => p.split('/').map(encodeURIComponent).join('/');
 
 const STATUS_LABEL = {
   'Currently-Listening': 'Listening',

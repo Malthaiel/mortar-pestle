@@ -16,6 +16,7 @@ import MusicHome    from './MusicHome.jsx';
 import MusicLibrary from './MusicLibrary.jsx';
 import MusicTopBar  from './MusicTopBar.jsx';
 import SidebarSeam from '@host/components/SidebarSeam.jsx';
+import { encodePath, decodePath } from '../paths.js';
 
 const LAST_VIEWED_KEY = 'tools:lastMusicPath';
 const SPLIT_WIDTH_KEY = 'music:split:width';
@@ -29,25 +30,6 @@ function replaceHash(newHash) {
   const base = window.location.href.split('#')[0];
   window.history.replaceState(null, '', base + '#' + newHash);
   window.dispatchEvent(new HashChangeEvent('hashchange'));
-}
-
-function decodePath(path) {
-  let prev;
-  let current = path;
-  let safety = 0;
-  while (safety < 10 && current !== prev) {
-    prev = current;
-    try {
-      current = current.split('/').map(s => decodeURIComponent(s)).join('/');
-    } catch {
-      break;
-    }
-    safety++;
-  }
-  return current;
-}
-function encodePath(path) {
-  return path.split('/').map(encodeURIComponent).join('/');
 }
 
 // Split the rest into a mode:

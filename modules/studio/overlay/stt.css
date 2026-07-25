@@ -119,10 +119,6 @@
 
 .stt-filedrop { flex-shrink: 0; }
 
-@media (prefers-reduced-motion: reduce) {
-  .stt-caret { animation: none; }
-}
-
 /* Visually-hidden live region — the text/aria fallback for the level meter. */
 .stt-sr-only {
   position: absolute;

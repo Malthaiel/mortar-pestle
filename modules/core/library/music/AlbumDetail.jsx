@@ -13,6 +13,7 @@ import { refFromQueueItem } from './PlaylistProvider.jsx';
 import MusicCredits from './MusicCredits.jsx';
 import MusicNotes from './MusicNotes.jsx';
 import { useDownloads } from './DownloadProvider.jsx';
+import { navigate } from '@host/router.js';
 
 const LISTEN_STATUSES = ['Plan-to-Listen', 'Currently-Listening', 'Listened', 'Dropped'];
 
@@ -48,10 +49,6 @@ function fmtDuration(sec) {
   const m = Math.floor(sec / 60);
   const s = Math.floor(sec % 60).toString().padStart(2, '0');
   return `${m}:${s}`;
-}
-
-function navigate(p) {
-  window.location.hash = p;
 }
 
 export default function AlbumDetail({ accent, albumPath }) {
