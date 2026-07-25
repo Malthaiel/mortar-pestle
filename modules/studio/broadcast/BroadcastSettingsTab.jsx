@@ -190,9 +190,30 @@ export default function BroadcastSettingsTab({ accent, initialSection, onNavigat
     api.invoke('broadcast_twitch_ingests').then((r) => setTwIngests(Array.isArray(r) ? r : [])).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isTwitch]);
+  // `urlSecure` (rtmps://), not `url` — every Twitch ingest publishes both, and
+  // the bundled catalog only ever carried the plain one, so the stream key was
+  // travelling in the clear. rtmps to Twitch is untested in this project (SP5
+  // still-open #5); the final mission gate is what proves it.
   const serverOpts = (isTwitch && twIngests?.length)
-    ? twIngests.map((s) => ({ value: s.url, label: s.name }))
+    ? twIngests.map((s) => ({ value: s.urlSecure, label: s.name }))
     : (svcEntry?.servers || []).map((s) => ({ value: s.url, label: s.name }));
+
+  // SF7 sign-in. The login is remembered only to label the button — the backend
+  // keeps no token, so this is provenance, not a session.
+  const [twBusy, setTwBusy] = useState(false);
+  const [twLogin, setTwLogin] = useState(() => api.settings.get('twitchLogin', '') || '');
+  const fetchTwitchKey = () => {
+    setTwBusy(true);
+    api.invoke('broadcast_twitch_fetch_key')
+      .then((r) => {
+        setSvcField('key', r.streamKey);
+        setTwLogin(r.login);
+        api.settings.set('twitchLogin', r.login);
+        toast('Broadcast', `Stream key loaded from twitch.tv/${r.login}`);
+      })
+      .catch((e) => toast('Broadcast', (e && e.message) || 'Twitch sign-in failed'))
+      .finally(() => setTwBusy(false));
+  };
 
   // --- SF6 resilience (SP5 Phase 7) ---
   // All four keys are OBS's own `[Output]` ini names, so a profile written here
@@ -403,8 +424,18 @@ export default function BroadcastSettingsTab({ accent, initialSection, onNavigat
               ) : (
                 <Row label="Server URL"><NameField value={svcSet.server || ''} accent={accent} onCommit={(v) => setSvcField('server', v)} /></Row>
               )}
+              {isTwitch && (
+                <Row label="Twitch account">
+                  <OutlinedBtn small disabled={twBusy} onClick={fetchTwitchKey} title="Sign in to Twitch in your browser and fill the stream key in automatically">
+                    {twBusy ? 'Waiting for Twitch' : twLogin ? `Get key again (${twLogin})` : 'Get key from Twitch'}
+                  </OutlinedBtn>
+                </Row>
+              )}
               <Row label="Stream key"><SecretField value={svcSet.key || ''} accent={accent} placeholder="Paste your stream key" onCommit={(v) => setSvcField('key', v)} /></Row>
-              <div style={muted}>The key is stored as plain text in the engine profile folder, exactly as OBS stores it.</div>
+              <div style={muted}>
+                The key is stored as plain text in the engine profile folder, exactly as OBS stores it.
+                {isTwitch && ' Getting it from Twitch opens your browser with the code already filled in — press Authorize and the key lands here on its own. Nothing is signed in afterwards and no token is kept.'}
+              </div>
             </>
           )}
 

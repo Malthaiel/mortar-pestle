@@ -408,3 +408,168 @@ pub async fn broadcast_twitch_ingests() -> Result<Vec<IngestServer>, VaultError>
     out.sort_by_key(|s| s.name != "Auto (nearest)");
     Ok(out)
 }
+
+// ── SP5 SF7 — Twitch sign-in (Device Code Flow) ───────────────────────────────
+
+/// The app's registered Twitch client-id. PUBLIC by design — it is not a secret
+/// and Twitch expects it in plain requests; the app is registered as a public
+/// client precisely so no secret has to be shipped. Device Code Flow was chosen
+/// over the war-game's specced loopback-redirect flow because it needs **no
+/// redirect URI, no listening port, and no client secret** (the registered
+/// redirect `https://localhost` is never used — Twitch's console merely demands
+/// one, and rejects `http://`).
+const TWITCH_CLIENT_ID: &str = "i9zycrzoekkq6jii1iimqtn9rjhfad";
+const TWITCH_SCOPES: &str = "channel:read:stream_key";
+/// How long to keep polling before giving up. Twitch's own `expires_in` is 1800s,
+/// which would leave this future hanging for half an hour if the user simply
+/// walked away — the browser opens with the code pre-filled, so anyone actually
+/// present is done inside a minute.
+const TWITCH_POLL_CAP_SECS: u64 = 300;
+
+/// What the settings tab gets back: whose account it came from, and the key.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TwitchKey {
+    pub login: String,
+    pub stream_key: String,
+}
+
+#[derive(serde::Deserialize)]
+struct DeviceStart {
+    device_code: String,
+    verification_uri: String,
+    interval: u64,
+}
+
+#[derive(serde::Deserialize)]
+struct TokenOk {
+    access_token: String,
+}
+
+#[derive(serde::Deserialize)]
+struct HelixUser {
+    id: String,
+    login: String,
+}
+
+#[derive(serde::Deserialize)]
+struct HelixStreamKey {
+    stream_key: String,
+}
+
+#[derive(serde::Deserialize)]
+struct HelixData<T> {
+    data: Vec<T>,
+}
+
+/// `broadcast_twitch_fetch_key` — sign in to Twitch and return the stream key.
+///
+/// Deliberately **stateless: no token is stored anywhere.** The access token is
+/// used for exactly two Helix calls and then dropped; the stream key it fetches
+/// lands in `service.json` where OBS already keeps it, so there is nothing at
+/// rest that did not exist before. That is why this needs no keyring entry
+/// despite the war-game's M8.1/L5 fuss — Twitch remembers the authorisation, so
+/// re-running this is two clicks with no re-login, which is cheaper than owning
+/// a one-time-use refresh token and the "lost the rotation, silently signed out"
+/// failure mode that comes with it. Add persistence only when a feature actually
+/// needs a standing token (chat, title changes, going live over the API).
+///
+/// Flow: POST `/oauth2/device` → open the returned `verification_uri` (the code
+/// arrives pre-filled in that URL) → poll `/oauth2/token` every `interval` until
+/// it stops answering `authorization_pending` → Helix `/users` for the id and
+/// login → Helix `/streams/key` for the key.
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+#[tauri::command]
+pub async fn broadcast_twitch_fetch_key(app: AppHandle) -> Result<TwitchKey, VaultError> {
+    let http = reqwest::Client::new();
+    let net = |e: reqwest::Error| VaultError::Io(format!("twitch: {e}"));
+
+    let start: DeviceStart = http
+        .post("https://id.twitch.tv/oauth2/device")
+        .form(&[("client_id", TWITCH_CLIENT_ID), ("scopes", TWITCH_SCOPES)])
+        .send()
+        .await
+        .map_err(net)?
+        .error_for_status()
+        .map_err(net)?
+        .json()
+        .await
+        .map_err(|e| VaultError::Invalid(format!("twitch device start: {e}")))?;
+
+    app.opener()
+        .open_url(&start.verification_uri, None::<&str>)
+        .map_err(|e| VaultError::Io(format!("twitch: could not open browser: {e}")))?;
+
+    // Poll. A 4xx here is the documented `authorization_pending` case far more
+    // often than a real fault, so only a 2xx is treated as an answer — anything
+    // else just means "not yet" until the cap runs out.
+    let interval = std::time::Duration::from_secs(start.interval.max(1));
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(TWITCH_POLL_CAP_SECS);
+    let token = loop {
+        tokio::time::sleep(interval).await;
+        let res = http
+            .post("https://id.twitch.tv/oauth2/token")
+            .form(&[
+                ("client_id", TWITCH_CLIENT_ID),
+                ("scopes", TWITCH_SCOPES),
+                ("device_code", start.device_code.as_str()),
+                ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
+            ])
+            .send()
+            .await
+            .map_err(net)?;
+        if res.status().is_success() {
+            let ok: TokenOk = res
+                .json()
+                .await
+                .map_err(|e| VaultError::Invalid(format!("twitch token: {e}")))?;
+            break ok.access_token;
+        }
+        if std::time::Instant::now() >= deadline {
+            return Err(VaultError::Io(
+                "Twitch sign-in timed out — the Authorize button was never pressed.".into(),
+            ));
+        }
+    };
+
+    let helix = |url: String| {
+        http.get(url)
+            .bearer_auth(&token)
+            .header("Client-Id", TWITCH_CLIENT_ID)
+            .send()
+    };
+
+    let user: HelixData<HelixUser> = helix("https://api.twitch.tv/helix/users".to_string())
+        .await
+        .map_err(net)?
+        .error_for_status()
+        .map_err(net)?
+        .json()
+        .await
+        .map_err(|e| VaultError::Invalid(format!("twitch users: {e}")))?;
+    let user = user
+        .data
+        .into_iter()
+        .next()
+        .ok_or_else(|| VaultError::NotFound("twitch returned no user".into()))?;
+
+    let key: HelixData<HelixStreamKey> = helix(format!(
+        "https://api.twitch.tv/helix/streams/key?broadcaster_id={}",
+        user.id
+    ))
+    .await
+    .map_err(net)?
+    .error_for_status()
+    .map_err(net)?
+    .json()
+    .await
+    .map_err(|e| VaultError::Invalid(format!("twitch stream key: {e}")))?;
+    let stream_key = key
+        .data
+        .into_iter()
+        .next()
+        .ok_or_else(|| VaultError::NotFound("twitch returned no stream key".into()))?
+        .stream_key;
+
+    Ok(TwitchKey { login: user.login, stream_key })
+}

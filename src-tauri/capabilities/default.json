@@ -73,6 +73,7 @@
     "allow-deadlock-fetch-match",
     "allow-coaching-classify-match",
     "allow-coaching-agent-run",
+    "allow-coaching-cancel",
     "allow-comms-job-start",
     "allow-comms-job-status",
     "allow-comms-job-take",
@@ -326,6 +327,7 @@
     "allow-broadcast-open-log",
     "allow-broadcast-paths",
     "allow-broadcast-twitch-ingests",
+    "allow-broadcast-twitch-fetch-key",
     "allow-broadcast-remux-start"
   ]
 }
