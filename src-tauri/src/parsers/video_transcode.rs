@@ -106,6 +106,15 @@ pub fn transcode_path(hash: &str) -> Result<PathBuf, VaultError> {
     Ok(dir.join(format!("{hash}.mp4")))
 }
 
+/// Staging name ffmpeg writes to; renamed onto `cache_path` once it exits 0.
+/// Deliberately keeps the `.mp4` in the middle so the argv builders' explicit
+/// `-f mp4` is what picks the muxer — the trailing `.partial` hides the extension.
+pub(crate) fn partial_path(cache_path: &Path) -> PathBuf {
+    let mut name = cache_path.file_name().unwrap_or_default().to_os_string();
+    name.push(".partial");
+    cache_path.with_file_name(name)
+}
+
 pub fn subs_path(hash: &str) -> Result<PathBuf, VaultError> {
     let dir = subs_root()?;
     std::fs::create_dir_all(&dir).map_err(|e| VaultError::Io(format!("mkdir subs: {e}")))?;
@@ -230,6 +239,10 @@ fn build_transcode_argv(
         "-hide_banner".into(),
         "-loglevel".into(),
         "error".into(),
+        // Overwrite without asking: the lane stages to `<hash>.mp4.partial`, and a
+        // leftover partial from a SIGTERMed run would otherwise make ffmpeg block on
+        // an interactive "overwrite?" prompt with nothing attached to answer it.
+        "-y".into(),
     ];
     args.push("-i".into());
     // `\\?\`-strip: canonicalize() hands the editor remux (and player transcode)
@@ -421,6 +434,25 @@ mod remux_argv_tests {
         assert!(args.windows(2).any(|w| w[0] == "-f" && w[1] == "mp4"));
         assert_eq!(args.last().unwrap(), "out.mp4");
     }
+
+    #[test]
+    fn partial_path_stages_beside_the_final_file() {
+        let p = partial_path(Path::new("/cache/abc123.mp4"));
+        assert_eq!(p.file_name().unwrap(), "abc123.mp4.partial");
+        assert_eq!(p.parent(), Path::new("/cache/abc123.mp4").parent());
+        // The staging name must NOT end in .mp4, or a crashed run leaves a truncated
+        // file that the fast-path `entry.path.exists()` would serve as complete.
+        assert!(!p.to_string_lossy().ends_with(".mp4"));
+    }
+
+    #[test]
+    fn transcode_argv_overwrites_a_stale_partial() {
+        // No -y => ffmpeg blocks on an interactive overwrite prompt when a partial
+        // from a SIGTERMed run is still on disk, and the job hangs forever.
+        let args = build_transcode_argv("in.mkv", None, Path::new("out.mp4.partial"), true, None);
+        assert!(args.iter().any(|a| a == "-y"));
+        assert!(build_remux_argv("in.mkv", Path::new("out.mp4.partial")).iter().any(|a| a == "-y"));
+    }
 }
 
 /// pub(crate): the editor remux lane (parsers/editor_proxy.rs) reuses this
@@ -478,8 +510,13 @@ pub fn start_or_reuse(
         }
     }
 
-    // 2. Spawn outside lock.
-    let mut child = spawn_ffmpeg_to_file(&abs, audio, &cache_path, copy_audio, proxy.as_ref())?;
+    // 2. Spawn outside lock, writing to a staging name. A SIGTERMed job (over-cap trim,
+    //    app exit) used to leave a truncated file sitting at the final cache path, where
+    //    the next fast-path `entry.path.exists()` would hand it out as a complete video.
+    //    The supervisor renames it into place only on exit 0. Subs extraction already
+    //    worked this way; the video lanes did not.
+    let partial = partial_path(&cache_path);
+    let mut child = spawn_ffmpeg_to_file(&abs, audio, &partial, copy_audio, proxy.as_ref())?;
     // Take stdout before the supervisor consumes the child. Only the re-encode
     // lane has one; wait_with_output() then simply sees an empty stdout.
     let progress_pipe = child.stdout.take();
@@ -521,7 +558,7 @@ pub fn start_or_reuse(
         spawn_progress_reader(app, hash.clone(), total, pipe);
     }
 
-    spawn_supervisor(hash, started_at, child);
+    spawn_supervisor(hash, started_at, child, partial, cache_path);
     Ok(())
 }
 
@@ -566,10 +603,16 @@ fn spawn_progress_reader(
     });
 }
 
-fn spawn_supervisor(hash: String, captured_started: Instant, child: TokioChild) {
+fn spawn_supervisor(
+    hash: String,
+    captured_started: Instant,
+    child: TokioChild,
+    partial: PathBuf,
+    final_path: PathBuf,
+) {
     tauri::async_runtime::spawn(async move {
         let output = child.wait_with_output().await;
-        let (exit_code, stderr_tail) = match output {
+        let (mut exit_code, mut stderr_tail) = match output {
             Ok(o) => {
                 let stderr = String::from_utf8_lossy(&o.stderr);
                 let tail: String = stderr.chars().rev().take(400).collect::<String>()
@@ -578,6 +621,19 @@ fn spawn_supervisor(hash: String, captured_started: Instant, child: TokioChild) 
             }
             Err(e) => (None, format!("wait error: {e}")),
         };
+
+        // Promote the staging file only on a clean exit; otherwise bin it, so a truncated
+        // MP4 never occupies the final cache path. A failed rename demotes the run to
+        // Failed — reporting Done for a file that isn't there is the worse lie.
+        if exit_code == Some(0) {
+            if let Err(e) = std::fs::rename(&partial, &final_path) {
+                exit_code = None;
+                stderr_tail = format!("transcode rename failed: {e}");
+                let _ = std::fs::remove_file(&partial);
+            }
+        } else {
+            let _ = std::fs::remove_file(&partial);
+        }
 
         let mut r = match registry().lock() {
             Ok(g) => g,
