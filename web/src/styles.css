@@ -3637,10 +3637,17 @@ button.button-misc-card.is-expanded .card-chevron {
  * parameter to mismatch. `top` (not transform) so the press still actuates; the
  * lift zeroes with the depth animation (--candy-center-on) so flat buttons are
  * not lifted. JS twin: util/candy.js candyCenterOffset(). Verifier (DEV):
- * util/candyCenterAudit.js. See DESIGN.md § Spacing → Candy shadow clearance (3). */
+ * util/candyCenterAudit.js. See DESIGN.md § Spacing → Candy shadow clearance (3).
+ *
+ * A candy button NESTED in another candy button's face needs the same lift and
+ * cannot use .candy-center-row: .candy-face is inline-flex, and that class would
+ * flip it to block-level flex. Those shapes are listed by name instead — a face
+ * is always align-items:center, so any candy child of one is centered on its
+ * border-box and reads depth/2 low against the row's flat text (measured 2.5px
+ * for the small-depth circles in a track row, 2026-07-24). */
 .candy-center-row { display: flex; align-items: center; }
 :where(.candy-center-row) > .candy-btn,
-.candy-btn[data-shape="chip-field"] > .candy-face > .candy-btn {
+.candy-btn:is([data-shape="chip-field"], [data-shape="track"]) > .candy-face > .candy-btn {
   position: relative;
   top: calc(var(--cbtn-depth, var(--candy-depth)) / -2 * var(--candy-center-on, 1));
 }

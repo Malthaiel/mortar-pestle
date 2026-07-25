@@ -71,12 +71,22 @@ export function candyCenterAudit(root = document.body, { quiet = false } = {}) {
     console.info('%ccandy-center audit — 0 offenders', 'color:#27ae60');
   }
   // DEV-only bridge — mirror offender count + serializable list (strip DOM nodes).
+  // `row` + `label` are the LOCATORS: the console form hands you a clickable node,
+  // but the JSON is read from a shell with no DOM, and a bare "candy-btn vs span"
+  // names nothing greppable. The fix for an offender is almost always "its row is
+  // missing .candy-center-row", so the row's own classes plus the button's visible
+  // text are what turn a delta into a source file.
+  const label = (el) => (el.getAttribute?.('aria-label') || el.title || el.textContent || '')
+    .trim().replace(/\s+/g, ' ').slice(0, 40);
   postAudit('center', {
     count: offenders.length,
     offenders: offenders.map((o) => ({
       delta: o.delta,
       btn: o.btn.className || o.btn.tagName.toLowerCase(),
       sibling: o.sibling.className || o.sibling.tagName.toLowerCase(),
+      row: o.btn.parentElement?.className || o.btn.parentElement?.tagName.toLowerCase() || '',
+      label: label(o.btn),
+      siblingText: label(o.sibling),
     })),
   });
   return offenders;
