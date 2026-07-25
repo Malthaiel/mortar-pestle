@@ -324,6 +324,22 @@ const unrealOut = applyFindings(
 assert.ok(JSON.stringify(unrealOut).includes('[27:49]'), 'fix outside transcript not applied');
 assert.equal(unrealOut.meta.findings.length, 1, 'unreal fix flagged instead');
 
+// M15<->M4: coerceReport folds tight runs into "[a–b]" range tokens BEFORE verify sees the draft, so a
+// correction to a range arrives as a whole-token swap. It must apply — and every stamp in the fix must
+// land in the transcript, not just the leading one (a bad range END used to ride in on a good START).
+const rangeSegs = [{ t0Ms: 1600000, t1Ms: 1603000 }, { t0Ms: 1609000, t1Ms: 1612000 }]; // 26:40–26:43, 26:49–26:52
+const rangeFixed = applyFindings(
+  { sections: [{ id: 's', heading: 'H', md: 'the push at [26:40–27:49] broke them' }], meta: { warnings: [], findings: [] } },
+  [{ field: 'timestamp', issue: '[26:40–27:49]', fix: '[26:40–26:49]', confidence: 'likely' }], rangeSegs);
+assert.ok(JSON.stringify(rangeFixed).includes('[26:40–26:49]'), 'range-end correction auto-applied');
+assert.equal(rangeFixed.meta.findings.length, 0, 'applied range fix not also flagged');
+const rangeBadEnd = applyFindings(
+  { sections: [{ id: 's', heading: 'H', md: 'the push at [26:40–26:49] broke them' }], meta: { warnings: [], findings: [] } },
+  [{ field: 'timestamp', issue: '[26:40–26:49]', fix: '[26:40–99:00]', confidence: 'likely' }], rangeSegs);
+assert.ok(JSON.stringify(rangeBadEnd).includes('[26:40–26:49]'), 'range fix with an unreal END rejected');
+assert.equal(rangeBadEnd.meta.findings.length, 1, 'unreal range end flagged instead');
+assert.ok(VERIFY_SYSTEM_PROMPT.includes('RANGE token'), 'verify prompt teaches whole-range citation');
+
 // ── M15: collapse stamp runs ─────────────────────────────────────────────────
 // A run of ≥3 whitespace-separated [m:ss] stamps within ≤45s gaps folds to one [first–last] range;
 // fewer than 3, a >45s gap, or prose between, leaves the individual stamps. Idempotent on ranges.

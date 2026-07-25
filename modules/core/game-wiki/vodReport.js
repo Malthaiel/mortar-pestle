@@ -917,6 +917,10 @@ export const VERIFY_SYSTEM_PROMPT = [
   '"timestamp", "issue" to the wrong stamp as written in the draft, and "fix" to the right one. That',
   'exact field value is what lets a verified stamp correction be APPLIED instead of only flagged — any',
   'other field name ships the known-wrong stamp in the report body.',
+  'Some stamps appear as a RANGE token — "[1:00–1:50]", en-dash — one token standing for a folded run',
+  'of stamps. To correct either end of a range, set "issue" to the WHOLE range token exactly as written',
+  'and "fix" to the whole corrected range. Never cite a bare stamp that sits inside a range: that text',
+  'is not in the draft, so the correction can only be flagged, never applied.',
 ].join('\n');
 
 export function buildVerifyPrompt({ report, matchDigests = [], lexicon = '' }) {
@@ -971,10 +975,15 @@ export function applyFindings(report, findings, segments = []) {
   const spanEnd = segs.length ? Math.max(...segs.map((s) => Number(s.t1Ms) || 0)) : 0;
   const TOL = 5000;
   const stampRe = /\b(?:\d{1,2}:)?\d{1,2}:[0-5]\d\b/;
-  const stampSec = (str) => { const m = String(str).match(/\b(?:(\d{1,2}):)?(\d{1,2}):([0-5]\d)\b/); return m ? (Number(m[1]) || 0) * 3600 + Number(m[2]) * 60 + Number(m[3]) : null; };
+  // EVERY stamp in the fix, not just the first: M15 folds tight runs into "[1:00–1:50]" range tokens, so a
+  // correction to a range's END arrives with its (already-valid) START leading the string. Validating one
+  // stamp would wave through a fix whose changed half never happened in the recording.
+  const stampSecs = (str) => [...String(str).matchAll(/\b(?:(\d{1,2}):)?(\d{1,2}):([0-5]\d)\b/g)]
+    .map((m) => (Number(m[1]) || 0) * 3600 + Number(m[2]) * 60 + Number(m[3]));
   const inSeg = (sec) => { if (sec == null || !segs.length) return false; const ms = sec * 1000; if (ms < 0 || ms > spanEnd + TOL) return false; return segs.some((s) => ms >= Number(s.t0Ms) - TOL && ms <= Number(s.t1Ms) + TOL); };
+  const fixLandsInTranscript = (fix) => { const secs = stampSecs(fix); return secs.length > 0 && secs.every(inSeg); };
   const isTimestampFix = (f) => f.field === 'timestamp' && f.fix && f.issue !== f.fix
-    && stampRe.test(f.issue) && stampRe.test(f.fix) && inSeg(stampSec(f.fix))
+    && stampRe.test(f.issue) && stampRe.test(f.fix) && fixLandsInTranscript(f.fix)
     && JSON.stringify(out).split(f.issue).length === 2; // wrong stamp is unique → safe global replace
   for (const f of (Array.isArray(findings) ? findings : [])) {
     if ((f.confidence === 'exact' && f.fix && f.issue !== f.fix) || isTimestampFix(f)) {

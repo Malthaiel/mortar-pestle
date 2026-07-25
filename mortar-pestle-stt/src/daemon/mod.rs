@@ -34,7 +34,13 @@ const EVENT_BUS_CAPACITY: usize = 8192;
 /// broadcast bus, constructs the (SF1, engine-less) `ControlContext`, and blocks
 /// on the socket server until a `shutdown` op breaks the accept loop.
 pub fn run(_args: &[String]) -> ExitCode {
-    let _ = env_logger::Builder::from_default_env().try_init();
+    // `default_filter_or("info")`, NOT `from_default_env()`: env_logger's own default when RUST_LOG
+    // is unset is ERROR, and the host only forwards RUST_LOG when the app itself was launched with it
+    // (src-tauri/src/stt/mod.rs). So every normal run dropped `model loaded (backend=…)` and every
+    // other INFO line on the floor while whisper.cpp's C-level stderr sailed past the Rust logger —
+    // which read as "the Rust lines don't flush". They were never emitted. RUST_LOG still overrides.
+    let _ = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+        .try_init();
 
     let runtime = match tokio::runtime::Builder::new_multi_thread().enable_all().build() {
         Ok(rt) => rt,

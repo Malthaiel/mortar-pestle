@@ -21,7 +21,10 @@ export default function TerminalRouter({ rest, legacy, accent }) {
     return (
       <SkillsPage
         accent={accent}
-        selectedSlug={decodeURIComponent(rest.slice('skills/'.length))}
+        // NOT decoded here: `rest` is a router capture and matchRoute already decoded it. A second
+        // pass threw URIError on a slug holding a literal % (white screen) and silently turned a
+        // literal %41 into an A.
+        selectedSlug={rest.slice('skills/'.length)}
         onBack={() => navigate('/tools/terminal/skills')}
       />
     );

@@ -38,6 +38,13 @@ function readHash() {
   return h.startsWith('#') ? h.slice(1) : h;
 }
 
+// A hand-typed or stale deep-link can carry a malformed escape ("#/tools/terminal/100%"), and a raw
+// decodeURIComponent throws URIError there. This runs inside render/hashchange, so an uncaught throw
+// white-screens the whole app over a bad character — fall back to the raw capture instead.
+function safeDecode(s) {
+  try { return decodeURIComponent(s); } catch { return s; }
+}
+
 function matchRoute(path) {
   if (!path || path === '/') return { path, page: null };
   // Legacy alias: the standalone Releases page folded into Docs as a reserved
@@ -51,7 +58,7 @@ function matchRoute(path) {
     const out = { path, page: pr.page };
     pr.captures.forEach((name, idx) => {
       const raw = m[idx + 1];
-      out[name] = raw ? decodeURIComponent(raw) : (name === 'folderPath' || name === 'rest' ? '' : null);
+      out[name] = raw ? safeDecode(raw) : (name === 'folderPath' || name === 'rest' ? '' : null);
     });
     return out;
   }
