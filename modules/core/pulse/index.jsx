@@ -12,6 +12,7 @@ import PulseNav from '@host/components/PulseSidebar.jsx';
 import SidebarPill from '@host/components/SidebarPill.jsx';
 import RailStat from '@host/components/sidebar/RailStat.jsx';
 import { useManifestData } from '@host/lib/manifestReader.js';
+import { safeDecode } from '@host/router.js';
 import { invoke, api } from '@host/api.js';
 
 function PulseRail({ accent }) {
@@ -73,7 +74,7 @@ export default {
       match: (path) => {
         if (path === '/pulse') return { sub: null };
         const m = path.match(/^\/pulse\/([^/]+)$/);
-        if (m) return { sub: decodeURIComponent(m[1]) };
+        if (m) return { sub: safeDecode(m[1]) };
         return false;
       },
       render: ({ params, accent }) => (

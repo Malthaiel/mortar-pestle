@@ -9,13 +9,14 @@
 
 import { useEffect, useState } from 'react';
 import { videoApi } from './api.js';
+import { safeDecode } from '@host/router.js';
 import { VideoPlayerProvider, useVideoPlayer } from './VideoPlayerProvider.jsx';
 
 function parseHash(hash) {
   // hash looks like "#/player/<encodedPath>?ep=<n>"
   const after = hash.replace(/^#\/player\/?/, '');
   const [pathPart, query] = after.split('?');
-  const seriesPath = pathPart ? decodeURIComponent(pathPart) : '';
+  const seriesPath = pathPart ? safeDecode(pathPart) : '';
   const params = new URLSearchParams(query || '');
   const ep = Number(params.get('ep') || '0');
   return { seriesPath, ep: Number.isFinite(ep) ? ep : 0 };

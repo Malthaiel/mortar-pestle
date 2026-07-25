@@ -7,6 +7,7 @@
 import { lazy, Suspense } from 'react';
 import GameWikiRail from './GameWikiRail.jsx';
 import SidebarPill from '@host/components/SidebarPill.jsx';
+import { safeDecode } from '@host/router.js';
 import './game-wiki.css';
 
 // react-markdown (+ remark-gfm, ~100KB) is only needed once a page is actually
@@ -19,7 +20,7 @@ function matchGameWiki(path) {
   if (path === '/game-wiki') return { rest: '' };
   const m = path.match(/^\/game-wiki\/(.+)$/);
   if (!m) return false;
-  return { rest: decodeURIComponent(m[1]) };
+  return { rest: safeDecode(m[1]) };
 }
 
 export default {

@@ -41,7 +41,8 @@ function readHash() {
 // A hand-typed or stale deep-link can carry a malformed escape ("#/tools/terminal/100%"), and a raw
 // decodeURIComponent throws URIError there. This runs inside render/hashchange, so an uncaught throw
 // white-screens the whole app over a bad character — fall back to the raw capture instead.
-function safeDecode(s) {
+// Exported because module-level route matchers parse the raw hash themselves and hit the same throw.
+export function safeDecode(s) {
   try { return decodeURIComponent(s); } catch { return s; }
 }
 

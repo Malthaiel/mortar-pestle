@@ -232,9 +232,10 @@ export default function BrowserPage({ api, accent, rest, inOverlay = false, sync
     if (!ready || !rest || !active) return;
     if (rest === 'vault' || rest.startsWith('vault/')) return; // reserved for the full vault route (SF4)
     if (rest === 'history') return; // reserved for the full history route
-    let url = rest;
-    try { url = decodeURIComponent(rest); } catch { /* use raw */ }
-    navigateActive(url);
+    // NOT decoded here: `rest` is a router capture and matchRoute already decoded it. The second pass
+    // turned a deep-linked literal %41 into an A, silently loading a different URL; the try/catch only
+    // hid the throwing half of that.
+    navigateActive(rest);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, rest]);
 

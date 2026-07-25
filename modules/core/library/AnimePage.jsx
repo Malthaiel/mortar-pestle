@@ -54,15 +54,15 @@ function routeContent({ accent, rest, parts }) {
     const sub = parts[1];
     if (sub === 'top' || sub === 'season') return <BrowseGrid accent={accent} mode={sub} />;
     if (sub === 'search') {
-      let q = '';
-      try { q = decodeURIComponent(parts.slice(2).join('/')); } catch { q = parts.slice(2).join('/'); }
+      // `parts` splits the router's `rest` capture, which matchRoute already decoded — decoding again
+      // turned a literal %41 in a query into an A and searched for the wrong thing.
+      const q = parts.slice(2).join('/');
       if (!q.trim()) return <Redirect to="/tools/library/anime" />;
       return <BrowseGrid accent={accent} mode="search" query={q} />;
     }
     // Native MAL discovery by clickable taxon (genre/theme/demographic/studio).
     if (sub === 'genre' || sub === 'theme' || sub === 'demographic' || sub === 'studio' || sub === 'type' || sub === 'season') {
-      let name = '';
-      try { name = decodeURIComponent(parts.slice(2).join('/')); } catch { name = parts.slice(2).join('/'); }
+      const name = parts.slice(2).join('/'); // already decoded by matchRoute — see the search branch above
       if (!name.trim()) return <Redirect to="/tools/library/anime" />;
       return <BrowseGrid accent={accent} mode="discover" kind={sub} name={name} />;
     }

@@ -15,6 +15,7 @@ import VaultSidebar from '@host/components/VaultSidebar.jsx';
 import SidebarPill from '@host/components/SidebarPill.jsx';
 import RailStat from '@host/components/sidebar/RailStat.jsx';
 import { useManifestData } from '@host/lib/manifestReader.js';
+import { safeDecode } from '@host/router.js';
 
 // Normalize a raw hash path into { type, sub, folderPath } | false. Accepts the
 // canonical /vault/<type>/… form and the legacy /<type>/… form (old bookmarks).
@@ -25,16 +26,16 @@ function matchVault(path) {
   if (f) {
     return {
       type: 'folder',
-      sub: decodeURIComponent(f[1]),
-      folderPath: f[2] ? decodeURIComponent(f[2]) : '',
+      sub: safeDecode(f[1]),
+      folderPath: f[2] ? safeDecode(f[2]) : '',
     };
   }
   const m = path.match(/^(?:\/vault)?\/(knowledge|infrastructure)(?:\/([^/]+))?(?:\/(.*))?$/);
   if (!m) return false;
   return {
     type: m[1],
-    sub: m[2] ? decodeURIComponent(m[2]) : null,
-    folderPath: m[3] ? decodeURIComponent(m[3]) : '',
+    sub: m[2] ? safeDecode(m[2]) : null,
+    folderPath: m[3] ? safeDecode(m[3]) : '',
   };
 }
 

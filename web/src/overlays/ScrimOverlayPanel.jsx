@@ -12,6 +12,7 @@ import { lazy, Suspense, useState, useEffect, useRef, useCallback } from 'react'
 import { listen } from '@tauri-apps/api/event';
 import useOverlayPanelDrag from './useOverlayPanelDrag.js';
 import { invoke } from '../api.js';
+import { safeDecode } from '../router.js';
 import CollapsibleRail from '../components/ui/CollapsibleRail.jsx';
 import GameWikiRail, { RailHeaderPill } from '@modules/core/game-wiki/GameWikiRail.jsx';
 import { readStopwatch } from '@modules/core/game-wiki/useStopwatch.js';
@@ -76,7 +77,7 @@ export default function ScrimOverlayPanel() {
   const selRef = useRef(sel); selRef.current = sel;
   const nav = useCallback((to) => {
     const m = String(to || '').match(/^\/game-wiki(?:\/(.*))?$/);
-    const rest = m && m[1] ? decodeURIComponent(m[1]) : '';
+    const rest = m && m[1] ? safeDecode(m[1]) : '';
     setSel(rest);
     try { localStorage.setItem(SEL_KEY, rest); } catch { /* private mode */ }
   }, []);
