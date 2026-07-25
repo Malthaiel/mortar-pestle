@@ -16,6 +16,7 @@ import CandySelect from '@host/components/ui/CandySelect.jsx';
 import EnableToggle from '@host/components/ui/EnableToggle.jsx';
 import { SectionBand, Row } from '@host/components/settings/section-primitives.jsx';
 import { verb } from './broadcastStore.js';
+import { composeStreamUrl } from './streamUrl.js';
 import { toast } from './mutations.js';
 import useBroadcastState from './useBroadcastState.js';
 import PropertiesForm from './PropertiesForm.jsx';
@@ -160,8 +161,14 @@ export default function BroadcastSettingsTab({ accent, initialSection, onNavigat
   // --- stream service (SP5 SF1) ---
   // The engine keeps service.json opaque, so the whole shape lives here: mode
   // is just the `type` field, and everything else is `settings` keys.
-  const svcType = svc?.type === 'rtmp_custom' ? 'rtmp_custom' : 'rtmp_common';
+  const svcType = svc?.type === 'rtmp_custom' ? 'rtmp_custom'
+    : svc?.type === 'url' ? 'url' : 'rtmp_common';
   const svcSet = svc?.settings || {};
+  // SRT and RIST are both engine type `url`, told apart by the stored
+  // `protocol`. The Seg therefore switches on a UI-only "destination mode"
+  // rather than the service type directly.
+  const urlProto = svcSet.protocol === 'RIST' ? 'RIST' : 'SRT';
+  const destMode = svcType === 'url' ? urlProto : svcType;
   const svcName = svcSet.service || '';
   const svcEntry = svcCatalog.find((s) => s.name === svcName);
   const serviceOpts = useMemo(
@@ -195,8 +202,26 @@ export default function BroadcastSettingsTab({ accent, initialSection, onNavigat
     if (name === svcName) return;                         // no-op, never a reset
     saveService('rtmp_common', { ...svcSet, service: name, server: '' });
   };
+  // The typed parts are kept beside the composed `url` (the only key the engine
+  // reads) so the fields still round-trip after a reopen. The SRT/RIST query
+  // dialect itself lives in streamUrl.js, which carries the selftest.
+  const saveUrlService = (proto, next) => saveService('url', {
+    protocol: proto,
+    base: next.base ?? '',
+    delay_ms: next.delay_ms ?? '',
+    password: next.password ?? '',
+    url: composeStreamUrl(proto, next.base, next.delay_ms, next.password),
+  });
+  const setUrlField = (k, v) => saveUrlService(urlProto, {
+    base: svcSet.base, delay_ms: svcSet.delay_ms, password: svcSet.password, [k]: v,
+  });
+
   const setSvcMode = (t) => {
-    if (t === svcType) return;
+    if (t === destMode) return;
+    if (t === 'SRT' || t === 'RIST') {
+      saveUrlService(t, { base: svcSet.base, delay_ms: svcSet.delay_ms, password: svcSet.password });
+      return;
+    }
     if (t === 'rtmp_custom') { saveService('rtmp_custom', { server: '', key: svcSet.key || '' }); return; }
     saveService('rtmp_common', { service: svcName || '', server: svcSet.server || '', key: svcSet.key || '' });
   };
@@ -306,20 +331,41 @@ export default function BroadcastSettingsTab({ accent, initialSection, onNavigat
         <SectionBand title="Stream" anchor="set-bcast-stream">
           <Row label="Destination">
             <Seg
-              options={[{ value: 'rtmp_common', label: 'Service' }, { value: 'rtmp_custom', label: 'Custom RTMP' }]}
-              value={svcType} accent={accent} onChange={setSvcMode}
+              options={[
+                { value: 'rtmp_common', label: 'Service' },
+                { value: 'rtmp_custom', label: 'Custom RTMP' },
+                { value: 'SRT', label: 'SRT' },
+                { value: 'RIST', label: 'RIST' },
+              ]}
+              value={destMode} accent={accent} onChange={setSvcMode}
             />
           </Row>
-          {svcType === 'rtmp_common' ? (
+          {svcType === 'url' ? (
             <>
-              <Row label="Service"><CandySelect value={svcName} options={serviceOpts} onChange={pickService} placeholder="Pick a service" title="Streaming service — start typing to jump" /></Row>
-              <Row label="Server"><CandySelect value={svcSet.server || ''} options={serverOpts} onChange={(v) => setSvcField('server', v)} placeholder="Pick a server" title="Ingest server — closest is usually best" /></Row>
+              <Row label="Address"><NameField value={svcSet.base || ''} accent={accent} onCommit={(v) => setUrlField('base', v)} /></Row>
+              <Row label="Delay (ms)"><NameField value={svcSet.delay_ms || ''} accent={accent} onCommit={(v) => setUrlField('delay_ms', v)} /></Row>
+              <Row label="Password"><SecretField value={svcSet.password || ''} accent={accent} placeholder="Optional" onCommit={(v) => setUrlField('password', v)} /></Row>
+              <div style={muted}>
+                {urlProto === 'SRT'
+                  ? 'SRT sends over UDP and re-sends lost packets. The delay is how long it waits for them — bigger survives a worse connection, at the cost of being further behind.'
+                  : 'RIST sends over UDP and re-sends lost packets. The delay is the buffer it keeps for them — bigger survives a worse connection, at the cost of being further behind.'}
+                {' '}Leave the delay blank to use the default. There is no stream key: the address is the whole destination.
+              </div>
             </>
           ) : (
-            <Row label="Server URL"><NameField value={svcSet.server || ''} accent={accent} onCommit={(v) => setSvcField('server', v)} /></Row>
+            <>
+              {svcType === 'rtmp_common' ? (
+                <>
+                  <Row label="Service"><CandySelect value={svcName} options={serviceOpts} onChange={pickService} placeholder="Pick a service" title="Streaming service — start typing to jump" /></Row>
+                  <Row label="Server"><CandySelect value={svcSet.server || ''} options={serverOpts} onChange={(v) => setSvcField('server', v)} placeholder="Pick a server" title="Ingest server — closest is usually best" /></Row>
+                </>
+              ) : (
+                <Row label="Server URL"><NameField value={svcSet.server || ''} accent={accent} onCommit={(v) => setSvcField('server', v)} /></Row>
+              )}
+              <Row label="Stream key"><SecretField value={svcSet.key || ''} accent={accent} placeholder="Paste your stream key" onCommit={(v) => setSvcField('key', v)} /></Row>
+              <div style={muted}>The key is stored as plain text in the engine profile folder, exactly as OBS stores it.</div>
+            </>
           )}
-          <Row label="Stream key"><SecretField value={svcSet.key || ''} accent={accent} placeholder="Paste your stream key" onCommit={(v) => setSvcField('key', v)} /></Row>
-          <div style={muted}>The key is stored as plain text in the engine profile folder, exactly as OBS stores it.</div>
         </SectionBand>
       )}
 

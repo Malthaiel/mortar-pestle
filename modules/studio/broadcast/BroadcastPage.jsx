@@ -117,7 +117,12 @@ export default function BroadcastPage({ api, accent }) {
       toast('Pick a server', 'Choose an ingest server in Settings ▸ Broadcast ▸ Stream — the one closest to you.');
       return;
     }
-    setConfirmStream({ stopping: false, service: s.service || s.server || 'your streaming service' });
+    // Same courtesy for SRT/RIST, whose whole destination is the address.
+    if (svc.type === 'url' && !s.url) {
+      toast('No address', 'Enter an SRT or RIST address in Settings ▸ Broadcast ▸ Stream first.');
+      return;
+    }
+    setConfirmStream({ stopping: false, service: s.service || s.server || s.base || 'your streaming service' });
   }, [api, streaming]);
 
   // Telemetry (SP5 SF3): the engine reports raw counters, we do the rate math.

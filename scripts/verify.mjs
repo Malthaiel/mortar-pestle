@@ -19,11 +19,12 @@ import { readdirSync } from 'node:fs';
 // selftest joins the baseline by existing. (The hardcoded `files` list in the syntax
 // step below is the cautionary counter-example — it has to be hand-grown, and these
 // eight selftests sat outside `verify` entirely until 2026-07-20 for exactly that reason.)
-const SELFTEST_DIR = 'modules/core/game-wiki';
-const selftests = readdirSync(SELFTEST_DIR)
-  .filter((f) => f.endsWith('.selftest.mjs'))
-  .sort()
-  .map((f) => `${SELFTEST_DIR}/${f}`);
+const SELFTEST_DIRS = ['modules/core/game-wiki', 'modules/studio/broadcast'];
+const selftests = SELFTEST_DIRS.flatMap((dir) =>
+  readdirSync(dir)
+    .filter((f) => f.endsWith('.selftest.mjs'))
+    .sort()
+    .map((f) => `${dir}/${f}`));
 
 // npm resolves to npm.cmd on Windows; spawnSync with shell:false won't find a
 // bare `npm` there. Pick the platform binary explicitly (CI + dev are Windows).
@@ -65,7 +66,7 @@ const steps = [
   { name: 'web: planner time/frame math',  cmd: NPM, args: ['--prefix', 'web', 'run', 'check-time'] },
   { name: 'web: path marshalling',         cmd: NPM, args: ['--prefix', 'web', 'run', 'check-path'] },
   {
-    name: 'game-wiki selftests',
+    name: 'module selftests',
     cmd: process.execPath, // node
     baseArgs: [],
     files: selftests,

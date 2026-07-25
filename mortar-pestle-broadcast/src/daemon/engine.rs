@@ -2050,16 +2050,48 @@ impl Engine {
         let retries = self.profile.get_u32("Output", "MaxRetries", 25) as i32;
         let retry_sec = self.profile.get_u32("Output", "RetryDelay", 2) as i32;
 
+        // SP5 SF4: SRT and RIST have NO obs_service in libobs â€” OBS drives them
+        // straight off a URL through obs-ffmpeg's mpegts muxer, and `rtmp_custom`
+        // will NOT resolve an srt:// server (proven: it builds an rtmp_output and
+        // dies CONNECT_FAILED -2 without ever reaching the receiver). `type:"url"`
+        // is that second path; every rtmp_common/rtmp_custom service keeps the
+        // proven Phase-3 route untouched, service and all.
+        let url_mode = svc_type == "url";
+        let stream_url = if url_mode {
+            Some(
+                svc_settings
+                    .get("url")
+                    .and_then(Value::as_str)
+                    .filter(|u| !u.is_empty())
+                    .ok_or_else(|| ProtoError::bad_request("url service has no url"))?
+                    .to_string(),
+            )
+        } else {
+            None
+        };
+
         self.stream_error = None;
         unsafe {
-            let sdata = data_from_value(&svc_settings);
-            let sid = cstring(&svc_type);
-            let sname = cstring("bcast_service");
-            let service = ffi::obs_service_create(sid.as_ptr(), sname.as_ptr(), sdata, std::ptr::null_mut());
-            ffi::obs_data_release(sdata);
-            if service.is_null() {
-                return Err(ProtoError::internal(format!("service '{svc_type}' create failed")));
-            }
+            // Even URL transports need a service object: libobs refuses to start
+            // any OBS_OUTPUT_SERVICE-flagged output with none attached, and does
+            // it SILENTLY (obs_output_start returns false, nothing logged). So
+            // SRT/RIST ride a plain rtmp_custom whose `server` IS the URL, which
+            // is also where obs-ffmpeg reads its destination from.
+            let (svc_id, svc_data) = match &stream_url {
+                Some(url) => ("rtmp_custom".to_string(), json!({ "server": url, "key": "" })),
+                None => (svc_type.clone(), svc_settings.clone()),
+            };
+            let service = {
+                let sdata = data_from_value(&svc_data);
+                let sid = cstring(&svc_id);
+                let sname = cstring("bcast_service");
+                let s = ffi::obs_service_create(sid.as_ptr(), sname.as_ptr(), sdata, std::ptr::null_mut());
+                ffi::obs_data_release(sdata);
+                if s.is_null() {
+                    return Err(ProtoError::internal(format!("service '{svc_id}' create failed")));
+                }
+                s
+            };
 
             // Service clamps (max bitrate, forced codec) land on the STREAM
             // encoder settings only â€” the record EncoderSet is never touched.
@@ -2085,14 +2117,25 @@ impl Engine {
             ffi::obs_encoder_set_video(venc, ffi::obs_get_video());
             ffi::obs_encoder_set_audio(aenc, ffi::obs_get_audio());
 
-            let out_settings = data_from_value(&json!({}));
-            let output = ffi::obs_output_create(c"rtmp_output".as_ptr(), c"stream_out".as_ptr(), out_settings, std::ptr::null_mut());
+            // The mpegts muxer takes its destination as an output SETTING;
+            // rtmp_output takes it from the service instead.
+            let (out_id, out_json) = match &stream_url {
+                Some(url) => ("ffmpeg_mpegts_muxer", json!({ "url": url })),
+                None => ("rtmp_output", json!({})),
+            };
+            log::info!("stream transport: output='{out_id}'");
+            let out_settings = data_from_value(&out_json);
+            let oid = cstring(out_id);
+            let output = ffi::obs_output_create(oid.as_ptr(), c"stream_out".as_ptr(), out_settings, std::ptr::null_mut());
             ffi::obs_data_release(out_settings);
             if output.is_null() {
                 ffi::obs_encoder_release(venc);
                 ffi::obs_encoder_release(aenc);
                 ffi::obs_service_release(service);
-                return Err(ProtoError::internal("rtmp_output create failed"));
+                // A null mpegts muxer means obs-ffmpeg never registered it, i.e.
+                // the payload lacks srt/rist support â€” abort condition 5, not a
+                // bug to iterate on.
+                return Err(ProtoError::internal(format!("output '{out_id}' create failed")));
             }
 
             // Ordering mirrors start_record's rec_out, plus the stream-only
