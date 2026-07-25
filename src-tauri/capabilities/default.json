@@ -325,6 +325,7 @@
     "allow-broadcast-restart-engine",
     "allow-broadcast-open-log",
     "allow-broadcast-paths",
+    "allow-broadcast-twitch-ingests",
     "allow-broadcast-remux-start"
   ]
 }

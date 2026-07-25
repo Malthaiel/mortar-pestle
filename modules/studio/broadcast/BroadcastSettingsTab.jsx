@@ -115,6 +115,7 @@ export default function BroadcastSettingsTab({ accent, initialSection, onNavigat
   const [remuxOpen, setRemuxOpen] = useState(false);
   const [svcCatalog, setSvcCatalog] = useState([]); // services[] from the OBS rtmp-services catalog
   const [svc, setSvc] = useState(null);             // { type, settings } | null (never configured)
+  const [twIngests, setTwIngests] = useState(null); // SF7: Twitch's live list, or null until fetched
 
   const refetchProfile = () => verb(api, 'get_output_settings').then((r) => setProfile(r?.profile || {})).catch(() => {});
   const refetchService = () => verb(api, 'get_stream_service').then((r) => setSvc(r || null)).catch(() => {});
@@ -179,7 +180,19 @@ export default function BroadcastSettingsTab({ accent, initialSection, onNavigat
     () => [...svcCatalog].sort((a, b) => (b.common === true) - (a.common === true)).map((s) => ({ value: s.name, label: s.name })),
     [svcCatalog],
   );
-  const serverOpts = (svcEntry?.servers || []).map((s) => ({ value: s.url, label: s.name }));
+  // SF7: Twitch's own ingest list, fetched once when Twitch is the selected
+  // service. It is the only source with an auto/nearest entry — the bundled
+  // catalog has none and its first server is alphabetical, not close. Falls back
+  // silently to the catalog when offline; a missing list is not worth a toast.
+  const isTwitch = svcType === 'rtmp_common' && svcName === 'Twitch';
+  useEffect(() => {
+    if (!isTwitch || twIngests) return;
+    api.invoke('broadcast_twitch_ingests').then((r) => setTwIngests(Array.isArray(r) ? r : [])).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isTwitch]);
+  const serverOpts = (isTwitch && twIngests?.length)
+    ? twIngests.map((s) => ({ value: s.url, label: s.name }))
+    : (svcEntry?.servers || []).map((s) => ({ value: s.url, label: s.name }));
 
   // --- SF6 resilience (SP5 Phase 7) ---
   // All four keys are OBS's own `[Output]` ini names, so a profile written here

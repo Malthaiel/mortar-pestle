@@ -260,6 +260,11 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
     if (!review) { notify('error', 'No review recording', 'Record or extract this match’s VOD-review comms first.'); return; }
     let hasFirst = true;
     try { await api.getRawFileMeta(sidecarPath(folder, n, 'matchreport'), 'gamewiki'); } catch { hasFirst = false; }
+    // M5a's twin for Process 2. doMatchFinal reads the same sidecar inside a try/catch and falls back
+    // to matchDigests = [], which the prompt's NO-MATCH-DATA addendum makes degrade honestly — but
+    // silently. The coach is told before the spend, exactly as Process 1 tells them.
+    let hasData = true;
+    try { await api.getRawFileMeta(sidecarPath(folder, n), 'gamewiki'); } catch { hasData = false; }
     runGated([
       // M8: legacy adoption is consented, never silent — the scrim-level transcript is read-only.
       review.scrimLevel ? {
@@ -267,6 +272,11 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
         message: 'This match has no review recording of its own. Read the scrim-level VOD review as this match’s review source? The file is only read — never moved or changed.',
         confirmLabel: 'Use it',
       } : null,
+      hasData ? null : {
+        title: 'No match data attached',
+        message: 'The final report will run from the review only — data verdicts will be skipped. Generate anyway?',
+        confirmLabel: 'Generate anyway',
+      },
       hasFirst ? null : { // M5b — allowed per locked decision 4
         title: 'No first report',
         message: 'The final report will come from the review + match data only. Generate anyway?',

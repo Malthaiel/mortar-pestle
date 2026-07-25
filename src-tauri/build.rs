@@ -327,6 +327,7 @@ fn main() {
         "broadcast_open_log",
         "broadcast_paths",
         "broadcast_remux_start",
+        "broadcast_twitch_ingests",
       ]),
     ),
   )

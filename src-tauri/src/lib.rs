@@ -1023,6 +1023,7 @@ pub fn run() {
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::broadcast::broadcast_open_log,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::broadcast::broadcast_paths,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::broadcast::broadcast_remux_start,
+            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::broadcast::broadcast_twitch_ingests,
         ])
         .on_window_event(|window, event| {
             if let WindowEvent::Focused(focused) = event {

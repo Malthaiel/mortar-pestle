@@ -340,3 +340,71 @@ pub async fn broadcast_remux_start(input: String, output: Option<String>) -> Res
         .unwrap_or_else(|| std::path::PathBuf::from(&input).with_extension("mp4"));
     remux_to_partial(&input, &out).await.map_err(VaultError::Io)
 }
+
+// ── SP5 SF7 — Twitch public ingest list ───────────────────────────────────────
+
+/// One Twitch ingest, as the settings picker wants it: a display name and the
+/// server URL with the `/{stream_key}` placeholder stripped, matching the shape
+/// the bundled OBS catalog stores (`rtmp://host/app`).
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IngestServer {
+    pub name: String,
+    pub url: String,
+    pub url_secure: String,
+}
+
+#[derive(serde::Deserialize)]
+struct TwitchIngest {
+    #[serde(rename = "_id")]
+    id: i64,
+    name: String,
+    availability: f64,
+    url_template: String,
+    url_template_secure: String,
+}
+
+#[derive(serde::Deserialize)]
+struct TwitchIngests {
+    ingests: Vec<TwitchIngest>,
+}
+
+/// `broadcast_twitch_ingests` — fetch Twitch's ingest list (public, no auth).
+///
+/// This exists because the bundled OBS `rtmp-services` catalog carries **no
+/// auto/nearest entry** for Twitch, and its `servers[0]` is merely ALPHABETICAL
+/// ("Asia: Hong Kong") — which is why the picker refuses to guess a server.
+/// Twitch's own list opens with `_id: 0` "Default", the `global-contribute` host
+/// that geo-routes server-side, so asking Twitch beats any client-side latency
+/// probe: no measuring, and above all no test broadcast (the `?bandwidthtest=true`
+/// no-burn mechanism this sub-feature was originally specced around is dead —
+/// every Twitch stream is a real public broadcast).
+///
+/// `default: true` is set on NO entry — id 0 is the only marker for the auto
+/// host, so that is what this matches on. `availability` is a float (`1.0`).
+/// Every entry also publishes an `rtmps://` template, which the plain catalog
+/// never offered.
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+#[tauri::command]
+pub async fn broadcast_twitch_ingests() -> Result<Vec<IngestServer>, VaultError> {
+    let res: TwitchIngests = reqwest::get("https://ingest.twitch.tv/ingests")
+        .await
+        .map_err(|e| VaultError::Io(format!("twitch ingests: {e}")))?
+        .json()
+        .await
+        .map_err(|e| VaultError::Invalid(format!("twitch ingests parse: {e}")))?;
+    let mut out: Vec<IngestServer> = res
+        .ingests
+        .into_iter()
+        .filter(|i| i.availability > 0.0)
+        .map(|i| IngestServer {
+            name: if i.id == 0 { "Auto (nearest)".to_string() } else { i.name },
+            url: i.url_template.replace("/{stream_key}", ""),
+            url_secure: i.url_template_secure.replace("/{stream_key}", ""),
+        })
+        .collect();
+    // Twitch already returns id 0 first; sorting it there anyway keeps the auto
+    // entry pinned without trusting the response order.
+    out.sort_by_key(|s| s.name != "Auto (nearest)");
+    Ok(out)
+}
