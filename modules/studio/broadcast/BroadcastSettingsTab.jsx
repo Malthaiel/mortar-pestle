@@ -181,6 +181,19 @@ export default function BroadcastSettingsTab({ accent, initialSection, onNavigat
   );
   const serverOpts = (svcEntry?.servers || []).map((s) => ({ value: s.url, label: s.name }));
 
+  // --- SF6 resilience (SP5 Phase 7) ---
+  // All four keys are OBS's own `[Output]` ini names, so a profile written here
+  // stays readable by OBS itself. Reconnect off is expressed to libobs as
+  // retries=0 (engine side), which lets MaxRetries keep its value while off.
+  const reconnectOn = g('Output', 'Reconnect', 'true') !== 'false';
+  const retryDelay = parseInt(g('Output', 'RetryDelay', '2'), 10) || 2;
+  const maxRetries = parseInt(g('Output', 'MaxRetries', '25'), 10) || 25;
+  const delaySec = parseInt(g('Output', 'DelaySec', '0'), 10) || 0;
+  const dynBitrate = g('Output', 'DynamicBitrate', 'false') === 'true';
+  // Dynamic bitrate lives in the rtmp_output plugin, so it exists for RTMP
+  // destinations only — absent rather than greyed everywhere else.
+  const isRtmp = svcType === 'rtmp_common' || svcType === 'rtmp_custom';
+
   const saveService = (type, settings) => {
     const next = { type, settings };
     setSvc(next);                                       // optimistic, as applyPatch
@@ -379,6 +392,32 @@ export default function BroadcastSettingsTab({ accent, initialSection, onNavigat
               )}
               <Row label="Stream key"><SecretField value={svcSet.key || ''} accent={accent} placeholder="Paste your stream key" onCommit={(v) => setSvcField('key', v)} /></Row>
               <div style={muted}>The key is stored as plain text in the engine profile folder, exactly as OBS stores it.</div>
+            </>
+          )}
+
+          <Row label="Auto-reconnect"><EnableToggle enabled={reconnectOn} accent={accent} onChange={(v) => set('Output', 'Reconnect', !!v)} title="Pick the stream back up on its own if it drops" /></Row>
+          {reconnectOn && (
+            <>
+              <Row label="Retry delay"><Slider value={retryDelay} min={1} max={30} step={1} unit=" s" accent={accent} onChange={(v) => set('Output', 'RetryDelay', v)} /></Row>
+              <Row label="Max retries"><Slider value={maxRetries} min={1} max={100} step={1} accent={accent} onChange={(v) => set('Output', 'MaxRetries', v)} /></Row>
+            </>
+          )}
+          <Row label="Stream delay"><Slider value={delaySec} min={0} max={60} step={5} unit=" s" accent={accent} onChange={(v) => set('Output', 'DelaySec', v)} /></Row>
+          <div style={muted}>
+            The stream goes out this far behind, so you get that long to stop something before anyone sees it — and stopping then takes up to the same time to finish. 0 sends straight away.
+          </div>
+          {isRtmp && (
+            <>
+              <Row label="Dynamic bitrate">
+                <div style={delaySec ? { opacity: 0.4, pointerEvents: 'none' } : undefined}>
+                  <EnableToggle enabled={!delaySec && dynBitrate} accent={accent} onChange={(v) => set('Output', 'DynamicBitrate', !!v)} title="Lower the picture quality automatically when the connection struggles" />
+                </div>
+              </Row>
+              <div style={muted}>
+                {delaySec
+                  ? 'Off while a stream delay is set — the two cannot run at the same time.'
+                  : 'When the connection starts to choke, the picture quality steps down on its own and climbs back once it clears. It needs an encoder that can change quality mid-stream; if yours cannot, it stays off and says so in the engine log.'}
+              </div>
             </>
           )}
         </SectionBand>

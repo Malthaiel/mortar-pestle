@@ -2046,9 +2046,27 @@ impl Engine {
 
         let (venc_id, venc_settings) = self.stream_encoder_plan();
         let abitrate = self.profile.get_u32("SimpleOutput", "ABitrate", 160);
-        // SF6 makes these configurable; the defaults are OBS's own.
-        let retries = self.profile.get_u32("Output", "MaxRetries", 25) as i32;
+        // SF6 makes these configurable; the defaults are OBS's own. Retries 0 is
+        // libobs's own "never reconnect", so the Reconnect toggle rides on it
+        // rather than needing a second knob — MaxRetries keeps its value while off.
+        let retries = if self.profile.get_bool("Output", "Reconnect", true) {
+            self.profile.get_u32("Output", "MaxRetries", 25) as i32
+        } else {
+            0
+        };
         let retry_sec = self.profile.get_u32("Output", "RetryDelay", 2) as i32;
+        let delay_sec = self.profile.get_u32("Output", "DelaySec", 0);
+        // M7.3: the whole dynamic-bitrate algorithm already ships INSIDE
+        // rtmp_output (rtmp-stream.c's dbr_* — congestion sampling, step down,
+        // recovery ramp). The frontend's entire job is this one flag, exactly as
+        // OBS does it (SimpleOutput.cpp), key name included. The plugin self-gates
+        // on OBS_ENCODER_CAP_DYN_BITRATE and self-disables when a delay is set.
+        let dyn_bitrate = self.profile.get_bool("Output", "DynamicBitrate", false);
+        // Echoed because "the setting silently did not apply" is the failure mode
+        // for all four of these — libobs accepts and ignores rather than rejects.
+        log::info!(
+            "stream resilience: retries={retries} retry_sec={retry_sec} delay_sec={delay_sec} dyn_bitrate={dyn_bitrate}"
+        );
 
         // SP5 SF4: SRT and RIST have NO obs_service in libobs â€” OBS drives them
         // straight off a URL through obs-ffmpeg's mpegts muxer, and `rtmp_custom`
@@ -2131,7 +2149,7 @@ impl Engine {
             let (out_id, out_json) = match (&stream_url, svc_type.as_str()) {
                 (Some(url), _) => ("ffmpeg_mpegts_muxer", json!({ "url": url })),
                 (None, "whip_custom") => ("whip_output", json!({})),
-                _ => ("rtmp_output", json!({})),
+                _ => ("rtmp_output", json!({ "dyn_bitrate": dyn_bitrate })),
             };
             log::info!("stream transport: output='{out_id}'");
             let out_settings = data_from_value(&out_json);
@@ -2155,6 +2173,9 @@ impl Engine {
             ffi::obs_output_set_audio_encoder(output, aenc, 0);
             ffi::obs_output_set_service(output, service);
             ffi::obs_output_set_reconnect_settings(output, retries, retry_sec);
+            // PRESERVE keeps the buffered delay across a reconnect instead of
+            // discarding it — the two SF6 knobs are meant to survive together.
+            ffi::obs_output_set_delay(output, delay_sec, ffi::OBS_OUTPUT_DELAY_PRESERVE);
 
             // Signals connect BEFORE start so `starting`/`start` can't be missed.
             let sig_ctx = {
