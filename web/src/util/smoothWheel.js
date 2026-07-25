@@ -70,6 +70,13 @@ const state = new WeakMap(); // el -> { axis, target, raf }
 // Per-element scrollbar-glow state (see the glow subsystem below).
 const glow = new WeakMap();  // el -> { cur, scrolling, hovering, raf, idle }
 
+// DELIBERATE EXCEPTION to the 2026-05-21 "Drop Reduced-Motion Support" ADR — do
+// NOT delete this as an orphan. That ADR scopes to decorative chrome motion
+// (transitions, animations, dock/candy state), and two orphan @media blocks have
+// already been swept under it (styles.css 2026-07-13, stt.css 2026-07-25). This
+// one stays: sliding/momentum scroll is a common motion-sickness and vestibular
+// trigger, so honouring the system setting here is a real accommodation, not
+// leftover configurability. Ruled and amended into the ADR 2026-07-25.
 function reduceMotion() {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
