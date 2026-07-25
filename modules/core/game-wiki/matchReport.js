@@ -95,8 +95,10 @@ export function buildMatchReportSystemPrompt({ dataFree = false } = {}) {
     '  itself voiced that read. NEVER write filler like "no individual curve discussed" — an empty field',
     '  renders as "Not analyzed." and costs nothing. Filler costs trust.',
   ] : [
-    '- Only claim what the data supports. No curve granularity for a lane → leave laneVerdict "" rather than',
-    '  guessing; an empty field renders as "Not analyzed." and costs nothing. Filler costs trust.',
+    '- Only claim what the data supports. ANY field the digest cannot support is left "" / [] rather than',
+    '  guessed — laneVerdict without a lane curve, soulsCurveRead without souls data, itemCritique without a',
+    '  build, deathAnalysis without deaths, hero/lane the digest never names. An empty field renders as',
+    '  "Not analyzed." and costs nothing. Filler costs trust.',
   ]),
   '- Stamp sources: times from the DIGEST are GAME clock (match time), written m:ss or h:mm:ss with NO letter',
   '  after them — there is no recording behind them. Times from the in-game comms transcript are recording',
@@ -121,8 +123,8 @@ export function buildMatchReportSystemPrompt({ dataFree = false } = {}) {
   '                                     // shell is not a card, and the roster is not a checklist to fill. No',
   '                                     // player evidenced at all means "playerCards": [].',
   '    { "player": string,              // player name if known, else the hero name',
-  '      "hero": string,                // canonical hero name from the digest',
-  '      "lane": string,                // assigned lane from the digest',
+  '      "hero": string,                // canonical hero name from the digest ("" when no digest names it — never guess one)',
+  '      "lane": string,                // assigned lane from the digest ("" when no digest names it — never guess one)',
   ...(dataFree ? [
     '      "laneVerdict": string,         // "" this run — the souls curve does not exist; fill ONLY if comms voiced it',
     '      "soulsCurveRead": string,      // "" this run — no souls data exists',

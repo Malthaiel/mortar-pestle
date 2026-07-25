@@ -58,6 +58,12 @@ for (const needle of ['[data]', '[grounded]', '[analyst]', 'PROVENANCE', 'YOUR O
 // Same coin-flip the final-report prompt had: a card with every field empty is a shell, not a card.
 assert.ok(MATCH_REPORT_SYSTEM_PROMPT.includes('OMIT a player entirely when every field would be empty'),
   'P1 omits empty player cards too — both prompts state it, so neither can drift');
+// Session-10 sweep, P1 half. hero/lane sit OUTSIDE the dataFree branch, so the data-free build used to
+// keep "from the digest" with no digest and no stated fallback — same unstated-default class.
+assert.ok(MATCH_REPORT_SYSTEM_PROMPT.includes('"" when no digest names it — never guess one'),
+  'P1 carries the identical hero/lane guard — asserted in vodReport.selftest.mjs too, so neither drifts');
+assert.ok(MATCH_REPORT_SYSTEM_PROMPT.includes('ANY field the digest cannot support'),
+  'the data-BEARING branch generalises past laneVerdict to every field the digest cannot support');
 // M3: full report shape — the final must be able to replace this 1:1
 for (const present of ['"actionItems"', '"qa"', '"debates"', '"followUps"', '"keepDoing"']) {
   assert.ok(MATCH_REPORT_SYSTEM_PROMPT.includes(present), `match report schema carries ${present}`);
@@ -70,6 +76,8 @@ const dfPrompt = buildMatchReportSystemPrompt({ dataFree: true });
 assert.ok(dfPrompt.includes('NO MATCH DATA THIS RUN'), 'data-free prompt carries the rule block');
 assert.ok(!dfPrompt.includes('off the lane souls curve'), 'data-grounded laneVerdict comment replaced, not kept');
 assert.ok(dfPrompt.includes('"laneVerdict"') && dfPrompt.includes('"swings"'), 'schema keys survive the swap');
+assert.ok(dfPrompt.includes('"" when no digest names it'), 'hero/lane guard survives the data-free swap — it is where the guard matters most');
+assert.ok(!dfPrompt.includes('ANY field the digest cannot support'), 'data-bearing grounding rule replaced, not kept');
 assert.ok(!MATCH_REPORT_SYSTEM_PROMPT.includes('NO MATCH DATA THIS RUN'), 'default prompt has no data-free text');
 assert.equal(buildMatchReportSystemPrompt(), MATCH_REPORT_SYSTEM_PROMPT, 'no-arg build IS the default prompt');
 

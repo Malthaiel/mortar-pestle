@@ -113,6 +113,15 @@ assert.ok(VOD_REPORT_SYSTEM_PROMPT.includes('OMIT a player entirely when every f
 // sheet is read away from the report, where that pointer resolves to nothing.
 assert.ok(VOD_REPORT_SYSTEM_PROMPT.includes('Every carry line must stand alone'),
   'carry entries drop trailing cross-references');
+// Session-10 sweep for the REST of that coin-flip class: every schema field that can legitimately be
+// empty must say which of omit / emit-empty the model takes, in BOTH prompts, asserted in both
+// selftests so the pair cannot drift. These three were the P2 side's unstated defaults.
+assert.ok(VOD_REPORT_SYSTEM_PROMPT.includes('"" when no digest names it — never guess one'),
+  'hero/lane fall back to "" without a digest — identical guard asserted in matchReport.selftest.mjs');
+assert.ok(VOD_REPORT_SYSTEM_PROMPT.includes('a string field with nothing real to put in it is ""'),
+  'P2 carried only the empty-ARRAY half of this rule; strings had no stated default at all');
+assert.ok(VOD_REPORT_SYSTEM_PROMPT.includes('never grade comms you were'),
+  'no judgments AND no review comms talk -> commsGrade.overall "", not an invented grade');
 
 // M4 first-report reference block: labeled + reference-only rule inline; absent when empty
 const pFinal = buildReportPrompt({ transcriptBlock: 'T', firstReportBlock: '{"sections":[]}' });
@@ -277,6 +286,11 @@ assert.equal(vr2.report.playerCards[0].hero, 'Grey Talom'); // draft shipped unm
 const dataFreePrompt = buildReportPrompt({ transcriptBlock: '[0:00] A: hi', matchDigests: [] });
 assert.ok(dataFreePrompt.includes('NO MATCH DATA ATTACHED'), 'data-free prompt carries the addendum');
 assert.ok(dataFreePrompt.includes('review-talk evidence only'), 'addendum names the commsGrade basis');
+// Session-10: the addendum used to name laneVerdict + soulsCurveRead ONLY, leaving six other
+// digest-fed fields reading "grounded in the souls curve" with no curve to stand on.
+for (const f of ['.hero', '.lane', '.itemCritique', '.deathAnalysis', 'macro.tempoRead', '.laneMap', '.objectiveWindows', '.swings']) {
+  assert.ok(dataFreePrompt.includes(f), `addendum names ${f} among the digest-fed fields it empties`);
+}
 assert.ok(!dataFreePrompt.includes('MATCH DATA DIGEST'), 'no digest header when data-free');
 const dataPrompt = buildReportPrompt({ transcriptBlock: '[0:00] A: hi', matchDigests: ['Match 1: souls 21k at 10:00'] });
 assert.ok(!dataPrompt.includes('NO MATCH DATA ATTACHED'), 'digest present → no addendum');
