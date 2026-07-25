@@ -93,6 +93,18 @@ assert.equal(rec.generated, '2026-07-24', 'generated survives coercion — the b
 assert.ok(VOD_REPORT_SYSTEM_PROMPT.includes('"reconciliation"'), 'schema names reconciliation');
 assert.ok(VOD_REPORT_SYSTEM_PROMPT.includes('RECONCILIATION —'), 'prompt carries the reconciliation rule');
 
+// followUps may only judge SUPPLIED priors. Live session-9 run wrote two followUps off the first
+// report instead — one of them duplicating this report's own action item, which is the exact
+// duplication the code-level self-loop kill was for. The rule closes the wording route to it.
+assert.ok(VOD_REPORT_SYSTEM_PROMPT.includes('FOLLOW-UPS —'), 'prompt carries the follow-ups rule');
+assert.ok(VOD_REPORT_SYSTEM_PROMPT.includes('its action items are never follow-ups'),
+  'the first report is explicitly excluded as a follow-up source');
+assert.ok(VOD_REPORT_SYSTEM_PROMPT.includes('one lesson, one home'), 'followUps/actionItems overlap forbidden');
+const pPrior = buildReportPrompt({ transcriptBlock: 'T', priorActionItems: [{ id: 'a', text: 'call rotations' }] });
+assert.ok(pPrior.includes('with ONLY these items'), 'prior-items block points back at the rule');
+assert.ok(!buildReportPrompt({ transcriptBlock: 'T' }).includes('Prior action items from earlier scrims'),
+  'no priors supplied -> no prior block, so the rule sends followUps to []');
+
 // M4 first-report reference block: labeled + reference-only rule inline; absent when empty
 const pFinal = buildReportPrompt({ transcriptBlock: 'T', firstReportBlock: '{"sections":[]}' });
 assert.ok(pFinal.includes('=== FIRST REPORT (ANALYST) ==='), 'first report block labeled');

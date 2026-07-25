@@ -413,6 +413,14 @@ export const VOD_REPORT_SYSTEM_PROMPT = [
   'is []. The first report is REFERENCE for reconciliation and continuity, never source text to copy — the',
   'review transcript is the primary source of this report.',
   '',
+  'FOLLOW-UPS — "followUps" judges ONLY the items in the supplied "Prior action items from earlier scrims"',
+  'list. No such list in this prompt means "followUps" is []. The === FIRST REPORT (ANALYST) === block is THIS',
+  'match, not earlier homework: its action items are never follow-ups, however squarely the review speaks to',
+  'them. A review that settles an analyst read belongs in "reconciliation"; a lesson worth restating belongs in',
+  'this report\'s own "actionItems". Never put an item in "followUps" that also appears in this report\'s',
+  '"actionItems" — one lesson, one home. A supplied prior item the review never touched is judged "unclear" or',
+  'omitted; it is never replaced with something closer to hand.',
+  '',
   'CARRY-FORWARD — the "carry" index. Three kinds of thing outlive this match, and the scrim\'s exported',
   'carry-forward sheet is compiled mechanically from this index alone:',
   '- "habit"  — a recurring pattern WITH its stated age ("he has not bought Counterspell since the rework").',
@@ -492,7 +500,7 @@ export function buildReportPrompt({ transcriptBlock, teams = {}, coachedTeam = '
   }
   if (priorActionItems.length) {
     lines.push('');
-    lines.push('Prior action items from earlier scrims — judge each resolved / persisting / unclear from this review and fill "followUps":');
+    lines.push('Prior action items from earlier scrims — judge each resolved / persisting / unclear from this review and fill "followUps" with ONLY these items (see the FOLLOW-UPS rule):');
     lines.push(JSON.stringify(priorActionItems.map((p) => ({ id: p.id, text: p.text })), null, 0));
   }
   if (String(notesBlock).trim()) {
