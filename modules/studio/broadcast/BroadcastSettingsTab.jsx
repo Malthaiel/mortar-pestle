@@ -162,6 +162,7 @@ export default function BroadcastSettingsTab({ accent, initialSection, onNavigat
   // The engine keeps service.json opaque, so the whole shape lives here: mode
   // is just the `type` field, and everything else is `settings` keys.
   const svcType = svc?.type === 'rtmp_custom' ? 'rtmp_custom'
+    : svc?.type === 'whip_custom' ? 'whip_custom'
     : svc?.type === 'url' ? 'url' : 'rtmp_common';
   const svcSet = svc?.settings || {};
   // SRT and RIST are both engine type `url`, told apart by the stored
@@ -223,6 +224,10 @@ export default function BroadcastSettingsTab({ accent, initialSection, onNavigat
       return;
     }
     if (t === 'rtmp_custom') { saveService('rtmp_custom', { server: '', key: svcSet.key || '' }); return; }
+    // whip_custom's own setting keys, read straight off the module (server +
+    // bearer_token) — the engine stores them opaque and whip_output pulls them
+    // back off the service, so a wrong name here would be silently ignored.
+    if (t === 'whip_custom') { saveService('whip_custom', { server: '', bearer_token: svcSet.bearer_token || '' }); return; }
     saveService('rtmp_common', { service: svcName || '', server: svcSet.server || '', key: svcSet.key || '' });
   };
 
@@ -336,6 +341,7 @@ export default function BroadcastSettingsTab({ accent, initialSection, onNavigat
                 { value: 'rtmp_custom', label: 'Custom RTMP' },
                 { value: 'SRT', label: 'SRT' },
                 { value: 'RIST', label: 'RIST' },
+                { value: 'whip_custom', label: 'WHIP' },
               ]}
               value={destMode} accent={accent} onChange={setSvcMode}
             />
@@ -350,6 +356,15 @@ export default function BroadcastSettingsTab({ accent, initialSection, onNavigat
                   ? 'SRT sends over UDP and re-sends lost packets. The delay is how long it waits for them — bigger survives a worse connection, at the cost of being further behind.'
                   : 'RIST sends over UDP and re-sends lost packets. The delay is the buffer it keeps for them — bigger survives a worse connection, at the cost of being further behind.'}
                 {' '}Leave the delay blank to use the default. There is no stream key: the address is the whole destination.
+              </div>
+            </>
+          ) : svcType === 'whip_custom' ? (
+            <>
+              <Row label="Address"><NameField value={svcSet.server || ''} accent={accent} onCommit={(v) => setSvcField('server', v)} /></Row>
+              <Row label="Bearer token"><SecretField value={svcSet.bearer_token || ''} accent={accent} placeholder="Optional" onCommit={(v) => setSvcField('bearer_token', v)} /></Row>
+              <div style={muted}>
+                WHIP hands the video to the receiver the same way a video call does, so it lands with almost no lag.
+                The address is the whole destination, and a token is only needed when the receiver asks you to prove who you are.
               </div>
             </>
           ) : (

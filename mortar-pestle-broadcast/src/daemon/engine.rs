@@ -2099,9 +2099,15 @@ impl Engine {
             let adata = data_from_value(&json!({ "bitrate": abitrate }));
             ffi::obs_service_apply_encoder_settings(service, vdata, adata);
 
+            // WebRTC carries no AAC: whip_output declares `opus` as its only
+            // encoded audio codec (obs-webrtc calls addOpusCodec and nothing
+            // else), and libobs's pre-start codec check rejects a mismatch —
+            // one more start that fails without saying why. RTMP keeps AAC.
+            let aenc_id = if svc_type == "whip_custom" { "ffmpeg_opus" } else { "ffmpeg_aac" };
             let vid = cstring(&venc_id);
+            let aid = cstring(aenc_id);
             let venc = ffi::obs_video_encoder_create(vid.as_ptr(), c"bcast_stream_venc".as_ptr(), vdata, std::ptr::null_mut());
-            let aenc = ffi::obs_audio_encoder_create(c"ffmpeg_aac".as_ptr(), c"bcast_stream_aenc".as_ptr(), adata, 0, std::ptr::null_mut());
+            let aenc = ffi::obs_audio_encoder_create(aid.as_ptr(), c"bcast_stream_aenc".as_ptr(), adata, 0, std::ptr::null_mut());
             ffi::obs_data_release(vdata);
             ffi::obs_data_release(adata);
             if venc.is_null() || aenc.is_null() {
@@ -2118,10 +2124,14 @@ impl Engine {
             ffi::obs_encoder_set_audio(aenc, ffi::obs_get_audio());
 
             // The mpegts muxer takes its destination as an output SETTING;
-            // rtmp_output takes it from the service instead.
-            let (out_id, out_json) = match &stream_url {
-                Some(url) => ("ffmpeg_mpegts_muxer", json!({ "url": url })),
-                None => ("rtmp_output", json!({})),
+            // rtmp_output and whip_output read theirs off the SERVICE instead
+            // (obs-webrtc imports obs_output_get_service and pulls `server` +
+            // `bearer_token` from it), so the service block above needs no WHIP
+            // case at all — `whip_custom` rides through opaque like any other.
+            let (out_id, out_json) = match (&stream_url, svc_type.as_str()) {
+                (Some(url), _) => ("ffmpeg_mpegts_muxer", json!({ "url": url })),
+                (None, "whip_custom") => ("whip_output", json!({})),
+                _ => ("rtmp_output", json!({})),
             };
             log::info!("stream transport: output='{out_id}'");
             let out_settings = data_from_value(&out_json);

@@ -35,6 +35,10 @@ const V1_MODULES: &[&str] = &[
     "obs-nvenc",
     "obs-qsv11",
     "obs-amf",
+    // SP5 SF5: whip_custom + whip_output. Boot-load, not CEF-style late-load —
+    // obs-webrtc defines no obs_module_post_load, and its runtime deps
+    // (datachannel.dll, libcurl.dll) are already in the payload's bin/64bit.
+    "obs-webrtc",
 ];
 
 /// libobs log levels (util/base.h): LOG_ERROR=100 .. LOG_DEBUG=400.
