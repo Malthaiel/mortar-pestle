@@ -20,7 +20,7 @@
 // matchData import). The hour part is REQUIRED: these stamps are read next to the same VOD uploaded
 // to YouTube, and YouTube renders 4045s as "1:07:25" — a bare "67:25" makes the notes and the video
 // disagree on every moment past 1:00:00 (a 71-minute review put 32 such stamps in one report).
-import { parseOrRetry } from './aiRetry.js';
+import { parseOrRetry, isCancel } from './aiRetry.js';
 
 export function mmss(s) {
   const v = Number(s);
@@ -878,6 +878,7 @@ export async function normalizeTranscript(invoke, segments, lexicon, agents = {}
     try {
       corrections = await parseOrRetry(call, user, parseCorrections, 'Respond with ONLY the JSON array, nothing else.');
     } catch (err) {
+      if (isCancel(err)) throw err; // a stop must stop, not degrade into the next billed pass
       // parse-failed-twice OR a transport failure (timeout/auth/upstream) — either way this pass
       // is an enhancer, so ship the transcript un-normalized rather than block the report.
       return keep(`Pass 0 discarded: ${err.message}`);
@@ -1005,6 +1006,7 @@ export async function verifyReport(invoke, { report, matchDigests = [], lexicon 
   try {
     findings = await parseOrRetry(call, user, parseFindings, 'Respond with ONLY the JSON object, nothing else.');
   } catch (err2) {
+    if (isCancel(err2)) throw err2; // a stop must stop, not ship the draft as if verify were optional
     const out = mapStrings(report, (s) => s);
     out.meta = out.meta || { passes: [], brainSections: [], warnings: [], findings: [] };
     out.meta.warnings = [...(out.meta.warnings || []), `Pass 2 skipped: ${err2.message}`];

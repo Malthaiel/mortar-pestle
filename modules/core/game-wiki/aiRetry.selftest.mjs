@@ -1,7 +1,7 @@
 // node modules/core/game-wiki/aiRetry.selftest.mjs
 // The rule under test: parse failure buys ONE reprompt; a transport failure buys none.
 import assert from 'node:assert/strict';
-import { parseOrRetry } from './aiRetry.js';
+import { parseOrRetry, isCancel } from './aiRetry.js';
 
 const json = (raw) => JSON.parse(raw);
 
@@ -51,5 +51,20 @@ assert.deepEqual(seen, ['garbage', 'garbage']);
 // onRaw is best-effort: a failed save never breaks the run
 const survived = await parseOrRetry(async () => '{"a":3}', 'U', json, 'HINT', () => { throw new Error('disk full'); });
 assert.deepEqual(survived, { a: 3 });
+
+// A cancel is a stop, not a failed pass. Degrade paths key off this predicate to rethrow it — a
+// timeout must NOT match, or every wall-kill would abort a pipeline that is meant to degrade.
+assert.ok(isCancel({ code: 'CANCELED' }), 'CANCELED is a cancel');
+assert.ok(!isCancel(Object.assign(new Error('claude timed out'), { code: 'TIMEOUT' })), 'a timeout is not a cancel');
+assert.ok(!isCancel(new Error('parse failed')), 'a plain error is not a cancel');
+assert.ok(!isCancel(undefined), 'no error is not a cancel');
+
+// A cancel raised by the transport is not retried either — same rule as a timeout.
+calls = [];
+await assert.rejects(
+  parseOrRetry(async (p) => { calls.push(p); throw Object.assign(new Error('cancelled'), { code: 'CANCELED' }); }, 'U', json, 'HINT'),
+  (e) => isCancel(e),
+);
+assert.equal(calls.length, 1, 'a cancel must not be reprompted');
 
 console.log('aiRetry.selftest: all assertions passed');

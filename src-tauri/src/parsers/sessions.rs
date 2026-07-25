@@ -144,6 +144,13 @@ fn write_and_mtime(p: &std::path::Path, content: &str) -> Result<f64, VaultError
 pub fn append_freeform_note(text: &str, base_mtime: Option<f64>) -> Result<OkOut, VaultError> {
     let ds = today_str();
     let p = daily_path(&ds);
+    // A missing note used to bounce the write and DROP what the user typed. Create it from the
+    // same skeleton `daily_get_today` uses, then append into it. A note we just made has no prior
+    // version to conflict with, so the mtime check is skipped for that case only.
+    let created = !p.exists();
+    if created {
+        crate::parsers::daily::ensure_daily_note(&ds);
+    }
     if !p.exists() {
         return Ok(OkOut {
             ok: false,
@@ -151,7 +158,9 @@ pub fn append_freeform_note(text: &str, base_mtime: Option<f64>) -> Result<OkOut
             mtime: 0.0,
         });
     }
-    check_mtime(&p, base_mtime)?;
+    if !created {
+        check_mtime(&p, base_mtime)?;
+    }
     let content = fs::read_to_string(&p).map_err(|e| VaultError::Io(e.to_string()))?;
     let mut lines: Vec<String> = content.split('\n').map(|s| s.to_string()).collect();
 

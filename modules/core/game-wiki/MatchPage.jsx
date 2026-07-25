@@ -160,6 +160,19 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
   const mfKey = `${folder}#${n}#final`;
   const mfRunning = matchReportJob.key === mfKey;
 
+  // Bytes-so-far from the live CLI run. The Rust side has always emitted this (throttled to ~2 KB)
+  // and nothing consumed it, so a running report showed one frozen word with no way to tell working
+  // from hung. Shown on the Cancel face; reset whenever a run starts or ends.
+  const [runChars, setRunChars] = useState(0);
+  useEffect(() => { setRunChars(0); }, [matchReportJob.key]);
+  useEffect(() => {
+    const un = listen('coaching-progress', (e) => setRunChars(e.payload?.chars || 0));
+    return () => { un.then((f) => f()).catch(() => {}); };
+  }, []);
+  const runFace = (label) => (runChars ? `Cancel · ${(runChars / 1000).toFixed(1)}k chars` : label);
+  // One switch stops whichever billed run is live — every AI path funnels through run_claude_cli.
+  const cancelReport = () => invoke('coaching_cancel').catch(() => {});
+
   // ── M5: pre-generate gates — confirm dialogs, never hard blocks ──
   // One ConfirmModal at a time from a queue; confirming the last one runs the job. Cancel anywhere
   // aborts the whole run. Reuses the app's ConfirmModal (the module's existing confirm pattern).
@@ -242,6 +255,12 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
       setMrReady(true);
       notify('success', 'Match report ready', `${report.sections.length} section${report.sections.length === 1 ? '' : 's'} · ${report.playerCards.length} player card${report.playerCards.length === 1 ? '' : 's'}.`);
     } catch (e) {
+      // A cancel is a user action, not a failure. The half-written answer rides along on e.partial
+      // exactly as a timeout's does, but a truncated report is not parseable, so none is saved.
+      if (e?.code === 'CANCELED') {
+        notify('info', 'Report cancelled', `Stopped after ${(e.partial || '').length} characters — no report was saved.`);
+        return;
+      }
       const msg = {
         AUTH: ['AI backend not configured', 'Add an Anthropic API key or Claude CLI in Settings → Agents.'],
         NETWORK: ['Network error', e?.message || 'Could not reach the model.'],
@@ -337,6 +356,10 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
       setMfReady(true);
       notify('success', 'Final report ready', `${report.reconciliation.length} analyst read${report.reconciliation.length === 1 ? '' : 's'} reconciled · ${report.sections.length} section${report.sections.length === 1 ? '' : 's'}.`);
     } catch (e) {
+      if (e?.code === 'CANCELED') {
+        notify('info', 'Report cancelled', `Stopped after ${(e.partial || '').length} characters — no report was saved.`);
+        return;
+      }
       const msg = {
         AUTH: ['AI backend not configured', 'Add an Anthropic API key or Claude CLI in Settings → Agents.'],
         NETWORK: ['Network error', e?.message || 'Could not reach the model.'],
@@ -898,13 +921,13 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
             <div style={labelStyle}>First Report</div>
             <div className="candy-chip-row">
               <button className="candy-btn" data-shape="chip"
-                disabled={!aiConfigured || mrRunning || mfRunning || running || commsBusy.on || reviewBusy.on || classifying || reviewing}
-                onClick={runMatchReport}
-                title={!aiConfigured ? 'Configure an AI backend in Settings → Agents (API key or Claude CLI)'
-                  : !populated ? 'No match data yet — generating asks first, then runs from comms only'
-                    : 'First Report (Process 1) — the Analyst’s own coaching report on this match, every claim tagged [data] / [grounded] / [analyst]'}
-                style={mrRunning ? { opacity: 0.6, cursor: 'progress' } : undefined}>
-                <span className="candy-face">{mrRunning ? 'Asking Claude' : mrReady ? 'Regenerate First Report' : 'Generate First Report'}</span>
+                disabled={mrRunning ? false : (!aiConfigured || mfRunning || running || commsBusy.on || reviewBusy.on || classifying || reviewing)}
+                onClick={mrRunning ? cancelReport : runMatchReport}
+                title={mrRunning ? 'Stop this run — the words already written are kept'
+                  : !aiConfigured ? 'Configure an AI backend in Settings → Agents (API key or Claude CLI)'
+                    : !populated ? 'No match data yet — generating asks first, then runs from comms only'
+                      : 'First Report (Process 1) — the Analyst’s own coaching report on this match, every claim tagged [data] / [grounded] / [analyst]'}>
+                <span className="candy-face">{mrRunning ? runFace('Cancel') : mrReady ? 'Regenerate First Report' : 'Generate First Report'}</span>
               </button>
               {mrReady && !mfReady && !mrRunning && (
                 <button className="candy-btn" data-shape="chip" onClick={() => setMrOpen(true)} title="Open this match's analyst report">
@@ -919,13 +942,13 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
             <div style={labelStyle}>Final Report</div>
             <div className="candy-chip-row">
               <button className="candy-btn" data-shape="chip"
-                disabled={!rvReady || !aiConfigured || mfRunning || mrRunning || running || commsBusy.on || reviewBusy.on || classifying || reviewing}
-                onClick={runMatchFinal}
-                title={!rvReady ? 'Record this match’s VOD review first — the final report is written from it'
-                  : !aiConfigured ? 'Configure an AI backend in Settings → Agents (API key or Claude CLI)'
-                    : 'Final Report (Process 2) — the coach-voiced report written from the review session; replaces the first report in every view'}
-                style={mfRunning ? { opacity: 0.6, cursor: 'progress' } : undefined}>
-                <span className="candy-face">{mfRunning ? 'Asking Claude' : mfReady ? 'Regenerate Final Report' : 'Generate Final Report'}</span>
+                disabled={mfRunning ? false : (!rvReady || !aiConfigured || mrRunning || running || commsBusy.on || reviewBusy.on || classifying || reviewing)}
+                onClick={mfRunning ? cancelReport : runMatchFinal}
+                title={mfRunning ? 'Stop this run — the words already written are kept'
+                  : !rvReady ? 'Record this match’s VOD review first — the final report is written from it'
+                    : !aiConfigured ? 'Configure an AI backend in Settings → Agents (API key or Claude CLI)'
+                      : 'Final Report (Process 2) — the coach-voiced report written from the review session; replaces the first report in every view'}>
+                <span className="candy-face">{mfRunning ? runFace('Cancel') : mfReady ? 'Regenerate Final Report' : 'Generate Final Report'}</span>
               </button>
               {mfReady && !mfRunning && (
                 <button className="candy-btn" data-shape="chip" onClick={() => setMrOpen(true)} title="Open this match's final (coach-reviewed) report">

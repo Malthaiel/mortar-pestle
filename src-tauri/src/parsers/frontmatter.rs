@@ -1,9 +1,10 @@
 //! YAML-subset frontmatter parser. Logic ported from the now-removed Node sidecar (`server/src/skills/frontmatter.js`).
 //!
 //! Handles the surface area the vault uses: top-level scalars, inline arrays
-//! (`Tags: [a, b]`), flat lists (`aliases:\n  - foo`), and list-of-mappings
-//! (`Arguments:\n  - name: value\n    description: …`). A full YAML parser
-//! would be over-built — the schema is small and stable.
+//! (`Tags: [a, b]`), flat lists (`aliases:\n  - foo`), list-of-mappings
+//! (`Arguments:\n  - name: value\n    description: …`), and nested maps
+//! (`Track Sources:\n  1: https://…`). A full YAML parser would be over-built —
+//! the schema is small and stable.
 //!
 //! Sub-feature 4 of the Desktop-Only Migration. Used by `parsers::frontmatter_cache`
 //! and the folder reader for field projection.
@@ -24,6 +25,21 @@ static RE_CONT: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\s{4,}([A-Za-z]
 static RE_TOP_KEY: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[A-Za-z][\w \-]*:").unwrap());
 static RE_SCALAR_LINE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^([A-Za-z][\w \-]*):\s*(.*)$").unwrap());
 static RE_SUBKEY: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[A-Za-z][\w \-]*:\s*(.*)$").unwrap());
+// Nested-map entry: an indented `key: value` that is NOT a bullet. Keys may be quoted, because
+// the album writer emits `  "01 Track Title": https://…` — spaces and punctuation and all.
+static RE_NESTED_ITEM: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"^\s+("[^"]*"|'[^']*'|[A-Za-z0-9][\w \-]*):\s*(.*)$"#).unwrap());
+
+/// Strip one matching pair of surrounding quotes, if present.
+fn unquote(s: &str) -> &str {
+    let b = s.as_bytes();
+    if b.len() >= 2
+        && ((b[0] == b'"' && b[b.len() - 1] == b'"') || (b[0] == b'\'' && b[b.len() - 1] == b'\''))
+    {
+        return &s[1..s.len() - 1];
+    }
+    s
+}
 
 /// Parse a scalar YAML value into a JSON Value. Mirrors Node's `parseScalar`:
 /// `true`/`false` → bool, integer literal → number, float literal → number,
@@ -46,15 +62,7 @@ fn parse_scalar(raw: &str) -> Value {
             return json!(n);
         }
     }
-    let bytes = s.as_bytes();
-    if bytes.len() >= 2 {
-        let first = bytes[0];
-        let last = bytes[bytes.len() - 1];
-        if (first == b'"' && last == b'"') || (first == b'\'' && last == b'\'') {
-            return Value::String(s[1..s.len() - 1].to_string());
-        }
-    }
-    Value::String(s.to_string())
+    Value::String(unquote(s).to_string())
 }
 
 fn parse_inline_array(raw: &str) -> Value {
@@ -185,6 +193,36 @@ pub fn parse_frontmatter(text: &str) -> (Map<String, Value>, String) {
                 meta.insert(key, Value::Array(items));
                 continue;
             }
+
+            // Nested map: `Key:` followed by indented `  subkey: value` lines with no bullet.
+            // Without this branch the bare `Key:` fell through to the scalar arm and landed as an
+            // empty string while every sub-key was skipped — a silent WRONG parse, not a miss.
+            if i + 1 < lines.len() && RE_NESTED_ITEM.is_match(lines[i + 1]) {
+                let key = list_key.get(1).unwrap().as_str().trim().to_string();
+                let mut m = Map::new();
+                i += 1;
+                while i < lines.len() {
+                    let l = lines[i];
+                    if l.trim().is_empty() {
+                        i += 1;
+                        continue;
+                    }
+                    if RE_TOP_KEY.is_match(l) {
+                        break;
+                    }
+                    let Some(c) = RE_NESTED_ITEM.captures(l) else { break };
+                    let raw = c.get(2).unwrap().as_str().trim();
+                    let value = if raw.starts_with('[') && raw.ends_with(']') {
+                        parse_inline_array(raw)
+                    } else {
+                        parse_scalar(raw)
+                    };
+                    m.insert(unquote(c.get(1).unwrap().as_str().trim()).to_string(), value);
+                    i += 1;
+                }
+                meta.insert(key, Value::Object(m));
+                continue;
+            }
         }
 
         if let Some(c) = RE_SCALAR_LINE.captures(line) {
@@ -278,6 +316,28 @@ mod tests {
         assert_eq!(args[0]["name"], json!("foo"));
         assert_eq!(args[0]["description"], json!("first arg"));
         assert_eq!(args[1]["name"], json!("bar"));
+    }
+
+    #[test]
+    fn nested_map_quoted_keys() {
+        // The album writer's real shape: `Track Sources:` then indented quoted track keys, one of
+        // them still empty (a `--only-missing` row whose URL has not been resolved yet).
+        let txt = "---\nTitle: An Album\nTrack Sources:\n  \"01 First\": https://youtu.be/aaa\n  \"02 Second\": \nGenres:\n  - rock\n---\n";
+        let (meta, _) = parse_frontmatter(txt);
+        assert_eq!(meta["Track Sources"]["01 First"], json!("https://youtu.be/aaa"));
+        assert_eq!(meta["Track Sources"]["02 Second"], json!(""));
+        // the map must not swallow the fields around it
+        assert_eq!(meta["Title"], json!("An Album"));
+        assert_eq!(meta["Genres"], json!(["rock"]));
+    }
+
+    #[test]
+    fn nested_map_bare_keys_and_scalar_types() {
+        let txt = "---\nCounts:\n  one: 1\n  flag: true\n  tags: [a, b]\n---\n";
+        let (meta, _) = parse_frontmatter(txt);
+        assert_eq!(meta["Counts"]["one"], json!(1));
+        assert_eq!(meta["Counts"]["flag"], json!(true));
+        assert_eq!(meta["Counts"]["tags"], json!(["a", "b"]));
     }
 
     #[test]

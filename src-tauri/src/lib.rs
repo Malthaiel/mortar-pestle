@@ -847,6 +847,7 @@ pub fn run() {
             commands::coaching::deadlock_fetch_match,
             commands::coaching::coaching_classify_match,
             commands::coaching::coaching_agent_run,
+            commands::coaching::coaching_cancel,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::comms_job::comms_job_start,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::comms_job::comms_job_status,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::comms_job::comms_job_take,
@@ -1024,6 +1025,7 @@ pub fn run() {
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::broadcast::broadcast_paths,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::broadcast::broadcast_remux_start,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::broadcast::broadcast_twitch_ingests,
+            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::broadcast::broadcast_twitch_fetch_key,
         ])
         .on_window_event(|window, event| {
             if let WindowEvent::Focused(focused) = event {

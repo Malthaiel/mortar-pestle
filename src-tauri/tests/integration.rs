@@ -168,15 +168,16 @@ Date: 2026-05-15
     );
 }
 
-// ─── 3. Error path ──────────────────────────────────────────────────────────
+// ─── 3. Missing-note path ───────────────────────────────────────────────────
 //
-// The function returns Ok(OkOut { ok: false, error: Some(...) }) - NOT an
-// Err - when today's file doesn't exist. This is a deliberate API choice
-// (recoverable surface) and the integration scaffold should pin it down so
-// the contract can't drift silently.
+// A missing daily note USED to bounce the write with Ok(OkOut { ok: false }),
+// which silently DROPPED whatever the user had typed. The note is now created
+// from the skeleton first (the same one `daily_get_today` uses) and the text
+// lands in it. Pinned here because the failure mode is invisible — the note
+// just never appears and nothing errors loudly.
 
 #[test]
-fn integration_append_freeform_note_errors_when_daily_missing() {
+fn integration_append_freeform_note_creates_missing_daily() {
     let _g = common::env_lock();
     // Future date — no daily log file will exist for it.
     set_today("2099-01-01");
@@ -184,14 +185,20 @@ fn integration_append_freeform_note_errors_when_daily_missing() {
     // Set up an empty vault root (no Pulse/Daily Logs/2099-01-01.md).
     let dir = tempfile::tempdir().expect("tempdir");
     std::env::set_var("AGENTIC_VAULT_ROOT", dir.path().display().to_string());
+    // pulse_vault_root() prefers a REGISTERED Pulse vault over AGENTIC_VAULT_ROOT. Reading a
+    // missing file through that fallback was harmless; creating one is not, so pin the Pulse root
+    // to the temp dir — then clear it right after the write so a failed assert below cannot leak a
+    // dangling root into the next test.
+    std::env::set_var("AGENTIC_PULSE_VAULT_ROOT", dir.path().display().to_string());
+    let r = append_freeform_note("survived the missing note", None).unwrap();
+    std::env::remove_var("AGENTIC_PULSE_VAULT_ROOT");
 
-    let r = append_freeform_note("text", None).unwrap();
-
-    assert_eq!(r.ok, false, "should report not-ok when file is missing");
-    assert_eq!(
-        r.error.as_deref(),
-        Some("Today's note not found"),
-        "should surface the exact contract message"
+    assert!(r.ok, "a missing note is created, not an error: {:?}", r.error);
+    let written = std::fs::read_to_string(dir.path().join("Pulse/Daily Logs/2099-01-01.md"))
+        .expect("the note should have been created");
+    assert!(
+        written.contains("survived the missing note"),
+        "the typed text must land in the new note, got: {written:?}"
     );
 }
 

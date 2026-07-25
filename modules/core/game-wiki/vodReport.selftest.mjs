@@ -534,4 +534,18 @@ assert.equal(finalRoundTrip.generated, '2026-07-24T18:00:00Z', 'matchfinal gener
 assert.equal(finalRoundTrip.reconciliation.length, 1, 'matchfinal reconciliation survives coercion');
 assert.equal(finalRoundTrip.reconciliation[0].verdict, 'overridden');
 
+// A cancel during the verify pass must ABORT the whole report, not degrade to "Pass 2 skipped" and
+// ship anyway. The degrade branch swallows every other failure by design, so without the rethrow
+// the stop button would burn the draft's money and still save an unverified report.
+const cancelErr = Object.assign(new Error('cancelled by the user'), { code: 'CANCELED' });
+await assert.rejects(
+  verifyReport(async () => { throw cancelErr; }, { report: { sections: [], meta: { warnings: [] } } }),
+  (e) => e.code === 'CANCELED',
+  'a cancel in the verify pass propagates instead of degrading',
+);
+// while a plain transport failure still degrades to an un-verified report, as before
+const degraded = await verifyReport(async () => { throw new Error('claude timed out'); }, { report: { sections: [], meta: { warnings: [] } } });
+assert.equal(degraded.ran, false, 'a timeout still degrades rather than aborting');
+assert.ok(degraded.report.meta.warnings.some((w) => w.startsWith('Pass 2 skipped')), 'degrade still warns');
+
 console.log('vodReport.selftest: all assertions passed');

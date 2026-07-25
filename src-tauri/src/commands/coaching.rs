@@ -428,6 +428,9 @@ pub enum DeadlockError {
     /// The CLI was killed at the wall. Carries whatever text had already streamed in, so a long
     /// paid run is salvageable instead of silently discarded (the frontend persists `partial`).
     Timeout { message: String, partial: String },
+    /// The user stopped the run from the UI. Carries the same salvage payload as `Timeout` —
+    /// those words were already billed, so cancelling must not throw them away.
+    Canceled { partial: String },
 }
 
 impl serde::Serialize for DeadlockError {
@@ -441,11 +444,12 @@ impl serde::Serialize for DeadlockError {
             DeadlockError::Upstream(m) => ("UPSTREAM", m.as_str()),
             DeadlockError::Auth(m) => ("AUTH", m.as_str()),
             DeadlockError::Timeout { message, .. } => ("TIMEOUT", message.as_str()),
+            DeadlockError::Canceled { .. } => ("CANCELED", "cancelled by the user"),
         };
         let mut map = s.serialize_map(Some(3))?;
         map.serialize_entry("code", code)?;
         map.serialize_entry("message", message)?;
-        if let DeadlockError::Timeout { partial, .. } = self {
+        if let DeadlockError::Timeout { partial, .. } | DeadlockError::Canceled { partial } = self {
             map.serialize_entry("partial", partial)?;
         }
         map.end()
@@ -675,6 +679,20 @@ pub async fn coaching_agent_run(
     .await
 }
 
+/// Stop switch for whichever billed CLI run is live. Exactly one AI run happens app-wide at a
+/// time (the frontend's job store enforces it), so one process-global signal is enough — and
+/// `notify_waiters` only wakes waiters that are ALREADY parked, so a stale click cannot leak
+/// forward and kill the next run the way a stored permit would.
+static CANCEL: tokio::sync::Notify = tokio::sync::Notify::const_new();
+
+/// Stop the running `claude` CLI call. Every billed path — first report, final report, teamfight
+/// comms, analyst brain, auto-classify — funnels through `run_claude_cli`, so cancelling there
+/// covers all of them instead of one button at a time. Safe to call when nothing is running.
+#[tauri::command]
+pub fn coaching_cancel() {
+    CANCEL.notify_waiters();
+}
+
 /// Shared headless `claude --print` spawn: JSON envelope in/out, user prompt via stdin,
 /// optional cwd + read-only tool allowance, hard timeout (kill_on_drop reaps the child when
 /// the timed-out future is dropped), and no console flash on Windows (CREATE_NO_WINDOW).
@@ -790,17 +808,31 @@ async fn run_claude_cli(
         }
     };
 
-    match tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), read).await {
-        Ok(()) => {}
-        Err(_) => {
-            return Err(DeadlockError::Timeout {
-                message: format!(
-                    "claude timed out after {timeout_secs}s (killed) — {} characters had been written",
-                    text.len()
-                ),
-                partial: text,
-            })
+    // A cancel races the read. Whichever lands first ends the run; returning drops `child`, and
+    // kill_on_drop reaps the CLI process — the same reaping the timeout arm has always relied on.
+    // The race has to yield a plain bool rather than returning from inside the select, because the
+    // `read` future holds `&mut text` until the whole timeout expression is dropped.
+    let raced = async {
+        tokio::select! {
+            () = read => false,
+            () = CANCEL.notified() => true,
         }
+    };
+    let canceled =
+        match tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), raced).await {
+            Ok(c) => c,
+            Err(_) => {
+                return Err(DeadlockError::Timeout {
+                    message: format!(
+                        "claude timed out after {timeout_secs}s (killed) — {} characters had been written",
+                        text.len()
+                    ),
+                    partial: text,
+                })
+            }
+        };
+    if canceled {
+        return Err(DeadlockError::Canceled { partial: text });
     }
     if let Some(e) = result_err {
         return Err(e);

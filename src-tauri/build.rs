@@ -78,6 +78,7 @@ fn main() {
         "deadlock_fetch_match",
         "coaching_classify_match",
         "coaching_agent_run",
+        "coaching_cancel",
         "comms_job_start",
         "comms_job_status",
         "comms_job_take",
@@ -328,6 +329,7 @@ fn main() {
         "broadcast_paths",
         "broadcast_remux_start",
         "broadcast_twitch_ingests",
+        "broadcast_twitch_fetch_key",
       ]),
     ),
   )

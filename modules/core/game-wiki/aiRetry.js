@@ -10,6 +10,12 @@
 // Born from a VOD report that burned ~20 minutes and a quarter of a Claude Pro session window on
 // two draft attempts, both killed at the 5-minute CLI wall, with zero output saved.
 
+// A user cancel (Rust `DeadlockError::Canceled`) is not a bad pass — it is a stop. Every degrade
+// path that swallows a failed pass and rolls on MUST rethrow it, or the stop button just skips one
+// pass and the pipeline spends money on the next one. Lives here because this module already owns
+// "which failures mean what" for the whole coaching pipeline.
+export const isCancel = (err) => err?.code === 'CANCELED';
+
 // `call(userPrompt) => Promise<string>` (the raw model text), `parse(raw) => T` (throws on
 // contract violation), `hint` = the format nudge appended to the reprompt.
 // `onRaw(raw)` (optional) sees every raw response before parsing — used to persist an expensive
