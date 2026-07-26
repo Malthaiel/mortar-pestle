@@ -788,8 +788,11 @@ export function checkProse(report) {
 const SPLIT_JOIN = /\s+—\s+|[:;]\s+/g;
 const SPLIT_MIN_HALF = 6;
 
-export function splitLongSentences(report) {
-  const r = report && typeof report === 'object' ? report : {};
+// The line-level splitter, lifted out of splitLongSentences so the player brief (markdown, not a
+// report object) runs the SAME rule instead of a second copy that drifts. Returns the rewritten
+// text plus how many sentences were split. `skipLine` lets a caller refuse extra lines — the brief
+// passes one that spares the machine block and the card's fenced block.
+export function splitProseText(text, skipLine = () => false) {
   let n = 0;
   const splitOne = (s) => {
     if (s.trim().split(/\s+/).length <= STYLE_MAX_WORDS) return s;
@@ -809,11 +812,18 @@ export function splitLongSentences(report) {
     n++;
     return `${s.slice(0, best.index).trimEnd()}. ${right[0].toUpperCase()}${right.slice(1)}`;
   };
-  const fix = (text) => String(text ?? '').split('\n').map((line) => (
-    !line.trim() || line.includes('|') || line.trimStart().startsWith('#')
+  const out = String(text ?? '').split('\n').map((line, i) => (
+    !line.trim() || line.includes('|') || line.trimStart().startsWith('#') || skipLine(line, i)
       ? line
       : line.replace(/[^.!?]+[.!?]+[*_"')\]]*/g, splitOne)
   )).join('\n');
+  return { text: out, n };
+}
+
+export function splitLongSentences(report) {
+  const r = report && typeof report === 'object' ? report : {};
+  let n = 0;
+  const fix = (text) => { const s = splitProseText(text); n += s.n; return s.text; };
   const arr = (v) => (Array.isArray(v) ? v : []);
   for (const s of arr(r.sections)) s.md = fix(s.md);
   for (const c of arr(r.playerCards)) { c.coaching = fix(c.coaching); c.itemCritique = fix(c.itemCritique); }

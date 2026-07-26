@@ -521,10 +521,15 @@ const ANTHROPIC_MESSAGES_URL: &str = "https://api.anthropic.com/v1/messages";
 const CLASSIFY_TIMEOUT_SECS: u64 = 20 * 60;
 
 /// settings.agents.model alias → Anthropic model id (defaults to the current best Opus).
+/// `opus-5` is NOT reachable from Settings→Agents by design — it is pinned in code by the player
+/// brief (playerBrief.js::BRIEF_MODEL), whose target document was written by Opus 5 and for which
+/// model choice is a visible share of the remaining quality gap. Everything else keeps inheriting
+/// the user's alias.
 fn classify_model_id(alias: &str) -> &'static str {
     match alias {
         "sonnet" => "claude-sonnet-4-6",
         "haiku" => "claude-haiku-4-5",
+        "opus-5" => "claude-opus-5",
         _ => "claude-opus-4-8",
     }
 }
@@ -710,7 +715,10 @@ async fn run_claude_cli(
     // Reuse design.rs's resolver: configured path → PATH lookup → platform
     // fallback dirs (covers launchers whose PATH omits where `claude` is installed).
     let resolved = crate::commands::design::resolve_cli_path(cli_path);
-    let alias = if matches!(model, "opus" | "sonnet" | "haiku") { model } else { "opus" };
+    // The CLI's own short aliases pass straight through; anything else resolves to a full model id
+    // so a code-pinned model (the player brief's `opus-5`) reaches the CLI backend too instead of
+    // being silently downgraded to the default Opus.
+    let alias = if matches!(model, "opus" | "sonnet" | "haiku") { model } else { classify_model_id(model) };
 
     // Stage the system prompt in a temp file (see design::SystemPromptFile) and
     // pass --system-prompt-file so it never touches the command line — a large

@@ -75,6 +75,13 @@ export function sidecarPath(scrim, matchN, kind = 'matchdata') {
 // also the sectionJump key the match report view listens on).
 export const matchPath = (scrimFolder, n) => `${scrimFolder}/Matches/Match ${n}.md`;
 
+// The player brief — the study document the Final Report button produces. A REAL page at the scrim
+// root (not a dot-sidecar) so it lists in the tree and opens in the ordinary markdown reader with no
+// tree code and no viewer of its own, exactly like Carry-Forward.md. Scrim-level because the brief
+// is a SESSION artifact: it covers the hero pool, mindset and mechanics taught across the review,
+// not one game's events.
+export const briefPath = (scrimFolder) => `${scrimFolder}/Player Brief.md`;
+
 // Scrim-level twin (no per-match suffix): the VOD Review recording is one file for the
 // whole scrim. `<folder>/.vodcomms.json` (`kind: 'vodreport'` → `.vodreport.json`).
 export function scrimSidecarPath(scrim, kind) {

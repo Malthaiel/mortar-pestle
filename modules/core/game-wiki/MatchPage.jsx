@@ -17,7 +17,7 @@ import { IconFolder, IconPlayCircle } from '@host/components/icons.jsx';
 import { candyGap } from '@host/util/candy.js';
 import { useSettings } from '@host/hooks/useSettings.js';
 import { parseMatchFile, serializeMatchFile, mergeMatch, getNotes, ensureNotes } from './scrimSchema.js';
-import { sidecarPath, renderSummary, MATCH_DATA_PLACEHOLDER, clock, extractMeta, fmtLocalTime, extractSpatial, resolveReviewTranscript } from './matchData.js';
+import { sidecarPath, briefPath, renderSummary, MATCH_DATA_PLACEHOLDER, clock, extractMeta, fmtLocalTime, extractSpatial, resolveReviewTranscript } from './matchData.js';
 import { compileNotes, renderCoachingSummary, parseTimedNote, sortByTimeAsc } from './noteCompile.js';
 import { parseSegments, parseCommsSidecar, buildCommsSidecar, renderCommsSummary } from './commsCompile.js';
 import { labelForCluster } from './diarize.js';
@@ -27,9 +27,9 @@ import { buildFights, judgeTeamfights, summarize } from './teamfightComms.js';
 import { buildMatchDigest } from './matchDigest.js';
 import { buildBrainContext } from './analystBrain.js';
 import ConfirmModal from '@host/components/ui/ConfirmModal.jsx';
-import { serializeTfComms, buildTranscriptBlock, generateReport, validateStamps } from './vodReport.js';
-import { generateMatchReport, coerceMatchReport } from './matchReport.js';
-import { openHomework, teamSidecarPath } from './teamProgress.js';
+import { serializeTfComms, buildTranscriptBlock, reconcileReport, validateStamps } from './vodReport.js';
+import { generateMatchReport } from './matchReport.js';
+import { generatePlayerBrief, briefToFinal, BRIEF_MODEL } from './playerBrief.js';
 import { exportCarryForward } from './carryForward.js';
 import { readStopwatch } from './useStopwatch.js';
 import CommsTranscriptView from './CommsTranscriptView.jsx';
@@ -272,18 +272,20 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
     }
   };
 
-  // ── Final Report (M4, Process 2) — coach-voiced, written FROM the review; replaces the first ──
+  // ── Final Report — the PLAYER BRIEF, written FROM the review session ──
+  // What this button produces changed 2026-07-26: the coach-voiced JSON analyst report became the
+  // study document the coached player keeps (modules/core/game-wiki/playerBrief.js). Both reports
+  // were always FOR THE PLAYER, so a record-voiced artifact was aimed at the wrong reader; this
+  // replaces it rather than sitting beside it.
+  //
+  // The pre-generate gates that guarded the analyst report's data verdicts are GONE: the brief is
+  // built from the session and needs only a resolved review transcript. No digest gate, no
+  // first-report gate, and no speaker nudge — second person makes the reader's own label
+  // unnecessary, so an unresolved "Speaker 3" does not degrade the document.
   const runMatchFinal = async () => {
     if (matchReportStore.snap.key) return; // one AI run app-wide, shared with Process 1
     const review = await resolveReviewTranscript(api, folder, n);
     if (!review) { notify('error', 'No review recording', 'Record or extract this match’s VOD-review comms first.'); return; }
-    let hasFirst = true;
-    try { await api.getRawFileMeta(sidecarPath(folder, n, 'matchreport'), 'gamewiki'); } catch { hasFirst = false; }
-    // M5a's twin for Process 2. doMatchFinal reads the same sidecar inside a try/catch and falls back
-    // to matchDigests = [], which the prompt's NO-MATCH-DATA addendum makes degrade honestly — but
-    // silently. The coach is told before the spend, exactly as Process 1 tells them.
-    let hasData = true;
-    try { await api.getRawFileMeta(sidecarPath(folder, n), 'gamewiki'); } catch { hasData = false; }
     runGated([
       // M8: legacy adoption is consented, never silent — the scrim-level transcript is read-only.
       review.scrimLevel ? {
@@ -291,17 +293,6 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
         message: 'This match has no review recording of its own. Read the scrim-level VOD review as this match’s review source? The file is only read — never moved or changed.',
         confirmLabel: 'Use it',
       } : null,
-      hasData ? null : {
-        title: 'No match data attached',
-        message: 'The final report will run from the review only — data verdicts will be skipped. Generate anyway?',
-        confirmLabel: 'Generate anyway',
-      },
-      hasFirst ? null : { // M5b — allowed per locked decision 4
-        title: 'No first report',
-        message: 'The final report will come from the review + match data only. Generate anyway?',
-        confirmLabel: 'Generate anyway',
-      },
-      await unlabeledGate(review.path),
     ], () => doMatchFinal(review));
   };
   const doMatchFinal = async (review) => {
@@ -312,59 +303,49 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
       const brain = await buildBrainContext(api, { coachedTeam: team });
       const reviewSegs = parseSegments((await api.getRawFileMeta(review.path, 'gamewiki')).content);
       const transcriptBlock = buildTranscriptBlock(reviewSegs);
-      // The first report rides along as the reconciliation reference — optional by design (locked
-      // decision 4: allowed without one; M5 adds the warning dialog for that edge).
-      let firstReportBlock = '';
-      try { firstReportBlock = JSON.stringify(coerceMatchReport(JSON.parse((await api.getRawFileMeta(sidecarPath(folder, n, 'matchreport'), 'gamewiki')).content))); } catch { /* no first report */ }
-      let matchDigests = [];
-      try { matchDigests = [buildMatchDigest(JSON.parse((await api.getRawFileMeta(sidecarPath(folder, n), 'gamewiki')).content), { label: `Match ${n}` })]; } catch { /* no match data */ }
-      let tfCommsBlocks = [];
+      // Coach's tagged in-game notes are the one optional input the brief still takes — they are the
+      // coach's own words about this match, so they are session material, not data cross-reference.
+      let coachNotesBlock = '';
       try {
-        const tf = JSON.parse((await api.getRawFileMeta(sidecarPath(folder, n, 'tfcomms'), 'gamewiki')).content);
-        const b = serializeTfComms(tf.fights || [], `Match ${n}`);
-        if (b) tfCommsBlocks = [b];
-      } catch { /* no comms review */ }
-      // Machine-carry (M4b): open homework as priorActionItems, THIS match excluded (M6 match-grain
-      // self-loop guard — Match 1's items stay genuine priors when Match 2 regenerates).
-      let priorActionItems = [];
-      try {
-        const agg = JSON.parse((await api.getRawFileMeta(teamSidecarPath(team), 'gamewiki')).content);
-        priorActionItems = openHomework(agg, { excludeScrim: folder.split('/').pop(), excludeMatch: n });
-      } catch { /* no team progress yet */ }
-      // Keep action-item done-state across regenerates (abort condition 2: ids are user data).
-      let prior = null;
-      try { prior = JSON.parse((await api.getRawFileMeta(sidecarPath(folder, n, 'matchfinal'), 'gamewiki')).content); } catch { /* first final */ }
-      const report = await generateReport(invoke, {
-        transcriptBlock, coachedTeam: team, firstReportBlock, priorActionItems,
-        brainContext: brain.text, matchDigests, tfCommsBlocks, prior,
+        const bullets = getNotes(docRef.current)?.bullets || [];
+        if (bullets.length) coachNotesBlock = renderCoachingSummary(compileNotes(bullets));
+      } catch { /* no notes */ }
+      const { md, meta, warnings } = await generatePlayerBrief(invoke, {
+        transcriptBlock, coachedTeam: team, brainContext: brain.text, coachNotesBlock,
       }, agents);
-      // M7a: each stamp is checked against the recording its OWN source letter names (M18) — an "r"
-      // against the review, a "c" against the in-game comms, a bare game-clock time against neither.
-      // The union check this replaced passed a review-only moment that was tagged as in-game comms.
-      let commsSegs = [];
-      try { commsSegs = parseSegments((await api.getRawFileMeta(sidecarPath(folder, n, 'comms'), 'gamewiki')).content); } catch { /* no comms transcript */ }
-      const badStamps = validateStamps(report, { review: reviewSegs, comms: commsSegs });
-      if (badStamps.length) report.meta.warnings.push(`stamps not found in the recording they name (±5s): ${badStamps.join(', ')}`);
-      report.meta.warnings = [...brain.warnings, ...(report.meta.warnings || [])];
-      report.generated = new Date().toISOString().slice(0, 10);
-      report.model = agents.model;
+      // Ledger stamps only — the body carries none by design ("the player is not clicking anything").
+      const badStamps = validateStamps({ ledger: meta.ledger.map((l) => l.stamp) }, reviewSegs);
+      if (badStamps.length) warnings.push(`ledger stamps not found in the review recording (±5s): ${badStamps.join(', ')}`);
+      // The brief IS the document; the sidecar is its machine projection, derived in code with no
+      // second billed call. Everything downstream (Carry-Forward, Team Progress, cross-session
+      // homework, the report view, the tree's section sub-nav) reads only sections / actionItems /
+      // carry, so all of it keeps working unchanged.
+      let prior = null;
+      try { prior = JSON.parse((await api.getRawFileMeta(sidecarPath(folder, n, 'matchfinal'), 'gamewiki')).content); } catch { /* first brief */ }
+      const projected = briefToFinal(md, {
+        warnings: [...brain.warnings, ...warnings],
+        generated: new Date().toISOString().slice(0, 10),
+        model: BRIEF_MODEL,
+      });
+      const report = prior ? reconcileReport(projected, prior) : projected;
+      await api.savePage(briefPath(folder), md, null, 'gamewiki');
       await api.savePage(sidecarPath(folder, n, 'matchfinal'), JSON.stringify(report), null, 'gamewiki');
       // M24 auto-refresh: onlyIfExists means the sheet is REFRESHED, never conjured — a scrim that
       // never asked for a carry-forward stays without one. Swallowed on failure by design: the final
       // report already landed, so a sheet that could not be rewritten must not read as a failed run.
       await exportCarryForward(api, folder, { scrim: folder.split('/').pop(), date: report.generated, onlyIfExists: true }).catch(() => {});
       setMfReady(true);
-      notify('success', 'Final report ready', `${report.reconciliation.length} analyst read${report.reconciliation.length === 1 ? '' : 's'} reconciled · ${report.sections.length} section${report.sections.length === 1 ? '' : 's'}.`);
+      notify('success', 'Player brief ready', `${report.sections.length} section${report.sections.length === 1 ? '' : 's'} · ${report.actionItems.length} card line${report.actionItems.length === 1 ? '' : 's'} · ${meta.ledger.length} point${meta.ledger.length === 1 ? '' : 's'} swept.`);
     } catch (e) {
       if (e?.code === 'CANCELED') {
-        notify('info', 'Report cancelled', `Stopped after ${(e.partial || '').length} characters — no report was saved.`);
+        notify('info', 'Brief cancelled', `Stopped after ${(e.partial || '').length} characters — nothing was saved.`);
         return;
       }
       const msg = {
         AUTH: ['AI backend not configured', 'Add an Anthropic API key or Claude CLI in Settings → Agents.'],
         NETWORK: ['Network error', e?.message || 'Could not reach the model.'],
         UPSTREAM: ['Model error', e?.message || 'The model returned an unexpected response.'],
-      }[e?.code] || ['Final report failed', e?.message || String(e)];
+      }[e?.code] || ['Player brief failed', e?.message || String(e)];
       notify('error', msg[0], msg[1]);
     } finally {
       setMatchReportJob(null);
@@ -945,18 +926,18 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
                 disabled={mfRunning ? false : (!rvReady || !aiConfigured || mrRunning || running || commsBusy.on || reviewBusy.on || classifying || reviewing)}
                 onClick={mfRunning ? cancelReport : runMatchFinal}
                 title={mfRunning ? 'Stop this run — the words already written are kept'
-                  : !rvReady ? 'Record this match’s VOD review first — the final report is written from it'
+                  : !rvReady ? 'Record this match’s VOD review first — the brief is written from it'
                     : !aiConfigured ? 'Configure an AI backend in Settings → Agents (API key or Claude CLI)'
-                      : 'Final Report (Process 2) — the coach-voiced report written from the review session; replaces the first report in every view'}>
+                      : 'Final Report — the player brief: the study document the coached player keeps, written from the review session and saved as “Player Brief” in this scrim'}>
                 <span className="candy-face">{mfRunning ? runFace('Cancel') : mfReady ? 'Regenerate Final Report' : 'Generate Final Report'}</span>
               </button>
               {mfReady && !mfRunning && (
-                <button className="candy-btn" data-shape="chip" onClick={() => setMrOpen(true)} title="Open this match's final (coach-reviewed) report">
+                <button className="candy-btn" data-shape="chip" onClick={() => setMrOpen(true)} title="Open the brief’s sections and card lines in the report view — the brief itself is the “Player Brief” page in this scrim">
                   <span className="candy-face">Open Report</span>
                 </button>
               )}
             </div>
-            {!rvReady && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: candyGap(8) }}>No review recording yet — the final report is written from the VOD-review session.</div>}
+            {!rvReady && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: candyGap(8) }}>No review recording yet — the brief is written from the VOD-review session.</div>}
           </div>
         </div>
 
