@@ -619,6 +619,10 @@ assert.deepEqual(checkProse(oneCard('**Stop cubing yourself** — that is exactl
 assert.deepEqual(checkProse({ playerCards: [{ player: 'a', coaching: 'He rotated late.' }, { player: 'b', coaching: '' }], sections: [], keepDoing: [] }), [],
   'multi-player report keeps third person');
 assert.ok(checkProse(oneCard(`bad. ${'However regardless. '.repeat(20)}`)).length <= 8, 'style flags are capped');
+// A bolded lead closes after its own full stop, so the splitter must consume the trailing "**" or it
+// welds the lead onto the next sentence and reports one long one. Four false flags on the first live run.
+assert.deepEqual(checkProse(oneCard('**Your own reasoning is already most of the way there.** You take the camp because the souls sit there until they respawn, and you clear it so nobody counters it, and you tell your teammates what is open [52:21r].')), [],
+  'a bolded lead is its own sentence, not a prefix on the next one');
 
 // FOLLOW-UPS gate: with no prior action items supplied there is no earlier homework to judge, so
 // any follow-up the model emits anyway is dropped in code. MatchPage feeds priorActionItems from

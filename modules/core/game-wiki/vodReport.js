@@ -686,7 +686,10 @@ export function checkProse(report) {
     const lower = text.toLowerCase();
     for (const w of STYLE_FANCY) if (lower.includes(w)) { add(where, `fancy wording "${w.trim()}" — use the plain word`); break; }
     if (soloCoached && /\b(?:he|him|his)\b/i.test(text)) add(where, 'third-person "he/his" — the report addresses the coached player as "you"');
-    for (const sentence of text.split(/(?<=[.!?])\s+|\n+/)) {
+    // The bolded lead closes AFTER its full stop ("...most of the way there.**"), so a plain
+    // (?<=[.!?])\s+ split never fires there and glues the lead onto the next sentence — which
+    // reported four false 36-57 word sentences on the first live run. Consume the closing marker.
+    for (const sentence of text.split(/(?<=[.!?])[*_"')\]]*\s+|\n+/)) {
       const s = sentence.trim();
       if (!s) continue;
       const words = s.split(/\s+/).length;
