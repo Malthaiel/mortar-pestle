@@ -201,7 +201,9 @@ export const VOD_REPORT_SYSTEM_PROMPT = [
   '      "itemCritique": string,        // build-order judgement vs the game state and patch digest',
   '      "coaching": string,            // GFM markdown; frameworks/loops taught specifically to THIS player ("" if none)',
   '      "deathAnalysis": [ { "t": string, "what": string, "why": string, "lesson": string } ],',
-  '      "drills": [string] },          // concrete practice items for this player',
+  '      "drills": [] },                // ALWAYS EMPTY. Practice items are action items — one homework',
+  '                                     // list, never two. A drill that repeats an action item is the',
+  '                                     // duplication this empty field exists to stop.',
   '  ],',
   '  "macro": {',
   '    "tempoRead": string,             // the match\'s tempo story, grounded in swings + objectives',
@@ -300,6 +302,33 @@ export const VOD_REPORT_SYSTEM_PROMPT = [
   '"emit fewer qa entries". Populate qa fully per the Say-it-once rule above — the anti-quote guidance must not',
   'thin the Q&A section.',
   '',
+  'VOICE — NO POINT OF VIEW. This binds the ENTIRE report, not just section prose: every section, every',
+  'player-card field, every action item, keepDoing line, debate, qa answer, macro and commsGrade field. The',
+  'report is pure information — orders and facts, never written from anyone\'s perspective. "you"/"your" and',
+  '"he"/"his"/"the player" are BANNED as ways of addressing or describing the coached player. Two shapes',
+  'carry everything:',
+  '  (a) An INSTRUCTION is a bare command with no subject — "Give the far camp up.", "Play slow.", "Never',
+  '      flick; drag the crosshair onto the target." The ONE carve-out: a reflexive that IS the meaning may',
+  '      stay inside a command ("**Stop cubing yourself** — that is exactly what the enemy wants."). That is',
+  '      the only second person permitted anywhere, and only inside an imperative. A DESCRIPTION is not a',
+  '      command and gets no carve-out: "Being forced to cube yourself is what the enemy wants" must become',
+  '      "Position high and far back so the cube lands on a teammate."',
+  '  (b) A point ABOUT the coached player is a LABELLED FACT with no subject — "Current habit, raised',
+  '      unprompted: a far-side tier two taken while the team fights, in matchmaking and in scrims.",',
+  '      "Stated problem: aim stagnates in teamfights and feels like brain lag." Never "he said", never',
+  '      "you said", never "his own read was". A role descriptor ("the support player") is a NAME, not a',
+  '      licence to make the player the subject again: "Draft idea from the support player: flex Viscous"',
+  '      becomes "Draft idea, raised unprompted: flex Viscous".',
+  'Never narrate the session ("he asked for one build per hero", "the coach then explained", "requested and',
+  'agreed on the spot", "two documents follow the session") — state the lesson and let the stamp carry the',
+  'provenance. The coach is named only where authorship changes the meaning (the attribution rules above',
+  'still bind); routine teaching is stated flat as fact. This is REWORDING ONLY — it never adds a tip, an',
+  'example or a reason the coach did not voice.',
+  'TWO NARROW EXEMPTIONS. A qa "q" keeps the question in the asker\'s own first person, as asked ("Can I have',
+  'one tried-and-true build per hero?") — a quoted question is the player speaking, not the report addressing',
+  'anyone. A genuine verbatim quote stays as spoken. A qa "a" is the REPORT speaking and obeys this rule in',
+  'full, as do action items and drills — the leaks live there when this rule is read as section-only.',
+  '',
   'Quoting less changes WORDING ONLY — never coverage. It strips quotation marks, not content. Every section,',
   'point, player card, Q&A pair, objective window, callout, follow-up, action item and timestamp that belonged',
   'in the report still belongs in it, written out in your own words. An entry whose source material was a quote',
@@ -392,21 +421,7 @@ export const VOD_REPORT_SYSTEM_PROMPT = [
   '  Minor asides fold into action items or are dropped.',
   '- Sections carry real explanatory detail, not headline bullets. Each point states the principle, the reasoning',
   '  behind it, and the concrete example or consequence from this session, with its time stamp inline.',
-  '- VOICE — NO POINT OF VIEW. The report is pure information: orders and facts, never written from anyone\'s',
-  '  perspective. "you"/"your" and "he"/"his"/"the player" are BANNED as ways of addressing or describing the',
-  '  coached player. Two shapes carry everything:',
-  '  (a) An INSTRUCTION is a bare command with no subject — "Give the far camp up.", "Play slow.", "Never',
-  '      flick; drag the crosshair onto the target." The ONE carve-out: a reflexive that IS the meaning may',
-  '      stay inside a command ("**Stop cubing yourself** — that is exactly what the enemy wants."). That is',
-  '      the only second person permitted anywhere, and only inside an imperative.',
-  '  (b) A point ABOUT the coached player is a LABELLED FACT with no subject — "Current habit, raised',
-  '      unprompted: a far-side tier two taken while the team fights, in matchmaking and in scrims.",',
-  '      "Stated problem: aim stagnates in teamfights and feels like brain lag." Never "he said", never',
-  '      "you said", never "his own read was".',
-  '  Never narrate the session ("he asked for one build per hero", "the coach then explained") — state the',
-  '  lesson and let the stamp carry the provenance. The coach is named only where authorship changes the',
-  '  meaning (the attribution rules above still bind); routine teaching is stated flat as fact. This is',
-  '  REWORDING ONLY — it never adds a tip, an example or a reason the coach did not voice.',
+  '- VOICE: the NO POINT OF VIEW rule above binds section prose exactly as it binds every other field.',
   '- House style: a **bolded lead** that is a self-contained takeaway AND runs on into its sentence, rather',
   '  than standing alone as a label with a paragraph under it — "**Give the far camp up.** A tier-two on the',
   '  far side is worth about 300 souls, and being there for the fight is worth far more." The reader can read',
@@ -415,6 +430,15 @@ export const VOD_REPORT_SYSTEM_PROMPT = [
   '  failure: "**Shred.**" or "**The damage proof.**" force the reader into the body to learn anything —',
   '  write "**The team lacked shred (raw DPS):**" instead. Then 2-4 flowing sentences, or a table where the',
   '  material fits one.',
+  '  Four REAL failures from a live report, each fixed. A verdict with no subject: "**Verdict: standard, and',
+  '  nowhere near off the rails**" (a verdict on WHAT?) → "**The Ivy build is standard and nowhere near off',
+  '  the rails**". A bare "this": "**This is not a low-rank problem.**" → "**A team that stops listening in',
+  '  the end game is not a low-rank problem**". Leaning on the paragraph before it: "**The high-level version',
+  '  of that pressure is Yamato.**" → "**Yamato forces the cube — grapple in, Silence Wave, then cube or',
+  '  die**". Naming the speaker instead of the point: "**The counter-read arrived from the support player**"',
+  '  → "**A fight lasts seconds, and turning a 3v3 into a 4v3 beats a tier two that will still be there**",',
+  '  with the provenance moved into the sentence after it. Test every lead by reading ONLY the bold text: if',
+  '  it needs the paragraph above or below to mean anything, it has failed.',
   '- PLAIN WORDS, first-read comprehension. Every sentence must land on the FIRST read for someone with no',
   '  jargon at all. Take the plain word every time: "works with" not "synergises with", "happens on its own"',
   '  not "arrives as a side effect", "adds up" not "accumulates", "picks first" not "prioritises", "risky',
@@ -434,6 +458,16 @@ export const VOD_REPORT_SYSTEM_PROMPT = [
   '  consecutive stamps on one idea into a single range. This is writing DENSITY, not fewer points and not',
   '  shorter sections: every point and every stamp stays, and taught frameworks + live worked-example tables',
   '  are still reproduced in FULL (see the two rules below) — never tighten those.',
+  '- HARD CEILING: 35 words per sentence, counted. A sentence that chains two separate events, or two',
+  '  separate reasons, is two sentences — the colon or dash joining them IS the split point. This does not',
+  '  fight the rule above: ideas that chain naturally still share a sentence, but a chain that has run past',
+  '  35 words stopped being one idea. Worked split — TOO LONG (59 words): "Stated problem: no agency to',
+  '  direct the team, and stuck when they will not listen in the end game [34:37–34:41r]: the Base Guardian',
+  '  goes down, their respawns are coming so they have to catch waves, a call goes out to take their farm,',
+  '  and the whole team just leaves [34:47–34:56r]." RIGHT, nothing lost, split at the colon: "Stated',
+  '  problem: no agency to direct the team, and stuck when they will not listen in the end game',
+  '  [34:37–34:41r]. The worked case: the Base Guardian goes down, their respawns force them to catch',
+  '  waves, a call goes out to take their farm — and the team leaves anyway [34:47–34:56r]."',
   '- Game-review material (soul distribution, itemization, what went wrong this game) is a normal detailed',
   '  section like any taught lesson — never a list of one-line takeaways.',
   '- A topic aimed at ONE player (their hero\'s gameplay loop, individual coaching) is NEVER a team section —',
@@ -673,22 +707,42 @@ const STYLE_TURNS = ['however', 'regardless', 'nonetheless', 'that said', 'never
 const STYLE_PASSIVE = /\b(?:was|were)\s+\w+(?:ed|en)\b/i;
 const STYLE_MAX_WORDS = 35;
 const STYLE_MAX_FLAGS = 8;
+// Per-place cap: the first live run spent all 8 global flags inside ONE section, so the other ten and
+// every card went unreported. Two per place forces the sample to spread across the report.
+const STYLE_MAX_PER_PART = 2;
+// Report order: a broken rule before a cosmetic preference.
+const STYLE_RANK = ['pov', 'length', 'fancy', 'turns', 'passive'];
 
 export function checkProse(report) {
   const r = report && typeof report === 'object' ? report : {};
   const cards = Array.isArray(r.playerCards) ? r.playerCards : [];
+  const list = (v) => (Array.isArray(v) ? v : []);
+  // Every field the reader actually reads. The first version checked only sections/keepDoing/cards, so a
+  // 58-word sentence sat unseen in "debates". Excluded on purpose: followUps.priorItem (copied from an
+  // earlier report, not authored by this run) and "carry" (a machine index for the export, never rendered).
   const parts = [
-    ...(Array.isArray(r.sections) ? r.sections : []).map((s) => [`section "${s?.heading || s?.id || ''}"`, s?.md]),
-    ...(Array.isArray(r.keepDoing) ? r.keepDoing : []).map((k) => ['keepDoing', k]),
+    ...list(r.sections).map((s) => [`section "${s?.heading || s?.id || ''}"`, s?.md]),
+    ...list(r.keepDoing).map((k) => ['keepDoing', k]),
+    ...list(r.debates).map((d) => ['debates', d]),
+    ...list(r.qa).map((x) => ['qa', x?.a]),
+    ...list(r.actionItems).map((it) => ['actionItems', it?.text]),
+    ...list(r.followUps).map((f) => ['followUps', f?.evidence]),
+    ...list(r.macro?.swings).map((s) => ['macro', s?.cause]),
+    ['macro', `${r.macro?.overall || ''}\n${r.macro?.laneMap || ''}`],
+    ...list(r.commsGrade?.callouts).map((c) => ['comms', `${c?.verdict || ''}\n${c?.evidence || ''}`]),
+    ...list(r.commsGrade?.missed).map((m) => ['comms', m]),
+    ['comms', r.commsGrade?.overall],
     ...cards.map((c) => [`card "${c?.player || ''}"`, `${c?.coaching || ''}\n${c?.itemCritique || ''}`]),
+    ...cards.flatMap((c) => list(c?.drills).map((d) => [`card "${c?.player || ''}" drills`, d])),
   ];
-  const flags = [];
-  const add = (where, msg) => { if (flags.length < STYLE_MAX_FLAGS) flags.push(`[style] ${where}: ${msg}`); };
+  const found = [];
+  let overLong = 0;
+  const add = (where, kind, msg) => found.push({ where, kind, msg });
   for (const [where, raw] of parts) {
     const text = String(raw ?? '');
     if (!text.trim()) continue;
     const lower = text.toLowerCase();
-    for (const w of STYLE_FANCY) if (lower.includes(w)) { add(where, `fancy wording "${w.trim()}" — use the plain word`); break; }
+    for (const w of STYLE_FANCY) if (lower.includes(w)) { add(where, 'fancy', `fancy wording "${w.trim()}" — use the plain word`); break; }
     // The bolded lead closes AFTER its full stop ("...most of the way there.**"), so a plain
     // (?<=[.!?])\s+ split never fires there and glues the lead onto the next sentence — which
     // reported four false 36-57 word sentences on the first live run. Consume the closing marker.
@@ -696,18 +750,76 @@ export function checkProse(report) {
       const s = sentence.trim();
       if (!s) continue;
       const words = s.split(/\s+/).length;
-      if (words > STYLE_MAX_WORDS) { add(where, `${words}-word sentence — split it`); continue; }
+      if (words > STYLE_MAX_WORDS) { overLong++; add(where, 'length', `${words}-word sentence — split it`); continue; }
       const sl = s.toLowerCase();
       // No point of view at all. "yourself" is deliberately NOT matched — a reflexive inside an
       // imperative ("Stop cubing yourself") is the one carve-out, because dropping it loses the point.
       // "he/his" is excused in a sentence that names the coach, where it is a real third party.
-      if (/\b(?:you|your|yours)\b/i.test(s)) add(where, 'second person "you/your" — the report carries no point of view');
-      else if (/\b(?:he|him|his)\b/i.test(s) && !/coach/i.test(s)) add(where, 'third person "he/his" — the report carries no point of view');
-      else if (STYLE_TURNS.filter((t) => sl.includes(t)).length > 1) add(where, 'two turn-words in one sentence — keep one');
-      else if (STYLE_PASSIVE.test(s)) add(where, `passive voice ("${s.match(STYLE_PASSIVE)[0]}") — write it active`);
+      if (/\b(?:you|your|yours)\b/i.test(s)) add(where, 'pov', 'second person "you/your" — the report carries no point of view');
+      else if (/\b(?:he|him|his)\b/i.test(s) && !/coach/i.test(s)) add(where, 'pov', 'third person "he/his" — the report carries no point of view');
+      else if (STYLE_TURNS.filter((t) => sl.includes(t)).length > 1) add(where, 'turns', 'two turn-words in one sentence — keep one');
+      else if (STYLE_PASSIVE.test(s)) add(where, 'passive', `passive voice ("${s.match(STYLE_PASSIVE)[0]}") — write it active`);
     }
   }
+  // Severity order, not document order. A live run spent all 8 slots on passive-voice and "off-meta" nits
+  // inside the sections and never reached the action items and qa answers — where five real point-of-view
+  // leaks sat, breaches of the report's most important rule. Rule breaches now outrank cosmetics.
+  const flags = [];
+  const perPart = new Map();
+  for (const f of found.sort((a, b) => STYLE_RANK.indexOf(a.kind) - STYLE_RANK.indexOf(b.kind))) {
+    if (flags.length >= STYLE_MAX_FLAGS) break;
+    const n = perPart.get(f.where) || 0;
+    if (n >= STYLE_MAX_PER_PART) continue;
+    perPart.set(f.where, n + 1);
+    flags.push(`[style] ${f.where}: ${f.msg}`);
+  }
+  // Totals past the cap: a run with 25 over-limit sentences surfaced only 7, reading as a handful of nits.
+  const pov = found.filter((f) => f.kind === 'pov').length;
+  if (pov) flags.push(`[style] ${pov} point-of-view leak${pov > 1 ? 's' : ''} in the report`);
+  if (overLong) flags.push(`[style] ${overLong} sentence${overLong > 1 ? 's' : ''} over ${STYLE_MAX_WORDS} words in the report`);
   return flags;
+}
+
+// The ceiling has teeth in code, not only in the prompt. Two live runs stated the 35-word limit in the
+// system prompt and breached it anyway (25 sentences, then 1, then 5), so the last resort is mechanical:
+// split an over-long sentence at the colon or dash that joins its two halves. DELIBERATELY TIMID — it
+// only fires where a join is unambiguous, never inside a bolded lead or a table row, and never when
+// either half would be a stub. A sentence with no safe join is left alone for checkProse to flag.
+const SPLIT_JOIN = /\s+—\s+|[:;]\s+/g;
+const SPLIT_MIN_HALF = 6;
+
+export function splitLongSentences(report) {
+  const r = report && typeof report === 'object' ? report : {};
+  let n = 0;
+  const splitOne = (s) => {
+    if (s.trim().split(/\s+/).length <= STYLE_MAX_WORDS) return s;
+    const mid = s.length / 2;
+    let best = null;
+    SPLIT_JOIN.lastIndex = 0;
+    for (let m; (m = SPLIT_JOIN.exec(s));) {
+      const before = s.slice(0, m.index);
+      if ((before.match(/\*\*/g) || []).length % 2) continue;      // inside a bolded lead
+      if (!/^[a-z]/.test(s.slice(m.index + m[0].length))) continue; // not a sentence boundary
+      if (before.trim().split(/\s+/).length < SPLIT_MIN_HALF) continue;
+      if (s.slice(m.index + m[0].length).trim().split(/\s+/).length < SPLIT_MIN_HALF) continue;
+      if (!best || Math.abs(m.index - mid) < Math.abs(best.index - mid)) best = m;
+    }
+    if (!best) return s;
+    const right = s.slice(best.index + best[0].length);
+    n++;
+    return `${s.slice(0, best.index).trimEnd()}. ${right[0].toUpperCase()}${right.slice(1)}`;
+  };
+  const fix = (text) => String(text ?? '').split('\n').map((line) => (
+    !line.trim() || line.includes('|') || line.trimStart().startsWith('#')
+      ? line
+      : line.replace(/[^.!?]+[.!?]+[*_"')\]]*/g, splitOne)
+  )).join('\n');
+  const arr = (v) => (Array.isArray(v) ? v : []);
+  for (const s of arr(r.sections)) s.md = fix(s.md);
+  for (const c of arr(r.playerCards)) { c.coaching = fix(c.coaching); c.itemCritique = fix(c.itemCritique); }
+  if (Array.isArray(r.keepDoing)) r.keepDoing = r.keepDoing.map(fix);
+  if (Array.isArray(r.debates)) r.debates = r.debates.map(fix);
+  return n;
 }
 
 // Carry the app-owned checkbox state (status: done/pending) from a prior report onto a fresh one,
@@ -776,8 +888,10 @@ export function serializeReportMarkdown(report, selected, name, segments = []) {
             const parts = [d?.what, d?.why, d?.lesson ? `Lesson: ${d.lesson}` : ''].map((x) => String(x ?? '').trim()).filter(Boolean);
             if (parts.length) L.push(`- **Death${d?.t ? ` [${d.t}]` : ''}:** ${parts.join(' — ')}`);
           }
-          const drills = (Array.isArray(c?.drills) ? c.drills : []).map(String).filter(Boolean);
-          if (drills.length) L.push(`- **Drills:** ${drills.join('; ')}`);
+          // One bullet each: joining with '; ' welded a full stop to the separator ("…build.; In every
+          // Viscous fight…") six times in a real export. New reports emit no drills at all (practice
+          // items are action items now) — this still renders old sidecars cleanly.
+          for (const d of (Array.isArray(c?.drills) ? c.drills : []).map(String).filter(Boolean)) L.push(`- **Drill:** ${d}`);
           return L.join('\n');
         }).join('\n\n')
       : '_(none)_'));
@@ -870,7 +984,10 @@ export function serializeReportMarkdown(report, selected, name, segments = []) {
         }).join('\n')
       : '_(unavailable)_'));
   }
-  return blocks.join('\n\n') + '\n';
+  // A selected-but-empty section used to print "## Debates\n\n_(none)_". Three of them stacked at the
+  // end of a real export, and a reader re-reading before a game should not scroll past headers that say
+  // nothing. Drop the block instead of touching all eight emit sites.
+  return blocks.filter((b) => !String(b).trimEnd().endsWith('_(none)_')).join('\n\n') + '\n';
 }
 
 // ── Pass 0: transcript name-normalization (Analyst pipeline, Move 9) ─────────
@@ -1137,6 +1254,8 @@ export async function generateReport(invoke, { transcriptBlock, teams, coachedTe
     report.meta.warnings.push(`Dropped ${report.followUps.length} follow-up(s): no prior action items were supplied, so there is no earlier homework to judge.`);
     report.followUps = [];
   }
+  const split = splitLongSentences(report);
+  if (split) report.meta.warnings.push(`Split ${split} over-long sentence${split > 1 ? 's' : ''} at a colon or dash — the 35-word ceiling is stated in the prompt but two live runs breached it.`);
   report.meta.warnings.push(...checkProse(report));
   return prior ? reconcileReport(report, prior) : report;
 }

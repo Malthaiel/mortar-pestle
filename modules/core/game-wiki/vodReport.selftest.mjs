@@ -2,7 +2,7 @@
 // Covers the parts that break silently — transcript formatting, tolerant parse (fenced + noisy),
 // coercion of a missing id, and checkbox reconcile across a regenerate.
 import assert from 'node:assert/strict';
-import { mmss, slugId, buildTranscriptBlock, buildReportPrompt, parseReport, reconcileReport, serializeReportMarkdown, buildNormalizePrompt, parseCorrections, applyCorrections, transcriptHash, normalizeTranscript, parseFindings, applyFindings, verifyReport, validateStamps, collapseStampRuns, parseStamp, segIndexForStamp, serializeTfComms, coerceReport, checkProse, generateReport, VOD_REPORT_SYSTEM_PROMPT, VERIFY_SYSTEM_PROMPT } from './vodReport.js';
+import { mmss, slugId, buildTranscriptBlock, buildReportPrompt, parseReport, reconcileReport, serializeReportMarkdown, buildNormalizePrompt, parseCorrections, applyCorrections, transcriptHash, normalizeTranscript, parseFindings, applyFindings, verifyReport, validateStamps, collapseStampRuns, parseStamp, segIndexForStamp, serializeTfComms, coerceReport, checkProse, splitLongSentences, generateReport, VOD_REPORT_SYSTEM_PROMPT, VERIFY_SYSTEM_PROMPT } from './vodReport.js';
 import { MATCH_REPORT_SYSTEM_PROMPT } from './matchReport.js';
 
 // mmss
@@ -451,6 +451,19 @@ assert.ok(!mdSome.includes('## Q&A'));
 // empty selection → empty string
 assert.equal(serializeReportMarkdown(exRep, new Set(), 'X'), '');
 
+// A selected-but-EMPTY section is dropped, not printed as "_(none)_" — a real export stacked three of
+// those headers at the end. Drills render one bullet each: joining with '; ' welded a full stop to the
+// separator ("…solo-queue build.; In every fight…") six times in that same export.
+const mdEmpty = serializeReportMarkdown({ sections: [{ heading: 'S', md: 'Give the camp up.' }] },
+  new Set(['report', 'macro', 'debates', 'followups']), 'X');
+assert.ok(!mdEmpty.includes('_(none)_'), 'empty sections are dropped from the export');
+assert.ok(!mdEmpty.includes('## Debates'), 'an empty section takes its header with it');
+assert.ok(mdEmpty.includes('## S'), 'sections with content still export');
+const mdDrills = serializeReportMarkdown({ playerCards: [{ player: 'Sam', drills: ['Queue the scrim build.', 'Pre-plan the route.'] }] },
+  new Set(['players']), 'X');
+assert.ok(!mdDrills.includes('.;'), 'drills never weld a full stop onto the separator');
+assert.equal((mdDrills.match(/\*\*Drill:\*\*/g) || []).length, 2, 'one bullet per drill');
+
 // segments section renders the transcript with m:ss stamps
 const mdSeg = serializeReportMarkdown(exRep, new Set(['segments']), 'X', [{ t0Ms: 125000, speaker: 'Coach', text: 'hello' }]);
 assert.ok(mdSeg.includes('## Segments (transcript)'));
@@ -468,9 +481,11 @@ assert.ok(mdCards.includes('### Vindicta (Sam) — Lane 1') && mdCards.includes(
 assert.ok(mdCards.includes('**Death [12:00]:** dove — no vision — Lesson: ward'), 'death line');
 assert.ok(mdCards.includes('## Macro') && mdCards.includes('**Tempo:** slow start [5:00]') && mdCards.includes('- [20:00] mid boss — contestable (cooldowns up)'), 'macro body');
 assert.ok(mdCards.includes('## Comms Grade') && mdCards.includes('**Overall:** quiet [8:00]') && mdCards.includes('- [9:00] **Sam:** rotate — good (saved a life)') && mdCards.includes('- no ult call'), 'comms body');
-// empty player/macro/comms → _(none)_, not a crash
-const mdEmpty = serializeReportMarkdown(parseReport('{}'), new Set(['players', 'macro', 'comms']), 'X');
-assert.ok(mdEmpty.includes('## Player Cards\n\n_(none)_') && mdEmpty.includes('## Macro\n\n_(none)_') && mdEmpty.includes('## Comms Grade\n\n_(none)_'), 'empty sections degrade');
+// empty player/macro/comms → the whole block is dropped (was "_(none)_" under its header), not a crash
+const mdBlank = serializeReportMarkdown(parseReport('{}'), new Set(['players', 'macro', 'comms']), 'X');
+assert.ok(!mdBlank.includes('_(none)_'), 'empty sections degrade to nothing at all');
+assert.ok(!/## (Player Cards|Macro|Comms Grade)/.test(mdBlank), 'empty sections take their headers with them');
+assert.ok(mdBlank.trim().startsWith('# X'), 'the title survives an all-empty export');
 
 // --- WS2 -------------------------------------------------------------------
 // M11: tfcomms judgments serialize to one compact block. Neutral (unjudged) calls are dropped;
@@ -593,7 +608,22 @@ for (const needle of [
   'Prose economy is TIME-TO-ABSORB, not word count',
   'chopped stubs read',
   'never stack two turn-words',
+  'HARD CEILING: 35 words per sentence, counted.',
+  'the colon or dash joining them IS the split point',
+  // The voice rule sat under the "Section rules:" header, so the model applied it to sections and
+  // nowhere else — five real leaks landed in action items and qa answers. It is report-wide now.
+  'This binds the ENTIRE report, not just section prose',
+  'every action item, keepDoing line, debate, qa answer',
+  'A DESCRIPTION is not a',
+  'is a NAME, not a',
+  'keeps the question in the asker',
+  'Test every lead by reading ONLY the bold text',
 ]) assert.ok(VOD_REPORT_SYSTEM_PROMPT.includes(needle), `P2 voice rule states: ${needle}`);
+// The voice rule must sit ABOVE the section-rules header, or it reads as section-only again.
+assert.ok(VOD_REPORT_SYSTEM_PROMPT.indexOf('VOICE — NO POINT OF VIEW') < VOD_REPORT_SYSTEM_PROMPT.indexOf('Section rules:'),
+  'the voice rule is stated report-wide, before the section-rules block');
+assert.ok(VOD_REPORT_SYSTEM_PROMPT.includes('"drills": [] },                // ALWAYS EMPTY'),
+  'drills are merged into actionItems — one homework list, never two');
 // Density must NOT have been traded away for the new flowing voice — every point still survives.
 for (const kept of [
   'every point and every stamp stays',
@@ -623,6 +653,57 @@ assert.match(flagsFor(`Give the camp up ${'because it is worth far less than the
 assert.deepEqual(checkProse(oneCard('**Give the far camp up.** A far-side tier two is worth about 300 souls, and being in position for the fight is worth more. Current habit, raised unprompted: a far tier two taken while the team fights.')), [],
   'orders plus labelled facts raise no style flag');
 assert.ok(checkProse(oneCard(`bad. ${'However regardless. '.repeat(20)}`)).length <= 8, 'style flags are capped');
+// ...but the cap must not hide SCALE: a live run held 25 over-limit sentences and surfaced 7. The true
+// total is reported past the cap, so 20 long sentences read as drift rather than as a handful of nits.
+const long = `Give the camp up ${'because it is worth far less than the fight '.repeat(5)}. `;
+const manyLong = checkProse(oneCard(long.repeat(20)));
+assert.match(manyLong[manyLong.length - 1], /20 sentences over 35 words/, 'true over-limit total escapes the flag cap');
+assert.ok(!checkProse(oneCard('Give the far camp up. It is worth about 300 souls.')).some((f) => /over 35 words/.test(f)),
+  'no total line when every sentence is inside the ceiling');
+// Every reader-facing field is scanned, not just sections/keepDoing/cards — a 58-word "debates" entry
+// was invisible to the first version.
+for (const [field, report] of [
+  ['debates', { debates: ['He gave up the camp early.'] }],
+  ['qa', { qa: [{ q: 'when?', a: 'He gave up the camp early.' }] }],
+  ['actionItems', { actionItems: [{ text: 'He gave up the camp early.' }] }],
+  ['macro', { macro: { overall: 'He gave up the camp early.' } }],
+  ['comms', { commsGrade: { missed: ['He gave up the camp early.'] } }],
+]) assert.match(checkProse(report).join(' | '), new RegExp(`${field}.*third person`), `${field} is style-checked too`);
+// The cap must SPREAD: one drifting section used to eat all 8 flags and hide every other place.
+const drift = { sections: [1, 2, 3, 4].map((n) => ({ heading: `S${n}`, md: 'He gave up the camp early. '.repeat(5) })) };
+assert.equal(new Set(checkProse(drift).filter((f) => f.includes('section "')).map((f) => f.split(':')[0])).size, 4,
+  'flags spread across all four sections');
+// ...and a broken rule must outrank a cosmetic nit. Eight sections of passive voice used to fill every
+// slot before the checker ever reached the action items, where the real POV leaks were.
+const buried = {
+  sections: [1, 2, 3, 4, 5, 6, 7, 8].map((n) => ({ heading: `S${n}`, md: 'The camp was cleared before the fight started.' })),
+  actionItems: [{ text: 'Play matchmaking with your scrim build.' }],
+  playerCards: [{ player: 'p', drills: ['Pre-plan your escape route.'] }],
+};
+const bf = checkProse(buried);
+assert.ok(bf.some((f) => /actionItems.*second person/.test(f)), 'a POV leak in actionItems outranks eight passive-voice nits');
+assert.ok(bf.some((f) => /drills.*second person/.test(f)), 'drills are style-checked too');
+assert.ok(bf.some((f) => /2 point-of-view leaks in the report/.test(f)), 'POV total is reported past the cap');
+
+// splitLongSentences — the ceiling's last resort. Two live runs breached the 35-word limit with the rule
+// stated in the prompt, so an over-long sentence is broken mechanically at the join. Timid by design.
+const long40 = 'The far-side tier two trades roughly three hundred souls for a fight the team is already taking without it: the camp will still be standing in ninety seconds and the fight will not, so the trade is a loss every time.';
+const longRep = { sections: [{ heading: 'S', md: long40 }] };
+assert.equal(splitLongSentences(longRep), 1, 'an over-long sentence is split at its join');
+assert.ok(longRep.sections[0].md.includes('. The camp will still be standing'), 'the second half is re-capitalised');
+assert.ok(!checkProse(longRep).some((f) => /word sentence/.test(f)), 'the split clears the flag');
+// A sentence with no safe join is left ALONE for the checker to flag, never mangled.
+const noJoin = { sections: [{ heading: 'S', md: `Give the camp up ${'because it is worth far less than the fight '.repeat(5)}.` }] };
+assert.equal(splitLongSentences(noJoin), 0, 'no safe join → no split');
+// Never inside a bolded lead, never in a table row, never leaving a stub half.
+const bold = { sections: [{ heading: 'S', md: `**Give the far camp up — it is worth about three hundred souls.** ${'and the fight is worth far more than that '.repeat(6)}.` }] };
+splitLongSentences(bold);
+assert.ok(bold.sections[0].md.startsWith('**Give the far camp up — it is worth about three hundred souls.**'), 'a bolded lead is never split apart');
+const table = { sections: [{ heading: 'S', md: `| item | why |\n| Rescue Beam | ${'it works with the position already wanted and never comes out of the build '.repeat(3)} |` }] };
+assert.equal(splitLongSentences(table), 0, 'table rows are left alone');
+const stub = { sections: [{ heading: 'S', md: `Stated: ${'the aim goes jittery in every teamfight and it feels like brain lag '.repeat(4)}.` }] };
+splitLongSentences(stub);
+assert.ok(stub.sections[0].md.startsWith('Stated: the aim'), 'a join leaving a stub half is skipped');
 // A bolded lead closes after its own full stop, so the splitter must consume the trailing "**" or it
 // welds the lead onto the next sentence and reports one long one. Four false flags on the first live run.
 assert.deepEqual(checkProse(oneCard('**Low economy on Viscous is a feature.** The camps skipped there go to teammates who convert them into more, and the jungle never needs clearing on cooldown [52:21r].')), [],
