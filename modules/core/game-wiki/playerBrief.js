@@ -98,11 +98,18 @@ NOT by when it came up. Assume this is the only part re-read.
 
 SHAPE — every line is TWO parts and the split is not optional:
   N. **<The rule, bolded, as a complete imperative or claim.>** <The mechanism, cost or number that
-     makes it stick — one clause, unbolded.>
+     makes it stick — unbolded.>
 The reader must be able to read ONLY the bold across all lines and come away with the session. The
 unbolded half is what makes the bold half survive Monday. A line with no bold is a failure; so is a line
 that is entirely bold. A topic label is a failure too — "Cube usage" is not a line, "Cubing yourself is
 what the enemy team is playing for" is.
+THE UNBOLDED HALF MAY BE A CLUSTER, NOT ONE CLAUSE. Where a rule travels with its corollaries, the
+corollaries ride on the SAME line, compressed to fragments — "Play back, play high, cube + rescue beam
+others" is one unbolded half carrying three actions, and it is correct. One line per THEME, not one line
+per idea. A hero's positioning rule and the item that enables it are one line; splitting them costs a
+line and gains nothing, because the reader who needs one needs the other.
+MERGE BEFORE YOU ADD. If a candidate line shares a hero, a theme or a trigger with a line already on the
+list, fold it in as a fragment instead of taking a new number.
 Where a hero owns the line, lead with the hero name: "**Viscous: cubing yourself is what the enemy team
 is playing for.**"
 
@@ -115,7 +122,8 @@ COVERAGE — a line is EARNED BY SESSION WEIGHT, never by section count. A topic
 earns one; a topic touched once in passing does not, however true it is. Test it against your own draft:
 a hero section markedly thinner than its siblings was discussed markedly less and gets NO §0 line — its
 points live in its own section, which is where the reader will look for them. Plus one for any rule the
-coach stated twice or more, capped at 10.
+coach stated twice or more. AIM FOR 8. Ten is the ceiling, not the goal, and a draft that arrives at ten
+has almost always split a theme that should have been one line — go back and merge before you accept it.
 Nothing appears here that appears nowhere else.
 
 === THE SIDELINE CARD ===
@@ -165,6 +173,17 @@ commands, the test checks. Four jobs, one point, no re-argument.
   they say it: "MM" not "matchmaking", "mid-boss" not "the mid-boss objective". Plain words means fewer
   syllables to parse, and their own shorthand is already the fastest form for them — expanding it is not
   plainer, only longer. This never licenses inventing shorthand the session did not use.
+  THE SHORT FORM IS THE DEFAULT, not the occasional variant. Roughly three in four uses should be the
+  abbreviation; spell it out only where the full word carries weight the short one cannot (a heading the
+  reader scans cold, or a first use that has to teach the term). Writing "matchmaking" nine times and
+  "MM" four is backwards, and it is the single easiest way to make this document not sound like them.
+- THE READER WAS THERE. State the finding; do not rebuild the evidence for it. They know their own job,
+  schedule, rank history, match record and what they said an hour ago — replaying it back as support
+  costs words and tells them nothing they did not walk in with. "You treat game time as earned leisure"
+  beats "you work seven days a week and get up at 5 a.m., so game time is earned leisure". Echo their
+  own words ONLY where the wording IS the lesson — a coined phrase, or a self-diagnosis you are
+  confirming as correct. "You said" / "you asked" / "your words" across the whole document: a handful,
+  not one every other point. Past that it is session narration wearing a second-person coat.
 - ACTIVE VOICE. "Sensitivity is fine", never "sensitivity was checked and found not to be an issue".
 - 35 WORDS PER SENTENCE, hard ceiling. A sentence chaining two events or two reasons is two sentences;
   the colon or dash joining them is the split.
@@ -194,7 +213,13 @@ Read your draft once against this list and fix what fails. Do not report the che
 7. Every taught framework has all its steps.
 8. Every card line is under a second to read and appears in no other card group.
 9. Nothing in the document was not in the transcript.
-10. The template's fixed strings are present and exact, and no emoji appears anywhere.`;
+10. The template's fixed strings are present and exact, and no emoji appears anywhere.
+11. §0 is 8 lines unless a 9th or 10th genuinely earned its place, and no two lines share a hero or a
+    trigger. If two do, merge them and re-number.
+12. Count your "=" and "→" outside the self-test. Under 8 and 15 means you wrote linking prose where a
+    symbol was faster — go back and compress the joints.
+13. Every abbreviation the session used appears in short form more often than spelled out, and no
+    sentence rebuilds evidence the reader lived through.`;
 
 // ── §4 the document template ─────────────────────────────────────────────────
 // These strings are FIXED — the model does not re-decide them. checkTemplate asserts them, which
@@ -296,14 +321,20 @@ export const BRIEF_TYPOGRAPHY = `=== TYPOGRAPHY — ten rules, most of the visua
 8. BOLD KEY TERMS INLINE on first use in a section. Once, not every recurrence.
 9. SELF-TEST FORMAT: "<question> → *<answer>*". Arrow, then italic answer, on one line.
 10. CARD CHECKBOXES ARE "□", not "- [ ]". The card is a printed object, not a task list.
-11. ARROWS AND EQUALS ARE HOUSE SHORTHAND, used only where they replace a clause and lose nothing.
+11. ARROWS AND EQUALS ARE THE HOUSE COMPRESSION DEVICES. They are not decoration and not a last resort —
+    they are the fastest way this reader parses a link between two things, and under-using them is the
+    single most common way this document comes out longer than it needs to be.
     "→" for a consequence chain ("Play to improve → improvement happens → rank follows on its own"),
     for a priority ordering ("Improvement priority, high → low"), and for a quoted problem answered by
-    a reframe (*"my ults are bad"* → the ult is not your engage). "=" ONLY where the equation IS the
-    lesson: "Cubing yourself = you were positioned wrong five seconds earlier." NEVER use "=" in place
-    of a mechanism the coach actually gave — a stated cost beats a bare assertion every time, so
-    "a rep of habits you will never use with the team" wins over "= bad habits". A handful of each per
-    document, not a tic on every line.`;
+    a reframe (*"my ults are bad"* → the ult is not your engage).
+    "=" for an equivalence that would otherwise need a linking phrase: "Different builds in MM =
+    building bad habits into the character" carries the same mechanism as "a different build in
+    matchmaking is a rep of habits you will never use with the team" in a third of the words. Use it.
+    THE MECHANISM IS NOT LOST BY COMPRESSING IT — it is lost by DELETING it. "= bad habits" fails
+    because it names no mechanism, not because it used "=". Write the mechanism, then compress the
+    joint.
+    TARGET DENSITY: roughly 8-12 "=" and 15-20 "→" across the document, outside the self-test. Landing
+    under half of that means prose is doing work these symbols do better.`;
 
 // ── §7.1 the structural skeleton ─────────────────────────────────────────────
 // Safe to copy: carries structure but no voice. Paired with BRIEF_TEXTURE, which carries voice but
@@ -837,8 +868,9 @@ HOW MANY §0 LINES
 Earned by session weight, never by section count. A topic the coach worked through earns a line; a topic
 mentioned once in passing does not, however true it is. A section markedly thinner than its siblings was
 discussed markedly less and gets no line — a hero covered in five bullets while two others carry five
-subsections each belongs in his own section only. Plus one for any rule the coach stated twice or more,
-capped at 10. Under 6 means sections were merged that should not have been.
+subsections each belongs in his own section only. Plus one for any rule the coach stated twice or more.
+Target 8; 10 is the ceiling. Under 6 means sections were merged that should not have been. At 9 or 10,
+look for two lines sharing a hero or a trigger and merge them — that is nearly always the real answer.
 
 HOW MANY SELF-TEST QUESTIONS
 As many as there are decisions the player has to make mid-game, with clustered numbers merged into single
@@ -850,6 +882,14 @@ name it in the pool line as shelved. Never infer a cut from the coach spending l
 
 WHEN THE PLAYER'S SELF-DIAGNOSIS WAS RIGHT
 Say so, in the section that owns it, before the instruction. It tells them which instincts to trust.
+
+WHAT'S STILL OPEN — ROW DISCIPLINE
+The Status cell opens with the substance, NOT with a bolded restatement of the column header. "Shelved
+deliberately." / "Unresolved." / "Out of your hands." are labels for a column that is already labelled;
+they cost a bolded fragment per row and carry nothing. Lead with why it is open and what closes it.
+A point already given its own treatment in a section is NOT still open — it is answered, and repeating it
+here is the same explanation at the same depth in a second place. Only genuinely unfinished business:
+shelved heroes, work the coach deferred, questions raised and not reached, things the coach owes.
 
 WHEN MATERIAL IS DISCOURAGING BUT WAS ADDRESSED
 Keep it, in What's Still Open, with the coach's reassurance attached. A dropped hero or a losing streak
