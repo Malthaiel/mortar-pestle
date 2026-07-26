@@ -93,12 +93,30 @@ By what the player must fix first, never by session chronology:
 - No inline timestamps. The player is not clicking anything. Stamps live in the machine block.
 
 === §0, THE COMPRESSION LAYER ===
-6 to 10 numbered lines, the entire session compressed, before any section.
-- Ordered by what matters most, NOT by when it came up.
-- Every line complete and actionable alone: an imperative or a stated fact. A topic label is a failure —
-  "Cube usage" is not a line; "Cubing yourself is what the enemy wants" is.
-- Nothing appears here that appears nowhere else.
-- Assume this is the only part re-read. Write it accordingly.
+6 to 10 numbered lines, the whole session compressed, before any section. Ordered by what matters most,
+NOT by when it came up. Assume this is the only part re-read.
+
+SHAPE — every line is TWO parts and the split is not optional:
+  N. **<The rule, bolded, as a complete imperative or claim.>** <The mechanism, cost or number that
+     makes it stick — one clause, unbolded.>
+The reader must be able to read ONLY the bold across all lines and come away with the session. The
+unbolded half is what makes the bold half survive Monday. A line with no bold is a failure; so is a line
+that is entirely bold. A topic label is a failure too — "Cube usage" is not a line, "Cubing yourself is
+what the enemy team is playing for" is.
+Where a hero owns the line, lead with the hero name: "**Viscous: cubing yourself is what the enemy team
+is playing for.**"
+
+RHYTHM — vary length deliberately. At least one line under 12 words, at least one over 20. Nine lines all
+sitting between 20 and 28 words scan as a wall however good each one is.
+NO WORD CAP: a line runs as long as its mechanism needs and not one word longer. Never drop the mechanism
+to hit a length — the mechanism is the half that survives contact with a live game.
+
+COVERAGE — a line is EARNED BY SESSION WEIGHT, never by section count. A topic the coach worked through
+earns one; a topic touched once in passing does not, however true it is. Test it against your own draft:
+a hero section markedly thinner than its siblings was discussed markedly less and gets NO §0 line — its
+points live in its own section, which is where the reader will look for them. Plus one for any rule the
+coach stated twice or more, capped at 10.
+Nothing appears here that appears nowhere else.
 
 === THE SIDELINE CARD ===
 Not a homework list at the bottom — the thing that goes on the second monitor and is read mid-game.
@@ -112,9 +130,13 @@ Not a homework list at the bottom — the thing that goes on the second monitor 
   Produce it. Never write a line saying it has not been produced yet.
 
 === SELF-TEST ===
-Retrieval, not review: the answer restates, never re-explains.
-- One question per hard fact, number, threshold, named counter or decision rule in the document.
-- Cover every NUMBER that appears anywhere above. A number nobody can recall was never taught.
+Retrieval, not review: the answer restates, never re-explains. A quick quiz, not an exam.
+- SELECT, DO NOT ENUMERATE. One question per thing that changes a decision mid-game: a rule they must
+  apply, a named counter, a threshold that gates a choice. NOT one per fact on the page. A page of facts
+  turned into a page of questions is a test nobody sits.
+- MERGE CLUSTERED NUMBERS into one question. "Flight duration, silence duration, damage bonus?" is one
+  question carrying three numbers, never three questions.
+- NEVER QUIZ THEM ON THEMSELVES. "How many games do you have on this hero" tests nothing they will use.
 - One correct answer each. Nothing open-ended.
 - Order follows document order.
 
@@ -139,6 +161,10 @@ commands, the test checks. Four jobs, one point, no re-argument.
   "accumulates", "much more important" not "infinitely more important", "risky spot" not "compromised
   position", "money" not "econ". Game terms stay EXACT and untranslated — hero, item, ability, map and
   objective names are precise and the reader knows them.
+- KEEP THEIR SHORTHAND. Any abbreviation the coach or the player uses in the transcript stays in the form
+  they say it: "MM" not "matchmaking", "mid-boss" not "the mid-boss objective". Plain words means fewer
+  syllables to parse, and their own shorthand is already the fastest form for them — expanding it is not
+  plainer, only longer. This never licenses inventing shorthand the session did not use.
 - ACTIVE VOICE. "Sensitivity is fine", never "sensitivity was checked and found not to be an issue".
 - 35 WORDS PER SENTENCE, hard ceiling. A sentence chaining two events or two reasons is two sentences;
   the colon or dash joining them is the split.
@@ -159,10 +185,10 @@ thin because a digest would have thickened it.
 
 === SELF-CHECK BEFORE EMITTING ===
 Read your draft once against this list and fix what fails. Do not report the check; just fix and emit.
-1. Every §0 line is a complete instruction or fact — no bare labels.
+1. Every §0 line has a bolded rule AND an unbolded mechanism, and reading only the bold gives the session.
 2. Every diagnosed habit has a replacement rule.
 3. Every rule that had a stated "why" carries it.
-4. Every number in the document appears in the self-test.
+4. Every self-test question is one the player could act on mid-game.
 5. Every deferred or shelved topic appears in What's Still Open.
 6. Zero third-person references to the reader; zero session narration.
 7. Every taught framework has all its steps.
@@ -269,7 +295,15 @@ export const BRIEF_TYPOGRAPHY = `=== TYPOGRAPHY — ten rules, most of the visua
    notes. Never for emphasis; that is bold's job.
 8. BOLD KEY TERMS INLINE on first use in a section. Once, not every recurrence.
 9. SELF-TEST FORMAT: "<question> → *<answer>*". Arrow, then italic answer, on one line.
-10. CARD CHECKBOXES ARE "□", not "- [ ]". The card is a printed object, not a task list.`;
+10. CARD CHECKBOXES ARE "□", not "- [ ]". The card is a printed object, not a task list.
+11. ARROWS AND EQUALS ARE HOUSE SHORTHAND, used only where they replace a clause and lose nothing.
+    "→" for a consequence chain ("Play to improve → improvement happens → rank follows on its own"),
+    for a priority ordering ("Improvement priority, high → low"), and for a quoted problem answered by
+    a reframe (*"my ults are bad"* → the ult is not your engage). "=" ONLY where the equation IS the
+    lesson: "Cubing yourself = you were positioned wrong five seconds earlier." NEVER use "=" in place
+    of a mechanism the coach actually gave — a stated cost beats a bare assertion every time, so
+    "a rep of habits you will never use with the team" wins over "= bad habits". A handful of each per
+    document, not a tic on every line.`;
 
 // ── §7.1 the structural skeleton ─────────────────────────────────────────────
 // Safe to copy: carries structure but no voice. Paired with BRIEF_TEXTURE, which carries voice but
@@ -287,7 +321,9 @@ export const BRIEF_SKELETON = `=== STRUCTURAL SKELETON — copy this shape exact
 
 1. **<Rule, imperative.>** <One clause of consequence or mechanism.>
 2. **<Rule.>** <Consequence.>
-   … 6–10 total, ordered by importance …
+3. **<HERO A>: <the hero's single biggest fix.>** <Consequence.>
+4. **<Short rule.>** <Short clause.>   ← at least one line well under the others
+   … 6–10 total, ordered by importance, NOT one per section. The thinly-covered hero gets none …
 
 ---
 
@@ -304,7 +340,10 @@ export const BRIEF_SKELETON = `=== STRUCTURAL SKELETON — copy this shape exact
 
 ### 1.3 <The tilt-proofing / expectations rule>
 ### 1.4 What you already have right
-- **<Praise as a named strength.>** <Why it matters, from the session.> Protect it.
+- **<Praise as a named strength.>** <Why it matters, from the session.> <Directive — "Protect it.">
+- **<A second named strength.>** <The precedent or credential behind it.> <Directive.>
+- **<A third.>** <Why it matters.> <Directive.>
+   … three or four bullets, EVERY ONE ending in a directive, no two of the same shape …
 
 ---
 
@@ -355,7 +394,7 @@ Three legitimate uses:
 
 ---
 
-## §4 — <HERO C>
+## §4 — <HERO C>   ← the thinly-covered hero: a handful of bullets, no subsections, and NO §0 line
 - **<Skill order rule.>** <Answers the player's stated question.>
 - **<Combo or item note.>**
 
@@ -414,7 +453,7 @@ END OF GAME
 ## §9 — SELF-TEST (cover the answers)
 
 1. <question>? → *<answer>*
-   … 12–20, in document order …
+   … 12–18, in document order, one per mid-game decision — not one per fact …
 
 ---
 
@@ -776,7 +815,13 @@ WHAT GOES IN THE FRAME SECTION (§1)
 Include: any rule the coach said applies to every hero; anything about rank, tilt, expectations or why
 to play; every piece of praise about the player's approach rather than their mechanics.
 Exclude: anything hero-specific, anything mechanical.
-Praise lands here as a named strength, never as a trailing list at the end of the document.
+Praise lands here as a named strength, never as a trailing list at the end of the document, and it lands
+in ONE subsection — never split a frame point into a subsection of its own because it reads encouraging.
+EVERY PRAISE BULLET ENDS IN A DIRECTIVE: the strength is handed straight back as an instruction
+("Protect it.", "Don't let anyone talk you out of the role.", "Trust that instinct."). Praise with no
+directive is a compliment; praise with one is a rule they can act on.
+NEVER TWO PRAISE BULLETS OF THE SAME SHAPE. Two separate "your self-diagnosis was right" bullets are ONE
+bullet naming both reads.
 
 WHAT EARNS A TABLE
 - Any coach answer of the form "it depends on X" → table, states of X in column one.
@@ -789,11 +834,15 @@ Exactly one per mechanic and macro section: that section's single memorable rule
 sections get none.
 
 HOW MANY §0 LINES
-One per section, plus one for any rule the coach stated twice or more, capped at 10. Under 6 means
-sections were merged that should not have been.
+Earned by session weight, never by section count. A topic the coach worked through earns a line; a topic
+mentioned once in passing does not, however true it is. A section markedly thinner than its siblings was
+discussed markedly less and gets no line — a hero covered in five bullets while two others carry five
+subsections each belongs in his own section only. Plus one for any rule the coach stated twice or more,
+capped at 10. Under 6 means sections were merged that should not have been.
 
 HOW MANY SELF-TEST QUESTIONS
-One per number, named counter, threshold, decision rule and skill-order rule. Typically 12–20.
+As many as there are decisions the player has to make mid-game, with clustered numbers merged into single
+questions. Typically 12–18. Enumerating every fact on the page produces an exam nobody sits, not a quiz.
 
 WHEN A HERO LEAVES THE POOL
 Only when the coach said so. Record it in What's Still Open as "shelved" with the coach's reason, and
