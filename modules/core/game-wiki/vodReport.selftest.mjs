@@ -621,8 +621,9 @@ assert.deepEqual(checkProse({ playerCards: [{ player: 'a', coaching: 'He rotated
 assert.ok(checkProse(oneCard(`bad. ${'However regardless. '.repeat(20)}`)).length <= 8, 'style flags are capped');
 
 // FOLLOW-UPS gate: with no prior action items supplied there is no earlier homework to judge, so
-// invented follow-ups are dropped in code. The live Arndew run produced ten of them against a
-// "[MISSING: prior reports]" input, judged every one "persisting", and looped the session onto itself.
+// any follow-up the model emits anyway is dropped in code. MatchPage feeds priorActionItems from
+// openHomework(), which has been non-empty on every real run — this guards the first scrim, where
+// invented "since last time" items would read as history the reader has no way to falsify.
 const inventedFollowUps = JSON.stringify({
   sections: [], actionItems: [], qa: [], keepDoing: [], debates: [], carry: [],
   followUps: [{ priorItem: 'stop cubing yourself', verdict: 'persisting', evidence: 'he still does it [7:17r]' }],

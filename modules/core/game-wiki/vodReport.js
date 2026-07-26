@@ -1118,9 +1118,10 @@ export async function generateReport(invoke, { transcriptBlock, teams, coachedTe
   // pipeline and a double parse failure used to discard it entirely.
   const report = await parseOrRetry(call, user, parseReport, 'Respond with ONLY the JSON object, nothing else.', onRaw);
   report.schemaVersion = REPORT_SCHEMA_VERSION; // stamp regardless of what the model echoed
-  // The FOLLOW-UPS prompt rule says "no prior list → []", and a live run broke it anyway: with no
-  // prior report attached it invented ten prior items out of THIS session and judged them all
-  // "persisting" — a self-loop dressed as history. The input is knowable here, so enforce it.
+  // The FOLLOW-UPS prompt rule says "no prior list → []". Whether a list was supplied is knowable
+  // here, so enforce it in code rather than trusting the model not to fill an empty array — the
+  // failure it guards (follow-ups invented out of the session being reported) would read as real
+  // history. Not observed live; openHomework has supplied a real list on every run so far.
   if (!priorActionItems.length && report.followUps.length) {
     report.meta.warnings.push(`Dropped ${report.followUps.length} follow-up(s): no prior action items were supplied, so there is no earlier homework to judge.`);
     report.followUps = [];
