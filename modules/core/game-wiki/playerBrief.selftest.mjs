@@ -66,16 +66,9 @@ ${FENCE}
 
 ---
 
-## §5 — WHAT'S STILL OPEN
-
-| Item | Status |
-|---|---|
-| **Kelvin** | **Shelved.** You already have two heroes to polish. |
-
----
-
 ### Closing frame
 You do not need new mechanics. You need to pay attention. This is polish.
+Still coming from Malthaiel: the trade-valuation work, and his full VOD notes.
 
 <!-- brief-meta v1
 player: Nova
@@ -104,7 +97,7 @@ assert.throws(() => parseBrief('{"sections":[]}'), /heading/, 'JSON output is a 
 const secs = briefSections(OK);
 assert.deepEqual(secs.map((s) => s.heading), [
   '§0 — THE WHOLE SESSION IN 2 LINES', '§1 — MINDSET', '§2 — AIM', '§3 — SIDELINE CARD',
-  '§4 — SELF-TEST (cover the answers)', "§5 — WHAT'S STILL OPEN",
+  '§4 — SELF-TEST (cover the answers)',
 ]);
 assert.ok(secs[0].id && !secs[0].id.includes(' '), 'section ids are slugs');
 assert.deepEqual(cardLines(OK), ['Same build as scrims.', 'Aim slow. Never flick.']);
@@ -222,7 +215,7 @@ assert.deepEqual(checkCoverage('# no block'), ['[coverage] no machine block — 
 // with no error anywhere.
 const fresh = briefToFinal(OK, { warnings: ['[style] example'], generated: '2026-07-26', model: 'opus-5' });
 assert.equal(fresh.schemaVersion, 2);
-assert.equal(fresh.sections.length, 6);
+assert.equal(fresh.sections.length, 5);
 assert.equal(fresh.sections[1].heading, '§1 — MINDSET');
 assert.ok(fresh.sections[1].md.includes('Rule Zero'), 'section bodies carry their content');
 assert.deepEqual(fresh.actionItems.map((a) => a.text), ['Same build as scrims.', 'Aim slow. Never flick.']);

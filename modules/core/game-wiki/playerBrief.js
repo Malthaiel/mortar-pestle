@@ -77,7 +77,7 @@ By what the player must fix first, never by session chronology:
   then HEROES — one section per hero in the pool, ordered by the heuristics block.
   then MECHANICS — aim, movement, execution.
   then MACRO  — map, trades, closing games.
-  then the fixed tail: sideline card, self-test, what's still open, closing frame.
+  then the fixed tail: sideline card, self-test, closing frame. There is NO still-open section.
 
 === HOW A SECTION IS BUILT ===
 - A rule ALWAYS carries its mechanism. "Don't cube yourself" is forgotten under pressure; "cubing
@@ -118,6 +118,18 @@ sitting between 20 and 28 words scan as a wall however good each one is.
 NO WORD CAP: a line runs as long as its mechanism needs and not one word longer. Never drop the mechanism
 to hit a length — the mechanism is the half that survives contact with a live game.
 
+WRITE THE CLUSTER AS FRAGMENTS, NOT SENTENCES. This is where §0 lines get heavy: the merge is right and
+then each merged half is written out as full grammar. Comma-joined fragments carry the same content in
+half the words.
+  heavy:  "Play back and stay high, and use the cube and Rescue Beam on your teammates rather than on
+           yourself, because Rescue Beam is the item your position is built around."
+  right:  "Play back, play high, cube + Rescue Beam others — Rescue Beam always."
+Drop the connectives ("and", "because", "so that", "rather than", "which means"), drop the hedges, keep
+the nouns and verbs. A "+" or a "→" beats a conjunction. Second person is implied; you rarely need "you".
+DIAGNOSTIC, NOT A CAP: the target document's §0 runs about 18 words a line. If your §0 averages over 22,
+you are writing sentences where fragments would do — go back and cut connectives, NEVER content. There is
+no limit on any individual line, and no mechanism is ever deleted to move this number.
+
 COVERAGE — a line is EARNED BY SESSION WEIGHT, never by section count. A topic the coach worked through
 earns one; a topic touched once in passing does not, however true it is. Test it against your own draft:
 a hero section markedly thinner than its siblings was discussed markedly less and gets NO §0 line — its
@@ -148,15 +160,26 @@ Retrieval, not review: the answer restates, never re-explains. A quick quiz, not
 - One correct answer each. Nothing open-ended.
 - Order follows document order.
 
-=== WHAT'S STILL OPEN ===
-Everything left open, with its status: deferred (coach postponed it — say why, so it does not read as
-forgotten), shelved (dropped from scope for now), unresolved (raised, never settled), coach-owes,
-player-owes. A topic parked on purpose reads as neglect unless the document says it was parked on
-purpose. That is this section's whole job.
+=== NO STILL-OPEN SECTION ===
+This document has NO "What's Still Open" section and no status table. It was removed deliberately: every
+row was either answered in its own section already (the same explanation at the same depth, twice) or was
+housekeeping the player does not need a table for. Never reintroduce it under any heading.
+Where its content goes instead:
+- A SHELVED HERO: named on the pool line with the reason in the same breath — "(Kelvin shelved — three
+  heroes to polish first)". No cross-reference, no section.
+- A TOPIC THE COACH ANSWERED: it lives in the section that owns it. That is not "open".
+- A DISCOURAGING FACT THE COACH ADDRESSED (a losing streak, a dropped hero): it goes in the section that
+  raised it, with the coach's reassurance attached. Never strand it — a parked topic reads as neglect
+  unless the document says it was parked on purpose.
+- GENUINELY UNFINISHED BUSINESS — work the coach deferred to a later session, or notes the coach owes:
+  one closing line, see below. Nothing else survives.
 
 === CLOSING FRAME ===
 2–4 sentences from the session's own material, leaving the correct frame for the work. Never manufacture
 encouragement the session did not contain.
+THEN, only if the coach deferred work or owes the player something, ONE final line naming it: "Still
+coming from <COACH>: <the deferred work>, and <what is owed>." One sentence, no table, no heading. If the
+coach deferred nothing and owes nothing, the closing frame ends the document.
 
 === REPETITION IS THE DESIGN ===
 A point may appear at THREE resolutions: once in §0, once developed in its section, once as a card line
@@ -208,18 +231,21 @@ Read your draft once against this list and fix what fails. Do not report the che
 2. Every diagnosed habit has a replacement rule.
 3. Every rule that had a stated "why" carries it.
 4. Every self-test question is one the player could act on mid-game.
-5. Every deferred or shelved topic appears in What's Still Open.
+5. No "What's Still Open" section exists. A shelved hero is named on the pool line with its reason; work
+   the coach deferred or owes is one closing line; everything else lives in the section that owns it.
 6. Zero third-person references to the reader; zero session narration.
 7. Every taught framework has all its steps.
 8. Every card line is under a second to read and appears in no other card group.
 9. Nothing in the document was not in the transcript.
 10. The template's fixed strings are present and exact, and no emoji appears anywhere.
 11. §0 is 8 lines unless a 9th or 10th genuinely earned its place, and no two lines share a hero or a
-    trigger. If two do, merge them and re-number.
+    trigger. If two do, merge them and re-number. Then read the unbolded halves: any that is a full
+    sentence with connectives becomes comma-joined fragments. Cut connectives, never content.
 12. Count your "=" and "→" outside the self-test. Under 8 and 15 means you wrote linking prose where a
     symbol was faster — go back and compress the joints.
 13. Every abbreviation the session used appears in short form more often than spelled out, and no
-    sentence rebuilds evidence the reader lived through.`;
+    sentence rebuilds evidence the reader lived through.
+14. No "What's Still Open" section, table or heading exists anywhere in the document.`;
 
 // ── §4 the document template ─────────────────────────────────────────────────
 // These strings are FIXED — the model does not re-decide them. checkTemplate asserts them, which
@@ -229,7 +255,7 @@ literal and must appear exactly as written. ===
 
 # <PLAYER OR POOL> — Coaching Notes<, session with <COACH>>
 
-**Hero pool locked for now: <HERO> · <HERO> · <HERO>**<  (<EXCLUDED HERO> shelved — see §<N>)>
+**Hero pool locked for now: <HERO> · <HERO> · <HERO>**<  (<EXCLUDED HERO> shelved — <the coach's reason, one clause>)>
 **Read order:** §0 → §1 → your hero section → §<CARD> (sideline card). Everything else is reference.
 
 ---
@@ -271,23 +297,15 @@ literal and must appear exactly as written. ===
 
 ---
 
-## §<N> — WHAT'S STILL OPEN
-
-| Item | Status |
-|---|---|
-| **<topic>** | <status and what settles it> |
-
----
-
 ### Closing frame
-<2–4 sentences>
+<2–4 sentences><, then one line: "Still coming from <COACH>: <deferred work>, and <what is owed>." — only
+if either exists>
 
 <machine block, see the MACHINE BLOCK instruction below>
 
 FIXED ELEMENTS, VERBATIM: the "**Read order:**" line; "THE WHOLE SESSION IN N LINES"; "SIDELINE CARD"
 plus "*Put this on your second monitor. Glance at it between deaths.*"; "SELF-TEST (cover the answers)";
-"WHAT'S STILL OPEN"; "### Closing frame"; the ─ rules bounding the card block; "---" between every
-top-level section.
+"### Closing frame"; the ─ rules bounding the card block; "---" between every top-level section.
 
 HEADING GRAMMAR: "## §N — HEADING IN CAPS" (em dash, spaces both sides). Subheadings
 "### N.N Title Case — with an em-dashed clause when it helps". Section numbering is sequential; the
@@ -343,7 +361,7 @@ export const BRIEF_SKELETON = `=== STRUCTURAL SKELETON — copy this shape exact
 
 # <PLAYER> — Coaching Notes, session with <COACH>
 
-**Hero pool locked for now: <HERO A> · <HERO B> · <HERO C>** (<HERO D> shelved — see §10)
+**Hero pool locked for now: <HERO A> · <HERO B> · <HERO C>** (<HERO D> shelved — <the coach's reason>)
 **Read order:** §0 → §1 → your hero section → §8 (sideline card). Everything else is reference.
 
 ---
@@ -488,16 +506,9 @@ END OF GAME
 
 ---
 
-## §10 — WHAT'S STILL OPEN
-
-| Item | Status |
-|---|---|
-| **<topic>** | **<Status word>.** <Why parked, what settles it.> |
-
----
-
 ### Closing frame
-<2–4 sentences, using the session's own framing, in the player's favor.>`;
+<2–4 sentences, using the session's own framing, in the player's favor.><
+Still coming from <COACH>: <work deferred to a later session>, and <what the coach owes>.>`;
 
 // ── §7.2 the texture reference ───────────────────────────────────────────────
 // `deadlock-coaching-notes.md` (Citadel root) — the hand-written target document, pasted whole.
@@ -517,7 +528,7 @@ not contain it, it does not exist. ===`;
 
 export const BRIEF_TEXTURE_BODY = `# Deadlock Coaching Notes — Session with Malthaiel
 
-**Hero pool locked for now: Ivy · Viscous · Dynamo** (Kelvin shelved — see §7)
+**Hero pool locked for now: Ivy · Viscous · Dynamo** (Kelvin shelved — three heroes to polish first)
 **Read order:** §0 → §1 → your hero section → §8 (sideline card). Everything else is reference.
 
 ---
@@ -817,20 +828,9 @@ END OF GAME
 
 ---
 
-## §10 — WHAT'S STILL OPEN
-
-| Item | Status |
-|---|---|
-| **Kelvin** | **Shelved deliberately.** He's low priority in draft right now, and you already have three heroes to polish. Do not add a fourth. Your dome questions (when to catch people out, when to use it defensively, freezing objectives, setting up dives) get answered once Ivy/Viscous/Dynamo are solid. |
-| **Rem / Page** | Not the problem — you are. And you aren't, either: support climbing is hard but real (Malthaiel did it to E6). Set them aside while the pool is three heroes. Your Rem record on the new account (5–1, then 1–4) is matchmaking noise, not a verdict on you. |
-| **Soul cap / adapting builds to higher-cost items** | Partially covered by §2.5 (save for spikes) and §3.4 (situational buys). Bring specific games where you finished with dead souls to the next session. |
-| **Trade valuation deep-dive** | Deferred by Malthaiel to a future session — see §7.1. |
-| **Full VOD notes** | Coming separately; this document is the actionable version. |
-
----
-
 ### Closing frame
-You said it yourself and you were right: **you don't need to learn new mechanics, you need to pay attention.** The fundamentals are there — this is polish. Stop building left-to-right on autopilot, stop taking the far camp, stop cubing yourself, slow your aim down, and put §8 where you can see it.`;
+You said it yourself and you were right: **you don't need to learn new mechanics, you need to pay attention.** The fundamentals are there — this is polish. Stop building left-to-right on autopilot, stop taking the far camp, stop cubing yourself, slow your aim down, and put §8 where you can see it.
+Still coming from Malthaiel: the trade-valuation deep-dive he cut short, and his full VOD notes.`;
 
 // ── §8 tie-broken heuristics ─────────────────────────────────────────────────
 // Judgment calls the model would otherwise make differently every run.
@@ -877,23 +877,17 @@ As many as there are decisions the player has to make mid-game, with clustered n
 questions. Typically 12–18. Enumerating every fact on the page produces an exam nobody sits, not a quiz.
 
 WHEN A HERO LEAVES THE POOL
-Only when the coach said so. Record it in What's Still Open as "shelved" with the coach's reason, and
-name it in the pool line as shelved. Never infer a cut from the coach spending little time on a hero.
+Only when the coach said so. Name it on the pool line as shelved with the coach's reason in the same
+breath — "(Kelvin shelved — three heroes to polish first)". No section, no cross-reference, no table.
+Never infer a cut from the coach spending little time on a hero.
 
 WHEN THE PLAYER'S SELF-DIAGNOSIS WAS RIGHT
 Say so, in the section that owns it, before the instruction. It tells them which instincts to trust.
 
-WHAT'S STILL OPEN — ROW DISCIPLINE
-The Status cell opens with the substance, NOT with a bolded restatement of the column header. "Shelved
-deliberately." / "Unresolved." / "Out of your hands." are labels for a column that is already labelled;
-they cost a bolded fragment per row and carry nothing. Lead with why it is open and what closes it.
-A point already given its own treatment in a section is NOT still open — it is answered, and repeating it
-here is the same explanation at the same depth in a second place. Only genuinely unfinished business:
-shelved heroes, work the coach deferred, questions raised and not reached, things the coach owes.
-
 WHEN MATERIAL IS DISCOURAGING BUT WAS ADDRESSED
-Keep it, in What's Still Open, with the coach's reassurance attached. A dropped hero or a losing streak
-reads as a verdict on the player unless the document carries the reason it was set aside.`;
+Keep it, in the section that raised it, with the coach's reassurance attached in the same breath. A
+dropped hero or a losing streak reads as a verdict on the player unless the document carries the reason
+it was set aside. There is no status table to park it in — if it has no section, it did not earn a place.`;
 
 // ── §9 the machine block ─────────────────────────────────────────────────────
 // The two machine-readable things the JSON container was carrying, recovered as an HTML comment:
@@ -1013,7 +1007,6 @@ export const FIXED_STRINGS = [
   'SIDELINE CARD',
   '*Put this on your second monitor. Glance at it between deaths.*',
   'SELF-TEST (cover the answers)',
-  "WHAT'S STILL OPEN",
   '### Closing frame',
   '─────',
   '<!-- brief-meta',
@@ -1063,8 +1056,8 @@ const PROSE_DISTANCE = [/\bthe player\b/i, /\bthe \w+ player\b/i, /\bthe coached
 const PROSE_NARRATION = [/\bthe coach then\b/i, /\bhe asked\b/i, /\bwas requested\b/i, /\bagreed on the spot\b/i, /\bduring the session\b/i];
 const PROSE_PASSIVE = /\b(?:was|were)\s+\w+(?:ed|en)\b/i;
 // Sections whose shape makes the voice checks meaningless: the card is a fenced block of fragments,
-// the self-test is question/answer pairs, and What's Still Open is a status table.
-const VOICE_EXEMPT = /SIDELINE CARD|SELF-TEST|STILL OPEN/i;
+// and the self-test is question/answer pairs.
+const VOICE_EXEMPT = /SIDELINE CARD|SELF-TEST/i;
 
 export function checkProse(md) {
   const found = [];
