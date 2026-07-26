@@ -150,7 +150,7 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
     return () => { c = true; };
   }, [folder, n]);
   // Review-transcript presence (per-match .reviewcomms, or the single-match legacy fallback) gates
-  // the Final Report button — Process 2 is written FROM the review session.
+  // the Player Brief button — the brief is written FROM the review session.
   const [rvReady, setRvReady] = useState(false);
   useEffect(() => {
     let c = false;
@@ -272,7 +272,7 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
     }
   };
 
-  // ── Final Report — the PLAYER BRIEF, written FROM the review session ──
+  // ── Player Brief — the study document the coached player keeps, written FROM the review ──
   // What this button produces changed 2026-07-26: the coach-voiced JSON analyst report became the
   // study document the coached player keeps (modules/core/game-wiki/playerBrief.js). Both reports
   // were always FOR THE PLAYER, so a record-voiced artifact was aimed at the wrong reader; this
@@ -494,7 +494,7 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
     scrimFolder: folder,
     filter: (p) => p.kind === 'review' && Number(p.matchN) === n,
     setBusy: (b) => { reviewRef.current = b.on; setReviewBusy(b); },
-    // finishReviewJob wrote .reviewcomms — re-probe so the Final Report button enables live.
+    // finishReviewJob wrote .reviewcomms — re-probe so the Player Brief button enables live.
     onFinished: (p) => {
       if (p.kind === 'review' && Number(p.matchN) === n) {
         resolveReviewTranscript(api, folder, n).then((r) => setRvReady(!!r)).catch(() => {});
@@ -920,7 +920,7 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
             {populated && !hasComms && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: candyGap(8) }}>No comms review attached — the report will skip its comms grade rather than guess it.</div>}
           </div>
           <div style={{ marginTop: 8 }}>
-            <div style={labelStyle}>Final Report</div>
+            <div style={labelStyle}>Player Brief</div>
             <div className="candy-chip-row">
               <button className="candy-btn" data-shape="chip"
                 disabled={mfRunning ? false : (!rvReady || !aiConfigured || mrRunning || running || commsBusy.on || reviewBusy.on || classifying || reviewing)}
@@ -928,8 +928,8 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
                 title={mfRunning ? 'Stop this run — the words already written are kept'
                   : !rvReady ? 'Record this match’s VOD review first — the brief is written from it'
                     : !aiConfigured ? 'Configure an AI backend in Settings → Agents (API key or Claude CLI)'
-                      : 'Final Report — the player brief: the study document the coached player keeps, written from the review session and saved as “Player Brief” in this scrim'}>
-                <span className="candy-face">{mfRunning ? runFace('Cancel') : mfReady ? 'Regenerate Final Report' : 'Generate Final Report'}</span>
+                      : 'Player Brief — the study document the coached player keeps, written from the review session and saved as “Player Brief” in this scrim'}>
+                <span className="candy-face">{mfRunning ? runFace('Cancel') : mfReady ? 'Regenerate Player Brief' : 'Generate Player Brief'}</span>
               </button>
               {mfReady && !mfRunning && (
                 <button className="candy-btn" data-shape="chip" onClick={() => setMrOpen(true)} title="Open the brief’s sections and card lines in the report view — the brief itself is the “Player Brief” page in this scrim">
