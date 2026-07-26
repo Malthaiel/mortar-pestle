@@ -108,8 +108,20 @@ corollaries ride on the SAME line, compressed to fragments — "Play back, play 
 others" is one unbolded half carrying three actions, and it is correct. One line per THEME, not one line
 per idea. A hero's positioning rule and the item that enables it are one line; splitting them costs a
 line and gains nothing, because the reader who needs one needs the other.
-MERGE BEFORE YOU ADD. If a candidate line shares a hero, a theme or a trigger with a line already on the
-list, fold it in as a fragment instead of taking a new number.
+THE CLUSTER IS ONE RULE'S COROLLARIES AND NOTHING ELSE RIDES ALONG. "Play back, play high, cube + rescue
+beam others" is three ACTIONS THAT FOLLOW FROM ONE RULE, which is why it stays one line. A second
+finding, a justification for the rule, or a run of ability numbers is a DIFFERENT thing: it belongs to
+the section that owns it, not to this line. Test every unbolded half by striking whatever is not an
+instruction following from the bold — if what you struck was a whole idea, it was never part of this
+line. These are the failures, each carrying a second point the bold did not promise:
+  two findings:   "Rank-independent — people autopilot to E6. Your losing streak = MM, not you washed."
+  justification:  "Malthaiel is E6 with zero tech. The one habit: escape route + which bar goes where."
+  number dump:    "8s damage buff, 3s silence, 21s of flight — hover, wait, take the angle."
+  right:          "You are a global — sideline waves, then fly to fights."
+MERGE ONLY WITHIN A THEME. If a candidate line shares a hero, a theme or a trigger with a line already on
+the list, fold it in as a fragment instead of taking a new number. If it shares none of those, it does NOT
+merge — it either earns its own number or it goes to its section. Welding two themes together to save a
+number is what produces a heavy line.
 Where a hero owns the line, lead with the hero name: "**Viscous: cubing yourself is what the enemy team
 is playing for.**"
 
@@ -126,16 +138,21 @@ half the words.
   right:  "Play back, play high, cube + Rescue Beam others — Rescue Beam always."
 Drop the connectives ("and", "because", "so that", "rather than", "which means"), drop the hedges, keep
 the nouns and verbs. A "+" or a "→" beats a conjunction. Second person is implied; you rarely need "you".
-DIAGNOSTIC, NOT A CAP: the target document's §0 runs about 18 words a line. If your §0 averages over 22,
-you are writing sentences where fragments would do — go back and cut connectives, NEVER content. There is
-no limit on any individual line, and no mechanism is ever deleted to move this number.
+DIAGNOSTIC, NOT A CAP: in the target document the BOLDED lead runs about 7 words and the UNBOLDED half
+about 10. The lead is reliably right; the half is where this section fails. If your unbolded halves
+average over 13, one of two things happened — you wrote sentences where fragments would do, or you folded
+a second point into the line. Cut connectives first, then hunt the second point and send it to its
+section. There is no limit on any individual line, and no mechanism is ever deleted to move this number.
 
 COVERAGE — a line is EARNED BY SESSION WEIGHT, never by section count. A topic the coach worked through
 earns one; a topic touched once in passing does not, however true it is. Test it against your own draft:
 a hero section markedly thinner than its siblings was discussed markedly less and gets NO §0 line — its
 points live in its own section, which is where the reader will look for them. Plus one for any rule the
-coach stated twice or more. AIM FOR 8. Ten is the ceiling, not the goal, and a draft that arrives at ten
-has almost always split a theme that should have been one line — go back and merge before you accept it.
+coach stated twice or more. AIM FOR 8. Ten is the ceiling, not the goal. A draft that arrives at ten is
+carrying topics §0 does not owe the reader: RELEGATE, DO NOT MERGE. Send the weakest lines down to the
+sections that own them until eight remain. Welding a ninth topic onto an existing line hits the count
+while doubling that line's unbolded half, which is the exact failure this section keeps producing — the
+target document reaches eight by choosing eight topics, never by carrying nine in eight lines.
 Nothing appears here that appears nowhere else.
 
 === THE SIDELINE CARD ===
@@ -197,9 +214,11 @@ commands, the test checks. Four jobs, one point, no re-argument.
   syllables to parse, and their own shorthand is already the fastest form for them — expanding it is not
   plainer, only longer. This never licenses inventing shorthand the session did not use.
   THE SHORT FORM IS THE DEFAULT, not the occasional variant. Roughly three in four uses should be the
-  abbreviation; spell it out only where the full word carries weight the short one cannot (a heading the
-  reader scans cold, or a first use that has to teach the term). Writing "matchmaking" nine times and
-  "MM" four is backwards, and it is the single easiest way to make this document not sound like them.
+  abbreviation — AND NO MORE THAN FOUR IN FIVE. Spell it out where the full word carries weight the short
+  one cannot (a heading the reader scans cold, or a first use that has to teach the term). Writing
+  "matchmaking" nine times and "MM" four is backwards, and it is the single easiest way to make this
+  document not sound like them. Twelve "MM" to two "matchmaking" overshoots the same target from the far
+  side: the ratio is a BAND, and the spelled-out form still does real work at those two jobs.
 - THE READER WAS THERE. State the finding; do not rebuild the evidence for it. They know their own job,
   schedule, rank history, match record and what they said an hour ago — replaying it back as support
   costs words and tells them nothing they did not walk in with. "You treat game time as earned leisure"
@@ -239,12 +258,17 @@ Read your draft once against this list and fix what fails. Do not report the che
 9. Nothing in the document was not in the transcript.
 10. The template's fixed strings are present and exact, and no emoji appears anywhere.
 11. §0 is 8 lines unless a 9th or 10th genuinely earned its place, and no two lines share a hero or a
-    trigger. If two do, merge them and re-number. Then read the unbolded halves: any that is a full
-    sentence with connectives becomes comma-joined fragments. Cut connectives, never content.
-12. Count your "=" and "→" outside the self-test. Under 8 and 15 means you wrote linking prose where a
-    symbol was faster — go back and compress the joints.
-13. Every abbreviation the session used appears in short form more often than spelled out, and no
-    sentence rebuilds evidence the reader lived through.
+    trigger. Over eight, RELEGATE the weakest to its own section — never weld it onto a neighbour. Then
+    read the unbolded halves twice: once for grammar (a full sentence with connectives becomes
+    comma-joined fragments), once for content (strike anything that is not an instruction following from
+    the bold — a second finding, a justification, a run of ability numbers). Halves averaging over 13
+    words failed one of those two passes. Cut connectives and relegate second points, never content.
+12. Count your devices outside the self-test and land INSIDE the bands, over as well as under: "=" 9-13,
+    "→" 34-44, "+" 8-13, em dash 65-80, parenthetical glosses 35-48, bold spans 120-145. Under a band
+    means prose is doing a device's job; over it means the device stopped marking anything. "+" and the
+    bracketed gloss are the two you will be under on.
+13. Every abbreviation the session used appears in short form roughly three uses in four — not fewer,
+    and not more than four in five — and no sentence rebuilds evidence the reader lived through.
 14. No "What's Still Open" section, table or heading exists anywhere in the document.`;
 
 // ── §4 the document template ─────────────────────────────────────────────────
@@ -340,8 +364,9 @@ export const BRIEF_TYPOGRAPHY = `=== TYPOGRAPHY — ten rules, most of the visua
 9. SELF-TEST FORMAT: "<question> → *<answer>*". Arrow, then italic answer, on one line.
 10. CARD CHECKBOXES ARE "□", not "- [ ]". The card is a printed object, not a task list.
 11. ARROWS AND EQUALS ARE THE HOUSE COMPRESSION DEVICES. They are not decoration and not a last resort —
-    they are the fastest way this reader parses a link between two things, and under-using them is the
-    single most common way this document comes out longer than it needs to be.
+    they are the fastest way this reader parses a link between two things. Reaching for one wherever a
+    real link exists is what keeps this document short; scattering them where there is no link to mark
+    is what makes it read like a machine imitating a person. Both failures are live — check the band.
     "→" for a consequence chain ("Play to improve → improvement happens → rank follows on its own"),
     for a priority ordering ("Improvement priority, high → low"), and for a quoted problem answered by
     a reframe (*"my ults are bad"* → the ult is not your engage).
@@ -351,8 +376,16 @@ export const BRIEF_TYPOGRAPHY = `=== TYPOGRAPHY — ten rules, most of the visua
     THE MECHANISM IS NOT LOST BY COMPRESSING IT — it is lost by DELETING it. "= bad habits" fails
     because it names no mechanism, not because it used "=". Write the mechanism, then compress the
     joint.
-    TARGET DENSITY: roughly 8-12 "=" and 15-20 "→" across the document, outside the self-test. Landing
-    under half of that means prose is doing work these symbols do better.`;
+    TARGET DENSITY — BANDS TO LAND INSIDE, NOT FLOORS TO BEAT. Measured on the target document, whole
+    document, outside the self-test: "=" 9-13 · "→" 34-44 · "+" 8-13 · em dash 65-80 · parenthetical
+    glosses 35-48 · bold spans 120-145. Under a band means prose is doing work a device does faster.
+    OVER a band means the device has turned into decoration and the joints it marks are no longer
+    load-bearing — an arrow between two things that are not a consequence chain is noise.
+    "+" AND THE PARENTHETICAL GLOSS ARE THE TWO THIS DOCUMENT HABITUALLY UNDER-USES, by a factor of
+    three. "+" joins things used together: "cube + Rescue Beam others", "Heal Deny + Decay", "you +
+    Dynamo". The gloss is a bracketed fact that would otherwise cost a clause: "(her 2)", "(~2nd rift,
+    ~18 min)", "(only ~3 core items)", "(back + high ground)", "(you estimated ~50 games)". Neither
+    is an aside — rule 1 still governs asides, which take em dashes.`;
 
 // ── §7.1 the structural skeleton ─────────────────────────────────────────────
 // Safe to copy: carries structure but no voice. Paired with BRIEF_TEXTURE, which carries voice but
