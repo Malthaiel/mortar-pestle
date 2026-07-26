@@ -392,14 +392,21 @@ export const VOD_REPORT_SYSTEM_PROMPT = [
   '  Minor asides fold into action items or are dropped.',
   '- Sections carry real explanatory detail, not headline bullets. Each point states the principle, the reasoning',
   '  behind it, and the concrete example or consequence from this session, with its time stamp inline.',
-  '- VOICE — this is a LESSON, not minutes of a meeting. Write as a teacher explaining to the player being',
-  '  coached, and address them as "you": "**Stop cubing yourself** — that is exactly what the enemy wants."',
-  '  Never "he"/"his"/"the player", and never narrate the session itself ("he asked for one build per hero",',
-  '  "his own read was correct", "the coach then explained") — state the lesson and let the stamp carry the',
-  '  provenance. When the session coaches SEVERAL players "you" is ambiguous: name each player in team',
-  '  sections and reserve "you" for that player\'s own card. The teacher voice is REWORDING ONLY — it never',
-  '  adds a tip, an example, a reason, or a warmth-flavored aside the coach did not voice, and the attribution',
-  '  rules above still bind (name WHO only where authorship changes the meaning).',
+  '- VOICE — NO POINT OF VIEW. The report is pure information: orders and facts, never written from anyone\'s',
+  '  perspective. "you"/"your" and "he"/"his"/"the player" are BANNED as ways of addressing or describing the',
+  '  coached player. Two shapes carry everything:',
+  '  (a) An INSTRUCTION is a bare command with no subject — "Give the far camp up.", "Play slow.", "Never',
+  '      flick; drag the crosshair onto the target." The ONE carve-out: a reflexive that IS the meaning may',
+  '      stay inside a command ("**Stop cubing yourself** — that is exactly what the enemy wants."). That is',
+  '      the only second person permitted anywhere, and only inside an imperative.',
+  '  (b) A point ABOUT the coached player is a LABELLED FACT with no subject — "Current habit, raised',
+  '      unprompted: a far-side tier two taken while the team fights, in matchmaking and in scrims.",',
+  '      "Stated problem: aim stagnates in teamfights and feels like brain lag." Never "he said", never',
+  '      "you said", never "his own read was".',
+  '  Never narrate the session ("he asked for one build per hero", "the coach then explained") — state the',
+  '  lesson and let the stamp carry the provenance. The coach is named only where authorship changes the',
+  '  meaning (the attribution rules above still bind); routine teaching is stated flat as fact. This is',
+  '  REWORDING ONLY — it never adds a tip, an example or a reason the coach did not voice.',
   '- House style: a **bolded lead** that is a self-contained takeaway AND runs on into its sentence, rather',
   '  than standing alone as a label with a paragraph under it — "**Give the far camp up.** A tier-two on the',
   '  far side is worth about 300 souls, and being there for the fight is worth far more." The reader can read',
@@ -412,11 +419,11 @@ export const VOD_REPORT_SYSTEM_PROMPT = [
   '  jargon at all. Take the plain word every time: "works with" not "synergises with", "happens on its own"',
   '  not "arrives as a side effect", "adds up" not "accumulates", "picks first" not "prioritises", "risky',
   '  spot" not "compromised position", "much more important" not "infinitely more important", "what top',
-  '  players build" not "meta defaults", "money" not "econ", "your team cannot do it yet" not "beyond the',
+  '  players build" not "meta defaults", "money" not "econ", "the team cannot do it yet" not "beyond the',
   '  team\'s current execution". Game terms stay EXACT and untranslated — hero, item, ability, map and',
   '  objective names are precise and the reader knows them (Rescue Beam, Kudzu Connection, Mid-Boss, Walker,',
-  '  second Rift). Write active, never passive: "your sensitivity is fine", not "sensitivity was checked and',
-  '  is not the problem".',
+  '  second Rift). Write active, never passive: "Sensitivity is fine", not "sensitivity was checked and is',
+  '  not the problem".',
   '- Prose economy is TIME-TO-ABSORB, not word count. Test every word by deleting it: if nothing is lost in',
   '  meaning AND nothing in flow, cut it; if it smooths the ride, keep it. "That is exactly what the enemy',
   '  wants" keeps "exactly"; "it is worth noting that", "in terms of", "essentially", "the thing you actually',
@@ -670,9 +677,6 @@ const STYLE_MAX_FLAGS = 8;
 export function checkProse(report) {
   const r = report && typeof report === 'object' ? report : {};
   const cards = Array.isArray(r.playerCards) ? r.playerCards : [];
-  // "he/his" is correct prose in a multi-player scrim report; it is only a voice leak when exactly
-  // one player was coached and the whole report should be addressing them as "you".
-  const soloCoached = cards.length === 1;
   const parts = [
     ...(Array.isArray(r.sections) ? r.sections : []).map((s) => [`section "${s?.heading || s?.id || ''}"`, s?.md]),
     ...(Array.isArray(r.keepDoing) ? r.keepDoing : []).map((k) => ['keepDoing', k]),
@@ -685,7 +689,6 @@ export function checkProse(report) {
     if (!text.trim()) continue;
     const lower = text.toLowerCase();
     for (const w of STYLE_FANCY) if (lower.includes(w)) { add(where, `fancy wording "${w.trim()}" — use the plain word`); break; }
-    if (soloCoached && /\b(?:he|him|his)\b/i.test(text)) add(where, 'third-person "he/his" — the report addresses the coached player as "you"');
     // The bolded lead closes AFTER its full stop ("...most of the way there.**"), so a plain
     // (?<=[.!?])\s+ split never fires there and glues the lead onto the next sentence — which
     // reported four false 36-57 word sentences on the first live run. Consume the closing marker.
@@ -695,7 +698,12 @@ export function checkProse(report) {
       const words = s.split(/\s+/).length;
       if (words > STYLE_MAX_WORDS) { add(where, `${words}-word sentence — split it`); continue; }
       const sl = s.toLowerCase();
-      if (STYLE_TURNS.filter((t) => sl.includes(t)).length > 1) add(where, 'two turn-words in one sentence — keep one');
+      // No point of view at all. "yourself" is deliberately NOT matched — a reflexive inside an
+      // imperative ("Stop cubing yourself") is the one carve-out, because dropping it loses the point.
+      // "he/his" is excused in a sentence that names the coach, where it is a real third party.
+      if (/\b(?:you|your|yours)\b/i.test(s)) add(where, 'second person "you/your" — the report carries no point of view');
+      else if (/\b(?:he|him|his)\b/i.test(s) && !/coach/i.test(s)) add(where, 'third person "he/his" — the report carries no point of view');
+      else if (STYLE_TURNS.filter((t) => sl.includes(t)).length > 1) add(where, 'two turn-words in one sentence — keep one');
       else if (STYLE_PASSIVE.test(s)) add(where, `passive voice ("${s.match(STYLE_PASSIVE)[0]}") — write it active`);
     }
   }

@@ -581,10 +581,12 @@ assert.ok(degraded.report.meta.warnings.some((w) => w.startsWith('Pass 2 skipped
 // every game" reads like a transcript summary. The fix is a voice rule in the prompt; these pin its
 // load-bearing clauses so a later prompt edit cannot quietly drop them.
 for (const needle of [
-  'VOICE — this is a LESSON, not minutes of a meeting',
-  'address them as "you"',
-  'never narrate the session itself',
-  'The teacher voice is REWORDING ONLY',
+  'VOICE — NO POINT OF VIEW',
+  'are BANNED as ways of addressing or describing the',
+  'An INSTRUCTION is a bare command with no subject',
+  'a reflexive that IS the meaning may',
+  'is a LABELLED FACT with no subject',
+  'Never narrate the session',
   'runs on into its sentence',
   'PLAIN WORDS, first-read comprehension',
   'Game terms stay EXACT and untranslated',
@@ -608,20 +610,22 @@ assert.ok(MATCH_REPORT_SYSTEM_PROMPT.includes('Game terms (hero, item, ability, 
 const oneCard = (coaching) => ({ playerCards: [{ player: 'p', coaching }], sections: [], keepDoing: [] });
 const flagsFor = (coaching) => checkProse(oneCard(coaching)).join(' | ');
 assert.match(flagsFor('Rescue Beam synergises with the high ground.'), /fancy wording/, 'fancy word flagged');
-assert.match(flagsFor('He gave up the camp and his rotate was slow.'), /third-person/, 'he/his flagged when one player is coached');
+assert.match(flagsFor('He gave up the camp early.'), /third person/, 'he/his flagged — the report carries no point of view');
+assert.match(flagsFor('Give up your camp when a fight starts.'), /second person/, 'you/your flagged too');
+assert.deepEqual(checkProse(oneCard('**Stop cubing yourself** — that is exactly what the enemy wants.')), [],
+  'a reflexive inside an imperative is the one carve-out');
+assert.deepEqual(checkProse(oneCard('The coach reached E6 as a support player, and he says it is possible.')), [],
+  'he/his is excused where it names the coach, a real third party');
 assert.match(flagsFor('However the camp is worth less, regardless of the timer.'), /two turn-words/, 'doubled turn-word flagged');
 assert.match(flagsFor('Sensitivity was checked before the game.'), /passive voice/, 'passive voice flagged');
 assert.match(flagsFor(`Give the camp up ${'because it is worth far less than the fight '.repeat(5)}.`), /\d+-word sentence/, 'over-long sentence flagged');
-// The approved house voice trips nothing.
-assert.deepEqual(checkProse(oneCard('**Stop cubing yourself** — that is exactly what the enemy wants. Good players will work hard to force it out of you. At your rank they will usually do it by accident, but it hurts you just the same.')), [],
-  'the approved teacher voice raises no style flag');
-// "he/his" is normal prose in a multi-player scrim report — only a solo-coached report owes "you".
-assert.deepEqual(checkProse({ playerCards: [{ player: 'a', coaching: 'He rotated late.' }, { player: 'b', coaching: '' }], sections: [], keepDoing: [] }), [],
-  'multi-player report keeps third person');
+// The approved house voice — bare orders plus labelled facts — trips nothing.
+assert.deepEqual(checkProse(oneCard('**Give the far camp up.** A far-side tier two is worth about 300 souls, and being in position for the fight is worth more. Current habit, raised unprompted: a far tier two taken while the team fights.')), [],
+  'orders plus labelled facts raise no style flag');
 assert.ok(checkProse(oneCard(`bad. ${'However regardless. '.repeat(20)}`)).length <= 8, 'style flags are capped');
 // A bolded lead closes after its own full stop, so the splitter must consume the trailing "**" or it
 // welds the lead onto the next sentence and reports one long one. Four false flags on the first live run.
-assert.deepEqual(checkProse(oneCard('**Your own reasoning is already most of the way there.** You take the camp because the souls sit there until they respawn, and you clear it so nobody counters it, and you tell your teammates what is open [52:21r].')), [],
+assert.deepEqual(checkProse(oneCard('**Low economy on Viscous is a feature.** The camps skipped there go to teammates who convert them into more, and the jungle never needs clearing on cooldown [52:21r].')), [],
   'a bolded lead is its own sentence, not a prefix on the next one');
 
 // FOLLOW-UPS gate: with no prior action items supplied there is no earlier homework to judge, so
