@@ -12,7 +12,7 @@ import { useVaultLock } from './useVaultLock.js';
 import { useCredsStore } from './useCredsStore.js';
 import VaultRoute from './VaultRoute.jsx';
 import HistoryRoute from './HistoryRoute.jsx';
-import { IconClock } from '@host/components/icons.jsx';
+import { IconClock, IconShield, IconShieldOff } from '@host/components/icons.jsx';
 import { candyCenterOffset } from '@host/util/candy.js';
 import { POPOVER_HEIGHT } from './BrowserPopover.jsx';
 import HistoryPopover from './HistoryPopover.jsx';
@@ -418,16 +418,10 @@ export default function BrowserPage({ api, accent, rest, inOverlay = false, sync
   );
 }
 
-// Monochrome shield glyph for the toolbar toggle; inherits `currentColor`
-// (accent when active, muted when off) and shows a check (on) or slash (off).
+// Shield glyph for the toolbar toggle; inherits `currentColor` (accent when
+// active, muted when off) and shows a plain shield (on) or a crossed one (off).
 function ShieldGlyph({ off }) {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M12 3l7 3v5c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6l7-3z" />
-      {off ? <path d="M5.5 5.5l13 13" /> : <path d="M9 12l2 2 4-4" />}
-    </svg>
-  );
+  return off ? <IconShieldOff /> : <IconShield />;
 }
 
 const barStyle = {

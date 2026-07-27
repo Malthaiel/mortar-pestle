@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from 'react';
 import * as creds from './credsStore.js';
 import { useCredsStore } from './useCredsStore.js';
 import PasswordField from './PasswordField.jsx';
-import { EyeGlyph, CopyGlyph } from './vaultIcons.jsx';
+import { IconEye, IconEyeOff, IconCopy } from '@host/components/icons.jsx';
 import { copySecret } from './useVaultLock.js';
 import BrowserPopover from './BrowserPopover.jsx';
 
@@ -221,14 +221,14 @@ function MatchRow({ m, accent, clipboardClearSecs, revealRemaskSecs }) {
         <span style={{ flex: 1, fontSize: 12, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {m.username || '—'}
         </span>
-        <button type="button" style={miniTint(copied === 'user', accent)} title="Copy username" onClick={() => copyField('user')}><CopyGlyph /></button>
+        <button type="button" style={miniTint(copied === 'user', accent)} title="Copy username" onClick={() => copyField('user')}><IconCopy /></button>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <span style={{ flex: 1, fontSize: 12, color: 'var(--text)', fontFamily: 'var(--font-mono, monospace)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {revealed || '••••••••••'}
         </span>
-        <button type="button" style={rowMini} title={revealed ? 'Hide' : 'Reveal'} onClick={toggleReveal}><EyeGlyph off={!!revealed} /></button>
-        <button type="button" style={miniTint(copied === 'pass', accent)} title="Copy password" onClick={() => copyField('pass')}><CopyGlyph /></button>
+        <button type="button" style={rowMini} title={revealed ? 'Hide' : 'Reveal'} onClick={toggleReveal}>{revealed ? <IconEyeOff size={14} /> : <IconEye size={14} />}</button>
+        <button type="button" style={miniTint(copied === 'pass', accent)} title="Copy password" onClick={() => copyField('pass')}><IconCopy /></button>
       </div>
     </div>
   );

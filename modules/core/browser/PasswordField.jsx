@@ -3,7 +3,7 @@
 // add form and (SF4) the full entry editor.
 
 import { useEffect, useRef, useState } from 'react';
-import { EyeGlyph, CopyGlyph, RefreshGlyph } from './vaultIcons.jsx';
+import { IconEye, IconEyeOff, IconCopy, IconRotateCw } from '@host/components/icons.jsx';
 import { copySecret } from './useVaultLock.js';
 
 const mini = {
@@ -58,7 +58,7 @@ export default function PasswordField({
         style={field}
       />
       <button type="button" title={revealed ? 'Hide' : 'Reveal'} style={mini} onClick={toggleReveal}>
-        <EyeGlyph off={revealed} />
+        {revealed ? <IconEyeOff size={14} /> : <IconEye size={14} />}
       </button>
       <button
         type="button"
@@ -66,11 +66,11 @@ export default function PasswordField({
         style={{ ...mini, ...(copied ? { borderColor: accent, color: accent } : {}) }}
         onClick={doCopy}
       >
-        <CopyGlyph />
+        <IconCopy />
       </button>
       {onGenerate && (
         <button type="button" title="Generate password" style={mini} onClick={onGenerate}>
-          <RefreshGlyph />
+          <IconRotateCw size={14} />
         </button>
       )}
     </div>

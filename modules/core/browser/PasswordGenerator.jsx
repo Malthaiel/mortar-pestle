@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import * as creds from './credsStore.js';
 import { copySecret } from './useVaultLock.js';
-import { CopyGlyph, RefreshGlyph } from './vaultIcons.jsx';
+import { IconCopy, IconRotateCw } from '@host/components/icons.jsx';
 
 const box = {
   border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: 12,
@@ -65,8 +65,8 @@ export default function PasswordGenerator({ accent, clearSecs = 30, onUse }) {
     <div style={box}>
       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
         <input style={out} value={value} readOnly spellCheck={false} />
-        <button type="button" style={{ ...mini, ...(copied ? { borderColor: accent, color: accent } : {}) }} title="Copy" onClick={copy}><CopyGlyph /></button>
-        <button type="button" style={mini} title="Regenerate" onClick={gen}><RefreshGlyph /></button>
+        <button type="button" style={{ ...mini, ...(copied ? { borderColor: accent, color: accent } : {}) }} title="Copy" onClick={copy}><IconCopy /></button>
+        <button type="button" style={mini} title="Regenerate" onClick={gen}><IconRotateCw size={14} /></button>
       </div>
       <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', gap: 8, alignItems: 'center' }}>
         Length {length}

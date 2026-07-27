@@ -4,7 +4,7 @@
 // popover.
 
 import { useCredsStore } from './useCredsStore.js';
-import { KeyGlyph, LockGlyph } from './vaultIcons.jsx';
+import { IconKey, IconLock, IconLockOpen } from '@host/components/icons.jsx';
 import { candyCenterOffset } from '@host/util/candy.js';
 
 export default function VaultKeyButton({ accent, host, open, onToggle }) {
@@ -36,7 +36,7 @@ export default function VaultKeyButton({ accent, host, open, onToggle }) {
       aria-expanded={!!open}
       onClick={onToggle}
     >
-      <span className="candy-face">{initialized ? <LockGlyph open={unlocked} /> : <KeyGlyph />}</span>
+      <span className="candy-face">{!initialized ? <IconKey /> : unlocked ? <IconLockOpen /> : <IconLock size={15} />}</span>
       {matchCount > 0 && (
         <span style={{
           position: 'absolute', top: -4, right: -4, minWidth: 14, height: 14,

@@ -9,7 +9,7 @@ import { useCredsStore } from './useCredsStore.js';
 import { readModuleBag, writeModuleSetting } from '@host/module-sdk/index.js';
 import VaultEntryEditor from './VaultEntryEditor.jsx';
 import PasswordGenerator from './PasswordGenerator.jsx';
-import { LockGlyph } from './vaultIcons.jsx';
+import { IconLockOpen } from '@host/components/icons.jsx';
 
 const wrap = { display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, background: 'var(--bg)', position: 'relative' };
 const bar = { display: 'flex', alignItems: 'center', gap: 8, padding: 10, borderBottom: '1px solid var(--border)', background: 'var(--surface)', flex: '0 0 auto' };
@@ -65,7 +65,7 @@ export default function VaultRoute({ api, accent, onClose }) {
   return (
     <div style={wrap}>
       <div style={bar}>
-        <LockGlyph open />
+        <IconLockOpen />
         <strong style={{ fontSize: 14 }}>Password Vault</strong>
         <div style={{ flex: 1 }} />
         <button type="button" style={view === 'entries' ? primary(accent) : ghost} onClick={() => setView('entries')}>Logins</button>
