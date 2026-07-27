@@ -29,7 +29,7 @@ import { buildBrainContext } from './analystBrain.js';
 import ConfirmModal from '@host/components/ui/ConfirmModal.jsx';
 import { serializeTfComms, buildTranscriptBlock, reconcileReport, validateStamps } from './vodReport.js';
 import { generateMatchReport } from './matchReport.js';
-import { generatePlayerBrief, briefToFinal, BRIEF_MODEL } from './playerBrief.js';
+import { generatePlayerBrief, briefToFinal, lexiconOnly, BRIEF_MODEL } from './playerBrief.js';
 import { exportCarryForward } from './carryForward.js';
 import { readStopwatch } from './useStopwatch.js';
 import CommsTranscriptView from './CommsTranscriptView.jsx';
@@ -303,15 +303,20 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
       const brain = await buildBrainContext(api, { coachedTeam: team });
       const reviewSegs = parseSegments((await api.getRawFileMeta(review.path, 'gamewiki')).content);
       const transcriptBlock = buildTranscriptBlock(reviewSegs);
-      // Coach's tagged in-game notes are the one optional input the brief still takes — they are the
-      // coach's own words about this match, so they are session material, not data cross-reference.
-      let coachNotesBlock = '';
+      // The brief takes the transcript and the canonical name list, and NOTHING else. The target
+      // document was produced from raw segments alone, so every other input — the charter, the patch
+      // digest, taught concepts, corrections, team pages, the coach's tagged notes — is a route for a
+      // coaching point the coach never voiced. The name list cannot add a point; it fixes spelling.
+      const lexiconBlock = lexiconOnly(brain.text);
+      // Session number for the title. One brief per scrim, so the team's scrim count IS the session
+      // number; a team with no progress sidecar yet is on its first.
+      let sessionNumber = 1;
       try {
-        const bullets = getNotes(docRef.current)?.bullets || [];
-        if (bullets.length) coachNotesBlock = renderCoachingSummary(compileNotes(bullets));
-      } catch { /* no notes */ }
+        const agg = JSON.parse((await api.getRawFileMeta(`Deadlock/Coaching/Teams/.teamprogress.${team}.json`, 'gamewiki')).content);
+        sessionNumber = Math.max(1, Number(agg.scrimCount) || 1);
+      } catch { /* first session for this team */ }
       const { md, meta, warnings } = await generatePlayerBrief(invoke, {
-        transcriptBlock, coachedTeam: team, brainContext: brain.text, coachNotesBlock,
+        transcriptBlock, lexiconBlock, sessionNumber,
       }, agents);
       // Ledger stamps only — the body carries none by design ("the player is not clicking anything").
       const badStamps = validateStamps({ ledger: meta.ledger.map((l) => l.stamp) }, reviewSegs);

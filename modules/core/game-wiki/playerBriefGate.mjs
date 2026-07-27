@@ -13,7 +13,9 @@
 //                           and it is the single rule this whole artifact exists to invert.
 //   5. card non-empty     — a document with sections and no card lines fails. A session that taught
 //                           nothing actionable did not happen.
-//   6. template intact    — checkTemplate passes, including the no-emoji assertion.
+//   6. template intact    — checkTemplate passes: the fixed strings, the four-mark allowance
+//                           (⚠ ✅ ❌ ⏸ pass, any other pictograph fails), and the deferred-work
+//                           note when the machine block says work was deferred.
 import fs from 'node:fs';
 import path from 'node:path';
 import { parseMishears } from './analystBrain.js';

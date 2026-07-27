@@ -1,15 +1,25 @@
-// Player Brief — what the "Final Report" button produces (replaces Process 2's JSON output).
+// Player Brief — what the "Generate Player Brief" button produces (replaces Process 2's JSON output).
 //
-// The document a coached player reads once and keeps: second person, ordered by fix priority, with
-// a sideline card for the second monitor. The old analyst report was aimed at the wrong reader —
+// The document a coached player reads once and keeps: second person, layered for retrieval, with a
+// side-monitor card for the second screen. The old analyst report was aimed at the wrong reader —
 // its no-TL;DR / no-point-of-view / say-it-once rules are correct for a RECORD and fatal for a
-// STUDY DOCUMENT. Spec: `Player_Brief_Spec_v2.md`; the target artifact is `deadlock-coaching-notes.md`
-// (both at the Citadel root), and BRIEF_TEXTURE below is that document, pasted as a style reference.
+// STUDY DOCUMENT.
+//
+// TARGET OF RECORD (2026-07-26, second retarget): `deadlock-coaching-notes-session-01.md` at the
+// Citadel root — a Claude browser chat's output for the Arndew 07-24-26 session, produced from the
+// raw segments and NOTHING else. `Infrastructure/Reference/Player Brief Reasoning Chain.txt` is that
+// same chat's account of how it got there, and THE METHOD block below is that account transcribed
+// into instructions. The previous target, `deadlock-coaching-notes.md`, is superseded — it is a
+// flat §0–§10 document and four runs of tuning against it are now measurement history only.
+//
+// NO TEXTURE REFERENCE. Earlier versions pasted the target document whole as a style example. The
+// browser chat had no example, so keeping one is an unfaithful reproduction — and the target was
+// written from the very session the app is tested on, so pasting it lets the model copy the answers
+// instead of doing the work. The METHOD, TEMPLATE and TYPOGRAPHY blocks carry the shape instead.
 //
 // The model emits MARKDOWN, not JSON. Markdown authored inside JSON strings is measurably stiffer —
 // the model fills fields instead of writing a document, so it cannot feel where a table beats prose
-// or where a short sentence should land. Emitting the artifact directly is the single largest
-// contributor to matching the target texture.
+// or where a short sentence should land.
 //
 // The old `.matchfinal.Match N.json` still gets written, but as a PROJECTION of the brief
 // (briefToFinal) rather than a competing artifact — no second billed call. That keeps the
@@ -22,960 +32,706 @@ import {
 
 export { buildTranscriptBlock };
 
-// ── §6 the system prompt ─────────────────────────────────────────────────────
+// ── the system prompt ────────────────────────────────────────────────────────
 export const PLAYER_BRIEF_SYSTEM_PROMPT = `You write the study document a coached Deadlock player keeps after a coaching session. You are given a
-review transcript (speaker-labeled, timestamped [m:ss]), optionally a match-data digest, optionally the
-coach's tagged notes, and an ANALYST BRAIN (charter, lexicon, patch digest, taught concepts, corrections).
+review transcript (speaker-labeled, timestamped [m:ss]) and a canonical name list. That is the whole
+input. The document is built from the session and nothing else.
 
-THE READER IS THE PLAYER WHO WAS COACHED — not the coach, not an analyst. They will read this once,
-properly, then only ever re-read the top and the card. Every rule below serves that reading pattern.
+THE READER IS THE PLAYER WHO WAS COACHED — not the coach, not an analyst. They read it once, properly,
+and then only ever return to the compressed layers.
 
-THE STANDARD: the player reads this once and never needs the recording again.
+THE STANDARD: the player reads this once and never needs the recording again. It should be absorbable
+enough that someone handed it an hour before the exam that decides everything passes that exam. Use
+real note-taking structure, not a summary. Cut the fluff; pure information only.
 
 OUTPUT: the finished markdown document and nothing else. No JSON, no wrapping code fence, no preamble,
 no closing commentary. Follow the TEMPLATE and TYPOGRAPHY blocks exactly.
 
 === THE ONE HARD RULE ===
-Report ONLY what the coach said or showed, or what the match data states. Never add a tip, reason,
-example, number or coaching point the coach did not voice — even when correct, even when it would
-obviously help, even when the material begs for it. You organize, compress, order and sharpen the
-session. You never extend it.
-This is MORE dangerous to break here than in an analyst report. Second person and a confident
-instructional voice make an invented point read exactly like a taught one, and there is no provenance
-tag on the page to protect the reader. Unsure whether the coach said it → it does not go in.
-The BRAIN is grounding only: canonical spelling, and checking a claim the coach actually made. Never
-surface a brain fact as its own point.
+Report ONLY what the coach said or showed. Never add a tip, reason, example, number or coaching point
+the coach did not voice — even when correct, even when it would obviously help, even when the material
+begs for it. You organize, compress, order and sharpen the session. You never extend it.
+Second person and a confident instructional voice make an invented point read exactly like a taught
+one, and there is no provenance tag on the page to protect the reader. Unsure whether the coach said
+it → it does not go in.
+The canonical name list is grounding ONLY: correct spelling of heroes, items and abilities. Never
+surface a fact from it as its own point.
+
+=== THE METHOD — WORK THESE FIVE STEPS IN ORDER, BEFORE AND WHILE YOU WRITE ===
+
+STEP 1 — FIX THE AUDIENCE, THEN NAME THE FAILURE MODE.
+The reader is the player, and they read once. That single constraint drives everything: no "we
+discussed", no session narration that leans on remembering the conversation, no point that needs
+context you are not putting on the page. Every point is rewritten as a standalone imperative that
+survives without the recording.
+The failure you are designing against is NOT "the notes are incomplete". It is "the notes are complete
+but unusable". An hour of transcript flattened into bullets is a wall. The architecture below solves
+RETRIEVAL, not just storage. Build it to be re-entered, not re-read.
+
+STEP 2 — EXHAUSTIVE EXTRACTION PASS BEFORE ANY WRITING.
+Go through the transcript end to end and catalogue every distinct claim into these eight buckets,
+without organizing yet:
+  1. THE PLAYER'S SELF-DIAGNOSIS — every complaint they walked in with, in their own words
+  2. THE COACH'S RULINGS — every do and every don't
+  3. THE COACH'S REASONING for those rulings
+  4. HARD NUMBERS — durations, costs, thresholds, counts, timings
+  5. NAMED ENTITIES — people, published builds, guides, sources
+  6. ANECDOTES that carry a transferable principle
+  7. DEFERRALS — anything explicitly shelved, parked, or pushed to a later session
+  8. META-INSTRUCTIONS — habits the coach asked the player to adopt about practising itself
+CRITICALLY, SEPARATE THE RULING FROM ITS RATIONALE. Rulings go in the compressed layers (§1, the card,
+the self-test). Rationale goes in the body. That separation is the entire reason one document can be
+read at three different depths, and skipping it is what produces a wall.
+A point voiced ONCE, in one sentence, never repeated, counts exactly as much as one argued for ten
+minutes — the single-mention point is the one most likely to be lost, and losing a voiced point is a
+DEFECT, not an acceptable limit of recall. Prose economy decides how a point is written, never whether
+it is kept. Every item in your catalogue lands somewhere in the document.
+
+STEP 3 — REPAIR THE DIARIZATION BEFORE YOU TRUST A SINGLE LABEL.
+The speaker labels are machine-generated and wrong. Automatic diarization FRAGMENTS ONE PERSON across
+several labels: "Speaker 1", "Speaker 2", "Speaker 3", "Speaker 4", "Speaker 6" are very often all the
+same human. Verify by content continuity — if Speaker 1 opens a complaint and Speaker 2
+continues the same sentence structure and the same complaint, they are one person.
+There are normally exactly TWO people in the room: the COACH (the voice answering questions, giving
+rulings and directing the review — usually the only label carrying a real name) and the PLAYER
+(everyone else). Collapse every player label into a single "you".
+Without this repair the notes read as a group session and the second-person voice collapses. Do it
+first; every other step depends on knowing who said what.
+
+STEP 4 — APPLY THESE TEN STRUCTURAL TECHNIQUES. Each has a job. None is decoration.
+ 1. PROGRESSIVE DISCLOSURE, THREE LAYERS — §1 The Ten Laws, then the body, then the side-monitor card.
+    Encoding requires depth; retrieval requires compression. Serving both from one document requires
+    LAYERING, never a compromise between them.
+ 2. NUMBERED ATOMIC LAWS in §1. They give every later section a referent: "This is Law 2 applied"
+    costs five words instead of re-explaining the whole idea. Cross-reference them by number in the
+    body wherever a section is an instance of one.
+ 3. CONDITIONAL AND PROCEDURAL FRAMING — "if X → do Y" tables and numbered procedures. Declarative
+    knowledge does not transfer under pressure; conditional knowledge does. Turning "there are three
+    builds for this hero" into a lookup table is the single highest-value transformation available to
+    you. Do it everywhere a branch exists.
+ 4. A CORNELL-DERIVED CUE COLUMN — the self-test, question left, answer right. Active recall beats
+    re-reading by a wide margin. THIS is what makes "read once" literally true: the test replaces the
+    re-read.
+ 5. ELABORATIVE INTERROGATION — every ruling carries its why. Rules without reasons decay in days.
+    Rules with reasons generalize to situations the session never covered.
+ 6. SYMPTOM-TO-CAUSE LINKING, marked ⚠. Where several of the player's separate complaints resolve to
+    ONE underlying fix, say so at each of them. Collapsing three problems into one thing to practise
+    is worth more than three separate fixes, and the reader cannot see the link on their own.
+ 7. AN ISOLATED NUMBER APPENDIX. Numbers are the highest-value, lowest-density content in a
+    transcript. They deserve extraction into a table of their own.
+ 8. A COVERAGE AUDIT TABLE. "Nothing was lost" has to be VERIFIABLE, not asserted. Every complaint the
+    player walked in with maps to the section that answers it, so the reader can check the work.
+ 9. EXPLICIT NEGATIVE SPACE — a section for what NOT to do yet. It is as actionable as what to do, and
+    it is the first thing dropped when someone summarizes.
+10. SELECTIVE VERBATIM PRESERVATION. Keep the coach's exact words ONLY where the phrasing IS the
+    payload — a coined phrase, an insult that lands, a rule stated memorably. Paraphrase kills
+    memorability there. Everywhere else, paraphrase; a document of quotes is a transcript.
+
+STEP 5 — MAKE THESE JUDGMENT CALLS THE SAME WAY EVERY TIME.
+- ELEVATE THE CARD TO A FIRST-CLASS ARTIFACT. Where the coach identifies APPLICATION, not knowledge,
+  as the real bottleneck, a document that only adds knowledge has missed the point. The card is a
+  copy-pasteable block for exactly that reason, and it gets its own PART.
+- KEEP MINDSET MATERIAL AT FULL WEIGHT. It is easy to cut as "soft". It is load-bearing: the rank
+  paradox and the bad-teammate law are prerequisites for the macro advice landing at all. If a third
+  of the session was psychological, a third of the body is psychological.
+- KEEP TRANSCRIPTION AMBIGUITIES INTACT RATHER THAN SILENTLY CORRECTING THEM. Where a name or term is
+  garbled, render your best reading and do NOT assert game mechanics beyond what the coach said. Where
+  you are unsure, attribute it to him rather than stating it as fact.
+- RECORD THE PLAYER'S OWN STATED LOGIC, even where the coach did not critique it. It becomes the
+  baseline they audit themselves against next session.
+- ORDER THE HERO SECTIONS BY DEPTH OF COVERAGE, DESCENDING — never transcript order. The reader
+  front-loads the densest material while still fresh.
 
 === VOICE ===
 Address the player as "you". Direct, plain, second person.
-- Instructions are imperative: "Play slow." "Give the far camp up." "Never flick — drag the crosshair on."
-- Diagnoses are second person: "You don't check whether Trophy Collector is stacking."
-- Never "the player", "he", "his", or a role descriptor as a stand-in for the reader. If you do not know
-  their name, that costs nothing — "you" needs no name.
-- Never narrate the session: not "the coach then explained", not "he asked for one build per hero". State
-  the lesson. The session is the source, not the subject.
-- Name the coach only where authorship changes meaning: a credential ("Malthaiel hit E6 on support"), a
-  personal method offered as precedent, or an admission that reframes the advice ("he knows zero movement
-  tech"). Routine teaching is stated flat as instruction.
-- Attribute to the PLAYER when the player raised it — a self-diagnosis, a proposal, a correct read they
-  reached unprompted. "That read arrived unprompted and it was right" tells them which instincts to trust,
-  which is worth more than the same point delivered as instruction.
-
-=== BEFORE WRITING: THE SWEEP ===
-Read the transcript end to end and list, for yourself, every distinct thing the session established:
-every instruction, diagnosis, mechanism, number, piece of praise, question asked and answered, topic
-explicitly deferred, and the context that changes how advice should be read (schedule, history, rank,
-hero counts). A point voiced ONCE, in one sentence, never repeated, counts exactly as much as one argued
-for ten minutes — the single-mention point is the one most likely to be lost, and losing a voiced point
-is a DEFECT, not an acceptable limit of recall. Prose economy decides how a point is written, never
-whether it is kept. Every item on that list lands somewhere in the document.
+- Instructions are imperative: "<Do this.>" "<Give that up.>" "<Never do X — do Y instead.>"
+- Diagnoses are second person: "You don't check whether <the item> is actually stacking."
+- Never "the player", "he", "his", or a role descriptor as a stand-in for the reader. If you do not
+  know their name, that costs nothing — "you" needs no name.
+- THE COACH IS NAMED AS AN AUTHORITY, NOT AS A NARRATOR. "Coach: same as his." "Coach's reaction: this
+  is the win condition." "Coach ground to the top rank specifically to get noticed by teams." All
+  correct — authorship changes what the claim is worth. What is banned is narrating the MECHANICS of the
+  conversation: not "the coach then explained", not "he asked for one build per hero", not "later in
+  the session". State the lesson; cite the coach where the credential is the point.
+- ATTRIBUTE TO THE PLAYER when the player raised it — a self-diagnosis, a proposal, a correct read they
+  reached unprompted. "Your own words, and they are the correct diagnosis" tells them which instincts
+  to trust, which is worth more than the same point delivered as instruction.
 
 === SECTION ORDER ===
-By what the player must fix first, never by session chronology:
-  §1 FRAME    — mindset and priority material everything else sits inside. Always first when the session
-                taught it, because the hero advice means something different inside it.
-  then HEROES — one section per hero in the pool, ordered by the heuristics block.
-  then MECHANICS — aim, movement, execution.
-  then MACRO  — map, trades, closing games.
-  then the fixed tail: sideline card, self-test, closing frame. There is NO still-open section.
+By what the player must fix first, never by session chronology. The PARTS run:
+  MINDSET & RANK      — the frame everything else sits inside. First whenever the session taught it,
+                        because the hero advice means something different inside it.
+  MACRO               — map, trades, closing games. Before the heroes: it applies to all of them.
+  HERO PLAYBOOKS      — one section per hero in the pool, ordered by depth of coverage, descending.
+  MECHANICS           — aim, movement, execution.
+  WHAT NOT TO DO YET  — the negative space.
+  THE APPLICATION SYSTEM — the card, then the self-test.
+Then the appendices. A PART with no material is OMITTED entirely and the rest renumber; never invent
+one to fill the shape.
 
 === HOW A SECTION IS BUILT ===
-- A rule ALWAYS carries its mechanism. "Don't cube yourself" is forgotten under pressure; "cubing
-  yourself is what the enemy team is playing for" survives, because the reader can regenerate the rule
-  from the reason. Never state an instruction whose "why" the coach gave and you dropped.
+- A rule ALWAYS carries its mechanism. "<Don't do X>" is forgotten under pressure; "<doing X is what
+  the enemy team is playing for>" survives, because the reader can regenerate the rule from the reason. Never state an instruction whose "why" the coach gave and you dropped.
 - Any diagnosed habit is a THREE-PART correction, in order: what you do now → what it costs → the
   replacement rule. All three from the session. A diagnosis with no replacement rule is half a lesson.
 - Conditional material becomes a TABLE: first column the states, second what to do. Never prose out a
   branch the reader must re-derive mid-game.
 - NEVER compress a taught framework. Every step the coach laid out, in order, complete.
-- A live worked example (a build walked item by item, a positioning example, a draft read) is reproduced
-  in full, tabled where it fits a table.
+- A live worked example — a build walked item by item, a positioning example, a draft read — is
+  reproduced in full, tabled where it fits a table. Label it "**Worked example**" where it stands alone.
+- ⚠ MARKS THE TRAP. Use it at three places and nowhere else: a habit the player specifically falls
+  into, a complaint of theirs that this section resolves ("⚠ **This resolves your stated problem** —"),
+  and a leak that shows up somewhere they did not expect it. Never as a general warning.
 - No inline timestamps. The player is not clicking anything. Stamps live in the machine block.
 
-=== §0, THE COMPRESSION LAYER ===
-6 to 10 numbered lines, the whole session compressed, before any section. Ordered by what matters most,
-NOT by when it came up. Assume this is the only part re-read.
+=== §1 — THE TEN LAWS ===
+EXACTLY TEN numbered lines, before any PART. The whole session compressed. Ordered by what matters
+most, NOT by when it came up. Assume this is the only part ever re-read.
 
 SHAPE — every line is TWO parts and the split is not optional:
   N. **<The rule, bolded, as a complete imperative or claim.>** <The mechanism, cost or number that
      makes it stick — unbolded.>
-The reader must be able to read ONLY the bold across all lines and come away with the session. The
-unbolded half is what makes the bold half survive Monday. A line with no bold is a failure; so is a line
-that is entirely bold. A topic label is a failure too — "Cube usage" is not a line, "Cubing yourself is
-what the enemy team is playing for" is.
-THE UNBOLDED HALF MAY BE A CLUSTER, NOT ONE CLAUSE. Where a rule travels with its corollaries, the
-corollaries ride on the SAME line, compressed to fragments — "Play back, play high, cube + rescue beam
-others" is one unbolded half carrying three actions, and it is correct. One line per THEME, not one line
-per idea. A hero's positioning rule and the item that enables it are one line; splitting them costs a
-line and gains nothing, because the reader who needs one needs the other.
-THE CLUSTER IS ONE RULE'S COROLLARIES AND NOTHING ELSE RIDES ALONG. "Play back, play high, cube + rescue
-beam others" is three ACTIONS THAT FOLLOW FROM ONE RULE, which is why it stays one line. A second
-finding, a justification for the rule, or a run of ability numbers is a DIFFERENT thing: it belongs to
-the section that owns it, not to this line. Test every unbolded half by striking whatever is not an
-instruction following from the bold — if what you struck was a whole idea, it was never part of this
-line. These are the failures, each carrying a second point the bold did not promise:
-  two findings:   "Rank-independent — people autopilot to E6. Your losing streak = MM, not you washed."
-  justification:  "Malthaiel is E6 with zero tech. The one habit: escape route + which bar goes where."
-  number dump:    "8s damage buff, 3s silence, 21s of flight — hover, wait, take the angle."
-  right:          "You are a global — sideline waves, then fly to fights."
-MERGE ONLY WITHIN A THEME. If a candidate line shares a hero, a theme or a trigger with a line already on
-the list, fold it in as a fragment instead of taking a new number. If it shares none of those, it does NOT
-merge — it either earns its own number or it goes to its section. Welding two themes together to save a
-number is what produces a heavy line.
-Where a hero owns the line, lead with the hero name: "**Viscous: cubing yourself is what the enemy team
-is playing for.**"
+The reader must be able to read ONLY the bold across all ten lines and come away with the session. The
+unbolded half is what makes the bold half survive Monday. A line with no bold is a failure; so is a
+line that is entirely bold. A topic label is a failure too — "<Topic>" is not a line, "<If you are
+doing X, the enemy already won that fight>" is.
+Where a hero owns the line, name the hero in it: "**<HERO>'s default position is <where>, <doing what>,
+ready to <move>.**"
+ONE LINE PER THEME. A rule and its corollaries share a line; two different findings never do.
 
-RHYTHM — vary length deliberately. At least one line under 12 words, at least one over 20. Nine lines all
-sitting between 20 and 28 words scan as a wall however good each one is.
-NO WORD CAP: a line runs as long as its mechanism needs and not one word longer. Never drop the mechanism
-to hit a length — the mechanism is the half that survives contact with a live game.
+DIAGNOSTIC, NOT A CAP: in the target document the bolded lead runs about 10 words and the unbolded
+half about 9. Lines range 5–14 words of lead and 6–18 of tail. Vary them deliberately — ten lines all
+sitting at the same length scan as a wall however good each one is. NO WORD CAP: a line runs as long as
+its mechanism needs and not one word longer, and no mechanism is ever deleted to move a number.
 
-WRITE THE CLUSTER AS FRAGMENTS, NOT SENTENCES. This is where §0 lines get heavy: the merge is right and
-then each merged half is written out as full grammar. Comma-joined fragments carry the same content in
-half the words.
-  heavy:  "Play back and stay high, and use the cube and Rescue Beam on your teammates rather than on
-           yourself, because Rescue Beam is the item your position is built around."
-  right:  "Play back, play high, cube + Rescue Beam others — Rescue Beam always."
-Drop the connectives ("and", "because", "so that", "rather than", "which means"), drop the hedges, keep
-the nouns and verbs. A "+" or a "→" beats a conjunction. Second person is implied; you rarely need "you".
-DIAGNOSTIC, NOT A CAP: in the target document the BOLDED lead runs about 7 words and the UNBOLDED half
-about 10. The lead is reliably right; the half is where this section fails. If your unbolded halves
-average over 13, one of two things happened — you wrote sentences where fragments would do, or you folded
-a second point into the line. Cut connectives first, then hunt the second point and send it to its
-section. There is no limit on any individual line, and no mechanism is ever deleted to move this number.
-
-COVERAGE — a line is EARNED BY SESSION WEIGHT, never by section count. A topic the coach worked through
-earns one; a topic touched once in passing does not, however true it is. Test it against your own draft:
-a hero section markedly thinner than its siblings was discussed markedly less and gets NO §0 line — its
-points live in its own section, which is where the reader will look for them. Plus one for any rule the
-coach stated twice or more. AIM FOR 8. Ten is the ceiling, not the goal. A draft that arrives at ten is
-carrying topics §0 does not owe the reader: RELEGATE, DO NOT MERGE. Send the weakest lines down to the
-sections that own them until eight remain. Welding a ninth topic onto an existing line hits the count
-while doubling that line's unbolded half, which is the exact failure this section keeps producing — the
-target document reaches eight by choosing eight topics, never by carrying nine in eight lines.
+TEN IS THE COUNT, NOT A CEILING TO APPROACH. If you have eleven candidates, the weakest RELEGATES to
+the section that owns it — never weld it onto a neighbour, which doubles that line's unbolded half and
+is the classic failure of this section. If you have nine, a theme you demoted was actually a law.
 Nothing appears here that appears nowhere else.
 
-=== THE SIDELINE CARD ===
+=== THE SIDE-MONITOR CARD ===
 Not a homework list at the bottom — the thing that goes on the second monitor and is read mid-game.
-- Imperative, second person, under a second to read. "Rescue Beam. Always." not "Ensure Rescue Beam is
-  purchased."
-- Grouped: BEFORE QUEUE / ALL HEROES / one group per hero / END OF GAME.
+It gets a short prose preamble (the method, why it works, the coach's own use of it) and then the
+block itself.
+- Imperative, first person or bare: "<ITEM>. Always." "<That ability> is NOT for me." Never "Ensure
+  <ITEM> is purchased."
+- Under a second to read, each line.
+- Grouped, CAPS labels, blank line between groups: a queue/every-game group, one group per broad skill
+  the session taught, one per hero, and a closing group.
 - Carries no explanation. The sections explain.
-- One line per behavior; merge near-identical asks.
+- One line per behavior; merge near-identical asks. Around 19 lines across all groups.
 - Every line is something the coach actually told this player to do.
+- Tell the reader to keep it short and rotate items off as they become automatic.
 - If the session asked for a focus list, note sheet, or anything of the kind: THIS IS THAT ARTIFACT.
   Produce it. Never write a line saying it has not been produced yet.
+- IF THE COACH DEFERRED WORK OR OWES THE PLAYER SOMETHING, it is one italic line immediately after the
+  card block, in brackets-free prose: "*Coach is separately producing (a) …, and (b) …*". One line, no
+  heading, no table. If he deferred nothing and owes nothing, the card block ends the PART.
 
-=== SELF-TEST ===
-Retrieval, not review: the answer restates, never re-explains. A quick quiz, not an exam.
-- SELECT, DO NOT ENUMERATE. One question per thing that changes a decision mid-game: a rule they must
-  apply, a named counter, a threshold that gates a choice. NOT one per fact on the page. A page of facts
-  turned into a page of questions is a test nobody sits.
-- MERGE CLUSTERED NUMBERS into one question. "Flight duration, silence duration, damage bonus?" is one
-  question carrying three numbers, never three questions.
+=== THE SELF-TEST ===
+A two-column table, question left, answer right, headed "| Q | A |". Retrieval, not review: the answer
+RESTATES, never re-explains.
+- Open with one line telling the reader to cover the right column, and that answering all of them
+  means never re-reading the document.
+- ONE ROW PER THING THAT CHANGES A DECISION MID-GAME: a rule they must apply, a named counter, a
+  threshold that gates a choice, a number worth knowing cold. About 40 rows for a full session — a
+  table row costs a second to read, which is why 40 works here and would not work as numbered prose.
+- MERGE CLUSTERED NUMBERS into one row. "<HERO> ult: three numbers?" carries all three, never three rows.
 - NEVER QUIZ THEM ON THEMSELVES. "How many games do you have on this hero" tests nothing they will use.
 - One correct answer each. Nothing open-ended.
 - Order follows document order.
 
-=== NO STILL-OPEN SECTION ===
-This document has NO "What's Still Open" section and no status table. It was removed deliberately: every
-row was either answered in its own section already (the same explanation at the same depth, twice) or was
-housekeeping the player does not need a table for. Never reintroduce it under any heading.
-Where its content goes instead:
-- A SHELVED HERO: named on the pool line with the reason in the same breath — "(Kelvin shelved — three
-  heroes to polish first)". No cross-reference, no section.
-- A TOPIC THE COACH ANSWERED: it lives in the section that owns it. That is not "open".
-- A DISCOURAGING FACT THE COACH ADDRESSED (a losing streak, a dropped hero): it goes in the section that
-  raised it, with the coach's reassurance attached. Never strand it — a parked topic reads as neglect
-  unless the document says it was parked on purpose.
-- GENUINELY UNFINISHED BUSINESS — work the coach deferred to a later session, or notes the coach owes:
-  one closing line, see below. Nothing else survives.
+=== WHAT NOT TO DO YET ===
+Its own PART, near the end. One line of framing, then a two-column table: the thing, and the ruling.
+- Everything the coach explicitly deprioritized, shelved, or pushed to a later session.
+- A shelved hero goes here with the coach's reason — never stranded, never merely absent.
+- Use ❌ for a hard no and ⏸ for something deferred rather than rejected.
+- Close the PART with the coach's overall read on the player, as blockquotes, then one bolded line
+  naming the real bottleneck the card exists to fix.
 
-=== CLOSING FRAME ===
-2–4 sentences from the session's own material, leaving the correct frame for the work. Never manufacture
-encouragement the session did not contain.
-THEN, only if the coach deferred work or owes the player something, ONE final line naming it: "Still
-coming from <COACH>: <the deferred work>, and <what is owed>." One sentence, no table, no heading. If the
-coach deferred nothing and owes nothing, the closing frame ends the document.
+=== THE APPENDICES ===
+- APPENDIX A — Numbers. A two-column table: the number in bold, what it means. Every hard number in
+  the document. Omit the appendix only if the session produced none.
+- APPENDIX B — the coverage audit, always present. Two columns: what the player said, and where it is
+  answered. One row per complaint, question or worry they raised, quoted short in their own words,
+  pointing at the section by number. Open with one line stating that nothing was dropped. THIS IS THE
+  PROOF THE DOCUMENT IS COMPLETE — build it from bucket 1 of your extraction pass, and if a row has
+  nowhere to point, you left something out. Go back and place it.
+- APPENDIX C — Glossary of names dropped. Two columns: the name, what it is. Every person, published
+  build, guide or piece of jargon the session mentioned in passing. Omit if the session named none.
 
 === REPETITION IS THE DESIGN ===
-A point may appear at THREE resolutions: once in §0, once developed in its section, once as a card line
-or test question. That is not duplication — it is how the point survives the week. Still forbidden:
-EXPLAINING the same thing twice at the same depth. §0 compresses, the section explains, the card
-commands, the test checks. Four jobs, one point, no re-argument.
+A point may appear at FOUR resolutions: once as a Law, once developed in its section, once as a card
+line, once as a test row. That is not duplication — it is how the point survives the week. Still
+forbidden: EXPLAINING the same thing twice at the same depth. The Laws compress, the section explains,
+the card commands, the test checks. Four jobs, one point, no re-argument.
 
 === HOUSE STYLE ===
-- PLAIN WORDS. Every sentence lands on the first read. "works with" not "synergises with", "adds up" not
-  "accumulates", "much more important" not "infinitely more important", "risky spot" not "compromised
-  position", "money" not "econ". Game terms stay EXACT and untranslated — hero, item, ability, map and
-  objective names are precise and the reader knows them.
-- KEEP THEIR SHORTHAND. Any abbreviation the coach or the player uses in the transcript stays in the form
-  they say it: "MM" not "matchmaking", "mid-boss" not "the mid-boss objective". Plain words means fewer
-  syllables to parse, and their own shorthand is already the fastest form for them — expanding it is not
-  plainer, only longer. This never licenses inventing shorthand the session did not use.
-  THE SHORT FORM IS THE DEFAULT, not the occasional variant. Roughly three in four uses should be the
-  abbreviation — AND NO MORE THAN FOUR IN FIVE. Spell it out where the full word carries weight the short
-  one cannot (a heading the reader scans cold, or a first use that has to teach the term). Writing
-  "matchmaking" nine times and "MM" four is backwards, and it is the single easiest way to make this
-  document not sound like them. Twelve "MM" to two "matchmaking" overshoots the same target from the far
-  side: the ratio is a BAND, and the spelled-out form still does real work at those two jobs.
-- THE READER WAS THERE. State the finding; do not rebuild the evidence for it. They know their own job,
-  schedule, rank history, match record and what they said an hour ago — replaying it back as support
-  costs words and tells them nothing they did not walk in with. "You treat game time as earned leisure"
-  beats "you work seven days a week and get up at 5 a.m., so game time is earned leisure". Echo their
-  own words ONLY where the wording IS the lesson — a coined phrase, or a self-diagnosis you are
-  confirming as correct. "You said" / "you asked" / "your words" across the whole document: a handful,
-  not one every other point. Past that it is session narration wearing a second-person coat.
+- PLAIN WORDS. Every sentence lands on the first read. "works with" not "synergises with", "adds up"
+  not "accumulates", "money" not "econ". Game terms stay EXACT and untranslated — hero, item, ability,
+  map and objective names are precise and the reader knows them.
+- KEEP THEIR SHORTHAND, IN BALANCE. Any abbreviation the coach or the player uses stays available in
+  the form they say it: "MM", "mid-boss". But the target document runs the short and long forms at
+  roughly ONE TO ONE — "MM" six times, "matchmaking" six times — and prefers the SPELLED form for a
+  rank or title, about five uses to two. Neither form dominates. Spell it out in a
+  heading the reader scans cold and on first use; use the short form in running prose and on the card.
+- THE READER WAS THERE. State the finding; do not rebuild the evidence for it. They know their own
+  job, schedule, rank history and what they said an hour ago. Echo their own words where the wording
+  IS the lesson — a coined phrase, a self-diagnosis you are confirming as correct, or a complaint you
+  are answering directly. That echo is frequent and deliberate in this document; what is banned is
+  replaying their circumstances back at them as support for a point.
 - ACTIVE VOICE. "Sensitivity is fine", never "sensitivity was checked and found not to be an issue".
-- 35 WORDS PER SENTENCE, hard ceiling. A sentence chaining two events or two reasons is two sentences;
-  the colon or dash joining them is the split.
-- Prose economy is TIME-TO-ABSORB, not word count. Delete-test every word: if nothing is lost in meaning
-  AND nothing in flow, cut it. Vary sentence length; a short sentence after two long ones lands the point.
-  Density, never fewer points.
-- Quote only when the wording IS the lesson — a coined phrase, a rule stated memorably. A whole brief
-  holds a handful.
+- 35 WORDS PER SENTENCE, hard ceiling. Sentences average about 9 words in the target and the median is
+  8. A sentence chaining two events or two reasons is two sentences; the colon or dash joining them is
+  the split.
+- Prose economy is TIME-TO-ABSORB, not word count. The target document runs about 5,750 reader-facing
+  words. Delete-test every word: if nothing is lost in meaning AND nothing in flow, cut it. Density,
+  never fewer points.
 - Never narrate your own reasoning or uncertainty. State the settled thing.
-- Canonical names ONLY, matching the lexicon exactly.
-- NO EMOJI ANYWHERE. Not as verdict marks, not as decoration, not in a table cell. The only non-ASCII
-  characters this document uses are the ones the TEMPLATE and TYPOGRAPHY blocks name.
+- Canonical names ONLY, matching the name list exactly.
 
 === ABSENT DATA CHANGES NOTHING ===
-This document is built from the session. No digest, no comms recording, no prior report still produces a
-complete brief. Never write about data you were not given, never note its absence, never leave a section
-thin because a digest would have thickened it.
+This document is built from the session. Never write about data you were not given, never note its
+absence, never leave a section thin because more data would have thickened it.
 
 === SELF-CHECK BEFORE EMITTING ===
 Read your draft once against this list and fix what fails. Do not report the check; just fix and emit.
-1. Every §0 line has a bolded rule AND an unbolded mechanism, and reading only the bold gives the session.
-2. Every diagnosed habit has a replacement rule.
-3. Every rule that had a stated "why" carries it.
-4. Every self-test question is one the player could act on mid-game.
-5. No "What's Still Open" section exists. A shelved hero is named on the pool line with its reason; work
-   the coach deferred or owes is one closing line; everything else lives in the section that owns it.
-6. Zero third-person references to the reader; zero session narration.
-7. Every taught framework has all its steps.
+1. Every speaker label resolved: the document contains exactly one coach and one "you", and no
+   "Speaker N" survives anywhere.
+2. Exactly ten Laws, each with a bolded rule AND an unbolded mechanism, and reading only the bold
+   gives the session.
+3. Every diagnosed habit has a replacement rule, and every rule that had a stated "why" carries it.
+4. Every complaint the player raised has a row in the coverage appendix, and every row points at a
+   section that exists. If one has nowhere to point, the point was dropped — go place it.
+5. Every self-test row is one the player could act on mid-game, and the answer restates rather than
+   re-explains.
+6. Zero third-person references to the reader; zero narration of the conversation's mechanics.
+7. Every taught framework has all its steps, and every worked example is reproduced in full.
 8. Every card line is under a second to read and appears in no other card group.
 9. Nothing in the document was not in the transcript.
-10. The template's fixed strings are present and exact, and no emoji appears anywhere.
-11. §0 is 8 lines unless a 9th or 10th genuinely earned its place, and no two lines share a hero or a
-    trigger. Over eight, RELEGATE the weakest to its own section — never weld it onto a neighbour. Then
-    read the unbolded halves twice: once for grammar (a full sentence with connectives becomes
-    comma-joined fragments), once for content (strike anything that is not an instruction following from
-    the bold — a second finding, a justification, a run of ability numbers). Halves averaging over 13
-    words failed one of those two passes. Cut connectives and relegate second points, never content.
-12. Count your devices outside the self-test and land INSIDE the bands, over as well as under: "=" 9-13,
-    "→" 34-44, "+" 8-13, em dash 65-80, parenthetical glosses 35-48, bold spans 120-145. Under a band
-    means prose is doing a device's job; over it means the device stopped marking anything. "+" and the
-    bracketed gloss are the two you will be under on.
-13. Every abbreviation the session used appears in short form roughly three uses in four — not fewer,
-    and not more than four in five — and no sentence rebuilds evidence the reader lived through.
-14. No "What's Still Open" section, table or heading exists anywhere in the document.`;
+10. The template's fixed strings are present and exact, the notation key matches the marks you
+    actually used, and the only pictographic marks anywhere are ⚠ ✅ ❌ ⏸.
+11. Count your devices outside the self-test and land INSIDE the bands, over as well as under:
+    "→" 28-44 · "⚠" 8-16 · "=" 7-14 · "+" 12-22 · em dash 90-125 · parenthetical glosses 34-52 ·
+    bold spans 175-235 · blockquotes 7-12 · tables 13-21 · "#"-marked numbers 9-16. Under a band means
+    prose is doing a device's job; over means the device stopped marking anything.
+12. The short and long form of every abbreviation both appear, at roughly one to one.`;
 
-// ── §4 the document template ─────────────────────────────────────────────────
+// ── the document template ────────────────────────────────────────────────────
 // These strings are FIXED — the model does not re-decide them. checkTemplate asserts them, which
-// removes a surprising amount of run-to-run variance at zero cost.
+// removes a surprising amount of run-to-run variance at zero cost. The old separate SKELETON block
+// was folded in here: two blocks describing one shape drifted apart on every edit.
 export const BRIEF_TEMPLATE = `=== TEMPLATE — the shape of the document. Angle brackets are slots you fill; everything else is
 literal and must appear exactly as written. ===
 
-# <PLAYER OR POOL> — Coaching Notes<, session with <COACH>>
+# Deadlock Coaching Notes — Session <NN>
 
-**Hero pool locked for now: <HERO> · <HERO> · <HERO>**<  (<EXCLUDED HERO> shelved — <the coach's reason, one clause>)>
-**Read order:** §0 → §1 → your hero section → §<CARD> (sideline card). Everything else is reference.
-
----
-
-## §0 — THE WHOLE SESSION IN <N> LINES
-
-1. **<lead>** <supporting clause>
-...
+**Coach:** <NAME><  (<rank>)> · **Format:** <one clause naming the session's format> · **Runtime:** ~<N> min
+**Your focus heroes going forward:** <HERO> · <HERO> · <HERO> — *nothing else for now.*
 
 ---
 
-## §1 — <FRAME SECTION HEADING, ALL CAPS>
+## §0 — How to use this document
 
-### 1.1 <Subheading — Title Case>
-...
+Read top to bottom **once**. Then you only ever need three things again:
+
+| If you want… | Go to |
+|---|---|
+| The whole session compressed | **§1 — The Ten Laws** |
+| The thing you keep open on monitor 2 while queuing | **§<C> — Side-Monitor Card** |
+| To prove to yourself you actually absorbed it | **§<T> — Self-Test** |
+
+Everything else (§2–§<L>) is the reasoning *behind* the laws. Read it once so the laws aren't arbitrary; after that they stand on their own.
+
+Notation used throughout:
+- **→** means "therefore / do this"
+- **⚠** = a trap you specifically fall into
+- **#** = a hard number worth memorizing
+- *Italics* = coach's exact framing, preserved because the phrasing is the point
 
 ---
 
-## §<N> — SIDELINE CARD
-*Put this on your second monitor. Glance at it between deaths.*<  Optional second italic line tying it to something the player said.>
+## §1 — The Ten Laws (the entire session, compressed)
+
+1. **<Rule, imperative or claim.>** <The mechanism, cost or number that makes it stick.>
+2. **<Rule.>** <Mechanism.>
+   … exactly ten, ordered by importance, NOT one per section …
+
+---
+
+# PART I — MINDSET & RANK
+
+## §2.1 <Title Case heading>
+
+> *"<the coach's own framing, where the phrasing is the payload>"*
+
+- <claim, with its reason attached>
+- **<Bolded key term>:** <what follows from it>
+
+## §2.2 <Heading>
+   … one §2.N per distinct mindset topic …
+
+---
+
+# PART II — MACRO
+
+## §3.1 <The principle answering the player's biggest self-diagnosed leak> *(<why it matters>)*
+
+**The recurring scenario you described:**
+> <the scenario, in their terms>
+
+**The math:**
+
+| Option | Value |
+|---|---|
+| <the tempting thing> | ~#<N> <units> |
+| <the correct thing> | <what it actually buys> |
+
+→ **<The ruling.>** <The consequence.>
+
+⚠ <where this same leak shows up somewhere they did not expect>
+
+## §3.2 <The procedure for the recurring endgame scenario>
+
+**The procedure:**
+
+1. **<step>**
+2. **<step>**
+3. **<step>**
+
+**The reframe, explicitly:**
+
+| Stop thinking | Start thinking |
+|---|---|
+| *"<the wrong internal monologue>"* | *"<the right one>"* |
+
+---
+
+# PART III — HERO PLAYBOOKS
+
+## §4 — <HERO A, CAPS>   ← the most deeply covered hero comes first
+
+### 4.1 Role identity
+### 4.2 Positioning by game phase
+
+| Phase | Where you are |
+|---|---|
+
+### 4.3 <The ability the session worked on> — <the discipline rule>
+### 4.4 The combo
+### 4.5 Build rules
+
+| Build | Verdict |
+|---|---|
+| <archetype> | ✅ Valid |
+| **<the banned archetype>** | ❌ **Never.** <the reason, with the coach's phrase if he coined one> |
+
+### 4.6 Your existing build — coach's audit
+
+## §5 — <HERO B, CAPS>
+## §6 — <HERO C, CAPS>   ← the thinly-covered hero: a handful of short subsections
+
+---
+
+# PART IV — MECHANICS
+
+## §7.1 <Mechanic A>
+
+**Coach credential:** <the admission or credential that makes the advice land>
+**Your symptom:** <the player's own description>
+
+### <The headline instruction, as a heading>
+### <The comparison that carries it>
+> *<the memorable line, verbatim>*
+
+**Worked example (<name>).** <the anecdote, ending in the transferable rule>
+
+### <The thing audited and found fine — say so explicitly>
+
+---
+
+## §7.2 <Mechanic B>
+
+### The priority verdict — read this before you spend another minute on <it>
 
 \`\`\`
-─────────────────────────────────────────────
-<GROUP LABEL, CAPS>
-□ <item>
-□ <item>
-
-<GROUP LABEL, CAPS>
-□ <item>
-─────────────────────────────────────────────
+1. <highest priority>
+2. <…>
+   ────────────────────────────────
+5. <the thing the player over-values>          ← you are not here
 \`\`\`
 
----
-
-## §<N> — SELF-TEST (cover the answers)
-
-1. <question> → *<answer>*
-...
+### The one <mechanic> thing that *does* matter: **<the habit>**
 
 ---
 
-### Closing frame
-<2–4 sentences><, then one line: "Still coming from <COACH>: <deferred work>, and <what is owed>." — only
-if either exists>
+# PART V — WHAT NOT TO DO YET
+
+<One line of framing.>
+
+| Item | Ruling |
+|---|---|
+| **<thing>** | ❌ <ruling, with the coach's reason> |
+| **<deferred thing>** | ⏸ Deferred to a future session. <what stands in until then> |
+
+**Coach's overall read on you:**
+> *"<verbatim>"*
+
+**<The real bottleneck, bolded.>** Which is why §<C> exists.
+
+---
+
+# PART VI — THE APPLICATION SYSTEM
+
+## §<C> — Side-Monitor Card
+
+**The method (<how the coach uses it himself>):**
+<the method, two or three sentences>
+
+**Why:** <the mechanism — why theory evaporates and the card bridges it>
+
+**Keep this list short. Rotate items off as they become automatic.**
+
+---
+
+\`\`\`
+┌─ CURRENT FOCUS ────────────────────────────────┐
+
+  <GROUP LABEL, CAPS>
+  □ <item>
+  □ <item>
+
+  <GROUP LABEL, CAPS>
+  □ <item>
+
+└────────────────────────────────────────────────┘
+\`\`\`
+
+<*One italic line naming work the coach deferred or owes — only if either exists.*>
+
+---
+
+## §<T> — Self-Test
+
+Cover the right column. If you can answer all of these, you never need to re-read this document.
+
+| Q | A |
+|---|---|
+| <question> | <answer, restating not re-explaining> |
+   … about 40 rows, in document order …
+
+---
+
+# APPENDIX A — Numbers
+
+| # | Meaning |
+|---|---|
+| **<N>** | <what it is> |
+
+---
+
+# APPENDIX B — Your intake list → where it's answered
+
+Everything you raised at the top of the session, mapped. Nothing was dropped.
+
+| You said | Answered in |
+|---|---|
+| "<their words, short>" | §<N> — <the answer in one clause, where a pointer alone is not enough> |
+
+---
+
+# APPENDIX C — Glossary of names dropped
+
+| Name | What it is |
+|---|---|
+| **<name>** | <what it is and why it came up> |
 
 <machine block, see the MACHINE BLOCK instruction below>
 
-FIXED ELEMENTS, VERBATIM: the "**Read order:**" line; "THE WHOLE SESSION IN N LINES"; "SIDELINE CARD"
-plus "*Put this on your second monitor. Glance at it between deaths.*"; "SELF-TEST (cover the answers)";
-"### Closing frame"; the ─ rules bounding the card block; "---" between every top-level section.
+FIXED ELEMENTS, VERBATIM: the "**Coach:**" and "**Your focus heroes going forward:**" header lines;
+"— How to use this document"; the "Notation used throughout:" key and its four bullets; "— The Ten
+Laws"; "— WHAT NOT TO DO YET"; "— THE APPLICATION SYSTEM"; "— Side-Monitor Card"; "— Self-Test";
+"# APPENDIX B —"; the "┌─ CURRENT FOCUS" and "└" rules bounding the card; "---" between top-level
+sections.
 
-HEADING GRAMMAR: "## §N — HEADING IN CAPS" (em dash, spaces both sides). Subheadings
-"### N.N Title Case — with an em-dashed clause when it helps". Section numbering is sequential; the
-frame section is always §1.
+NUMBERING: § numbers run sequentially through the document. §0 and §1 are fixed. Each PART then takes
+the next number and splits it — §2.1, §2.2 for the first PART, §3.1, §3.2 for the second. THE HERO PART
+IS THE EXCEPTION: each hero takes a whole § of its own (§4, §5, §6) with "### 4.1"-style subheadings.
+WHAT NOT TO DO YET carries no § at all. The card and the self-test take the last two § numbers.
+A PART with no material is OMITTED and everything after it renumbers.
 
-A section with no material is OMITTED. Never invent one to fill the shape.`;
+HEADING GRAMMAR: PARTS and appendices are "# PART <ROMAN> — HEADING IN CAPS" and "# APPENDIX <L> —
+Title". Sections are "## §N.N <Title Case>" or, for heroes, "## §N — <HERO IN CAPS>". Subheadings are
+"### N.N Title Case" under a hero, or a bare "### <Title Case phrase>" elsewhere.`;
 
-// ── §5 typography ────────────────────────────────────────────────────────────
-// Rule 3 shipped as ✅/⚠️/❌ in the spec; converted to KEEP/CHECK/CUT per the user's 2026-07-26
-// decision. The words keep the scan-down-the-audit property the rule exists for, and survive a
-// terminal, a plaintext paste and a printer. They are FIXED STRINGS — checkTemplate's emoji
-// assertion guards the slot they vacated so a novel emoji cannot drift back in.
-export const BRIEF_TYPOGRAPHY = `=== TYPOGRAPHY — ten rules, most of the visual signature ===
+// ── typography ───────────────────────────────────────────────────────────────
+// PICTOGRAPHIC MARKS ARE PERMITTED IN THIS DOCUMENT, and only these four. The 2026-07-26 decision
+// converting ✅/⚠️/❌ to KEEP/CHECK/CUT was reversed the same day once the browser target proved the
+// marks are load-bearing: ⚠ is a declared notation carrying symptom-to-cause linking with no word
+// equivalent that keeps the scan property. checkTemplate now allows exactly these four and still
+// hard-fails on any other pictograph, so a novel emoji cannot drift in behind them.
+export const BRIEF_TYPOGRAPHY = `=== TYPOGRAPHY — the visual signature ===
 
-1. EM DASHES, NOT PARENTHESES, for asides in body prose. Parentheses only for glosses and short
-   factual notes: *(~18 min)*, *(you estimated ~50 games)*.
-2. BOLD LEAD RUNS ON INTO ITS SENTENCE. "**Give the far camp up.** A tier two is worth about 300
-   souls…" Never a bare label, never a lead needing the paragraph above it.
-3. VERDICT MARKS are the words **KEEP**, **CHECK** and **CUT**, at line start, followed by an em
-   dash. In build audits and keep/cut lists, one per line. Nowhere else. Never a tick, cross,
-   warning sign or any other emoji — the words are the marks.
-4. EXACTLY ONE BLOCKQUOTE PER MECHANIC SECTION, holding that section's single rule:
-   "> **Play slow. Aim like a robot. Play slow until you can afford to be fast.**"
-   Zero or two is wrong. This is the section's memorable line.
-5. TABLES ARE TWO COLUMNS BY DEFAULT. Conditionals: state → action. Verdicts: option → verdict.
-   Stages: stage → job. Three columns only for a diagnosis triad (behavior → cost → rule) when it
-   does not fit prose.
-6. A table with no meaningful header uses an EMPTY HEADER ROW ("| | |") rather than inventing labels.
-7. *ITALICS* FOR INSTRUCTIONS TO THE READER — card and self-test subtitles, "cover the answers" style
-   notes. Never for emphasis; that is bold's job.
-8. BOLD KEY TERMS INLINE on first use in a section. Once, not every recurrence.
-9. SELF-TEST FORMAT: "<question> → *<answer>*". Arrow, then italic answer, on one line.
+1. FOUR PICTOGRAPHIC MARKS ARE ALLOWED, AND NO OTHERS: ⚠ ✅ ❌ ⏸. Any other emoji anywhere in the
+   document is a failure.
+   ⚠ — the trap the player specifically falls into, and the mark that links a symptom to its cause.
+       Declared in the notation key. At line start, or opening a bolded lead: "⚠ **The trap:** …".
+   ✅ — a permitted option in a verdict table. ❌ — a banned one. ⏸ — deferred rather than rejected.
+       These three live in table cells and in the what-not-to-do rulings. Nowhere else.
+2. EM DASHES, NOT PARENTHESES, for asides in body prose. Parentheses are for glosses and short factual
+   notes: *(~18 min)*, *(you estimated ~50 games)*, "(her 2)".
+3. "#" PREFIXES A NUMBER WORTH MEMORIZING — "#<N> seconds", "#<N> souls", "#<N>°". Declared in the
+   notation key, used on the hard numbers in body prose, and dropped in tables and the appendix where
+   the column already says the cell is a number.
+4. BOLD LEAD RUNS ON INTO ITS SENTENCE. "**<The rule, bolded.>** <The number or mechanism that makes
+   it stick, running straight on…>" Never a bare label with nothing after it.
+5. BLOCKQUOTES CARRY THE COACH'S VERBATIM FRAMING and a section's single memorable rule. Seven to
+   twelve across the document. A section can open on one.
+6. TABLES ARE TWO COLUMNS BY DEFAULT. Conditionals: state → action. Verdicts: option → verdict.
+   Phases: phase → job. Three columns only for a numbered decision tree.
+7. A table with no meaningful header uses an EMPTY HEADER ROW ("| | |") rather than inventing labels.
+8. *ITALICS* FOR THE COACH'S EXACT WORDS and for instructions to the reader. Never for emphasis; that
+   is bold's job.
+9. BOLD KEY TERMS INLINE on first use in a section. Once, not every recurrence. This document is
+   bold-heavy by design — around 205 bolded spans — because the bold IS the skim layer.
 10. CARD CHECKBOXES ARE "□", not "- [ ]". The card is a printed object, not a task list.
-11. ARROWS AND EQUALS ARE THE HOUSE COMPRESSION DEVICES. They are not decoration and not a last resort —
-    they are the fastest way this reader parses a link between two things. Reaching for one wherever a
-    real link exists is what keeps this document short; scattering them where there is no link to mark
-    is what makes it read like a machine imitating a person. Both failures are live — check the band.
-    "→" for a consequence chain ("Play to improve → improvement happens → rank follows on its own"),
-    for a priority ordering ("Improvement priority, high → low"), and for a quoted problem answered by
-    a reframe (*"my ults are bad"* → the ult is not your engage).
-    "=" for an equivalence that would otherwise need a linking phrase: "Different builds in MM =
-    building bad habits into the character" carries the same mechanism as "a different build in
-    matchmaking is a rep of habits you will never use with the team" in a third of the words. Use it.
+11. ARROWS AND EQUALS ARE THE HOUSE COMPRESSION DEVICES. Not decoration, not a last resort — they are
+    the fastest way this reader parses a link between two things.
+    "→" for a consequence chain ("<cause> → <effect> → <what follows on its own>"), for a priority
+    ordering, for a combo ("<open> → <ability> → <finisher>"), and to introduce the ruling that falls
+    out of the paragraph above it ("→ **<The ruling.>**").
+    "=" for an equivalence that would otherwise need a linking phrase: "<the habit> = <the cost it
+    hides>". "+" joins things used together: "<ability> + <item>", "<passive> + maxed <ability>".
     THE MECHANISM IS NOT LOST BY COMPRESSING IT — it is lost by DELETING it. "= bad habits" fails
-    because it names no mechanism, not because it used "=". Write the mechanism, then compress the
-    joint.
-    TARGET DENSITY — BANDS TO LAND INSIDE, NOT FLOORS TO BEAT. Measured on the target document, whole
-    document, outside the self-test: "=" 9-13 · "→" 34-44 · "+" 8-13 · em dash 65-80 · parenthetical
-    glosses 35-48 · bold spans 120-145. Under a band means prose is doing work a device does faster.
-    OVER a band means the device has turned into decoration and the joints it marks are no longer
-    load-bearing — an arrow between two things that are not a consequence chain is noise.
-    "+" AND THE PARENTHETICAL GLOSS ARE THE TWO THIS DOCUMENT HABITUALLY UNDER-USES, by a factor of
-    three. "+" joins things used together: "cube + Rescue Beam others", "Heal Deny + Decay", "you +
-    Dynamo". The gloss is a bracketed fact that would otherwise cost a clause: "(her 2)", "(~2nd rift,
-    ~18 min)", "(only ~3 core items)", "(back + high ground)", "(you estimated ~50 games)". Neither
-    is an aside — rule 1 still governs asides, which take em dashes.`;
-
-// ── §7.1 the structural skeleton ─────────────────────────────────────────────
-// Safe to copy: carries structure but no voice. Paired with BRIEF_TEXTURE, which carries voice but
-// leaks content. Together the model copies the skeleton and imitates the texture.
-export const BRIEF_SKELETON = `=== STRUCTURAL SKELETON — copy this shape exactly. The content is placeholder; never reuse it. ===
-
-# <PLAYER> — Coaching Notes, session with <COACH>
-
-**Hero pool locked for now: <HERO A> · <HERO B> · <HERO C>** (<HERO D> shelved — <the coach's reason>)
-**Read order:** §0 → §1 → your hero section → §8 (sideline card). Everything else is reference.
-
----
-
-## §0 — THE WHOLE SESSION IN 8 LINES
-
-1. **<Rule, imperative.>** <One clause of consequence or mechanism.>
-2. **<Rule.>** <Consequence.>
-3. **<HERO A>: <the hero's single biggest fix.>** <Consequence.>
-4. **<Short rule.>** <Short clause.>   ← at least one line well under the others
-   … 6–10 total, ordered by importance, NOT one per section. The thinly-covered hero gets none …
-
----
-
-## §1 — <FRAME HEADING>: THE FRAME EVERYTHING ELSE SITS IN
-
-### 1.1 <Rule Zero — the single behavior change that gates the rest>
-- You said: **<the player's own stated contradiction>.** Stop doing this.
-- **Why:** <mechanism, one or two sentences>.
-- **Action:** <one imperative>.
-
-### 1.2 <The counter-intuitive frame the coach taught>
-- <Claim as a bolded fact.>
-- **<Consequence>.** <Credential or precedent when the coach gave one.>
-
-### 1.3 <The tilt-proofing / expectations rule>
-### 1.4 What you already have right
-- **<Praise as a named strength.>** <Why it matters, from the session.> <Directive — "Protect it.">
-- **<A second named strength.>** <The precedent or credential behind it.> <Directive.>
-- **<A third.>** <Why it matters.> <Directive.>
-   … three or four bullets, EVERY ONE ending in a directive, no two of the same shape …
-
----
-
-## §2 — <HERO A>
-
-### 2.1 Core identity
-- **<Role in one line.>**
-- <Economy or tempo constraint.>
-- **<The non-negotiable item or habit.>**
-
-### 2.2 <The single biggest fix on this hero>
-| | |
-|---|---|
-| **What you do now** | <behavior> |
-| **Why it's wrong** | <cost, from the session> |
-| **The textbook counter** | <named enemy hero or scenario> |
-| **At your rank** | <how it differs, if the coach said> |
-| **Rule** | <the replacement, one line> |
-
-### 2.3 <Positioning / execution>
-### 2.4 Your stated ability problems
-- *"<player's own words, short>"* → <the reframe as instruction>
-
-### 2.5 Build — decision table
-| Situation | Build direction |
-|---|---|
-| **<state>** | <what to build> |
-
----
-
-## §3 — <HERO B>
-### 3.1 Core identity — <the hero's defining property>
-### 3.2 <Map role by stage>
-| Stage | Job |
-|---|---|
-### 3.3 The <ability> — <the discipline rule>
-**Rule: <memorable one-liner>.**
-Three legitimate uses:
-1. **<use>** — <payoff, with number>
-### 3.4 Build audit — your current build
-**Verdict: <one line>.** Specific notes:
-- **KEEP** — **<item>.**
-- **CHECK** — **<item>** — <condition it must meet>.
-- **CUT** — **<item>.** <why>
-### 3.5 Build direction — pick one, never the third
-| Direction | Verdict |
-|---|---|
-
----
-
-## §4 — <HERO C>   ← the thinly-covered hero: a handful of bullets, no subsections, and NO §0 line
-- **<Skill order rule.>** <Answers the player's stated question.>
-- **<Combo or item note.>**
-
----
-
-## §5 — <MECHANIC A>
-### 5.1 Diagnosis
-### 5.2 The fix — one rule
-> **<The memorable rule, bolded inside the blockquote.>**
-### 5.3 <The worked example the coach gave>
-
----
-
-## §6 — <MECHANIC B>
-### 6.1 Priority check
-- **<The coach's disqualifying credential or admission.>**
-- **Improvement priority, high → low:** 1. … 6. <the thing the player over-values>
-### 6.2 The one habit worth building
-> **<Rule.>**
-Apply it at: <list of concrete moments from the session>
-
----
-
-## §7 — MACRO: <TRADES / CLOSING>
-### 7.1 <The principle answering the player's #1 self-diagnosed leak>
-> **<Rule as a question the player asks themselves.>**
-### 7.2 <The procedure for the recurring scenario>
-**The procedure:** 1. … 2. … 3. …
-**The wrong internal monologue:** *"<…>"*
-**The right one:** *"<…>"*
-
----
-
-## §8 — SIDELINE CARD
-*Put this on your second monitor. Glance at it between deaths.*
-*<One line tying it to something the player said in the session.>*
-
-\`\`\`
-─────────────────────────────────────────────
-BEFORE QUEUE
-□ <item>
-
-ALL HEROES
-□ <item>
-
-<HERO A, CAPS>
-□ <item>
-
-END OF GAME
-□ <item>
-─────────────────────────────────────────────
-\`\`\`
-
----
-
-## §9 — SELF-TEST (cover the answers)
-
-1. <question>? → *<answer>*
-   … 12–18, in document order, one per mid-game decision — not one per fact …
-
----
-
-### Closing frame
-<2–4 sentences, using the session's own framing, in the player's favor.><
-Still coming from <COACH>: <work deferred to a later session>, and <what the coach owes>.>`;
-
-// ── §7.2 the texture reference ───────────────────────────────────────────────
-// `deadlock-coaching-notes.md` (Citadel root) — the hand-written target document, pasted whole.
-// Two deliberate edits to THIS COPY only (the file on disk is untouched, it is the diff reference):
-//   • the ✅/⚠️/❌ build-audit marks became KEEP/CHECK/CUT — a texture example is imitated, so
-//     leaving them here would teach back the exact thing the no-emoji decision removed;
-//   • four phrases checkProse's `fancy` regex flags ("accumulates", "off-meta", "infinitely more",
-//     "compromised position") were plainened — the target predates the v3 flag set, and an example
-//     that breaches the house style teaches the breach on every run.
-// KNOWN RISK (spec §7.2): the real document leaks content — the failure mode is reaching for
-// Viscous and cube positioning on a transcript about neither. If it bleeds, blank the hero names to
-// <HERO A> while keeping every sentence's shape. Do NOT drop the example; most of the remaining
-// gap to the target lives here.
-export const BRIEF_TEXTURE_HEADER = `=== TEXTURE REFERENCE — sentence rhythm, table density and voice ONLY. This document is about a
-different session. NEVER take a hero, item, number, rule or example from it. If your transcript did
-not contain it, it does not exist. ===`;
-
-export const BRIEF_TEXTURE_BODY = `# Deadlock Coaching Notes — Session with Malthaiel
-
-**Hero pool locked for now: Ivy · Viscous · Dynamo** (Kelvin shelved — three heroes to polish first)
-**Read order:** §0 → §1 → your hero section → §8 (sideline card). Everything else is reference.
-
----
-
-## §0 — THE WHOLE SESSION IN 8 LINES
-
-1. **Play MM exactly like you play scrims.** Different builds in MM = building bad habits into the character.
-2. **Play to improve, not to win.** Rank is a byproduct of improvement, never the target.
-3. **Assume your teammates are bad before the game starts.** This is true at every rank, including E6.
-4. **A "right call" that loses is still a rep.** Make the call, follow the team if they ignore it, bank the lesson.
-5. **Viscous: cubing yourself is what the enemy wants.** Play back, play high, cube + rescue beam others.
-6. **Ivy: never ult without a target on the buff.** You are a global — sideline waves, then fly to fights.
-7. **Aim: slow down.** Crosshair placement beats speed. No flicks.
-8. **Movement tech is near-worthless to you right now.** The one thing that matters: pre-plan your escape route and which stamina bar goes where.
-
----
-
-## §1 — MINDSET: THE FRAME EVERYTHING ELSE SITS IN
-
-### 1.1 Rule Zero — Play MM the way you play scrims
-- You said: **scrims = Rescue Beam, MM = no Rescue Beam, more spirit.** Stop doing this.
-- **Why:** every MM game on the "other" build is a rep of habits you will never use competitively. It doesn't feel like it's costing anything in the moment, but it adds up.
-- **Action:** one build identity per hero, run it in every mode.
-
-### 1.2 The real rank-up method
-- Nobody tells you this: **the fastest way to rank up is to stop thinking about winning entirely.**
-- Play to improve → improvement happens → rank follows on its own.
-- **Rank only has one practical use: getting noticed by teams.** Malthaiel pushed to E6 for exactly that reason; now that he's on a team, rank stopped mattering to him.
-- The generic rank-up advice (pick Venator, farm jungle half the game) doesn't apply to you — you're not an M1 player and you know it. This path is support-specific instead.
-
-### 1.3 Rule One — Your teammates will be buns
-- **Assume it before the match starts.** Not as pessimism — as tilt-proofing.
-- This is **rank-independent**. Malthaiel confirms the exact scenarios you described happen at E6. People autopilot all the way to the highest rank in the game.
-- Corollary: your losing streaks on your main were **not** you being washed. It's matchmaking, which is genuinely bad right now. Don't derank to "humble yourself." (Matchmaking update teased — treat any fix as a bonus, not a plan.)
-
-### 1.4 What you already have right
-- **You don't tilt.** You treat the game as earned leisure, not as something to be angry at. Malthaiel spends half of most coaching sessions trying to install this mindset in people — you arrived with it. Protect it.
-- **Support is viable for climbing.** It's harder, but Malthaiel hit E6 as a support player. Do not let anyone talk you out of the role.
-- **You have the competitive brain** (Overwatch, League, Valorant, Rivals). The gap is not knowledge, it's *attention* — converting things you already know into things you actually do mid-game. That's what §8 exists for.
-
----
-
-## §2 — VISCOUS
-
-### 2.1 Core identity
-- **Position 6. Lowest economy on the team.** That's correct, not a failure — camps you skip feed your carries.
-- Realistically **1–2 big power spikes per game.** Every purchase either buys you toward one or delays it.
-- **Rescue Beam is non-negotiable.** Your default position (back + high ground) only pays off with the item that reaches the fight for you.
-
-### 2.2 The cube — the single biggest fix
-| | |
-|---|---|
-| **What you do now** | Cube yourself in fights (you estimated ~50 games total on the hero) |
-| **Why it's wrong** | Cube on yourself is *the enemy's win condition.* At high level, teams permanently dive the Viscous specifically to burn the cube on himself. |
-| **The textbook counter** | **Yamato:** grapples onto you → Silence Wave (her 2) → you either cube or die. |
-| **At your rank** | Enemies aren't doing it on purpose — but it costs you the same either way. |
-| **Rule** | Cubing yourself = you were positioned wrong 5 seconds earlier. |
-
-### 2.3 Positioning (this *is* the cube fix)
-- Default: **as far back and as high as the fight allows.**
-- Two criteria, ideally both at once:
-  1. **Long path** — enemies need a lot of time to route to you.
-  2. **Safe** — cover, walls, no easy angle.
-- From that spot you can still: cube an ally, Rescue Beam an ally, splatter, drop your 3, hold line of sight.
-- If someone *does* peel off to come get you, that's already a win — they left the fight. Use your ult to kite/buy time around walls.
-- **Mid-boss:** do not enter the pit. Sit above it. Throw the 3 down, splatter down, Rescue Beam from the lip. Full participation, zero exposure.
-
-### 2.4 Your stated ability problems
-- *"My ults are bad — I build spirit, roll in, insta-die."* → The ult is not an engage tool for you. It's a **time-buying / kiting** tool from a safe position.
-- *"I hardly use my 3, I just throw it out."* → It's part of your from-range kit (see mid-boss above). Throwing it from the safe spot is correct; the problem was never the 3, it was where you were standing.
-
-### 2.5 Build — decision table
-You do **not** currently have a dedicated Viscous build. Build it around this logic instead of memorizing one list:
-
-| Situation | Build direction |
-|---|---|
-| **Your team has 2 supports** (e.g. you + Dynamo) | Support core + damage. Rescue Beam, Tank Buster, Echo Shard (works on either ability). Spirit is affordable here. |
-| **You're the only support, enemy has no scary threats** | Still allowed to go damage/spirit alongside support. |
-| **You're the only support and the enemy is stacked with pick/dive** (Infernus, Holiday, Bebop, Shiv) | **Full support.** Skip mid-tier damage items entirely. Save for the big ones: **Divine Barrier, Echo Shard for the cube.** |
-
-- Constant across all three: **utility always, Rescue Beam always.**
-- Your current instinct (Heal Deny + Decay, Healbane, later Boundless, playing around the 1) is a fine skeleton — the missing piece was Rescue Beam in MM and the "am I saving for a spike?" question.
-
----
-
-## §3 — IVY
-
-### 3.1 Core identity — you are a global
-- **Only two globals exist in the game: Ivy and Mirage.** Mirage is near-instant; **you are the second fastest thing on the map.**
-- **Flight duration: 21 seconds.** You have far more time than you think — you are allowed to hover and wait.
-
-### 3.2 Map role by game stage
-| Stage | Job |
-|---|---|
-| **Early** | Do **not** take side lanes. Wraith / Venator need that farm. |
-| **Mid (~2nd rift, ~18 min)** | **Start taking side lanes.** Push waves, pressure the side walkers. |
-| **Whenever a fight starts** | Fly to it. Your default state is "pushing a wave, ready to leave." |
-
-- This directly explains game 2: you were catching side waves and mid from a different position and **picked up nobody with your ult.** The waves weren't the mistake — leaving the ult unused was.
-
-### 3.3 The ult — never press it "just to press it"
-**Rule: every ult should have a passenger.**
-
-Three legitimate uses:
-1. **Damage amp on a teammate** — 8 seconds of outgoing damage bonus. **Insane on Shiv** (he gets the whole window to work).
-2. **Extraction** — huge range. If the enemy has pick threats (Paradox, Holiday), pull a teammate out. You can reach around a corner and lift someone out of a Rift fight.
-3. **The silence window** — **3 seconds where the target has no abilities = a free kill window.**
-
-**Silence targets, ranked by realism for you right now:**
-- **Yamato** — do this.
-- **Dynamo** — good; he may pre-empt with his 2 (entanglement). *That's still a win:* forcing his 2 opens your team's follow-up (e.g. Lash ult lands after).
-- **Geist** — the dream (denies her ult), but **needs team coordination you don't have yet.** Park it.
-
-**Combo:** fly in → ult → 3, with **Echo Shard**. If you catch two people in it, that's close to a guaranteed kill depending on the hero.
-
-**Discipline:** the temptation is to see a big teamfight and dump the ult in the middle. Usually correct play is to **hold, hover, and wait for the perfect angle.** You have 21 seconds.
-
-### 3.4 Build audit — your current build
-**Verdict: fine. Standard items, nothing off the rails.** Specific notes:
-
-- **KEEP** — **Sprint Boots early.**
-- **KEEP** — **Enduring → Juggernaut** when not going Trophy.
-- **KEEP** — **Situational buys** (Healbane vs healing, Suppressor vs M1, Slowing Hex early, Knockdown / Disarming Hex late) — correct instincts.
-- **KEEP** — **Mystic Slow with your ult.** Works well together; swapping Healbane → Spirit Burn late is fine.
-- **CHECK** — **Trophy Collector + Decay are not standard picks.** Not banned — **but you must verify Trophy is actually stacking.** You admitted you don't check. **After every game, look at the souls it earned.** If it's not fully stacked by late game, it's a wasted slot.
-  - *Precedent:* every tier list and every caster says Celeste is bad. Malthaiel's best teammate plays Celeste. Building against the grain is fine **if you can show it's working.** The burden is on you to check.
-- **CUT** — **Healing Tempo, usually.** If you're pocketing an M1 carry (Wraith / Venator / Geist), you're maxing Katsu connection so it's permanently on them. **That's already doing so much work that Healing Tempo's marginal value loses to almost any other item.**
-- **CUT** — **Healing Nova → replace with Rescue Beam.** Almost unconditionally.
-
-### 3.5 Build direction — pick one, never the third
-| Direction | Verdict |
-|---|---|
-| **Gun hybrid** (some gun + support) | **KEEP** — valid |
-| **Full support** | **KEEP** — valid |
-| **Full gun / position-1 Ivy** | **CUT** — **never.** "You are the tickler." Your gun does not scale like Wraith's or other M1 carries. |
-
-- This answers your question directly: *"is gun just the way to play Ivy?"* — **No.** Gun is a supplement, never the plan.
-- Note: Piggy's Ivy build looks scattered (only ~3 core items) precisely **because** the hero branches into support vs hybrid. Titanic Tesla is optional, not mandatory.
-
----
-
-## §4 — DYNAMO
-
-- **Max Stomp first.** Then go into your ult. This answers your "do I play around the 3 or around stomp/ult?" question: **stomp.**
-- **Stomp + Headhunter = you chunk people in the early game.** Insane burst.
-- **Entanglement points** — take them when the enemy has non-ult debuffs/threats that warrant it. It's effectively built-in defense: you dodge a huge amount of ults with it, **including Ivy's.**
-- **Piggy builds are the safe default for all supports.** You've already watched his support guide — use his Dynamo list (his path is the same idea: core item, then Stomp).
-- Outside of that, play the hero normally. Your custom build is fine.
-
----
-
-## §5 — AIM
-
-### 5.1 Diagnosis
-- Your description: *stagnates in teamfights, jittery, "brain lag,"* which is why you gravitate toward ability-based heroes.
-- **Sensitivity is not the problem.** ~180° across the mousepad is the same as Malthaiel's. Nothing to change.
-- Context: **this is Malthaiel's first competitive FPS too.** He learned aim from scratch to reach E6. It's learnable.
-
-### 5.2 The fix — one rule
-> **Play slow. Aim like a robot. Play slow until you can afford to be fast.**
-
-- **Crosshair placement is much more important than speed** for consistent, clean aim.
-- When you catch yourself jittering or flicking everywhere → **stop, step back, deliberately slow down.**
-- **Look at your crosshair.** Consciously. Then move it onto the target slowly and place it there.
-
-### 5.3 The Shiv example (why this works)
-Malthaiel has coached multiple players who couldn't hit Shiv knives. Every one of them was **flicking** — going for the highlight knife. The instruction is always the same: **never flick.** Play purely for placement, drag the crosshair onto the target. Accuracy jumps immediately.
-
-It sounds too simple to matter. It's the highest-return aim change available to you.
-
----
-
-## §6 — MOVEMENT & STAMINA
-
-### 6.1 Priority check — read this before you spend an hour in a practice lobby
-- **Malthaiel is E6 and knows literally zero movement tech.** You do not need tech to be cracked at this game.
-- **Movement tech is only worth time if:** (a) you're a casual just having fun, or (b) you've already mastered everything else.
-- **Improvement priority, high → low:**
-  1. Macro
-  2. Your hero's kit, mechanically, cold
-  3. Itemization
-  4. Knowing what to do in specific moments
-  5. …
-  6. **Movement tech**
-- So: **stop wondering whether you need to grind movement.** You don't. You already know how to edge boost, mantle, slide — that's enough. Use tech you already have; don't farm new tech.
-
-### 6.2 The one movement habit worth building — pre-plan the escape
-Your actual problem isn't tech, it's **arriving at the fight already on 0 stamina** because you spent it inattentively.
-
-> **Before you commit to a risky spot, visualize the exact escape route and which stamina bar you spend where.**
-
-Apply it at these moments:
-- **Pushing a walker** — be deep only on full stamina (3). Know the route out before you engage.
-- **Contesting / stealing an enemy jungle camp** — "if this goes wrong, I go *there*."
-- **Stealing the enemy sinner at 8:00** — often it's as simple as one dash-jump. **Having *a* plan beats having none.**
-
-**Payoff:** less wasted stamina, and you escape situations you currently die in. Bonus: once you're thinking this way you start inventing your own tricks (e.g. faking a route around the walker/veil, then breaking the other way).
-
----
-
-## §7 — MACRO: TRADES, CAMPS, AND CLOSING GAMES
-
-### 7.1 The trade principle (the answer to your #1 self-diagnosed leak)
-Your words: *"I'm taking a tier 2 camp on the other side of the map like a dweeb while we're fighting."* You already know it's wrong — here's the rule that makes it automatic:
-
-> **Every action is a trade. Ask: what's more valuable in this exact moment?**
-
-- Tier 2 camp ≈ **300 souls.**
-- Being positioned for the teamfight = the fight itself.
-- **The fight wins.** Turning a 3v3 into a 4v3 is worth more than any camp.
-- **You are allowed to give up camps.** They do not need to be on cooldown. As a low-econ hero, camps you skip go to your carries — that's the role working correctly.
-- **Do not go to the far corner of the map when rift/objective is up in a minute.** The risk of a fight starting while you're unable to rotate outweighs the souls.
-
-**Default map position for Viscous/Dynamo:** roughly central — not necessarily contesting space, just **somewhere you can reach your teammates fast.** Not in the backfield farming.
-
-*(Note: this also showed up in your scrims, not just MM.)*
-
-**Open thread:** Malthaiel will drill you specifically on trade valuation — which of two things is worth more in a given moment — in a future session. It's deliberately deferred because you have enough to work on now.
-
-### 7.2 Closing out games
-Your scenario: you take base guardian, enemy has respawns coming, you say "let's take their farm," team just leaves. Do you follow, greed, or beg?
-
-**The procedure:**
-1. **Make the call out loud.** Concretely: *"We have both shrines, we have time, we can stay and drop the Patron."* Say the correct thing.
-2. **If they don't listen — follow them.** In your example, staying alone in their base while four teammates leave = you die for nothing. **Just leave with them.**
-3. **Then reframe it:** you saw the correct play. An item, a position, a timing your team didn't see. **You made the right call → you improved. That's the point of the game you just played.**
-
-**The wrong internal monologue:** *"so unfortunate, my team was just…"*
-**The right one:** *"I read that correctly. That's a rep."*
-
-This is the same lesson as §1.2 and §1.3, applied at the end of a game: **your teammates will be buns at every rank; your job is being right, not being obeyed.**
-
----
-
-## §8 — SIDELINE CARD
-*Put this on your second monitor. Glance at it between deaths. This is the whole point — you said you know things in your brain but can't put them into practice; this is the bridge.*
-*(Malthaiel does exactly this for his own current focus items.)*
-
-\`\`\`
-─────────────────────────────────────────────
-BEFORE QUEUE
-□ Same build as scrims. No MM-only builds.
-□ Teammates will be bad. Decided already. Not tilting.
-□ Goal today = improve. Not win. Not rank.
-
-ALL HEROES
-□ AIM SLOW. Look at the crosshair. Never flick.
-□ Escape route planned BEFORE I commit.
-□ Am I close enough to rotate to my team RIGHT NOW?
-□ Camp vs fight → FIGHT.
-
-VISCOUS
-□ Rescue Beam. Always.
-□ Back + high. Cube for THEM, not me.
-□ Mid-boss = above the pit, never in it.
-□ Am I saving for Divine Barrier / Echo Shard?
-
-IVY
-□ Never ult without a passenger or a silence target.
-□ Sidelanes AFTER ~18 min. Not before.
-□ Fly in → ult → 3 (Echo Shard).
-□ Hold the ult. I have 21 seconds.
-□ Not a gun carry.
-
-DYNAMO
-□ Max Stomp first.
-□ Entanglement to dodge ults.
-
-END OF GAME
-□ Did Trophy fully stack? (check the soul count)
-□ Made the right call even if they ignored it? → that's the rep.
-─────────────────────────────────────────────
-\`\`\`
-
----
-
-## §9 — SELF-TEST (cover the answers)
-
-1. Why is running a different build in MM than in scrims actively harmful? → *Bad habits compound on the character even though it feels harmless in the moment.*
-2. What is the fastest way to rank up? → *Stop caring about rank; play to improve. Rank follows.*
-3. What does the enemy team want your Viscous cube used on? → *Yourself.*
-4. Which hero is the textbook Viscous counter, and how? → *Yamato: grapple + Silence Wave forces the self-cube.*
-5. Where do you stand during a mid-boss fight as Viscous? → *Above the pit, never inside it.*
-6. When do you go **full** support Viscous? → *You're the only support AND the enemy is loaded with pick/dive (Infernus, Holiday, Bebop, Shiv) — then skip mid-tier items to save for Divine Barrier / Echo Shard.*
-7. How many globals are in the game? → *Two: Ivy and Mirage. Mirage is near-instant, Ivy second fastest.*
-8. How long is Ivy's flight? Her silence? Her damage buff? → *21s flight · 3s silence · 8s outgoing damage bonus.*
-9. When does Ivy start taking side lanes, and why not earlier? → *~2nd rift, ~18 min. Earlier, that farm belongs to Wraith/Venator.*
-10. Ivy's best silence targets right now? → *Yamato, Dynamo (forcing his 2 is still value). Geist later — needs team coordination.*
-11. Which two Ivy items get cut? → *Healing Tempo (Katsu connection already does the work) and Healing Nova (Rescue Beam instead).*
-12. What must you check on Trophy Collector? → *That it's actually stacking — look at the soul count after games.*
-13. What do you max first on Dynamo? → *Stomp. Stomp + Headhunter = early-game chunk.*
-14. What single change improves your aim most? → *Slow down; crosshair placement over speed; never flick.*
-15. Where does movement tech sit on the improvement priority list? → *Bottom. Below macro, kit mastery, itemization, and situational decisions.*
-16. What's the one movement habit you should keep? → *Pre-visualizing the escape route and stamina spend before committing.*
-17. Tier 2 camp vs. being in position for a fight? → *Fight. ~300 souls loses to a 4v3.*
-18. Your team ignores your correct call at the end of a game. What do you do? → *Follow them, don't die alone — and log it as a rep, because you read it correctly.*
-
----
-
-### Closing frame
-You said it yourself and you were right: **you don't need to learn new mechanics, you need to pay attention.** The fundamentals are there — this is polish. Stop building left-to-right on autopilot, stop taking the far camp, stop cubing yourself, slow your aim down, and put §8 where you can see it.
-Still coming from Malthaiel: the trade-valuation deep-dive he cut short, and his full VOD notes.`;
-
-// ── §8 tie-broken heuristics ─────────────────────────────────────────────────
+    because it names no mechanism, not because it used "=". Write the mechanism, then compress the joint.
+    TARGET DENSITY — BANDS TO LAND INSIDE, measured on the target document, whole document:
+    "→" 28-44 · "⚠" 8-16 · "=" 7-14 · "+" 12-22 · em dash 90-125 · parenthetical glosses 34-52 ·
+    bold spans 175-235 · blockquotes 7-12 · tables 13-21 · "#"-marked numbers 9-16.`;
+
+// ── tie-broken heuristics ────────────────────────────────────────────────────
 // Judgment calls the model would otherwise make differently every run.
 export const BRIEF_HEURISTICS = `=== HEURISTICS — apply in order, stop at the first that decides ===
 
 HERO SECTION ORDER
-1. Heroes the player named as a problem come before heroes they named as working.
-2. Among those, fewest games played first (least-formed habits, most correctable).
-3. Then most distinct problems raised in the session.
-4. Then the order the coach addressed them.
+1. Depth of coverage, descending — the hero the session spent most words on comes first.
+2. Tie: the hero the player named as a problem before the hero they named as working.
+3. Tie: fewest games played first — least-formed habits, most correctable.
+The thinly-covered hero still gets a full section; it is simply shorter, and it gets no Law of its own
+unless the coach stated its rule twice.
 
-WHAT GOES IN THE FRAME SECTION (§1)
-Include: any rule the coach said applies to every hero; anything about rank, tilt, expectations or why
-to play; every piece of praise about the player's approach rather than their mechanics.
+WHAT GOES IN THE MINDSET PART
+Include: any rule that applies to every hero; anything about rank, tilt, expectations or why to play;
+the player's own psychological context where the coach responded to it; every piece of praise about
+the player's approach rather than their mechanics.
 Exclude: anything hero-specific, anything mechanical.
-Praise lands here as a named strength, never as a trailing list at the end of the document, and it lands
-in ONE subsection — never split a frame point into a subsection of its own because it reads encouraging.
-EVERY PRAISE BULLET ENDS IN A DIRECTIVE: the strength is handed straight back as an instruction
-("Protect it.", "Don't let anyone talk you out of the role.", "Trust that instinct."). Praise with no
-directive is a compliment; praise with one is a rule they can act on.
-NEVER TWO PRAISE BULLETS OF THE SAME SHAPE. Two separate "your self-diagnosis was right" bullets are ONE
-bullet naming both reads.
+PRAISE IS A NAMED STRENGTH HANDED BACK AS AN INSTRUCTION — "this is the win condition … do not lose it
+while chasing rank". Never a trailing compliment, never split across subsections because it reads
+encouraging, and never two bullets of the same shape.
+A DISCOURAGING FACT THE COACH ADDRESSED — a losing streak, an abandoned account, a dropped hero — goes
+in the section that raised it with the coach's reassurance attached in the same breath, marked ⚠ where
+it is a trap the player falls into. Never stranded.
 
 WHAT EARNS A TABLE
 - Any coach answer of the form "it depends on X" → table, states of X in column one.
-- Any build audit of four or more items → table, or a KEEP / CHECK / CUT list.
-- Any three-part diagnosis that does not fit two prose sentences.
+- Any build audit of four or more items → table.
+- Any two-way reframe (stop thinking / start thinking) → two-column table.
+- Factual context about the player's account, record or history → a two-column table with an empty
+  header row, so it reads as reference rather than as argument.
 - Never table a sequence; taught frameworks stay numbered lists.
 
 WHAT EARNS A BLOCKQUOTE
-Exactly one per mechanic and macro section: that section's single memorable rule. Frame and hero
-sections get none.
+The coach's exact words where the phrasing is the payload, and a section's single memorable rule.
+Seven to twelve across the whole document, and a section may open on one.
 
-HOW MANY §0 LINES
-Earned by session weight, never by section count. A topic the coach worked through earns a line; a topic
-mentioned once in passing does not, however true it is. A section markedly thinner than its siblings was
-discussed markedly less and gets no line — a hero covered in five bullets while two others carry five
-subsections each belongs in his own section only. Plus one for any rule the coach stated twice or more.
-Target 8; 10 is the ceiling. Under 6 means sections were merged that should not have been. At 9 or 10,
-look for two lines sharing a hero or a trigger and merge them — that is nearly always the real answer.
+WHAT EARNS A FENCED BLOCK
+Two per document: the priority-ordering list in the mechanics PART, and the card itself. A fenced
+block says "this is an object, not prose" — use it where the shape is the point.
 
-HOW MANY SELF-TEST QUESTIONS
-As many as there are decisions the player has to make mid-game, with clustered numbers merged into single
-questions. Typically 12–18. Enumerating every fact on the page produces an exam nobody sits, not a quiz.
+HOW MANY LAWS
+Exactly ten. Earned by session weight, never by section count: a topic the coach worked through earns
+one, a topic touched once in passing does not, however true it is. Plus weight for any rule the coach
+stated twice or more. At eleven candidates, RELEGATE the weakest to its section; at nine, promote the
+strongest theme you demoted.
+
+HOW MANY SELF-TEST ROWS
+One per decision the player has to make mid-game, with clustered numbers merged into single rows.
+About 40 for a full session. Enumerating every fact on the page produces an exam nobody sits; stopping
+at fifteen leaves the reader re-reading the body, which is the failure this table exists to prevent.
 
 WHEN A HERO LEAVES THE POOL
-Only when the coach said so. Name it on the pool line as shelved with the coach's reason in the same
-breath — "(Kelvin shelved — three heroes to polish first)". No section, no cross-reference, no table.
-Never infer a cut from the coach spending little time on a hero.
+Only when the coach said so. It goes in the what-not-to-do table with his reason, and the pool line
+names only the heroes that stayed. Never infer a cut from the coach spending little time on a hero.
 
 WHEN THE PLAYER'S SELF-DIAGNOSIS WAS RIGHT
 Say so, in the section that owns it, before the instruction. It tells them which instincts to trust.
 
-WHEN MATERIAL IS DISCOURAGING BUT WAS ADDRESSED
-Keep it, in the section that raised it, with the coach's reassurance attached in the same breath. A
-dropped hero or a losing streak reads as a verdict on the player unless the document carries the reason
-it was set aside. There is no status table to park it in — if it has no section, it did not earn a place.`;
+WHEN THE SESSION NUMBER IS UNKNOWN
+It is given to you. Use it exactly as given, zero-padded to two digits.`;
 
-// ── §9 the machine block ─────────────────────────────────────────────────────
-// The two machine-readable things the JSON container was carrying, recovered as an HTML comment:
+// ── the machine block ────────────────────────────────────────────────────────
+// The machine-readable things the JSON container was carrying, recovered as an HTML comment:
 // invisible when rendered, survives copy-paste. `ledger` is the coverage mechanism and the only
 // thing aimed at the failure the whole rule set did not catch — a one-sentence lesson dropped
 // across a thousand transcript segments. It makes "did we lose a point" a question code can ask,
-// with no second billed call.
-export const BRIEF_MACHINE = `=== MACHINE BLOCK — the LAST thing in the document, after the closing frame ===
+// with no second billed call. `deferred` exists because the deferred-work line has no fixed heading
+// any more: it is one italic line under the card, and checkTemplate cannot tell an absent line from
+// a session that deferred nothing unless the model says which happened.
+export const BRIEF_MACHINE = `=== MACHINE BLOCK — the LAST thing in the document, after the final appendix ===
 
 Emit it exactly in this shape, as an HTML comment:
 
-<!-- brief-meta v1
+<!-- brief-meta v2
 player: <name or unresolved>
 coach: <name>
 pool: <hero>, <hero>, <hero>
+deferred: <yes|no>
 items: <slug>=pending; <slug>=pending; <slug>=pending
-ledger: L1 12:03r viscous-cube; L2 18:27r ivy-build; L3 33:39r movement-escape; ...
+ledger: L1 12:03r 21-frame-heading; L2 18:27r 4-hero-a; L3 33:39r 71-mechanic-a; ...
 -->
 
-- items: ONE ENTRY PER SIDELINE-CARD LINE. The slug is the card line's text, lowercased, every run of
+- deferred: "yes" if the coach deferred work or owes the player something — in which case the italic
+  line under the card must be present. "no" if he deferred nothing.
+- items: ONE ENTRY PER CARD LINE. The slug is the card line's text, lowercased, every run of
   non-alphanumeric characters replaced with a single "-", trimmed, capped at 60 characters. Status is
   always "pending" — the app owns the done/pending state and carries it across regenerates.
-- ledger: ONE ENTRY PER POINT FROM YOUR SWEEP: an id, the [m:ss] stamp it came from with its source
-  letter, and the slug of the "##" section it landed in (same slug rule). A point you could not place
-  still gets a line, with "unplaced" as its section.
+- ledger: ONE ENTRY PER POINT FROM YOUR EXTRACTION PASS: an id, the [m:ss] stamp it came from with its
+  source letter, and the slug of the heading it landed under (same slug rule — a "##" section, or a
+  "#" PART or appendix where that owns the text). A point you could not place still gets a line, with
+  "unplaced" as its section.
 - Nothing else goes in the comment. No prose, no explanation.`;
 
-// The full system prompt: §6 then the literal blocks, in spec order.
+// The full system prompt: the method, then the literal blocks.
 export const BRIEF_SYSTEM = [
   PLAYER_BRIEF_SYSTEM_PROMPT,
   BRIEF_TEMPLATE,
   BRIEF_TYPOGRAPHY,
-  BRIEF_SKELETON,
-  `${BRIEF_TEXTURE_HEADER}\n\n${BRIEF_TEXTURE_BODY}`,
   BRIEF_HEURISTICS,
   BRIEF_MACHINE,
 ].join('\n\n');
 
 // ── the user prompt ──────────────────────────────────────────────────────────
-// Mirrors buildReportPrompt minus every block the brief has no use for: no match digest, no first
-// report, no prior action items, no teamfight comms. Spec §11: the brief needs ONLY a resolved
-// review transcript, and "absent data changes nothing" is stated in the system prompt rather than
-// bolted on per-run — a brief never degrades, it is simply built from the session.
-export function buildBriefPrompt({ transcriptBlock, coachedTeam = '', brainContext = '', notesBlock = '', coachNotesBlock = '' }) {
-  const lines = [];
-  if (String(coachedTeam).trim()) lines.push(`Coached team: ${String(coachedTeam).trim()}.`);
-  if (String(brainContext).trim()) lines.push('', '=== ANALYST BRAIN ===', String(brainContext).trim());
-  if (String(coachNotesBlock).trim()) {
-    lines.push('', "Coach's tagged in-game notes (chess.com-style classifications):", String(coachNotesBlock).trim());
-  }
-  if (String(notesBlock).trim()) {
-    lines.push('', 'Player-written notes (supplementary source; the transcript wins on conflict):', String(notesBlock).trim());
+// The browser chat that produced the target document was given the raw segments and nothing else.
+// Matching that is the point, so the analyst brain's charter / patch digest / taught concepts /
+// corrections / team pages are all gone, and so are the coach's tagged notes and any player notes —
+// every one of them a route for a coaching point the coach never voiced to enter the document.
+// The ONE survivor is the canonical name list, which cannot add a point: it only fixes spelling.
+export function buildBriefPrompt({ transcriptBlock, lexiconBlock = '', sessionNumber = 1 }) {
+  const lines = [`Session number: ${String(sessionNumber).padStart(2, '0')}.`];
+  if (String(lexiconBlock).trim()) {
+    lines.push('', '=== CANONICAL NAMES (spelling only — never a source of coaching points) ===',
+      String(lexiconBlock).trim());
   }
   lines.push('', 'Review transcript:', transcriptBlock || '(empty transcript)');
   return lines.join('\n');
+}
+
+// The brain's LEXICON block, sliced out of the full context. Cheaper than a second reader and it
+// cannot drift from what Process 1 loads, because it is the same string.
+// No `m` flag on purpose: with it, `$` means end-of-LINE and the lazy body stops after one entry —
+// a one-hero name list that looks exactly like a full one at the call site.
+export function lexiconOnly(brainText) {
+  const m = String(brainText ?? '').match(/(?:^|\n)=== LEXICON ===\n([\s\S]*?)(?=\n=== |$)/);
+  return m ? m[1].trim() : '';
 }
 
 // Markdown output has no JSON to slice — the only tolerated deviation is the model wrapping the
@@ -990,9 +746,9 @@ export function parseBrief(text) {
 }
 
 // ── document scan ────────────────────────────────────────────────────────────
-// Regions no line-wise check may touch: the machine block, any fenced block (the sideline card
-// lives in one), and blockquote lines (typography rule 4's memorable rules are deliberately terse
-// and would flag as fragments).
+// Regions no line-wise check may touch: the machine block, any fenced block (the card and the
+// priority list live in them), and blockquote lines (the coach's verbatim framing is deliberately
+// terse and would flag as fragments).
 export function scanLines(md) {
   const out = [];
   let fence = false;
@@ -1008,47 +764,64 @@ export function scanLines(md) {
   return out;
 }
 
-// The `##` sections, with their bodies. Used by checkProse (the `voiceless` flag is section-scoped),
-// by checkCoverage (a ledger slug must resolve to one of these) and by briefToFinal.
+// The sections, with their bodies. Used by checkProse (the `voiceless` flag is section-scoped), by
+// checkCoverage (a ledger slug must resolve to one of these) and by briefToFinal.
+//
+// BOTH "#" AND "##" COUNT. The PART and APPENDIX headings are "#", and two of them own real text
+// (what-not-to-do, and every appendix) — leaving them out made their ledger entries dangle. The
+// document title is the first heading and is not a section; a PART that only introduces its "##"
+// children owns no text and is dropped, so the sidecar's section list stays free of empty rows.
 export function briefSections(md) {
   const out = [];
   let cur = null;
+  let seenTitle = false;
   for (const { line, machine } of scanLines(md)) {
     if (machine) continue;
-    const h = line.match(/^##\s+(.+?)\s*$/);
+    const h = line.match(/^(#{1,2})\s+(.+?)\s*$/);
     if (h) {
-      cur = { id: slugId(h[1]), heading: h[1], body: [] };
+      if (h[1] === '#' && !seenTitle) { seenTitle = true; continue; }
+      cur = { id: slugId(h[2]), heading: h[2], body: [] };
       out.push(cur);
       continue;
     }
     if (cur) cur.body.push(line);
   }
-  return out.map((s) => ({ ...s, body: s.body.join('\n').trim() }));
+  return out.map((s) => ({ ...s, body: s.body.join('\n').trim() })).filter((s) => s.body);
 }
 
-// The sideline card's `□` lines, in order. These become the report's actionItems.
+// The card's `□` lines, in order. These become the report's actionItems.
 export function cardLines(md) {
   return scanLines(md)
     .filter(({ line, fence }) => fence && /^\s*□\s+\S/.test(line))
     .map(({ line }) => line.replace(/^\s*□\s+/, '').trim());
 }
 
-// ── §10 checkTemplate ────────────────────────────────────────────────────────
+// ── checkTemplate ────────────────────────────────────────────────────────────
+// Numbers are deliberately absent from these: a PART with no material is omitted and everything
+// after it renumbers, so "§9 — Self-Test" would fail on a legitimate document. The dash-prefixed
+// fragments pin the wording without pinning the count.
 export const FIXED_STRINGS = [
-  '**Read order:**',
-  'THE WHOLE SESSION IN ',
-  'SIDELINE CARD',
-  '*Put this on your second monitor. Glance at it between deaths.*',
-  'SELF-TEST (cover the answers)',
-  '### Closing frame',
-  '─────',
+  '**Coach:**',
+  '**Your focus heroes going forward:**',
+  '— How to use this document',
+  'Notation used throughout:',
+  '— The Ten Laws',
+  '— WHAT NOT TO DO YET',
+  '— THE APPLICATION SYSTEM',
+  '— Side-Monitor Card',
+  '— Self-Test',
+  '# APPENDIX B —',
+  '┌─ CURRENT FOCUS',
+  '└',
   '<!-- brief-meta',
 ];
 
-// One property, not a list of three: any emoji at all fails. The named verdict marks are gone, and
-// a blacklist of exactly the three we removed would catch only the phrasing already fixed — the
-// §1.7 failure, repeated. \p{Extended_Pictographic} covers every pictographic codepoint and passes
-// every structural character the template keeps (§ ° · – — … → ≈ ─ □), verified against the target.
+// Exactly four pictographs are load-bearing in the target document and are stripped before the
+// catch-all test; \p{Extended_Pictographic} then covers every other pictographic codepoint and
+// passes every structural character the template keeps (§ ° · – — … → ≈ ─ □ ┌ ┐ └ ┘), verified
+// against the target. A blacklist of the ones we happen to have seen would catch only the phrasing
+// already fixed, which is the failure this replaced.
+const ALLOWED_MARKS = /[⚠✅❌⏸]️?/gu;
 const EMOJI_RE = /\p{Extended_Pictographic}/u;
 
 export function checkTemplate(md) {
@@ -1057,40 +830,54 @@ export function checkTemplate(md) {
     .map((s) => `[template] missing fixed string: ${JSON.stringify(s)}`);
   for (const { line, machine } of scanLines(md)) {
     if (machine) continue;
-    const hit = line.match(EMOJI_RE);
+    const hit = line.replace(ALLOWED_MARKS, '').match(EMOJI_RE);
     if (hit) {
-      flags.push(`[template] emoji "${hit[0]}" — verdict marks are the words KEEP / CHECK / CUT: ${line.trim().slice(0, 60)}`);
+      flags.push(`[template] emoji "${hit[0]}" — only ⚠ ✅ ❌ ⏸ are allowed: ${line.trim().slice(0, 60)}`);
       break; // one is the signal; the fix is the same for all of them
+    }
+  }
+  // The deferred-work line has no heading of its own any more, so an absent line and a session that
+  // deferred nothing look identical in the markdown. The machine block is the only thing that can
+  // tell them apart — this is the regression watch-point that survived four runs. The card is the
+  // LAST fenced block in the document, so the first non-empty line after it is the note or nothing.
+  const meta = parseMachineBlock(md);
+  if (meta.present && meta.deferred) {
+    const after = (t.split('```').pop() || '').split('\n').map((s) => s.trim()).filter(Boolean)[0] || '';
+    if (!/^\*[^*].*\*$/.test(after)) {
+      flags.push('[template] machine block says work was deferred, but no italic line follows the card');
     }
   }
   return flags;
 }
 
-// ── §10 checkProse v3 ────────────────────────────────────────────────────────
+// ── checkProse ───────────────────────────────────────────────────────────────
 // The FREE half of the wording rules: the prompt states the voice, this proves it landed, with no
 // second paid pass. Flags are advisory strings, capped so a drifting run cannot wall the warnings
-// box. Inverts the old report's `pov` flag — second person is now correct and its ABSENCE is the
-// defect.
+// box. Second person is correct here and its ABSENCE is the defect.
 const PROSE_MAX_WORDS = 35;
 const PROSE_MAX_FLAGS = 8;
 const PROSE_MAX_PER_PART = 2;
 // Rule breaches before cosmetics. `distance` first: a third-person reference is what most visibly
 // marks the document as machine-written, and it is the rule this whole artifact exists to invert.
 const PROSE_RANK = ['distance', 'voiceless', 'narration', 'label', 'length', 'fancy', 'passive'];
-// Regex, not substring (spec §1.7): the old list held the literal `off-meta` while the live report
-// shipped "very off meta" four times, and held `arrives as a side effect` while the report shipped
-// "moves on its own over time as a side effect".
+// Regex, not substring: the old list held the literal `off-meta` while the live report shipped "very
+// off meta" four times. THREE ENTRIES WERE REMOVED 2026-07-26 because the target document uses them
+// and a checker that fights the reference is noise: `off-meta` (a game term the coach says out loud),
+// `synergi[sz]` and `infinitely more` (both inside verbatim coach quotes, where changing the words
+// would be putting words in his mouth).
 const PROSE_FANCY = [
-  /\boff[- ]meta\b/i, /\bas a side effect\b/i, /\bsynergi[sz]/i, /\bprioriti[sz]/i,
-  /\baccumulat/i, /\binfinitely more\b/i, /\bcompromised position\b/i, /\bin terms of\b/i,
-  /\bessentially\b/i,
+  /\bas a side effect\b/i, /\bprioriti[sz]/i, /\baccumulat/i,
+  /\bcompromised position\b/i, /\bin terms of\b/i, /\bessentially\b/i,
 ];
 const PROSE_DISTANCE = [/\bthe player\b/i, /\bthe \w+ player\b/i, /\bthe coached\b/i, /\bSpeaker \d+/];
-const PROSE_NARRATION = [/\bthe coach then\b/i, /\bhe asked\b/i, /\bwas requested\b/i, /\bagreed on the spot\b/i, /\bduring the session\b/i];
+// Narrating the MECHANICS of the conversation. Naming the coach is not narration — the target does it
+// constantly ("Coach's reaction:", "Coach: same as his") because authorship changes what a claim is
+// worth. What is banned is the play-by-play.
+const PROSE_NARRATION = [/\bthe coach then\b/i, /\bhe asked\b/i, /\bwas requested\b/i, /\bagreed on the spot\b/i, /\b(?:during|later in|earlier in) the session\b/i];
 const PROSE_PASSIVE = /\b(?:was|were)\s+\w+(?:ed|en)\b/i;
 // Sections whose shape makes the voice checks meaningless: the card is a fenced block of fragments,
-// and the self-test is question/answer pairs.
-const VOICE_EXEMPT = /SIDELINE CARD|SELF-TEST/i;
+// the self-test is question/answer pairs, and the appendices are lookup tables.
+const VOICE_EXEMPT = /Side-Monitor Card|Self-Test|APPENDIX/i;
 
 export function checkProse(md) {
   const found = [];
@@ -1098,33 +885,31 @@ export function checkProse(md) {
   let overLong = 0;
   for (const sec of briefSections(md)) {
     const where = `section "${sec.heading}"`;
+    // The card, the self-test and the appendices are lookup surfaces, not prose. Their one-line
+    // preambles are terse and often passive by design — the template's own "Nothing was dropped."
+    // is the case in point, and a checker that fights the reference document is noise.
+    const exempt = VOICE_EXEMPT.test(sec.heading);
+    const rows = sec.body.split('\n').filter((l) => l.trim());
+    const mostlyTable = rows.length > 2 && rows.filter((l) => l.trimStart().startsWith('|')).length / rows.length > 0.6;
     // Section-scoped: a body with no second person at all has drifted back to labelled-fact, the
-    // exact failure this document exists to fix.
-    // ponytail: "zero second-person pronouns" only — the spec also wanted "and zero imperative
-    // openers", but detecting an imperative needs a verb list, which is the substring-blacklist
-    // failure this very file fixes elsewhere. A purely-imperative section false-positives; it is an
-    // advisory flag, and a section with no "you" in a second-person document is worth a look anyway.
-    if (!VOICE_EXEMPT.test(sec.heading) && sec.body.split(/\s+/).length > 25
+    // exact failure this document exists to fix. A reference table (account history, a glossary) is
+    // legitimately voiceless, so a body that is mostly table rows is exempt.
+    if (!exempt && !mostlyTable && sec.body.split(/\s+/).length > 25
         && !/\b(?:you|your|yours)\b/i.test(sec.body)) {
       add(where, 'voiceless', 'no second person anywhere in this section — it has drifted back to labelled fact');
     }
     for (const { line, skip } of scanLines(sec.body)) {
       if (skip || !line.trim() || line.trimStart().startsWith('#')) continue;
       // A bolded lead that is a BARE LABEL: a short bold with nothing after it, or with nothing but
-      // ANOTHER bolded label after it — the §1.4 failure, `- **Coaching:** - **Current habit:** …`,
-      // a machine index rendering as reader-facing content.
-      // NOT flagged: a colon lead carrying real content. The spec's rule says "ending . or :", but
-      // the spec's OWN skeleton ships `- **Why:** <mechanism>` and `- **Action:** <one imperative>`,
-      // so a flat colon test contradicts the document it is checking. Content after the lead is the
-      // property that matters, not the punctuation before it.
-      // The bullet prefix accepts `1.` as well as `-`/`*`: §0 is a numbered list and "a topic label
-      // is a failure" is the rule it exists to enforce.
+      // ANOTHER bolded label after it — a machine index rendering as reader-facing content.
+      // NOT flagged: a colon lead carrying real content, which the template ships deliberately
+      // (`**Why:** <mechanism>`). Content after the lead is the property that matters, not the
+      // punctuation before it. The bullet prefix accepts `1.` as well as `-`/`*`: the Laws are a
+      // numbered list and "a topic label is a failure" is the rule §1 exists to enforce.
       if (!line.includes('|')) {
-        const lead = line.match(/^\s*(?:[-*]\s+|\d+\.\s+)?\*\*(.+?)\*\*\s*(.*)$/);
+        const lead = line.match(/^\s*(?:[-*]\s+|\d+\.\s+)?(?:[⚠✅❌⏸]\s*)?\*\*(.+?)\*\*\s*(.*)$/);
         const rest = lead ? lead[2].trim() : '';
-        if (lead && lead[1].trim().split(/\s+/).length < 4
-            && (!rest || /^[-*]?\s*\*\*/.test(rest))
-            && !/^\*\*(?:KEEP|CHECK|CUT)\*\*/.test(line.trim())) {
+        if (lead && lead[1].trim().split(/\s+/).length < 4 && (!rest || /^[-*]?\s*\*\*/.test(rest))) {
           add(where, 'label', `bare bolded label "${lead[1]}" — the lead must run on into its sentence`);
         }
       }
@@ -1132,7 +917,7 @@ export function checkProse(md) {
         if (re.test(line) && !/coach|Malthaiel/i.test(line)) { add(where, 'distance', 'third-person reference to the reader — the reader is "you"'); break; }
       }
       for (const re of PROSE_NARRATION) {
-        if (re.test(line)) { add(where, 'narration', 'narrates the session — state the lesson, not who said it'); break; }
+        if (re.test(line)) { add(where, 'narration', 'narrates the conversation — state the lesson, not the play-by-play'); break; }
       }
       for (const re of PROSE_FANCY) {
         if (re.test(line)) { add(where, 'fancy', `fancy wording "${line.match(re)[0]}" — use the plain word`); break; }
@@ -1143,7 +928,7 @@ export function checkProse(md) {
         const s = sentence.trim();
         if (!s) continue;
         if (s.split(/\s+/).length > PROSE_MAX_WORDS) { overLong++; add(where, 'length', `${s.split(/\s+/).length}-word sentence — split it`); continue; }
-        if (PROSE_PASSIVE.test(s)) add(where, 'passive', `passive voice ("${s.match(PROSE_PASSIVE)[0]}") — write it active`);
+        if (!exempt && PROSE_PASSIVE.test(s)) add(where, 'passive', `passive voice ("${s.match(PROSE_PASSIVE)[0]}") — write it active`);
       }
     }
   }
@@ -1163,25 +948,55 @@ export function checkProse(md) {
   return flags;
 }
 
+// ── device density ───────────────────────────────────────────────────────────
+// The prompt states bands; this proves they landed, with no second paid pass. Measured on
+// `deadlock-coaching-notes-session-01.md` (Citadel root) — the actual counts are in the comment
+// beside each band, so a future retarget can see what moved. Advisory: a band miss is a texture
+// drift, never a reason to reject a document that covered the session.
+export const DEVICE_BANDS = [
+  ['→', /→/g, 28, 44], //  target 35
+  ['⚠', /⚠/g, 8, 16], //  target 12
+  ['=', /(?<![|`=])=(?!=)/g, 7, 14], //  target 10
+  ['+', /(?<!\w)\+(?!\w)/g, 12, 22], //  target 17
+  ['em dash', /—/g, 90, 125], //  target 108
+  ['parenthetical glosses', /\([^)]*\)/g, 34, 52], //  target 43
+  ['bold spans', /\*\*[^*]+\*\*/g, 175, 235], //  target 205
+  ['blockquotes', /(?:^> .*\n)+/gm, 7, 12], //  target 9
+  ['tables', /^\|[-: |]+\|$/gm, 13, 21], //  target 17
+  ['"#"-marked numbers', /#\d/g, 9, 16], //  target 12
+];
+
+export function checkDevices(md) {
+  const body = String(md ?? '').replace(/<!--[\s\S]*?-->/g, '');
+  const out = [];
+  for (const [name, re, lo, hi] of DEVICE_BANDS) {
+    const n = (body.match(re) || []).length;
+    if (n < lo) out.push(`[density] ${name} ${n}, band ${lo}-${hi} — prose is doing a device's job`);
+    else if (n > hi) out.push(`[density] ${name} ${n}, band ${lo}-${hi} — the device stopped marking anything`);
+  }
+  return out;
+}
+
 // The 35-word ceiling with teeth in code, not only in the prompt. Same timid splitter the analyst
 // report uses (one shared implementation, so the two can never disagree about what a safe join is),
-// refusing the machine block and the card's fenced block on top of its usual refusals.
+// refusing the machine block and the fenced blocks on top of its usual refusals.
 export function splitBriefSentences(md) {
   const skip = new Set(scanLines(md).map(({ skip: s }, i) => (s ? i : -1)).filter((i) => i >= 0));
   return splitProseText(md, (_line, i) => skip.has(i));
 }
 
-// ── §9 machine block ─────────────────────────────────────────────────────────
+// ── machine block ────────────────────────────────────────────────────────────
 export function parseMachineBlock(md) {
   const m = String(md ?? '').match(/<!--\s*brief-meta[^\n]*\n([\s\S]*?)-->/);
-  const out = { player: '', coach: '', pool: [], items: [], ledger: [], present: !!m };
+  const out = { player: '', coach: '', pool: [], deferred: false, items: [], ledger: [], present: !!m };
   if (!m) return out;
   for (const raw of m[1].split('\n')) {
-    const kv = raw.match(/^\s*(player|coach|pool|items|ledger)\s*:\s*(.*)$/i);
+    const kv = raw.match(/^\s*(player|coach|pool|deferred|items|ledger)\s*:\s*(.*)$/i);
     if (!kv) continue;
     const key = kv[1].toLowerCase();
     const val = kv[2].trim();
     if (key === 'player' || key === 'coach') out[key] = val;
+    else if (key === 'deferred') out.deferred = /^y(es)?|true$/i.test(val);
     else if (key === 'pool') out.pool = val.split(',').map((s) => s.trim()).filter(Boolean);
     else if (key === 'items') {
       out.items = val.split(';').map((s) => s.trim()).filter(Boolean).map((s) => {
@@ -1246,13 +1061,13 @@ export function briefToFinal(md, { warnings = [], generated = '', model = '' } =
 // then let the second throw. Markdown output means "parse failure" now means only that the model
 // emitted nothing document-shaped, which is rare and recoverable.
 //
-// MODEL IS PINNED (spec §11). The Settings→Agents alias maps `opus` to Opus 4.8; the target
-// document was written by Opus 5, and model choice is a visible share of the remaining gap. The
-// alias is resolved in src-tauri/src/commands/coaching.rs::classify_model_id.
+// MODEL IS PINNED. The Settings→Agents alias maps `opus` to Opus 4.8; the target document was
+// written by Opus 5, and model choice is a visible share of the remaining gap. The alias is resolved
+// in src-tauri/src/commands/coaching.rs::classify_model_id.
 export const BRIEF_MODEL = 'opus-5';
 
-export async function generatePlayerBrief(invoke, { transcriptBlock, coachedTeam = '', brainContext = '', notesBlock = '', coachNotesBlock = '', onRaw = null }, agents = {}) {
-  const user = buildBriefPrompt({ transcriptBlock, coachedTeam, brainContext, notesBlock, coachNotesBlock });
+export async function generatePlayerBrief(invoke, { transcriptBlock, lexiconBlock = '', sessionNumber = 1, onRaw = null }, agents = {}) {
+  const user = buildBriefPrompt({ transcriptBlock, lexiconBlock, sessionNumber });
   const base = {
     systemPrompt: BRIEF_SYSTEM,
     backend: agents.authBackend || 'api-key',
@@ -1266,6 +1081,6 @@ export async function generatePlayerBrief(invoke, { transcriptBlock, coachedTeam
   if (split.n) warnings.push(`Split ${split.n} over-long sentence${split.n > 1 ? 's' : ''} at a colon or dash — the 35-word ceiling is stated in the prompt.`);
   const md = split.text;
   const meta = parseMachineBlock(md);
-  warnings.push(...checkTemplate(md), ...checkProse(md), ...checkCoverage(md, meta));
+  warnings.push(...checkTemplate(md), ...checkProse(md), ...checkDevices(md), ...checkCoverage(md, meta));
   return { md, meta, warnings };
 }
