@@ -16,11 +16,15 @@
 //   6. template intact    — checkTemplate passes: the fixed strings, the four-mark allowance
 //                           (⚠ ✅ ❌ ⏸ pass, any other pictograph fails), and the deferred-work
 //                           note when the machine block says work was deferred.
+//   7. texture            — ADVISORY, never a fail. checkProse + checkDevices, the same two the
+//                           generate path already runs into the run payload. Without them a gate
+//                           PASS read cleaner than the run was: run 1 passed 6/6 while sitting
+//                           outside seven of the ten device bands.
 import fs from 'node:fs';
 import path from 'node:path';
 import { parseMishears } from './analystBrain.js';
 import { validateStamps } from './vodReport.js';
-import { checkTemplate, cardLines, briefSections, parseMachineBlock, scanLines } from './playerBrief.js';
+import { checkTemplate, checkProse, checkDevices, cardLines, briefSections, parseMachineBlock, scanLines } from './playerBrief.js';
 
 const GW = path.join(process.env.APPDATA, 'dev.malthaiel.mortar-pestle', 'GameWiki', 'Deadlock');
 const briefPath = process.argv[2];
@@ -73,6 +77,9 @@ const naked = scanLines(md)
   .map(({ line }) => line.trim().slice(0, 70));
 const card = cardLines(md);
 const templateFlags = checkTemplate(md);
+// Advisory, deliberately outside `pass`: a band miss is texture drift, never a reason to reject a
+// document that covered the session.
+const texture = [...checkProse(md), ...checkDevices(md)];
 
 const pass = heroMisses.length === 0 && mishearHits.length === 0 && badStamps.length === 0
   && naked.length === 0 && card.length > 0 && templateFlags.length === 0;
@@ -87,6 +94,8 @@ console.log(badStamps.length ? `FAIL ledger stamps outside the recording: ${badS
 console.log(naked.length ? `FAIL naked reader (${naked.length}): ${naked.slice(0, 3).join(' | ')}` : 'PASS reader: addressed as "you" throughout');
 console.log(card.length ? `PASS card: ${card.length} lines` : 'FAIL card is empty — a session that taught nothing actionable did not happen');
 console.log(templateFlags.length ? `FAIL template: ${templateFlags.join(' | ')}` : 'PASS template: fixed strings intact, no emoji');
+console.log(texture.length ? `ADVISORY texture (${texture.length}) — does not affect the verdict:` : 'PASS texture: prose and device bands clean');
+for (const flag of texture) console.log(`  ${flag}`);
 console.log('---');
 console.log(pass ? 'PLAYER BRIEF GATE: PASS' : 'PLAYER BRIEF GATE: FAIL');
 process.exit(pass ? 0 : 1);

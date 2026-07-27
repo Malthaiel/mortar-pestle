@@ -985,6 +985,69 @@ export function splitBriefSentences(md) {
   return splitProseText(md, (_line, i) => skip.has(i));
 }
 
+// ── shorthand balance ────────────────────────────────────────────────────────
+// The prompt states the ratio twice — in HOUSE STYLE and again as self-check item 12 — and run 1
+// still emitted "MM" 0 times against "matchmaking" 20, "E6" 0 against "Eternus 6" 13. A rule that
+// needs a whole-document tally does not survive drafting: the model cannot count its own output
+// while producing it. So the balance is struck here instead, the same way the 35-word ceiling has
+// teeth in `splitBriefSentences` rather than in prose alone.
+//
+// `share` is the fraction of eligible uses that become the short form. Measured on the target
+// document: "MM" 6 / "matchmaking" 6, and "E6" 2 / "Eternus 6" 5 — a rank prefers the spelled form.
+export const SHORTHAND = [
+  [/\bmatchmaking\b/gi, 'MM', 1 / 2], //  target 6 short / 6 long
+  [/\bEternus 6\b/g, 'E6', 2 / 7], //  target 2 short / 5 long
+];
+
+// Spans that are never rewritten. A double-quoted span is the coach verbatim, and shortening inside
+// it puts words in his mouth. A table cell that is nothing but a bolded term is a definition — the
+// glossary row "| **Eternus 6** | Coach's rank |" is what teaches the abbreviation, so abbreviating
+// it erases its own entry. Bold in running prose is NOT masked: a bolded Law lead is an ordinary
+// sentence, and masking all 161 bold spans left almost nothing eligible.
+// ponytail: quote and definition-cell masks only. An unquoted italic aside would slip through;
+// every verbatim in the target carries its quote marks. Widen the mask the day one does not.
+function masked(line, at) {
+  for (const m of line.matchAll(/"[^"]*"/g)) {
+    if (at >= m.index && at < m.index + m[0].length) return true;
+  }
+  if (!/^\s*\|/.test(line)) return false;
+  for (let i = line.indexOf('|'); i >= 0;) {
+    const j = line.indexOf('|', i + 1);
+    if (j < 0) return false;
+    if (at > i && at < j) return /^\s*\*\*[^*]+\*\*\s*$/.test(line.slice(i + 1, j));
+    i = j;
+  }
+  return false;
+}
+
+export function balanceShorthand(md) {
+  const rows = scanLines(md);
+  const before = rows.map(({ line }) => line);
+  let n = 0;
+  for (const [re, short, share] of SHORTHAND) {
+    let seen = -1;
+    for (const row of rows) {
+      // Headings stay spelled for a reader scanning cold; `skip` already refuses the machine block,
+      // the fenced card and every blockquote.
+      if (row.skip || /^\s*#/.test(row.line)) continue;
+      row.line = row.line.replace(re, (hit, at) => {
+        if (masked(row.line, at)) return hit;
+        seen += 1;
+        if (seen === 0) return hit; // first use always spells it out
+        if (Math.round(seen * share) <= Math.round((seen - 1) * share)) return hit;
+        n += 1;
+        return short;
+      });
+    }
+  }
+  // "a matchmaking-only build" becomes "a MM-only build" — both abbreviations open on a vowel
+  // sound. Only lines this pass actually touched are corrected, so a verbatim keeps its own grammar.
+  rows.forEach((row, i) => {
+    if (row.line !== before[i]) row.line = row.line.replace(/\b([Aa]) (?=(?:MM|E6)\b)/g, '$1n ');
+  });
+  return { text: rows.map(({ line }) => line).join('\n'), n };
+}
+
 // ── machine block ────────────────────────────────────────────────────────────
 export function parseMachineBlock(md) {
   const m = String(md ?? '').match(/<!--\s*brief-meta[^\n]*\n([\s\S]*?)-->/);
@@ -1077,9 +1140,11 @@ export async function generatePlayerBrief(invoke, { transcriptBlock, lexiconBloc
   const call = (userPrompt) => invoke('coaching_classify_match', { ...base, userPrompt });
   const raw = await parseOrRetry(call, user, parseBrief, 'Respond with ONLY the finished markdown document, nothing else.', onRaw);
   const split = splitBriefSentences(raw);
+  const balanced = balanceShorthand(split.text);
   const warnings = [];
   if (split.n) warnings.push(`Split ${split.n} over-long sentence${split.n > 1 ? 's' : ''} at a colon or dash — the 35-word ceiling is stated in the prompt.`);
-  const md = split.text;
+  if (balanced.n) warnings.push(`Shortened ${balanced.n} spelled-out use${balanced.n > 1 ? 's' : ''} to its abbreviation — the prompt states the one-to-one ratio and the draft ignored it.`);
+  const md = balanced.text;
   const meta = parseMachineBlock(md);
   warnings.push(...checkTemplate(md), ...checkProse(md), ...checkDevices(md), ...checkCoverage(md, meta));
   return { md, meta, warnings };

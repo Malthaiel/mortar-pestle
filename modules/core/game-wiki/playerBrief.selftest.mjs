@@ -8,8 +8,8 @@
 import assert from 'node:assert/strict';
 import {
   BRIEF_SYSTEM, parseBrief, briefSections, cardLines, checkTemplate, checkProse, checkDevices,
-  splitBriefSentences, parseMachineBlock, checkCoverage, briefToFinal, buildBriefPrompt,
-  lexiconOnly, FIXED_STRINGS, DEVICE_BANDS,
+  splitBriefSentences, balanceShorthand, parseMachineBlock, checkCoverage, briefToFinal,
+  buildBriefPrompt, lexiconOnly, FIXED_STRINGS, DEVICE_BANDS,
 } from './playerBrief.js';
 import { reconcileReport } from './vodReport.js';
 
@@ -323,6 +323,35 @@ assert.equal(splitBriefSentences(OK).n, 0);
 assert.equal(splitBriefSentences(OK).text, OK, 'a clean document round-trips byte for byte');
 const machineBefore = OK.slice(OK.indexOf('<!-- brief-meta'));
 assert.ok(split.text.endsWith(machineBefore), 'the machine block is never touched');
+
+// ── balanceShorthand ─────────────────────────────────────────────────────────
+// Run 1 emitted "MM" zero times against "matchmaking" twenty, with the ratio stated twice in the
+// prompt. Every line below is a hazard that showed up in that document.
+const SH = [
+  '## Matchmaking Is Scrims',
+  'You queue matchmaking every night.',
+  'A matchmaking-only build costs you.',
+  '*"It is the matchmaking dude."* The matchmaking in this game is bad.',
+  '| **Eternus 6** | the coach rank |',
+  '> He plays matchmaking on stream.',
+  '<!-- brief-meta',
+  'ledger: L1 0:03r 21-matchmaking-is-scrims',
+  '-->',
+].join('\n');
+const bal = balanceShorthand(SH);
+assert.equal(bal.n, 1, 'one of two eligible uses shortens, at the stated one-to-one share');
+assert.ok(bal.text.includes('## Matchmaking Is Scrims'), 'a heading keeps the spelled form for a cold read');
+assert.ok(bal.text.includes('You queue matchmaking every night.'), 'the first use always spells it out');
+assert.ok(bal.text.includes('An MM-only build'), 'the next use shortens, and the article agrees with it');
+assert.ok(bal.text.includes('*"It is the matchmaking dude."*'), 'a verbatim is never rewritten — that is putting words in his mouth');
+assert.ok(bal.text.includes('| **Eternus 6** |'), 'the glossary row that DEFINES the abbreviation keeps it spelled');
+assert.ok(bal.text.includes('> He plays matchmaking on stream.'), 'blockquotes are skipped, as everywhere else');
+assert.ok(bal.text.includes('21-matchmaking-is-scrims'), 'the machine block is never touched');
+// Bold in running prose is eligible: masking all of it left almost nothing to balance.
+assert.ok(balanceShorthand('You play matchmaking.\n**Play matchmaking like scrims.**').text.endsWith('**Play MM like scrims.**'));
+// Nothing to balance round-trips byte for byte.
+const noShorthand = 'You play well.\nHe plays well.';
+assert.deepEqual(balanceShorthand(noShorthand), { text: noShorthand, n: 0 });
 assert.ok(split.text.includes('□ Aim slow. Never flick.'), "the card's fenced block is never touched");
 
 // ── the machine block ────────────────────────────────────────────────────────
