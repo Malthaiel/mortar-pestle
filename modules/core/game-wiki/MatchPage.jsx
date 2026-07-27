@@ -25,11 +25,11 @@ import { enrollPrint } from './voiceprints.js';
 import { buildMomentsDigest, classifyMoments, reconcile, renderAutoClassification, sideFromTeamFields, mergedItemToBullet } from './autoClassify.js';
 import { buildFights, judgeTeamfights, summarize } from './teamfightComms.js';
 import { buildMatchDigest } from './matchDigest.js';
-import { buildBrainContext } from './analystBrain.js';
+import { buildBrainContext, LEXICON_PATH, stripFrontmatter } from './analystBrain.js';
 import ConfirmModal from '@host/components/ui/ConfirmModal.jsx';
 import { serializeTfComms, buildTranscriptBlock, reconcileReport, validateStamps } from './vodReport.js';
 import { generateMatchReport } from './matchReport.js';
-import { generatePlayerBrief, briefToFinal, lexiconOnly, BRIEF_MODEL } from './playerBrief.js';
+import { generatePlayerBrief, briefToFinal, BRIEF_MODEL } from './playerBrief.js';
 import { exportCarryForward } from './carryForward.js';
 import { readStopwatch } from './useStopwatch.js';
 import CommsTranscriptView from './CommsTranscriptView.jsx';
@@ -300,14 +300,23 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
     try {
       const agents = await resolveAgents(settings);
       const team = coachedRef.current;
-      const brain = await buildBrainContext(api, { coachedTeam: team });
       const reviewSegs = parseSegments((await api.getRawFileMeta(review.path, 'gamewiki')).content);
       const transcriptBlock = buildTranscriptBlock(reviewSegs);
       // The brief takes the transcript and the canonical name list, and NOTHING else. The target
       // document was produced from raw segments alone, so every other input — the charter, the patch
       // digest, taught concepts, corrections, team pages, the coach's tagged notes — is a route for a
       // coaching point the coach never voiced. The name list cannot add a point; it fixes spelling.
-      const lexiconBlock = lexiconOnly(brain.text);
+      //
+      // Read straight from Lexicon.md rather than building the analyst brain and slicing it out. The
+      // brain reads the charter, the patch digest, concepts, corrections, team pages and prior report
+      // TLDRs, and the brief discards every one — and it then warned about the material the brief
+      // deliberately refuses to use ("[MISSING: Concepts.md ## Distilled]", "[MISSING: prior
+      // reports]"), which lands in the saved payload reading like a problem with the run. Same string
+      // either way: buildBrainContext pushes the lexicon whole, with no ceiling applied.
+      let lexiconBlock = '';
+      try {
+        lexiconBlock = stripFrontmatter((await api.getRawFileMeta(LEXICON_PATH, 'gamewiki')).content).trim();
+      } catch { /* no Lexicon yet — the brief runs without a name list, as buildBriefPrompt allows */ }
       // Session number for the title. One brief per scrim, so the team's scrim count IS the session
       // number; a team with no progress sidecar yet is on its first.
       let sessionNumber = 1;
@@ -328,7 +337,7 @@ export default function MatchPage({ folder, n, accent, overlay = false }) {
       let prior = null;
       try { prior = JSON.parse((await api.getRawFileMeta(sidecarPath(folder, n, 'matchfinal'), 'gamewiki')).content); } catch { /* first brief */ }
       const projected = briefToFinal(md, {
-        warnings: [...brain.warnings, ...warnings],
+        warnings,
         generated: new Date().toISOString().slice(0, 10),
         model: BRIEF_MODEL,
       });

@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import {
   BRIEF_SYSTEM, parseBrief, briefSections, cardLines, checkTemplate, checkProse, checkDevices,
   splitBriefSentences, balanceShorthand, parseMachineBlock, checkCoverage, briefToFinal,
-  buildBriefPrompt, lexiconOnly, FIXED_STRINGS, DEVICE_BANDS,
+  buildBriefPrompt, FIXED_STRINGS, DEVICE_BANDS,
 } from './playerBrief.js';
 import { reconcileReport } from './vodReport.js';
 
@@ -171,10 +171,6 @@ assert.ok(up.includes('CANONICAL NAMES'), 'the name list is passed for spelling'
 assert.ok(up.includes('[0:00] Malthaiel: play slow'));
 assert.ok(!/ANALYST BRAIN|Coached team|tagged in-game notes/.test(up), 'no other input may reach the brief');
 assert.ok(!buildBriefPrompt({ transcriptBlock: 'x' }).includes('CANONICAL NAMES'), 'an absent name list adds no empty header');
-
-assert.equal(lexiconOnly('=== ANALYST CHARTER ===\nblah\n\n=== LEXICON ===\n- Ivy\n- Dynamo\n\n=== PATCH DIGEST ===\nx'),
-  '- Ivy\n- Dynamo', 'the lexicon is sliced out without its neighbours');
-assert.equal(lexiconOnly('no blocks here'), '');
 
 // ── parseBrief ───────────────────────────────────────────────────────────────
 assert.equal(parseBrief('# Title\n\nbody'), '# Title\n\nbody');

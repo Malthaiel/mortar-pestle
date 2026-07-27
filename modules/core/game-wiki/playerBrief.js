@@ -725,14 +725,10 @@ export function buildBriefPrompt({ transcriptBlock, lexiconBlock = '', sessionNu
   return lines.join('\n');
 }
 
-// The brain's LEXICON block, sliced out of the full context. Cheaper than a second reader and it
-// cannot drift from what Process 1 loads, because it is the same string.
-// No `m` flag on purpose: with it, `$` means end-of-LINE and the lazy body stops after one entry —
-// a one-hero name list that looks exactly like a full one at the call site.
-export function lexiconOnly(brainText) {
-  const m = String(brainText ?? '').match(/(?:^|\n)=== LEXICON ===\n([\s\S]*?)(?=\n=== |$)/);
-  return m ? m[1].trim() : '';
-}
+// `lexiconOnly` lived here and is gone (2026-07-26). It existed to slice the LEXICON block out of the
+// analyst brain, which meant building the whole brain — charter, patch digest, concepts, corrections,
+// team pages, prior report TLDRs — to keep one block of it. `doMatchFinal` now reads `Lexicon.md`
+// directly via `analystBrain.LEXICON_PATH`, which is the same string with none of the discarded work.
 
 // Markdown output has no JSON to slice — the only tolerated deviation is the model wrapping the
 // whole document in a fence despite being told not to. An empty body is a failure worth retrying.
