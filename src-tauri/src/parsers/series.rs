@@ -583,6 +583,60 @@ fn index_files_by_episode(root: Option<&Path>) -> HashMap<i64, PathBuf> {
     map
 }
 
+/// Build one table's episode list: every table row (file attached when the scan
+/// found one), then any indexed file whose number has no row at all. Airing
+/// shows get new files long before the `## Episodes` table catches up, and a
+/// row-only list drops them silently — the file is on disk, plays fine, and is
+/// simply invisible. Orphans sort after the rows by number and take the
+/// filename stem as their title. An empty table therefore yields a pure file
+/// listing.
+fn build_episodes(
+    table_eps: &[TableEp],
+    files_by_num: HashMap<i64, PathBuf>,
+    season_name: Option<&str>,
+) -> Vec<Episode> {
+    let mut out: Vec<Episode> = table_eps
+        .iter()
+        .map(|t| {
+            let file_abs = files_by_num
+                .get(&t.n)
+                .map(|p| p.to_string_lossy().to_string());
+            Episode {
+                n: t.n,
+                title: t.title.clone(),
+                wikilink: t.wikilink.clone(),
+                aired: t.aired.clone(),
+                available: file_abs.is_some(),
+                file_abs,
+                season_name: season_name.map(str::to_string),
+            }
+        })
+        .collect();
+    let seen: HashSet<i64> = table_eps.iter().map(|t| t.n).collect();
+    let mut orphans: Vec<(i64, PathBuf)> = files_by_num
+        .into_iter()
+        .filter(|(n, _)| !seen.contains(n))
+        .collect();
+    orphans.sort_by_key(|(n, _)| *n);
+    out.extend(orphans.into_iter().map(|(n, p)| {
+        let title = p
+            .file_name()
+            .and_then(|s| s.to_str())
+            .map(|s| s.rsplit_once('.').map(|(a, _)| a).unwrap_or(s).to_string())
+            .unwrap_or_default();
+        Episode {
+            n,
+            title,
+            wikilink: None,
+            aired: None,
+            available: true,
+            file_abs: Some(p.to_string_lossy().to_string()),
+            season_name: season_name.map(str::to_string),
+        }
+    }));
+    out
+}
+
 fn is_franchise(meta: &Map<String, Value>) -> bool {
     match meta.get("Related IDs") {
         Some(Value::Array(a)) => !a.is_empty(),
@@ -771,23 +825,7 @@ pub fn read_series(series_path: &str) -> Result<Series, VaultError> {
                 .as_deref()
                 .map(|lp| PathBuf::from(lp).join(suffix));
             let files_by_num = index_files_by_episode(section_dir.as_deref());
-            let section_eps: Vec<Episode> = table_eps
-                .iter()
-                .map(|t| {
-                    let file_abs = files_by_num
-                        .get(&t.n)
-                        .map(|p| p.to_string_lossy().to_string());
-                    Episode {
-                        n: t.n,
-                        title: t.title.clone(),
-                        wikilink: t.wikilink.clone(),
-                        aired: t.aired.clone(),
-                        available: file_abs.is_some(),
-                        file_abs,
-                        season_name: Some(suffix.clone()),
-                    }
-                })
-                .collect();
+            let section_eps = build_episodes(&table_eps, files_by_num, Some(suffix));
             let watched = as_finite_numbers(meta.get(&format!("Watched Episodes {suffix}")));
             seasons.push(Season {
                 name: suffix.clone(),
@@ -809,48 +847,7 @@ pub fn read_series(series_path: &str) -> Result<Series, VaultError> {
     } else {
         let table_eps = parse_episode_table(&body);
         let files_by_num = index_files_by_episode(local_path.as_deref().map(Path::new));
-        if !table_eps.is_empty() {
-            episodes_out = table_eps
-                .iter()
-                .map(|t| {
-                    let file_abs = files_by_num
-                        .get(&t.n)
-                        .map(|p| p.to_string_lossy().to_string());
-                    Episode {
-                        n: t.n,
-                        title: t.title.clone(),
-                        wikilink: t.wikilink.clone(),
-                        aired: t.aired.clone(),
-                        available: file_abs.is_some(),
-                        file_abs,
-                        season_name: None,
-                    }
-                })
-                .collect();
-        } else {
-            let mut entries: Vec<(i64, PathBuf)> = files_by_num.into_iter().collect();
-            entries.sort_by_key(|(k, _)| *k);
-            episodes_out = entries
-                .into_iter()
-                .map(|(n, p)| {
-                    let title = p
-                        .file_name()
-                        .and_then(|s| s.to_str())
-                        .map(|s| s.rsplit_once('.').map(|(a, _)| a).unwrap_or(s).to_string())
-                        .unwrap_or_default();
-                    let file_abs = Some(p.to_string_lossy().to_string());
-                    Episode {
-                        n,
-                        title,
-                        wikilink: None,
-                        aired: None,
-                        available: true,
-                        file_abs,
-                        season_name: None,
-                    }
-                })
-                .collect();
-        }
+        episodes_out = build_episodes(&table_eps, files_by_num, None);
     }
 
     let watched_value = if franchise {
@@ -1178,6 +1175,28 @@ mod tests {
         );
         assert_eq!(extract_body_section(body, "Missing"), None);
         assert_eq!(extract_body_section("## Plot\n\n## Episodes\n", "Plot"), None);
+    }
+
+    #[test]
+    fn files_past_the_table_still_listed() {
+        // Airing show: table stops at 2, disk has 3 files. Ep 3 must survive.
+        let rows = parse_episode_table("| 01 | First | 2026-01-01 |\n| 02 | Second | 2026-01-08 |\n");
+        let files: HashMap<i64, PathBuf> = [
+            (1, PathBuf::from("/v/[Grp] Show - 01.mkv")),
+            (3, PathBuf::from("/v/[Grp] Show - 03.mkv")),
+        ]
+        .into_iter()
+        .collect();
+        let eps = build_episodes(&rows, files, None);
+        assert_eq!(eps.iter().map(|e| e.n).collect::<Vec<_>>(), vec![1, 2, 3]);
+        assert!(eps[0].available); // row with a file
+        assert!(!eps[1].available); // row with no file yet
+        assert_eq!(eps[2].title, "[Grp] Show - 03"); // orphan → filename stem
+        assert!(eps[2].available);
+        // Empty table degrades to a pure file listing (the old fallback branch).
+        let only = build_episodes(&[], [(5, PathBuf::from("/v/x - 05.mkv"))].into_iter().collect(), None);
+        assert_eq!(only.len(), 1);
+        assert_eq!(only[0].n, 5);
     }
 
     #[test]
