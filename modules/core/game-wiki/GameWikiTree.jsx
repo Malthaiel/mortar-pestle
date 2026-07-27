@@ -25,7 +25,7 @@ import { IconPlus, IconFolder, IconLink, IconFile, IconX, IconSettings } from '@
 import { CircleChip } from '@host/components/ui/Button.jsx';
 import CoachPopup from './CoachPopup.jsx';
 import {
-  AnimCtx, SuffixCtx, REVEAL, GAP, MUTED,
+  AnimCtx, SuffixCtx, REVEAL, GAP, MUTED, NAV_H,
   CandyHeader, TreeRow, TreeChildren, Collapsible, StaggerChild,
 } from '@host/components/vault-tree/treeKit.jsx';
 
@@ -103,8 +103,11 @@ function TreeNode({ node, tree, accent, currentPath, openMenu, nav, onGear }) {
           <CandyHeader label={node.name} open={open} accent={accent}
             onToggle={() => tree.toggle(node.vaultPath)}
             onContextMenu={hasMenu ? (e) => openMenu(e, node) : undefined}/>
+          {/* size=NAV_H, not a hand-picked number: it is the same min-height the
+              row pill uses, so the two buttons side by side are exactly the same
+              height. Buttons in a row match each other's size. */}
           {gear && (
-            <CircleChip size={22} title="Coaching notes" onClick={() => onGear?.(gear)}>
+            <CircleChip size={NAV_H} title="Coaching notes" onClick={() => onGear?.(gear)}>
               <IconSettings size={13}/>
             </CircleChip>
           )}
