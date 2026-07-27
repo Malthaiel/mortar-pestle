@@ -65,7 +65,11 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
   const [job, setJob] = useState(null);
   const [transcript, setTranscript] = useState('checking'); // checking | present | missing
   const [showDetails, setShowDetails] = useState(false);
-  const [confirmRun, setConfirmRun] = useState(false);
+  // null = no confirm open; otherwise the pending run's options. `{ only: 3 }` is
+  // the cheap test — it re-runs just the audit over phase 1+2 output that already
+  // exists, so the whole chain (spawn, stream, parse, done) is exercised for a
+  // fraction of a full run.
+  const [confirmRun, setConfirmRun] = useState(null);
   const [keep, setKeep] = useState(() => new Set());
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
@@ -306,7 +310,8 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
           roughly a dollar for a short match, up to about six for a full hour.
         </Note>
         <Row>
-          <PrimaryBtn accent={accent} disabled={busy} onClick={() => setConfirmRun(true)}>Make the notes</PrimaryBtn>
+          <PrimaryBtn accent={accent} disabled={busy} onClick={() => setConfirmRun({})}>Make the notes</PrimaryBtn>
+          <OutlinedBtn disabled={busy} onClick={() => setConfirmRun({ only: 3 })}>Cheap test</OutlinedBtn>
           <OutlinedBtn onClick={reveal}>Open the folder</OutlinedBtn>
         </Row>
       </>
@@ -322,15 +327,19 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
         </div>
       </AppWindow>
       <ConfirmModal
-        open={confirmRun}
+        open={!!confirmRun}
         title="This spends real money"
-        message={'A short match costs about a dollar; a full hour of talking costs about six. '
-          + 'It runs for ten to twenty minutes and you can stop it at any point, but whatever has '
-          + 'already been spent stays spent. Go ahead?'}
+        message={confirmRun?.only === 3
+          ? 'Cheap test: this only re-does the last step, checking notes that were already '
+            + 'written. It needs the earlier steps to have run on this match before. A couple of '
+            + 'minutes and roughly a dollar and a half. Go ahead?'
+          : 'A short match costs about a dollar; a full hour of talking costs about six. '
+            + 'It runs for ten to twenty minutes and you can stop it at any point, but whatever '
+            + 'has already been spent stays spent. Go ahead?'}
         confirmLabel="Go ahead"
         cancelLabel="Not now"
-        onCancel={() => setConfirmRun(false)}
-        onConfirm={() => { setConfirmRun(false); start(); }}
+        onCancel={() => setConfirmRun(null)}
+        onConfirm={() => { const o = confirmRun; setConfirmRun(null); start(o || {}); }}
       />
     </>
   );
