@@ -21,13 +21,18 @@ import { encodePagePath } from '@host/components/SidebarBrowser.jsx';
 import { useContextMenu } from '@host/context-menu/useContextMenu.js';
 import NameInputModal from '@host/components/vault-tree/NameInputModal.jsx';
 import ConfirmModal from '@host/components/ui/ConfirmModal.jsx';
-import { IconPlus, IconFolder, IconLink, IconFile, IconX } from '@host/components/icons.jsx';
+import { IconPlus, IconFolder, IconLink, IconFile, IconX, IconSettings } from '@host/components/icons.jsx';
+import { CircleChip } from '@host/components/ui/Button.jsx';
+import CoachPopup from './CoachPopup.jsx';
 import {
   AnimCtx, SuffixCtx, REVEAL, GAP, MUTED,
   CandyHeader, TreeRow, TreeChildren, Collapsible, StaggerChild,
 } from '@host/components/vault-tree/treeKit.jsx';
 
-export const SCRIM_BASE = 'Deadlock/Coaching/Scrim';
+// Re-exported (it now lives in scrimSchema.js, which CoachPopup can import
+// without cycling back through this file) so existing importers are unchanged.
+export { SCRIM_BASE } from './scrimSchema.js';
+import { SCRIM_BASE } from './scrimSchema.js';
 
 // "<base>" when vp is a scrim folder (direct subfolder of SCRIM_BASE), else null.
 function scrimBaseOf(vp) {
@@ -36,7 +41,26 @@ function scrimBaseOf(vp) {
   return rest && !rest.includes('/') ? rest : null;
 }
 
-function TreeBody({ node, tree, accent, currentPath, open, openMenu, nav, animateOnMount = true }) {
+// "<scrim>/Match N" → { scrim, match }. `Match N` folders are created by
+// coach.py (or the scrim gear) and are the unit the coaching pipeline runs over.
+function matchOf(vp) {
+  if (!vp || !vp.startsWith(SCRIM_BASE + '/')) return null;
+  const parts = vp.slice(SCRIM_BASE.length + 1).split('/');
+  if (parts.length !== 2) return null;
+  const m = /^Match (\d+)$/.exec(parts[1]);
+  return m ? { scrim: parts[0], match: parseInt(m[1], 10) } : null;
+}
+
+// Which folders carry the coaching gear: a scrim (creates a match folder) and
+// each of its Match folders (runs the pipeline).
+function gearOf(vp) {
+  const scrim = scrimBaseOf(vp);
+  if (scrim) return { kind: 'scrim', scrim };
+  const m = matchOf(vp);
+  return m ? { kind: 'match', ...m } : null;
+}
+
+function TreeBody({ node, tree, accent, currentPath, open, openMenu, nav, onGear, animateOnMount = true }) {
   const [entered, setEntered] = useState(!animateOnMount);
   useEffect(() => {
     const r = requestAnimationFrame(() => setEntered(true));
@@ -54,28 +78,40 @@ function TreeBody({ node, tree, accent, currentPath, open, openMenu, nav, animat
     inner = nodes.map((c, i) => (
       <StaggerChild key={c.vaultPath} index={i} count={n} open={shown}>
         <TreeNode node={c} tree={tree} accent={accent}
-          currentPath={currentPath} openMenu={openMenu} nav={nav}/>
+          currentPath={currentPath} openMenu={openMenu} nav={nav} onGear={onGear}/>
       </StaggerChild>
     ));
   }
   return <TreeChildren>{inner}</TreeChildren>;
 }
 
-function TreeNode({ node, tree, accent, currentPath, openMenu, nav }) {
+function TreeNode({ node, tree, accent, currentPath, openMenu, nav, onGear }) {
   if (node.isFolder) {
     const open = tree.isOpen(node.vaultPath);
     const entry = tree.childrenOf(node.vaultPath);
     const mounted = open || !!entry;
     const count = entry?.nodes?.length || 0;
     const hasMenu = node.vaultPath === SCRIM_BASE || !!scrimBaseOf(node.vaultPath);
+    const gear = gearOf(node.vaultPath);
     return (
       <div style={{ display: 'flex', flexDirection: 'column' }}>
-        <CandyHeader label={node.name} open={open} accent={accent}
-          onToggle={() => tree.toggle(node.vaultPath)}
-          onContextMenu={hasMenu ? (e) => openMenu(e, node) : undefined}/>
+        {/* The gear is a SIBLING of the row, never CandyHeader's `trailing`:
+            CandyHeader is a <button>, and a button nested in a button is invalid
+            and never receives its own click. The row is already
+            width:fit-content, so it sits flush beside it. */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <CandyHeader label={node.name} open={open} accent={accent}
+            onToggle={() => tree.toggle(node.vaultPath)}
+            onContextMenu={hasMenu ? (e) => openMenu(e, node) : undefined}/>
+          {gear && (
+            <CircleChip size={22} title="Coaching notes" onClick={() => onGear?.(gear)}>
+              <IconSettings size={13}/>
+            </CircleChip>
+          )}
+        </div>
         <Collapsible open={open} count={count}>
           {mounted && <TreeBody open={open} node={node} tree={tree} accent={accent}
-            currentPath={currentPath} openMenu={openMenu} nav={nav}/>}
+            currentPath={currentPath} openMenu={openMenu} nav={nav} onGear={onGear}/>}
         </Collapsible>
       </div>
     );
@@ -93,6 +129,16 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
   const anim = REVEAL[settings.vaultTreeReveal] || REVEAL.normal;
   const currentPath = route?.page === 'game-wiki' ? (route.rest || '') : '';
   const [modal, setModal] = useState(null);
+  // Which gear was clicked ({ kind:'scrim'|'match', scrim, match }), or null.
+  const [coach, setCoach] = useState(null);
+
+  // Open a finished match's notes. The filename is coach.py's deliverable
+  // convention; navigating to the folder would land on an empty-folder blurb.
+  const openNotes = (scrim, n) => nav(
+    '/game-wiki/' + encodePagePath(
+      `${SCRIM_BASE}/${scrim}/Match ${n}/Deadlock Coaching — ${scrim} Match ${n}`,
+    ),
+  );
 
   const openMenu = (e, node) => {
     if (node.vaultPath === SCRIM_BASE) {
@@ -172,7 +218,7 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
                   <Collapsible open={open} count={count}>
                     {mounted && <TreeBody open={open} animateOnMount={false} node={g}
                       tree={tree} accent={accent} currentPath={currentPath}
-                      openMenu={openMenu} nav={nav}/>}
+                      openMenu={openMenu} nav={nav} onGear={setCoach}/>}
                   </Collapsible>
                 </div>
               );
@@ -180,6 +226,12 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
             <div aria-hidden style={{ flexShrink: 0, height: 9 }}/>
           </div>
 
+          {coach && (
+            <CoachPopup target={coach} accent={accent}
+              onClose={() => setCoach(null)}
+              onFolderChange={() => tree.refresh(`${SCRIM_BASE}/${coach.scrim}`)}
+              onOpenNotes={openNotes}/>
+          )}
           {modal?.kind === 'rename' && (
             <NameInputModal open title={`Rename ${modal.base}`} label="New name" confirmLabel="Rename" initialValue={modal.base}
               onCancel={() => setModal(null)}
