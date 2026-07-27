@@ -1,9 +1,12 @@
-// Game Wiki page pane — dispatches by path shape (GameWiki Unification Phase 4):
-//   <scrim>/Overview            → OverviewPage (scrim-level editor)
-//   <scrim>/Matches/Match <n>   → MatchPage (per-match editor)
-//   <scrim>/Report|Coaching/<t> → VodReportView inline (sidecar-driven views)
+// Game Wiki page pane — dispatches by path shape:
+//   Deadlock/Coaching/Scrim     → the scrims landing blurb
+//   <scrim> (a bare folder)     → the empty-scrim blurb
 //   anything else               → the read-only markdown reader (react-markdown +
 //                                 GFM, client-side wikilink transform).
+//
+// Scrim Teardown (2026-07-26): the scrim Overview / Match / report / segments
+// panes are gone with the pages they mounted. A scrim folder holds nothing, so
+// there is nothing left to route into.
 //
 // Why the reader is client-side (not vault_render_reference): the shared Rust
 // renderer resolves wikilinks against the ACTIVE (content) vault's manifest — a
@@ -24,12 +27,6 @@ import { encodePagePath } from '@host/components/SidebarBrowser.jsx';
 import PageTitleHeader from '@host/components/PageTitleHeader.jsx';
 import { getGameWikiIndex, resolveTarget } from './gamewikiIndex.js';
 import { SCRIM_BASE } from './GameWikiTree.jsx';
-import { sidecarPath, resolveReviewTranscript, matchPath } from './matchData.js';
-import OverviewPage from './OverviewPage.jsx';
-import MatchPage from './MatchPage.jsx';
-import VodReportView from './VodReportView.jsx';
-import CommsTranscriptView from './CommsTranscriptView.jsx';
-import { takeSegmentJump } from './sectionJump.js';
 
 // Drop a leading YAML frontmatter block (the Rust reader strips it too).
 function stripFrontmatter(src) {
@@ -86,71 +83,6 @@ const mdComponents = (nav) => ({
   },
 });
 
-// M1: the inline per-match report pane. Final replaces first (locked decision 2):
-// render the .matchfinal sidecar when it exists, else .matchreport (whose view
-// banners itself as not-yet-coach-reviewed). Probed per mount — a fresh generate
-// remounts via the route key.
-function MatchReportPane({ folder, n, tab, rest, accent, nav }) {
-  const [sp, setSp] = useState(null);
-  useEffect(() => {
-    let cancelled = false;
-    api.getRawFileMeta(sidecarPath(folder, n, 'matchfinal'), 'gamewiki')
-      .then(() => { if (!cancelled) setSp(sidecarPath(folder, n, 'matchfinal')); })
-      .catch(() => { if (!cancelled) setSp(sidecarPath(folder, n, 'matchreport')); });
-    return () => { cancelled = true; };
-  }, [folder, n]);
-  if (!sp) return <Shell accent={accent}><p style={{ opacity: 0.6 }}>Loading…</p></Shell>;
-  const onTabChange = (t) => {
-    const to = `${folder}/Matches/Match ${n}/${t}`;
-    if (to !== rest) nav('/game-wiki/' + encodePagePath(to));
-  };
-  return (
-    <VodReportView inline variant="match" tab={tab} onTabChange={onTabChange}
-      sidecarPath={sp}
-      feedbackPath={sidecarPath(folder, n, 'matchfeedback')}
-      mdPath={matchPath(folder, n)} accent={accent} />
-  );
-}
-
-// M1: the two per-match transcript pages (locked decision 10 — comms and review
-// stamps land on separate pages). Comms reads the match's own transcript; review
-// resolves through the ONE accessor (per-match .reviewcomms, else the M8-adopted
-// scrim-level .vodcomms on single-match scrims).
-function MatchSegmentsPane({ folder, n, review, accent }) {
-  const [resolved, setResolved] = useState(review ? undefined : { path: sidecarPath(folder, n, 'comms'), scrimLevel: false });
-  // M18: a stamp chip in the report navigated here and left the moment behind. One-shot, taken once
-  // on mount (this pane is freshly mounted by that navigation) so a later manual visit is not hijacked.
-  const [jumpTo] = useState(() => takeSegmentJump(matchPath(folder, n)));
-  useEffect(() => {
-    if (!review) { setResolved({ path: sidecarPath(folder, n, 'comms'), scrimLevel: false }); return undefined; }
-    let cancelled = false;
-    setResolved(undefined);
-    resolveReviewTranscript(api, folder, n)
-      .then((r) => { if (!cancelled) setResolved(r); })
-      .catch(() => { if (!cancelled) setResolved(null); });
-    return () => { cancelled = true; };
-  }, [review, folder, n]);
-  const title = review ? 'Review Segments' : 'Comms Segments';
-  return (
-    <Shell accent={accent} header={<PageTitleHeader title={title} accent={accent} />}>
-      {resolved === undefined && <p style={{ opacity: 0.6 }}>Loading…</p>}
-      {resolved === null && (
-        <p style={{ opacity: 0.7 }}>
-          {review ? 'No review recording for this match yet.' : 'No comms transcript for this match yet.'}
-        </p>
-      )}
-      {resolved && (
-        <>
-          {resolved.scrimLevel && (
-            <p style={{ opacity: 0.6, fontSize: 12 }}>Scrim-level review recording (adopted for this single-match scrim).</p>
-          )}
-          <CommsTranscriptView sidecarPath={resolved.path} jumpTo={jumpTo} />
-        </>
-      )}
-    </Shell>
-  );
-}
-
 function Shell({ children, accent, header }) {
   return (
     <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
@@ -167,24 +99,23 @@ export default function GameWikiPage({ rest, accent, nav = navigate, overlay = f
   const [err, setErr] = useState(null);
   const [index, setIndex] = useState(null);
 
-  // Scrim dispatch by path shape. A bare scrim-folder path lands on Overview.
-  const sm = rest ? rest.match(/^(Deadlock\/Coaching\/Scrim\/[^/]+)(?:\/(.+))?$/) : null;
-  const scrimFolder = sm ? sm[1] : null;
-  const scrimTail = sm ? (sm[2] || 'Overview') : null;
+  // A bare scrim folder is the only scrim shape left — it holds no pages, so it
+  // gets a blurb rather than a 404 from the reader. A deeper path (a file someone
+  // put there by hand) still falls through to the reader.
   const isScrimLanding = rest === SCRIM_BASE;
-  const isScrim = !!scrimFolder && !isScrimLanding;
+  const isScrimFolder = !!(rest && /^Deadlock\/Coaching\/Scrim\/[^/]+$/.test(rest));
 
   useEffect(() => { getGameWikiIndex().then(setIndex).catch(() => {}); }, []);
 
   useEffect(() => {
-    if (!rest || isScrim || isScrimLanding) { setRaw(null); setErr(null); return; }
+    if (!rest || isScrimFolder || isScrimLanding) { setRaw(null); setErr(null); return; }
     let cancelled = false;
     setRaw(null); setErr(null);
     api.getRawFile(rest + '.md', 'gamewiki')
       .then((c) => { if (!cancelled) setRaw(c); })
       .catch((e) => { if (!cancelled) setErr(String(e?.message || e)); });
     return () => { cancelled = true; };
-  }, [rest, isScrim, isScrimLanding]);
+  }, [rest, isScrimFolder, isScrimLanding]);
 
   const body = useMemo(
     () => (raw == null ? '' : transformWikilinks(stripFrontmatter(raw), index)),
@@ -198,30 +129,12 @@ export default function GameWikiPage({ rest, accent, nav = navigate, overlay = f
     </Shell>
   );
 
-  if (isScrim) {
-    if (scrimTail === 'Overview') return <OverviewPage folder={scrimFolder} accent={accent} nav={nav} overlay={overlay} />;
-    // M1: per-match routes. Bare `Matches/Match N` = the match Overview (editor);
-    // a tail = a report view (VodReportView variant=match tab) or a segments page.
-    const mm = scrimTail.match(/^Matches\/Match (\d+)(?:\/([\w-]+))?$/);
-    if (mm) {
-      const n = Number(mm[1]);
-      const tail = mm[2] || null;
-      if (!tail) return <MatchPage key={`${scrimFolder}/${n}`} folder={scrimFolder} n={n} accent={accent} overlay={overlay} />;
-      if (tail === 'comms-segments' || tail === 'review-segments') {
-        return <MatchSegmentsPane key={`${scrimFolder}/${n}/${tail}`} folder={scrimFolder} n={n}
-          review={tail === 'review-segments'} accent={accent} />;
-      }
-      return <MatchReportPane key={`${scrimFolder}/${n}`} folder={scrimFolder} n={n}
-        tab={tail} rest={rest} accent={accent} nav={nav} />;
-    }
-    // A stray real file inside a scrim folder — fall through to the reader shape
-    // is not worth supporting; point at the tree instead.
-    return (
-      <Shell accent={accent}>
-        <p style={{ opacity: 0.7 }}>Pick a page from this scrim in the tree on the left.</p>
-      </Shell>
-    );
-  }
+  if (isScrimFolder) return (
+    <Shell accent={accent}>
+      <h2>{rest.split('/').pop()}</h2>
+      <p style={{ opacity: 0.7 }}>This scrim is empty.</p>
+    </Shell>
+  );
 
   if (!rest) {
     return (

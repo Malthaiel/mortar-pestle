@@ -52,6 +52,20 @@ export function parseCommsSidecar(jsonStr) {
   return { segments: arr.map(normSeg), clusters, micSpeaker: raw?.micSpeaker ?? 'You' };
 }
 
+// The segment a stamp points at: exact whole-second start, else the first segment at/after it,
+// else the last row (-1 only when there are no segments at all). A range token ([first–last])
+// lands on its START. Relocated here from the deleted vodReport.js — CommsTranscriptView's jump
+// is the only surviving caller, and it already owns the sidecar this indexes into.
+export function segIndexForStamp(segments, t) {
+  const segs = Array.isArray(segments) ? segments : [];
+  if (!segs.length) return -1;
+  const tSec = String(t ?? '').split('–')[0].split(':').map(Number)
+    .reduce((acc, n) => acc * 60 + (Number.isFinite(n) ? n : 0), 0);
+  let i = segs.findIndex((s) => Math.floor((Number(s.t0Ms) || 0) / 1000) === tSec);
+  if (i === -1) i = segs.findIndex((s) => (Number(s.t0Ms) || 0) >= tSec * 1000);
+  return i === -1 ? segs.length - 1 : i;
+}
+
 // Build the SF6 object-shape sidecar payload (the caller JSON.stringifies it). Segments keep
 // speaker + cluster; clusters carry the per-cluster mean embeddings so a later relabel can
 // retrain the matched voiceprint; micSpeaker labels the mic (you) track.

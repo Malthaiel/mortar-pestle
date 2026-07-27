@@ -16,11 +16,10 @@ import TreeToolbar from '@host/components/vault-tree/TreeToolbar.jsx';
 import { GAP } from '@host/components/vault-tree/treeKit.jsx';
 import { IconChevronRight } from '@host/components/icons.jsx';
 import { VAULT_SORT_MODES } from '@host/components/vault-tree/useVaultTree.js';
-import { encodePagePath } from '@host/components/SidebarBrowser.jsx';
 import GameWikiTree, { SCRIM_BASE } from './GameWikiTree.jsx';
 import { useGameWikiTree } from './useGameWikiTree.js';
 import NewScrimModal from './NewScrimModal.jsx';
-import { newScrimScaffold } from './scrimSchema.js';
+import { newScrimName } from './scrimSchema.js';
 
 // The rail's top pill — the ScrimRailHeader recipe (the main nav's brand block,
 // .candy-btn.is-primary data-variant="brand"). Collapsed shows an expand chevron.
@@ -53,21 +52,20 @@ export default function GameWikiRail({ route, accent, nav = navigate, header }) 
 
   const currentPath = route?.page === 'game-wiki' ? (route.rest || '') : '';
 
+  // Scrim Teardown (2026-07-26): New Scrim creates the correctly-named folder and
+  // NOTHING inside it. There is no Overview, no Matches, no seed file to write and
+  // nowhere to navigate afterwards — the tree refresh is the whole feedback.
   const doCreate = async ({ team1, team2 }) => {
-    const { base, files } = newScrimScaffold({ team1, team2 });
+    const base = newScrimName({ team1, team2 });
     try {
       // Dedup against the authoritative disk listing (the tree cache may be cold).
       const res = await api.listFolderRaw(SCRIM_BASE, 'gamewiki').catch(() => null);
       const existing = new Set(res?.subfolders || []);
       let uniq = base;
       if (existing.has(uniq)) { let k = 2; while (existing.has(`${base} (${k})`)) k++; uniq = `${base} (${k})`; }
-      for (const f of files) await api.savePage(`${SCRIM_BASE}/${uniq}/${f.rel}`, f.content, 0, 'gamewiki');
-      // Per-scrim recordings folder (Videos\Mortar & Pestle\Scrims\<base>) — also
-      // ensured lazily before every record, so a failure here is non-fatal.
-      try { await invoke('coaching_scrim_dir', { base: uniq }); } catch {}
+      await api.createFolder(`${SCRIM_BASE}/${uniq}`, 'gamewiki');
       setModal(null);
       await tree.refresh(SCRIM_BASE);
-      nav('/game-wiki/' + encodePagePath(`${SCRIM_BASE}/${uniq}/Overview`));
     } catch (e) {
       setModal({ kind: 'new-scrim', err: String(e?.message || e) });
     }

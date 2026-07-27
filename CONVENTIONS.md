@@ -39,7 +39,6 @@ silent-regression-prone. Regenerate the lists with the greps cited inline.
 modules/core/game-wiki/MatchViewPopup.jsx
 modules/core/game-wiki/ScrimViewer.jsx
 modules/core/game-wiki/useGameWikiTree.js
-modules/core/game-wiki/useStopwatch.js
 modules/core/library/music/AlbumBrowser.jsx
 modules/core/library/music/MusicPage.jsx
 modules/core/library/music/MusicPlayerProvider.jsx

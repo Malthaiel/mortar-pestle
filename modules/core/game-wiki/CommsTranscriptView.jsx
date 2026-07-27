@@ -15,8 +15,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { api } from '@host/api.js';
-import { parseCommsSidecar } from './commsCompile.js';
-import { segIndexForStamp } from './vodReport.js';
+import { parseCommsSidecar, segIndexForStamp } from './commsCompile.js';
 import { speakerColor } from './diarize.js';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
 

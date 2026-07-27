@@ -15,7 +15,7 @@ import { itemName, itemSlot, itemTier, isShopItem, structureName } from './match
 // Deadlock team sides: 0 = Amber (The Amber Hand), 1 = Sapphire (The Sapphire Flame).
 export const TEAM_NAMES = { 0: 'Amber', 1: 'Sapphire' };
 
-// The ### Match Data body emptyMatch() writes before a run (scrimSchema.js).
+// The ### Match Data body a scrim page wrote before a run (kept: old sidecars carry it).
 export const MATCH_DATA_PLACEHOLDER = '_(populated on Run Process)_';
 
 // Baked hero id→name snapshot from the public deadlock-api assets
@@ -60,9 +60,6 @@ const SIDECAR_PREFIX = {
   comms: 'commstranscript',
   autoclass: 'autoclass',
   tfcomms: 'tfcomms',
-  matchreport: 'matchreport', // WS4 M22: the per-match AI coaching report
-  matchfeedback: 'matchfeedback', // WS4 M23: coach Mark/Wrong corrections on that report
-  matchfinal: 'matchfinal', // M4: the coach-voiced final report (Process 2) — replaces matchreport in views
   reviewcomms: 'reviewcomms', // per-match VOD-review transcript (Recording B, per-match by design)
 };
 
@@ -70,41 +67,14 @@ export function sidecarPath(scrim, matchN, kind = 'matchdata') {
   return `${scrimFolderOf(scrim)}/Matches/.${SIDECAR_PREFIX[kind] || 'matchdata'}.Match ${matchN}.json`;
 }
 
-// The match page itself (moved here from scrimShared so path-free modules — the
-// tree, the router pane — can build it without importing the JSX module; it is
-// also the sectionJump key the match report view listens on).
+// The match page path. No page writes one any more (Scrim Teardown 2026-07-26);
+// kept because the sidecar path builders above are keyed the same way.
 export const matchPath = (scrimFolder, n) => `${scrimFolder}/Matches/Match ${n}.md`;
-
-// The player brief — the study document the Final Report button produces. A REAL page at the scrim
-// root (not a dot-sidecar) so it lists in the tree and opens in the ordinary markdown reader with no
-// tree code and no viewer of its own, exactly like Carry-Forward.md. Scrim-level because the brief
-// is a SESSION artifact: it covers the hero pool, mindset and mechanics taught across the review,
-// not one game's events.
-export const briefPath = (scrimFolder) => `${scrimFolder}/Player Brief.md`;
 
 // Scrim-level twin (no per-match suffix): the VOD Review recording is one file for the
 // whole scrim. `<folder>/.vodcomms.json` (`kind: 'vodreport'` → `.vodreport.json`).
 export function scrimSidecarPath(scrim, kind) {
   return `${scrimFolderOf(scrim)}/.${kind}.json`;
-}
-
-// The ONE accessor for a match's REVIEW transcript (Recording B) — every consumer (Review Segments
-// page, Process 2 generate, M8 adoption) resolves through here, never by inlining paths: the
-// per-match `.reviewcomms` sidecar when present, else — single-match scrims only (M8 legacy
-// adoption, North's case) — the scrim-level `.vodcomms`. Read-only either way; the legacy file is
-// never moved or rewritten. Multi-match legacy scrims get no fallback (adoption is forbidden there).
-export async function resolveReviewTranscript(api, scrim, matchN) {
-  const folder = scrimFolderOf(scrim);
-  const per = sidecarPath(folder, matchN, 'reviewcomms');
-  try { await api.getRawFileMeta(per, 'gamewiki'); return { path: per, scrimLevel: false }; } catch { /* no per-match review yet */ }
-  try {
-    const list = await api.listFolderRaw(`${folder}/Matches`, 'gamewiki');
-    const mds = (list?.files || []).filter((f) => /^Match \d+\.md$/.test(f));
-    if (mds.length !== 1) return null;
-    const legacy = scrimSidecarPath(folder, 'vodcomms');
-    await api.getRawFileMeta(legacy, 'gamewiki');
-    return { path: legacy, scrimLevel: true };
-  } catch { return null; }
 }
 
 // Whole seconds → m:ss ("—" for missing/NaN).

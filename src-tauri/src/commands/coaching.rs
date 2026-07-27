@@ -1,16 +1,12 @@
-//! Deadlock Scrim Coaching backend commands.
+//! Deadlock coaching backend commands.
 //!
-//! `coaching_read_image` reads a user-picked image (the scoreboard screenshot,
-//! chosen via the file dialog) and returns it as a `data:` URL so the ScrimViewer
-//! can show it inline. Unlike the `mortar-pestle-asset://` scheme — which rejects any
-//! path outside the vault / media roots (`asset_protocol::is_under_allowed_root`)
-//! — this serves the file wherever it lives, because the path came from an
-//! explicit user file-pick (trusted) and never widens the asset allowlist. Capped
-//! so a pathological file can't be base64'd into the DOM.
-//!
-//! `deadlock_fetch_match` pulls a Deadlock match's full metadata by Match ID from
-//! the public deadlock-api (`/v1/matches/{id}/metadata`), returning the raw JSON
-//! verbatim — the data half of the ScrimViewer's per-match "Run Process" button.
+//! Scrim Teardown (2026-07-26) removed the scrim pages and both AI report
+//! processes; what remains here is the reusable half. `deadlock_fetch_match`
+//! pulls a Deadlock match's full metadata by Match ID from the public
+//! deadlock-api (`/v1/matches/{id}/metadata`), returning the raw JSON verbatim.
+//! `coaching_extract_audio` / `coaching_audio_track_count` serve the comms-job
+//! transcription pipeline. `coaching_classify_match` is the generic one-shot AI
+//! call the Analyst brain still uses, and `coaching_cancel` stops it.
 
 use std::path::Path;
 use std::path::PathBuf;
@@ -22,101 +18,6 @@ use tokio::process::Command as TokioCommand;
 
 use crate::commands::vault::VaultError;
 use crate::parsers::video_transcode::{compute_hash, mtime_ms_for};
-
-const MAX_IMAGE_BYTES: u64 = 25 * 1024 * 1024; // 25 MB
-
-/// Standard base64 (RFC 4648, `+/`, `=` padding). Hand-rolled to avoid pulling a
-/// dependency for one small encode; base64 is a trivial, non-security encoding.
-fn base64_encode(data: &[u8]) -> String {
-    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::with_capacity((data.len() + 2) / 3 * 4);
-    for chunk in data.chunks(3) {
-        let b0 = chunk[0] as u32;
-        let b1 = *chunk.get(1).unwrap_or(&0) as u32;
-        let b2 = *chunk.get(2).unwrap_or(&0) as u32;
-        let n = (b0 << 16) | (b1 << 8) | b2;
-        out.push(ALPHABET[((n >> 18) & 63) as usize] as char);
-        out.push(ALPHABET[((n >> 12) & 63) as usize] as char);
-        out.push(if chunk.len() > 1 { ALPHABET[((n >> 6) & 63) as usize] as char } else { '=' });
-        out.push(if chunk.len() > 2 { ALPHABET[(n & 63) as usize] as char } else { '=' });
-    }
-    out
-}
-
-fn mime_for(path: &Path) -> &'static str {
-    match path.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase()).as_deref() {
-        Some("png") => "image/png",
-        Some("jpg") | Some("jpeg") => "image/jpeg",
-        Some("webp") => "image/webp",
-        Some("gif") => "image/gif",
-        Some("bmp") => "image/bmp",
-        _ => "application/octet-stream",
-    }
-}
-
-#[tauri::command]
-pub fn coaching_read_image(path: String) -> Result<String, VaultError> {
-    if path.is_empty() {
-        return Err(VaultError::Invalid("path required".into()));
-    }
-    let canonical = std::fs::canonicalize(PathBuf::from(&path))
-        .map_err(|_| VaultError::NotFound(format!("Image not found: {path}")))?;
-    let meta = std::fs::metadata(&canonical).map_err(|e| VaultError::Io(e.to_string()))?;
-    if !meta.is_file() {
-        return Err(VaultError::NotFile);
-    }
-    if meta.len() > MAX_IMAGE_BYTES {
-        return Err(VaultError::Invalid("image too large (max 25 MB)".into()));
-    }
-    let bytes = std::fs::read(&canonical).map_err(|e| VaultError::Io(e.to_string()))?;
-    Ok(format!("data:{};base64,{}", mime_for(&canonical), base64_encode(&bytes)))
-}
-
-const MAX_TEXT_BYTES: u64 = 1024 * 1024; // 1 MB
-
-/// Read a user-picked text file (player-written VOD-review notes, chosen via the
-/// file dialog) and return its contents. Same trust model as `coaching_read_image`:
-/// the explicit file-pick is the grant, no allowlist widened. Extension-whitelisted
-/// to plain text so the picker grant can't be repurposed as an arbitrary-file reader.
-#[tauri::command]
-pub fn coaching_read_text(path: String) -> Result<String, VaultError> {
-    if path.is_empty() {
-        return Err(VaultError::Invalid("path required".into()));
-    }
-    let canonical = std::fs::canonicalize(PathBuf::from(&path))
-        .map_err(|_| VaultError::NotFound(format!("File not found: {path}")))?;
-    let ext = canonical.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase());
-    if !matches!(ext.as_deref(), Some("md") | Some("txt")) {
-        return Err(VaultError::Invalid("only .md / .txt notes are supported".into()));
-    }
-    let meta = std::fs::metadata(&canonical).map_err(|e| VaultError::Io(e.to_string()))?;
-    if !meta.is_file() {
-        return Err(VaultError::NotFile);
-    }
-    if meta.len() > MAX_TEXT_BYTES {
-        return Err(VaultError::Invalid("notes file too large (max 1 MB)".into()));
-    }
-    String::from_utf8(std::fs::read(&canonical).map_err(|e| VaultError::Io(e.to_string()))?)
-        .map_err(|_| VaultError::Invalid("notes file is not UTF-8 text".into()))
-}
-
-/// Open a user-picked recording (`.mp4`) in the OS default application. No allowlist
-/// gate — the path came from an explicit file-pick and a scrim recording legitimately
-/// lives outside the vault. Launches the external app only; serves nothing to the webview.
-#[tauri::command]
-pub fn coaching_open_path(app: tauri::AppHandle, path: String) -> Result<(), VaultError> {
-    if path.is_empty() {
-        return Err(VaultError::Invalid("path required".into()));
-    }
-    let canonical = std::fs::canonicalize(PathBuf::from(&path))
-        .map_err(|_| VaultError::NotFound(format!("Path not found: {path}")))?;
-    if !canonical.is_file() {
-        return Err(VaultError::NotFile);
-    }
-    app.opener()
-        .open_path(canonical.to_string_lossy().into_owned(), None::<&str>)
-        .map_err(|e| VaultError::Io(e.to_string()))
-}
 
 /// Highlight a GameWiki-vault file in the OS file manager (the "open in folder"
 /// button on the VOD Review Report). `reveal_in_files` (media.rs) can't be reused:
@@ -139,85 +40,6 @@ pub fn coaching_reveal_path(app: tauri::AppHandle, path: String) -> Result<(), V
     app.opener()
         .reveal_item_in_dir(&canonical)
         .map_err(|e| VaultError::Io(e.to_string()))
-}
-
-/// A scrim basename is app-built (`T1 VS T2 (MM-DD-YY)`, teams pre-sanitized in
-/// `newScrimContent`) but gate it anyway: it becomes a folder name under the
-/// captures root, so no separators, traversal, or reserved characters.
-fn valid_scrim_base(base: &str) -> Result<(), VaultError> {
-    if base.trim().is_empty() {
-        return Err(VaultError::Invalid("scrim name required".into()));
-    }
-    if base.contains(['/', '\\', ':', '*', '?', '"', '<', '>', '|']) || base.contains("..") {
-        return Err(VaultError::Invalid("invalid scrim name".into()));
-    }
-    Ok(())
-}
-
-/// Resolve (and create) the per-scrim recordings folder
-/// `<captures root>\Scrims\<base>` — called after "+ New Scrim" and lazily
-/// before every in-app scrim recording, so pre-existing scrims get their folder
-/// on first record. Returns the absolute path for the daemon's `start_record`
-/// `dir` override.
-#[tauri::command]
-pub fn coaching_scrim_dir(base: String) -> Result<String, VaultError> {
-    valid_scrim_base(&base)?;
-    let dir = PathBuf::from(crate::commands::vault::captures_dir()).join("Scrims").join(&base);
-    std::fs::create_dir_all(&dir)
-        .map_err(|e| VaultError::Io(format!("create scrim dir {}: {e}", dir.display())))?;
-    Ok(dir.to_string_lossy().into_owned())
-}
-
-/// Rename a scrim's recordings folder alongside a scrim-bundle rename. Missing
-/// old folder = no-op (nothing recorded yet); existing new folder = error
-/// rather than a silent merge. Deleting a scrim intentionally has no folder
-/// twin — recordings outlive the page.
-#[tauri::command]
-pub fn coaching_rename_scrim_dir(old_base: String, new_base: String) -> Result<(), VaultError> {
-    valid_scrim_base(&old_base)?;
-    valid_scrim_base(&new_base)?;
-    let root = PathBuf::from(crate::commands::vault::captures_dir()).join("Scrims");
-    let from = root.join(&old_base);
-    let to = root.join(&new_base);
-    if !from.exists() {
-        return Ok(());
-    }
-    if to.exists() {
-        return Err(VaultError::Invalid(format!("recordings folder already exists: {new_base}")));
-    }
-    std::fs::rename(&from, &to).map_err(|e| VaultError::Io(format!("rename scrim dir: {e}")))
-}
-
-/// Write an exported VOD-review report (a compiled markdown string) to a
-/// user-chosen path. The JS `save()` dialog is the consent boundary — no
-/// allowlist gate, same trust model as `coaching_read_image` /
-/// `coaching_open_path` (an explicit user pick, never widens the asset/vault
-/// allowlist). `atomic_write` creates the parent dir + tmp-file + fsync + rename.
-/// When `reveal` is set, highlight the written file in the OS file manager via
-/// the opener plugin (the same primitive as `coaching_reveal_path`, but ungated
-/// — this path is the user's save pick, not a vault-relative app path). Returns
-/// the written path on success.
-#[tauri::command]
-pub async fn export_report_file(
-    app: tauri::AppHandle,
-    path: String,
-    content: String,
-    reveal: bool,
-) -> Result<String, VaultError> {
-    if path.trim().is_empty() {
-        return Err(VaultError::Invalid("path required".into()));
-    }
-    let out = PathBuf::from(&path);
-    crate::commands::vault::atomic_write(&out, content.as_bytes())?;
-    if reveal {
-        // Canonicalize so the opener resolves the real on-disk path (matches
-        // coaching_reveal_path); a failed canonicalize just skips the reveal —
-        // the file is already written, the reveal is cosmetic.
-        if let Ok(canon) = std::fs::canonicalize(&out) {
-            let _ = app.opener().reveal_item_in_dir(&canon);
-        }
-    }
-    Ok(path)
 }
 
 // ── Comms Extraction (audio → 16 kHz mono WAV) ───────────────────────────────
@@ -521,15 +343,10 @@ const ANTHROPIC_MESSAGES_URL: &str = "https://api.anthropic.com/v1/messages";
 const CLASSIFY_TIMEOUT_SECS: u64 = 20 * 60;
 
 /// settings.agents.model alias → Anthropic model id (defaults to the current best Opus).
-/// `opus-5` is NOT reachable from Settings→Agents by design — it is pinned in code by the player
-/// brief (playerBrief.js::BRIEF_MODEL), whose target document was written by Opus 5 and for which
-/// model choice is a visible share of the remaining quality gap. Everything else keeps inheriting
-/// the user's alias.
 fn classify_model_id(alias: &str) -> &'static str {
     match alias {
         "sonnet" => "claude-sonnet-4-6",
         "haiku" => "claude-haiku-4-5",
-        "opus-5" => "claude-opus-5",
         _ => "claude-opus-4-8",
     }
 }
@@ -649,39 +466,6 @@ async fn classify_via_cli(
 ) -> Result<String, DeadlockError> {
     // No tools, default cwd: pure reasoning over the prompt.
     run_claude_cli(system, user, model, cli_path, None, None, CLASSIFY_CLI_TIMEOUT_SECS, app).await
-}
-
-/// Read-only, tool-using one-shot for the Analyst verify pass (Pass 2). Distinct from
-/// coaching_classify_match — different contract: cwd = the GameWiki `Deadlock/` folder and
-/// Read/Grep/Glob are allowed so the model can check claims against Fact/ pages. Still
-/// `--setting-sources ""` (deterministic — the brain arrives in the prompt; tools are for
-/// checking, not settings). CLI backend only: the API path has no filesystem tools.
-#[tauri::command]
-pub async fn coaching_agent_run(
-    system_prompt: String,
-    user_prompt: String,
-    model: String,
-    cli_path: String,
-    app: tauri::AppHandle,
-) -> Result<String, DeadlockError> {
-    if user_prompt.trim().is_empty() {
-        return Err(DeadlockError::Invalid("empty agent-run prompt".into()));
-    }
-    let cwd = std::path::PathBuf::from(crate::commands::vault::gamewiki_vault_root()).join("Deadlock");
-    if !cwd.is_dir() {
-        return Err(DeadlockError::Invalid(format!("GameWiki Deadlock folder not found at {}", cwd.display())));
-    }
-    run_claude_cli(
-        &system_prompt,
-        &user_prompt,
-        &model,
-        &cli_path,
-        Some(cwd),
-        Some("Read,Grep,Glob"),
-        AGENT_RUN_TIMEOUT_SECS,
-        &app,
-    )
-    .await
 }
 
 /// Stop switch for whichever billed CLI run is live. Exactly one AI run happens app-wide at a

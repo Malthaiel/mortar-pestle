@@ -15,10 +15,13 @@ import { invoke } from '../api.js';
 import { safeDecode } from '../router.js';
 import CollapsibleRail from '../components/ui/CollapsibleRail.jsx';
 import GameWikiRail, { RailHeaderPill } from '@modules/core/game-wiki/GameWikiRail.jsx';
-import { readStopwatch } from '@modules/core/game-wiki/useStopwatch.js';
-import {
-  appendMatchNote, setMatchFieldIfEmpty, readOverviewFm, DICTATION_TARGET_KEY,
-} from '@modules/core/game-wiki/scrimShared.jsx';
+
+// Scrim Teardown (2026-07-26): the live-notes path is GONE. Overview.md, match
+// pages and the per-match stopwatch it read no longer exist, so the panel is a
+// wiki browser plus the live-target control. The dictation target key moved here
+// (it outlived scrimShared, which went with the scrim pages it served) — Rust
+// still owns the live cell, so Go Live from a future surface keeps working.
+const DICTATION_TARGET_KEY = 'overlay-dictation-target';
 
 // react-markdown rides in GameWikiPage (~100KB) — lazy-split off the overlay boot
 // chunk, mirroring the main app's split (index.jsx).
@@ -74,7 +77,6 @@ export default function ScrimOverlayPanel() {
   // Local selection + nav shim (GameWikiRail/GameWikiPage call nav with
   // '/game-wiki/<encoded path>' — decode into the sel string).
   const [sel, setSel] = useState(loadSel);
-  const selRef = useRef(sel); selRef.current = sel;
   const nav = useCallback((to) => {
     const m = String(to || '').match(/^\/game-wiki(?:\/(.*))?$/);
     const rest = m && m[1] ? safeDecode(m[1]) : '';
@@ -90,27 +92,7 @@ export default function ScrimOverlayPanel() {
 
   // Scrim context from the selection — feeds the ticker + the header pill.
   const scrimFolder = (sel.match(/^(Deadlock\/Coaching\/Scrim\/[^/]+)(?:\/|$)/) || [])[1] || null;
-  const matchN = Number((sel.match(/\/Matches\/Match (\d+)$/) || [])[1]) || null;
   const scrimTitle = scrimFolder ? titleOf(scrimFolder.split('/').pop()) : '';
-  const [ov, setOv] = useState(null); // Overview frontmatter (teams, coached) for the open scrim
-  useEffect(() => {
-    if (!scrimFolder) { setOv(null); return undefined; }
-    let c = false;
-    readOverviewFm(scrimFolder).then((f) => { if (!c) setOv(f); }).catch(() => {});
-    return () => { c = true; };
-  }, [scrimFolder]);
-  const coached = ov?.['Coached Team'] || ov?.['Team 1'] || '';
-
-  // Elapsed — polled from the same per-match stopwatch the notes timer uses.
-  const [elapsed, setElapsed] = useState(null);
-  useEffect(() => {
-    if (!scrimFolder || matchN == null || !matchN) { setElapsed(null); return undefined; }
-    const key = `gw-sw:${scrimFolder}:m${matchN}:${coached}`;
-    const tick = () => setElapsed(readStopwatch(key).elapsedSec);
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [scrimFolder, matchN, coached]);
 
   // Re-publish the persisted dictation target on mount (the Rust cell survives
   // reloads, but republishing keeps it in step with what this webview last set).
@@ -140,32 +122,6 @@ export default function ScrimOverlayPanel() {
     try { localStorage.removeItem(DICTATION_TARGET_KEY); } catch { /* private mode */ }
     invoke('overlay_go_offline').catch(() => {});
     setLive(null);
-  }, []);
-
-  // Dictation / screenshot fallback: when the target match page is NOT the page
-  // currently open here, finish the capture on disk (scrimShared helpers). A
-  // mounted MatchPage handles its own events through its save loop.
-  useEffect(() => {
-    const subs = [
-      listen('overlay-dictation-committed', (e) => {
-        const p = e.payload || {};
-        if (!p.scrimPath || p.matchN == null) return;
-        if (selRef.current === `${p.scrimPath}/Matches/Match ${p.matchN}`) return; // MatchPage owns it
-        appendMatchNote(p.scrimPath, Number(p.matchN), p.coachedTeam || '', p.text)
-          .then(() => invoke('overlay_note_toast', { text: String(p.text || '').trim() }).catch(() => {}))
-          .catch(() => {});
-      }),
-      listen('capture-screenshot-saved', (e) => {
-        const pth = e.payload?.path;
-        if (!pth) return;
-        let t = null;
-        try { t = JSON.parse(localStorage.getItem(DICTATION_TARGET_KEY) || 'null'); } catch { /* corrupt */ }
-        if (!t?.folder || !t?.n) return;
-        if (selRef.current === `${t.folder}/Matches/Match ${t.n}`) return; // MatchPage owns it
-        setMatchFieldIfEmpty(t.folder, Number(t.n), 'Scoreboard', pth).catch(() => {});
-      }),
-    ];
-    return () => subs.forEach((s) => s.then((u) => u()).catch(() => {}));
   }, []);
 
   // Resize (all edges + corners). Refs feed the pointer handlers the current size
@@ -208,19 +164,11 @@ export default function ScrimOverlayPanel() {
   }, [commitPos]);
   const resizeProps = { onPointerMove: moveResize, onPointerUp: endResize, onPointerCancel: endResize };
 
-  // Ticker items: SCRIM OVERLAY · scrim title · MATCH n · MM:SS ELAPSED (LIVE
-  // died with Go Live). One group = items each led by a ● separator; rendered
-  // twice in the track for a seamless translateX(0 → -50%) loop.
+  // Ticker items: GAMEWIKI OVERLAY · scrim title. One group = items each led by a
+  // ● separator; rendered twice in the track for a seamless translateX(0 → -50%)
+  // loop. The MATCH n / elapsed items went with the match pages that fed them.
   const tickerItems = [{ text: 'GAMEWIKI OVERLAY', bright: true }];
   if (scrimTitle) tickerItems.push({ text: scrimTitle, bright: true });
-  if (matchN) {
-    tickerItems.push({ text: `MATCH ${matchN}` });
-    if (elapsed != null) {
-      const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
-      const ss = String(elapsed % 60).padStart(2, '0');
-      tickerItems.push({ text: `${mm}:${ss} ELAPSED` });
-    }
-  }
   const renderTickerGroup = (keyPrefix) => tickerItems.map((it, i) => (
     <span className="ov-scrim-ticker-group" key={`${keyPrefix}-${i}`}>
       <span className="ov-scrim-ticker-sep" aria-hidden="true">●</span>
