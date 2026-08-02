@@ -293,7 +293,6 @@ fn main() {
         "reset_captures_dir",
         "stt_load_model",
         "stt_transcribe_file",
-        "stt_diarize_file",
         "stt_start_dictation",
         "stt_stop_dictation",
         "stt_set_scrim_key",

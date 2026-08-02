@@ -4,7 +4,9 @@
 // CoachPopup transcribes OBS track 1 (mic, all coach) and track 3 (Discord, all student)
 // separately and calls `mergeTranscripts` to interleave them by time. The old
 // diarize-then-attribute path (alignDiarization + dropClusters, and the stt_diarize_file
-// spans they consumed) had no caller left after that and was deleted 2026-08-02.
+// spans they consumed) had no caller left after that and was deleted 2026-08-02 — the
+// `stt_diarize_file` command itself went the same day, so nothing reaches the sidecar's
+// sherpa-onnx diarization any more (the daemon still ships the `diarize_file` op).
 //
 // Wire shapes (camelCase, from the host commands):
 //   comms/mic text segments: { t0Ms, t1Ms, text }

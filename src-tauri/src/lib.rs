@@ -997,7 +997,6 @@ pub fn run() {
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::reset_captures_dir,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::stt::stt_load_model,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::stt::stt_transcribe_file,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::stt::stt_diarize_file,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::stt::stt_start_dictation,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::stt::stt_stop_dictation,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::stt::stt_set_scrim_key,
