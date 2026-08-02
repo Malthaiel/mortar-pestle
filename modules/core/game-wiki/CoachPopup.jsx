@@ -25,7 +25,7 @@ import { FilterChip } from '@host/components/ui/Pill.jsx';
 import { TextInput } from '@host/components/ui/Input.jsx';
 import { SCRIM_BASE } from './scrimSchema.js';
 import { alignDiarization, mergeTranscripts } from './diarize.js';
-import { coachTranscribe } from './coachTranscribe.js';
+import { coachTranscribe, labelCoach, summarizeSpeakers } from './coachTranscribe.js';
 
 const TRANSCRIPT = '00-transcript.md';
 const PROTECTED = `${SCRIM_BASE.replace(/\/Scrim$/, '')}/Method/protected-terms.md`;
@@ -38,6 +38,22 @@ const COACH_MODEL = 'large-v3-turbo-q5_0';
 
 // Plain-words stages for the write-it-out pass, in the order they run.
 const STT_STAGES = ['Getting the listener ready', 'Listening to the talk', 'Working out who is who', 'Saving'];
+
+// `coach.py` binds phase 2 with "the coach is the speaker labelled <coach_label>, every other
+// label is the Student", so this exact string has to appear in the transcript. It is read from
+// the pipeline's own config rather than duplicated, because renaming it there and silently
+// producing coach-less transcripts here is a wrong set of notes, not a failed run.
+const COACH_CONFIG = 'Infrastructure/Scripts/coaching/config.json';
+const COACH_LABEL_FALLBACK = 'Malthaiel';
+
+async function coachLabel() {
+  try {
+    const raw = await api.getRawFile(COACH_CONFIG);
+    return JSON.parse(raw).coach_label || COACH_LABEL_FALLBACK;
+  } catch {
+    return COACH_LABEL_FALLBACK;
+  }
+}
 
 // One streaming `stt_*` command as a promise. Every one of them ends in a `done` event,
 // and an `error` always arrives just before it — so the error is remembered and thrown
@@ -110,6 +126,10 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
   // The write-it-out pass: null when idle, else { stage, pct }. Unlike the coaching run
   // this lives in the window, so closing it throws the work away (the window says so).
   const [stt, setStt] = useState(null);
+  // After the engine passes, before the file is written: { segments, rows, label }. The user
+  // marks which voices are theirs here — nothing is saved until they do.
+  const [pick, setPick] = useState(null);
+  const [coachKeys, setCoachKeys] = useState(() => new Set());
   // Re-render once a minute so the elapsed line advances during a run.
   const [, tick] = useState(0);
 
@@ -236,18 +256,34 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
         else if (ev.kind === 'diarization') diar = ev;
       });
 
-      setStt({ stage: 3, pct: null });
       const merged = mergeTranscripts({ commsSegments: alignDiarization(segments, diar?.segments || []) });
-      const body = coachTranscribe(merged);
-      if (!body.trim()) throw new Error('Nothing was said in that recording — no words came out of it.');
-      await api.savePage(`${folder}/${TRANSCRIPT}`, body, null, 'gamewiki');
-      setTranscript('present');
+      const rows = summarizeSpeakers(merged);
+      if (!rows.length) throw new Error('Nothing was said in that recording — no words came out of it.');
+      // Straight to the picker, NOT to disk: a transcript with no coach label would run the
+      // whole paid pipeline and produce wrong notes rather than fail.
+      setCoachKeys(new Set());
+      setPick({ segments: merged, rows, label: await coachLabel() });
     } catch (e) {
       setErr(String(e?.message || e));
     } finally {
       setStt(null);
     }
   }, [folder]);
+
+  const saveTranscript = useCallback(async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      const body = coachTranscribe(labelCoach(pick.segments, coachKeys, pick.label));
+      await api.savePage(`${folder}/${TRANSCRIPT}`, body, null, 'gamewiki');
+      setPick(null);
+      setTranscript('present');
+    } catch (e) {
+      setErr(String(e?.message || e));
+    } finally {
+      setBusy(false);
+    }
+  }, [pick, coachKeys, folder]);
 
   const title = isMatch
     ? `Coaching notes — Match ${target.match}`
@@ -380,6 +416,39 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
           An hour of talking takes a good while — leave it be. Keep this window open: close it and
           it stops and you would have to start again.
         </Note>
+      </>
+    );
+  } else if (pick) {
+    // ── Which voices are you? ────────────────────────────────────────────────
+    // Not a nicety. Everything not marked as the coach becomes the Student, so an unmarked
+    // transcript teaches the pipeline that the coach never spoke.
+    body = (
+      <>
+        <Note>
+          It heard {pick.rows.length} different voices. Tap every one that is you — one person often
+          comes out as several, so tap all of yours. Everyone else is left as they are.
+        </Note>
+        <div style={{ maxHeight: 300, overflowY: 'auto', marginBottom: 16 }}>
+          {pick.rows.map((r) => (
+            <div key={r.key} style={{ display: 'flex', gap: 10, alignItems: 'center', margin: '0 0 6px' }}>
+              <FilterChip active={coachKeys.has(r.key)} accent={accent}
+                onClick={() => setCoachKeys((s) => {
+                  const next = new Set(s);
+                  if (next.has(r.key)) next.delete(r.key); else next.add(r.key);
+                  return next;
+                })}>{r.speaker} · {r.count}</FilterChip>
+              <span style={{ opacity: 0.6, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {r.sample}
+              </span>
+            </div>
+          ))}
+        </div>
+        <Row>
+          <PrimaryBtn accent={accent} disabled={busy || !coachKeys.size} onClick={saveTranscript}>
+            {coachKeys.size ? `Save — ${coachKeys.size} of them are me` : 'Tap the ones that are you'}
+          </PrimaryBtn>
+          <OutlinedBtn disabled={busy} onClick={() => setPick(null)}>Throw it away</OutlinedBtn>
+        </Row>
       </>
     );
   } else if (transcript === 'missing') {
