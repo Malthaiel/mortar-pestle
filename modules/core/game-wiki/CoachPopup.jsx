@@ -6,7 +6,7 @@
 //   { kind: 'scrim' } — the gear on a scrim folder. Creates a Match folder,
 //                       because a match gear needs a match folder to sit beside
 //                       and coach.py only makes one as a side effect of running.
-//   { kind: 'match' } — the real thing: check → confirm → run → gate → done.
+//   { kind: 'match' } — the real thing: check → confirm → run → done.
 //
 // The job lives in Rust (`coach_job.rs`), NOT here: a full run is 10-20 minutes
 // and closing this window must not kill it. Everything below is a view over
@@ -21,18 +21,16 @@ import { api, invoke } from '@host/api.js';
 import AppWindow from '@host/components/ui/AppWindow.jsx';
 import ConfirmModal from '@host/components/ui/ConfirmModal.jsx';
 import { PrimaryBtn, OutlinedBtn, DangerOutlinedBtn } from '@host/components/ui/Button.jsx';
-import { FilterChip } from '@host/components/ui/Pill.jsx';
 import { TextInput } from '@host/components/ui/Input.jsx';
 import { SCRIM_BASE } from './scrimSchema.js';
 import { mergeTranscripts } from './diarize.js';
 import { coachTranscribe } from './coachTranscribe.js';
 
 const TRANSCRIPT = '00-transcript.md';
-const PROTECTED = `${SCRIM_BASE.replace(/\/Scrim$/, '')}/Method/protected-terms.md`;
 
 // The coaching path forces the best model regardless of `settings.stt.defaultModel`.
 // The `small` default invents proper nouns that were never spoken, and every invented
-// name lands in the review gate as a term to adjudicate — 48 of them, on one match.
+// name lands in `01-unmatched.md` as a term to adjudicate — 48 of them, on one match.
 // Fetched on demand (574 MB, SHA-verified) the first time this runs.
 const COACH_MODEL = 'large-v3-turbo-q5_0';
 
@@ -140,7 +138,6 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
   // exists, so the whole chain (spawn, stream, parse, done) is exercised for a
   // fraction of a full run.
   const [confirmRun, setConfirmRun] = useState(null);
-  const [keep, setKeep] = useState(() => new Set());
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const [newMatch, setNewMatch] = useState('1');
@@ -191,7 +188,7 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
     try {
       await invoke('coach_job_start', {
         scrim: target.scrim, matchN: target.match,
-        fromPhase: opts.fromPhase ?? null, only: opts.only ?? null, noGate: opts.noGate ?? false,
+        fromPhase: opts.fromPhase ?? null, only: opts.only ?? null,
       });
     } catch (e) {
       setErr(String(e?.message || e));
@@ -199,29 +196,6 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
       setBusy(false);
     }
   }, [target]);
-
-  // "Keep these and continue": the ticked words go into the anti-match list so
-  // the pipeline stops second-guessing them, then the run resumes at phase 2.
-  // The list is hand-edited by design, so this appends a dated section rather
-  // than merging into an existing one.
-  const keepAndContinue = useCallback(async () => {
-    setBusy(true);
-    setErr(null);
-    try {
-      const words = mine.gateTerms.filter((t) => keep.has(t));
-      if (words.length) {
-        const r = await api.getRawFileMeta(PROTECTED, 'gamewiki');
-        const stamp = new Date().toISOString().slice(0, 10);
-        const block = `\n## Kept from a review stop (${stamp})\n\n${words.map((w) => `- ${w}`).join('\n')}\n`;
-        await api.savePage(PROTECTED, r.content.replace(/\s*$/, '\n') + block, r.mtime, 'gamewiki');
-      }
-      await invoke('coach_job_clear');
-      await start({ fromPhase: 2 });
-    } catch (e) {
-      setErr(String(e?.message || e));
-      setBusy(false);
-    }
-  }, [mine, keep, start]);
 
   const createMatch = useCallback(async () => {
     const n = parseInt(newMatch, 10);
@@ -324,35 +298,6 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
           <span>Match number</span>
           <TextInput value={newMatch} onChange={setNewMatch} accent={accent} style={{ width: 90 }} autoFocus />
           <PrimaryBtn onClick={createMatch} disabled={busy} accent={accent}>Make the folder</PrimaryBtn>
-        </Row>
-      </>
-    );
-  } else if (mine?.status === 'gate') {
-    // ── The review stop ──────────────────────────────────────────────────────
-    body = (
-      <>
-        <Note>
-          It stopped part-way. These are words it heard but couldn&apos;t place. Tap any that are a
-          real person, a nickname, a joke or a build name — those get remembered and left alone from
-          now on. Leave the rest untapped.
-        </Note>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: 260, overflowY: 'auto', marginBottom: 16 }}>
-          {mine.gateTerms.map((t, i) => (
-            <FilterChip key={`${t}-${i}`} active={keep.has(t)} accent={accent}
-              onClick={() => setKeep((s) => {
-                const next = new Set(s);
-                if (next.has(t)) next.delete(t); else next.add(t);
-                return next;
-              })}>{t}</FilterChip>
-          ))}
-        </div>
-        <Row>
-          <PrimaryBtn onClick={keepAndContinue} disabled={busy} accent={accent}>
-            {keep.size ? `Keep ${keep.size} and carry on` : 'Carry on'}
-          </PrimaryBtn>
-          <OutlinedBtn onClick={async () => { await invoke('coach_job_clear'); start({ noGate: true }); }} disabled={busy}>
-            Start over without this check
-          </OutlinedBtn>
         </Row>
       </>
     );
