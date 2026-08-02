@@ -24,8 +24,8 @@ import { PrimaryBtn, OutlinedBtn, DangerOutlinedBtn } from '@host/components/ui/
 import { FilterChip } from '@host/components/ui/Pill.jsx';
 import { TextInput } from '@host/components/ui/Input.jsx';
 import { SCRIM_BASE } from './scrimSchema.js';
-import { alignDiarization, mergeTranscripts } from './diarize.js';
-import { coachTranscribe, labelCoach, summarizeSpeakers } from './coachTranscribe.js';
+import { mergeTranscripts } from './diarize.js';
+import { coachTranscribe } from './coachTranscribe.js';
 
 const TRANSCRIPT = '00-transcript.md';
 const PROTECTED = `${SCRIM_BASE.replace(/\/Scrim$/, '')}/Method/protected-terms.md`;
@@ -37,7 +37,28 @@ const PROTECTED = `${SCRIM_BASE.replace(/\/Scrim$/, '')}/Method/protected-terms.
 const COACH_MODEL = 'large-v3-turbo-q5_0';
 
 // Plain-words stages for the write-it-out pass, in the order they run.
-const STT_STAGES = ['Getting the listener ready', 'Listening to the talk', 'Working out who is who', 'Saving'];
+const STT_STAGES = [
+  'Pulling the two sounds apart',
+  'Getting the listener ready',
+  'Listening to you',
+  'Listening to everyone else',
+  'Saving',
+];
+
+// Which sound track holds what, numbered the way OBS labels them (from 1). The recording keeps
+// the mic and Discord on separate tracks, so who spoke is known by construction — no voice
+// matching, no guessing. `coaching_extract_audio` counts from 0, hence the -1 at the call.
+//
+// ponytail: hard-coded on purpose. Nothing inside the file says which track is which (every
+// stream is a nameless "OBS Audio Handler"), and the broadcast engine only knows its OWN scene,
+// never the OBS that made these. Job 4 makes the app record it, and then the layout is ours by
+// construction and these two lines come out. A picker built now is a picker deleted then.
+const MIC_TRACK = 1;    // your voice, alone
+const COMMS_TRACK = 3;  // Discord — everyone else
+
+// Everyone who is not the coach. METHOD-A §8a merges them into one Student anyway, so the
+// Discord pass needs no per-person labels — one cluster id, one name.
+const STUDENT = 'Student';
 
 // `coach.py` binds phase 2 with "the coach is the speaker labelled <coach_label>, every other
 // label is the Student", so this exact string has to appear in the transcript. It is read from
@@ -126,10 +147,6 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
   // The write-it-out pass: null when idle, else { stage, pct }. Unlike the coaching run
   // this lives in the window, so closing it throws the work away (the window says so).
   const [stt, setStt] = useState(null);
-  // After the engine passes, before the file is written: { segments, rows, label }. The user
-  // marks which voices are theirs here — nothing is saved until they do.
-  const [pick, setPick] = useState(null);
-  const [coachKeys, setCoachKeys] = useState(() => new Set());
   // Re-render once a minute so the elapsed line advances during a run.
   const [, tick] = useState(0);
 
@@ -223,67 +240,71 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
 
   const reveal = () => invoke('coaching_reveal_path', { path: folder }).catch(() => {});
 
-  // Pick a recording and turn it into `00-transcript.md`. Three engine passes over the
-  // same file — words, then who-spoke-when, then the two stitched together — and the
-  // result is written straight into the match folder, which flips this window to Ready.
+  // Listen to one sound track of the recording. `coaching_extract_audio` shells ffmpeg to pull
+  // that track out on its own, and the engine hears nothing but it — so every word it returns
+  // belongs to whoever that track records. The WAV is cached by file+track, so a second run
+  // over the same recording skips the pulling-apart.
+  const trackSegments = useCallback(async (video, obsTrack, stage) => {
+    const wav = await invoke('coaching_extract_audio', { video, track: obsTrack - 1 });
+    const segments = [];
+    await runStt('stt_transcribe_file', { path: wav }, (ev) => {
+      if (ev.kind === 'progress') setStt({ stage, pct: ev.pct });
+      else if (ev.kind === 'segment' && ev.text) segments.push({ t0Ms: ev.t0Ms, t1Ms: ev.t1Ms, text: ev.text });
+    });
+    return segments;
+  }, []);
+
+  // Pick a recording and turn it into `00-transcript.md`. Two listening passes — your own
+  // track, then everyone else's — stitched back together in time order, written straight into
+  // the match folder, which flips this window to Ready.
   //
   // The `stt_*` commands are invoked directly rather than through `useStt`: SttProvider
   // mounts only in the overlay window, and this popup is in the main one.
   const transcribeVideo = useCallback(async () => {
     const picked = await open({
       multiple: false,
-      filters: [{ name: 'Recording', extensions: ['mp4', 'mkv', 'mov', 'wav', 'm4a', 'mp3'] }],
+      filters: [{ name: 'Recording', extensions: ['mp4', 'mkv', 'mov'] }],
     });
     if (!picked) return;
     setErr(null);
-    const segments = [];
-    let diar = null;
     try {
       setStt({ stage: 0, pct: null });
-      await runStt('stt_load_model', { name: COACH_MODEL },
-        (ev) => { if (ev.kind === 'progress') setStt({ stage: 0, pct: ev.pct }); });
+      const label = await coachLabel();
 
       setStt({ stage: 1, pct: null });
-      await runStt('stt_transcribe_file', { path: picked }, (ev) => {
-        if (ev.kind === 'progress') setStt({ stage: 1, pct: ev.pct });
-        else if (ev.kind === 'segment' && ev.text) segments.push({ t0Ms: ev.t0Ms, t1Ms: ev.t1Ms, text: ev.text });
-      });
+      await runStt('stt_load_model', { name: COACH_MODEL },
+        (ev) => { if (ev.kind === 'progress') setStt({ stage: 1, pct: ev.pct }); });
 
-      // maxSpeakers 0 = let it work out how many people are talking.
       setStt({ stage: 2, pct: null });
-      await runStt('stt_diarize_file', { path: picked, maxSpeakers: 0 }, (ev) => {
-        if (ev.kind === 'progress') setStt({ stage: 2, pct: ev.pct });
-        else if (ev.kind === 'diarization') diar = ev;
-      });
+      const micSegments = await trackSegments(picked, MIC_TRACK, 2);
+      setStt({ stage: 3, pct: null });
+      const commsSegments = await trackSegments(picked, COMMS_TRACK, 3);
 
-      const merged = mergeTranscripts({ commsSegments: alignDiarization(segments, diar?.segments || []) });
-      const rows = summarizeSpeakers(merged);
-      if (!rows.length) throw new Error('Nothing was said in that recording — no words came out of it.');
-      // Straight to the picker, NOT to disk: a transcript with no coach label would run the
-      // whole paid pipeline and produce wrong notes rather than fail.
-      setCoachKeys(new Set());
-      setPick({ segments: merged, rows, label: await coachLabel() });
+      // A track that exists but holds the wrong thing yields silence, and silence would save a
+      // half-empty transcript that reads as a real one. Stop and say which track was empty.
+      if (!micSegments.length) {
+        throw new Error(`Nothing was said on track ${MIC_TRACK} — is that the one your voice goes to?`);
+      }
+      if (!commsSegments.length) {
+        throw new Error(`Nothing was said on track ${COMMS_TRACK} — is that the one everyone else goes to?`);
+      }
+
+      setStt({ stage: 4, pct: null });
+      const body = coachTranscribe(mergeTranscripts({
+        micSegments,
+        // One cluster for everybody else — the pipeline merges them anyway.
+        commsSegments: commsSegments.map((s) => ({ ...s, cluster: 0 })),
+        micSpeaker: label,
+        nameMap: { 0: STUDENT },
+      }));
+      await api.savePage(`${folder}/${TRANSCRIPT}`, body, null, 'gamewiki');
+      setTranscript('present');
     } catch (e) {
       setErr(String(e?.message || e));
     } finally {
       setStt(null);
     }
-  }, [folder]);
-
-  const saveTranscript = useCallback(async () => {
-    setBusy(true);
-    setErr(null);
-    try {
-      const body = coachTranscribe(labelCoach(pick.segments, coachKeys, pick.label));
-      await api.savePage(`${folder}/${TRANSCRIPT}`, body, null, 'gamewiki');
-      setPick(null);
-      setTranscript('present');
-    } catch (e) {
-      setErr(String(e?.message || e));
-    } finally {
-      setBusy(false);
-    }
-  }, [pick, coachKeys, folder]);
+  }, [folder, trackSegments]);
 
   const title = isMatch
     ? `Coaching notes — Match ${target.match}`
@@ -418,39 +439,6 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
         </Note>
       </>
     );
-  } else if (pick) {
-    // ── Which voices are you? ────────────────────────────────────────────────
-    // Not a nicety. Everything not marked as the coach becomes the Student, so an unmarked
-    // transcript teaches the pipeline that the coach never spoke.
-    body = (
-      <>
-        <Note>
-          It heard {pick.rows.length} different voices. Tap every one that is you — one person often
-          comes out as several, so tap all of yours. Everyone else is left as they are.
-        </Note>
-        <div style={{ maxHeight: 300, overflowY: 'auto', marginBottom: 16 }}>
-          {pick.rows.map((r) => (
-            <div key={r.key} style={{ display: 'flex', gap: 10, alignItems: 'center', margin: '0 0 6px' }}>
-              <FilterChip active={coachKeys.has(r.key)} accent={accent}
-                onClick={() => setCoachKeys((s) => {
-                  const next = new Set(s);
-                  if (next.has(r.key)) next.delete(r.key); else next.add(r.key);
-                  return next;
-                })}>{r.speaker} · {r.count}</FilterChip>
-              <span style={{ opacity: 0.6, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {r.sample}
-              </span>
-            </div>
-          ))}
-        </div>
-        <Row>
-          <PrimaryBtn accent={accent} disabled={busy || !coachKeys.size} onClick={saveTranscript}>
-            {coachKeys.size ? `Save — ${coachKeys.size} of them are me` : 'Tap the ones that are you'}
-          </PrimaryBtn>
-          <OutlinedBtn disabled={busy} onClick={() => setPick(null)}>Throw it away</OutlinedBtn>
-        </Row>
-      </>
-    );
   } else if (transcript === 'missing') {
     // ── Nothing to work from ─────────────────────────────────────────────────
     body = (
@@ -458,8 +446,9 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
         <Note>
           Nothing to work from yet. This needs the talk-through written out as words, saved inside
           this match&apos;s folder under the name <code>{TRANSCRIPT}</code>. Point it at the
-          recording and it writes that out for you — it listens, works out who said what, and
-          saves it. Costs nothing; it all happens on your own machine.
+          recording and it writes that out for you — your voice and everyone else&apos;s are kept
+          on separate sound tracks, so it knows who said what without having to guess.
+          Costs nothing; it all happens on your own machine.
         </Note>
         <Row>
           <PrimaryBtn accent={accent} onClick={transcribeVideo}>Write it out from a recording</PrimaryBtn>
