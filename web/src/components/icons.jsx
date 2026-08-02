@@ -1,17 +1,38 @@
-// Icon pack: Boxicons Regular (https://boxicons.com) — MIT licence.
-// Path data copied from the boxicons npm package; no runtime dependency.
-// Every icon in the app comes from here. Boxicons draws filled shapes on a
-// 24 grid, so there is no stroke to tune — colour flows through currentColor
-// and `size` is the only knob.
+// Icon pack. Every icon in the app comes from here — nothing is hand-drawn.
+// Path data is copied inline from the source packages; there is no runtime
+// dependency. Colour flows through currentColor; `size` is the only knob.
+//
+// Two sources, and which one you use is decided by the shape, not by taste:
+//
+//   1. Boxicons Regular (https://boxicons.com) — MIT. The default. Draws
+//      filled shapes on a 24 grid. Use it for every NAMED THING: folder,
+//      clock, key, chart, shield.
+//   2. Font Awesome Free 7 solid (https://fontawesome.com) — icons are
+//      CC BY 4.0, credited here as the licence requires. Used ONLY for BARE
+//      MARKS — the tick and the cross. Boxicons' free tier has no filled
+//      form of either (`bxs-check` and `bxs-x` do not exist), so those fell
+//      back to its thin Basic set and read visibly lighter than every solid
+//      icon beside them. Font Awesome draws the same marks much larger inside
+//      their box, so at a given `size` they land at the same stroke thickness
+//      but ~1.7x the mark — which is what makes them read as heavy.
 //
 // Adding an icon: find it at boxicons.com (Regular weight), copy the <path>
-// out of svg/regular/<name>.svg, and add one line below. Do NOT hand-draw one
-// and do NOT reach for a second pack.
+// out of svg/regular/<name>.svg, add one line below. Do NOT hand-draw one.
+// Reach for Font Awesome only for another bare mark (plus, minus, pause) and
+// only after confirming Boxicons has no filled form.
+//
+// Non-24 viewBoxes: pass the third `wrap` argument. Font Awesome authors on a
+// 512-tall box of varying width, so each mark is re-framed to a 512 square by
+// shifting min-x — framing only, the path data is untouched.
 
-const SVG_PROPS = { viewBox: '0 0 24 24', fill: 'currentColor' };
-function wrap(size, children) {
-  return <svg width={size} height={size} {...SVG_PROPS}>{children}</svg>;
+function wrap(size, children, viewBox = '0 0 24 24') {
+  return <svg width={size} height={size} viewBox={viewBox} fill="currentColor">{children}</svg>;
 }
+
+// Font Awesome's own square framings, kept next to each other so the offsets
+// are obviously (512 - nativeWidth) / 2 and not a magic number.
+const FA_CHECK_BOX = '-32 0 512 512';  // native 448 wide
+const FA_XMARK_BOX = '-64 0 512 512';  // native 384 wide
 
 // ── Sidebar / chrome icons (sized via prop; default 18) ───────────────────────
 export function IconTimer         ({ size = 18 }) { return wrap(size, <><path d="M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10 10-4.486 10-10S17.514 2 12 2zm3.293 14.707L11 12.414V6h2v5.586l3.707 3.707-1.414 1.414z"/></>); } // bxs-time-five
@@ -45,8 +66,8 @@ export function IconRewind        ({ size = 15 }) { return wrap(size, <><path d=
 export function IconFastForward   ({ size = 15 }) { return wrap(size, <><path d="m19 12-7-5v10zM5 7v10l7-5z"/></>); } // bx-fast-forward (Basic — no filled form)
 export function IconPause         ({ size = 15 }) { return wrap(size, <><path d="M8 7h3v10H8zm5 0h3v10h-3z"/></>); } // bx-pause (Basic — no filled form)
 export function IconMaximize      ({ size = 15 }) { return wrap(size, <><path d="M5 5h5V3H3v7h2zm5 14H5v-5H3v7h7zm11-5h-2v5h-5v2h7zm-2-4h2V3h-7v2h5z"/></>); } // bx-fullscreen (Basic — no filled form)
-export function IconX             ({ size = 10 }) { return wrap(size, <><path d="m16.192 6.344-4.243 4.242-4.242-4.242-1.414 1.414L10.535 12l-4.242 4.242 1.414 1.414 4.242-4.242 4.243 4.242 1.414-1.414L13.364 12l4.242-4.242z"/></>); } // bx-x (Basic — no filled form)
-export function IconCheck         ({ size = 14 }) { return wrap(size, <><path d="m10 15.586-3.293-3.293-1.414 1.414L10 18.414l9.707-9.707-1.414-1.414z"/></>); } // bx-check (Basic — no filled form)
+export function IconX             ({ size = 10 }) { return wrap(size, <><path d="M55.1 73.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L147.2 256 9.9 393.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L192.5 301.3 329.9 438.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L237.8 256 375.1 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L192.5 210.7 55.1 73.4z"/></>, FA_XMARK_BOX); } // Font Awesome solid xmark (Boxicons has no bxs-x)
+export function IconCheck         ({ size = 14 }) { return wrap(size, <><path d="M434.8 70.1c14.3 10.4 17.5 30.4 7.1 44.7l-256 352c-5.5 7.6-14 12.3-23.4 13.1s-18.5-2.7-25.1-9.3l-128-128c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l101.5 101.5 234-321.7c10.4-14.3 30.4-17.5 44.7-7.1z"/></>, FA_CHECK_BOX); } // Font Awesome solid check (Boxicons has no bxs-check)
 export function IconChevronLeft   ({ size = 14 }) { return wrap(size, <><path d="M13.939 4.939 6.879 12l7.06 7.061 2.122-2.122L11.121 12l4.94-4.939z"/></>); } // bxs-chevron-left
 export function IconChevronRight  ({ size = 14 }) { return wrap(size, <><path d="M10.061 19.061 17.121 12l-7.06-7.061-2.122 2.122L12.879 12l-4.94 4.939z"/></>); } // bxs-chevron-right
 export function IconSort          ({ size = 18 }) { return wrap(size, <><path d="M19.707 14.707A1 1 0 0 0 19 13h-7v2h4.586l-4.293 4.293A1 1 0 0 0 13 21h7v-2h-4.586l4.293-4.293zM7 3.99H5v12H2l4 4 4-4H7zM17 3h-2c-.417 0-.79.259-.937.649l-2.75 7.333h2.137L14.193 9h3.613l.743 1.981h2.137l-2.75-7.333A1 1 0 0 0 17 3zm-2.057 4 .75-2h.613l.75 2h-2.113z"/></>); } // bx-sort-a-z (Basic — no filled form)
