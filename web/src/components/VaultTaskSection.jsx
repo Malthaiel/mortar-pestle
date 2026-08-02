@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { IconCheck } from './icons.jsx';
 
 function VaultTaskRow({ task, active, onSelect, onToggle, accent, onDragStart }) {
   const [hover, setHover] = useState(false);
@@ -41,14 +42,11 @@ function VaultTaskRow({ task, active, onSelect, onToggle, accent, onDragStart })
           width: 16, height: 16, borderRadius: 'var(--radius-sm)',
           border: `1.5px solid ${task.checked ? accent : 'var(--border)'}`,
           background: task.checked ? accent : 'transparent',
+          color: '#fff',
           cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
           transition: 'all 0.1s',
         }}>
-        {task.checked && (
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="20 6 9 17 4 12"/>
-          </svg>
-        )}
+        {task.checked && <IconCheck size={10} />}
       </button>
     </div>
   );
@@ -74,14 +72,11 @@ function RoutineRow({ item, accent, onToggle }) {
           width: 14, height: 14, borderRadius: 'var(--radius-sm)',
           border: `1.5px solid ${item.checked ? accent : 'var(--border)'}`,
           background: item.checked ? accent : 'transparent',
+          color: '#fff',
           cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
           transition: 'all 0.1s',
         }}>
-        {item.checked && (
-          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="20 6 9 17 4 12"/>
-          </svg>
-        )}
+        {item.checked && <IconCheck size={9} />}
       </button>
     </div>
   );
