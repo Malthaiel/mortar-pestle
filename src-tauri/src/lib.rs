@@ -289,13 +289,12 @@ pub fn run() {
                 eprintln!("recycle bin retention: purged {} expired item(s)", rb.removed);
             }
 
-            // Wipe stale transcodes left by a hard-killed prior session — the
-            // in-memory registry starts empty so LRU can't see orphans, and a
-            // clean exit already wipes this dir (RunEvent::Exit below). One
-            // complete transcode per (file, audio) is recreated on next play.
-            if let Ok(dir) = parsers::video_transcode::cache_root() {
-                let _ = std::fs::remove_dir_all(&dir);
-            }
+            // Adopt the previous session's transcodes instead of wiping them:
+            // complete files are re-registered (so the existing LRU caps bound
+            // the dir again) and a hard-killed run's `.partial` staging files
+            // are removed. A re-encoded episode costs ~80 s of GPU work, which
+            // the old wipe-on-startup + wipe-on-exit pair charged every launch.
+            parsers::video_transcode::adopt_cache_from_disk();
 
             // SF12 follow-up — loopback HTTP server for media bytes. WebKitGTK
             // rejects custom URI schemes in HTMLMediaElement, so audio/video
@@ -1062,9 +1061,9 @@ pub fn run() {
         .expect("error while building tauri application")
         .run(|_app_handle, event| {
             if let RunEvent::Exit = event {
-                if let Ok(dir) = parsers::video_transcode::cache_root() {
-                    let _ = std::fs::remove_dir_all(&dir);
-                }
+                // The transcode cache deliberately survives exit — the next
+                // launch adopts it (see the startup sweep). Killed children
+                // leave only `.partial` staging files, which adoption removes.
                 parsers::video_transcode::shutdown_active();
                 commands::video_editor::shutdown_export();
                 // Game Capture reap (5-SF2d): terminate the spawned engine + (Unix)

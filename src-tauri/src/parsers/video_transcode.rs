@@ -17,8 +17,10 @@
 //!   the current entry's `started_at` before flipping status.
 //! - **LRU eviction** (3 files OR 5 GB) excludes every active hash and runs
 //!   on every insert; Linux unlink-while-open is safe for in-flight reads.
-//! - **Cleanup** wipes the transcodes dir on `RunEvent::Exit` and SIGTERMs
-//!   all active children. Subs persist by design (tiny, repeat-watch-friendly).
+//! - **Cleanup** SIGTERMs all active children on `RunEvent::Exit`. The cache
+//!   itself persists: the next launch calls [`adopt_cache_from_disk`], which
+//!   re-registers the complete files (handing them back to the LRU) and removes
+//!   a killed run's `.partial` staging files. Subs persist the same way.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -747,6 +749,80 @@ fn lru_evict(r: &mut TranscodeRegistry) {
     }
 }
 
+/// Adopt a previous run's cache instead of wiping it.
+///
+/// Both the startup sweep and the `RunEvent::Exit` reap used to `remove_dir_all`
+/// this directory, because the in-memory registry starts empty and so the LRU
+/// could not see the leftovers. A copy remux is cheap to rebuild, but a
+/// re-encoded episode costs ~80 s of GPU work — paying that again on every app
+/// restart is what made a second viewing as slow as the first.
+///
+/// Re-registering the complete files hands them back to the existing LRU, so
+/// `LRU_FILE_CAP` / `LRU_BYTE_CAP` bound the directory exactly as they do
+/// in-session. Only `<hash>.mp4` is adopted: a `.partial` is a killed run's
+/// staging file and is removed, and nothing else is ever promoted to a final
+/// cache path, so an adopted file is always a complete transcode.
+pub fn adopt_cache_from_disk() {
+    let Ok(dir) = cache_root() else { return };
+    adopt_dir(&dir);
+}
+
+/// Directory-scoped half of [`adopt_cache_from_disk`], so tests can drive it
+/// against a temp dir instead of the real cache root.
+pub(crate) fn adopt_dir(dir: &Path) {
+    let Ok(rd) = std::fs::read_dir(dir) else { return };
+    let now = Instant::now();
+    let mut found: Vec<(String, PathBuf, std::time::Duration)> = Vec::new();
+    for e in rd.flatten() {
+        let path = e.path();
+        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+        if name.ends_with(".partial") {
+            let _ = std::fs::remove_file(&path);
+            continue;
+        }
+        if path.extension().and_then(|x| x.to_str()) != Some("mp4") {
+            continue;
+        }
+        let Some(hash) = path.file_stem().and_then(|s| s.to_str()).map(String::from) else {
+            continue;
+        };
+        // Age drives LRU order: an older file must sort as less-recently-served.
+        let age = std::fs::metadata(&path)
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.elapsed().ok())
+            .unwrap_or_default();
+        found.push((hash, path, age));
+    }
+    if found.is_empty() {
+        return;
+    }
+    let mut r = match registry().lock() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    };
+    for (hash, path, age) in found {
+        // Never displace a live entry — adoption runs at startup, but a poisoned
+        // lock or a future caller could race a running transcode.
+        if r.entries.contains_key(&hash) {
+            continue;
+        }
+        let served = now.checked_sub(age).unwrap_or(now);
+        r.entries.insert(
+            hash.clone(),
+            TranscodeEntry {
+                hash,
+                path,
+                duration: None,
+                started_at: served,
+                last_served_at: served,
+                status: EntryStatus::Done,
+            },
+        );
+    }
+    lru_evict(&mut r);
+}
+
 /// Trim the running set down to `MAX_ACTIVE_TRANSCODES`: while over budget,
 /// remove the oldest-started active transcode and collect its PID for the
 /// caller to SIGTERM (outside the lock). Returns the evicted PIDs — usually
@@ -1012,6 +1088,43 @@ mod tests {
         let f = File::create(&p).unwrap();
         f.set_len(size).unwrap();
         p
+    }
+
+    #[test]
+    fn adopt_dir_keeps_complete_files_and_bins_partials() {
+        let _g = REG_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        __test_reset_registry();
+        let td = TempDir::new().unwrap();
+        let done = make_sparse(td.path(), "aaa.mp4", 100);
+        let partial = make_sparse(td.path(), "bbb.mp4.partial", 100);
+        let vtt = make_sparse(td.path(), "ccc.vtt", 10);
+
+        adopt_dir(td.path());
+
+        assert!(done.exists(), "a complete transcode must survive a restart");
+        assert!(!partial.exists(), "a killed run's staging file must be removed");
+        assert!(vtt.exists(), "subs are not the video lane's to touch");
+        assert_eq!(__test_registry_len(), 1, "only the complete .mp4 is registered");
+        assert!(
+            matches!(status_of("aaa"), Some(EntryStatus::Done)),
+            "an adopted file is complete by construction — only exit 0 renames onto the final path"
+        );
+        __test_reset_registry();
+    }
+
+    #[test]
+    fn adopt_dir_lets_the_lru_bound_the_adopted_cache() {
+        let _g = REG_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        __test_reset_registry();
+        let td = TempDir::new().unwrap();
+        // 4 complete files against LRU_FILE_CAP=3: adoption must not smuggle an
+        // unbounded cache back in just because the registry started empty.
+        for n in ["a", "b", "c", "d"] {
+            make_sparse(td.path(), &format!("{n}.mp4"), 100);
+        }
+        adopt_dir(td.path());
+        assert_eq!(__test_registry_len(), 3, "adoption feeds the existing LRU caps");
+        __test_reset_registry();
     }
 
     #[test]
