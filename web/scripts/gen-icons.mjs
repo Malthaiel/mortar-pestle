@@ -12,8 +12,8 @@
 //   node web/scripts/gen-icons.mjs /tmp/iconpacks/node_modules/boxicons/svg
 //
 // Default location if no argument is given: <repo>/.iconpacks/node_modules/
-// boxicons/svg (gitignored). The ten Font Awesome marks need no download —
-// their path data is inlined in OVERRIDES.
+// boxicons/svg (gitignored). The Font Awesome marks need no download — their
+// path data is inlined in OVERRIDES.
 //
 // Verify a run by diffing the result against the committed file; the generator
 // reproduces it exactly.
@@ -48,6 +48,7 @@ const MAP = {
   // Non-sidebar / inline
   IconReset: 'bx-reset', IconSkip: 'bx-skip-next', IconSkipBack: 'bx-skip-previous',
   IconRewind: 'bx-rewind', IconFastForward: 'bx-fast-forward', IconPause: 'bx-pause',
+  IconStop: 'bx-stop',
   IconMaximize: 'bx-fullscreen', IconX: 'bx-x', IconCheck: 'bx-check',
   IconChevronLeft: 'bx-chevron-left', IconChevronRight: 'bx-chevron-right',
   IconSort: 'bx-sort-a-z', IconChevronsDownUp: 'bx-collapse-vertical', IconChevronsUpDown: 'bx-expand-vertical',
@@ -92,7 +93,7 @@ const MAP = {
 // sites that omit `size` keep the size they have today.
 const SIZES = {
   IconReset: 15, IconSkip: 15, IconSkipBack: 15, IconRewind: 15, IconFastForward: 15,
-  IconPause: 15, IconMaximize: 15, IconX: 10, IconCheck: 14, IconChevronLeft: 14,
+  IconPause: 15, IconStop: 15, IconMaximize: 15, IconX: 10, IconCheck: 14, IconChevronLeft: 14,
   IconChevronRight: 14, IconExternal: 14, IconGrip: 14, IconPlayCircle: 14,
   IconKey: 15, IconLockOpen: 15, IconCopy: 14, IconShield: 15, IconShieldOff: 15,
   IconDot: 14, IconSend: 14,
@@ -122,8 +123,8 @@ const HEADER = `// Icon pack. Every icon in the app comes from here — nothing 
 //      clock, key, chart, shield.
 //   2. Font Awesome Free 7 solid (https://fontawesome.com) — icons are
 //      CC BY 4.0, credited here as the licence requires. Used ONLY for BARE
-//      MARKS: tick, cross, plus, pause, the collapse/expand chevrons, sort,
-//      fullscreen and the two rotate arrows. Boxicons' free tier has no filled
+//      MARKS: tick, cross, plus, pause, stop, the collapse/expand chevrons,
+//      sort, fullscreen, the two rotate arrows. Boxicons' free tier has no filled
 //      form of any of them, so each fell back to its thin Basic set and read
 //      visibly lighter than every solid icon beside them. Font Awesome draws
 //      the same marks much larger inside their box, so at a given \`size\` they
@@ -177,6 +178,11 @@ const OVERRIDES = {
     d: '<path fill="currentColor" d="M48 32C21.5 32 0 53.5 0 80L0 432c0 26.5 21.5 48 48 48l64 0c26.5 0 48-21.5 48-48l0-352c0-26.5-21.5-48-48-48L48 32zm224 0c-26.5 0-48 21.5-48 48l0 352c0 26.5 21.5 48 48 48l64 0c26.5 0 48-21.5 48-48l0-352c0-26.5-21.5-48-48-48l-64 0z"/>',
     box: 'FA_BOX_384',
     pack: 'Font Awesome solid pause (Boxicons has no bxs-pause)',
+  },
+  IconStop: {
+    d: '<path fill="currentColor" d="M64 32l320 0c35.3 0 64 28.7 64 64l0 320c0 35.3-28.7 64-64 64L64 480c-35.3 0-64-28.7-64-64L0 96C0 60.7 28.7 32 64 32z"/>',
+    box: 'FA_BOX_448',
+    pack: 'Font Awesome solid stop (Boxicons has no bxs-stop)',
   },
   IconChevronsDownUp: {
     d: '<path fill="currentColor" d="M214.6 41.4c-12.5-12.5-32.8-12.5-45.3 0l-160 160c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L192 109.3 329.4 246.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3l-160-160zm160 352l-160-160c-12.5-12.5-32.8-12.5-45.3 0l-160 160c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L192 301.3 329.4 438.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3z"/>',

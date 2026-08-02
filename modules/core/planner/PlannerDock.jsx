@@ -3,19 +3,12 @@ import DualRingRect from './watchfaces/DualRingRect.jsx';
 import CalendarPanel from './CalendarPanel.jsx';
 import { CircleChip, Dot } from '@host/components/ui/index.js';
 import {
-  IconReset, IconSkip, IconChevronRight, IconX, IconCheck,
+  IconReset, IconSkip, IconChevronRight, IconX, IconCheck, IconStop,
 } from '@host/components/icons.jsx';
 
-// Local stop icon. Sized to match IconReset/IconSkip (15px) for the
+// IconStop defaults to 15px in the pack, matching IconReset/IconSkip for the
 // 44px circle buttons. The TimerPrimary pill is text-only (no play/pause icon
-// per user request), so IconPlay/IconPause are no longer needed.
-function IconStop({ size = 15 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 16 16">
-      <rect x="4" y="4" width="8" height="8" rx="1" fill="currentColor"/>
-    </svg>
-  );
-}
+// per user request), so IconPlay/IconPause are not needed here.
 
 import { useModuleSettings } from '@host/hooks/useSettings.js';
 import { usePlanner } from './PlannerProvider.jsx';
