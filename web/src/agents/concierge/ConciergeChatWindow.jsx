@@ -20,6 +20,7 @@ import ChatInput from '../../components/design/ChatInput.jsx';
 import RecipeTray from '../../components/agents/RecipeTray.jsx';
 import { getRecipe } from '../recipes/index.js';
 
+import { IconFileText } from '../../components/icons.jsx';
 const IDLE = { phase: 'idle', recipeId: null, ctx: null, proposal: null, error: null };
 
 function normErr(e) {
@@ -158,12 +159,7 @@ export default function ConciergeChatWindow({ settings, setSetting, accent, onCl
           onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover)'; e.currentTarget.style.color = 'var(--text)'; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/>
-            <path d="M14 3v5h5"/>
-            <line x1="9" y1="13" x2="15" y2="13"/>
-            <line x1="9" y1="17" x2="13" y2="17"/>
-          </svg>
+          <IconFileText size={14} />
         </button>
       }
     >

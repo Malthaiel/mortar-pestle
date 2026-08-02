@@ -6,6 +6,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 
+import { IconSend } from '../icons.jsx';
 export default function ChatInput({ onSend, streaming, accent, mentions = [], onClearMention, seedText, seedNonce = 0, onSeedConsumed, placeholder = 'Ask Atelier', busyPlaceholder = 'Atelier is thinking…' }) {
   const [text, setText] = useState('');
   const ref = useRef(null);
@@ -123,9 +124,7 @@ function SendButton({ accent, enabled, onClick }) {
       onMouseUp={(e)   => { e.currentTarget.style.transform = 'scale(1)'; }}
       onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
     >
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M5 12l14-7-5 14-3-6-6-1z"/>
-      </svg>
+      <IconSend size={14} />
     </button>
   );
 }

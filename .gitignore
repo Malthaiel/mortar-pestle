@@ -27,6 +27,11 @@ src-tauri/resources/usda_foods.db
 # No-undo-net backups taken before bulk edits.
 .bak/
 
+# Boxicons source pack, read by web/scripts/gen-icons.mjs to regenerate the icon
+# pack. Not a dependency of this repo (the app ships zero npm deps) — drop it
+# here with `npm i boxicons` only when regenerating, or pass another path.
+.iconpacks/
+
 # DEV audit→chat bridge sink (Spacing Correctness System). Runtime scratch written
 # by the Vite /__audit middleware; never committed.
 web/.audit/

@@ -9,6 +9,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 
+import { IconX } from '../icons.jsx';
 export default function WorkingTreeTray({ files, accent, onDiscard, onDiscardAll, onCommitAll, onClose }) {
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
@@ -74,10 +75,7 @@ export default function WorkingTreeTray({ files, accent, onDiscard, onDiscardAll
               color: 'var(--text-muted)', cursor: 'pointer', borderRadius: 4,
             }}
           >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
-              <line x1="6" y1="6" x2="18" y2="18"/>
-              <line x1="6" y1="18" x2="18" y2="6"/>
-            </svg>
+            <IconX size={11} />
           </button>
         </div>
       </div>

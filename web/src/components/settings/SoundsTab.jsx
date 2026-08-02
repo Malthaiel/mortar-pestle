@@ -6,6 +6,7 @@ import { useMemo, useState } from 'react';
 import EnableToggle from '../ui/EnableToggle.jsx';
 import { Seg } from '../ui/Pill.jsx';
 import { SOUND_KEYS, SOUND_PRESETS } from '../../hooks/useSettings.js';
+import { IconPlay } from '../icons.jsx';
 import {
   playTactileThock,
   playReorderPickup,
@@ -213,9 +214,7 @@ function AuditionButton({ accent, onClick }) {
       onMouseEnter={(e) => e.currentTarget.style.background = `color-mix(in oklch, ${accent} 12%, transparent)`}
       onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
     >
-      <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-        <polygon points="6 4 20 12 6 20 6 4"/>
-      </svg>
+      <IconPlay size={10} />
     </button>
   );
 }

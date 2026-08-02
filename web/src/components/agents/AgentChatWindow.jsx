@@ -12,6 +12,7 @@
 import { createPortal } from 'react-dom';
 import { useDragChat, DRAG_CHAT_WIDTH, DRAG_CHAT_HEIGHT } from '../design/useDragChat.js';
 
+import { IconX } from '../icons.jsx';
 export default function AgentChatWindow({
   settings,
   setSetting,
@@ -117,10 +118,7 @@ function AgentChatHeader({ avatar, title, subtitle, onClose, closeTitle, dragHan
           style={{ width: 24, height: 24, borderRadius: 7, flexShrink: 0 }}
         >
           <span className="candy-face" style={{ padding: 0 }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="6" y1="6" x2="18" y2="18"/>
-              <line x1="6" y1="18" x2="18" y2="6"/>
-            </svg>
+            <IconX size={13} />
           </span>
         </button>
       </div>

@@ -14,6 +14,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Select, TextInput } from '@host/components/ui/index.js';
 
+import { IconCheck } from '@host/components/icons.jsx';
 const nameOf = (arg) => arg?.name ?? arg?.Name ?? '';
 
 function defaultsFor(args) {
@@ -169,16 +170,12 @@ function BoolCheckbox({ value, onChange, description, accent }) {
         borderRadius: 4,
         border: `1.5px solid ${checked ? accent : 'var(--border-2, var(--border))'}`,
         background: checked ? accent : 'transparent',
+        color: '#fff',
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         flexShrink: 0,
         transition: 'all 80ms ease',
       }}>
-        {checked && (
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white"
-               strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="20 6 9 17 4 12"/>
-          </svg>
-        )}
+        {checked && <IconCheck size={10} />}
       </span>
       <input
         type="checkbox"
