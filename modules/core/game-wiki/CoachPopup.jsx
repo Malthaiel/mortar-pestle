@@ -22,9 +22,11 @@ import AppWindow from '@host/components/ui/AppWindow.jsx';
 import ConfirmModal from '@host/components/ui/ConfirmModal.jsx';
 import { PrimaryBtn, OutlinedBtn, DangerOutlinedBtn } from '@host/components/ui/Button.jsx';
 import { TextInput } from '@host/components/ui/Input.jsx';
+import useBroadcastState from '@modules/studio/broadcast/useBroadcastState.js';
 import { SCRIM_BASE } from './scrimSchema.js';
 import { mergeTranscripts } from './diarize.js';
 import { coachTranscribe } from './coachTranscribe.js';
+import { startCoachingRecord } from './coachRecord.js';
 
 const TRANSCRIPT = '00-transcript.md';
 
@@ -47,10 +49,11 @@ const STT_STAGES = [
 // the mic and Discord on separate tracks, so who spoke is known by construction — no voice
 // matching, no guessing. `coaching_extract_audio` counts from 0, hence the -1 at the call.
 //
-// ponytail: hard-coded on purpose. Nothing inside the file says which track is which (every
-// stream is a nameless "OBS Audio Handler"), and the broadcast engine only knows its OWN scene,
-// never the OBS that made these. Job 4 makes the app record it, and then the layout is ours by
-// construction and these two lines come out. A picker built now is a picker deleted then.
+// ponytail: still hard-coded, now on purpose in the other direction. Nothing inside the file
+// says which track is which (every stream is a nameless "OBS Audio Handler"). Job 4's Record
+// button pins exactly this layout on every press (coachRecord.js), so for anything the app
+// records these are true by construction — and they were already the layout of every recording
+// made in OBS before it, so both sources agree. A picker would be a picker over one answer.
 const MIC_TRACK = 1;    // your voice, alone
 const COMMS_TRACK = 3;  // Discord — everyone else
 
@@ -110,6 +113,11 @@ function elapsedLabel(startedMs) {
 
 const money = (n) => `$${(Number(n) || 0).toFixed(2)}`;
 
+const baseName = (p) => String(p || '').split(/[\\/]/).pop();
+/// Letters and digits only — the engine sanitises the filename it is handed, and this
+/// survives whatever it stripped.
+const plain = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
 function Row({ children }) {
   return <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>{children}</div>;
 }
@@ -144,11 +152,33 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
   // The write-it-out pass: null when idle, else { stage, pct }. Unlike the coaching run
   // this lives in the window, so closing it throws the work away (the window says so).
   const [stt, setStt] = useState(null);
+  // The path Stop handed back, so the write-out never asks for a file. Lost on close —
+  // the file picker is the fallback, and re-picking is one click.
+  const [recorded, setRecorded] = useState(null);
+  const [recBusy, setRecBusy] = useState(false);
   // Re-render once a minute so the elapsed line advances during a run.
   const [, tick] = useState(0);
 
   const isMatch = target?.kind === 'match';
   const folder = isMatch ? matchFolder(target.scrim, target.match) : null;
+
+  // Recording truth comes from the broadcast engine, not from here: closing this window
+  // must not stop a session. `api` (the vault one) carries no `invoke`, so the hook —
+  // which expects a module-SDK api — gets a one-key shim held stable across renders.
+  const bcastApi = useMemo(() => ({ invoke }), []);
+  const { snapshot: bcast } = useBroadcastState(bcastApi);
+  const rec = bcast?.recording;
+  // The engine names the file after the stem we hand it, sanitised. Comparing on
+  // letters-and-digits alone survives whatever it stripped, and tells this match's
+  // recording from one started somewhere else in the app.
+  const stem = isMatch ? `${target.scrim} Match ${target.match}` : null;
+  const myRecording = !!(rec?.active && stem && plain(baseName(rec.path)).startsWith(plain(stem)));
+  // The engine pushes state on changes, not per second, so anchor a start time to each
+  // snapshot's own elapsed and let the minute tick carry it forward between them.
+  const recStart = useMemo(
+    () => (rec?.active ? Date.now() - (rec.elapsed_ns || 0) / 1e6 : null),
+    [rec?.active, rec?.elapsed_ns],
+  );
 
   // Only show a job that belongs to THIS match — the cell is process-global and
   // may still hold a finished run for a different one.
@@ -166,10 +196,10 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
   }, []);
 
   useEffect(() => {
-    if (!running) return undefined;
+    if (!running && !myRecording) return undefined;
     const id = setInterval(() => tick((n) => n + 1), 30000);
     return () => clearInterval(id);
-  }, [running]);
+  }, [running, myRecording]);
 
   // Is the transcript there? Re-checked whenever the window opens on a match.
   useEffect(() => {
@@ -214,6 +244,37 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
 
   const reveal = () => invoke('coaching_reveal_path', { path: folder }).catch(() => {});
 
+  // ── Recording (Job 4) ────────────────────────────────────────────────────────────────
+  // The app makes the recording, so the sound-track layout is decided here rather than
+  // guessed later — see coachRecord.js. The file goes to the engine's own captures folder
+  // named after this match; keeping a multi-gigabyte video out of the notes folder.
+  const startRecording = useCallback(async () => {
+    setErr(null);
+    setRecBusy(true);
+    try {
+      const request = (op, args) => invoke('broadcast_request', { op, args });
+      await startCoachingRecord(request, { snapshot: bcast, stem });
+      setRecorded(null);
+    } catch (e) {
+      setErr(String(e?.message || e));
+    } finally {
+      setRecBusy(false);
+    }
+  }, [bcast, stem]);
+
+  const stopRecording = useCallback(async () => {
+    setErr(null);
+    setRecBusy(true);
+    try {
+      const r = await invoke('broadcast_stop_record');
+      if (r?.path) setRecorded(r.path);
+    } catch (e) {
+      setErr(String(e?.message || e));
+    } finally {
+      setRecBusy(false);
+    }
+  }, []);
+
   // Listen to one sound track of the recording. `coaching_extract_audio` shells ffmpeg to pull
   // that track out on its own, and the engine hears nothing but it — so every word it returns
   // belongs to whoever that track records. The WAV is cached by file+track, so a second run
@@ -234,8 +295,9 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
   //
   // The `stt_*` commands are invoked directly rather than through `useStt`: SttProvider
   // mounts only in the overlay window, and this popup is in the main one.
-  const transcribeVideo = useCallback(async () => {
-    const picked = await open({
+  // `known` is the path a just-stopped recording handed back — given one, nothing is asked for.
+  const transcribeVideo = useCallback(async (known) => {
+    const picked = known || await open({
       multiple: false,
       filters: [{ name: 'Recording', extensions: ['mp4', 'mkv', 'mov'] }],
     });
@@ -384,19 +446,51 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
         </Note>
       </>
     );
+  } else if (myRecording) {
+    // ── Recording ────────────────────────────────────────────────────────────
+    body = (
+      <>
+        <div style={{ fontSize: 15, marginBottom: 8 }}>Recording</div>
+        <Note>
+          {elapsedLabel(recStart) || 'just started'}. Your voice, the game and Discord are each
+          being kept on their own sound track, so afterwards it knows who said what.
+          <br />You can close this window — it keeps recording.
+        </Note>
+        <Row>
+          <DangerOutlinedBtn disabled={recBusy} onClick={stopRecording}>Stop recording</DangerOutlinedBtn>
+        </Row>
+      </>
+    );
   } else if (transcript === 'missing') {
     // ── Nothing to work from ─────────────────────────────────────────────────
+    // Two ways in: record the session here and now, or point at a recording already made.
+    // A just-stopped recording is remembered, so the usual path never opens a file picker.
     body = (
       <>
         <Note>
           Nothing to work from yet. This needs the talk-through written out as words, saved inside
-          this match&apos;s folder under the name <code>{TRANSCRIPT}</code>. Point it at the
-          recording and it writes that out for you — your voice and everyone else&apos;s are kept
+          this match&apos;s folder under the name <code>{TRANSCRIPT}</code>. Record the session here
+          and it writes that out for you afterwards — your voice and everyone else&apos;s are kept
           on separate sound tracks, so it knows who said what without having to guess.
           Costs nothing; it all happens on your own machine.
         </Note>
+        {recorded && (
+          <Note>
+            Just recorded: <code>{baseName(recorded)}</code>
+          </Note>
+        )}
+        {!bcast && <Note>The Live studio is not running, so recording is not possible right now.</Note>}
         <Row>
-          <PrimaryBtn accent={accent} onClick={transcribeVideo}>Write it out from a recording</PrimaryBtn>
+          {recorded ? (
+            <PrimaryBtn accent={accent} onClick={() => transcribeVideo(recorded)}>
+              Write out what was just recorded
+            </PrimaryBtn>
+          ) : (
+            <PrimaryBtn accent={accent} disabled={!bcast || recBusy} onClick={startRecording}>
+              Record the session
+            </PrimaryBtn>
+          )}
+          <OutlinedBtn onClick={() => transcribeVideo()}>Write it out from a recording</OutlinedBtn>
           <OutlinedBtn onClick={reveal}>Open the folder</OutlinedBtn>
         </Row>
       </>
