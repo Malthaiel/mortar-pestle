@@ -93,6 +93,8 @@ struct CoachJob {
     pid: Option<u32>,
     /// Set while consuming the indented table rows that follow a gate header.
     in_gate_block: bool,
+    /// Set by the `HALT:` header so every following line joins the same message.
+    in_halt: bool,
     /// Set by the `Done. $X this run.` line so the NEXT line is read as the path.
     expect_deliverable: bool,
 }
@@ -185,6 +187,19 @@ fn absorb(job: &mut CoachJob, line: &str) -> bool {
     }
     let trimmed = line.trim_end();
 
+    // A Halt message is multi-line — `conformance_check` lists every failing rule
+    // under the header, then names the file it kept. coach.py exits immediately
+    // after printing it, so nothing unrelated can follow and everything from here
+    // belongs to the same message. Matching only the header line threw the
+    // reasons away and rendered as a colon with nothing under it. (Live 2026-08-02.)
+    if job.in_halt {
+        if let Some(e) = job.error.as_mut() {
+            e.push('\n');
+            e.push_str(trimmed);
+        }
+        return true;
+    }
+
     // A gate block runs from its header to the first non-table line.
     if job.in_gate_block {
         if let Some(term) = parse_gate_term(trimmed) {
@@ -236,6 +251,7 @@ fn absorb(job: &mut CoachJob, line: &str) -> bool {
     // every one of them names a file and a problem.
     if let Some(msg) = trimmed.strip_prefix("HALT: ") {
         job.error = Some(msg.trim().to_string());
+        job.in_halt = true;
         return true;
     }
 
@@ -315,6 +331,7 @@ pub async fn coach_job_start(
             cancel_requested: false,
             pid: None,
             in_gate_block: false,
+            in_halt: false,
             expect_deliverable: false,
         });
     }
@@ -482,7 +499,7 @@ mod tests {
             scrim: "s".into(), match_n: 1, phase: 0, chunk: None, chunk_total: None,
             cost: 0.0, gate_terms: Vec::new(), error: None, lines: Vec::new(),
             deliverable: None, started_ms: 0, status: CoachStatus::Running,
-            cancel_requested: false, pid: None, in_gate_block: false,
+            cancel_requested: false, pid: None, in_gate_block: false, in_halt: false,
             expect_deliverable: false,
         }
     }
@@ -533,5 +550,19 @@ mod tests {
         let mut j = job();
         absorb(&mut j, "HALT: turn count changed 1380 -> 1377 in chunk 4");
         assert_eq!(j.error.as_deref(), Some("turn count changed 1380 -> 1377 in chunk 4"));
+    }
+
+    /// The real 2026-08-02 conformance stop, verbatim. Matching only the header
+    /// left the popup showing a colon and nothing else.
+    #[test]
+    fn halt_keeps_its_continuation_lines() {
+        let mut j = job();
+        absorb(&mut j, "HALT: the deliverable does not conform to METHOD-A §10/§11:");
+        absorb(&mut j, "   §9.1: block '§10.1 \"Just leave the camp\" [52:21]' has Symptom but no Diagnosis");
+        absorb(&mut j, "File kept at C:\\x\\Match 1\\notes.md for inspection. Re-run with --only 3.");
+        let e = j.error.as_deref().unwrap();
+        assert!(e.starts_with("the deliverable does not conform to METHOD-A §10/§11:"));
+        assert!(e.contains("has Symptom but no Diagnosis"));
+        assert!(e.contains("Re-run with --only 3."));
     }
 }
