@@ -303,6 +303,34 @@ fn meta_bool(meta: &Map<String, Value>, key: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// `Airing`, self-corrected against `Aired To`.
+///
+/// `Airing` is a snapshot: `download_anime.py` writes it once from the Jikan
+/// detail at ingest and nothing ever revisits it, so every show that finishes
+/// its run after being downloaded keeps claiming to be airing — which keeps a
+/// qBittorrent RSS rule armed and keeps SeriesDetail offering "grab more".
+///
+/// No network call is needed to fix that. Jikan only fills `aired.to` once a
+/// run has ended (a currently-airing show carries no end date at all), so a
+/// recorded `Aired To` in the past is conclusive on its own. Reading the flag
+/// through here means the correction happens wherever a series is read, rather
+/// than needing a sweep that would go stale again.
+fn airing_now(meta: &Map<String, Value>) -> bool {
+    if !meta_bool(meta, "Airing") {
+        return false;
+    }
+    let Some(to) = meta_str(meta, "Aired To") else {
+        return true; // no end date recorded → genuinely unfinished
+    };
+    // ISO-8601 dates order correctly as plain strings, so no parsing is needed
+    // beyond taking the date half of a possible timestamp.
+    let to = to.trim().trim_matches('"');
+    if to.len() < 10 {
+        return true;
+    }
+    to[..10] >= *chrono::Local::now().format("%Y-%m-%d").to_string()
+}
+
 fn safe_read_dir(p: &Path) -> Vec<String> {
     let Ok(entries) = fs::read_dir(p) else {
         return Vec::new();
@@ -768,7 +796,7 @@ pub fn list_series() -> Result<Vec<SeriesSummary>, VaultError> {
                 .map(|s| strip_wikilink(s))
                 .collect(),
             episodes_total,
-            airing: meta_bool(&meta, "Airing"),
+            airing: airing_now(&meta),
             local_path,
             download_status: meta_str(&meta, "Download Status"),
             has_local_files,
@@ -902,7 +930,7 @@ pub fn read_series(series_path: &str) -> Result<Series, VaultError> {
         episodes_total,
         aired_from: meta_str(&meta, "Aired From"),
         aired_to: meta_str(&meta, "Aired To"),
-        airing: meta_bool(&meta, "Airing"),
+        airing: airing_now(&meta),
         local_path,
         download_status: meta_str(&meta, "Download Status"),
         online_rating: meta_clone(&meta, "Online Rating"),
@@ -1115,6 +1143,31 @@ mod tests {
         assert_eq!(meta_str(&m, "Empty"), None);
         assert_eq!(meta_str(&m, "Set"), Some("x".into()));
         assert_eq!(meta_str(&m, "Missing"), None);
+    }
+
+    #[test]
+    fn airing_self_corrects_against_a_past_end_date() {
+        let meta = |airing: &str, to: Option<&str>| {
+            let mut m = Map::new();
+            m.insert("Airing".into(), Value::String(airing.into()));
+            if let Some(t) = to {
+                m.insert("Aired To".into(), Value::String(t.into()));
+            }
+            m
+        };
+        // The reported bug: flag says airing, but the recorded run ended.
+        assert!(!airing_now(&meta("true", Some("2026-06-22"))));
+        // Still airing: no end date is ever recorded until the run finishes.
+        assert!(airing_now(&meta("true", None)));
+        // An end date in the future does not retire the flag early.
+        assert!(airing_now(&meta("true", Some("2099-01-01"))));
+        // A false flag stays false whatever the dates say.
+        assert!(!airing_now(&meta("false", Some("2099-01-01"))));
+        // Quoted values and full timestamps are the same case as a bare date.
+        assert!(!airing_now(&meta("true", Some("\"2026-06-22\""))));
+        assert!(!airing_now(&meta("true", Some("2026-06-22T00:00:00+00:00"))));
+        // Garbage in the field must not silently retire a live show.
+        assert!(airing_now(&meta("true", Some("soon"))));
     }
 
     #[test]
