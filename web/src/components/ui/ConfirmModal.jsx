@@ -4,6 +4,7 @@
 // confirm. Renders nothing when closed.
 
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { OutlinedBtn, DangerOutlinedBtn } from './Button.jsx';
 
 export default function ConfirmModal({
@@ -28,11 +29,14 @@ export default function ConfirmModal({
   }, [open, onConfirm, onCancel]);
 
   if (!open) return null;
-  return (
+  // Portalled to body at 1100, the app's standard "modal above a window" layer.
+  // Rendered inline at 1000 it tied with AppWindow's own portal and lost on DOM
+  // order — the backdrop landed but the box itself painted underneath the window.
+  return createPortal(
     <div
       onClick={onCancel}
       style={{
-        position: 'fixed', inset: 0, zIndex: 1000,
+        position: 'fixed', inset: 0, zIndex: 1100,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         background: 'rgba(0, 0, 0, 0.45)',
         backdropFilter: 'blur(2px)',
@@ -59,6 +63,7 @@ export default function ConfirmModal({
             : <OutlinedBtn small onClick={onConfirm}>{confirmLabel}</OutlinedBtn>}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
