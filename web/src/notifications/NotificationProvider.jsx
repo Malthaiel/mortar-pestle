@@ -15,6 +15,7 @@ import { checkForUpdate } from '../hooks/useNetworkUpdate.js';
 import { api } from '../api.js';
 import { navigate } from '../router.js';
 import { sharedEvents } from '../module-sdk/index.js';
+import { IconAlert, IconDot, IconDownload, IconRotateCw } from '../components/icons.jsx';
 
 const NotificationCtx = createContext(null);
 export const useNotifications = () => useContext(NotificationCtx);
@@ -22,9 +23,16 @@ export const useNotifications = () => useContext(NotificationCtx);
 const STORAGE_KEY = 'notifications:history:v1';
 const CAP = 100;
 
-// iconKey → glyph. Matches the text glyphs the original toasts painted in their
-// accent bubbles (↻ for update, ! for errors/conflict).
-export const NOTIF_GLYPH = { rotate: '↻', alert: '!', conflict: '!', download: '↓', bell: '•' };
+// iconKey → the mark painted in a notification's accent bubble. Ready-made
+// elements (not components) so a consumer just drops one in; they inherit the
+// bubble's colour via currentColor. Fall back to NOTIF_GLYPH.bell.
+export const NOTIF_GLYPH = {
+  rotate:   <IconRotateCw size={12} />,
+  alert:    <IconAlert    size={12} />,
+  conflict: <IconAlert    size={12} />,
+  download: <IconDownload size={12} />,
+  bell:     <IconDot      size={9}  />,
+};
 
 function loadHistory() {
   try {
@@ -304,7 +312,7 @@ function FlyClone({ fly, onDone }) {
         width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
         background: `color-mix(in oklch, ${fly.accent} 18%, transparent)`,
         color: fly.accent, fontWeight: 700, fontSize: 13,
-      }}>{NOTIF_GLYPH[fly.iconKey] || '•'}</span>
+      }}>{NOTIF_GLYPH[fly.iconKey] || NOTIF_GLYPH.bell}</span>
       <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600 }}>
         {fly.title}
       </span>

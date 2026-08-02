@@ -13,6 +13,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { candyGap } from '../util/candy.js';
+import { IconCheck, IconChevronRight, IconDot } from '../components/icons.jsx';
 
 const MIN_WIDTH = 200;
 const MAX_WIDTH = 320;
@@ -385,7 +386,9 @@ function MenuSep() {
 
 function MenuRow({ it, id, accent, active, hasChildren, onHover, onClick, registerEl }) {
   const disabled = !!it.disabled;
-  const glyph = it.kind === 'radio' ? (it.checked ? '•' : '') : (it.checked ? '✓' : '');
+  const glyph = it.kind === 'radio'
+    ? (it.checked ? <IconDot size={8} /> : null)
+    : (it.checked ? <IconCheck size={12} /> : null);
   // icon may be a component (e.g. IconTrash) or a ready node; render either.
   const Icon = it.icon;
   const lead = Icon ? (typeof Icon === 'function' ? <Icon size={14} /> : Icon) : glyph;
@@ -423,9 +426,9 @@ function MenuRow({ it, id, accent, active, hasChildren, onHover, onClick, regist
           <span style={{ flex: 1, minWidth: 0 }}>{it.label}</span>
           {hasChildren ? (
             <span aria-hidden style={{
-              marginLeft: 12, fontSize: 11, lineHeight: 1,
+              marginLeft: 12, display: 'inline-flex', lineHeight: 1,
               color: 'var(--text-faint)',
-            }}>▸</span>
+            }}><IconChevronRight size={11} /></span>
           ) : it.shortcut ? (
             <span style={{
               marginLeft: 12, fontSize: 10, fontFamily: 'var(--font-mono)',

@@ -75,7 +75,7 @@ export default function NotificationPanel({ open, onClose, accent }) {
                 width: 20, height: 20, borderRadius: '50%', flexShrink: 0, marginTop: 1,
                 background: `color-mix(in oklch, ${n.accent} 18%, transparent)`,
                 color: n.accent, fontWeight: 700, fontSize: 12,
-              }}>{NOTIF_GLYPH[n.iconKey] || '•'}</span>
+              }}>{NOTIF_GLYPH[n.iconKey] || NOTIF_GLYPH.bell}</span>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 12.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {n.title}

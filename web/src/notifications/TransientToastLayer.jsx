@@ -58,7 +58,7 @@ function ToastRow({ n, onDismiss, onRemove }) {
     <Toast
       innerRef={ref}
       accent={n.accent}
-      glyph={NOTIF_GLYPH[n.iconKey] || '•'}
+      glyph={NOTIF_GLYPH[n.iconKey] || NOTIF_GLYPH.bell}
       title={n.title}
       message={n.message}
       error={errMsg}

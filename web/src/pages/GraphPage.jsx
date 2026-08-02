@@ -9,6 +9,7 @@ import { buildLinkGraph } from '../lib/linkGraph.js';
 import { navigate } from '../router.js';
 import { encodePagePath } from '../components/SidebarBrowser.jsx';
 import { FilterChip, LoadingState, EmptyState } from '../components/ui/index.js';
+import { IconX } from '../components/icons.jsx';
 
 const PANEL = {
   background: 'var(--surface)',
@@ -156,7 +157,7 @@ export default function GraphPage({ accent }) {
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
             <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', lineHeight: 1.25 }}>{selected.title}</span>
             <button type="button" onClick={clearSelection} title="Clear selection"
-              style={{ background: 'transparent', border: 'none', color: 'var(--text-faint)', cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: 0 }}>×</button>
+              style={{ background: 'transparent', border: 'none', color: 'var(--text-faint)', cursor: 'pointer', display: 'flex', alignItems: 'center', lineHeight: 1, padding: 0 }}><IconX size={12} /></button>
           </div>
           <div style={{ fontSize: 11, color: 'var(--text-faint)', wordBreak: 'break-all' }}>{selected.path}</div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{selected.degree} link{selected.degree === 1 ? '' : 's'}</div>

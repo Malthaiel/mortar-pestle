@@ -86,8 +86,8 @@ export default function Breadcrumb({ route, accent }) {
           {i > 0 && (
             <span aria-hidden style={{
               color: 'var(--text-faint)',
-              fontSize: 11, fontWeight: 400,
-            }}>›</span>
+              display: 'inline-flex', alignItems: 'center',
+            }}><IconChevronRight size={11} /></span>
           )}
           {seg.href && !seg.isLeaf
             ? <BreadcrumbLink href={seg.href} accent={accentColor}>{seg.label}</BreadcrumbLink>
