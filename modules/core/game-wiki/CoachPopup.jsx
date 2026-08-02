@@ -15,6 +15,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
+import { Channel } from '@tauri-apps/api/core';
+import { open } from '@tauri-apps/plugin-dialog';
 import { api, invoke } from '@host/api.js';
 import AppWindow from '@host/components/ui/AppWindow.jsx';
 import ConfirmModal from '@host/components/ui/ConfirmModal.jsx';
@@ -22,9 +24,40 @@ import { PrimaryBtn, OutlinedBtn, DangerOutlinedBtn } from '@host/components/ui/
 import { FilterChip } from '@host/components/ui/Pill.jsx';
 import { TextInput } from '@host/components/ui/Input.jsx';
 import { SCRIM_BASE } from './scrimSchema.js';
+import { alignDiarization, mergeTranscripts } from './diarize.js';
+import { coachTranscribe } from './coachTranscribe.js';
 
 const TRANSCRIPT = '00-transcript.md';
 const PROTECTED = `${SCRIM_BASE.replace(/\/Scrim$/, '')}/Method/protected-terms.md`;
+
+// The coaching path forces the best model regardless of `settings.stt.defaultModel`.
+// The `small` default invents proper nouns that were never spoken, and every invented
+// name lands in the review gate as a term to adjudicate — 48 of them, on one match.
+// Fetched on demand (574 MB, SHA-verified) the first time this runs.
+const COACH_MODEL = 'large-v3-turbo-q5_0';
+
+// Plain-words stages for the write-it-out pass, in the order they run.
+const STT_STAGES = ['Getting the listener ready', 'Listening to the talk', 'Working out who is who', 'Saving'];
+
+// One streaming `stt_*` command as a promise. Every one of them ends in a `done` event,
+// and an `error` always arrives just before it — so the error is remembered and thrown
+// once `done` lands, rather than racing the terminator.
+function runStt(cmd, args, onEvent) {
+  return new Promise((resolve, reject) => {
+    let failed = null;
+    const ch = new Channel();
+    ch.onmessage = (ev) => {
+      if (ev?.kind === 'error') { failed = `${ev.code}: ${ev.message}`; return; }
+      if (ev?.kind === 'done') {
+        if (failed || !ev.ok) reject(new Error(failed || 'the voice engine stopped'));
+        else resolve();
+        return;
+      }
+      onEvent?.(ev);
+    };
+    invoke(cmd, { ...args, onEvent: ch }).catch(reject);
+  });
+}
 
 // Plain-words stage names. coach.py's own labels (Normalizer / Author / Auditor)
 // are METHOD-A vocabulary and mean nothing outside the method document.
@@ -74,6 +107,9 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const [newMatch, setNewMatch] = useState('1');
+  // The write-it-out pass: null when idle, else { stage, pct }. Unlike the coaching run
+  // this lives in the window, so closing it throws the work away (the window says so).
+  const [stt, setStt] = useState(null);
   // Re-render once a minute so the elapsed line advances during a run.
   const [, tick] = useState(0);
 
@@ -166,6 +202,52 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
   }, [newMatch, target, onFolderChange, onClose]);
 
   const reveal = () => invoke('coaching_reveal_path', { path: folder }).catch(() => {});
+
+  // Pick a recording and turn it into `00-transcript.md`. Three engine passes over the
+  // same file — words, then who-spoke-when, then the two stitched together — and the
+  // result is written straight into the match folder, which flips this window to Ready.
+  //
+  // The `stt_*` commands are invoked directly rather than through `useStt`: SttProvider
+  // mounts only in the overlay window, and this popup is in the main one.
+  const transcribeVideo = useCallback(async () => {
+    const picked = await open({
+      multiple: false,
+      filters: [{ name: 'Recording', extensions: ['mp4', 'mkv', 'mov', 'wav', 'm4a', 'mp3'] }],
+    });
+    if (!picked) return;
+    setErr(null);
+    const segments = [];
+    let diar = null;
+    try {
+      setStt({ stage: 0, pct: null });
+      await runStt('stt_load_model', { name: COACH_MODEL },
+        (ev) => { if (ev.kind === 'progress') setStt({ stage: 0, pct: ev.pct }); });
+
+      setStt({ stage: 1, pct: null });
+      await runStt('stt_transcribe_file', { path: picked }, (ev) => {
+        if (ev.kind === 'progress') setStt({ stage: 1, pct: ev.pct });
+        else if (ev.kind === 'segment' && ev.text) segments.push({ t0Ms: ev.t0Ms, t1Ms: ev.t1Ms, text: ev.text });
+      });
+
+      // maxSpeakers 0 = let it work out how many people are talking.
+      setStt({ stage: 2, pct: null });
+      await runStt('stt_diarize_file', { path: picked, maxSpeakers: 0 }, (ev) => {
+        if (ev.kind === 'progress') setStt({ stage: 2, pct: ev.pct });
+        else if (ev.kind === 'diarization') diar = ev;
+      });
+
+      setStt({ stage: 3, pct: null });
+      const merged = mergeTranscripts({ commsSegments: alignDiarization(segments, diar?.segments || []) });
+      const body = coachTranscribe(merged);
+      if (!body.trim()) throw new Error('Nothing was said in that recording — no words came out of it.');
+      await api.savePage(`${folder}/${TRANSCRIPT}`, body, null, 'gamewiki');
+      setTranscript('present');
+    } catch (e) {
+      setErr(String(e?.message || e));
+    } finally {
+      setStt(null);
+    }
+  }, [folder]);
 
   const title = isMatch
     ? `Coaching notes — Match ${target.match}`
@@ -285,16 +367,34 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
         {showDetails && <Details lines={mine.lines || []} />}
       </>
     );
+  } else if (stt) {
+    // ── Writing the talk out ─────────────────────────────────────────────────
+    body = (
+      <>
+        <div style={{ fontSize: 15, marginBottom: 8 }}>{STT_STAGES[stt.stage]}</div>
+        <div className="candy-groove" style={{ marginBottom: 10 }}>
+          <div className="candy-groove__fill"
+            style={{ '--accent': accent || 'var(--accent)', width: `${stt.pct == null ? 8 : Math.round(stt.pct)}%` }} />
+        </div>
+        <Note>
+          An hour of talking takes a good while — leave it be. Keep this window open: close it and
+          it stops and you would have to start again.
+        </Note>
+      </>
+    );
   } else if (transcript === 'missing') {
     // ── Nothing to work from ─────────────────────────────────────────────────
     body = (
       <>
         <Note>
           Nothing to work from yet. This needs the talk-through written out as words, saved inside
-          this match&apos;s folder under the name <code>{TRANSCRIPT}</code>.
+          this match&apos;s folder under the name <code>{TRANSCRIPT}</code>. Point it at the
+          recording and it writes that out for you — it listens, works out who said what, and
+          saves it. Costs nothing; it all happens on your own machine.
         </Note>
         <Row>
-          <PrimaryBtn accent={accent} onClick={reveal}>Open the folder</PrimaryBtn>
+          <PrimaryBtn accent={accent} onClick={transcribeVideo}>Write it out from a recording</PrimaryBtn>
+          <OutlinedBtn onClick={reveal}>Open the folder</OutlinedBtn>
         </Row>
       </>
     );

@@ -37,10 +37,11 @@ serde_json = "1"
 mortar-pestle-daemon = { path = "../mortar-pestle-daemon" }
 # SF2 dependency add (ask-first gate, user-approved 2026-06-16). whisper-rs vendors
 # whisper.cpp (offline C/C++/CMake build); symphonia decodes the input file to f32
-# PCM (wav+pcm only this SF — mp3/isomp4/aac are a one-line bump when a later phase
-# transcribes capture-engine output).
+# PCM. Containers: wav natively, plus isomp4/mkv (+ the aac codec inside them) so a
+# recorded clip or an OBS capture decodes without a pre-convert step — `decode_to_16k_mono`
+# probes by extension and is already container-agnostic, so this list IS the whole surface.
 whisper-rs = { version = "0.16" }
-symphonia = { version = "0.5", default-features = false, features = ["wav", "pcm"] }
+symphonia = { version = "0.5", default-features = false, features = ["wav", "pcm", "isomp4", "mkv", "aac"] }
 # SF3 dependency add (ask-first gate, user-approved 2026-06-16). ureq: blocking, minimal
 # HTTP client (rustls TLS, no system OpenSSL) for fetch-on-demand model download on the
 # blocking whisper worker thread; sha2: verifies the published HuggingFace git-LFS SHA256

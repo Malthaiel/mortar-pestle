@@ -531,10 +531,19 @@ pub(crate) fn decode_to_16k_mono(path: &Path) -> Result<Vec<f32>, String> {
         .map_err(|e| format!("probe: {e}"))?;
     let mut format = probed.format;
 
-    let track = format.default_track().ok_or("no default audio track")?;
+    // NOT `default_track()` — in a video container that is the video track, which has no
+    // sample rate and no registered decoder. Take the first track that carries a sample
+    // rate; in a bare WAV that is the only track anyway.
+    let track = format
+        .tracks()
+        .iter()
+        .find(|t| t.codec_params.sample_rate.is_some())
+        .ok_or("no audio track")?;
     let track_id = track.id;
     let src_rate = track.codec_params.sample_rate.ok_or("unknown sample rate")?;
-    let n_ch = track.codec_params.channels.ok_or("unknown channel layout")?.count().max(1);
+    // Channel layout is NOT read from codec_params: an AAC track in an mp4 leaves it unset
+    // until the first packet is decoded. Taken from the decoded buffer's spec below instead.
+    let mut n_ch = 1usize;
     let mut decoder = symphonia::default::get_codecs()
         .make(&track.codec_params, &DecoderOptions::default())
         .map_err(|e| format!("make decoder: {e}"))?;
@@ -557,6 +566,7 @@ pub(crate) fn decode_to_16k_mono(path: &Path) -> Result<Vec<f32>, String> {
             Ok(audio_buf) => {
                 if sample_buf.is_none() {
                     let spec = *audio_buf.spec();
+                    n_ch = spec.channels.count().max(1);
                     let dur = audio_buf.capacity() as u64;
                     sample_buf = Some(SampleBuffer::<f32>::new(dur, spec));
                 }
