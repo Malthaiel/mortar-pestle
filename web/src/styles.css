@@ -38,6 +38,16 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
      it alongside --dock-height so content ends flush under the strip. */
   --titlebar-h: 40px;
 
+  /* Titlebar fill. FIXED across every theme, exactly like --dock-bg: the two
+     chrome strips bookend the app and shouldn't repaint with the content
+     palette. Deliberately DARKER than --dock-bg (0.190) and than --surface,
+     which is what the sidebars use — before this token both the titlebar and
+     the sidebars resolved to --surface, so there was zero contrast between
+     them by construction. NOTE the dark-theme surface scale runs LIGHTER as
+     the number rises (--surface 0.190 → -2 0.215 → -3 0.245), so reaching for
+     --surface-2 here would brighten the strip, not darken it. */
+  --titlebar-bg: oklch(0.150 0.005 78);
+
   /* Candy SURFACE rest depth — the STATIC offset-shadow band under framed
      container surfaces (the .candy-* family). Distinct from --candy-depth:
      surfaces never translate, so this only feeds the resting box-shadow. Sits
@@ -488,8 +498,8 @@ body[data-design-pointer="markup"] *:not(input):not(textarea):not(select):not([d
   justify-content: space-between;
   gap: 8px;
   padding: 0 8px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  background: var(--titlebar-bg);
+  border-bottom: 1px solid color-mix(in oklch, var(--titlebar-bg), black 30%);
 }
 /* The two button clusters. Everything BETWEEN them is bare strip, which is what
    stays draggable — the clusters sit on top of the drag region and swallow their

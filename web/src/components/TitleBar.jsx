@@ -25,6 +25,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { invoke } from '@tauri-apps/api/core';
 import { IconMinus, IconSquare, IconRestore, IconX, IconSettings, IconTrash } from './icons.jsx';
 import { CircleChip } from './ui/Button.jsx';
+import { candyCenterOffset } from '../util/candy.js';
 import { Popover, useAnchoredRect } from './ui';
 import NotificationBell from '../notifications/NotificationBell.jsx';
 import { useUpdateStatus } from '../hooks/useUpdateStatus.js';
@@ -35,6 +36,13 @@ import SignInModal from '@modules/core/feedback/SignInModal.jsx';
 
 const BTN = 28;
 const MENU_W = 220;
+
+// A candy button's depth lip is a box-shadow drawn OUTSIDE layout, so flex
+// centring centres the BOX and leaves the visible ink sitting half a band low.
+// candyCenterOffset() lifts it back — the same correction every Dock button
+// uses. The avatar deliberately does NOT take it: it casts no candy shadow, so
+// offsetting it would push it out of line with its neighbours.
+const CENTER = candyCenterOffset();
 
 export default function TitleBar({
   settings, accent,
@@ -92,7 +100,7 @@ export default function TitleBar({
   return (
     <div className="titlebar" data-tauri-drag-region>
       <div className="titlebar-cluster">
-        <span style={{ position: 'relative', display: 'inline-flex' }}>
+        <span style={{ display: 'inline-flex', ...CENTER }}>
           <CircleChip title="Settings" size={BTN} className="is-hover-accent"
             onClick={() => setSettingsOpen?.(true)}>
             <IconSettings size={16}/>
@@ -115,7 +123,7 @@ export default function TitleBar({
           accent={accent}
         />
         <CircleChip title="Recycling bin" size={BTN} className="is-hover-accent"
-          onClick={() => setRecycleBinOpen?.(true)}>
+          style={CENTER} onClick={() => setRecycleBinOpen?.(true)}>
           <IconTrash size={16}/>
         </CircleChip>
       </div>
@@ -134,16 +142,17 @@ export default function TitleBar({
           <UserAvatar src={profile?.avatar_url} name={name} size={26}/>
         </span>
 
-        <CircleChip title="Minimize" size={BTN} className="is-hover-accent" onClick={() => win.minimize()}>
+        <CircleChip title="Minimize" size={BTN} className="is-hover-accent" style={CENTER} onClick={() => win.minimize()}>
           <IconMinus size={14}/>
         </CircleChip>
         <CircleChip
           title={maximized ? 'Restore' : 'Maximize'}
           size={BTN}
           className="is-hover-accent"
+          style={CENTER}
           onClick={() => win.toggleMaximize()}
         >{maximized ? <IconRestore size={14}/> : <IconSquare size={14}/>}</CircleChip>
-        <CircleChip title="Close" size={BTN} className="is-hover-accent" onClick={() => win.close()}>
+        <CircleChip title="Close" size={BTN} className="is-hover-accent" style={CENTER} onClick={() => win.close()}>
           <IconX size={14}/>
         </CircleChip>
       </div>

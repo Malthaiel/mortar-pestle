@@ -10,6 +10,7 @@
 import { useEffect, useRef, useState } from 'react';
 import DockButton from '../components/dock/DockButton.jsx';
 import { CircleChip } from '../components/ui/Button.jsx';
+import { candyCenterOffset } from '../util/candy.js';
 import { IconBell } from '../components/icons.jsx';
 import { useNotifications } from './NotificationProvider.jsx';
 
@@ -43,6 +44,9 @@ export default function NotificationBell({ label, onClick, isActive, accent, onC
       data-notif-bell
       style={{
         display: 'inline-flex', position: 'relative',
+        // Optical-centre lift goes on the WRAPPER, not the button, so the
+        // absolutely-positioned unread badge rides along with it.
+        ...(variant === 'titlebar' ? candyCenterOffset() : null),
         animation: absorbing ? 'bellAbsorb 380ms cubic-bezier(0.34,1.56,0.64,1)' : undefined,
       }}
     >
