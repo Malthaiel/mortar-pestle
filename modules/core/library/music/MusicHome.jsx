@@ -1,14 +1,19 @@
 // Combined Music home — the single search-first surface that folds the old
 // Downloaded / Playlists / Browse tabs into one. Carousel-first, cloned from the
-// Anime tab's AnimeHome: a search bar spanning your library + MusicBrainz, then
-// (when the query is empty) Continue Listening, Your Playlists, Recently Added,
-// and a library-derived "More from artists you own" discovery row. Library cards
-// route to the album detail (/tools/library/music/downloaded/<path>); MusicBrainz cards
-// route into the existing Browse preview seeded with their query.
+// Anime tab's AnimeHome: Continue Listening, Your Playlists, Recently Added, and
+// a library-derived "More from artists you own" discovery row when the query is
+// empty; the result stacks when it isn't. Library cards route to the album detail
+// (/tools/library/music/downloaded/<path>); MusicBrainz cards route into the
+// existing Browse preview seeded with their query.
+//
+// The search bar itself no longer lives here — it moved into MusicTopBar
+// (MusicSearchBar.jsx) so it is present on every Music screen. MusicPage owns the
+// query, the album list and the hash mirroring, and hands them down; this page is
+// the FULL-PAGE view of a committed search, and `SearchResults` is exported so
+// the topbar popup renders the identical stacks.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { musicApi } from './api.js';
-import { useMusicPlayer } from './MusicPlayerProvider.jsx';
 import { usePlaylists } from './PlaylistProvider.jsx';
 import CoverArtCard from './CoverArtCard.jsx';
 import BrowseResultCard from './BrowseResultCard.jsx';
@@ -19,7 +24,6 @@ import { SEARCH_TABS, useSearchTab, ResultRow, trackRowProps, recordingRowProps 
 import { encodePath } from '../paths.js';
 import { navigate as go } from '@host/router.js';
 
-const HOME_PATH = '/tools/library/music';
 const toAlbum = (path) => go('/tools/library/music/downloaded/' + encodePath(path));
 const toBrowse = (q, mode) =>
   go('/tools/library/music/browse/' + (mode === 'artists' ? 'artists/' : '') + 'q/' + encodeURIComponent(q));
@@ -43,54 +47,10 @@ function errText(e, fallback) {
   try { return JSON.stringify(e); } catch { return fallback; }
 }
 
-export default function MusicHome({ accent, initialQuery = '' }) {
-  const { playAlbumTracks } = useMusicPlayer();
+export default function MusicHome({ accent, query = '', albums, ownedIds, onPlay }) {
   const { playlists } = usePlaylists();
-  const [albums, setAlbums] = useState(null);   // owned library (null = loading)
-  const [query, setQuery] = useState(initialQuery);
   const [tab, setTab] = useSearchTab('tools:musicSearchTab');
-
-  // Mirror the typed query into the hash so Back out of a result returns to
-  // these results instead of an empty home (the query used to live only here,
-  // so the home history entry always replayed as the carousels).
-  // replaceState, not navigate: a history entry per keystroke turns Back into a
-  // per-letter rewind. The guard keeps a timer that fires mid-navigation from
-  // clobbering the route we just left for.
-  useEffect(() => {
-    const t = setTimeout(() => {
-      const cur = (window.location.hash || '').replace(/^#/, '');
-      if (cur !== HOME_PATH && !cur.startsWith(HOME_PATH + '/q/')) return;
-      const q = query.trim();
-      const want = HOME_PATH + (q ? '/q/' + encodeURIComponent(q) : '');
-      if (cur === want) return;
-      window.history.replaceState(null, '', window.location.href.split('#')[0] + '#' + want);
-    }, 250);
-    return () => clearTimeout(t);
-  }, [query]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const load = () => musicApi.listAlbums()
-      .then(l => { if (!cancelled) setAlbums(l || []); })
-      .catch(() => { if (!cancelled) setAlbums([]); });
-    load();
-    window.addEventListener('music-library-changed', load);
-    return () => { cancelled = true; window.removeEventListener('music-library-changed', load); };
-  }, []);
-
-  // Play an album by reading its full detail then loading the queue.
-  const playAlbum = async (album) => {
-    try {
-      const detail = await musicApi.readAlbum(album.path);
-      playAlbumTracks(detail, 0);
-    } catch {}
-  };
-
-  const ownedIds = useMemo(
-    () => new Set((albums || []).map(a => a.providerId).filter(Boolean)),
-    [albums],
-  );
-  const q = query.trim();
+  const q = (query || '').trim();
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
@@ -99,26 +59,17 @@ export default function MusicHome({ accent, initialQuery = '' }) {
         padding: '20px 22px 40px',
         display: 'flex', flexDirection: 'column', gap: 26,
       }}>
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search your library and MusicBrainz…"
-          className="candy-input"
-          style={{ padding: '11px 14px', fontSize: 14, color: 'var(--text)', outline: 'none', width: '100%' }}
-        />
-
         {q ? (
           <>
             <Seg options={SEARCH_TABS} value={tab} onChange={setTab} accent={accent}/>
             <SearchResults query={q} tab={tab} accent={accent} albums={albums} ownedIds={ownedIds}
-                           onPlay={playAlbum} />
+                           onPlay={onPlay} />
           </>
         ) : (
           <>
-            <ContinueListening albums={albums} accent={accent} onPlay={playAlbum} />
+            <ContinueListening albums={albums} accent={accent} onPlay={onPlay} />
             <YourPlaylists playlists={playlists} accent={accent} />
-            <RecentlyAdded albums={albums} accent={accent} onPlay={playAlbum} />
+            <RecentlyAdded albums={albums} accent={accent} onPlay={onPlay} />
             <MoreFromYourArtists albums={albums} ownedIds={ownedIds} accent={accent} />
           </>
         )}
@@ -245,7 +196,9 @@ function MoreFromYourArtists({ albums, ownedIds, accent }) {
 
 // ---- Search ----------------------------------------------------------------
 
-function SearchResults({ query, tab, accent, albums, ownedIds, onPlay }) {
+// Exported: the topbar's MusicSearchBar popup renders the identical stacks, so
+// the popup and the full page can never drift apart.
+export function SearchResults({ query, tab, accent, albums, ownedIds, onPlay }) {
   const [mbAlbums, setMbAlbums] = useState(null);
   const [mbArtists, setMbArtists] = useState(null);
   const [mbSongs, setMbSongs] = useState(null);

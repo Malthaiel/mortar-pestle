@@ -7,7 +7,9 @@
 //   "browse"                             → MusicBrainz discovery + download
 //   legacy "personal[/<album>]" or bare "<album>" → downloaded (back-compat)
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { musicApi } from './api.js';
+import { useMusicPlayer } from './MusicPlayerProvider.jsx';
 import AlbumBrowser from './AlbumBrowser.jsx';
 import AlbumDetail  from './AlbumDetail.jsx';
 import BrowsePage   from './BrowsePage.jsx';
@@ -19,6 +21,7 @@ import SidebarSeam from '@host/components/SidebarSeam.jsx';
 import { encodePath, decodePath } from '../paths.js';
 import { navigate as go } from '@host/router.js';
 
+const HOME_PATH = '/tools/library/music';
 const LAST_VIEWED_KEY = 'tools:lastMusicPath';
 const SPLIT_WIDTH_KEY = 'music:split:width';
 const SPLIT_MIN      = 320;  // album-browser (left) floor
@@ -58,9 +61,10 @@ function parseMusicRoute(rest) {
       ? decodePath(segs.slice(qi + 1).join('/')) : '';
     return { mode: 'browse', album: '', browseMode, browseQuery };
   }
-  // "q/<query>" is still the home surface, carrying the typed search so it
-  // survives a Back out of a result. MusicHome mirrors it in with replaceState
-  // (no per-keystroke history entries); without it Back landed on an empty home.
+  // "q/<query>" is still the home surface — the COMMITTED search (Enter in the
+  // topbar bar), carrying the query so it survives a Back out of a result. This
+  // page mirrors it back with replaceState (no per-keystroke history entries);
+  // without it Back landed on an empty home.
   if (first === 'q') {
     return { mode: 'home', album: '', homeQuery: decodePath(segs.slice(1).join('/')) };
   }
@@ -85,6 +89,56 @@ function readInitialSplitWidth() {
 export default function MusicPage({ accent, rest }) {
   const { mode, album, status, homeQuery, browseMode, browseQuery, browseRg, browseArtist } = parseMusicRoute(rest || '');
   const selectedPath = album;
+
+  // ── Search (topbar-owned) ────────────────────────────────────────────
+  // The query lives here, not in MusicHome, because MusicTopBar renders on every
+  // Music screen and MusicHome only on one. `onSearchPage` is the committed
+  // search (Enter navigated to /q/<query>): there the popup is suppressed and the
+  // bar drives the page inline instead of floating over it.
+  const [query, setQuery] = useState(homeQuery || '');
+  const onSearchPage = mode === 'home' && !!homeQuery;
+  useEffect(() => { setQuery(homeQuery || ''); }, [homeQuery]);
+
+  // One library fetch feeds both the popup and the home page.
+  const [albums, setAlbums] = useState(null);   // owned library (null = loading)
+  useEffect(() => {
+    let cancelled = false;
+    const load = () => musicApi.listAlbums()
+      .then(l => { if (!cancelled) setAlbums(l || []); })
+      .catch(() => { if (!cancelled) setAlbums([]); });
+    load();
+    window.addEventListener('music-library-changed', load);
+    return () => { cancelled = true; window.removeEventListener('music-library-changed', load); };
+  }, []);
+  const ownedIds = useMemo(
+    () => new Set((albums || []).map(a => a.providerId).filter(Boolean)),
+    [albums],
+  );
+
+  // Play an album by reading its full detail then loading the queue. Defined
+  // here so the popup and the home carousels share one implementation.
+  const { playAlbumTracks } = useMusicPlayer();
+  const playAlbum = async (a) => {
+    try { playAlbumTracks(await musicApi.readAlbum(a.path), 0); } catch {}
+  };
+
+  // Mirror the committed query into the hash so Back out of a result returns to
+  // these results instead of an empty home. replaceState, not navigate: a history
+  // entry per keystroke turns Back into a per-letter rewind. Only runs on the
+  // committed-search page — typing elsewhere just floats the popup and must
+  // leave the URL of the page you're on alone.
+  useEffect(() => {
+    if (!onSearchPage) return undefined;
+    const t = setTimeout(() => {
+      const cur = (window.location.hash || '').replace(/^#/, '');
+      if (cur !== HOME_PATH && !cur.startsWith(HOME_PATH + '/q/')) return;
+      const q = query.trim();
+      const want = HOME_PATH + (q ? '/q/' + encodeURIComponent(q) : '');
+      if (cur === want) return;
+      window.history.replaceState(null, '', window.location.href.split('#')[0] + '#' + want);
+    }, 250);
+    return () => clearTimeout(t);
+  }, [query, onSearchPage]);
 
   // ── Resizable split (personal mode) ──────────────────────────────────
   const containerRef = useRef(null);
@@ -139,7 +193,15 @@ export default function MusicPage({ accent, rest }) {
 
   let content;
   if (mode === 'home') {
-    content = <MusicHome accent={accent} initialQuery={homeQuery || ''}/>;
+    // Only the committed search reaches the page — while the popup is floating
+    // over the carousels the page underneath must stay as it was.
+    content = (
+      <MusicHome
+        accent={accent}
+        query={onSearchPage ? query : ''}
+        albums={albums} ownedIds={ownedIds} onPlay={playAlbum}
+      />
+    );
   } else if (mode === 'library') {
     content = <MusicLibrary accent={accent} status={status}/>;
   } else if (mode === 'browse') {
@@ -204,7 +266,12 @@ export default function MusicPage({ accent, rest }) {
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-      <MusicTopBar accent={accent} rest={rest} />
+      <MusicTopBar
+        accent={accent}
+        query={query} setQuery={setQuery}
+        albums={albums} ownedIds={ownedIds} onPlay={playAlbum}
+        suppressPopup={onSearchPage}
+      />
       {content}
     </div>
   );
