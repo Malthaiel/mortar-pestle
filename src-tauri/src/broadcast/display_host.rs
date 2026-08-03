@@ -274,7 +274,9 @@ fn ensure_class() -> Result<(), String> {
 /// Logical→physical for one rect against the main window's live scale factor
 /// (re-read per call — a DPI change rides the next bounds sync).
 fn to_physical(app: &AppHandle, x: f64, y: f64, w: f64, h: f64) -> Result<(i32, i32, i32, i32), String> {
-    let main = app.get_webview_window("main").ok_or("no main window")?;
+    // get_window, not get_webview_window: get_webview_window("main") returns None
+    // once a browser tab adds a child webview to the main window.
+    let main = app.get_window("main").ok_or("no main window")?;
     let sf = main.scale_factor().map_err(|e| format!("scale_factor: {e}"))?;
     Ok((
         (x * sf).round() as i32,
@@ -301,7 +303,7 @@ pub async fn ensure(app: &AppHandle, id: &str, x: f64, y: f64, w: f64, h: f64) -
             ensure_class()?;
             let (px, py, pw, ph) = to_physical(&app2, x, y, w, h)?;
             destroy_stored(&id);
-            let main = app2.get_webview_window("main").ok_or("no main window")?;
+            let main = app2.get_window("main").ok_or("no main window")?;
             let parent = main.hwnd().map_err(|e| format!("main hwnd: {e}"))?;
             MAIN_HWND.store(parent.0 as isize, Ordering::Relaxed);
             let _ = APP.set(app2.clone());

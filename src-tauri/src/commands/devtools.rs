@@ -11,7 +11,10 @@ use tauri::Manager;
 #[tauri::command]
 pub fn open_devtools(app: tauri::AppHandle) {
     #[cfg(debug_assertions)]
-    if let Some(w) = app.get_webview_window("main") {
+    // get_webview, not get_webview_window: once a browser tab attaches a child
+    // webview to "main", is_webview_window() is false and get_webview_window
+    // returns None. The main webview's own label is still "main".
+    if let Some(w) = app.get_webview("main") {
         w.open_devtools();
     }
     #[cfg(not(debug_assertions))]
