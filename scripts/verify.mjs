@@ -65,6 +65,7 @@ const steps = [
   { name: 'web: drag math',                cmd: NPM, args: ['--prefix', 'web', 'run', 'check-drag'] },
   { name: 'web: planner time/frame math',  cmd: NPM, args: ['--prefix', 'web', 'run', 'check-time'] },
   { name: 'web: path marshalling',         cmd: NPM, args: ['--prefix', 'web', 'run', 'check-path'] },
+  { name: 'web: availability busy math',   cmd: NPM, args: ['--prefix', 'web', 'run', 'check-busy'] },
   {
     name: 'module selftests',
     cmd: process.execPath, // node

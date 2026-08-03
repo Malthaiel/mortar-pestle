@@ -197,7 +197,7 @@ export const RESET_SCOPES = {
   // sub-tabs reset the whole bag; the Vault Agent placeholder resets nothing.
   'agents/general':     { label: 'Agents', keys: ['agents'] },
   'agents/atelier':     { label: 'Agents', keys: ['agents'] },
-  'system/system':      { label: 'System', bag: 'dev', fields: ['autoCheckUpdates', 'updatePollInterval'] },
+  'system/system':      { label: 'System', bag: 'dev', fields: ['autoCheckUpdates', 'updatePollInterval'], keys: ['sitePushEnabled'] },
   'system/downloads':   { label: 'System › Downloads', keys: ['downloads'] },
   'system/recycle':     { label: 'System › Recycling Bin', keys: ['recycleBinMaxItems', 'recycleBinRetentionDays'] },
 };
@@ -213,8 +213,11 @@ export function scopeFor(addr) {
 export function scopeModified(scope, settings, defaults) {
   if (!scope || !settings || !defaults) return false;
   const eq = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
-  if (scope.bag) return scope.fields.some(f => !eq(settings[scope.bag]?.[f], defaults[scope.bag]?.[f]));
-  return scope.keys.some(k => !eq(settings[k], defaults[k]));
+  // A scope may carry a nested bag, flat keys, or BOTH (system/system does) —
+  // an early return on `bag` would silently ignore the flat keys beside it.
+  const bagHit = scope.bag ? scope.fields.some(f => !eq(settings[scope.bag]?.[f], defaults[scope.bag]?.[f])) : false;
+  const keyHit = scope.keys ? scope.keys.some(k => !eq(settings[k], defaults[k])) : false;
+  return bagHit || keyHit;
 }
 
 // Last-visited top-level tab — the fallback target for context-less opens.

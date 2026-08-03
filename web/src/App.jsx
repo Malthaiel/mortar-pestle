@@ -9,6 +9,7 @@ import { registerCommandAction } from './command-actions.js';
 import { useGlobalTactileSound, useGlobalCandyPressHold } from './hooks/useTactileSound.js';
 import { useEventReminders } from './hooks/useEventReminders.js';
 import { useFeedbackNotifications } from './hooks/useFeedbackNotifications.js';
+import { useSitePush } from './hooks/useSitePush.js';
 import AppShell from './components/AppShell.jsx';
 import ToolsPage from './pages/ToolsPage.jsx';
 import PageView from './pages/PageView.jsx';
@@ -133,6 +134,8 @@ function MainApp() {
   const [downloadsManagerOpen, setDownloadsManagerOpen] = useState(false);
   const [recycleBinOpen, setRecycleBinOpen] = useState(false);
   const accent = settings.accentColor;
+  // Site Bridge availability push. Off by default; reads nothing while off.
+  useSitePush(settings.sitePushEnabled === true);
 
   // Visit tracking — records every route change to the recent-pages list,
   // surfaced in both the Cmd+K palette and the sidebar recently-visited

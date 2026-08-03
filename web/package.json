@@ -12,6 +12,7 @@
     "check-drag": "node scripts/check-drag-math.mjs",
     "check-time": "node scripts/check-planner-time.mjs",
     "check-path": "node scripts/check-path-marshal.mjs",
+    "check-busy": "node scripts/check-busy-ranges.mjs",
     "lint": "eslint ."
   },
   "dependencies": {

@@ -57,6 +57,7 @@ pub mod release;
 pub mod self_update;
 pub mod sessions;
 pub mod sidebar;
+pub mod site;
 pub mod skills;
 #[cfg(any(target_os = "linux", target_os = "windows"))]
 pub mod stt;

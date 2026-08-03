@@ -33,11 +33,31 @@ export default function SystemTab({ settings, setSetting, accent, section, onSec
         <>
           <BuildSection accent={accent}/>
           <UpdatesSection settings={settings} setSetting={setSetting} accent={accent}/>
+          <SitePushSection settings={settings} setSetting={setSetting} accent={accent}/>
         </>
       )}
       {active === 'downloads' && <DownloadsPanel settings={settings} setSetting={setSetting} accent={accent}/>}
       {active === 'recycle'   && <RecyclePanel   settings={settings} setSetting={setSetting} accent={accent}/>}
     </div>
+  );
+}
+
+// ── Availability push (malthaiel.com booking calendar) ───────────────────────
+// One switch for the whole Site Bridge upload path. See hooks/useSitePush.js.
+
+function SitePushSection({ settings, setSetting, accent }) {
+  return (
+    <SectionBand title="Public availability">
+      <StackedRow label="Publish my busy times" anchor="set-sitePushEnabled"
+        hint="Sends the next 30 days of busy times to the malthaiel.com booking calendar so nobody can book over you. Start and end times only — titles, notes and event names never leave this machine.">
+        <EnableToggle
+          enabled={settings.sitePushEnabled === true}
+          accent={accent}
+          onChange={v => setSetting('sitePushEnabled', v)}
+          title="Publish busy times to the public booking calendar"
+        />
+      </StackedRow>
+    </SectionBand>
   );
 }
 

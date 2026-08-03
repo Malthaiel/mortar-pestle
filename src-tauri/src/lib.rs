@@ -979,6 +979,8 @@ pub fn run() {
             commands::feedback::feedback_comment_delete_any,
             commands::feedback::feedback_comment_official_reply,
             commands::feedback::feedback_avatar_upload,
+            commands::site::site_push_busy,
+            commands::site::site_fetch_bookings,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::get_capture_state,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::capture_start,
             #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::capture_stop,

@@ -343,13 +343,13 @@ export default function SettingsDrawer({ open, onClose, settings, setSetting, se
   const resetScope = searching ? null : scopeFor(addr);
   const handleReset = () => {
     if (!resetScope) return;
+    // A scope may carry a bag, flat keys, or both — reset every part it names.
     if (resetScope.bag) {
       const fields = {};
       for (const f of resetScope.fields) fields[f] = SETTINGS_DEFAULTS[resetScope.bag][f];
       setSetting(resetScope.bag, fields);
-    } else {
-      resetSettings(resetScope.keys);
     }
+    if (resetScope.keys) resetSettings(resetScope.keys);
   };
 
   return (

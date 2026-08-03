@@ -256,7 +256,7 @@ fn client() -> Result<reqwest::Client, FeedbackError> {
 /// A PostgREST request with `apikey` + `Authorization` already attached.
 /// `require_user=true` forces a signed-in token (RLS sees `auth.uid()`);
 /// `false` falls back to the anon key for public reads.
-async fn rest(
+pub(crate) async fn rest(
     method: Method,
     path: &str,
     require_user: bool,
@@ -273,7 +273,7 @@ async fn rest(
         .header("Authorization", format!("Bearer {token}")))
 }
 
-async fn handle_json(resp: reqwest::Response) -> Result<Value, FeedbackError> {
+pub(crate) async fn handle_json(resp: reqwest::Response) -> Result<Value, FeedbackError> {
     let status = resp.status();
     let text = resp.text().await.unwrap_or_default();
     if status.is_success() {
