@@ -7,11 +7,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { musicApi } from './api.js';
 import { FilterChip, TextInput } from '@host/components/ui/index.js';
+import { navigate as go } from '@host/router.js';
 import BrowseResultCard from './BrowseResultCard.jsx';
 import BrowsePreview from './BrowsePreview.jsx';
 
 const MODE_ALBUMS = 'albums';
 const MODE_ARTISTS = 'artists';
+const BROWSE = '/tools/library/music/browse';
 
 const GRID = {
   display: 'grid',
@@ -39,11 +41,11 @@ export default function BrowsePage({ accent, initialQuery = '', initialMode = MO
   // Seeded from an identity route (browse/artist/<mbid>) when we arrived by
   // clicking a specific artist, so no search re-run is needed to get here.
   const [selectedArtist, setSelectedArtist] = useState(initialArtist || null); // { mbid, name }
-  // Likewise browse/rg/<mbid>: the mbid alone is enough — BrowsePreview fetches
-  // the rest via releaseGroupDetail and shows its own loading state meanwhile.
-  const [selectedResult, setSelectedResult] = useState(
-    initialResultMbid ? { mbid: initialResultMbid } : null,
-  ); // a result card → preview
+  // The preview is a ROUTE (browse/rg/<mbid>), never local state: picking a card
+  // navigates, so it gets a real history entry and the mouse Back button returns
+  // to the grid instead of leaving Music. The mbid alone is enough — BrowsePreview
+  // fetches the rest via releaseGroupDetail and shows its own loading state.
+  const selectedResult = initialResultMbid ? { mbid: initialResultMbid } : null;
   const [libraryMap, setLibraryMap] = useState(() => new Map()); // providerId → { present, total }
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -104,6 +106,24 @@ export default function BrowsePage({ accent, initialQuery = '', initialMode = MO
       .finally(() => { if (myId === reqId.current) setLoading(false); });
   }, [selectedArtist]);
 
+  // Mirror the typed query + mode into the hash so Back out of a preview or a
+  // discography returns to these results. replaceState, not navigate: a history
+  // entry per keystroke turns Back into a per-letter rewind. Skipped while an
+  // identity route (rg / artist) owns the hash, and once we've navigated away.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (selectedResult || selectedArtist) return;
+      const cur = (window.location.hash || '').replace(/^#/, '');
+      if (!cur.startsWith(BROWSE)) return;
+      const q = query.trim();
+      const want = BROWSE + (mode === MODE_ARTISTS ? '/artists' : '') +
+                   (q ? '/q/' + encodeURIComponent(q) : '');
+      if (cur === want) return;
+      window.history.replaceState(null, '', window.location.href.split('#')[0] + '#' + want);
+    }, 250);
+    return () => clearTimeout(t);
+  }, [query, mode, selectedArtist, selectedResult]);
+
   const switchMode = (m) => {
     if (m === mode) return;
     setMode(m);
@@ -118,17 +138,15 @@ export default function BrowsePage({ accent, initialQuery = '', initialMode = MO
 
   const showArtistList = mode === MODE_ARTISTS && !selectedArtist;
 
-  // A picked result takes over the whole page; backing out restores the grid
-  // (search/discography state is untouched while the preview is mounted).
-  // Arrived straight from a browse/rg/<mbid> link instead? There IS no grid
-  // behind us — no search ever ran — so back means back where you came from.
+  // A picked result takes over the whole page. Both ways out — the in-app arrow
+  // and the mouse Back button — are the same history pop, so the grid we came
+  // from (or wherever the link came from) is restored either way.
   if (selectedResult) {
-    const arrivedDirect = !!initialResultMbid && selectedResult.mbid === initialResultMbid;
     return (
       <BrowsePreview
         result={selectedResult}
         accent={accent}
-        onBack={() => (arrivedDirect ? window.history.back() : setSelectedResult(null))}
+        onBack={() => window.history.back()}
         libraryEntry={libraryMap.get(selectedResult.mbid) || null}
       />
     );
@@ -153,15 +171,15 @@ export default function BrowsePage({ accent, initialQuery = '', initialMode = MO
         />
         {selectedArtist && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+            {/* The artist list (or wherever the link came from) is the previous
+                history entry either way, so back out through history. */}
             <button
-              onClick={() => (initialArtist && selectedArtist.mbid === initialArtist.mbid
-                ? window.history.back()   // arrived by link; no artist list behind us
-                : setSelectedArtist(null))}
+              onClick={() => window.history.back()}
               style={{
                 background: 'transparent', border: 'none', cursor: 'pointer',
                 color: 'var(--text-muted)', fontSize: 12, padding: 0,
               }}
-            >← {initialArtist && selectedArtist.mbid === initialArtist.mbid ? 'Back' : 'Artists'}</button>
+            >← Back</button>
             <span style={{ color: 'var(--text-faint)' }}>/</span>
             <span style={{ color: 'var(--text)', fontWeight: 500 }}>{selectedArtist.name}</span>
           </div>
@@ -188,7 +206,8 @@ export default function BrowsePage({ accent, initialQuery = '', initialMode = MO
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {artists.map(a => (
                   <ArtistRow key={a.mbid} artist={a} accent={accent}
-                             onSelect={() => setSelectedArtist({ mbid: a.mbid, name: a.name })} />
+                             onSelect={() => go(BROWSE + '/artist/' + encodeURIComponent(a.mbid) +
+                                               (a.name ? '/' + encodeURIComponent(a.name) : ''))} />
                 ))}
               </div>
             )
@@ -203,7 +222,7 @@ export default function BrowsePage({ accent, initialQuery = '', initialMode = MO
                 {results.map(r => (
                   <BrowseResultCard key={r.mbid} result={r} accent={accent}
                                     inLibrary={libraryMap.has(r.mbid)}
-                                    onSelect={() => setSelectedResult(r)} />
+                                    onSelect={() => go(BROWSE + '/rg/' + encodeURIComponent(r.mbid))} />
                 ))}
               </div>
             )
