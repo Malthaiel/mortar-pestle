@@ -99,26 +99,26 @@ export default function Popover({
   return portal ? createPortal(panel, document.body) : panel;
 }
 
-// Anchor a fixed popover ABOVE a trigger rect, falling back to centered-above-dock
-// when the trigger is gone (e.g. the hover-dock collapsed it). Returns a
-// `{ left, bottom }` fragment to spread into the Popover `style`, or null while
-// closed / before the first measure (caller renders nothing until it resolves).
-export function useAnchoredRect(getRect, { open, width, gap = 10, pad = 8 } = {}) {
+// Anchor a fixed popover to a trigger rect, falling back to centered-against-the
+// -matching-edge when the trigger is gone (e.g. the hover-dock collapsed it).
+// `place` picks the side: 'above' (default — dock triggers, returns
+// `{ left, bottom }`) or 'below' (titlebar triggers, returns `{ left, top }`).
+// Returns a fragment to spread into the Popover `style`, or null while closed /
+// before the first measure (caller renders nothing until it resolves).
+export function useAnchoredRect(getRect, { open, width, gap = 10, pad = 8, place = 'above' } = {}) {
   const [pos, setPos] = useState(null);
   useLayoutEffect(() => {
     if (!open) { setPos(null); return; }
     const r = getRect?.();
     const vw = window.innerWidth, vh = window.innerHeight;
-    let left, bottom;
-    if (r && (r.width || r.height)) {
-      left = r.left + r.width / 2 - width / 2;
-      bottom = vh - r.top + gap;
-    } else {
-      left = vw / 2 - width / 2;
-      bottom = 64;
-    }
-    left = Math.max(pad, Math.min(left, vw - width - pad));
-    setPos({ left, bottom });
+    const has = r && (r.width || r.height);
+    const left = Math.max(pad, Math.min(
+      has ? r.left + r.width / 2 - width / 2 : vw / 2 - width / 2,
+      vw - width - pad,
+    ));
+    setPos(place === 'below'
+      ? { left, top: has ? r.bottom + gap : 64 }
+      : { left, bottom: has ? vh - r.top + gap : 64 });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
   return pos;

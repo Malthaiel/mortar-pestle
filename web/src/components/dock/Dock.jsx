@@ -9,14 +9,12 @@ import { useState, useRef, useCallback } from 'react';
 import { useHashRoute, navigate } from '../../router.js';
 import DockButton from './DockButton.jsx';
 import ModuleDockButton from './ModuleDockButton.jsx';
-import NotificationBell from '../../notifications/NotificationBell.jsx';
 import DownloadsDockButton from '../../downloads/DownloadsDockButton.jsx';
 import DockVaultSwitcher from './DockVaultSwitcher.jsx';
 import DockAgentsButton from './DockAgentsButton.jsx';
 import DraggableSidebarList from '../DraggableSidebarList.jsx';
 import { DOCK_BUTTONS } from './dock-buttons.js';
 import { DOCK_DEFAULT } from '../../hooks/useSettings.js';
-import { useUpdateStatus } from '../../hooks/useUpdateStatus.js';
 import { useModuleDockEntries } from './module-entries.js';
 import { useContextMenu } from '../../context-menu/useContextMenu.js';
 import { DockSeparator, DockSpacer } from './DockDivider.jsx';
@@ -60,21 +58,16 @@ function remapVaultDockIds(saved) {
 export default function Dock({
   settings,
   setSetting,
-  setSettingsOpen, settingsOpen,
   setPaletteOpen, paletteOpen,
   setHintsOpen, hintsOpen,
   setPlannerOpen, plannerOpen,
-  setNotifOpen, notifOpen,
   setDownloadsOpen, downloadsOpen,
-  setRecycleBinOpen, recycleBinOpen,
   accent,
   resolvedTheme,
 }) {
   const route = useHashRoute();
   const { openContextMenu } = useContextMenu();
   const [quickCaptureOpen, setQuickCaptureOpen] = useState(false);
-  // Update-available badge on the settings gear (mirrors the System rail tab).
-  const { available: updateAvailable } = useUpdateStatus();
   const dock = { ...DOCK_DEFAULT, ...(settings?.dock || {}) };
   const edgeStyle = dock.edgeStyle || DOCK_DEFAULT.edgeStyle;
   const dockRootRef = useRef(null);
@@ -103,13 +96,10 @@ export default function Dock({
 
   const ctx = {
     settings, setSetting, route, navigate, accent,
-    setSettingsOpen, settingsOpen,
     setPaletteOpen, paletteOpen,
     setHintsOpen, hintsOpen,
     setPlannerOpen, plannerOpen,
-    setNotifOpen, notifOpen,
     setDownloadsOpen, downloadsOpen,
-    setRecycleBinOpen, recycleBinOpen,
     setQuickCaptureOpen, quickCaptureOpen,
     plannerTimer: null, // sub-feature 5 wires this
   };
@@ -144,16 +134,6 @@ export default function Dock({
   const centerIndex = firstSpacerIdx >= 0 ? firstSpacerIdx + 1 : Math.floor(visibleItems.length / 2);
 
   const renderBtn = (b) => {
-    if (b.id === 'notifications') return (
-      <NotificationBell
-        key={b.id}
-        label={b.label}
-        onClick={() => b.onClick?.(ctx)}
-        isActive={b.isActive ? !!b.isActive(ctx) : false}
-        accent={accent}
-        onContextMenu={(e) => onItemContext(e, b.id)}
-      />
-    );
     if (b.id === 'downloads') return (
       <DownloadsDockButton
         key={b.id}
@@ -178,8 +158,6 @@ export default function Dock({
         key={b.id}
         label={b.label}
         accent={accent}
-        settings={settings}
-        setSetting={setSetting}
         onContextMenu={(e) => onItemContext(e, b.id)}
       />
     );
@@ -191,8 +169,6 @@ export default function Dock({
         onClick={() => b.onClick?.(ctx)}
         isActive={b.isActive ? !!b.isActive(ctx) : false}
         accent={accent}
-        auraPulse={b.id === 'design-mode' && !!ctx.settings?.agents?.mode}
-        updateDot={b.id === 'settings' && !!updateAvailable && ctx.settings?.dev?.autoCheckUpdates !== false}
         onContextMenu={(e) => onItemContext(e, b.id)}
       />
     );

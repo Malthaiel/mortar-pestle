@@ -36,7 +36,7 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
   /* Height of the custom titlebar that replaced the native Windows one.
      Single source of truth: .titlebar is sized to this, and AppShell subtracts
      it alongside --dock-height so content ends flush under the strip. */
-  --titlebar-h: 32px;
+  --titlebar-h: 40px;
 
   /* Candy SURFACE rest depth — the STATIC offset-shadow band under framed
      container surfaces (the .candy-* family). Distinct from --candy-depth:
@@ -190,8 +190,8 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
   --team-amber:    oklch(0.72 0.15 75);
   --team-sapphire: oklch(0.60 0.15 250);
 
-  /* Design Mode affordance tier — one notch above the modal ceiling (nested
-     Planner sub-modals at 10000) so the Atelier chat + selection outline float
+  /* Markup-mode affordance tier — one notch above the modal ceiling (nested
+     Planner sub-modals at 10000) so the selection outline + name badge float
      over every popup. Intentionally above Break/Confetti/WhatsNew too; those are
      transient and already sit below the 10000 sub-modals. */
   --z-design: 10001;
@@ -362,6 +362,10 @@ h1, h2, h3, h4, h5, h6 { font-family: var(--font-heading); }
   100% { opacity: 1; transform: translateY(0)    scale(1); }
 }
 @keyframes notifPanelIn { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+/* Mirror of notifPanelIn for popovers that DROP from a top anchor (the titlebar
+   bell) instead of rising from the dock. Separate keyframe, not a flipped one —
+   notifPanelIn still has three upward consumers (Downloads, BlockTimerUI). */
+@keyframes notifPanelInDown { from { opacity: 0; transform: translateY(-10px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes notifSweep   { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(20px); } }
 @keyframes bellAbsorb   { 0% { transform: scale(1); } 40% { transform: scale(1.18); } 100% { transform: scale(1); } }
 @keyframes badgeTick    { 0% { transform: scale(0.4); opacity: 0; } 60% { transform: scale(1.25); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
@@ -375,10 +379,9 @@ h1, h2, h3, h4, h5, h6 { font-family: var(--font-heading); }
   55%  { opacity: 1; }
   100% { opacity: 1; transform: rotateX(0deg); transform-origin: center 50%; }
 }
-/* Design Mode — ceremonial entry/exit. The reveal: desaturate (CSS rule
-   below, gated on body[data-design-mode]) + chat window slide-in. Exit
-   reverses. (The accent-sheen sweep + per-component wake glow were removed
-   under the no-glow rule.) */
+/* Agent chat window slide-in / slide-out. Named for the since-removed Atelier
+   agent; kept as the default animIn/animOut in AgentChatWindow, which Concierge
+   and Analyst both render. */
 @keyframes atelierChatIn {
   from { opacity: 0; transform: translateY(8px) scale(0.98); }
   to   { opacity: 1; transform: translateY(0)   scale(1); }
@@ -391,6 +394,7 @@ h1, h2, h3, h4, h5, h6 { font-family: var(--font-heading); }
   0%, 100% { opacity: 1; }
   50%      { opacity: 0.2; }
 }
+/* Markup mode crosshair — the body attr is set by useMarkupMode. */
 body[data-design-pointer="markup"],
 body[data-design-pointer="markup"] *:not(input):not(textarea):not(select):not([data-aos-no-mark]):not([data-aos-no-mark] *) {
   cursor: crosshair !important;
@@ -398,13 +402,6 @@ body[data-design-pointer="markup"] *:not(input):not(textarea):not(select):not([d
 @keyframes pendingTrayDown {
   from { max-height: 0;    opacity: 0; transform: translateY(-6px); }
   to   { max-height: 280px; opacity: 1; transform: translateY(0); }
-}
-/* Saturation drop while Design mode is active. 200ms transition lets the
-   in1→in2 phase shift feel smooth. The transition runs in both directions
-   so exit-fade-back is symmetric. */
-body[data-design-mode] #root {
-  filter: saturate(0.78);
-  transition: filter 200ms ease;
 }
 /* Frame Edit Mode (Planner). The Edit Frame button sets data-frame-edit="on" on
    the calendar grid; non-frame blocks recede (grayscale + dim) so the daily-
@@ -487,25 +484,19 @@ body[data-design-mode] #root {
   height: var(--titlebar-h);
   flex-shrink: 0;
   display: flex;
-  align-items: stretch;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 8px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
 }
-.titlebar-btn {
-  width: 44px;
-  display: flex; align-items: center; justify-content: center;
-  border: 0; padding: 0;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: default;
-  transition: background 90ms ease, color 90ms ease;
-}
-.titlebar-btn:hover {
-  background: color-mix(in oklch, var(--text) 10%, transparent);
-  color: var(--text);
-}
-.titlebar-btn.is-close:hover { background: #c42b1c; color: #fff; }
+/* The two button clusters. Everything BETWEEN them is bare strip, which is what
+   stays draggable — the clusters sit on top of the drag region and swallow their
+   own clicks. */
+.titlebar-cluster { display: flex; align-items: center; gap: 8px; }
+/* Bare avatar — no candy frame, no depth, no hover treatment. Clickable only. */
+.titlebar-avatar { display: inline-flex; cursor: pointer; }
 
 /* Dock — a full-width rectangle flush with the screen bottom, the horizontal
    twin of the side rails. Squared, a single top hairline, no float shadow.
@@ -1779,6 +1770,13 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
 .candy-btn[data-shape="circle"]:hover:not(.is-active):not(.is-primary) { --cbtn-band: var(--surface); }
 .candy-btn[data-shape="circle"]:hover:not(.is-active):not(.is-primary) > .candy-face { background: var(--surface-3); color: var(--text); }
 .candy-btn[data-shape="circle"]:hover:not(.is-active):not(.is-primary) .candy-face :where(div, span) { color: var(--text); }
+/* .is-hover-accent on a circle — opt back INTO the base accent flood the circle
+   rules above suppress (the titlebar controls; same recipe as the icon shape's
+   copy at § icon). Must sit AFTER the neutral hover block: equal specificity, so
+   source order decides. */
+.candy-btn[data-shape="circle"].is-hover-accent:is(:hover, :active):not(.is-active) { --cbtn-band: var(--accent); }
+.candy-btn[data-shape="circle"].is-hover-accent:is(:hover, :active):not(.is-active) > .candy-face { color: #fff; background: var(--accent); }
+.candy-btn[data-shape="circle"].is-hover-accent:is(:hover, :active):not(.is-active) .candy-face :where(div, span) { color: #fff; }
 
 /* select — dropdown trigger (CandySelect.jsx). Neutral candy control like
    chip/icon: no accent flip (a dropdown trigger turning accent-red reads wrong,
@@ -3861,6 +3859,7 @@ body[data-anim-task-celebration="off"] [style*="confettiBurstFly"] {
 body[data-anim-flyout="off"] [style*="flyoutIn"],
 body[data-anim-flyout="off"] [style*="flyoutOut"],
 body[data-anim-flyout="off"] [style*="notifPanelIn"],
+body[data-anim-flyout="off"] [style*="notifPanelInDown"],
 body[data-anim-flyout="off"] [style*="notifSweep"] {
   animation: none !important;
 }

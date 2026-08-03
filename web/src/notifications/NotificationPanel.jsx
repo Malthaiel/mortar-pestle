@@ -1,7 +1,8 @@
-// The notification history panel — pops up above the dock bell. Renders through
-// the shared Popover template: candy floating surface, anchored to the registered
-// bell rect via useAnchoredRect (falls back to centered-above-dock if the bell is
-// gone, e.g. hover-dock collapsed). Esc + click-outside close (the bell itself is
+// The notification history panel — drops DOWN from the titlebar bell. Renders
+// through the shared Popover template: candy floating surface, anchored to the
+// registered bell rect via useAnchoredRect (place:'below' since the Titlebar
+// Overhaul moved the bell out of the dock; falls back to a centered drop if the
+// bell is gone). Esc + click-outside close (the bell itself is
 // exempt so it toggles). Opening marks everything read. Rows show per-type accent
 // glyph + title + message + relative time; click an actionable row to run its
 // action; × removes a row; Clear all sweeps the list.
@@ -17,7 +18,7 @@ const PANEL_W = 340;
 export default function NotificationPanel({ open, onClose, accent }) {
   const { notifications, markAllRead, remove, clearAll, getBellRect } = useNotifications();
   const [clearing, setClearing] = useState(false);
-  const pos = useAnchoredRect(() => getBellRect?.(), { open, width: PANEL_W });
+  const pos = useAnchoredRect(() => getBellRect?.(), { open, width: PANEL_W, place: 'below' });
 
   useEffect(() => { if (open) markAllRead(); }, [open, markAllRead]);
 
@@ -44,9 +45,9 @@ export default function NotificationPanel({ open, onClose, accent }) {
       outsideExempt="[data-notif-bell]"
       headerActions={notifications.length > 0 ? <OutlinedBtn small onClick={doClear}>Clear all</OutlinedBtn> : null}
       style={{
-        position: 'fixed', left: pos.left, bottom: pos.bottom, width: PANEL_W,
-        maxHeight: 420, zIndex: 130, transformOrigin: 'bottom center',
-        animation: 'notifPanelIn 200ms cubic-bezier(0.16, 1, 0.3, 1) both',
+        position: 'fixed', left: pos.left, top: pos.top, width: PANEL_W,
+        maxHeight: 420, zIndex: 130, transformOrigin: 'top center',
+        animation: 'notifPanelInDown 200ms cubic-bezier(0.16, 1, 0.3, 1) both',
       }}
     >
       {notifications.length === 0 ? (

@@ -246,7 +246,15 @@ function MainApp() {
     >
     <ComposedProviders>
       <DownloadsProvider settings={settings}>
-      <TitleBar/>
+      <TitleBar
+        settings={settings}
+        accent={accent}
+        setSettingsOpen={setSettingsOpen}
+        setSettingsTab={setSettingsTab}
+        setNotifOpen={setNotifOpen}
+        notifOpen={notifOpen}
+        setRecycleBinOpen={setRecycleBinOpen}
+      />
       <AppShell
         onOpenSettings={() => setSettingsOpen(true)}
         settingsOpen={settingsOpen}
@@ -296,20 +304,14 @@ function MainApp() {
       <Dock
         settings={settings}
         setSetting={setSetting}
-        setSettingsOpen={setSettingsOpen}
-        settingsOpen={settingsOpen}
         setPaletteOpen={setPaletteOpen}
         paletteOpen={paletteOpen}
         setHintsOpen={setHintsOpen}
         hintsOpen={hintsOpen}
         setPlannerOpen={setPlannerOpen}
         plannerOpen={plannerOpen}
-        setNotifOpen={setNotifOpen}
-        notifOpen={notifOpen}
         setDownloadsOpen={setDownloadsOpen}
         downloadsOpen={downloadsOpen}
-        setRecycleBinOpen={setRecycleBinOpen}
-        recycleBinOpen={recycleBinOpen}
         accent={accent}
         resolvedTheme={resolvedTheme}
       />

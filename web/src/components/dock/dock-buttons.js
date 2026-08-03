@@ -7,8 +7,8 @@
 // rendering via `render(ctx)` and gain wiring in sub-feature 5.
 
 import {
-  IconSettings, IconCommand, IconKeyboard, IconPlus,
-  IconCalendar, IconBookOpen, IconSparkles, IconLayoutGrid, IconBell, IconDownload, IconTrash, IconDatabase,
+  IconCommand, IconKeyboard, IconPlus,
+  IconCalendar, IconBookOpen, IconSparkles, IconLayoutGrid, IconDownload, IconDatabase,
 } from '../icons.jsx';
 
 export const DOCK_BUTTONS = [
@@ -18,16 +18,10 @@ export const DOCK_BUTTONS = [
     // owns its own popover + onClick (so no onClick here).
     id: 'vault-switcher', group: 'tools', Icon: IconDatabase, label: 'Switch vault',
   },
-  {
-    id: 'settings', group: 'tools', Icon: IconSettings, label: 'Settings',
-    onClick: (ctx) => ctx.setSettingsOpen(true),
-    isActive: (ctx) => !!ctx.settingsOpen,
-  },
-  {
-    id: 'notifications', group: 'tools', Icon: IconBell, label: 'Notifications',
-    onClick: (ctx) => ctx.setNotifOpen?.(o => !o),
-    isActive: (ctx) => !!ctx.notifOpen,
-  },
+  // Settings / Notifications / Recycling bin used to live here. The Titlebar
+  // Overhaul moved all three into the titlebar's left cluster (TitleBar.jsx) —
+  // one home per button. Saved dock orders holding the old ids are dropped
+  // automatically by effectiveOrder() in Dock.jsx, so no migration is needed.
   {
     id: 'downloads', group: 'tools', Icon: IconDownload, label: 'Downloads',
     onClick: (ctx) => ctx.setDownloadsOpen?.(o => !o),
@@ -47,11 +41,6 @@ export const DOCK_BUTTONS = [
     id: 'planner', group: 'tools', Icon: IconLayoutGrid, label: 'Open planner',
     onClick: (ctx) => ctx.setPlannerOpen(true),
     isActive: (ctx) => !!ctx.plannerOpen,
-  },
-  {
-    id: 'recycle-bin', group: 'tools', Icon: IconTrash, label: 'Recycling bin',
-    onClick: (ctx) => ctx.setRecycleBinOpen?.(true),
-    isActive: (ctx) => !!ctx.recycleBinOpen,
   },
   {
     id: 'quick-capture', group: 'tools', Icon: IconPlus, label: 'Quick capture',
