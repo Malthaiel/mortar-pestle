@@ -3,10 +3,11 @@
 // main window; the overlay windows return early in App.jsx and never mount it.
 //
 // Two clusters ride the strip (Titlebar Overhaul):
-//   left  — Settings / Notifications / Recycling bin, relocated out of the Dock
-//           so they no longer hover-expand into labelled pills; `title` carries
-//           the label instead.
-//   right — the account avatar, then the three window controls.
+//   left  — Settings / Recycling bin, relocated out of the Dock so they no
+//           longer hover-expand into labelled pills; `title` carries the label
+//           instead.
+//   right — Notifications, the account button (avatar + display name in one
+//           candy chip), then the three window controls.
 // Everything BETWEEN the clusters is bare strip carrying
 // `data-tauri-drag-region`, so Tauri owns dragging and double-click-to-maximize
 // with no pointer handlers here. Only the element with the attribute drags, so
@@ -40,8 +41,8 @@ const MENU_W = 220;
 // A candy button's depth lip is a box-shadow drawn OUTSIDE layout, so flex
 // centring centres the BOX and leaves the visible ink sitting half a band low.
 // candyCenterOffset() lifts it back — the same correction every Dock button
-// uses. The avatar deliberately does NOT take it: it casts no candy shadow, so
-// offsetting it would push it out of line with its neighbours.
+// uses. Every control on the strip takes it, the account chip included: it is a
+// candy button too, and the offset reads its own --cbtn-depth.
 const CENTER = candyCenterOffset();
 
 export default function TitleBar({
@@ -100,7 +101,11 @@ export default function TitleBar({
   return (
     <div className="titlebar" data-tauri-drag-region>
       <div className="titlebar-cluster">
-        <span style={{ display: 'inline-flex', ...CENTER }}>
+        {/* --cbtn-depth re-declared because CENTER sits on this WRAPPER (so the
+            update dot rides along) and the var is only defined on .candy-btn —
+            without it the fallback is the full 7px and the gear lifts 1px more
+            than its neighbours. Same fix as NotificationBell's wrapper. */}
+        <span style={{ display: 'inline-flex', '--cbtn-depth': 'var(--candy-depth-small)', ...CENTER }}>
           <CircleChip title="Settings" size={BTN} className="is-hover-accent"
             onClick={() => setSettingsOpen?.(true)}>
             <IconSettings size={16}/>
@@ -115,13 +120,6 @@ export default function TitleBar({
             }}/>
           )}
         </span>
-        <NotificationBell
-          variant="titlebar"
-          label="Notifications"
-          onClick={() => setNotifOpen?.(o => !o)}
-          isActive={!!notifOpen}
-          accent={accent}
-        />
         <CircleChip title="Recycling bin" size={BTN} className="is-hover-accent"
           style={CENTER} onClick={() => setRecycleBinOpen?.(true)}>
           <IconTrash size={16}/>
@@ -129,18 +127,33 @@ export default function TitleBar({
       </div>
 
       <div className="titlebar-cluster">
-        <span
+        <NotificationBell
+          variant="titlebar"
+          label="Notifications"
+          onClick={() => setNotifOpen?.(o => !o)}
+          isActive={!!notifOpen}
+          accent={accent}
+        />
+
+        {/* Account button — the house candy `chip` shape, avatar left of the
+            display name in one frame. Signed out it reads "Sign in" and skips
+            the menu entirely, opening the modal on the first click. */}
+        <button
           ref={avatarRef}
-          className="titlebar-avatar"
+          type="button"
+          data-own-press
           data-titlebar-avatar
-          role="button"
-          tabIndex={0}
+          className="candy-btn titlebar-account is-hover-accent"
+          data-shape="chip"
+          style={{ height: BTN, ...CENTER }}
           title={signedIn ? (name || 'Account') : 'Sign in'}
-          onClick={() => setMenuOpen(o => !o)}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setMenuOpen(o => !o); } }}
+          onClick={() => (signedIn ? setMenuOpen(o => !o) : setSignInOpen(true))}
         >
-          <UserAvatar src={profile?.avatar_url} name={name} size={26}/>
-        </span>
+          <span className="candy-face">
+            <UserAvatar src={profile?.avatar_url} name={name} size={20}/>
+            {signedIn ? (name || 'Account') : 'Sign in'}
+          </span>
+        </button>
 
         <CircleChip title="Minimize" size={BTN} className="is-hover-accent" style={CENTER} onClick={() => win.minimize()}>
           <IconMinus size={14}/>
@@ -171,25 +184,20 @@ export default function TitleBar({
           }}
           bodyStyle={{ padding: 6, display: 'flex', flexDirection: 'column', gap: 4 }}
         >
-          {signedIn ? (
-            <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 8px 8px' }}>
-                <UserAvatar src={profile?.avatar_url} name={name} size={32}/>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {name || 'Account'}
-                  </div>
-                  {profile?.handle && (
-                    <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>@{profile.handle}</div>
-                  )}
-                </div>
+          {/* Signed out never reaches here — the button opens the modal directly. */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 8px 8px' }}>
+            <UserAvatar src={profile?.avatar_url} name={name} size={32}/>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {name || 'Account'}
               </div>
-              <MenuRow label="Account settings" onClick={openAccountSettings}/>
-              <MenuRow label="Sign out" onClick={async () => { setMenuOpen(false); await fb.signOut().catch(() => {}); refresh(); }}/>
-            </>
-          ) : (
-            <MenuRow label="Sign in" onClick={() => { setMenuOpen(false); setSignInOpen(true); }}/>
-          )}
+              {profile?.handle && (
+                <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>@{profile.handle}</div>
+              )}
+            </div>
+          </div>
+          <MenuRow label="Account settings" onClick={openAccountSettings}/>
+          <MenuRow label="Sign out" onClick={async () => { setMenuOpen(false); await fb.signOut().catch(() => {}); refresh(); }}/>
         </Popover>
       )}
 

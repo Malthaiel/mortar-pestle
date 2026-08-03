@@ -45,8 +45,13 @@ export default function NotificationBell({ label, onClick, isActive, accent, onC
       style={{
         display: 'inline-flex', position: 'relative',
         // Optical-centre lift goes on the WRAPPER, not the button, so the
-        // absolutely-positioned unread badge rides along with it.
-        ...(variant === 'titlebar' ? candyCenterOffset() : null),
+        // absolutely-positioned unread badge rides along with it. That costs us
+        // the var candyCenterOffset() reads: --cbtn-depth is declared on
+        // .candy-btn, so on a wrapper it falls through to the FULL --candy-depth
+        // and lifts 3.5px while the plain CircleChips beside it lift 2.5px —
+        // the bell sat 1px high. Re-declare the circle shape's own depth here so
+        // the fallback resolves to the same number the button uses.
+        ...(variant === 'titlebar' ? { '--cbtn-depth': 'var(--candy-depth-small)', ...candyCenterOffset() } : null),
         animation: absorbing ? 'bellAbsorb 380ms cubic-bezier(0.34,1.56,0.64,1)' : undefined,
       }}
     >

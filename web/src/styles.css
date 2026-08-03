@@ -40,13 +40,13 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
 
   /* Titlebar fill. FIXED across every theme, exactly like --dock-bg: the two
      chrome strips bookend the app and shouldn't repaint with the content
-     palette. Deliberately DARKER than --dock-bg (0.190) and than --surface,
-     which is what the sidebars use — before this token both the titlebar and
-     the sidebars resolved to --surface, so there was zero contrast between
-     them by construction. NOTE the dark-theme surface scale runs LIGHTER as
-     the number rises (--surface 0.190 → -2 0.215 → -3 0.245), so reaching for
-     --surface-2 here would brighten the strip, not darken it. */
-  --titlebar-bg: oklch(0.150 0.005 78);
+     palette. Matches the dock's default 0.190 by design — the strips bookend
+     the app and read as one chrome. Kept as a literal rather than
+     var(--dock-bg) because --dock-bg is declared on .dock-root, not :root, and
+     community themes re-derive it from --surface-2; the titlebar stays fixed.
+     NOTE the dark-theme surface scale runs LIGHTER as the number rises
+     (--surface 0.190 → -2 0.215 → -3 0.245). */
+  --titlebar-bg: oklch(0.190 0.005 78);
 
   /* Candy SURFACE rest depth — the STATIC offset-shadow band under framed
      container surfaces (the .candy-* family). Distinct from --candy-depth:
@@ -505,8 +505,9 @@ body[data-design-pointer="markup"] *:not(input):not(textarea):not(select):not([d
    stays draggable — the clusters sit on top of the drag region and swallow their
    own clicks. */
 .titlebar-cluster { display: flex; align-items: center; gap: 8px; }
-/* Bare avatar — no candy frame, no depth, no hover treatment. Clickable only. */
-.titlebar-avatar { display: inline-flex; cursor: pointer; }
+/* The titlebar account button's own skin lives beside the chip shape it
+   modifies (§ chip, ~1740) — placed here it would lose every declaration to the
+   later, stronger shape rules. */
 
 /* Dock — a full-width rectangle flush with the screen bottom, the horizontal
    twin of the side rails. Squared, a single top hairline, no float shadow.
@@ -1728,6 +1729,58 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
 }
 /* Nested label spans (GroupHeader, TypePill) follow the brighten, not the base white-flip. */
 .candy-btn[data-shape="chip"]:hover:not(.is-active) .candy-face :where(div, span) { color: var(--text); }
+/* .is-hover-accent on a chip — opt back INTO the base accent flood the two
+   brighten-only rules above suppress (the titlebar account button; same recipe
+   as the icon and circle shapes' copies). Must sit AFTER the neutral hover
+   block: equal specificity, so source order decides. */
+.candy-btn[data-shape="chip"].is-hover-accent:is(:hover, :active):not(.is-active) { --cbtn-band: var(--accent); }
+.candy-btn[data-shape="chip"].is-hover-accent:is(:hover, :active):not(.is-active) > .candy-face { color: #fff; background: var(--accent); }
+.candy-btn[data-shape="chip"].is-hover-accent:is(:hover, :active):not(.is-active) .candy-face :where(div, span) { color: #fff; }
+
+/* The six titlebar tool/window controls are `circle`-shaped CircleChips, but on
+   this strip they wear the account button's soft square corner instead of the
+   round one, so all seven controls read as one set (user-directed 2026-08-03).
+   Scoped to .titlebar so every other circle in the app — music transport,
+   planner reset/skip, IconBtn — stays round. --radius-md is the SAME token the
+   account button takes, which is the point: one corner value, not two that
+   drift. (0,3,0) beats the shape rule's (0,2,0), and it is placed after § chip
+   only for company — the account block below is its neighbour, not its rival. */
+.titlebar .candy-btn[data-shape="circle"] { border-radius: var(--radius-md); }
+
+/* Titlebar account button — the stock chip carrying avatar + display name.
+   MUST live here, after § chip, and carry the .candy-btn prefix: every rule
+   below overrides a chip-shape declaration, and the shape rules are both
+   stronger (0,2,0 / 0,3,0) and later than anything up in the titlebar section.
+   Written there it was silently dead — no error, just a pill at the wrong
+   height with the wrong text size.
+   Three deviations from stock chip:
+   1. --cbtn-depth pinned to the CircleChips' small depth. `chip` declares none,
+      so it inherits the FULL --candy-depth (7px vs the circles' 5px) — 2px more
+      visual mass AND 1px higher, since candyCenterOffset lifts by half the
+      button's OWN depth. Equal box heights cannot fix that: the lip is a
+      box-shadow, drawn outside layout. Measured off a screenshot at 35px vs 33.
+   2. A soft corner instead of the pill's 999px.
+   3. Zero vertical padding (height comes inline from TitleBar's BTN, the same
+      constant the CircleChips take) and a readable name size — stock chip's
+      10.5px/0.04em is a stat-pill treatment, too small beside a 20px avatar. */
+.candy-btn.titlebar-account {
+  --cbtn-depth: var(--candy-depth-small);
+  border-radius: var(--radius-md);
+}
+.candy-btn.titlebar-account > .candy-face {
+  height: 100%;
+  /* All three gaps are the SAME 8px: left padding, avatar-to-name, right
+     padding. Two things break that if you let them —
+     - unequal side padding: the button shrink-wraps its content, so a 4/12 pair
+       (once used to hug the avatar left) shifts the whole pair 4px off centre;
+     - letter-spacing: it is applied AFTER the last glyph too, so any non-zero
+       value pads the right gap only. Stock chip's 0.04em is why this reads as a
+       stat pill; a person's name wants none. */
+  gap: 8px;
+  padding: 0 8px;
+  font-size: 11.5px;
+  letter-spacing: 0;
+}
 /* Danger chip — neutral candy at rest; red text + frame on hover only. */
 .candy-btn[data-shape="chip"].is-danger,
 .candy-btn[data-shape="chip"].is-danger:is(:hover, :active) { --cbtn-band: var(--surface); }
