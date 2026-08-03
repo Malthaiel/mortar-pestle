@@ -10,7 +10,11 @@ import { invoke } from './core.js';
 // runs a loopback HTTP server on a kernel-assigned 127.0.0.1 port; the port
 // is fetched once at startup via `media_server_port` and cached. Plain
 // `<img>` tags happily accept mortar-pestle-asset:// so they still use it.
-let VAULT_ROOT_FOR_MEDIA = '/home/malthaiel/Documents/Citadel';
+// ponytail: null, not a baked default — the old `/home/malthaiel/Documents/Citadel`
+// literal was an SF2 straggler that resolved to a nonexistent path on Windows. Unset
+// means "don't invent a root" (same contract as `libraryAbs` below), so a too-early
+// call fails as a plain missing file instead of a wrong-OS absolute path.
+let VAULT_ROOT_FOR_MEDIA = null;
 // VaultProvider calls this on switch so media (img/audio/video) paths resolve
 // against the active vault's root instead of the Citadel default.
 export function setMediaVaultRoot(p) {
@@ -77,7 +81,8 @@ function absFromInput(p, base) {
   // is joined against the media root. (Game Capture clips are the one consumer
   // that passes an absolute path — and on Windows it has a drive letter, not `/`.)
   if (isAbsolutePath(p)) return p;
-  return `${base || VAULT_ROOT_FOR_MEDIA}/${p}`;
+  const root = base || VAULT_ROOT_FOR_MEDIA;
+  return root ? `${root}/${p}` : p;
 }
 export function mediaUrl(p, opts) {
   if (!p) return '';
