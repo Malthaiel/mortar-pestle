@@ -13,7 +13,7 @@ import { refFromQueueItem } from './PlaylistProvider.jsx';
 import MusicCredits from './MusicCredits.jsx';
 import MusicNotes from './MusicNotes.jsx';
 import { useDownloads } from './DownloadProvider.jsx';
-import { consumeTrackHighlight } from './searchShared.jsx';
+import { consumeTrackHighlight, fmtDuration } from './searchShared.jsx';
 import { navigate } from '@host/router.js';
 
 const LISTEN_STATUSES = ['Plan-to-Listen', 'Currently-Listening', 'Listened', 'Dropped'];
@@ -43,13 +43,6 @@ function useCoverTint(src) {
     return () => { cancelled = true; };
   }, [src]);
   return tint;
-}
-
-function fmtDuration(sec) {
-  if (!Number.isFinite(sec) || sec <= 0) return '';
-  const m = Math.floor(sec / 60);
-  const s = Math.floor(sec % 60).toString().padStart(2, '0');
-  return `${m}:${s}`;
 }
 
 export default function AlbumDetail({ accent, albumPath }) {

@@ -14,13 +14,7 @@ import PlaylistModal from './PlaylistModal.jsx';
 import CollageCover from './CollageCover.jsx';
 import { encodePath } from '../paths.js';
 import { navigate } from '@host/router.js';
-
-function fmtDur(sec) {
-  if (!Number.isFinite(sec) || sec <= 0) return '';
-  const m = Math.floor(sec / 60);
-  const s = String(Math.floor(sec % 60)).padStart(2, '0');
-  return `${m}:${s}`;
-}
+import { fmtDuration } from './searchShared.jsx';
 
 // PlaylistTrack → player queue item. Each track keeps its own album cover/artist
 // (playlists span albums), which is why playback uses playTracks, not
@@ -306,7 +300,7 @@ export default function PlaylistDetail({ path, accent }) {
                   {[t.artist, t.albumTitle].filter(Boolean).join(' · ')}
                 </div>
               </div>
-              <span style={{ flexShrink: 0, fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-faint)', fontVariantNumeric: 'tabular-nums' }}>{fmtDur(t.duration)}</span>
+              <span style={{ flexShrink: 0, fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-faint)', fontVariantNumeric: 'tabular-nums' }}>{fmtDuration(t.duration)}</span>
               <button
                 onClick={(e) => {
                   e.stopPropagation();

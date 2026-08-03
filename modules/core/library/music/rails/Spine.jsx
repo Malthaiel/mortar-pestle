@@ -12,6 +12,9 @@ import { mediaUrl } from '@host/api.js';
 const BAR_COUNT = 9;
 const FFT_BINS = 32;
 
+// ponytail: NOT searchShared's fmtDuration — this is the transport clock, so a
+// missing/negative time must read 0:00, where the shared one returns ''. Kept
+// separate deliberately; collapsing them blanks the player readout.
 function fmtTime(sec) {
   if (!isFinite(sec) || sec < 0) sec = 0;
   const m = Math.floor(sec / 60);
