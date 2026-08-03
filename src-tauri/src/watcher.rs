@@ -1,10 +1,25 @@
 //! Sub-feature 5 — notify file watcher emitting Tauri events.
 //!
 //! Replaces the Fastify SSE stream + chokidar watcher in
-//! `server/src/watcher.js`. Single recursive watcher on canonicalized
-//! `vault_root()`, 200ms debounce via `notify-debouncer-full`. Event names
-//! preserved 1:1 with the Fastify side so the web client's
+//! `server/src/watcher.js`. Recursive watches on the canonicalized content, App
+//! and Pulse vault roots, 200ms debounce via `notify-debouncer-full`. Event
+//! names preserved 1:1 with the Fastify side so the web client's
 //! `subscribeEvents` swap is transport-only.
+//!
+//! It watches all three because `match_event`'s paths live in different vaults
+//! post Multi-Mount: `Pulse/Schedule.md`, `Pulse/Daily Logs/` and
+//! `Pulse/Recurring Tasks.md` are in the Pulse vault, while
+//! `Infrastructure/Vault State/` is in the content vault. Watching only
+//! `vault_root()` meant that whenever the active vault was the content vault —
+//! the normal case, and one with no `Pulse/` directory at all since the
+//! 2026-06-30 retirement — `schedule`, `day`, `today` and `routine` could never
+//! fire, and the generic `file` event never reached the Live Preview editor for
+//! an externally-edited Pulse or App page. That silently disabled the
+//! availability push's republish-on-edit for its whole life.
+//!
+//! Library and GameWiki are deliberately NOT watched: nothing maps their paths
+//! to an event, and they are large media trees where a recursive watch is real
+//! cost for no consumer.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -17,7 +32,7 @@ use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use notify_debouncer_full::{new_debouncer, DebounceEventResult, Debouncer, FileIdMap};
 use tauri::{AppHandle, Emitter};
 
-use crate::commands::vault::vault_root;
+use crate::commands::vault::{app_vault_root, pulse_vault_root, vault_root};
 
 const DEBOUNCE_MS: u64 = 200;
 
@@ -27,12 +42,46 @@ const DEBOUNCE_MS: u64 = 200;
 /// drain thread.
 static WATCHER: Mutex<Option<Debouncer<RecommendedWatcher, FileIdMap>>> = Mutex::new(None);
 
+/// The roots to watch: content + App + Pulse, canonicalized, deduped, and sorted
+/// longest-first so a nested root wins `relativize`'s prefix match. A root that
+/// can't be canonicalized (not yet created, or not registered) is skipped rather
+/// than failing the whole watcher — the common case is the three roles all
+/// falling back to the same content vault before the migration populates them.
+fn watch_roots() -> Vec<PathBuf> {
+    let mut roots: Vec<PathBuf> = [vault_root(), app_vault_root(), pulse_vault_root()]
+        .iter()
+        .filter_map(|r| std::fs::canonicalize(r).ok())
+        .collect();
+    roots.sort();
+    roots.dedup();
+    roots.sort_by_key(|r| std::cmp::Reverse(r.as_os_str().len()));
+    roots
+}
+
+/// Path → path relative to the deepest root containing it. `roots` must be
+/// sorted longest-first. `None` when the path is under no watched root.
+fn relativize<'a>(roots: &[PathBuf], path: &'a Path) -> Option<&'a Path> {
+    roots.iter().find_map(|r| path.strip_prefix(r).ok())
+}
+
 pub fn spawn(app: AppHandle) -> Result<(), notify::Error> {
-    let root = std::fs::canonicalize(vault_root())?;
+    let roots = watch_roots();
 
     let (tx, rx) = mpsc::channel::<DebounceEventResult>();
     let mut debouncer = new_debouncer(Duration::from_millis(DEBOUNCE_MS), None, tx)?;
-    debouncer.watcher().watch(&root, RecursiveMode::Recursive)?;
+    let mut watched = 0usize;
+    for root in &roots {
+        match debouncer.watcher().watch(root, RecursiveMode::Recursive) {
+            Ok(()) => watched += 1,
+            // One unwatchable root must not cost the others their events.
+            Err(e) => log::warn!("watch {} failed: {e}", root.display()),
+        }
+    }
+    if watched == 0 {
+        // Nothing is being observed — surface it as the hard error it is rather
+        // than parking a watcher that can never emit.
+        return Err(notify::Error::generic("no vault root could be watched"));
+    }
     *WATCHER.lock().unwrap_or_else(|e| e.into_inner()) = Some(debouncer);
 
     thread::spawn(move || {
@@ -58,9 +107,9 @@ pub fn spawn(app: AppHandle) -> Result<(), notify::Error> {
                     if !seen.insert(path.clone()) {
                         continue;
                     }
-                    let rel = match path.strip_prefix(&root) {
-                        Ok(r) => r,
-                        Err(_) => continue,
+                    let rel = match relativize(&roots, path) {
+                        Some(r) => r,
+                        None => continue,
                     };
                     for (name, payload) in match_event(rel, &today) {
                         let p = payload.unwrap_or_default();
@@ -168,6 +217,28 @@ mod tests {
 
     fn rel(p: &str) -> PathBuf {
         PathBuf::from(p)
+    }
+
+    // The Pulse vault's nested layout is what makes the multi-root watch free:
+    // root `<...>/Pulse` + file `<...>/Pulse/Pulse/Schedule.md` relativizes to
+    // exactly `Pulse/Schedule.md`, the string match_event already expects. Also
+    // pins longest-root-wins, without which a nested root is shadowed by its
+    // parent and emits a wrong (parent-relative) path.
+    #[test]
+    fn relativize_picks_the_deepest_root() {
+        let roots = vec![
+            PathBuf::from("/vaults/content/Pulse"),
+            PathBuf::from("/vaults/content"),
+        ];
+        assert_eq!(
+            relativize(&roots, Path::new("/vaults/content/Pulse/Pulse/Schedule.md")),
+            Some(Path::new("Pulse/Schedule.md")),
+        );
+        assert_eq!(
+            relativize(&roots, Path::new("/vaults/content/Infrastructure/Vault State/Log.md")),
+            Some(Path::new("Infrastructure/Vault State/Log.md")),
+        );
+        assert_eq!(relativize(&roots, Path::new("/elsewhere/Schedule.md")), None);
     }
 
     #[test]
