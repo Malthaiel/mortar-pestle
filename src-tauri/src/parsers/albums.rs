@@ -411,6 +411,83 @@ pub fn list_albums() -> Result<Vec<AlbumSummary>, VaultError> {
     Ok(out)
 }
 
+/// One track-title hit, carrying enough of its album to render a result row.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrackHit {
+    pub title: String,
+    pub n: i64,
+    pub disc: i64,
+    pub duration: Option<i64>,
+    pub available: bool,
+    pub audio_path: Option<String>,
+    pub album_path: String,
+    pub album_title: String,
+    pub artist: String,
+    pub image: Option<String>,
+}
+
+/// Case-insensitive substring search over every track listed on every album
+/// page. Tracklists are body tables, so `list_albums`'s frontmatter-only fast
+/// path cannot serve this — bodies have to be read.
+///
+/// Matches every listed track, playable or not; `available` says which have
+/// audio on disk.
+///
+/// ponytail: full body scan per query, and matching albums are re-read through
+/// `read_album` to resolve `available`/`audioPath` instead of duplicating its
+/// audio-file matcher. Only albums that actually hit pay the second read. If a
+/// large library measurably drags, add an mtime-keyed track index — not before.
+pub fn search_tracks(query: &str, limit: usize) -> Result<Vec<TrackHit>, VaultError> {
+    let q = query.trim().to_lowercase();
+    if q.is_empty() || limit == 0 {
+        return Ok(Vec::new());
+    }
+    let dir = albums_dir();
+    let mut entries = safe_read_dir(&dir);
+    entries.sort();
+    let mut out = Vec::new();
+    for entry in entries {
+        if !entry.ends_with(".md") {
+            continue;
+        }
+        let Ok(text) = fs::read_to_string(dir.join(&entry)) else {
+            continue;
+        };
+        let (_, body) = parse_frontmatter(&text);
+        if !parse_track_table(&body)
+            .iter()
+            .any(|t| t.title.to_lowercase().contains(&q))
+        {
+            continue;
+        }
+        let Ok(album) = read_album(&format!("{ALBUMS_DIR}/{entry}")) else {
+            continue;
+        };
+        for t in &album.tracks {
+            if !t.title.to_lowercase().contains(&q) {
+                continue;
+            }
+            out.push(TrackHit {
+                title: t.title.clone(),
+                n: t.n,
+                disc: t.disc,
+                duration: t.duration,
+                available: t.available,
+                audio_path: t.audio_path.clone(),
+                album_path: album.path.clone(),
+                album_title: album.title.clone(),
+                artist: album.artist.clone(),
+                image: album.image.clone(),
+            });
+            if out.len() >= limit {
+                return Ok(out);
+            }
+        }
+    }
+    Ok(out)
+}
+
 pub fn read_album(album_path: &str) -> Result<Album, VaultError> {
     let abs = PathBuf::from(library_vault_root()).join(album_path);
     if !abs.exists() {
@@ -679,6 +756,36 @@ mod tests {
         assert_eq!(meta_str(&m, "Empty"), None);
         assert_eq!(meta_str(&m, "Set"), Some("x".into()));
         assert_eq!(meta_str(&m, "Missing"), None);
+    }
+
+    // The predicate search_tracks runs over each album body: disc-aware table
+    // parse, then case-insensitive substring match on the rendered title
+    // (wikilink display text, not the target).
+    #[test]
+    fn track_table_search_predicate() {
+        let body = "\
+### Disc 1
+| 1 | [[Tracks/Creep\\|Creep]] | 3:56 |
+| 2 | Karma Police | 4:21 |
+### Disc 2
+| 1 | No Surprises | 3:48 |
+";
+        let tracks = parse_track_table(body);
+        assert_eq!(tracks.len(), 3);
+        assert_eq!(tracks[0].title, "Creep");
+        assert_eq!(tracks[2].disc, 2);
+
+        let hits = |q: &str| {
+            tracks
+                .iter()
+                .filter(|t| t.title.to_lowercase().contains(&q.trim().to_lowercase()))
+                .count()
+        };
+        assert_eq!(hits("creep"), 1, "match must ignore case");
+        assert_eq!(hits("  KARMA  "), 1, "query is trimmed");
+        assert_eq!(hits("r"), 3, "substring, not prefix");
+        assert_eq!(hits("Tracks/"), 0, "wikilink target must not be searched");
+        assert_eq!(hits("nope"), 0);
     }
 
     #[test]

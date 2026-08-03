@@ -64,6 +64,14 @@ pub fn music_read_album(path: String) -> Result<albums::Album, VaultError> {
 }
 
 #[tauri::command]
+pub fn music_search_tracks(
+    query: String,
+    limit: Option<usize>,
+) -> Result<Vec<albums::TrackHit>, VaultError> {
+    albums::search_tracks(&query, limit.unwrap_or(30).clamp(1, 200))
+}
+
+#[tauri::command]
 pub fn music_mark_status(
     path: String,
     status: String,

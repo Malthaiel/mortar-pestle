@@ -14,6 +14,8 @@ import CoverArtCard from './CoverArtCard.jsx';
 import BrowseResultCard from './BrowseResultCard.jsx';
 import CollageCover from './CollageCover.jsx';
 import PosterRow from '@modules/core/library/PosterRow.jsx';
+import { Seg } from '@host/components/ui/index.js';
+import { SEARCH_TABS, useSearchTab, ResultRow, trackRowProps, recordingRowProps } from './searchShared.jsx';
 import { encodePath } from '../paths.js';
 import { navigate as go } from '@host/router.js';
 
@@ -38,6 +40,7 @@ export default function MusicHome({ accent }) {
   const { playlists } = usePlaylists();
   const [albums, setAlbums] = useState(null);   // owned library (null = loading)
   const [query, setQuery] = useState('');
+  const [tab, setTab] = useSearchTab('tools:musicSearchTab');
 
   useEffect(() => {
     let cancelled = false;
@@ -80,8 +83,11 @@ export default function MusicHome({ accent }) {
         />
 
         {q ? (
-          <SearchResults query={q} accent={accent} albums={albums} ownedIds={ownedIds}
-                         onPlay={playAlbum} />
+          <>
+            <Seg options={SEARCH_TABS} value={tab} onChange={setTab} accent={accent}/>
+            <SearchResults query={q} tab={tab} accent={accent} albums={albums} ownedIds={ownedIds}
+                           onPlay={playAlbum} />
+          </>
         ) : (
           <>
             <ContinueListening albums={albums} accent={accent} onPlay={playAlbum} />
@@ -213,28 +219,39 @@ function MoreFromYourArtists({ albums, ownedIds, accent }) {
 
 // ---- Search ----------------------------------------------------------------
 
-function SearchResults({ query, accent, albums, ownedIds, onPlay }) {
+function SearchResults({ query, tab, accent, albums, ownedIds, onPlay }) {
   const [mbAlbums, setMbAlbums] = useState(null);
   const [mbArtists, setMbArtists] = useState(null);
+  const [mbSongs, setMbSongs] = useState(null);
+  const [localSongs, setLocalSongs] = useState(null);
   const [error, setError] = useState(null);
   const reqId = useRef(0);
 
+  // Which stacks this tab renders — also gates the fetches, so switching to
+  // Artists never spends a MusicBrainz call on recordings.
+  const showAlbums  = tab === 'all' || tab === 'albums';
+  const showSongs   = tab === 'all' || tab === 'songs';
+  const showArtists = tab === 'all' || tab === 'artists';
+
   useEffect(() => {
     const myId = ++reqId.current;
-    setError(null); setMbAlbums(null); setMbArtists(null);
+    setError(null); setMbAlbums(null); setMbArtists(null); setMbSongs(null); setLocalSongs(null);
     const t = setTimeout(async () => {
       try {
-        const [al, ar] = await Promise.all([
-          musicApi.searchReleaseGroups(query, 18, 0).catch(() => []),
-          musicApi.searchArtists(query).catch(() => []),
+        const [al, ar, rec, tr] = await Promise.all([
+          showAlbums  ? musicApi.searchReleaseGroups(query, 18, 0).catch(() => []) : Promise.resolve(null),
+          showArtists ? musicApi.searchArtists(query).catch(() => [])              : Promise.resolve(null),
+          showSongs   ? musicApi.searchRecordings(query).catch(() => [])           : Promise.resolve(null),
+          showSongs   ? musicApi.searchTracks(query, 40).catch(() => [])           : Promise.resolve(null),
         ]);
-        if (myId === reqId.current) { setMbAlbums(al || []); setMbArtists(ar || []); }
+        if (myId !== reqId.current) return;
+        setMbAlbums(al); setMbArtists(ar); setMbSongs(rec); setLocalSongs(tr);
       } catch (e) {
         if (myId === reqId.current) setError(errText(e, 'Search failed.'));
       }
     }, 350);
     return () => clearTimeout(t);
-  }, [query]);
+  }, [query, showAlbums, showSongs, showArtists]);
 
   const localHits = useMemo(() => {
     const ql = query.toLowerCase();
@@ -246,70 +263,85 @@ function SearchResults({ query, accent, albums, ownedIds, onPlay }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <GroupHeading>In your library</GroupHeading>
-        {localHits.length === 0
-          ? <Muted>No matches in your library.</Muted>
-          : <div style={GRID}>{localHits.map(a => (
-              <CoverArtCard key={a.path} album={a} accent={accent} selected={false} onSelect={toAlbum} onPlay={onPlay} />
-            ))}</div>}
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <GroupHeading>Albums · MusicBrainz</GroupHeading>
-          {mbAlbums && mbAlbums.length > 0 && (
-            <button onClick={() => toBrowse(query, 'albums')} data-own-press
-                    className="candy-btn" data-shape="chip" style={{ marginLeft: 'auto' }}>
-              <span className="candy-face" style={{ fontSize: 11 }}>See all →</span>
-            </button>
-          )}
+      {showAlbums && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <GroupHeading>In your library</GroupHeading>
+          {localHits.length === 0
+            ? <Muted>No matches in your library.</Muted>
+            : <div style={GRID}>{localHits.map(a => (
+                <CoverArtCard key={a.path} album={a} accent={accent} selected={false} onSelect={toAlbum} onPlay={onPlay} />
+              ))}</div>}
         </div>
-        {error && <div style={{ color: 'var(--text)', fontSize: 12 }}>{error}</div>}
-        {!error && mbAlbums === null && <Muted>Searching…</Muted>}
-        {!error && mbAlbums && (mbAlbums.length === 0
-          ? <Muted>No albums.</Muted>
-          : <div style={GRID}>{mbAlbums.map(r => (
-              <BrowseResultCard key={r.mbid} result={r} accent={accent}
-                                inLibrary={ownedIds.has(r.mbid)}
-                                onSelect={() => toBrowse(`${r.title} ${r.artist || ''}`.trim(), 'albums')} />
-            ))}</div>)}
-      </div>
+      )}
 
-      {mbArtists && mbArtists.length > 0 && (
+      {showSongs && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <GroupHeading>Songs in your library</GroupHeading>
+          {localSongs === null && <Muted>Searching…</Muted>}
+          {localSongs && (localSongs.length === 0
+            ? <Muted>No songs in your library match.</Muted>
+            : <RowList>{localSongs.map(t => (
+                <ResultRow key={`${t.albumPath}#${t.disc}.${t.n}`} {...trackRowProps(t)}
+                           onClick={() => toAlbum(t.albumPath)} />
+              ))}</RowList>)}
+        </div>
+      )}
+
+      {showSongs && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <GroupHeading>Songs · MusicBrainz</GroupHeading>
+          {!error && mbSongs === null && <Muted>Searching…</Muted>}
+          {!error && mbSongs && (mbSongs.length === 0
+            ? <Muted>No songs.</Muted>
+            : <RowList>{mbSongs.map(r => (
+                <ResultRow key={r.mbid} {...recordingRowProps(r)}
+                           onClick={() => toBrowse(`${r.title} ${r.artist || ''}`.trim(), 'albums')} />
+              ))}</RowList>)}
+        </div>
+      )}
+
+      {showAlbums && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <GroupHeading>Albums · MusicBrainz</GroupHeading>
+            {mbAlbums && mbAlbums.length > 0 && (
+              <button onClick={() => toBrowse(query, 'albums')} data-own-press
+                      className="candy-btn" data-shape="chip" style={{ marginLeft: 'auto' }}>
+                <span className="candy-face" style={{ fontSize: 11 }}>See all →</span>
+              </button>
+            )}
+          </div>
+          {error && <div style={{ color: 'var(--text)', fontSize: 12 }}>{error}</div>}
+          {!error && mbAlbums === null && <Muted>Searching…</Muted>}
+          {!error && mbAlbums && (mbAlbums.length === 0
+            ? <Muted>No albums.</Muted>
+            : <div style={GRID}>{mbAlbums.map(r => (
+                <BrowseResultCard key={r.mbid} result={r} accent={accent}
+                                  inLibrary={ownedIds.has(r.mbid)}
+                                  onSelect={() => toBrowse(`${r.title} ${r.artist || ''}`.trim(), 'albums')} />
+              ))}</div>)}
+        </div>
+      )}
+
+      {showArtists && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <GroupHeading>Artists · MusicBrainz</GroupHeading>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {mbArtists.slice(0, 8).map(a => (
-              <ArtistRow key={a.mbid} artist={a} onSelect={() => toBrowse(a.name, 'artists')} />
-            ))}
-          </div>
+          {!error && mbArtists === null && <Muted>Searching…</Muted>}
+          {!error && mbArtists && (mbArtists.length === 0
+            ? <Muted>No artists.</Muted>
+            : <RowList>{mbArtists.slice(0, tab === 'artists' ? 25 : 8).map(a => (
+                <ResultRow key={a.mbid} title={a.name}
+                           sub={[a.disambiguation, a.country].filter(Boolean).join(' · ')}
+                           onClick={() => toBrowse(a.name, 'artists')} />
+              ))}</RowList>)}
         </div>
       )}
     </div>
   );
 }
 
-function ArtistRow({ artist, onSelect }) {
-  const [hover, setHover] = useState(false);
-  const sub = [artist.disambiguation, artist.country].filter(Boolean).join(' · ');
-  return (
-    <button
-      onClick={onSelect}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-start',
-        textAlign: 'left', width: '100%', padding: '10px 12px',
-        borderRadius: 'var(--radius-md)', border: '1px solid var(--border)',
-        background: hover ? 'var(--surface-2)' : 'transparent',
-        cursor: 'pointer', transition: 'background 120ms ease',
-      }}
-    >
-      <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>{artist.name}</span>
-      {sub && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{sub}</span>}
-    </button>
-  );
+function RowList({ children }) {
+  return <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>{children}</div>;
 }
 
 // ---- Small primitives ------------------------------------------------------

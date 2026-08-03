@@ -41,6 +41,19 @@ pub struct ArtistHit {
     pub country: Option<String>,
 }
 
+/// One MusicBrainz recording (a song), with the release it most plausibly
+/// belongs to for display context.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecordingHit {
+    pub mbid: String,
+    pub title: String,
+    pub artist: String,
+    /// Track length in seconds (MusicBrainz reports milliseconds).
+    pub length: Option<i64>,
+    pub release: Option<String>,
+}
+
 /// Process-global timestamp of the last MusicBrainz request. The lock is held
 /// across the sleep so concurrent callers serialize behind the 1 req/s gate.
 fn last_request() -> &'static Mutex<Option<Instant>> {
@@ -181,6 +194,50 @@ pub async fn music_search_artists(query: String) -> Result<Vec<ArtistHit>, Vault
                         name,
                         disambiguation,
                         country,
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    Ok(hits)
+}
+
+#[tauri::command]
+pub async fn music_search_recordings(query: String) -> Result<Vec<RecordingHit>, VaultError> {
+    let q = query.trim();
+    if q.is_empty() {
+        return Ok(Vec::new());
+    }
+    let url = format!(
+        "{MB_BASE}/recording?query={}&fmt=json&limit=25",
+        urlencoding::encode(q)
+    );
+    let v = mb_get(&url).await?;
+    let hits = v
+        .get("recordings")
+        .and_then(|x| x.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|r| {
+                    let mbid = r.get("id")?.as_str()?.to_string();
+                    let title = r.get("title").and_then(|x| x.as_str()).unwrap_or("").to_string();
+                    let length = r
+                        .get("length")
+                        .and_then(|x| x.as_i64())
+                        .map(|ms| ms / 1000);
+                    let release = r
+                        .get("releases")
+                        .and_then(|x| x.as_array())
+                        .and_then(|a| a.first())
+                        .and_then(|rel| rel.get("title"))
+                        .and_then(|x| x.as_str())
+                        .map(str::to_string);
+                    Some(RecordingHit {
+                        mbid,
+                        title,
+                        artist: join_artist_credit(r),
+                        length,
+                        release,
                     })
                 })
                 .collect()

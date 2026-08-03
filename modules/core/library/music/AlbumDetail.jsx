@@ -13,6 +13,7 @@ import { refFromQueueItem } from './PlaylistProvider.jsx';
 import MusicCredits from './MusicCredits.jsx';
 import MusicNotes from './MusicNotes.jsx';
 import { useDownloads } from './DownloadProvider.jsx';
+import { consumeTrackHighlight } from './searchShared.jsx';
 import { navigate } from '@host/router.js';
 
 const LISTEN_STATUSES = ['Plan-to-Listen', 'Currently-Listening', 'Listened', 'Dropped'];
@@ -74,6 +75,12 @@ export default function AlbumDetail({ accent, albumPath }) {
     window.addEventListener('music-library-changed', onChanged);
     return () => { cancelled = true; window.removeEventListener('music-library-changed', onChanged); };
   }, [albumPath]);
+
+  // A song picked from the browser's Songs tab parks its track number for us;
+  // we claim it on mount. Re-runs per album, so the highlight can't survive
+  // navigating elsewhere.
+  const [highlight, setHighlight] = useState(null);
+  useEffect(() => { setHighlight(consumeTrackHighlight(albumPath)); }, [albumPath]);
 
   const coverImgSrc = album ? coverSrc(album.image, 400) : null;
   const tint = useCoverTint(coverImgSrc);
@@ -409,6 +416,7 @@ export default function AlbumDetail({ accent, albumPath }) {
                     key={t.n + ':' + t.title}
                     track={t} idx={idx}
                     accent={accent}
+                    highlighted={!!highlight && highlight.n === t.n && (highlight.disc ?? 1) === (t.disc || 1)}
                     playlistRef={playlistRef}
                     playing={playingThis && isPlaying}
                     onPlay={() => playFrom(idx)}
@@ -436,8 +444,14 @@ export default function AlbumDetail({ accent, albumPath }) {
   );
 }
 
-function TrackRow({ track, idx, accent, playing, onPlay, onEnqueue, playlistRef }) {
+function TrackRow({ track, idx, accent, playing, highlighted, onPlay, onEnqueue, playlistRef }) {
   const [hover, setHover] = useState(false);
+  const rowRef = useRef(null);
+  // Scroll a song arrived-at from search into view; long tracklists otherwise
+  // highlight a row sitting below the fold.
+  useEffect(() => {
+    if (highlighted) rowRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [highlighted]);
   const openPage = (e) => {
     e.stopPropagation();
     if (!track.wikilink) return;
@@ -452,7 +466,8 @@ function TrackRow({ track, idx, accent, playing, onPlay, onEnqueue, playlistRef 
 
   return (
     <div
-      className={'candy-btn' + (playing ? ' is-playing' : '')}
+      ref={rowRef}
+      className={'candy-btn' + (playing ? ' is-playing' : '') + (highlighted ? ' is-active' : '')}
       data-shape="track"
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
