@@ -35,12 +35,18 @@ export default function MusicSearchBar({ accent, query, setQuery, albums, ownedI
   useLayoutEffect(() => {
     if (!show) { setPos(null); return undefined; }
     const measure = () => {
-      const r = inputRef.current?.getBoundingClientRect();
+      const el = inputRef.current;
+      const r = el?.getBoundingClientRect();
       if (!r) return;
+      // Drop from the TOPBAR's bottom edge, not the input's: the topbar has 12px of
+      // bottom padding, so anchoring to the input left the panel overlapping the bar.
+      // The input is a direct child of the Topbar root (it rides the `leading` slot),
+      // so parentElement IS that bar; fall back to the input if that ever changes.
+      const barBottom = el.parentElement?.getBoundingClientRect().bottom ?? r.bottom;
       const vw = window.innerWidth;
       const width = Math.min(PANEL_W, vw - 2 * PAD);
       setPos({
-        top: r.bottom + GAP_Y,
+        top: barBottom + GAP_Y,
         left: Math.max(PAD, Math.min(r.left, vw - width - PAD)),
         width,
       });
