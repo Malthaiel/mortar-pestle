@@ -33,6 +33,11 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
      top edge. 36px button + 8/10px padding + 1px top hairline = 55px. */
   --dock-height: 55px;
 
+  /* Height of the custom titlebar that replaced the native Windows one.
+     Single source of truth: .titlebar is sized to this, and AppShell subtracts
+     it alongside --dock-height so content ends flush under the strip. */
+  --titlebar-h: 32px;
+
   /* Candy SURFACE rest depth — the STATIC offset-shadow band under framed
      container surfaces (the .candy-* family). Distinct from --candy-depth:
      surfaces never translate, so this only feeds the resting box-shadow. Sits
@@ -472,6 +477,35 @@ body[data-design-mode] #root {
   border-radius: 1px; cursor: grab;
 }
 .dock-root .dock-spacer { width: 100%; height: 36px; cursor: grab; }
+
+/* Titlebar — the app's replacement for the native window chrome. The strip
+   itself is the drag region (Tauri handles the drag off data-tauri-drag-region);
+   the three controls are flat marks with a hover tint only, so they read as
+   window chrome and not as app buttons. `height` is the single source of truth
+   for the top reservation (AppShell subtracts --titlebar-h). */
+.titlebar {
+  height: var(--titlebar-h);
+  flex-shrink: 0;
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-end;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.titlebar-btn {
+  width: 44px;
+  display: flex; align-items: center; justify-content: center;
+  border: 0; padding: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: default;
+  transition: background 90ms ease, color 90ms ease;
+}
+.titlebar-btn:hover {
+  background: color-mix(in oklch, var(--text) 10%, transparent);
+  color: var(--text);
+}
+.titlebar-btn.is-close:hover { background: #c42b1c; color: #fff; }
 
 /* Dock — a full-width rectangle flush with the screen bottom, the horizontal
    twin of the side rails. Squared, a single top hairline, no float shadow.

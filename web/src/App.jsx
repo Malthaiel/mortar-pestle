@@ -11,6 +11,7 @@ import { useEventReminders } from './hooks/useEventReminders.js';
 import { useFeedbackNotifications } from './hooks/useFeedbackNotifications.js';
 import { useSitePush } from './hooks/useSitePush.js';
 import AppShell from './components/AppShell.jsx';
+import TitleBar from './components/TitleBar.jsx';
 import ToolsPage from './pages/ToolsPage.jsx';
 import PageView from './pages/PageView.jsx';
 import SettingsDrawer from './components/SettingsDrawer.jsx';
@@ -232,6 +233,7 @@ function MainApp() {
     >
     <ComposedProviders>
       <DownloadsProvider settings={settings}>
+      <TitleBar/>
       <AppShell
         onOpenSettings={() => setSettingsOpen(true)}
         settingsOpen={settingsOpen}

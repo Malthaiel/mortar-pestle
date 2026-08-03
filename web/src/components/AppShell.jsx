@@ -110,7 +110,9 @@ export default function AppShell({ children, onOpenSettings, settingsOpen, accen
       // Reserve the flush bottom dock's height app-wide: the sidebars, content
       // pane, and every page scroller end at the dock's top edge, so nothing
       // hides behind the bar and the browser's native view sits flush above it.
-      height: 'calc(100vh - var(--dock-height))',
+      // --titlebar-h comes off the top for the same reason, since the custom
+      // titlebar replaced the native one the window no longer draws.
+      height: 'calc(100vh - var(--titlebar-h) - var(--dock-height))',
       width: '100vw',
       background: 'var(--bg)', color: 'var(--text)', overflow: 'hidden',
     }}>
