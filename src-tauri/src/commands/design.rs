@@ -1,30 +1,27 @@
-//! SF3 of Design Mode plan — Tauri-side backend for the in-app Atelier
-//! agent + scoped read/write surface for the design environment.
+//! Tauri-side backend shared by the in-app agents (Concierge, Analyst).
+//! The `design_*` names predate the Atelier removal and are kept so the
+//! frontend invoke names and the generated ACL don't churn.
 //!
 //! Exposes five `#[tauri::command]`s:
 //!   - `agent_chat(system, messages, model)` — streams a Claude response via three
 //!     Tauri events (`agent-chunk`, `agent-done`, `agent-error`).
+//!   - `agent_chat_cli(...)` — the same over a spawned `claude` CLI subprocess.
+//!   - `design_cli_auth_status(cli_path)` — reports whether that CLI is
+//!     installed and logged in.
 //!   - `design_set_api_key(key)` / `design_get_api_key() -> bool` — persists
-//!     and reports presence of the Anthropic API key via the OS keychain
-//!     (libsecret on Linux). The getter never returns the key itself.
-//!   - `design_read_file(rel_path)` / `design_write_file(rel_path, content)` —
-//!     scope-locked read/write under `web/src/` + `web/styles/` only; reuses
-//!     `vault::atomic_write` for the writer.
+//!     and reports presence of the Anthropic API key via the OS keychain.
+//!     The getter never returns the key itself.
 
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use std::sync::Mutex;
 
 use eventsource_stream::Eventsource;
 use futures_util::StreamExt;
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Serialize, Serializer};
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command as TokioCommand;
-
-use crate::commands::vault;
 
 const SERVICE: &str = "mortar-pestle";
 const ACCOUNT: &str = "anthropic";
@@ -40,8 +37,6 @@ fn resolve_api_model(alias: &str) -> &'static str {
     }
 }
 
-const ALLOWED_PREFIXES: &[&str] = &["web/src/", "web/styles/"];
-
 fn project_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -51,19 +46,6 @@ fn project_root() -> PathBuf {
                 .map(|h| h.join("Code").join("mortar-pestle"))
                 .unwrap_or_else(|| PathBuf::from("mortar-pestle"))
         })
-}
-
-fn check_path(rel: &str) -> Result<PathBuf, DesignError> {
-    if rel.is_empty() || rel.contains('\0') || rel.contains("..") {
-        return Err(DesignError::Invalid(format!("invalid path: {rel}")));
-    }
-    let allowed = ALLOWED_PREFIXES.iter().any(|p| rel.starts_with(p));
-    if !allowed {
-        return Err(DesignError::Invalid(format!(
-            "path not in allowlist (web/src/, web/styles/): {rel}"
-        )));
-    }
-    Ok(project_root().join(rel))
 }
 
 #[derive(Debug)]
@@ -117,21 +99,6 @@ impl From<reqwest::Error> for DesignError {
     }
 }
 
-impl From<vault::VaultError> for DesignError {
-    fn from(e: vault::VaultError) -> Self {
-        match e {
-            vault::VaultError::Invalid(m) => DesignError::Invalid(m),
-            vault::VaultError::NotFound(m) => DesignError::NotFound(m),
-            vault::VaultError::NotFile => DesignError::Invalid("Not a file".into()),
-            vault::VaultError::Conflict { .. } => DesignError::Invalid("Conflict".into()),
-            vault::VaultError::ManifestUnavailable => {
-                DesignError::Invalid("Manifest unavailable".into())
-            }
-            vault::VaultError::Io(m) => DesignError::Io(m),
-        }
-    }
-}
-
 fn load_api_key() -> Result<String, DesignError> {
     if let Ok(entry) = keyring::Entry::new(SERVICE, ACCOUNT) {
         if let Ok(k) = entry.get_password() {
@@ -166,22 +133,6 @@ pub fn design_get_api_key() -> bool {
     std::env::var("ANTHROPIC_API_KEY")
         .map(|v| !v.is_empty())
         .unwrap_or(false)
-}
-
-#[tauri::command]
-pub fn design_read_file(rel_path: String) -> Result<String, DesignError> {
-    let abs = check_path(&rel_path)?;
-    if !abs.is_file() {
-        return Err(DesignError::NotFound(rel_path));
-    }
-    fs::read_to_string(&abs).map_err(Into::into)
-}
-
-#[tauri::command]
-pub fn design_write_file(rel_path: String, content: String) -> Result<(), DesignError> {
-    let abs = check_path(&rel_path)?;
-    vault::atomic_write(&abs, content.as_bytes())?;
-    Ok(())
 }
 
 #[tauri::command]
@@ -601,269 +552,4 @@ pub async fn agent_chat_cli(
         Some(e) => Err(e),
         None => Ok(()),
     }
-}
-
-// ── SF10: Pending edits persistence ──────────────────────────────────────
-// Mirrors the sidebar_get_order / sidebar_set_order pattern: a single JSON
-// file at `<app_config>/design-pending.json`, write-serialized via Mutex,
-// committed atomically via `vault::atomic_write`. The web side
-// (usePendingEdits.js) load-on-mount and debounce-saves on every overrides
-// change so uncommitted edits survive across sessions.
-
-static PENDING_WRITE_LOCK: Mutex<()> = Mutex::new(());
-
-const PENDING_FILE: &str = "design-pending.json";
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct PendingEdit {
-    pub id: String,
-    pub component: String,
-    pub source: String,
-    /// "var" → CSS-variable override (commit-to-source supported)
-    /// "prop" → direct property override (raw px / color, no commit)
-    pub target: String,
-    pub property: String,
-    /// CSS-variable name (`--radius-md`) when target=="var", or
-    /// CSS-property name (`padding`) when target=="prop".
-    pub name: String,
-    pub value: String,
-    pub sel_class: String,
-}
-
-fn pending_file(app: &AppHandle) -> Result<PathBuf, DesignError> {
-    Ok(crate::commands::sidebar::app_config_root(app)
-        .map_err(DesignError::from)?
-        .join(PENDING_FILE))
-}
-
-fn load_pending(path: &Path) -> Vec<PendingEdit> {
-    let Ok(text) = fs::read_to_string(path) else {
-        return Vec::new();
-    };
-    serde_json::from_str(&text).unwrap_or_else(|e| {
-        log::warn!("design-pending.json parse failed ({e}) — treating as empty");
-        Vec::new()
-    })
-}
-
-fn persist_pending(path: &Path, edits: &[PendingEdit]) -> Result<(), DesignError> {
-    let mut text = serde_json::to_string_pretty(edits)
-        .map_err(|e| DesignError::Io(format!("serialize design-pending.json: {e}")))?;
-    text.push('\n');
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| DesignError::Io(format!("mkdir {parent:?}: {e}")))?;
-    }
-    vault::atomic_write(path, text.as_bytes())?;
-    Ok(())
-}
-
-#[tauri::command]
-pub fn design_pending_get(app: AppHandle) -> Result<Vec<PendingEdit>, DesignError> {
-    let path = pending_file(&app)?;
-    Ok(load_pending(&path))
-}
-
-#[tauri::command]
-pub fn design_pending_set(app: AppHandle, edits: Vec<PendingEdit>) -> Result<(), DesignError> {
-    let _guard = PENDING_WRITE_LOCK
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
-    let path = pending_file(&app)?;
-    persist_pending(&path, &edits)
-}
-
-// ── SF11: Working-tree git surface ───────────────────────────────────────
-// The Atelier agent edits files directly (Write/Edit, no Bash) and leaves
-// them dirty in the working tree — there is no git step in the agent flow.
-// These three commands give the in-app WorkingTreeTray a way to list, commit,
-// and discard those dirty (tracked-modified) files without the user dropping
-// to a terminal. Reuses the release.rs git convention: bare `git` on PATH
-// with `git -C <root>` for cwd (git.exe is not a .cmd shim, unlike `claude`).
-//
-// v1 scope: tracked-modified only (porcelain ` M`/`MM`/`M `, skip `??`);
-// discard = `git checkout --` (unstaged only — the agent never stages);
-// fixed auto-generated commit message; no per-file commit.
-
-#[derive(Serialize)]
-pub struct GitDirtyFile {
-    pub path: String,
-    pub staged: bool,
-}
-
-#[derive(Serialize)]
-pub struct GitCommitOut {
-    pub sha: String,
-    pub count: usize,
-    pub message: String,
-}
-
-/// Run `git -C <root> status --porcelain=v1 -z` and return raw stdout, or
-/// `None` if `git` is missing or <root> is not a repo (end-user installs may
-/// have neither — mirror release.rs `in_git_repo` tolerance).
-async fn git_porcelain(root: &Path) -> Option<String> {
-    let out = TokioCommand::new("git")
-        .arg("-C")
-        .arg(root)
-        .arg("status")
-        .arg("--porcelain=v1")
-        .arg("-z")
-        .output()
-        .await
-        .ok()?;
-    if !out.status.success() {
-        return None;
-    }
-    Some(String::from_utf8_lossy(&out.stdout).into_owned())
-}
-
-/// Parse `--porcelain=v1 -z` output into tracked-modified files. Skips
-/// untracked (`??`) and ignored (`!!`) entries. For renames/copies (`R`/`C`)
-/// the next NUL token is the destination path — consume it and use it.
-fn parse_dirty(stdout: &str) -> Vec<GitDirtyFile> {
-    let mut files = Vec::new();
-    let mut tokens = stdout.split('\0');
-    while let Some(tok) = tokens.next() {
-        let bytes = tok.as_bytes();
-        if bytes.len() < 4 {
-            continue;
-        }
-        let x = bytes[0] as char;
-        if x == '?' || x == '!' {
-            continue;
-        }
-        // tok = "XY <path>" — bytes[2] is a space, path starts at index 3.
-        let path = &tok[3..];
-        let final_path = if x == 'R' || x == 'C' {
-            tokens.next().unwrap_or(path)
-        } else {
-            path
-        };
-        let staged = x != ' ' && x != '?';
-        files.push(GitDirtyFile {
-            path: final_path.to_string(),
-            staged,
-        });
-    }
-    files
-}
-
-#[tauri::command]
-pub async fn design_git_status(_app: AppHandle) -> Result<Vec<GitDirtyFile>, DesignError> {
-    let root = project_root();
-    Ok(match git_porcelain(&root).await {
-        Some(stdout) => parse_dirty(&stdout),
-        None => Vec::new(),
-    })
-}
-
-#[tauri::command]
-pub async fn design_git_commit(_app: AppHandle) -> Result<GitCommitOut, DesignError> {
-    let root = project_root();
-    let dirty = match git_porcelain(&root).await {
-        Some(stdout) => parse_dirty(&stdout),
-        None => return Err(DesignError::Io("not a git repository".into())),
-    };
-    if dirty.is_empty() {
-        return Err(DesignError::Io("nothing to commit".into()));
-    }
-    let count = dirty.len();
-    let message = format!("feat(atelier): {count} file(s) from working tree");
-
-    // Stage modified+deleted tracked files only (skips untracked, so the
-    // commit matches exactly what the tray showed).
-    let add = TokioCommand::new("git")
-        .arg("-C")
-        .arg(&root)
-        .arg("add")
-        .arg("-u")
-        .output()
-        .await
-        .map_err(|e| DesignError::Io(format!("git add: {e}")))?;
-    if !add.status.success() {
-        return Err(DesignError::Io(format!(
-            "git add -u failed: {}",
-            String::from_utf8_lossy(&add.stderr)
-        )));
-    }
-
-    let commit = TokioCommand::new("git")
-        .arg("-C")
-        .arg(&root)
-        .arg("commit")
-        .arg("-m")
-        .arg(&message)
-        .output()
-        .await
-        .map_err(|e| DesignError::Io(format!("git commit: {e}")))?;
-    if !commit.status.success() {
-        return Err(DesignError::Io(format!(
-            "git commit failed: {}",
-            String::from_utf8_lossy(&commit.stderr)
-        )));
-    }
-
-    let rev = TokioCommand::new("git")
-        .arg("-C")
-        .arg(&root)
-        .arg("rev-parse")
-        .arg("--short")
-        .arg("HEAD")
-        .output()
-        .await
-        .map_err(|e| DesignError::Io(format!("git rev-parse: {e}")))?;
-    let sha = String::from_utf8_lossy(&rev.stdout).trim().to_string();
-    Ok(GitCommitOut { sha, count, message })
-}
-
-/// Discard (git checkout) dirty tracked files. `paths` empty = all
-/// tracked-modified; non-empty = just those. Returns the count reverted.
-/// Note: `git checkout --` reverts unstaged worktree modifications only —
-/// it does not touch the staged index. v1 assumes the agent never stages.
-#[tauri::command]
-pub async fn design_git_discard(_app: AppHandle, paths: Vec<String>) -> Result<usize, DesignError> {
-    let root = project_root();
-    let porcelain = match git_porcelain(&root).await {
-        Some(s) => s,
-        None => return Ok(0),
-    };
-    let before = parse_dirty(&porcelain);
-    if paths.is_empty() {
-        if before.is_empty() {
-            return Ok(0);
-        }
-        let out = TokioCommand::new("git")
-            .arg("-C")
-            .arg(&root)
-            .arg("checkout")
-            .arg("--")
-            .arg(".")
-            .output()
-            .await
-            .map_err(|e| DesignError::Io(format!("git checkout: {e}")))?;
-        if !out.status.success() {
-            return Err(DesignError::Io(format!(
-                "git checkout failed: {}",
-                String::from_utf8_lossy(&out.stderr)
-            )));
-        }
-        return Ok(before.len());
-    }
-    let mut count = 0;
-    for p in &paths {
-        let out = TokioCommand::new("git")
-            .arg("-C")
-            .arg(&root)
-            .arg("checkout")
-            .arg("--")
-            .arg(p)
-            .output()
-            .await
-            .map_err(|e| DesignError::Io(format!("git checkout {p}: {e}")))?;
-        if out.status.success() {
-            count += 1;
-        }
-    }
-    Ok(count)
 }

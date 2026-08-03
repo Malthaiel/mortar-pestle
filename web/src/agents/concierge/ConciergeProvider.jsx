@@ -6,7 +6,7 @@
 // the dock Agents popover, the context-menu "Ask AI" (SF5) — can summon Concierge
 // without prop-drilling.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSettings } from '../../hooks/useSettings.js';
 import ConciergeChatWindow from './ConciergeChatWindow.jsx';
 
