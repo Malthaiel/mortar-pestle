@@ -17,6 +17,7 @@ import MusicLibrary from './MusicLibrary.jsx';
 import MusicTopBar  from './MusicTopBar.jsx';
 import SidebarSeam from '@host/components/SidebarSeam.jsx';
 import { encodePath, decodePath } from '../paths.js';
+import { navigate as go } from '@host/router.js';
 
 const LAST_VIEWED_KEY = 'tools:lastMusicPath';
 const SPLIT_WIDTH_KEY = 'music:split:width';
@@ -25,12 +26,6 @@ const RIGHT_MIN      = 360;  // detail (right) floor — reserved so it never ov
 const SEAM_W         = 6;    // SidebarSeam hotzone width
 const SPLIT_FALLBACK = 480;  // used before the container is measured
 const SNAP_TARGETS   = [360, 440, 520, 600];
-
-function replaceHash(newHash) {
-  const base = window.location.href.split('#')[0];
-  window.history.replaceState(null, '', base + '#' + newHash);
-  window.dispatchEvent(new HashChangeEvent('hashchange'));
-}
 
 // Split the rest into a mode:
 //   "" (bare /tools/library/music)        → home (the combined search-first surface)
@@ -133,8 +128,13 @@ export default function MusicPage({ accent, rest }) {
     return () => { document.title = 'Citadel'; };
   }, [selectedPath]);
 
+  // navigate (a history PUSH), not replaceState: picking an album in the browser
+  // used to overwrite the current entry, so no album click was ever recorded and
+  // the mouse Back button skipped the whole session in the split view and popped
+  // out to wherever you were before Music. AlbumBrowser only calls this on a
+  // click (no arrow-key selection), so one entry per pick is exactly one step.
   const onSelectAlbum = (albumPath) => {
-    replaceHash('/tools/library/music/downloaded/' + encodePath(albumPath));
+    go('/tools/library/music/downloaded/' + encodePath(albumPath));
   };
 
   let content;
