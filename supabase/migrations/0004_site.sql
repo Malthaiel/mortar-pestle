@@ -83,7 +83,12 @@ create or replace function bookings_before_insert() returns trigger
   language plpgsql security definer set search_path = public as $$
 begin
   if not is_dev() then
-    new.status            := 'pending';
+    -- A free service takes no payment, so no Stripe webhook will ever arrive to
+    -- confirm it. Born confirmed instead: pinned to 'pending' it would fall out
+    -- of bookings_busy after 30 minutes and the slot would silently reopen for
+    -- someone else, and site_fetch_bookings (confirmed only) would never put it
+    -- on the planner. Free means there is nothing to defraud.
+    new.status            := case when new.service_id = 'intro' then 'confirmed' else 'pending' end;
     new.stripe_session_id := null;
     new.review_token      := null;
   end if;

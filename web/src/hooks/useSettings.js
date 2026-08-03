@@ -247,10 +247,11 @@ export const SETTINGS_DEFAULTS = {
   // Mirrored to RecycleBin/retention.json for the Rust startup purge.
   recycleBinRetentionDays: 30,
   recycleBinMaxItems: 200,
-  // malthaiel.com availability push (Settings → System). When on, useSitePush
-  // republishes the next 30 days of busy ranges to Supabase so the public booking
-  // calendar can grey them out. Times only — no titles ever leave the machine.
-  // Default OFF: nothing goes to the internet until it's switched on.
+  // malthaiel.com bridge, both directions (Settings → System). When on,
+  // useSitePush republishes the next 30 days of busy ranges to Supabase so the
+  // public booking calendar can grey them out (times only — no titles ever leave
+  // the machine), and useSiteBookings pulls confirmed bookings back into the
+  // daily log. Default OFF: nothing goes to the internet until it's switched on.
   sitePushEnabled: false,
   density: 'cozy',
   radiusScale: 'default',

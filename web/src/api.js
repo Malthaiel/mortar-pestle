@@ -180,10 +180,19 @@ export function serializeBlockLibrary(blocks) {
   return lines.join('\n');
 }
 
+// Everything under `## <sectionName>` up to the next H2 (or the end of file).
+//
+// The stop condition is `^## ` or true end-of-input, NOT `\s*$`: under /m that
+// matched the very first line ending, so the lazy body stopped there and this
+// returned only the section's FIRST LINE. Every caller of api.upcoming
+// .readSection inherited it — the agenda showed one event per day, reminders
+// only ever fired for that one, and the availability push left every later
+// one-off event bookable on the public calendar. Verified 2026-08-03 against a
+// real daily log, a bullet+note pair, and a two-event section.
 function extractH2Section(content, sectionName) {
   if (!content) return '';
   const body = content.replace(/^---\n[\s\S]*?\n---\n?/, '');
-  const re = new RegExp(`^## ${sectionName}\\s*\\n([\\s\\S]*?)(?=^## |\\s*$)`, 'm');
+  const re = new RegExp(`^## ${sectionName}[ \\t]*\\n([\\s\\S]*?)(?=^## |$(?![\\s\\S]))`, 'm');
   const m = body.match(re);
   return m ? m[1].trim() : '';
 }
@@ -263,8 +272,8 @@ function buildDailyLogSkeleton(ds, upcomingBullet) {
     '```plan',
     '```',
     '',
-    '## Vault Activity',
-    '',
+    // No `## Vault Activity` — the daily-log activity bullet was retired (it had
+    // no consumer). Older logs keep theirs; parseDaySections still skips it.
   ].join('\n');
 }
 
