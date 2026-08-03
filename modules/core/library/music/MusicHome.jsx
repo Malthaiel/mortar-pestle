@@ -19,6 +19,7 @@ import { SEARCH_TABS, useSearchTab, ResultRow, trackRowProps, recordingRowProps 
 import { encodePath } from '../paths.js';
 import { navigate as go } from '@host/router.js';
 
+const HOME_PATH = '/tools/library/music';
 const toAlbum = (path) => go('/tools/library/music/downloaded/' + encodePath(path));
 const toBrowse = (q, mode) =>
   go('/tools/library/music/browse/' + (mode === 'artists' ? 'artists/' : '') + 'q/' + encodeURIComponent(q));
@@ -42,12 +43,30 @@ function errText(e, fallback) {
   try { return JSON.stringify(e); } catch { return fallback; }
 }
 
-export default function MusicHome({ accent }) {
+export default function MusicHome({ accent, initialQuery = '' }) {
   const { playAlbumTracks } = useMusicPlayer();
   const { playlists } = usePlaylists();
   const [albums, setAlbums] = useState(null);   // owned library (null = loading)
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery);
   const [tab, setTab] = useSearchTab('tools:musicSearchTab');
+
+  // Mirror the typed query into the hash so Back out of a result returns to
+  // these results instead of an empty home (the query used to live only here,
+  // so the home history entry always replayed as the carousels).
+  // replaceState, not navigate: a history entry per keystroke turns Back into a
+  // per-letter rewind. The guard keeps a timer that fires mid-navigation from
+  // clobbering the route we just left for.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const cur = (window.location.hash || '').replace(/^#/, '');
+      if (cur !== HOME_PATH && !cur.startsWith(HOME_PATH + '/q/')) return;
+      const q = query.trim();
+      const want = HOME_PATH + (q ? '/q/' + encodeURIComponent(q) : '');
+      if (cur === want) return;
+      window.history.replaceState(null, '', window.location.href.split('#')[0] + '#' + want);
+    }, 250);
+    return () => clearTimeout(t);
+  }, [query]);
 
   useEffect(() => {
     let cancelled = false;

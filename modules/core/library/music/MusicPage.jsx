@@ -63,6 +63,12 @@ function parseMusicRoute(rest) {
       ? decodePath(segs.slice(qi + 1).join('/')) : '';
     return { mode: 'browse', album: '', browseMode, browseQuery };
   }
+  // "q/<query>" is still the home surface, carrying the typed search so it
+  // survives a Back out of a result. MusicHome mirrors it in with replaceState
+  // (no per-keystroke history entries); without it Back landed on an empty home.
+  if (first === 'q') {
+    return { mode: 'home', album: '', homeQuery: decodePath(segs.slice(1).join('/')) };
+  }
   const slash = rest.indexOf('/');
   const tail  = slash === -1 ? '' : rest.slice(slash + 1);
   if (first === 'library') return { mode: 'library', album: '', status: segs[1] || null };
@@ -82,7 +88,7 @@ function readInitialSplitWidth() {
 }
 
 export default function MusicPage({ accent, rest }) {
-  const { mode, album, status, browseMode, browseQuery, browseRg, browseArtist } = parseMusicRoute(rest || '');
+  const { mode, album, status, homeQuery, browseMode, browseQuery, browseRg, browseArtist } = parseMusicRoute(rest || '');
   const selectedPath = album;
 
   // ── Resizable split (personal mode) ──────────────────────────────────
@@ -133,7 +139,7 @@ export default function MusicPage({ accent, rest }) {
 
   let content;
   if (mode === 'home') {
-    content = <MusicHome accent={accent}/>;
+    content = <MusicHome accent={accent} initialQuery={homeQuery || ''}/>;
   } else if (mode === 'library') {
     content = <MusicLibrary accent={accent} status={status}/>;
   } else if (mode === 'browse') {
