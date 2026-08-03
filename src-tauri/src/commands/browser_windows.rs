@@ -148,10 +148,15 @@ pub async fn browser_new_tab(app: AppHandle, id: String, url: Option<String>) ->
     // analogue of the Linux `with_webview`/`run_on_main_thread` discipline.
     let (tx, rx) = tokio::sync::oneshot::channel::<Result<(), String>>();
     let app = app.clone();
+    let id_log = id.clone(); // for the failure log below (id moves into the closure)
     app.clone()
         .run_on_main_thread(move || {
             let _ = tx.send((|| -> Result<(), String> {
-    let main = app.get_webview_window("main").ok_or("no main window")?;
+    // Must be get_window, NOT get_webview_window: once the first tab's add_child
+    // gives "main" a second (child) webview, is_webview_window() is false and
+    // get_webview_window("main") returns None — the "no main window" bug that broke
+    // every tab after the first. get_window resolves the container regardless.
+    let main = app.get_window("main").ok_or("no main window")?;
     let profile_dir = app
         .path()
         .app_data_dir()
@@ -222,8 +227,7 @@ pub async fn browser_new_tab(app: AppHandle, id: String, url: Option<String>) ->
             }
         });
 
-    let window = main.as_ref().window();
-    let child = window
+    let child = main
         .add_child(builder, LogicalPosition::new(0.0, 0.0), LogicalSize::new(800.0, 600.0))
         .map_err(|e| format!("add_child: {e}"))?;
     // Start hidden; the chrome reveals + positions via set_visible/set_bounds.
@@ -361,7 +365,13 @@ pub async fn browser_new_tab(app: AppHandle, id: String, url: Option<String>) ->
             })());
         })
         .map_err(|e| e.to_string())?;
-    rx.await.map_err(|_| "new_tab task dropped".to_string())?
+    // Loud failures: a browser_new_tab error reaches the dev log, never only the UI
+    // crash card. A silent error here hid the "no main window" bug for two chats.
+    let outcome = rx.await.unwrap_or_else(|_| Err("new_tab task dropped".to_string()));
+    if let Err(e) = &outcome {
+        log::error!("browser(win): browser_new_tab failed for tab {id_log}: {e}");
+    }
+    outcome
 }
 
 #[tauri::command]
@@ -434,11 +444,14 @@ fn reparent_tab(app: &AppHandle, id: &str, window_label: &str) -> Result<(), Str
         log::warn!("browser(win): reparent of missing tab {id} (New-Tab Page?) — skipped");
         return Ok(());
     };
+    // get_window, not get_webview_window: the target ("main" or "overlay-host") holds
+    // child webviews once tabs attach, so is_webview_window() is false and
+    // get_webview_window returns None. get_window resolves the container either way.
     let win = app
-        .get_webview_window(window_label)
+        .get_window(window_label)
         .ok_or_else(|| format!("no {window_label} window"))?;
     let _ = wv.hide();
-    wv.reparent(&win.as_ref().window())
+    wv.reparent(&win)
         .map_err(|e| format!("reparent to {window_label}: {e}"))
 }
 
