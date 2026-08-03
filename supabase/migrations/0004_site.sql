@@ -45,7 +45,10 @@ create or replace function site_replace_busy(ranges jsonb) returns int
   language plpgsql security invoker set search_path = public as $$
 declare n int;
 begin
-  delete from availability_busy;
+  -- `where true` is load-bearing: Supabase runs pg_safeupdate for `authenticated`,
+  -- and a bare DELETE aborts with 21000 "DELETE requires a WHERE clause". This
+  -- function is security invoker, so it inherits that guard. Do not "simplify".
+  delete from availability_busy where true;
   insert into availability_busy (start_ts, end_ts)
   select (e->>'start_ts')::timestamptz, (e->>'end_ts')::timestamptz
     from jsonb_array_elements(coalesce(ranges, '[]'::jsonb)) e;
