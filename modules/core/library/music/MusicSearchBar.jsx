@@ -18,7 +18,8 @@ import { SEARCH_TABS, useSearchTab } from './searchShared.jsx';
 import { SearchResults } from './MusicHome.jsx';
 
 const PANEL_W = 560;
-const PAD = 8;
+const PAD = 8;    // viewport edge clamp
+const GAP_Y = 12; // breathing room under the input
 
 export default function MusicSearchBar({ accent, query, setQuery, albums, ownedIds, onPlay, suppress }) {
   const inputRef = useRef(null);
@@ -39,7 +40,7 @@ export default function MusicSearchBar({ accent, query, setQuery, albums, ownedI
       const vw = window.innerWidth;
       const width = Math.min(PANEL_W, vw - 2 * PAD);
       setPos({
-        top: r.bottom + PAD,
+        top: r.bottom + GAP_Y,
         left: Math.max(PAD, Math.min(r.left, vw - width - PAD)),
         width,
       });
@@ -93,7 +94,9 @@ export default function MusicSearchBar({ accent, query, setQuery, albums, ownedI
           // Clicking the input itself must not count as an outside click, or
           // the panel would close on every click back into the box.
           outsideExempt="[data-music-search]"
-          style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, maxHeight: '60vh' }}
+          // zIndex mirrors BlockLibraryPopover — .candy-modal sets no stacking
+          // order of its own, so without it the panel loses to page content.
+          style={{ position: 'fixed', zIndex: 1100, top: pos.top, left: pos.left, width: pos.width, maxHeight: '60vh' }}
           bodyStyle={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 14 }}
         >
           <Seg options={SEARCH_TABS} value={tab} onChange={setTab} accent={accent} />
