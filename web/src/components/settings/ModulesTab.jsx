@@ -10,11 +10,14 @@
 //
 // Uninstalling a dirty module still confirms first; Install is immediate.
 // Drag-reorder persists per tier via sidebar-order key 'modules:tier-<tier>'.
+// Reorder runs on the shared DraggableSidebarList (pointer hold-drag, live gap)
+// — the same primitive as the dock and right sidebar. This was the last surface
+// still on the legacy HTML5 useDragReorder, now deleted.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../api.js';
 import { useManifests } from '../../module-sdk/useModuleRegistry.js';
-import { useDragReorder } from '../../module-sdk/useDragReorder.js';
+import DraggableSidebarList from '../DraggableSidebarList.jsx';
 import { useSidebarOrder, applyOrder, emitSidebarOrderChange } from '../../hooks/useSidebarOrder.js';
 import {
   useModuleEnabledMap,
@@ -89,10 +92,14 @@ function TierPanel({ tier, accent, onOpenModule, onOpenKeybinds }) {
     [tierModules, savedOrder, localOrder],
   );
 
-  const handleReorder = useCallback((fromIndex, toIndex) => {
+  // DraggableSidebarList reports an INSERT index: `to` is the slot the item
+  // lands in front of, so dropping back onto your own slot (to === from or
+  // from + 1) is a no-op and a downward move loses one index to the removal.
+  const handleReorder = useCallback((from, to) => {
+    if (to === from || to === from + 1) return;
     const next = ordered.slice();
-    const [item] = next.splice(fromIndex, 1);
-    next.splice(toIndex, 0, item);
+    const [item] = next.splice(from, 1);
+    next.splice(from < to ? to - 1 : to, 0, item);
     setLocalOrder(next);
     api.setSidebarOrder(orderKey, next.map(m => m.id))
       .then(() => {
@@ -103,8 +110,6 @@ function TierPanel({ tier, accent, onOpenModule, onOpenKeybinds }) {
       })
       .catch(() => {});
   }, [ordered, orderKey]);
-
-  const { dragIndex, dropTarget, rowProps, containerProps } = useDragReorder({ onReorder: handleReorder });
 
   const handleSetEnabled = useCallback((moduleId, nextEnabled) => {
     if (!nextEnabled && dirty.has(moduleId)) {
@@ -120,33 +125,24 @@ function TierPanel({ tier, accent, onOpenModule, onOpenKeybinds }) {
 
   return (
     <>
-      <div
-        style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
-        {...containerProps}
-      >
-        {ordered.map((m, i) => {
-          return (
-            <div
-              key={m.id}
-            >
-              <ModuleCard
-                manifest={m}
-                enabled={enabledMap[m.id] !== false}
-                size={sizes?.[m.id]}
-                dragging={dragIndex === i}
-                dropTopHere={dropTarget?.index === i && dropTarget.side === 'top'}
-                dropBottomHere={dropTarget?.index === i && dropTarget.side === 'bottom'}
-                accent={accent}
-                onSetEnabled={(v) => handleSetEnabled(m.id, v)}
-                onOpenSettings={() => onOpenModule?.(m.id)}
-                onOpenReleases={() => onOpenModule?.(m.id, 'releases')}
-                onOpenKeybinds={() => onOpenKeybinds?.(m.name)}
-                {...rowProps(i)}
-              />
-            </div>
-          );
-        })}
-      </div>
+      <DraggableSidebarList
+        items={ordered}
+        keyExtractor={(m) => m.id}
+        onReorder={handleReorder}
+        style={{ gap: 12 }}
+        renderItem={(m) => (
+          <ModuleCard
+            manifest={m}
+            enabled={enabledMap[m.id] !== false}
+            size={sizes?.[m.id]}
+            accent={accent}
+            onSetEnabled={(v) => handleSetEnabled(m.id, v)}
+            onOpenSettings={() => onOpenModule?.(m.id)}
+            onOpenReleases={() => onOpenModule?.(m.id, 'releases')}
+            onOpenKeybinds={() => onOpenKeybinds?.(m.name)}
+          />
+        )}
+      />
 
       {confirmTarget && (
         <ConfirmUninstall
@@ -201,10 +197,8 @@ function CommunityPanel() {
 }
 
 function ModuleCard({
-  manifest, enabled, size, dragging,
-  dropTopHere, dropBottomHere, accent,
+  manifest, enabled, size, accent,
   onSetEnabled, onOpenSettings, onOpenReleases, onOpenKeybinds,
-  onDragStart, onDragOver, onDrop, onDragEnd,
 }) {
   const [hover, setHover] = useState(false);
   const accentColor = accent || 'var(--text)';
@@ -215,11 +209,6 @@ function ModuleCard({
 
   return (
     <div
-      draggable
-      onDragStart={onDragStart}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-      onDragEnd={onDragEnd}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       className="candy-section"
@@ -230,7 +219,7 @@ function ModuleCard({
         display: 'flex', alignItems: 'flex-start', gap: 12,
         padding: '13px 15px',
         cursor: 'grab',
-        opacity: dragging ? 0.55 : (enabled ? 1 : 0.55),
+        opacity: enabled ? 1 : 0.55,
         transition: 'opacity 80ms ease',
       }}
     >
@@ -238,7 +227,7 @@ function ModuleCard({
         width: 16, alignSelf: 'center',
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         color: 'var(--text-faint)',
-        opacity: hover || dragging ? 1 : 0.3,
+        opacity: hover ? 1 : 0.3,
         cursor: 'grab',
         transition: 'opacity 120ms ease',
         flexShrink: 0,
@@ -283,8 +272,6 @@ function ModuleCard({
         {hasKeybinds && (
           <button
             type="button"
-            draggable={false}
-            onDragStart={(e) => e.preventDefault()}
             onClick={onOpenKeybinds}
             style={{
               alignSelf: 'flex-start', background: 'none', border: 'none', padding: 0,
@@ -318,22 +305,19 @@ function ModuleCard({
         />
       </span>
 
-      {dropTopHere && <DropIndicator side="top" accent={accentColor}/>}
-      {dropBottomHere && <DropIndicator side="bottom" accent={accentColor}/>}
     </div>
   );
 }
 
-// Buttons inside a draggable card opt out of HTML5 drag arming so a press
-// never starts a card drag.
+// Real <button>s, which is what keeps them out of the card drag: the shared
+// DraggableSidebarList refuses pickup from button/a/[role="button"]/input, so a
+// press here never lifts the card. No drag opt-out plumbing needed.
 function CardActionBtn({ label, accent, onClick, emphasize }) {
   return (
     <button
       type="button"
       onClick={(e) => { e.stopPropagation(); onClick(); }}
       data-own-press
-      draggable={false}
-      onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
       className={'candy-btn' + (emphasize ? ' is-active' : '')}
       data-shape="row"
       style={{ '--accent': accent, width: 'auto', flexShrink: 0 }}
@@ -354,8 +338,6 @@ function CardIconBtn({ title, accent, disabled, onClick, children }) {
       data-own-press
       disabled={disabled}
       title={title}
-      draggable={false}
-      onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
       className="candy-btn"
       data-shape="row"
       style={{ '--accent': accent, width: 'auto', flexShrink: 0 }}
@@ -384,22 +366,6 @@ function TierBadge({ tier, accent }) {
       color: fg,
       flexShrink: 0,
     }}>{tier}</span>
-  );
-}
-
-function DropIndicator({ side, accent }) {
-  return (
-    <span aria-hidden style={{
-      position: 'absolute',
-      left: 8, right: 8,
-      top: side === 'top' ? -1 : 'auto',
-      bottom: side === 'bottom' ? -1 : 'auto',
-      height: 2,
-      background: accent,
-      borderRadius: 1,
-      boxShadow: `0 0 0 3px color-mix(in oklch, ${accent} 22%, transparent)`,
-      pointerEvents: 'none',
-    }}/>
   );
 }
 
