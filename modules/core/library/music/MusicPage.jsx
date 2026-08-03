@@ -43,6 +43,20 @@ function parseMusicRoute(rest) {
   const segs = rest.split('/');
   const first = segs[0];
   if (first === 'browse') {
+    // Identity routes — open the thing itself rather than re-searching for its
+    // name. Without these a picked album/artist could only be handed over as a
+    // text query, which lands you on the Browse grid needing a second click.
+    //   browse/rg/<releaseGroupMbid>       → straight into BrowsePreview
+    //   browse/artist/<mbid>/<name?>       → straight into that discography
+    if (segs[1] === 'rg' && segs[2]) {
+      return { mode: 'browse', album: '', browseMode: 'albums', browseQuery: '', browseRg: segs[2] };
+    }
+    if (segs[1] === 'artist' && segs[2]) {
+      return {
+        mode: 'browse', album: '', browseMode: 'artists', browseQuery: '',
+        browseArtist: { mbid: segs[2], name: segs[3] ? decodeURIComponent(segs[3]) : '' },
+      };
+    }
     let browseMode = 'albums', qi = 1;
     if (segs[1] === 'artists' || segs[1] === 'albums') { browseMode = segs[1]; qi = 2; }
     const browseQuery = (segs[qi] === 'q' && segs.length > qi + 1)
@@ -68,7 +82,7 @@ function readInitialSplitWidth() {
 }
 
 export default function MusicPage({ accent, rest }) {
-  const { mode, album, status, browseMode, browseQuery } = parseMusicRoute(rest || '');
+  const { mode, album, status, browseMode, browseQuery, browseRg, browseArtist } = parseMusicRoute(rest || '');
   const selectedPath = album;
 
   // ── Resizable split (personal mode) ──────────────────────────────────
@@ -125,10 +139,12 @@ export default function MusicPage({ accent, rest }) {
   } else if (mode === 'browse') {
     content = (
       <BrowsePage
-        key={'browse:' + (browseMode || '') + ':' + (browseQuery || '')}
+        key={'browse:' + (browseMode || '') + ':' + (browseQuery || '') + ':' + (browseRg || '') + ':' + (browseArtist?.mbid || '')}
         accent={accent}
         initialQuery={browseQuery}
         initialMode={browseMode === 'artists' ? 'artists' : 'albums'}
+        initialResultMbid={browseRg}
+        initialArtist={browseArtist}
       />
     );
   } else if (mode === 'playlists') {

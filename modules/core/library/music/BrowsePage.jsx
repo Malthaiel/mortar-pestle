@@ -30,13 +30,20 @@ function errText(e, fallback) {
   try { return JSON.stringify(e); } catch { return fallback; }
 }
 
-export default function BrowsePage({ accent, initialQuery = '', initialMode = MODE_ALBUMS }) {
+export default function BrowsePage({ accent, initialQuery = '', initialMode = MODE_ALBUMS,
+                                     initialResultMbid = '', initialArtist = null }) {
   const [mode, setMode] = useState(initialMode === MODE_ARTISTS ? MODE_ARTISTS : MODE_ALBUMS);
   const [query, setQuery] = useState(initialQuery || '');
   const [results, setResults] = useState(null);   // albums / discography; null = idle
   const [artists, setArtists] = useState(null);    // artist hits; null = idle
-  const [selectedArtist, setSelectedArtist] = useState(null); // { mbid, name }
-  const [selectedResult, setSelectedResult] = useState(null); // a result card → preview
+  // Seeded from an identity route (browse/artist/<mbid>) when we arrived by
+  // clicking a specific artist, so no search re-run is needed to get here.
+  const [selectedArtist, setSelectedArtist] = useState(initialArtist || null); // { mbid, name }
+  // Likewise browse/rg/<mbid>: the mbid alone is enough — BrowsePreview fetches
+  // the rest via releaseGroupDetail and shows its own loading state meanwhile.
+  const [selectedResult, setSelectedResult] = useState(
+    initialResultMbid ? { mbid: initialResultMbid } : null,
+  ); // a result card → preview
   const [libraryMap, setLibraryMap] = useState(() => new Map()); // providerId → { present, total }
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -113,12 +120,15 @@ export default function BrowsePage({ accent, initialQuery = '', initialMode = MO
 
   // A picked result takes over the whole page; backing out restores the grid
   // (search/discography state is untouched while the preview is mounted).
+  // Arrived straight from a browse/rg/<mbid> link instead? There IS no grid
+  // behind us — no search ever ran — so back means back where you came from.
   if (selectedResult) {
+    const arrivedDirect = !!initialResultMbid && selectedResult.mbid === initialResultMbid;
     return (
       <BrowsePreview
         result={selectedResult}
         accent={accent}
-        onBack={() => setSelectedResult(null)}
+        onBack={() => (arrivedDirect ? window.history.back() : setSelectedResult(null))}
         libraryEntry={libraryMap.get(selectedResult.mbid) || null}
       />
     );
@@ -144,12 +154,14 @@ export default function BrowsePage({ accent, initialQuery = '', initialMode = MO
         {selectedArtist && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
             <button
-              onClick={() => setSelectedArtist(null)}
+              onClick={() => (initialArtist && selectedArtist.mbid === initialArtist.mbid
+                ? window.history.back()   // arrived by link; no artist list behind us
+                : setSelectedArtist(null))}
               style={{
                 background: 'transparent', border: 'none', cursor: 'pointer',
                 color: 'var(--text-muted)', fontSize: 12, padding: 0,
               }}
-            >← Artists</button>
+            >← {initialArtist && selectedArtist.mbid === initialArtist.mbid ? 'Back' : 'Artists'}</button>
             <span style={{ color: 'var(--text-faint)' }}>/</span>
             <span style={{ color: 'var(--text)', fontWeight: 500 }}>{selectedArtist.name}</span>
           </div>

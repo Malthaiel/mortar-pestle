@@ -52,6 +52,10 @@ pub struct RecordingHit {
     /// Track length in seconds (MusicBrainz reports milliseconds).
     pub length: Option<i64>,
     pub release: Option<String>,
+    /// Release-group MBID of the first release carrying this recording, when
+    /// MusicBrainz includes it. Lets a song result link straight to its album
+    /// page instead of re-running a text search for it.
+    pub release_group_mbid: Option<String>,
 }
 
 /// Process-global timestamp of the last MusicBrainz request. The lock is held
@@ -225,11 +229,17 @@ pub async fn music_search_recordings(query: String) -> Result<Vec<RecordingHit>,
                         .get("length")
                         .and_then(|x| x.as_i64())
                         .map(|ms| ms / 1000);
-                    let release = r
+                    let first_release = r
                         .get("releases")
                         .and_then(|x| x.as_array())
-                        .and_then(|a| a.first())
+                        .and_then(|a| a.first());
+                    let release = first_release
                         .and_then(|rel| rel.get("title"))
+                        .and_then(|x| x.as_str())
+                        .map(str::to_string);
+                    let release_group_mbid = first_release
+                        .and_then(|rel| rel.get("release-group"))
+                        .and_then(|rg| rg.get("id"))
                         .and_then(|x| x.as_str())
                         .map(str::to_string);
                     Some(RecordingHit {
@@ -238,6 +248,7 @@ pub async fn music_search_recordings(query: String) -> Result<Vec<RecordingHit>,
                         artist: join_artist_credit(r),
                         length,
                         release,
+                        release_group_mbid,
                     })
                 })
                 .collect()

@@ -22,6 +22,13 @@ import { navigate as go } from '@host/router.js';
 const toAlbum = (path) => go('/tools/library/music/downloaded/' + encodePath(path));
 const toBrowse = (q, mode) =>
   go('/tools/library/music/browse/' + (mode === 'artists' ? 'artists/' : '') + 'q/' + encodeURIComponent(q));
+// Identity links: open the album/artist itself. Clicking a specific result used
+// to hand Browse only its NAME as a fresh query, so you landed on the Browse
+// grid and had to click the same thing a second time.
+const toRelease = (mbid) => go('/tools/library/music/browse/rg/' + encodeURIComponent(mbid));
+const toArtistPage = (mbid, name) =>
+  go('/tools/library/music/browse/artist/' + encodeURIComponent(mbid) +
+     (name ? '/' + encodeURIComponent(name) : ''));
 const toPlaylists = () => go('/tools/library/music/playlists');
 const toPlaylist = (path) => go('/tools/library/music/playlists/' + encodePath(path));
 
@@ -211,7 +218,7 @@ function MoreFromYourArtists({ albums, ownedIds, accent }) {
     <PosterRow title="More from artists you own" accent={accent} colWidth={160}>
       {items.map(r => (
         <BrowseResultCard key={r.mbid} result={r} accent={accent} inLibrary={false}
-                          onSelect={() => toBrowse(`${r.title} ${r.artist}`.trim(), 'albums')} />
+                          onSelect={() => toRelease(r.mbid)} />
       ))}
     </PosterRow>
   );
@@ -295,7 +302,11 @@ function SearchResults({ query, tab, accent, albums, ownedIds, onPlay }) {
             ? <Muted>No songs.</Muted>
             : <RowList>{mbSongs.map(r => (
                 <ResultRow key={r.mbid} {...recordingRowProps(r)}
-                           onClick={() => toBrowse(`${r.title} ${r.artist || ''}`.trim(), 'albums')} />
+                           onClick={() => (r.releaseGroupMbid
+                             ? toRelease(r.releaseGroupMbid)
+                             // MusicBrainz doesn't always attach a release to a
+                             // recording; fall back to a search for it.
+                             : toBrowse(`${r.title} ${r.artist || ''}`.trim(), 'albums'))} />
               ))}</RowList>)}
         </div>
       )}
@@ -318,7 +329,7 @@ function SearchResults({ query, tab, accent, albums, ownedIds, onPlay }) {
             : <div style={GRID}>{mbAlbums.map(r => (
                 <BrowseResultCard key={r.mbid} result={r} accent={accent}
                                   inLibrary={ownedIds.has(r.mbid)}
-                                  onSelect={() => toBrowse(`${r.title} ${r.artist || ''}`.trim(), 'albums')} />
+                                  onSelect={() => toRelease(r.mbid)} />
               ))}</div>)}
         </div>
       )}
@@ -332,7 +343,7 @@ function SearchResults({ query, tab, accent, albums, ownedIds, onPlay }) {
             : <RowList>{mbArtists.slice(0, tab === 'artists' ? 25 : 8).map(a => (
                 <ResultRow key={a.mbid} title={a.name}
                            sub={[a.disambiguation, a.country].filter(Boolean).join(' · ')}
-                           onClick={() => toBrowse(a.name, 'artists')} />
+                           onClick={() => toArtistPage(a.mbid, a.name)} />
               ))}</RowList>)}
         </div>
       )}
