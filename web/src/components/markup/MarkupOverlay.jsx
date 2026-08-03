@@ -1,16 +1,13 @@
-// SF8 of Design Mode — Markup mode overlay. Capture-phase mousemove +
-// click on the window; resolves the hit target to the nearest enclosing
-// `[data-aos-component]` (skipping anything inside `[data-aos-no-mark]`,
-// which is how the chat window opts out of being its own target).
+// Markup mode overlay. Capture-phase mousemove + click on the window;
+// resolves the hit target to the deepest element under the cursor (skipping
+// anything inside `[data-aos-no-mark]`).
 //
-// On click, we push an `@ComponentName` mention into the chat input and
-// surface a transient reveal chip with computed-style info. Pointer mode
-// stays on `markup` after the click so the user can chain picks (DevTools
-// behavior). Esc or the toggle clears.
+// On click we hand the element to onPick — App.jsx copies its component name
+// and source path to the clipboard. Markup mode stays on after the click so
+// the user can chain picks (DevTools behavior). Esc or the keybind clears.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import SelectionHighlight from './SelectionHighlight.jsx';
-import { readReveal } from './computed-style-reveal.js';
 import { resolveTarget, buildCrumbs } from './mark-resolve.js';
 
 // 1-pixel offset probes around the cursor — when an exact-hit pixel lands on
@@ -65,9 +62,8 @@ export default function MarkupOverlay({ accent, onPick }) {
   // (deepest element) and the breadcrumb crumbs (a chosen shallower level).
   const pick = useCallback((el) => {
     if (!el) return;
-    const reveal = readReveal(el);
     setPulseKey((k) => k + 1);
-    onPick?.(el, reveal);
+    onPick?.(el);
   }, [onPick]);
 
   const handleClick = useCallback((e) => {

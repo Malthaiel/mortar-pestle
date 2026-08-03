@@ -149,7 +149,6 @@ const DEV_DEFAULT = {
 // (The bag lives at settings.agents since the Agents-tab rename; the overlay
 // feature and its design_* IPC keep the Design Mode name.)
 export const AGENTS_DEFAULT = {
-  mode: false,
   magnetRadius: 80,
   snapCorners: false,
   dragSmoothness: 'medium',
@@ -157,11 +156,7 @@ export const AGENTS_DEFAULT = {
   // state on each overlay show. Off = the launcher always starts closed. Read in the
   // providerless overlay host by AgentsOverlayLauncher; toggled in Overlay settings.
   overlayRemember: true,
-  // SF10 — pending overrides moved to Tauri-backed JSON at
-  // <app_config>/design-pending.json (see useLiveOverrides.js +
-  // design_pending_get/set commands). The dormant localStorage array was
-  // never written to in shipped code, so no migration is needed.
-  // SF7 — persisted Atelier chat-window position. null = derive from current
+  // SF7 — persisted agent chat-window position. null = derive from current
   // viewport (bottom-right default); the Reset-position button writes null.
   // Stored as { x, y, anchor } where anchor ∈ {'left'|'right'|'top'|'bottom'|
   // 'top-left'|'top-right'|'bottom-left'|'bottom-right'|'free'} drives the
@@ -511,27 +506,6 @@ const OLD_ACCENT_DEFAULTS = {
     delete raw.design;
     localStorage.setItem('focus_settings', JSON.stringify(raw));
     localStorage.setItem('focus_settings_v7_agents_rename', '1');
-  } catch {}
-})();
-
-// Design Mode migration: dormant settings.dev.devMode is promoted to the
-// master overlay toggle (now agents.mode — the dock brush button), and the
-// legacy key is dropped. Any user with devMode previously enabled gets Design
-// mode pre-activated on first launch after upgrade. The v4 flag predates the
-// agents rename — keep its name, or already-migrated users would re-run it.
-(function migrateDevModeToDesignMode() {
-  try {
-    if (localStorage.getItem('focus_settings_v4_design_mode')) return;
-    const raw = JSON.parse(localStorage.getItem('focus_settings') || '{}');
-    const dev = { ...(raw.dev || {}) };
-    const agents = { ...(raw.agents || {}) };
-    if (dev.devMode === true && agents.mode === undefined) {
-      agents.mode = true;
-    }
-    delete dev.devMode;
-    const next = { ...raw, dev, agents };
-    localStorage.setItem('focus_settings', JSON.stringify(next));
-    localStorage.setItem('focus_settings_v4_design_mode', '1');
   } catch {}
 })();
 

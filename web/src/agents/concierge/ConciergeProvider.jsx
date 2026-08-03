@@ -23,18 +23,8 @@ export default function ConciergeProvider({ children }) {
   // it on entry so a later reopen without a recipe never re-fires the last one.
   const [recipeReq, setRecipeReq] = useState({ recipe: null, target: null, nonce: 0 });
 
-  // Ref so the once-registered window listeners read the LIVE designMode +
-  // setSetting (mutual exclusion below), not a mount-time closure.
-  const muteRef = useRef(null);
-  muteRef.current = { designMode: !!settings?.agents?.mode, setSetting };
-
   useEffect(() => {
     const onOpen = (e) => {
-      // Mutual exclusion centralized here: opening Concierge exits Design Mode
-      // (Atelier) — one agent surface at a time on the shared agent-chat stream,
-      // so every caller (dock, context-menu "Ask Concierge") gets it for free.
-      const m = muteRef.current;
-      if (m.designMode) m.setSetting('agents', { mode: false });
       const prefill = (e && e.detail && e.detail.prefill) || '';
       setSeed((s) => ({ text: prefill, nonce: s.nonce + 1 }));
       const recipe = (e && e.detail && e.detail.recipe) || null;
@@ -55,11 +45,6 @@ export default function ConciergeProvider({ children }) {
       window.removeEventListener('concierge:toggle', onToggle);
     };
   }, []);
-
-  // Belt-and-suspenders for the reverse direction: if Design Mode turns on by any
-  // other path, Concierge closes (it can't share the agent-chat stream with Atelier).
-  const designMode = !!settings?.agents?.mode;
-  useEffect(() => { if (designMode) setOpen(false); }, [designMode]);
 
   return (
     <>

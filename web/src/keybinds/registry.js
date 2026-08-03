@@ -52,6 +52,12 @@ export const KEYBIND_REGISTRY = [
     default: { kind: 'chord', key: 'f9', modifiers: [] },
   },
   {
+    id: 'markup.toggle',
+    group: 'Design',
+    label: 'Toggle markup mode (hover a component for its name + source path)',
+    default: { kind: 'chord', key: 'm', modifiers: ['meta', 'shift'] },
+  },
+  {
     id: 'browser.new-tab',
     group: 'Browser',
     label: 'Open a new browser tab',

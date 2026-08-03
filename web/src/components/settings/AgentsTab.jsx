@@ -1,8 +1,7 @@
-// Settings → Agents tab (formerly Design (AI)). Three sub-tabs on the shared
-// Topbar: General (auth backend, API key / Claude Code CLI, model, agent
-// reach, pending edits), Atelier (persona + chat-window drag tuning), and
-// Vault Agent (placeholder — planned under its own feature pass). The
-// settings bag renamed design → agents; the Rust design_* IPC names, the
+// Settings → Agents tab. Three sub-tabs on the shared Topbar: General (auth
+// backend, API key / Claude Code CLI, model, agent reach), Chat window (drag
+// tuning shared by every agent's floating window), and Concierge. The settings
+// bag renamed design → agents; the Rust design_* IPC names, the
 // components/design/ directory, and the dock design-mode button id stay.
 
 import { useCallback, useEffect, useState } from 'react';
@@ -27,22 +26,19 @@ export default function AgentsTab({ settings, setSetting, accent, section, onSec
         style={{ padding: '0 0 12px', background: 'transparent', marginBottom: 16 }}
       />
       {active === 'general'     && <GeneralPanel settings={settings} setSetting={setSetting} accent={accent}/>}
-      {active === 'atelier'     && <AtelierPanel settings={settings} setSetting={setSetting} accent={accent}/>}
+      {active === 'chat-window' && <ChatWindowPanel settings={settings} setSetting={setSetting} accent={accent}/>}
       {active === 'concierge'   && <ConciergePanel/>}
     </div>
   );
 }
 
-// ── General — backend, key/CLI, model, reach, pending edits ─────────────────
+// ── General — backend, key/CLI, model, reach ────────────────────────────────
 
 function GeneralPanel({ settings, setSetting, accent }) {
   const agents = { ...AGENTS_DEFAULT, ...(settings?.agents || {}) };
   const backend = agents.authBackend || 'api-key';
   const model = agents.model || 'opus';
   const cliPath = agents.claudeCliPath || '';
-
-  const [pendingCount, setPendingCount] = useState(0);
-  const [pendingBusy, setPendingBusy] = useState(false);
 
   const [keyDraft, setKeyDraft] = useState('');
   const [keyPresent, setKeyPresent] = useState(false);
@@ -52,16 +48,6 @@ function GeneralPanel({ settings, setSetting, accent }) {
   const [cliStatus, setCliStatus] = useState(null);
   const [cliStatusBusy, setCliStatusBusy] = useState(false);
   const [cliPathDraft, setCliPathDraft] = useState(cliPath);
-
-  const refreshPending = useCallback(async () => {
-    try {
-      const edits = await invoke('design_pending_get');
-      setPendingCount(Array.isArray(edits) ? edits.length : 0);
-    } catch {
-      setPendingCount(0);
-    }
-  }, []);
-  useEffect(() => { refreshPending(); }, [refreshPending]);
 
   const refreshKey = useCallback(async () => {
     try {
@@ -110,19 +96,6 @@ function GeneralPanel({ settings, setSetting, accent }) {
     setSetting('agents', { claudeCliPath: cliPathDraft.trim() });
   };
 
-  const handleClearPending = async () => {
-    if (pendingBusy) return;
-    setPendingBusy(true);
-    try {
-      await invoke('design_pending_set', { edits: [] });
-      await refreshPending();
-    } catch (e) {
-      console.warn('[agents] clear pending failed:', e);
-    } finally {
-      setPendingBusy(false);
-    }
-  };
-
   const handleCopyLogin = () => {
     try { navigator.clipboard?.writeText('claude /login'); } catch {}
   };
@@ -148,7 +121,7 @@ function GeneralPanel({ settings, setSetting, accent }) {
         <Row
           anchor="set-agents-model"
           label="Model"
-          hint="Shared across both backends. Opus is recommended for the best Atelier responses. CLI accepts the alias; API path overrides the hardcoded model."
+          hint="Shared across both backends. Opus is recommended for the best responses. CLI accepts the alias; API path overrides the hardcoded model."
         >
           <Seg
             accent={accent}
@@ -199,7 +172,7 @@ function GeneralPanel({ settings, setSetting, accent }) {
         <Section title="Claude Code">
           <Row
             label="Subscription"
-            hint="Auth state of the `claude` CLI on this machine. If not detected, log in once via a terminal and Atelier will use that session."
+            hint="Auth state of the `claude` CLI on this machine. If not detected, log in once via a terminal and the agents will use that session."
           >
             <CliStatusBanner
               status={cliStatus}
@@ -236,38 +209,21 @@ function GeneralPanel({ settings, setSetting, accent }) {
       <Section title="Agent reach">
         <ReachSummary backend={backend} accent={accent}/>
       </Section>
-
-      <Section title="Pending edits">
-        <Row
-          label={pendingCount > 0 ? `${pendingCount} uncommitted token tweak${pendingCount === 1 ? '' : 's'}` : 'No uncommitted tweaks'}
-          hint="Edits made via the Atelier token bubble that haven't been committed to source. Cleared here without writing."
-        >
-          <OutlinedBtn small onClick={handleClearPending} disabled={pendingCount === 0 || pendingBusy}>
-            {pendingBusy ? '…' : 'Clear all'}
-          </OutlinedBtn>
-        </Row>
-      </Section>
     </div>
   );
 }
 
-// ── Atelier — persona + chat-window drag tuning ──────────────────────────────
+// ── Chat window — drag tuning shared by every agent's floating window ────────
 
-function AtelierPanel({ settings, setSetting, accent }) {
+function ChatWindowPanel({ settings, setSetting, accent }) {
   const agents = { ...AGENTS_DEFAULT, ...(settings?.agents || {}) };
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <Section title="Atelier">
-        <Row
-          label="Persona"
-          hint="Atelier is the designer-in-residence — calm, opinionated, references DESIGN.md tokens by name. One persona ships in v1."
-        >
-          <PersonaChip accent={accent}/>
-        </Row>
+      <Section title="Chat window">
         <Row
           anchor="set-agents-magnetRadius"
           label="Edge magnetism"
-          hint="The Atelier chat drags freely and snaps flush to the nearest content-area edge when released within this range. 0 = off (free drag anywhere)."
+          hint="An agent chat drags freely and snaps flush to the nearest content-area edge when released within this range. 0 = off (free drag anywhere)."
         >
           <Slider
             accent={accent}
@@ -291,7 +247,7 @@ function AtelierPanel({ settings, setSetting, accent }) {
         <Row
           anchor="set-agents-dragSmoothness"
           label="Drag glide"
-          hint="How much the chat trails your cursor while you drag it. None pins it exactly (1:1); heavier gives a weightier, smoother trail."
+          hint="How much an agent chat trails your cursor while you drag it. None pins it exactly (1:1); heavier gives a weightier, smoother trail."
         >
           <Seg
             accent={accent}
@@ -308,7 +264,7 @@ function AtelierPanel({ settings, setSetting, accent }) {
         <Row
           anchor="set-agents-resetPosition"
           label="Chat position"
-          hint="Snap the Atelier chat back to its default bottom-right corner."
+          hint="Snap an agent chat back to its default bottom-right corner."
         >
           <OutlinedBtn small onClick={() => setSetting('agents', { chatPosition: null })}>
             Reset position
@@ -327,8 +283,8 @@ function ConciergePanel() {
       <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Concierge</div>
       <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.55 }}>
         The app-wide helper — launch it from the Agents button in the dock. Auth
-        backend and model are shared with Atelier in the General tab; more Concierge
-        controls arrive as its capabilities ship.
+        backend and model live in the General tab and are shared by every agent;
+        more Concierge controls arrive as its capabilities ship.
       </div>
     </div>
   );
@@ -462,26 +418,6 @@ function CliStatusBanner({ status, busy, onRefresh, onCopyLogin }) {
           {busy ? 'checking…' : 'Re-check'}
         </OutlinedBtn>
       </div>
-    </div>
-  );
-}
-
-function PersonaChip({ accent }) {
-  return (
-    <div style={{
-      display: 'inline-flex', alignItems: 'center', gap: 10,
-      padding: '6px 10px 6px 8px',
-      background: 'var(--surface-2)',
-      border: '1px solid var(--border-soft)',
-      borderRadius: 'var(--radius-md)',
-    }}>
-      <span style={{
-        width: 10, height: 10, borderRadius: '50%',
-        background: accent || 'var(--text)',
-        boxShadow: `0 0 0 3px color-mix(in oklch, ${accent || 'var(--text)'} 22%, transparent)`,
-      }}/>
-      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>Atelier</span>
-      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>· designer-in-residence</span>
     </div>
   );
 }

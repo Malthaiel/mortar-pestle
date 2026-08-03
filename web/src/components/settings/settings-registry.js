@@ -45,7 +45,7 @@ export const TAB_SECTIONS = {
     default: 'general',
     sections: [
       { id: 'general',     label: 'General' },
-      { id: 'atelier',     label: 'Atelier' },
+      { id: 'chat-window', label: 'Chat window' },
       { id: 'concierge',   label: 'Concierge' },
     ],
   },
@@ -196,7 +196,7 @@ export const RESET_SCOPES = {
   // The agents bag interleaves (mode / auth / drag tuning), so both real
   // sub-tabs reset the whole bag; the Vault Agent placeholder resets nothing.
   'agents/general':     { label: 'Agents', keys: ['agents'] },
-  'agents/atelier':     { label: 'Agents', keys: ['agents'] },
+  'agents/chat-window': { label: 'Agents', keys: ['agents'] },
   'system/system':      { label: 'System', bag: 'dev', fields: ['autoCheckUpdates', 'updatePollInterval'], keys: ['sitePushEnabled'] },
   'system/downloads':   { label: 'System › Downloads', keys: ['downloads'] },
   'system/recycle':     { label: 'System › Recycling Bin', keys: ['recycleBinMaxItems', 'recycleBinRetentionDays'] },

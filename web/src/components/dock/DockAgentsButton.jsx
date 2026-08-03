@@ -1,8 +1,8 @@
-// Dock "Agents" launcher — the repurposed Design dock button. A dock icon whose
-// popover opens UPWARD from the bar (mirrors DockVaultSwitcher) and lists the
-// agents from the registry: Atelier → enters Design Mode, Concierge → opens its
-// chat window. Rendered by Dock.jsx's renderBtn special-case for id 'design-mode'
-// (kept to avoid a dock.order migration).
+// Dock "Agents" launcher — a dock icon whose popover opens UPWARD from the bar
+// (mirrors DockVaultSwitcher) and lists the agents from the registry; each opens
+// its own chat window. Rendered by Dock.jsx's renderBtn special-case for id
+// 'design-mode' — that id is kept to avoid a dock.order migration, and no longer
+// refers to a Design Mode.
 
 import { useEffect, useRef, useState } from 'react';
 import { Popover } from '../ui';
@@ -12,7 +12,7 @@ import { listAgents } from '../../agents/agents-registry.js';
 import { openConcierge } from '../../agents/concierge/ConciergeProvider.jsx';
 import { openAnalyst } from '../../agents/analyst/AnalystProvider.jsx';
 
-export default function DockAgentsButton({ label, accent, settings, setSetting, onContextMenu }) {
+export default function DockAgentsButton({ label, accent, onContextMenu }) {
   const [open, setOpen] = useState(false);
   const [rect, setRect] = useState(null);
   const wrapRef = useRef(null);
@@ -32,8 +32,6 @@ export default function DockAgentsButton({ label, accent, settings, setSetting, 
     };
   }, [open]);
 
-  const designOn = !!settings?.agents?.mode;
-
   const toggle = () => {
     if (!open && wrapRef.current) setRect(wrapRef.current.getBoundingClientRect());
     setOpen((o) => !o);
@@ -41,11 +39,8 @@ export default function DockAgentsButton({ label, accent, settings, setSetting, 
 
   const launch = (id) => {
     setOpen(false);
-    if (id === 'atelier') setSetting('agents', { mode: true });
-    // Concierge exits Design Mode first — one agent surface at a time (they share
-    // the global agent-chat event stream).
-    else if (id === 'concierge') { setSetting('agents', { mode: false }); openConcierge(); }
-    // Analyst's provider centralizes its own exclusion (exits Design Mode, closes Concierge).
+    if (id === 'concierge') openConcierge();
+    // Analyst's provider centralizes its own exclusion (closes Concierge).
     else if (id === 'analyst') openAnalyst();
   };
 
@@ -55,7 +50,7 @@ export default function DockAgentsButton({ label, accent, settings, setSetting, 
         Icon={IconSparkles}
         label={label}
         onClick={toggle}
-        isActive={open || designOn}
+        isActive={open}
         accent={accent}
         onContextMenu={onContextMenu}
       />
@@ -77,9 +72,7 @@ export default function DockAgentsButton({ label, accent, settings, setSetting, 
           }}
           bodyStyle={{ padding: 6, display: 'flex', flexDirection: 'column', gap: 2 }}
         >
-          {listAgents().map((a) => {
-            const isOn = a.id === 'atelier' && designOn;
-            return (
+          {listAgents().map((a) => (
               <button
                 key={a.id}
                 type="button"
@@ -89,22 +82,18 @@ export default function DockAgentsButton({ label, accent, settings, setSetting, 
                   appearance: 'none', border: 0, textAlign: 'left',
                   display: 'flex', alignItems: 'center', gap: 8,
                   padding: '7px 9px', borderRadius: 8,
-                  background: isOn ? `color-mix(in oklch, ${accent || 'var(--accent)'} 14%, transparent)` : 'transparent',
+                  background: 'transparent',
                   color: 'var(--text)', cursor: 'pointer', width: '100%',
                 }}
-                onMouseEnter={(e) => { if (!isOn) e.currentTarget.style.background = 'var(--surface-2)'; }}
-                onMouseLeave={(e) => { if (!isOn) e.currentTarget.style.background = 'transparent'; }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-2)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
               >
                 <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
                   <span style={{ fontSize: 12.5, fontWeight: 600 }}>{a.label}</span>
                   <span style={{ fontSize: 10, color: 'var(--text-faint)' }}>{a.tagline}</span>
                 </span>
-                {isOn && (
-                  <span style={{ fontSize: 9.5, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>on</span>
-                )}
               </button>
-            );
-          })}
+          ))}
         </Popover>
       )}
     </span>

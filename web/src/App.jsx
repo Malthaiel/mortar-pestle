@@ -24,7 +24,8 @@ import WikilinkHoverPreview from './components/WikilinkHoverPreview.jsx';
 import WhatsNewOverlay from './components/WhatsNewOverlay.jsx';
 import DocsPage from './pages/docs/DocsPage.jsx';
 import Dock from './components/dock/Dock.jsx';
-import DesignModeOverlay from './components/design/DesignModeOverlay.jsx';
+import MarkupOverlay from './components/markup/MarkupOverlay.jsx';
+import { useMarkupMode } from './components/markup/useMarkupMode.js';
 import PlannerModal from './components/PlannerModal.jsx';
 import RecyclingBinModal from './components/RecyclingBinModal.jsx';
 import { ActiveModuleProvider } from './hooks/useActiveModule.jsx';
@@ -162,6 +163,16 @@ function MainApp() {
 
   useKeybindAction('command-palette.toggle', settings.keybinds, togglePalette, { ignoreEditableTarget: true });
   useKeybindAction('hints.toggle',           settings.keybinds, toggleHints);
+
+  // Markup mode — hover any element for its name + ancestor breadcrumb, click to
+  // copy `ComponentName — path/File.jsx:12:4` to the clipboard. Both attributes
+  // are stamped on every JSX element by the aos-component-id Vite plugin.
+  const { markupOn, toggleMarkup } = useMarkupMode();
+  useKeybindAction('markup.toggle', settings.keybinds, toggleMarkup, { ignoreEditableTarget: true });
+  const copyMarkupTarget = useCallback((el) => {
+    const { aosComponent = 'Unknown', aosSource = '' } = el?.dataset || {};
+    navigator.clipboard.writeText(aosSource ? `${aosComponent} — ${aosSource}` : aosComponent);
+  }, []);
 
   // Host-registered palette actions. Modules register their own via
   // registerCommandAction. These are the always-present chrome actions.
@@ -311,7 +322,7 @@ function MainApp() {
       <ConfettiBurst accent={accent}/>
       <WikilinkHoverPreview/>
       <WhatsNewOverlay/>
-      <DesignModeOverlay settings={settings} setSetting={setSetting} accent={accent}/>
+      {markupOn && <MarkupOverlay accent={accent} onPick={copyMarkupTarget}/>}
       </DownloadsProvider>
     </ComposedProviders>
     </ContextMenuProvider>

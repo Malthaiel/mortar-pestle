@@ -5,7 +5,7 @@
 // streaming.
 
 import { memo, useEffect, useRef } from 'react';
-import AtelierAvatar from './AtelierAvatar.jsx';
+import AgentAvatar from '../agents/AgentAvatar.jsx';
 
 export default function MessageList({ messages, streaming, accent, error, emptyName, emptyTagline, emptyBlurb }) {
   const scrollRef = useRef(null);
@@ -55,13 +55,13 @@ export default function MessageList({ messages, streaming, accent, error, emptyN
   );
 }
 
-// Persona is parameterized so reusers (Concierge) show their own identity;
-// Atelier's copy is the default when the props are omitted.
+// Persona is parameterized so every agent shows its own identity; each caller
+// passes emptyName / emptyTagline, and these generic strings are the fallback.
 function EmptyState({
   accent,
-  name = 'Atelier',
-  tagline = 'designer-in-residence',
-  blurb = 'What are we shaping? Ask in plain English, or hover over a component to talk about it directly.',
+  name = 'Agent',
+  tagline = '',
+  blurb = 'Ask in plain English.',
 }) {
   return (
     <div style={{
@@ -69,7 +69,7 @@ function EmptyState({
       padding: '24px 8px 8px',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <AtelierAvatar accent={accent} size={11}/>
+        <AgentAvatar accent={accent} size={11}/>
         <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{name}</span>
         <span style={{ fontSize: 11, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)' }}>
           {tagline}
@@ -107,7 +107,7 @@ const Message = memo(function Message({ msg, accent }) {
   return (
     <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', contentVisibility: 'auto', containIntrinsicSize: 'auto 200px' }}>
       <div style={{ paddingTop: 6, flexShrink: 0 }}>
-        <AtelierAvatar accent={accent} streaming={!!msg.streaming}/>
+        <AgentAvatar accent={accent} size={10} streaming={!!msg.streaming}/>
       </div>
       <div style={{
         flex: 1, minWidth: 0,

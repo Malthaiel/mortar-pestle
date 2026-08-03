@@ -6,11 +6,10 @@
 // aimed at a specific match.
 //
 // Mutual exclusion (one agent surface at a time on the shared agent-chat
-// stream): opening Analyst exits Design Mode (Atelier) AND closes Concierge;
-// the reverse guard listens for 'concierge:open' (Concierge predates the
-// Analyst and doesn't know about it) and closes on Design Mode turning on.
+// stream): opening Analyst closes Concierge; the reverse guard listens for
+// 'concierge:open' (Concierge predates the Analyst and doesn't know about it).
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSettings } from '../../hooks/useSettings.js';
 import AnalystChatWindow from './AnalystChatWindow.jsx';
 
@@ -22,14 +21,8 @@ export default function AnalystProvider({ children }) {
   const [recipeReq, setRecipeReq] = useState({ recipe: null, target: null, nonce: 0 });
   const [match, setMatch] = useState({ scrimPath: '', matchN: null });
 
-  // Ref so the once-registered listeners read the LIVE designMode + setSetting.
-  const muteRef = useRef(null);
-  muteRef.current = { designMode: !!settings?.agents?.mode, setSetting };
-
   useEffect(() => {
     const onOpen = (e) => {
-      const m = muteRef.current;
-      if (m.designMode) m.setSetting('agents', { mode: false });
       window.dispatchEvent(new CustomEvent('concierge:close'));
       const d = (e && e.detail) || {};
       if (d.scrimPath !== undefined || d.matchN !== undefined) {
@@ -53,9 +46,6 @@ export default function AnalystProvider({ children }) {
       window.removeEventListener('concierge:open', onConciergeOpen);
     };
   }, []);
-
-  const designMode = !!settings?.agents?.mode;
-  useEffect(() => { if (designMode) setOpen(false); }, [designMode]);
 
   return (
     <>
