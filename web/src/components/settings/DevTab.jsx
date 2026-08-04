@@ -54,7 +54,7 @@ export default function DevTab({ accent }) {
         <GpuSpikePanel accent={accent} />
       </PanelBoundary>
       <PanelBoundary>
-        <FoldPanel accent={accent} />
+        <FoldPanel />
       </PanelBoundary>
     </div>
   );
