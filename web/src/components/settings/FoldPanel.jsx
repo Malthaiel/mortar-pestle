@@ -92,8 +92,24 @@ export default function FoldPanel() {
   // colour hold. That deleted the held-press state, the --cbtn-band neutral
   // override and the face's resting-colour restatement along with it.
 
-  // Which flaps are pressed: [pair, flap]. Each squashes, releases, and only
-  // THEN folds, so the compaction runs down the stack a beat ahead of the fold.
+  // Whether the BOTTOM flap is pressed. It squashes, releases, and only THEN
+  // folds, so the compaction runs a beat ahead of its own fold.
+  //
+  // The PAIR used to squash too, at press + DUR. It no longer does, and this is
+  // a fix, not a trim. By the time that press landed, the bottom flap was
+  // already folded flat across the middle rectangle — so the squash was hidden
+  // and could never read as a press. All it ever produced was a leak: the press
+  // slides a face down --cbtn-depth (styles.css, `.candy-btn:is(:active,
+  // .is-pressed, [data-candy-pressed]) > .candy-face`) while the depth band
+  // underneath stays put, so the face paints straight over its own band — and
+  // the flap lying on top hid every part of that slide EXCEPT the bottom
+  // --cbtn-depth of it, which slid out from under the flap as a bar of face
+  // colour, held 70ms, and vanished. That is the "face of the candy button
+  // flickers then goes away" bug, and it took four sessions because it is
+  // invisible to a box measurement AND to the scrub slider (scrubbing presses
+  // nothing, so there is no slide to leak). Measured off a 60fps capture: the
+  // seven rows under the middle rectangle read 14 at rest and 31 — the exact
+  // face luma — for the four frames of the press.
   //
   // Squash-before-fold rather than squash-during is load-bearing, not taste. A
   // pressed face is slid DOWN --cbtn-depth inside its own button, and the fold
@@ -115,24 +131,23 @@ export default function FoldPanel() {
   // there for the squash that precedes the fold (a zero lip has nothing to
   // slide, and the squash would vanish with it).
   const [manual, setManual] = useState(null);
-  const [down, setDown] = useState([false, false]);
+  const [down, setDown] = useState(false);
   const [lip, setLip] = useState([true, true]);
   useEffect(() => {
     const t = [];
     if (open) {
-      setDown([false, false]);
+      setDown(false);
       // Lips return per flap, each as its own unfold finishes.
       t.push(setTimeout(() => setLip(([, f]) => [true, f]), press + DUR));
       t.push(setTimeout(() => setLip([true, true]), press + 2 * DUR));
     } else {
-      setDown([false, true]);                                      // Navigation squashes
+      setDown(true);                                               // Navigation squashes
       t.push(setTimeout(() => {                                    // released, then folds
-        setDown([false, false]); setLip([true, false]);
+        setDown(false); setLip([true, false]);
       }, press));
-      t.push(setTimeout(() => setDown([true, false]), press + DUR));  // pair squashes
-      t.push(setTimeout(() => {                                    // released, then folds
-        setDown([false, false]); setLip([false, false]);
-      }, 2 * press + DUR));
+      // The pair drops its lip as its own fold begins. No squash precedes it —
+      // see above; a hidden press only ever leaked a bar of face colour.
+      t.push(setTimeout(() => setLip([false, false]), 2 * press + DUR));
     }
     return () => t.forEach(clearTimeout);
   }, [open, press]);
@@ -358,7 +373,7 @@ export default function FoldPanel() {
                 top. So the closed-state label lives here, on the back — and it
                 matches the candy button's, so the swap only adds the depth
                 band. rotateX flips y only, so the counter-flip is scaleY. */}
-            <button type="button" ref={refs[1]} className={cls(down[0])} data-own-press data-self-press style={btn(pairLip)}
+            <button type="button" ref={refs[1]} className="candy-btn" data-own-press data-self-press style={btn(pairLip)}
               onClick={() => setOpen(false)}>
               <span className="candy-face" style={FACE}>
                 <span style={{ ...label, opacity: back ? 0 : 1 }}>Sounds</span>
@@ -370,7 +385,7 @@ export default function FoldPanel() {
             <button
               type="button"
               ref={refs[2]}
-              className={cls(down[1])}
+              className={cls(down)}
               data-own-press
               data-self-press
               onClick={() => setOpen(false)}
