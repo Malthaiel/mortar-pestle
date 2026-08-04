@@ -636,6 +636,10 @@ async fn process_mal_job(app: &AppHandle, job_id: &str) {
     emit_progress(app, job_id);
 
     let anime_script = resolve_script(app, "download_anime.py");
+    let save_root = crate::commands::video_config::anime_video_root(
+        app,
+        &crate::commands::vault::library_vault_root(),
+    );
     for (i, a) in entries.iter().enumerate() {
         if cancelled(job_id) {
             with_job(job_id, |j| j.state = ImportState::Cancelled);
@@ -658,7 +662,7 @@ async fn process_mal_job(app: &AppHandle, job_id: &str) {
         }
 
         if let Some(ref ascript) = anime_script {
-            match spawn_anime_card(job_id, ascript, a).await {
+            match spawn_anime_card(job_id, ascript, a, &save_root).await {
                 Some(skipped) => with_job(job_id, |j| {
                     if skipped {
                         j.skipped += 1;
@@ -702,7 +706,12 @@ async fn process_mal_job(app: &AppHandle, job_id: &str) {
 
 /// Spawn `download_anime.py --metadata-only` for one MAL entry; returns
 /// Some(skipped) from its terminal JSON, or None on failure.
-async fn spawn_anime_card(job_id: &str, script: &str, a: &ParsedAnime) -> Option<bool> {
+async fn spawn_anime_card(
+    job_id: &str,
+    script: &str,
+    a: &ParsedAnime,
+    save_root: &std::path::Path,
+) -> Option<bool> {
     let vault = crate::commands::vault::vault_root();
     let library = crate::commands::vault::library_vault_root();
     let status = if a.status.is_empty() { "Plan-to-Watch" } else { &a.status };
@@ -715,7 +724,7 @@ async fn spawn_anime_card(job_id: &str, script: &str, a: &ParsedAnime) -> Option
         .arg("--library")
         .arg(&library)
         .arg("--save-root")
-        .arg(format!("{library}/Anime/Videos"))
+        .arg(save_root)
         .arg("--metadata-only")
         .arg("--status")
         .arg(status)

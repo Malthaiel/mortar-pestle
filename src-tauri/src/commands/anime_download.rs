@@ -645,7 +645,7 @@ async fn process_job(app: &AppHandle, job_id: &str) {
         .arg("--mal-id").arg(mal_id.to_string())
         .arg("--vault").arg(&vault)
         .arg("--library").arg(&library)
-        .arg("--save-root").arg(Path::new(&library).join("Anime").join("Videos"))
+        .arg("--save-root").arg(crate::commands::video_config::anime_video_root(app, &library))
         .arg("--audio").arg(&audio)
         .arg("--type").arg(&anime_type);
     if airing {

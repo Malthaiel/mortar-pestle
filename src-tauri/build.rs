@@ -175,6 +175,8 @@ fn main() {
         "qbit_status",
         "qbit_start_daemon",
         "qbit_stop_daemon",
+        "video_get_config",
+        "video_set_config",
         "anime_download_enqueue",
         "anime_download_status",
         "anime_download_cancel",
