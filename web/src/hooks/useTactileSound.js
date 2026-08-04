@@ -233,7 +233,13 @@ function onCandyPressDown(e) {
   const candy = e.target.closest('.candy-btn');
   if (!candy || candy.disabled) return;
   if (candy.matches('[data-shape="seg-option"]')) return;             // never presses (would slip out of the tray clip)
-  if (e.target.closest('.planner-ring-button, .aos-chat-window')) return; // these self-manage is-pressed
+  // These self-manage is-pressed. data-self-press is the generic form of the two
+  // hardcoded classes: any candy button running its OWN press schedule opts out,
+  // because a 70ms global hold layered on top fights it — FoldPanel's rectangles
+  // squash and release on a timed choreography, and the leftover global hold ran
+  // 80ms into the bottom flap's fold, landing it a depth high (a pressed face is
+  // slid DOWN, and a 180deg fold flips that slide UP).
+  if (e.target.closest('.planner-ring-button, .aos-chat-window, [data-self-press]')) return;
   if (candy.matches('.music-tile')) {                                 // mirror the :has(...) gate (styles.css)
     const nested = e.target.closest('button, .music-tile-cover, .music-tile-scrub, .planner-ring-button, [data-no-drag]');
     if (nested && nested !== candy) return;                           // a nested control owns its own press

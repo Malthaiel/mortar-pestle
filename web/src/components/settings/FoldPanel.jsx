@@ -84,17 +84,13 @@ export default function FoldPanel() {
   // hand-back and both hinges can never drift apart.
   const SHUT = 2 * press + 2 * DUR;
 
-  // The button stays down for the whole unfolded stretch, then rises once the
-  // paper is shut again. This is a held state, NOT a transition-delay on the
-  // face: a delay there applies to every transform change, including the
-  // mouse's own :active press, which then sat frozen for the length of the
-  // delay before it would start moving.
-  const [pressed, setPressed] = useState(true);
-  useEffect(() => {
-    if (open) { setPressed(true); return; }
-    const t = setTimeout(() => setPressed(false), SHUT + SETTLE);
-    return () => clearTimeout(t);
-  }, [open]);
+  // The shut button is NOT held down any more (user-directed 2026-08-04). It
+  // used to stay pressed for the whole unfolded stretch and rise a beat after
+  // the fold shut, so a fully-pressed face — slid over its own depth band, i.e.
+  // a plain rectangle — handed over to the flaps with no depth pop. He asked
+  // for it to simply arrive at rest instead: no release to watch, no neutral
+  // colour hold. That deleted the held-press state, the --cbtn-band neutral
+  // override and the face's resting-colour restatement along with it.
 
   // Which flaps are pressed: [pair, flap]. Each squashes, releases, and only
   // THEN folds, so the compaction runs down the stack a beat ahead of the fold.
@@ -172,8 +168,16 @@ export default function FoldPanel() {
     height: box.h,
     display: 'block',              // the class is inline-flex; these stack
     '--cbtn-depth': lipOn ? 'var(--candy-depth)' : '0px',
-    // Re-armed against the wrapper's pointerEvents: 'none' below.
-    pointerEvents: 'auto',
+    // Re-armed against the wrapper's pointerEvents: 'none' below — but ONLY
+    // while open. An unconditional 'auto' also beat the GROUP's own
+    // `open ? 'auto' : 'none'`, so the rectangles kept hit-testing through the
+    // whole close: the one you clicked held :hover (accent face, white text)
+    // until its own rotation carried it out from under the cursor, then faded
+    // back to grey mid-flight. That is the "face flickers then goes away as
+    // they go up" — and why the slider never showed it, since scrubbing never
+    // puts the cursor on a rectangle. Dropping to 'none' at click releases the
+    // hover on frame one, while everything is still flat.
+    pointerEvents: open ? 'auto' : 'none',
   });
 
   // The account chip's face text, resolved through all three rules that reach
@@ -201,8 +205,45 @@ export default function FoldPanel() {
   const label = {
     gridArea: '1 / 1',
     whiteSpace: 'nowrap',        // type + colour inherit from the face
-    transition: `opacity ${DUR}ms ease-in-out`,
   };
+
+  // Which of the middle rectangle's two stacked words is showing — its front
+  // ("Sounds") or the mirrored one on its back ("Settings").
+  //
+  // This used to be a plain `open ? 1 : 0` opacity pair cross-fading over DUR,
+  // fired the instant the click landed. But the pair does not START folding
+  // until 2*press + DUR, so for the first 300ms of a close the rectangle is
+  // still FLAT AND FACING YOU while its back label fades up through its front
+  // one — a ghost word blooming on a face-up rectangle, then carried off as it
+  // rotates. That is the "face of the candy button flickers then goes away".
+  // Invisible to the slider, and only to the slider, because scrubbing forces
+  // `open` true, so the back label never fades in at all.
+  //
+  // Swapped at the edge-on frame instead: mid-fold the rectangle is rotated 90deg
+  // and paints zero pixels tall, so an instant swap there cannot be seen. No
+  // cross-fade left to catch flat. Manual scrub reads the angle directly, which
+  // also gives the slider the back label it never used to show.
+  const flipAt = open ? press + DUR / 2 : 2 * press + 1.5 * DUR;
+  const [flipped, setFlipped] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setFlipped(!open), flipAt);
+    return () => clearTimeout(t);
+  }, [open, flipAt]);
+
+  // Same swap on the OTHER hinge, and this is the one that was actually visible.
+  // A folded flap is face-DOWN, but nothing hides a backface, so the browser
+  // paints Navigation's own word straight through the back of it — a readable
+  // upside-down "Navigation" parked in the middle slot for the ~200ms between
+  // the two folds, then carried up and away by the second one. Measured off a
+  // 60fps capture: it holds dead steady for twelve frames. THAT is the flicker,
+  // not the Sounds/Settings pair, which is on the middle rectangle and behaves.
+  // Its own fold is edge-on at press + DUR/2 closing, press + 1.5*DUR opening.
+  const flapFlipAt = open ? press + 1.5 * DUR : press + DUR / 2;
+  const [flapFlipped, setFlapFlipped] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setFlapFlipped(!open), flapFlipAt);
+    return () => clearTimeout(t);
+  }, [open, flapFlipAt]);
 
   // Manual scrub. null = click-driven. One 0-360 sweep replays the letter fold
   // in order: 0-180 folds Navigation onto Sounds, 180-360 folds the pair onto
@@ -215,6 +256,9 @@ export default function FoldPanel() {
   // only while it is flat, which is the rule the animation follows too.
   const flapLip = auto ? lip[1] : flapDeg === 0;
   const pairLip = auto ? lip[0] : pairDeg === 0;
+  // Declared here, not up with the two flip flags, because they read auto/*Deg.
+  const back = auto ? flipped : pairDeg > 90;
+  const flapBack = auto ? flapFlipped : flapDeg > 90;
 
   return (
     <div>
@@ -234,16 +278,13 @@ export default function FoldPanel() {
       <div style={{ display: 'grid', width: box.w }}>
         {/* Shut state. Real .candy-btn / .candy-face, so hover, press and depth
             all arrive for free; only the face metrics are overridden, to the
-            account chip's, so the swap lands on the same rectangle.
-            is-pressed is the existing JS-held press (same rule as :active): it
-            holds the face down while the panel is open, which is what makes the
-            handover work — a fully pressed face has slid over its own depth
-            band, so it IS a plain rectangle, exactly what unfolds from it.
+            account chip's, so the swap lands on the same rectangle. It fades in
+            at REST — no held press, no release to sit through.
             data-own-press: candy defines its own :active, so it opts out of the
             global spring scale while keeping the press sound. */}
         <button
           type="button"
-          className={`candy-btn${pressed ? ' is-pressed' : ''}`}
+          className="candy-btn"
           data-own-press
           onClick={() => setOpen(true)}
           style={{
@@ -251,14 +292,6 @@ export default function FoldPanel() {
             width: box.w, height: box.h,
             opacity: open ? 0 : 1,
             pointerEvents: open ? 'none' : 'auto',
-            // Neutral only while HELD, not always: hover still floods accent
-            // like every other candy button, but the moment the press starts the
-            // button eases back to resting colour, so it hands over to plain grey
-            // rectangles without a colour jump on the frame the swap exists to
-            // hide. The band and frame read this var (base rule
-            // .candy-btn:is(:hover, :active)); the face's own accent fill is a
-            // SEPARATE rule, overridden inline below.
-            ...(pressed ? { '--cbtn-band': 'var(--surface)' } : {}),
             // The box-shadow leg is .candy-btn's own, restated verbatim: an
             // inline transition REPLACES the whole list, and dropping it left
             // the depth band snapping to the hover accent while the face above
@@ -267,13 +300,8 @@ export default function FoldPanel() {
               + ' box-shadow 150ms cubic-bezier(0, 0, 0.58, 1)',
           }}
         >
-          {/* While held, the face's own RESTING values are restated so the base
-              hover rule's accent fill / white text can't take — same pair the
-              rectangles use, so the handover changes no colour. Unheld, nothing
-              is set and hover behaves normally. */}
           <span className="candy-face" style={{
             ...CHIP_TEXT, height: '100%', padding: '0 8px',
-            ...(pressed ? { background: 'var(--surface-3)', color: 'var(--text-muted)' } : {}),
           }}>Settings</span>
         </button>
 
@@ -285,23 +313,24 @@ export default function FoldPanel() {
             puts the vanishing point off to the right, skewing the fold
             sideways. Holds its opacity until both folds have finished, so the
             whole animation plays before the candy button takes over.
-            Offset by the depth band: a pressed face sits that far down, and the
-            paper has to start from where the pressed face is, not where the
-            resting one was. var() so it tracks the depth picker. */}
+            NOT offset any more. It used to carry translateY(var(--candy-depth))
+            because the shut button was held PRESSED, so its face sat a depth
+            low and the paper had to start from there. The button lands neutral
+            now, so the paper lines up with the RESTING face at zero — leave the
+            offset off, or the folded stack hands over a full depth too low. */}
         <div
           role="group"
           aria-label="Fold"
           style={{
             gridArea: '1 / 1', alignSelf: 'start',
             perspective: PERSPECTIVE, width: box.w,
-            transform: 'translateY(var(--candy-depth))',
             opacity: open ? 1 : 0,
             pointerEvents: open ? 'auto' : 'none',
             transition: `opacity ${SETTLE}ms ease-in-out ${open ? press : SHUT}ms`,
           }}
         >
           {/* top — never moves; everything folds onto it */}
-          <button type="button" ref={refs[0]} className="candy-btn" data-own-press style={btn(true)}
+          <button type="button" ref={refs[0]} className="candy-btn" data-own-press data-self-press style={btn(true)}
             onClick={() => setOpen(false)}>
             <span className="candy-face" style={FACE}>
               <span style={label}>Appearance</span>
@@ -329,11 +358,11 @@ export default function FoldPanel() {
                 top. So the closed-state label lives here, on the back — and it
                 matches the candy button's, so the swap only adds the depth
                 band. rotateX flips y only, so the counter-flip is scaleY. */}
-            <button type="button" ref={refs[1]} className={cls(down[0])} data-own-press style={btn(pairLip)}
+            <button type="button" ref={refs[1]} className={cls(down[0])} data-own-press data-self-press style={btn(pairLip)}
               onClick={() => setOpen(false)}>
               <span className="candy-face" style={FACE}>
-                <span style={{ ...label, opacity: open ? 1 : 0 }}>Sounds</span>
-                <span style={{ ...label, opacity: open ? 0 : 1, transform: 'scaleY(-1)' }}>
+                <span style={{ ...label, opacity: back ? 0 : 1 }}>Sounds</span>
+                <span style={{ ...label, opacity: back ? 1 : 0, transform: 'scaleY(-1)' }}>
                   Settings
                 </span>
               </span>
@@ -343,11 +372,14 @@ export default function FoldPanel() {
               ref={refs[2]}
               className={cls(down[1])}
               data-own-press
+              data-self-press
               onClick={() => setOpen(false)}
               style={{ ...btn(flapLip), marginTop: GAP, ...hinge(flapDeg, open ? press + DUR : press, !auto) }}
             >
               <span className="candy-face" style={FACE}>
-                <span style={label}>Navigation</span>
+                {/* Hidden once past edge-on: face-down, its word must not show
+                    through the back. Blank underside, like real folded paper. */}
+                <span style={{ ...label, opacity: flapBack ? 0 : 1 }}>Navigation</span>
               </span>
             </button>
           </div>
