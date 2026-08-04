@@ -1712,8 +1712,17 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
    one). .is-active fills accent (base state — no override). .is-danger diverges
    from the persistent-red base: neutral at rest, red text + frame on hover only
    (Planner note-chip delete), so the destructive action reads without a standing
-   red fill. */
-.candy-btn[data-shape="chip"] { border-radius: 999px; }
+   red fill.
+   --cbtn-depth: chip is a SMALL shape and pins the small 5px lip, like `icon`,
+   `circle`, `seg`, `select` and its own legacy predecessor. It declared none
+   until 2026-08-03 and silently inherited the full 7px --candy-depth, so every
+   chip in the app carried 2px more visual mass than its neighbours and sat 1px
+   higher (candyCenterOffset lifts by half the button's OWN depth). The lip is a
+   box-shadow drawn OUTSIDE layout, so matching heights could never fix it. */
+.candy-btn[data-shape="chip"] {
+  border-radius: 999px;
+  --cbtn-depth: var(--candy-depth-small);
+}
 .candy-btn[data-shape="chip"] > .candy-face {
   padding: 5px 10px;
   font-size: 10.5px;
@@ -1755,18 +1764,16 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
    stronger (0,2,0 / 0,3,0) and later than anything up in the titlebar section.
    Written there it was silently dead — no error, just a pill at the wrong
    height with the wrong text size.
-   Three deviations from stock chip:
-   1. --cbtn-depth pinned to the CircleChips' small depth. `chip` declares none,
-      so it inherits the FULL --candy-depth (7px vs the circles' 5px) — 2px more
-      visual mass AND 1px higher, since candyCenterOffset lifts by half the
-      button's OWN depth. Equal box heights cannot fix that: the lip is a
-      box-shadow, drawn outside layout. Measured off a screenshot at 35px vs 33.
-   2. A soft corner instead of the pill's 999px.
-   3. Zero vertical padding (height comes inline from TitleBar's BTN, the same
+   Two deviations from stock chip:
+   1. A soft corner instead of the pill's 999px.
+   2. Zero vertical padding (height comes inline from TitleBar's BTN, the same
       constant the CircleChips take) and a readable name size — stock chip's
-      10.5px/0.04em is a stat-pill treatment, too small beside a 20px avatar. */
+      10.5px/0.04em is a stat-pill treatment, too small beside an 18px avatar.
+   These used to pin --cbtn-depth by hand as a third deviation, because `chip`
+   declared none and inherited the full 7px lip while the circles took 5px. The
+   shape itself pins the small depth now, so the hand-pin was deleted as dead
+   weight — every chip in the app matches its neighbours, not just these two. */
 .candy-btn:is(.titlebar-account, .titlebar-brand) {
-  --cbtn-depth: var(--candy-depth-small);
   border-radius: var(--radius-md);
 }
 .candy-btn:is(.titlebar-account, .titlebar-brand) > .candy-face {
