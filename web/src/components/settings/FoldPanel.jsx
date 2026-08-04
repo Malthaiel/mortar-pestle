@@ -148,6 +148,13 @@ export default function FoldPanel() {
             width: box.w, height: box.h,
             opacity: open ? 0 : 1,
             pointerEvents: open ? 'none' : 'auto',
+            // Stay neutral in every state. The cursor is ON the button when you
+            // click it, so the base :hover accent flood would fire, hold through
+            // the whole press, and then hand over to plain grey rectangles — a
+            // colour jump on the one frame the swap is meant to hide. The band
+            // and frame read this var (base rule .candy-btn:is(:hover,:active));
+            // the face's own accent fill is overridden inline below.
+            '--cbtn-band': 'var(--surface)',
             // The box-shadow leg is .candy-btn's own, restated verbatim: an
             // inline transition REPLACES the whole list, and dropping it left
             // the depth band snapping to the hover accent while the face above
@@ -156,8 +163,12 @@ export default function FoldPanel() {
               + ' box-shadow 150ms cubic-bezier(0, 0, 0.58, 1)',
           }}
         >
+          {/* background + color are the face's own RESTING values, restated so
+              the base hover rule's accent fill / white text can't take. Same
+              pair the rectangles use, so the swap changes no colour. */}
           <span className="candy-face" style={{
             ...CHIP_TEXT, height: '100%', padding: '0 8px',
+            background: 'var(--surface-3)', color: 'var(--text-muted)',
           }}>Settings</span>
         </button>
 
