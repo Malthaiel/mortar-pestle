@@ -4,7 +4,7 @@
 // Open is flat, closed is folded shut; the two folds run in sequence so the
 // motion traces the same path the old 0-360 slider swept by hand. Each
 // rectangle is sized and skinned to match the titlebar account chip.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 // Used until the real chip is measured. Height is TitleBar's BTN; the width is
 // a stand-in only — the chip has no width of its own (see measure below).
@@ -15,15 +15,23 @@ const FALLBACK = { w: 160, h: 28 };
 // shape. Pulling the camera back flattens the taper without killing the fold —
 // the flap still foreshortens, which is what sells the 3D.
 const PERSPECTIVE = 2000;
-// Neighbouring rectangles overlap by exactly one frame, so a crease reads as a
-// single 2px stroke instead of two 2px frames stacked into 4px.
-const OVERLAP = -2;
+// Gap between neighbouring rectangles, as marginTop: the depth lip plus air.
+// The lip part is not optional — the rectangles are the Settings button
+// exactly, lip included, and a lip is a DOWNWARD box-shadow living outside
+// layout, so any gap shorter than it leaves it overhanging the neighbour below.
+// Built from the same var rather than a number so it tracks Settings →
+// Appearance → Depth; hardcoding 7 would let them overlap the moment the
+// picker moved. The +4px on top is the visible air, on the app's 4px grid.
+const GAP_V = 'var(--candy-depth) + 4px';
+const GAP = `calc(${GAP_V})`;
 
-// The pivot sits at the MIDDLE of the overlap, not on the flap's top edge.
-// Rotating about the top edge overshoots by exactly the overlap: the edge is
-// already 2px inside the rectangle above, so 180deg lands the flap 2px past it.
-// Halving it makes the fold symmetric about the seam and the flap lands flush.
-const HINGE_Y = -OVERLAP / 2;
+// The pivot sits at the MIDDLE of the space between neighbours, not on the
+// flap's own top edge — rotating about the edge lands the flap a whole GAP off
+// its target. Half of it makes the fold symmetric about the boundary, so a
+// folded flap lands exactly on the rectangle above (at the 7px default: flap
+// 35-63, pivot 31.5, lands 0-28 against a 0-28 target). calc so it follows the
+// depth picker with the gap. Leave the expression.
+const HINGE_Y = `calc((${GAP_V}) / -2)`;
 
 // One fold. The two run back to back, so a full open or close is 2x this.
 const DUR = 300;
@@ -41,10 +49,18 @@ const SETTLE = 120;
 // The delay is what sequences the letter fold: whichever hinge is meant to move
 // second waits out the first one. Closing folds bottom-up, opening unfolds
 // top-down, so the two delays swap with direction.
-const hinge = (deg, delay) => ({
+
+// .candy-btn's OWN transition, restated verbatim. An inline `transition`
+// replaces the class's whole list, so a hinge that only declares its transform
+// leg strips the band's ease and the depth colour snaps while the face eases.
+const BAND_T = 'box-shadow 150ms cubic-bezier(0, 0, 0.58, 1)';
+
+// `live` = being scrubbed by hand: the transform must track the slider frame
+// for frame, so the timed leg comes off and only the band's own ease is left.
+const hinge = (deg, delay, live) => ({
   transform: `rotateX(${deg}deg) translateZ(-1px)`,
-  transformOrigin: `center ${HINGE_Y}px`,
-  transition: `transform ${DUR}ms ease-in-out ${delay}ms`,
+  transformOrigin: `center ${HINGE_Y}`,
+  transition: live ? BAND_T : `transform ${DUR}ms ease-in-out ${delay}ms, ${BAND_T}`,
   willChange: 'transform',
 });
 
@@ -62,6 +78,12 @@ export default function FoldPanel() {
     if (d > 0) setPress(d);
   }, []);
 
+  // Closing is now squash, fold, squash, fold — so every leg after the first
+  // squash is pushed back by one press, and the whole close runs two presses
+  // longer than the two folds alone. One expression, so the shut button's
+  // hand-back and both hinges can never drift apart.
+  const SHUT = 2 * press + 2 * DUR;
+
   // The button stays down for the whole unfolded stretch, then rises once the
   // paper is shut again. This is a held state, NOT a transition-delay on the
   // face: a delay there applies to every transform change, including the
@@ -70,26 +92,89 @@ export default function FoldPanel() {
   const [pressed, setPressed] = useState(true);
   useEffect(() => {
     if (open) { setPressed(true); return; }
-    const t = setTimeout(() => setPressed(false), 2 * DUR + SETTLE);
+    const t = setTimeout(() => setPressed(false), SHUT + SETTLE);
     return () => clearTimeout(t);
   }, [open]);
 
-  // Lifted verbatim from styles.css .candy-face + .candy-btn (--cbtn-band is
-  // --surface at rest, --cbtn-frame is 2px, radius is --radius-md).
-  // ponytail: copied, not classed — these are plain divs, not buttons, and
-  // wearing .candy-btn would drag in the press/hover/depth machinery too.
-  const skin = {
+  // Which flaps are pressed: [pair, flap]. Each squashes, releases, and only
+  // THEN folds, so the compaction runs down the stack a beat ahead of the fold.
+  //
+  // Squash-before-fold rather than squash-during is load-bearing, not taste. A
+  // pressed face is slid DOWN --cbtn-depth inside its own button, and the fold
+  // rotates that button 180deg, which flips the slide upward — so a flap still
+  // held at the moment it lands puts its face a full depth above its target,
+  // and only eases back afterwards while the stack is already fading out. That
+  // is the "folds too high" bug, and it is invisible to a box measurement: the
+  // BOXES land dead flush (measured 617/645 on all three), it is only the faces
+  // inside them that sit high. Released before its own fold starts, a flap is
+  // always at rest when it lands. Appearance is never in the list — it is the
+  // target, it never folds.
+  //
+  // `lip` runs alongside on the same clock and is the OTHER half of landing
+  // flush. A candy lip is a DOWNWARD box-shadow, so a flap rotated 180deg
+  // points its lip UP and stacks a whole depth of shadow above whatever it
+  // lands on — the real "folds too high", and the same reason the shut state
+  // cannot BE the folded stack. Each flap drops its lip exactly when its own
+  // fold begins and gets it back only once fully unfolded, so the lip is still
+  // there for the squash that precedes the fold (a zero lip has nothing to
+  // slide, and the squash would vanish with it).
+  const [manual, setManual] = useState(null);
+  const [down, setDown] = useState([false, false]);
+  const [lip, setLip] = useState([true, true]);
+  useEffect(() => {
+    const t = [];
+    if (open) {
+      setDown([false, false]);
+      // Lips return per flap, each as its own unfold finishes.
+      t.push(setTimeout(() => setLip(([, f]) => [true, f]), press + DUR));
+      t.push(setTimeout(() => setLip([true, true]), press + 2 * DUR));
+    } else {
+      setDown([false, true]);                                      // Navigation squashes
+      t.push(setTimeout(() => {                                    // released, then folds
+        setDown([false, false]); setLip([true, false]);
+      }, press));
+      t.push(setTimeout(() => setDown([true, false]), press + DUR));  // pair squashes
+      t.push(setTimeout(() => {                                    // released, then folds
+        setDown([false, false]); setLip([false, false]);
+      }, 2 * press + DUR));
+    }
+    return () => t.forEach(clearTimeout);
+  }, [open, press]);
+  const cls = (d) => `candy-btn${d ? ' is-pressed' : ''}`;
+
+  // TEMP measurement scaffold — reads the three buttons' painted top edges once
+  // the fold has finished, so the landing can be checked in numbers.
+  const refs = [useRef(null), useRef(null), useRef(null)];
+  const [edges, setEdges] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const y = refs.map((r) => {
+        const el = r.current;
+        if (!el) return '?';
+        const b = el.getBoundingClientRect();
+        return `${Math.round(b.top)}/${Math.round(b.bottom)}`;
+      });
+      setEdges(`A ${y[0]} S ${y[1]} N ${y[2]}`);
+    }, SHUT + SETTLE + 120);
+    return () => clearTimeout(t);
+  }, [open]);
+
+  // The rectangles wear the REAL .candy-btn now, not a hand-copied skin. They
+  // are interactive (they light on hover and close the fold), so the class's
+  // press machinery, hover flip and depth lip are all wanted — and the class
+  // gives them for free, which deleted the hand-rolled hover state, the copied
+  // frame values, and the ghost-border trap that came with them.
+  // Always writes --cbtn-depth rather than adding and removing the key: React
+  // only touches style keys that changed, and a key that disappears takes its
+  // value with it while the untouched rest of the rule stays put.
+  const btn = (lipOn) => ({
     width: box.w,
     height: box.h,
-    boxSizing: 'border-box',       // frame eats into the box — rectangles stay equal
-    background: 'var(--surface-3)',
-    border: '2px solid color-mix(in oklch, var(--surface), black 22%)',
-    borderRadius: 'var(--radius-md)',
-    // A single grid cell every label shares, so the middle rectangle can stack
-    // its two labels without absolute positioning.
-    display: 'grid',
-    placeItems: 'center',
-  };
+    display: 'block',              // the class is inline-flex; these stack
+    '--cbtn-depth': lipOn ? 'var(--candy-depth)' : '0px',
+    // Re-armed against the wrapper's pointerEvents: 'none' below.
+    pointerEvents: 'auto',
+  });
 
   // The account chip's face text, resolved through all three rules that reach
   // it: base .candy-face (mono, --text-muted), [data-shape="chip"] (600, no
@@ -103,15 +188,33 @@ export default function FoldPanel() {
     textTransform: 'none',
   };
 
-  const label = {
+  // Grid, not the class's inline-flex, so the middle rectangle can stack its
+  // two labels in one cell without absolute positioning.
+  const FACE = {
     ...CHIP_TEXT,
+    height: '100%',
+    padding: '0 8px',
+    display: 'grid',
+    placeItems: 'center',
+  };
+
+  const label = {
     gridArea: '1 / 1',
-    color: 'var(--text-muted)',
-    whiteSpace: 'nowrap',
+    whiteSpace: 'nowrap',        // type + colour inherit from the face
     transition: `opacity ${DUR}ms ease-in-out`,
   };
 
-  const deg = open ? 0 : 180;                 // both hinges share the same travel
+  // Manual scrub. null = click-driven. One 0-360 sweep replays the letter fold
+  // in order: 0-180 folds Navigation onto Sounds, 180-360 folds the pair onto
+  // Appearance — the same two hinges the click sequences with delays, driven by
+  // hand instead so a landing can be parked mid-fold and inspected.
+  const auto = manual === null;
+  const flapDeg = auto ? (open ? 0 : 180) : Math.min(180, manual);
+  const pairDeg = auto ? (open ? 0 : 180) : Math.max(0, manual - 180);
+  // Scrubbing has no squash and no timed lip schedule — a flap keeps its lip
+  // only while it is flat, which is the rule the animation follows too.
+  const flapLip = auto ? lip[1] : flapDeg === 0;
+  const pairLip = auto ? lip[0] : pairDeg === 0;
 
   return (
     <div>
@@ -119,7 +222,7 @@ export default function FoldPanel() {
         fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em',
         textTransform: 'uppercase', color: 'var(--text-faint)', fontWeight: 600,
         margin: '20px 0 10px',
-      }}>Fold</div>
+      }}>Fold — {edges}</div>
 
       {/* Two states share one grid cell and cross-fade. The shut state cannot
           BE the folded stack: the face left showing is the middle rectangle's
@@ -148,31 +251,35 @@ export default function FoldPanel() {
             width: box.w, height: box.h,
             opacity: open ? 0 : 1,
             pointerEvents: open ? 'none' : 'auto',
-            // Stay neutral in every state. The cursor is ON the button when you
-            // click it, so the base :hover accent flood would fire, hold through
-            // the whole press, and then hand over to plain grey rectangles — a
-            // colour jump on the one frame the swap is meant to hide. The band
-            // and frame read this var (base rule .candy-btn:is(:hover,:active));
-            // the face's own accent fill is overridden inline below.
-            '--cbtn-band': 'var(--surface)',
+            // Neutral only while HELD, not always: hover still floods accent
+            // like every other candy button, but the moment the press starts the
+            // button eases back to resting colour, so it hands over to plain grey
+            // rectangles without a colour jump on the frame the swap exists to
+            // hide. The band and frame read this var (base rule
+            // .candy-btn:is(:hover, :active)); the face's own accent fill is a
+            // SEPARATE rule, overridden inline below.
+            ...(pressed ? { '--cbtn-band': 'var(--surface)' } : {}),
             // The box-shadow leg is .candy-btn's own, restated verbatim: an
             // inline transition REPLACES the whole list, and dropping it left
             // the depth band snapping to the hover accent while the face above
             // it still eased over 150ms.
-            transition: `opacity ${SETTLE}ms ease-in-out ${open ? press : 2 * DUR}ms,`
+            transition: `opacity ${SETTLE}ms ease-in-out ${open ? press : SHUT}ms,`
               + ' box-shadow 150ms cubic-bezier(0, 0, 0.58, 1)',
           }}
         >
-          {/* background + color are the face's own RESTING values, restated so
-              the base hover rule's accent fill / white text can't take. Same
-              pair the rectangles use, so the swap changes no colour. */}
+          {/* While held, the face's own RESTING values are restated so the base
+              hover rule's accent fill / white text can't take — same pair the
+              rectangles use, so the handover changes no colour. Unheld, nothing
+              is set and hover behaves normally. */}
           <span className="candy-face" style={{
             ...CHIP_TEXT, height: '100%', padding: '0 8px',
-            background: 'var(--surface-3)', color: 'var(--text-muted)',
+            ...(pressed ? { background: 'var(--surface-3)', color: 'var(--text-muted)' } : {}),
           }}>Settings</span>
         </button>
 
-        {/* Open state. A plain button, deliberately — see the note on skin.
+        {/* Open state. A DIV, not a button — the three rectangles are real
+            candy buttons now and a button cannot nest inside a button. Each
+            rectangle closes the fold itself, so nothing is lost.
             Width must match the rectangles: perspective-origin defaults to the
             centre of the element that DECLARES perspective, and a wider one
             puts the vanishing point off to the right, skewing the fold
@@ -181,52 +288,94 @@ export default function FoldPanel() {
             Offset by the depth band: a pressed face sits that far down, and the
             paper has to start from where the pressed face is, not where the
             resting one was. var() so it tracks the depth picker. */}
-        <button
-          type="button"
+        <div
+          role="group"
           aria-label="Fold"
-          aria-expanded={open}
-          // The only motion here is the fold. Opts out of the global :active
-          // spring scale and the press sound that ride on every <button>.
-          data-no-tactile=""
-          onClick={() => setOpen(false)}
           style={{
             gridArea: '1 / 1', alignSelf: 'start',
             perspective: PERSPECTIVE, width: box.w,
             transform: 'translateY(var(--candy-depth))',
-            display: 'block', padding: 0, border: 'none', background: 'none',
-            cursor: 'pointer',
             opacity: open ? 1 : 0,
             pointerEvents: open ? 'auto' : 'none',
-            transition: `opacity ${SETTLE}ms ease-in-out ${open ? press : 2 * DUR}ms`,
+            transition: `opacity ${SETTLE}ms ease-in-out ${open ? press : SHUT}ms`,
           }}
         >
           {/* top — never moves; everything folds onto it */}
-          <div style={skin}><span style={label}>Appearance</span></div>
+          <button type="button" ref={refs[0]} className="candy-btn" data-own-press style={btn(true)}
+            onClick={() => setOpen(false)}>
+            <span className="candy-face" style={FACE}>
+              <span style={label}>Appearance</span>
+            </span>
+          </button>
 
           {/* middle + bottom travel together on the second fold, so they share
               a wrapper that hinges on the top rectangle's bottom edge.
               preserve-3d keeps the inner fold in 3D, not flattened. */}
           <div style={{
-            marginTop: OVERLAP,
+            marginTop: GAP,
             transformStyle: 'preserve-3d',
-            ...hinge(deg, open ? press : DUR),
+            // The bottom flap's translateZ(-1px) puts it BEHIND this wrapper's
+            // own plane, so the wrapper won every hit test over it and the flap
+            // never saw a mouseenter (the middle rectangle is untransformed, so
+            // it sits level with the wrapper and child-beats-parent applies —
+            // which is why only the bottom one was dead). Nothing listens here,
+            // so make it transparent to the pointer; the rectangles re-arm
+            // themselves via pointerEvents: 'auto' in BTN.
+            pointerEvents: 'none',
+            ...hinge(pairDeg, open ? press : 2 * press + DUR, !auto),
           }}>
             {/* Shut, this rectangle's UNDERSIDE is the one face left showing:
                 the bottom flap folds behind it, then the pair flips it onto the
                 top. So the closed-state label lives here, on the back — and it
                 matches the candy button's, so the swap only adds the depth
                 band. rotateX flips y only, so the counter-flip is scaleY. */}
-            <div style={skin}>
-              <span style={{ ...label, opacity: open ? 1 : 0 }}>Sounds</span>
-              <span style={{ ...label, opacity: open ? 0 : 1, transform: 'scaleY(-1)' }}>
-                Settings
+            <button type="button" ref={refs[1]} className={cls(down[0])} data-own-press style={btn(pairLip)}
+              onClick={() => setOpen(false)}>
+              <span className="candy-face" style={FACE}>
+                <span style={{ ...label, opacity: open ? 1 : 0 }}>Sounds</span>
+                <span style={{ ...label, opacity: open ? 0 : 1, transform: 'scaleY(-1)' }}>
+                  Settings
+                </span>
               </span>
-            </div>
-            <div style={{ ...skin, marginTop: OVERLAP, ...hinge(deg, open ? press + DUR : 0) }}>
-              <span style={label}>Navigation</span>
-            </div>
+            </button>
+            <button
+              type="button"
+              ref={refs[2]}
+              className={cls(down[1])}
+              data-own-press
+              onClick={() => setOpen(false)}
+              style={{ ...btn(flapLip), marginTop: GAP, ...hinge(flapDeg, open ? press + DUR : press, !auto) }}
+            >
+              <span className="candy-face" style={FACE}>
+                <span style={label}>Navigation</span>
+              </span>
+            </button>
           </div>
-        </button>
+        </div>
+      </div>
+
+      {/* TEMP diagnostic scrub. Drives both hinges by hand so a landing can be
+          parked and inspected; forces the stack open so the shut button can't
+          cross-fade over what is being looked at. Reset returns to click. */}
+      <div style={{ marginTop: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <input
+          type="range" min={0} max={360} step={1}
+          value={manual ?? 0}
+          onChange={(e) => { setManual(Number(e.target.value)); setOpen(true); }}
+          style={{ width: box.w }}
+        />
+        <span style={{
+          fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-faint)',
+          whiteSpace: 'nowrap',
+        }}>
+          {auto ? 'auto' : `${manual}  flap ${flapDeg}  pair ${pairDeg}`}
+        </span>
+        {!auto && (
+          <button type="button" className="candy-btn" data-shape="chip" data-own-press
+            onClick={() => setManual(null)}>
+            <span className="candy-face">Reset</span>
+          </button>
+        )}
       </div>
     </div>
   );
