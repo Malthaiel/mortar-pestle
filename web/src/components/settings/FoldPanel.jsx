@@ -145,9 +145,15 @@ export default function FoldPanel() {
       t.push(setTimeout(() => {                                    // released, then folds
         setDown(false); setLip([true, false]);
       }, press));
-      // The pair drops its lip as its own fold begins. No squash precedes it —
-      // see above; a hidden press only ever leaked a bar of face colour.
-      t.push(setTimeout(() => setLip([false, false]), 2 * press + DUR));
+      // The pair compacts by dropping its lip, one press BEFORE its own fold
+      // starts (press + DUR, not 2 * press + DUR) — that gap is the pause the
+      // deleted squash left, and this is what fills it. Dropped at the start of
+      // the fold instead, the collapse happens while the rectangle is already
+      // rotating and cannot be read at all; held flat for a beat first, it
+      // mirrors the open, where the lip grows back AFTER the unfold finishes
+      // and the compaction is legible. The lip is the pair's whole compaction
+      // cue now, since it does not squash (see above).
+      t.push(setTimeout(() => setLip([false, false]), press + DUR));
     }
     return () => t.forEach(clearTimeout);
   }, [open, press]);
