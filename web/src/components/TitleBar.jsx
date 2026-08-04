@@ -40,6 +40,9 @@ import SignInModal from '@modules/core/feedback/SignInModal.jsx';
 const BTN = 28;
 const MENU_W = 220;
 const VERSION = import.meta.env.PACKAGE_VERSION || '0.0.0';
+// Logo and avatar share one size so the strip's two chips stay twins — 2px under
+// the 20px they started at, which read a touch heavy in a 28px button.
+const MARK = 18;
 
 // A candy button's depth lip is a box-shadow drawn OUTSIDE layout, so flex
 // centring centres the BOX and leaves the visible ink sitting half a band low.
@@ -118,7 +121,7 @@ export default function TitleBar({
           onClick={() => navigate('/docs/releases')}
         >
           <span className="candy-face">
-            <img src="/mortar.png" alt="" width={20} height={20} style={{ borderRadius: 4, flexShrink: 0 }}/>
+            <img src="/mortar.png" alt="" width={MARK} height={MARK} style={{ borderRadius: 4, flexShrink: 0 }}/>
             MORTAR &amp; PESTLE v{VERSION}
           </span>
         </button>
@@ -172,7 +175,7 @@ export default function TitleBar({
           onClick={() => (signedIn ? setMenuOpen(o => !o) : setSignInOpen(true))}
         >
           <span className="candy-face">
-            <UserAvatar src={profile?.avatar_url} name={name} size={20}/>
+            <UserAvatar src={profile?.avatar_url} name={name} size={MARK}/>
             {signedIn ? (name || 'Account') : 'Sign in'}
           </span>
         </button>
