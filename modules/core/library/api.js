@@ -40,6 +40,8 @@ export const videoApi = {
   qbitStatus:        () => _api.invoke('qbit_status', {}),
   qbitStartDaemon:   () => _api.invoke('qbit_start_daemon', {}),
   qbitStopDaemon:    () => _api.invoke('qbit_stop_daemon', {}),
+  videoGetConfig:    () => _api.invoke('video_get_config', {}),
+  videoSetConfig:    (videoRoot) => _api.invoke('video_set_config', { videoRoot }),
   // Anime download engine (qBittorrent-backed, poll-driven). `type` → Rust `anime_type`.
   animeDownloadEnqueue: (malId, title, audio, image, airing, type, episodes, downloadSource, metadataOnly, initialStatus) =>
     _api.invoke('anime_download_enqueue', {
