@@ -1103,12 +1103,15 @@ pub struct MoveReport {
 }
 
 /// Card `Local Path` value in the same convention `download_anime.py` writes:
-/// library-relative while the folder is inside the library, absolute otherwise.
+/// library-relative while the folder is inside the library, absolute otherwise,
+/// and **double-quoted** like its `yaml_scalar()` — an unquoted Windows path is
+/// a YAML accident waiting for the first title with a `:` or a leading `[`.
 fn card_local_path(abs: &Path, library: &Path) -> String {
-    match abs.strip_prefix(library) {
+    let s = match abs.strip_prefix(library) {
         Ok(rel) => rel.to_string_lossy().replace('\\', "/"),
         Err(_) => abs.to_string_lossy().into_owned(),
-    }
+    };
+    serde_json::to_string(&s).unwrap_or_else(|_| format!("\"{s}\""))
 }
 
 /// Move every COMPLETED series' video folder into the current video root.
@@ -1245,10 +1248,15 @@ mod tests {
     #[test]
     fn card_local_path_matches_the_download_script_convention() {
         let lib = Path::new("/lib");
-        // Inside the library → library-relative, forward slashes.
-        assert_eq!(card_local_path(Path::new("/lib/Anime/Videos/Frieren"), lib), "Anime/Videos/Frieren");
-        // Outside → absolute, verbatim.
-        assert_eq!(card_local_path(Path::new("/mnt/vids/Frieren"), lib), "/mnt/vids/Frieren");
+        // Inside the library → library-relative, forward slashes, quoted.
+        assert_eq!(card_local_path(Path::new("/lib/Anime/Videos/Frieren"), lib), "\"Anime/Videos/Frieren\"");
+        // Outside → absolute, quoted.
+        assert_eq!(card_local_path(Path::new("/mnt/vids/Frieren"), lib), "\"/mnt/vids/Frieren\"");
+        // A title with a colon must not end up as a bare YAML scalar.
+        assert_eq!(
+            card_local_path(Path::new("/mnt/vids/Steins;Gate: 0"), lib),
+            "\"/mnt/vids/Steins;Gate: 0\"",
+        );
     }
 
     #[test]
