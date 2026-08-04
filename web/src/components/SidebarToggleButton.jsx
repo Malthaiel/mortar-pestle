@@ -1,28 +1,19 @@
-// Full-bleed brand button at the top of the primary sidebar — it IS the section.
+// Full-bleed section header at the top of the primary sidebar — it IS the section.
 // Doubles as the sidebar collapse/expand toggle; click flips `expanded` via the
 // parent's onToggle.
 //
 // Candy slab: the accent face fills the section's full width + height; its 3D
 // depth shadow forms the section's bottom edge (no separate divider). Collapsed
-// shows the centered brand-mark; expanded adds the MORTAR & PESTLE label + tagline.
+// shows the centered brand-mark; expanded names WHERE YOU ARE — the active
+// module's icon + name, or the page's own name when a non-module page (Docs,
+// Settings) has claimed the sidebar. Never blank, never a stale module name.
+// The app's own wordmark moved to the titlebar brand button.
 // Wires to the two-layer `.candy-btn.is-primary` block (data-variant="brand").
 
-import { useMemo } from 'react';
+import * as hostIcons from './icons.jsx';
 
-const TAGLINES = [
-  'your knowledge layer',
-  'memory has a backend',
-  'thoughts in alignment',
-  'context, kept',
-  'one rail to rule them all',
-  'where every page is one click away',
-  'the OS that thinks with you',
-];
-
-export default function SidebarToggleButton({ accent, expanded, onToggle, showTagline }) {
-  const tagline = useMemo(() => TAGLINES[Math.floor(Math.random() * TAGLINES.length)], []);
-
-
+export default function SidebarToggleButton({ accent, expanded, onToggle, label, iconKey }) {
+  const Icon = iconKey && hostIcons[iconKey] ? hostIcons[iconKey] : null;
   const tooltip = expanded ? 'Collapse sidebar' : 'Expand sidebar';
 
   return (
@@ -48,25 +39,14 @@ export default function SidebarToggleButton({ accent, expanded, onToggle, showTa
         {expanded && (
           <span style={{
             flex: 1, minWidth: 0,
-            display: 'flex', flexDirection: 'column',
-            gap: 1,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            gap: 8,
             overflow: 'hidden',
-            textAlign: 'center',
           }}>
+            {Icon && <Icon size={15}/>}
             <span style={{
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>Mortar &amp; Pestle</span>
-            {showTagline && (
-              <span style={{
-                fontSize: 9.5, fontStyle: 'italic',
-                fontFamily: 'var(--font-body)',
-                opacity: 0.78, fontWeight: 400,
-                letterSpacing: '0.01em',
-                textTransform: 'none',
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                animation: 'fadeIn 0.22s ease',
-              }}>{tagline}</span>
-            )}
+            }}>{label}</span>
           </span>
         )}
       </span>

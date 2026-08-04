@@ -3,7 +3,8 @@
 // main window; the overlay windows return early in App.jsx and never mount it.
 //
 // Two clusters ride the strip (Titlebar Overhaul):
-//   left  — Settings / Recycling bin, relocated out of the Dock so they no
+//   left  — the brand button (logo + wordmark + version, jumps to Releases),
+//           then Settings / Recycling bin, relocated out of the Dock so they no
 //           longer hover-expand into labelled pills; `title` carries the label
 //           instead.
 //   right — Notifications, the account button (avatar + display name in one
@@ -30,6 +31,7 @@ import { candyCenterOffset } from '../util/candy.js';
 import { Popover, useAnchoredRect } from './ui';
 import NotificationBell from '../notifications/NotificationBell.jsx';
 import { useUpdateStatus } from '../hooks/useUpdateStatus.js';
+import { navigate } from '../router.js';
 import { makeFeedbackApi } from '@modules/core/feedback/feedbackApi.js';
 import { useSession } from '@modules/core/feedback/useSession.js';
 import UserAvatar from '@modules/core/feedback/UserAvatar.jsx';
@@ -37,6 +39,7 @@ import SignInModal from '@modules/core/feedback/SignInModal.jsx';
 
 const BTN = 28;
 const MENU_W = 220;
+const VERSION = import.meta.env.PACKAGE_VERSION || '0.0.0';
 
 // A candy button's depth lip is a box-shadow drawn OUTSIDE layout, so flex
 // centring centres the BOX and leaves the visible ink sitting half a band low.
@@ -101,6 +104,25 @@ export default function TitleBar({
   return (
     <div className="titlebar" data-tauri-drag-region>
       <div className="titlebar-cluster">
+        {/* Brand button — same chip skin as the account button on the far right,
+            so the strip is bookended by one shape. Jumps to the Releases page;
+            it is the app's only version display now (the sideways VersionChip on
+            the collapsed rail was removed rather than print the number twice). */}
+        <button
+          type="button"
+          data-own-press
+          className="candy-btn titlebar-brand is-hover-accent"
+          data-shape="chip"
+          style={{ height: BTN, ...CENTER }}
+          title={`Mortar & Pestle v${VERSION} — open Releases`}
+          onClick={() => navigate('/docs/releases')}
+        >
+          <span className="candy-face">
+            <img src="/mortar.png" alt="" width={20} height={20} style={{ borderRadius: 4, flexShrink: 0 }}/>
+            MORTAR &amp; PESTLE v{VERSION}
+          </span>
+        </button>
+
         {/* --cbtn-depth re-declared because CENTER sits on this WRAPPER (so the
             update dot rides along) and the var is only defined on .candy-btn —
             without it the fallback is the full 7px and the gear lifts 1px more

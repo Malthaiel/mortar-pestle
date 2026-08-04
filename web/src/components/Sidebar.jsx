@@ -32,7 +32,6 @@ import SidebarSeam from './SidebarSeam.jsx';
 import CollapsibleRail from './ui/CollapsibleRail.jsx';
 import SidebarEmptyState from './SidebarEmptyState.jsx';
 import RailStack from './sidebar/RailStack.jsx';
-import VersionChip from './sidebar/VersionChip.jsx';
 
 const RAIL_WIDTH        = 56;
 const EXPANDED_DEFAULT  = 280;
@@ -48,7 +47,6 @@ const PRESETS = [
 const STORAGE_WIDTH_KEY = 'sidebar:width';
 
 // Width thresholds at which sidebar content gains additional surfaces.
-const TAGLINE_THRESHOLD  = 360;
 const HERO_THRESHOLD     = 440;
 
 function readInitialWidth() {
@@ -92,7 +90,6 @@ export default function Sidebar({ accent, settings }) {
     toggleSidebarExpanded();
   };
 
-  const renderedWidth = effectiveExpanded ? width : RAIL_WIDTH;
   // The SwapContainer is rendered at full saved width inside an absolutely
   // positioned wrapper, so it stays mounted even when the outer sidebar clips
   // to the 56 px rail. Only skip mounting entirely when there's nothing to
@@ -100,7 +97,7 @@ export default function Sidebar({ accent, settings }) {
   const bodyMounted = !!activeModuleId || !!pageSidebar || effectiveExpanded;
 
   // Body (rendered at full width, clipped when collapsed) + the thin-rail layer
-  // (module rail stack + version chip) are fed to the shared CollapsibleRail,
+  // (module rail stack) are fed to the shared CollapsibleRail,
   // which owns the width animation, clip, crossfade, header slot, and seam.
   const bodyEl = pageSidebar ? (
     <PageSecondary pageSidebar={pageSidebar} route={route} accent={accent} />
@@ -133,11 +130,10 @@ export default function Sidebar({ accent, settings }) {
     )
   ) : null;
 
+  // Version used to print sideways at the bottom of this rail; it lives in the
+  // titlebar brand button now, so the rail is just the module stack.
   const railContent = (
-    <>
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>{railEl}</div>
-      <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'center' }}><VersionChip /></div>
-    </>
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>{railEl}</div>
   );
 
   return (
@@ -161,7 +157,8 @@ export default function Sidebar({ accent, settings }) {
           accent={accent}
           onToggle={handleBrandClick}
           settings={settings}
-          sidebarWidth={renderedWidth}
+          label={pageSidebar?.label || activeModule?.name || 'Mortar & Pestle'}
+          iconKey={pageSidebar ? null : activeModule?.iconKey}
         />
       }
       railContent={railContent}
@@ -192,9 +189,8 @@ export default function Sidebar({ accent, settings }) {
   );
 }
 
-function SidebarHeader({ expanded, accent, onToggle, settings, sidebarWidth }) {
-  const showTagline = expanded && sidebarWidth > TAGLINE_THRESHOLD;
-  const button = <SidebarToggleButton accent={accent} expanded={expanded} onToggle={onToggle} showTagline={showTagline}/>;
+function SidebarHeader({ expanded, accent, onToggle, settings, label, iconKey }) {
+  const button = <SidebarToggleButton accent={accent} expanded={expanded} onToggle={onToggle} label={label} iconKey={iconKey}/>;
   return (
     <div style={{
       position: 'relative',

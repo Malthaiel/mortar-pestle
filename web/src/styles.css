@@ -1747,7 +1747,9 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
    only for company — the account block below is its neighbour, not its rival. */
 .titlebar .candy-btn[data-shape="circle"] { border-radius: var(--radius-md); }
 
-/* Titlebar account button — the stock chip carrying avatar + display name.
+/* The two titlebar chips — the account button (avatar + display name) on the
+   right and the brand button (logo + wordmark + version) on the left. One skin
+   for both so the strip is bookended by the same shape.
    MUST live here, after § chip, and carry the .candy-btn prefix: every rule
    below overrides a chip-shape declaration, and the shape rules are both
    stronger (0,2,0 / 0,3,0) and later than anything up in the titlebar section.
@@ -1763,11 +1765,11 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
    3. Zero vertical padding (height comes inline from TitleBar's BTN, the same
       constant the CircleChips take) and a readable name size — stock chip's
       10.5px/0.04em is a stat-pill treatment, too small beside a 20px avatar. */
-.candy-btn.titlebar-account {
+.candy-btn:is(.titlebar-account, .titlebar-brand) {
   --cbtn-depth: var(--candy-depth-small);
   border-radius: var(--radius-md);
 }
-.candy-btn.titlebar-account > .candy-face {
+.candy-btn:is(.titlebar-account, .titlebar-brand) > .candy-face {
   height: 100%;
   /* All three gaps are the SAME 8px: left padding, avatar-to-name, right
      padding. Two things break that if you let them —
