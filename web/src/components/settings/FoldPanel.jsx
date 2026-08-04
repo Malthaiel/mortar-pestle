@@ -1,14 +1,15 @@
 // Fold demo — dev toy recreating Josh Comeau's "Folding the DOM":
 // https://www.joshwcomeau.com/react/folding-the-dom/
-// Two half-height divs share one background sized to the whole image; the
-// bottom half shifts its background up so the seam is invisible, then folds on
-// rotateX from a top-edge hinge inside a perspective parent.
+// Two half-height divs stacked into one yellow rectangle; the bottom one folds
+// on rotateX from a top-edge hinge inside a perspective parent. The crease is
+// the top half's bottom border, sitting exactly on the hinge.
 import { useState } from 'react';
 import { Slider } from '../ui/index.js';
 
 const W = 200;
-const H = 200;          // mortar.png is 512x512 — keep it square so it doesn't stretch
-const SRC = '/mortar.png';
+const H = 200;
+const PAPER = '#f0d24b';
+const CREASE = '#b9992c';
 
 export default function FoldPanel({ accent }) {
   const [angle, setAngle] = useState(0);
@@ -16,8 +17,7 @@ export default function FoldPanel({ accent }) {
   const half = {
     width: W,
     height: H / 2,
-    backgroundSize: `${W}px ${H}px`,
-    backgroundImage: `url(${SRC})`,
+    background: PAPER,
   };
 
   return (
@@ -29,10 +29,13 @@ export default function FoldPanel({ accent }) {
       }}>Fold</div>
 
       <div style={{ perspective: 500 }}>
-        <div style={half} />
         <div style={{
           ...half,
-          backgroundPosition: '0px -100%',
+          boxSizing: 'border-box',      // keep the halves equal — border eats into height
+          borderBottom: `1px solid ${CREASE}`,
+        }} />
+        <div style={{
+          ...half,
           transform: `rotateX(${angle}deg)`,
           transformOrigin: 'center top',
           willChange: 'transform',
