@@ -489,8 +489,15 @@ pub async fn anime_uninstall(
         }
     }
 
+    // (see `video_bin_key` below for the safety rule)
     // Video folder — only on "Delete everything", and only a safe, unshared path
-    // under the library's Anime/Videos/. Otherwise it's left in place.
+    // that is a STRICT descendant of the effective video root (never the root
+    // itself). The root is the user's configured folder when set, else the
+    // library's Anime/Videos — so a custom root on another drive deletes just
+    // like the default one. The recorded key stays library-relative when the
+    // folder is inside the library (unchanged tombstone shape for every
+    // pre-existing bin item); a custom root outside it records the absolute
+    // path, which `recycle_bin::resolve_folder_target` restores verbatim.
     let mut video_folder: Option<(String, PathBuf)> = None;
     if delete_files {
         if let Some(lp) = &local_path {
@@ -499,32 +506,28 @@ pub async fn anime_uninstall(
             } else {
                 library.join(lp)
             };
-            let rel = lp_abs
-                .strip_prefix(&library)
-                .ok()
-                .map(|r| r.to_string_lossy().replace('\\', "/"));
+            let video_root = crate::commands::video_config::anime_video_root(
+                &app,
+                &library.to_string_lossy(),
+            );
             let ingested_dir = card_abs
                 .parent()
                 .map(Path::to_path_buf)
                 .unwrap_or_else(|| library.join("Anime/Catalog"));
-            match rel {
-                Some(rel)
-                    if rel.starts_with("Anime/Videos/")
-                        && rel.trim_end_matches('/') != "Anime/Videos" =>
-                {
-                    if local_path_is_shared(&ingested_dir, &card_abs, lp) {
-                        report
-                            .warnings
-                            .push(format!("kept files: {lp} is shared with another library entry"));
-                    } else if lp_abs.is_dir() {
-                        video_folder = Some((rel.trim_end_matches('/').to_string(), lp_abs));
-                    } else {
-                        report.deleted_files = true; // nothing on disk to bin
-                    }
+            if let Some(key) = video_bin_key(&lp_abs, &video_root, &library) {
+                if local_path_is_shared(&ingested_dir, &card_abs, lp) {
+                    report
+                        .warnings
+                        .push(format!("kept files: {lp} is shared with another library entry"));
+                } else if lp_abs.is_dir() {
+                    video_folder = Some((key, lp_abs));
+                } else {
+                    report.deleted_files = true; // nothing on disk to bin
                 }
-                _ => report
+            } else {
+                report
                     .warnings
-                    .push(format!("kept files: refusing to bin unsafe path {lp}")),
+                    .push(format!("kept files: refusing to bin unsafe path {lp}"));
             }
         }
     }
@@ -638,6 +641,23 @@ async fn process_job(app: &AppHandle, job_id: &str) {
     // Phase 2); --vault stays content so the script finds Infrastructure/Scripts/
     // (nyaa_search.py, qbittorrent_client.py), --library is the catalog base.
     let library = vault::library_vault_root();
+    let save_root = crate::commands::video_config::anime_video_root(app, &library);
+
+    // A configured video root on an unplugged/renamed drive must BLOCK, never
+    // silently fall back to the library default — the files would land somewhere
+    // the user didn't choose. `create_dir_all` doubles as the writability probe
+    // (it's a no-op when the folder already exists).
+    if !metadata_only {
+        if let Err(e) = std::fs::create_dir_all(&save_root) {
+            log::warn!("[anime_download] video root unavailable {save_root:?}: {e}");
+            finalize_error(
+                app,
+                job_id,
+                "Your anime video folder isn't available — reconnect the drive or change it in Settings → Video.",
+            );
+            return;
+        }
+    }
 
     // ── Phase 1 — Prepare (one-shot script → terminal JSON) ──────────────────
     let mut cmd = crate::commands::proc_util::python_cmd();
@@ -645,7 +665,7 @@ async fn process_job(app: &AppHandle, job_id: &str) {
         .arg("--mal-id").arg(mal_id.to_string())
         .arg("--vault").arg(&vault)
         .arg("--library").arg(&library)
-        .arg("--save-root").arg(crate::commands::video_config::anime_video_root(app, &library))
+        .arg("--save-root").arg(&save_root)
         .arg("--audio").arg(&audio)
         .arg("--type").arg(&anime_type);
     if airing {
@@ -1061,4 +1081,80 @@ fn finalize_error(app: &AppHandle, job_id: &str, msg: &str) {
     emit_progress(app, job_id);
     emit_done(app, job_id, None);
     record_history(app, job_id);
+}
+
+/// Decide whether a series' video folder may be binned, and under what key.
+///
+/// Returns `None` — meaning "refuse to bin, leave the files alone" — unless
+/// `lp_abs` is a **strict descendant** of the effective video root (the user's
+/// configured folder, else `<library>/Anime/Videos`). The root itself never
+/// qualifies: binning it would swallow every series at once.
+///
+/// The key is what the recycling-bin tombstone records for restore. It stays
+/// library-relative while the folder is inside the library (identical to the
+/// pre-custom-folder behaviour, so old bin items keep restoring), and is the
+/// absolute path otherwise — `recycle_bin::resolve_folder_target` accepts both.
+fn video_bin_key(lp_abs: &Path, video_root: &Path, library: &Path) -> Option<String> {
+    let rest = lp_abs.strip_prefix(video_root).ok()?;
+    if rest.as_os_str().is_empty() {
+        return None; // the root itself
+    }
+    Some(match lp_abs.strip_prefix(library) {
+        Ok(rel) => rel.to_string_lossy().replace('\\', "/").trim_end_matches('/').to_string(),
+        Err(_) => lp_abs.to_string_lossy().into_owned(),
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::video_bin_key;
+    use std::path::Path;
+
+    #[test]
+    fn default_root_keeps_library_relative_keys() {
+        let lib = Path::new("/lib");
+        let root = Path::new("/lib/Anime/Videos");
+        assert_eq!(
+            video_bin_key(Path::new("/lib/Anime/Videos/Frieren"), root, lib).as_deref(),
+            Some("Anime/Videos/Frieren"),
+        );
+    }
+
+    #[test]
+    fn the_root_itself_is_never_binned() {
+        let lib = Path::new("/lib");
+        assert_eq!(video_bin_key(Path::new("/lib/Anime/Videos"), Path::new("/lib/Anime/Videos"), lib), None);
+        assert_eq!(video_bin_key(Path::new("/mnt/vids"), Path::new("/mnt/vids"), lib), None);
+    }
+
+    #[test]
+    fn paths_outside_the_root_are_refused() {
+        let lib = Path::new("/lib");
+        let root = Path::new("/lib/Anime/Videos");
+        // Elsewhere in the library, and a sibling that merely shares a prefix.
+        assert_eq!(video_bin_key(Path::new("/lib/Anime/Catalog/Frieren.md"), root, lib), None);
+        assert_eq!(video_bin_key(Path::new("/lib/Anime/VideosOld/Frieren"), root, lib), None);
+        // Under the OLD default while a custom root is configured.
+        assert_eq!(video_bin_key(Path::new("/lib/Anime/Videos/Frieren"), Path::new("/mnt/vids"), lib), None);
+    }
+
+    #[test]
+    fn custom_root_outside_the_library_records_an_absolute_key() {
+        let lib = Path::new("/lib");
+        let root = Path::new("/mnt/vids");
+        assert_eq!(
+            video_bin_key(Path::new("/mnt/vids/Frieren"), root, lib).as_deref(),
+            Some("/mnt/vids/Frieren"),
+        );
+    }
+
+    #[test]
+    fn nested_series_folders_still_resolve() {
+        let lib = Path::new("/lib");
+        let root = Path::new("/mnt/vids");
+        assert_eq!(
+            video_bin_key(Path::new("/mnt/vids/Frieren/Season 1"), root, lib).as_deref(),
+            Some("/mnt/vids/Frieren/Season 1"),
+        );
+    }
 }

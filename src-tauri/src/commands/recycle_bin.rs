@@ -328,6 +328,24 @@ pub fn suggested_rename(label: &str) -> String {
 /// `parent_missing` conflict case, where `vault::resolve_in` would error on
 /// `canonicalize`). `rel` was produced by `resolve_in` at delete time, so it is
 /// already normalized; the traversal check is belt-and-suspenders.
+/// Restore target for a captured *media folder* (anime videos / album tracks).
+/// Identical to `resolve_target` except it also accepts an **absolute** path, so
+/// an anime video folder living outside the library (a custom video root on
+/// another drive — see `video_config::anime_video_root`) restores to where it
+/// actually came from. `resolve_target` rejects those as "escapes vault root",
+/// and the caller skips a failed resolve silently before wiping the blob — i.e.
+/// without this the files would be destroyed by a "successful" restore.
+pub fn resolve_folder_target(root_opt: &Option<String>, rel: &str) -> Result<PathBuf, VaultError> {
+    let p = Path::new(rel);
+    if p.is_absolute() {
+        if p.components().any(|c| c.as_os_str() == "..") {
+            return Err(VaultError::Invalid("Restore path traversal".into()));
+        }
+        return Ok(p.to_path_buf());
+    }
+    resolve_target(root_opt, rel)
+}
+
 pub fn resolve_target(root_opt: &Option<String>, rel: &str) -> Result<PathBuf, VaultError> {
     if rel.split('/').any(|c| c == "..") {
         return Err(VaultError::Invalid("Restore path traversal".into()));
@@ -1039,7 +1057,7 @@ pub fn recycle_bin_restore(
     if let Some(tf_rel) = &track_folder_rel {
         let src = blob_root.join("tracks");
         if src.is_dir() {
-            if let Ok(dst) = resolve_target(&root_opt, tf_rel) {
+            if let Ok(dst) = resolve_folder_target(&root_opt, tf_rel) {
                 let proceed = if dst.exists() {
                     if choice == Some("overwrite") {
                         let _ = fs::remove_dir_all(&dst);
