@@ -40,6 +40,14 @@ alter table reviews enable row level security;
 create policy reviews_dev on reviews for all to authenticated
   using (is_dev()) with check (is_dev());
 
+-- Supabase grants anon everything on a new public table by default, leaving RLS
+-- as the only thing in the way. RLS does hold — an anon insert is a 42501 — but
+-- an anon SELECT then answers `200 []`, which is indistinguishable from a table
+-- that is simply empty and cannot be proven either way. Revoking makes a read a
+-- hard 42501, exactly as 0005 did for coaching_posts. The view below is
+-- unaffected: a view runs with its OWNER's rights, not the caller's.
+revoke all on reviews from anon;
+
 -- The public shape. Like coaching_posts_public this is SECURITY DEFINER by
 -- default (no `security_invoker`), so it runs with its owner's rights and can
 -- read a table anon cannot — and it simply has no booking_id or moderation_key
