@@ -885,6 +885,7 @@ pub fn run() {
             commands::qbit::qbit_status,
             commands::qbit::qbit_start_daemon,
             commands::qbit::qbit_stop_daemon,
+            commands::anime_download::anime_move_videos,
             commands::video_config::video_get_config,
             commands::video_config::video_set_config,
             commands::anime_download::anime_download_enqueue,

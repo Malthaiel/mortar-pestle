@@ -172,6 +172,7 @@
     "allow-qbit-status",
     "allow-qbit-start-daemon",
     "allow-qbit-stop-daemon",
+    "allow-anime-move-videos",
     "allow-video-get-config",
     "allow-video-set-config",
     "allow-anime-download-enqueue",

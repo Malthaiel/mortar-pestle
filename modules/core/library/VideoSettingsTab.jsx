@@ -10,6 +10,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
+import { listen } from '@tauri-apps/api/event';
 import { Seg, OutlinedBtn } from '@host/components/ui/index.js';
 import { videoApi } from './api.js';
 import { useVideoPlayer } from './VideoPlayerProvider.jsx';
@@ -33,7 +34,7 @@ const inputStyle = { color: 'var(--text)', padding: '5px 8px', fontSize: 12, out
 export default function VideoSettingsTab({ accent }) {
   return (
     <div style={{ color: 'var(--text)', fontSize: 12 }}>
-      <DownloadsSection/>
+      <DownloadsSection accent={accent}/>
       <QbitSection/>
       <MalImportSection accent={accent}/>
       <SubtitleSection accent={accent}/>
@@ -124,10 +125,12 @@ function MalImportSection({ accent }) {
 // (byte-for-byte the historical behaviour). Chosen folder IS the video root:
 // files land at `<chosen>/<Series>`, no nested Anime/Videos.
 
-function DownloadsSection() {
+function DownloadsSection({ accent }) {
   const [cfg, setCfg] = useState(null); // { videoRoot, effectiveRoot, isDefault }
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
+  const [moving, setMoving] = useState(null); // { index, total, currentTitle }
+  const [moveMsg, setMoveMsg] = useState(null);
 
   const load = useCallback(() => (
     videoApi.videoGetConfig().then(setCfg).catch(e => setErr(errText(e, 'Could not read the video folder setting.')))
@@ -152,6 +155,26 @@ function DownloadsSection() {
     } catch (e) { setErr(errText(e, 'Folder picker failed.')); }
   };
 
+  // Progress ticks from the Rust move loop; the drawer can close mid-move and
+  // the move keeps going — only the display is lost.
+  useEffect(() => {
+    let un;
+    listen('anime-move-progress', e => setMoving(e.payload)).then(f => { un = f; });
+    return () => { if (un) un(); };
+  }, []);
+
+  const moveAll = async () => {
+    setMoving({ index: 0, total: 0 }); setMoveMsg(null); setErr(null);
+    try {
+      const r = await videoApi.animeMoveVideos();
+      const bits = [`Moved ${r.moved}`];
+      if (r.skipped) bits.push(`skipped ${r.skipped}`);
+      if (r.failed) bits.push(`failed ${r.failed}`);
+      setMoveMsg({ text: `${bits.join(', ')}.`, warnings: r.warnings || [] });
+    } catch (e) { setErr(errText(e, 'Move failed.')); }
+    finally { setMoving(null); }
+  };
+
   return (
     <SectionBand title="Downloads">
       <div data-search-anchor="set-video-videoFolder" style={{ fontSize: 11, color: 'var(--text-2)', lineHeight: 1.5 }}>
@@ -170,11 +193,32 @@ function DownloadsSection() {
       {cfg && cfg.isDefault && (
         <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>Default library folder.</div>
       )}
-      {cfg && !cfg.isDefault && (
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={() => apply('')} disabled={busy} className="candy-btn">
+      <div style={{ display: 'flex', gap: 8 }}>
+        {cfg && !cfg.isDefault && (
+          <button onClick={() => apply('')} disabled={busy || !!moving} className="candy-btn">
             <span className="candy-face">Reset to default</span>
           </button>
+        )}
+        <button onClick={moveAll} disabled={busy || !!moving} className="candy-btn">
+          <span className="candy-face">{moving ? 'Moving…' : 'Move all here'}</span>
+        </button>
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--text-faint)', lineHeight: 1.5 }}>
+        <b>Move all here</b> brings every finished series into the folder above — it copies each one,
+        checks it arrived whole, and only then removes the old copy. Series still downloading are left alone.
+      </div>
+      {moving && (
+        <div style={{ fontSize: 11, color: 'var(--text-2)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <span>{moving.total ? `${moving.index}/${moving.total}${moving.currentTitle ? ` · ${moving.currentTitle}` : ''}` : 'Starting…'}</span>
+          <div style={{ height: 4, borderRadius: 2, background: 'var(--surface-2)', overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: moving.total ? `${Math.round((moving.index / moving.total) * 100)}%` : '40%', background: accent || 'var(--accent)', borderRadius: 2, transition: 'width 200ms ease' }}/>
+          </div>
+        </div>
+      )}
+      {!moving && moveMsg && (
+        <div style={{ fontSize: 11, color: moveMsg.warnings.length ? '#d8a657' : 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span>{moveMsg.text}</span>
+          {moveMsg.warnings.map((w, i) => <span key={i} style={{ color: 'var(--text-faint)' }}>{w}</span>)}
         </div>
       )}
       {err && <div style={{ fontSize: 11, color: 'var(--error, var(--text))' }}>{err}</div>}

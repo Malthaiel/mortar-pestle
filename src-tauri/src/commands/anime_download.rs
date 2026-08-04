@@ -965,30 +965,40 @@ async fn poll_state(app: &AppHandle, tag: &str) -> Result<Vec<TorrentStat>, Stri
 /// Status / Personal Rating / Watched Episodes). `Complete` on success,
 /// `Failed` when the job errors so a dead card never lingers at `Queued`.
 fn set_download_status(series_rel: &str, status: &str) {
+    set_card_field(series_rel, "Download Status", status);
+}
+
+/// Field-level rewrite of one `Key: value` frontmatter line on a series card.
+/// Rewrites nothing when the key is absent — a card that never had the field
+/// keeps its exact shape rather than growing one.
+fn set_card_field(series_rel: &str, key: &str, value: &str) -> bool {
     let abs = PathBuf::from(vault::library_vault_root()).join(series_rel);
     let Ok(text) = std::fs::read_to_string(&abs) else {
-        return;
+        return false;
     };
+    let prefix = format!("{key}:");
     let mut replaced = false;
     let mut lines: Vec<String> = Vec::new();
     for l in text.lines() {
-        if !replaced && l.starts_with("Download Status:") {
-            lines.push(format!("Download Status: {status}"));
+        if !replaced && l.starts_with(&prefix) {
+            lines.push(format!("{key}: {value}"));
             replaced = true;
         } else {
             lines.push(l.to_string());
         }
     }
     if !replaced {
-        return;
+        return false;
     }
     let mut new = lines.join("\n");
     if text.ends_with('\n') {
         new.push('\n');
     }
     if let Err(e) = atomic_write(&abs, new.as_bytes()) {
-        log::warn!("set_download_status: failed to write {}: {e:?}", abs.display());
+        log::warn!("set_card_field: failed to write {}: {e:?}", abs.display());
+        return false;
     }
+    true
 }
 
 /// Persist a terminal job into the shared downloads history (best-effort). Reads
@@ -1083,6 +1093,128 @@ fn finalize_error(app: &AppHandle, job_id: &str, msg: &str) {
     record_history(app, job_id);
 }
 
+#[derive(Serialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct MoveReport {
+    pub moved: u32,
+    pub skipped: u32,
+    pub failed: u32,
+    pub warnings: Vec<String>,
+}
+
+/// Card `Local Path` value in the same convention `download_anime.py` writes:
+/// library-relative while the folder is inside the library, absolute otherwise.
+fn card_local_path(abs: &Path, library: &Path) -> String {
+    match abs.strip_prefix(library) {
+        Ok(rel) => rel.to_string_lossy().replace('\\', "/"),
+        Err(_) => abs.to_string_lossy().into_owned(),
+    }
+}
+
+/// Move every COMPLETED series' video folder into the current video root.
+///
+/// Copy → verify (file count + total bytes) → delete the original, per series,
+/// so a crash mid-move never loses data: the worst case is a duplicate the next
+/// run skips as "already there". Still-downloading series are left alone, as are
+/// folders shared by two cards and any destination that already exists.
+///
+/// Completion is read from the card's `Download Status`, not from qBittorrent —
+/// the same source the download engine writes at `progress >= 0.999`, and it
+/// works with qBittorrent closed.
+#[tauri::command]
+pub async fn anime_move_videos(app: AppHandle) -> Result<MoveReport, String> {
+    let library = PathBuf::from(vault::library_vault_root());
+    let new_root = crate::commands::video_config::anime_video_root(&app, &library.to_string_lossy());
+    std::fs::create_dir_all(&new_root).map_err(|_| {
+        "Your anime video folder isn't available — reconnect the drive or change it in Settings → Video."
+            .to_string()
+    })?;
+
+    let series = crate::parsers::series::list_series().map_err(|e| format!("{e:?}"))?;
+
+    // A folder referenced by two cards is shared — never move it out from under
+    // the other one. Counting the resolved paths beats string-comparing raw card
+    // values: it also catches a relative and an absolute pointing at one folder.
+    let mut refs: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
+    for s in &series {
+        if let Some(lp) = &s.local_path {
+            *refs.entry(lp.trim_end_matches('/').to_string()).or_insert(0) += 1;
+        }
+    }
+
+    let mut report = MoveReport::default();
+    let total = series.len();
+    for (i, s) in series.iter().enumerate() {
+        let _ = app.emit(
+            "anime-move-progress",
+            serde_json::json!({ "index": i, "total": total, "currentTitle": s.title }),
+        );
+        let Some(lp) = &s.local_path else { continue };
+        let src = PathBuf::from(lp);
+        if !src.is_dir() {
+            continue;
+        }
+        // Already in the right place (or nested under it) — nothing to do.
+        if src.starts_with(&new_root) {
+            continue;
+        }
+        if s.download_status.as_deref() != Some("Complete") {
+            report.skipped += 1;
+            report.warnings.push(format!("{}: still downloading", s.title));
+            continue;
+        }
+        if refs.get(lp.trim_end_matches('/')).copied().unwrap_or(0) > 1 {
+            report.skipped += 1;
+            report
+                .warnings
+                .push(format!("{}: folder is shared with another library entry", s.title));
+            continue;
+        }
+        let Some(leaf) = src.file_name() else { continue };
+        let dst = new_root.join(leaf);
+        if dst.exists() {
+            report.skipped += 1;
+            report
+                .warnings
+                .push(format!("{}: a folder of that name is already there", s.title));
+            continue;
+        }
+
+        let (want_count, want_bytes) = crate::commands::recycle_bin::dir_stats(&src);
+        if let Err(e) = crate::commands::recycle_bin::copy_dir_recursive(&src, &dst) {
+            let _ = std::fs::remove_dir_all(&dst);
+            report.failed += 1;
+            report.warnings.push(format!("{}: copy failed ({e:?})", s.title));
+            continue;
+        }
+        let (got_count, got_bytes) = crate::commands::recycle_bin::dir_stats(&dst);
+        if (got_count, got_bytes) != (want_count, want_bytes) {
+            let _ = std::fs::remove_dir_all(&dst);
+            report.failed += 1;
+            report.warnings.push(format!(
+                "{}: copy did not verify ({got_count} files/{got_bytes} bytes vs {want_count}/{want_bytes}) — original kept",
+                s.title
+            ));
+            continue;
+        }
+        // Card first: a crash between here and the delete leaves the card pointing
+        // at the new copy, which is the one that survives.
+        set_card_field(&s.path, "Local Path", &card_local_path(&dst, &library));
+        if let Err(e) = std::fs::remove_dir_all(&src) {
+            report
+                .warnings
+                .push(format!("{}: moved, but the old folder could not be removed ({e})", s.title));
+        }
+        report.moved += 1;
+    }
+    let _ = app.emit("anime-move-progress", serde_json::json!({ "index": total, "total": total }));
+    log::info!(
+        "[anime_move_videos] moved={} skipped={} failed={}",
+        report.moved, report.skipped, report.failed
+    );
+    Ok(report)
+}
+
 /// Decide whether a series' video folder may be binned, and under what key.
 ///
 /// Returns `None` — meaning "refuse to bin, leave the files alone" — unless
@@ -1107,8 +1239,17 @@ fn video_bin_key(lp_abs: &Path, video_root: &Path, library: &Path) -> Option<Str
 
 #[cfg(test)]
 mod tests {
-    use super::video_bin_key;
+    use super::{card_local_path, video_bin_key};
     use std::path::Path;
+
+    #[test]
+    fn card_local_path_matches_the_download_script_convention() {
+        let lib = Path::new("/lib");
+        // Inside the library → library-relative, forward slashes.
+        assert_eq!(card_local_path(Path::new("/lib/Anime/Videos/Frieren"), lib), "Anime/Videos/Frieren");
+        // Outside → absolute, verbatim.
+        assert_eq!(card_local_path(Path::new("/mnt/vids/Frieren"), lib), "/mnt/vids/Frieren");
+    }
 
     #[test]
     fn default_root_keeps_library_relative_keys() {
