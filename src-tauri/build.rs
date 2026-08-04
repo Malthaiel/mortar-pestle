@@ -4,6 +4,12 @@ fn main() {
   // unaffected: it keeps the runtime std::env::var fallback.
   println!("cargo:rerun-if-env-changed=MORTAR_PESTLE_SUPABASE_URL");
   println!("cargo:rerun-if-env-changed=MORTAR_PESTLE_SUPABASE_ANON_KEY");
+  // tauri_build embeds icons/icon.ico into the exe as a Windows resource, but cargo
+  // does not know the icons are a build input — swap them and it relinks nothing, so
+  // the app keeps showing the OLD icon with no error anywhere. Proven 2026-08-03:
+  // icon.ico written 9:50 PM, exe still the 6:34 PM build, taskbar still the stock
+  // Tauri mark. Declare the dependency so a regenerated icon set actually lands.
+  println!("cargo:rerun-if-changed=icons");
   if std::env::var("PROFILE").as_deref() == Ok("release") {
     let missing: Vec<&str> = ["MORTAR_PESTLE_SUPABASE_URL", "MORTAR_PESTLE_SUPABASE_ANON_KEY"]
       .into_iter()
