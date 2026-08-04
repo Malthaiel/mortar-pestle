@@ -33,6 +33,7 @@ const inputStyle = { color: 'var(--text)', padding: '5px 8px', fontSize: 12, out
 export default function VideoSettingsTab({ accent }) {
   return (
     <div style={{ color: 'var(--text)', fontSize: 12 }}>
+      <DownloadsSection/>
       <QbitSection/>
       <MalImportSection accent={accent}/>
       <SubtitleSection accent={accent}/>
@@ -112,6 +113,71 @@ function MalImportSection({ accent }) {
           {lastDone.state === 'error' ? (lastDone.error || 'Import failed') : (lastDone.summary || 'Done')}
         </div>
       )}
+    </SectionBand>
+  );
+}
+
+// ── Downloads ───────────────────────────────────────────────────────────────
+// Where anime video FILES land. Cards, covers and episode metadata always stay
+// in the Library vault — only the big video folders relocate, so the whole
+// library can sit on a secondary drive. Unset = `<library>/Anime/Videos`
+// (byte-for-byte the historical behaviour). Chosen folder IS the video root:
+// files land at `<chosen>/<Series>`, no nested Anime/Videos.
+
+function DownloadsSection() {
+  const [cfg, setCfg] = useState(null); // { videoRoot, effectiveRoot, isDefault }
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const load = useCallback(() => (
+    videoApi.videoGetConfig().then(setCfg).catch(e => setErr(errText(e, 'Could not read the video folder setting.')))
+  ), []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const apply = async (root) => {
+    setBusy(true); setErr(null);
+    try {
+      await videoApi.videoSetConfig(root);
+      await load();
+    } catch (e) { setErr(errText(e, 'Could not save the video folder.')); }
+    finally { setBusy(false); }
+  };
+
+  const pick = async () => {
+    setErr(null);
+    try {
+      const p = await open({ directory: true });
+      if (typeof p === 'string') await apply(p);
+    } catch (e) { setErr(errText(e, 'Folder picker failed.')); }
+  };
+
+  return (
+    <SectionBand title="Downloads">
+      <div data-search-anchor="set-video-videoFolder" style={{ fontSize: 11, color: 'var(--text-2)', lineHeight: 1.5 }}>
+        Where downloaded anime <b>video files</b> are saved. Each series gets its own folder inside.
+        Covers and episode details always stay with your library — only the videos move, so you can keep them on a bigger drive.
+        Already-downloaded series stay where they are.
+      </div>
+      <Field label="Video folder">
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input className="candy-input" value={cfg ? cfg.effectiveRoot : ''} readOnly
+                 title={cfg ? cfg.effectiveRoot : ''} placeholder="Loading"
+                 style={{ ...inputStyle, flex: 1 }}/>
+          <button onClick={pick} disabled={busy} className="candy-btn"><span className="candy-face">Choose…</span></button>
+        </div>
+      </Field>
+      {cfg && cfg.isDefault && (
+        <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>Default library folder.</div>
+      )}
+      {cfg && !cfg.isDefault && (
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => apply('')} disabled={busy} className="candy-btn">
+            <span className="candy-face">Reset to default</span>
+          </button>
+        </div>
+      )}
+      {err && <div style={{ fontSize: 11, color: 'var(--error, var(--text))' }}>{err}</div>}
     </SectionBand>
   );
 }
