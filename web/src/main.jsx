@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.jsx';
+import { LazyErrorBoundary, FatalCard } from './components/LazyErrorBoundary.jsx';
 import { loadAll } from './module-loader.js';
 import { initSmoothWheel } from './util/smoothWheel.js';
 import './pages/docs/register.jsx';   // side effect: registerPageSidebar('docs', …)
@@ -11,7 +12,9 @@ loadAll().then(() => {
   initSmoothWheel();
   createRoot(document.getElementById('root')).render(
     <StrictMode>
-      <App />
+      <LazyErrorBoundary full tag="[root]" label="Mortar & Pestle">
+        <App />
+      </LazyErrorBoundary>
     </StrictMode>
   );
   // DEV-only layout verifiers — tree-shaken from prod via the guard + dynamic
@@ -28,4 +31,9 @@ loadAll().then(() => {
     // the whole declaration silently — the GameWikiRail toolbar-padding class).
     import('./util/cssVarAudit.js').then((m) => m.startCssVarAudit());
   }
+}).catch((err) => {
+  // module-loader throws on manifest validation / dep cycles / missing entries.
+  // Without this the render above never runs and the window stays silently blank.
+  console.error('[root] module load failed — app never rendered', err);
+  createRoot(document.getElementById('root')).render(<FatalCard err={err} />);
 });
