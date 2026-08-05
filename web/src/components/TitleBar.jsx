@@ -22,13 +22,13 @@
 // close / start-dragging) are listed in capabilities/default.json; without
 // them every control silently no-ops.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { invoke } from '@tauri-apps/api/core';
 import { IconMinus, IconSquare, IconRestore, IconX, IconSettings, IconTrash } from './icons.jsx';
 import { CircleChip } from './ui/Button.jsx';
 import { candyCenterOffset } from '../util/candy.js';
-import { Popover, useAnchoredRect } from './ui';
+import FoldMenu from './ui/FoldMenu.jsx';
 import NotificationBell from '../notifications/NotificationBell.jsx';
 import { useUpdateStatus } from '../hooks/useUpdateStatus.js';
 import { navigate } from '../router.js';
@@ -38,7 +38,6 @@ import UserAvatar from '@modules/core/feedback/UserAvatar.jsx';
 import SignInModal from '@modules/core/feedback/SignInModal.jsx';
 
 const BTN = 28;
-const MENU_W = 220;
 const VERSION = import.meta.env.PACKAGE_VERSION || '0.0.0';
 // Logo and avatar share one size so the strip's two chips stay twins — 2px under
 // the 20px they started at, which read a touch heavy in a 28px button.
@@ -58,9 +57,7 @@ export default function TitleBar({
   setRecycleBinOpen,
 }) {
   const [maximized, setMaximized] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [signInOpen, setSignInOpen] = useState(false);
-  const avatarRef = useRef(null);
 
   // The feedback module's Rust commands are the app's only account backend, and
   // makeFeedbackApi only needs something with `.invoke` — so the host shim is
@@ -85,11 +82,6 @@ export default function TitleBar({
     return () => { un.then(f => f()).catch(() => {}); };
   }, []);
 
-  const menuPos = useAnchoredRect(
-    () => avatarRef.current?.getBoundingClientRect(),
-    { open: menuOpen, width: MENU_W, place: 'below' },
-  );
-
   const win = getCurrentWindow();
   const name = profile?.display_name || profile?.handle || '';
 
@@ -99,7 +91,6 @@ export default function TitleBar({
   // 'modules' tab (pagesByModuleId, keyed by module id). A bare tab id fails
   // validation and silently lands on the last-visited tab instead.
   const openAccountSettings = () => {
-    setMenuOpen(false);
     setSettingsTab?.('modules/feedback');
     setSettingsOpen?.(true);
   };
@@ -162,23 +153,51 @@ export default function TitleBar({
 
         {/* Account button — the house candy `chip` shape, avatar left of the
             display name in one frame. Signed out it reads "Sign in" and skips
-            the menu entirely, opening the modal on the first click. */}
-        <button
-          ref={avatarRef}
-          type="button"
-          data-own-press
-          data-titlebar-avatar
-          className="candy-btn titlebar-account is-hover-accent"
-          data-shape="chip"
-          style={{ height: BTN, ...CENTER }}
-          title={signedIn ? (name || 'Account') : 'Sign in'}
-          onClick={() => (signedIn ? setMenuOpen(o => !o) : setSignInOpen(true))}
-        >
-          <span className="candy-face">
+            the menu entirely, opening the modal on the first click.
+            Signed in it is a FoldMenu: the chip unfolds into its own rows like
+            a letter and folds back into itself, the Dev tab's fold generalized
+            to any row count. It replaced a floating Popover panel, and with it
+            the avatar/display-name/@handle header that panel carried — that
+            block does not fit the fold's grammar (every pane is one row tall)
+            and the name is on the button you just clicked anyway. */}
+        {signedIn ? (
+          <FoldMenu
+            style={CENTER}
+            rowH={BTN}
+            triggerClassName="titlebar-account is-hover-accent"
+            triggerTitle={name || 'Account'}
+            data-titlebar-avatar
+            ariaLabel="Account"
+            items={[
+              // "Settings", not "Account settings": the fold's rows are one
+              // rectangle wide and the shut state is the trigger, so a label
+              // longer than the display name widens the whole stack and the
+              // handover has to change size. Short enough to fit inside the
+              // chip, the paper and the button are the same rectangle.
+              { label: 'Settings', onClick: openAccountSettings },
+              { label: 'Sign out', onClick: async () => { await fb.signOut().catch(() => {}); refresh(); } },
+            ]}
+          >
             <UserAvatar src={profile?.avatar_url} name={name} size={MARK}/>
-            {signedIn ? (name || 'Account') : 'Sign in'}
-          </span>
-        </button>
+            {name || 'Account'}
+          </FoldMenu>
+        ) : (
+          <button
+            type="button"
+            data-own-press
+            data-titlebar-avatar
+            className="candy-btn titlebar-account is-hover-accent"
+            data-shape="chip"
+            style={{ height: BTN, ...CENTER }}
+            title="Sign in"
+            onClick={() => setSignInOpen(true)}
+          >
+            <span className="candy-face">
+              <UserAvatar src={profile?.avatar_url} name={name} size={MARK}/>
+              Sign in
+            </span>
+          </button>
+        )}
 
         <CircleChip title="Minimize" size={BTN} className="is-hover-accent" style={CENTER} onClick={() => win.minimize()}>
           <IconMinus size={14}/>
@@ -195,37 +214,6 @@ export default function TitleBar({
         </CircleChip>
       </div>
 
-      {menuOpen && menuPos && (
-        <Popover
-          open
-          onClose={() => setMenuOpen(false)}
-          accent={accent}
-          outsideExempt="[data-titlebar-avatar]"
-          ariaLabel="Account"
-          style={{
-            position: 'fixed', left: menuPos.left, top: menuPos.top, width: MENU_W,
-            zIndex: 130, transformOrigin: 'top center',
-            animation: 'notifPanelInDown 200ms cubic-bezier(0.16, 1, 0.3, 1) both',
-          }}
-          bodyStyle={{ padding: 6, display: 'flex', flexDirection: 'column', gap: 4 }}
-        >
-          {/* Signed out never reaches here — the button opens the modal directly. */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 8px 8px' }}>
-            <UserAvatar src={profile?.avatar_url} name={name} size={32}/>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {name || 'Account'}
-              </div>
-              {profile?.handle && (
-                <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>@{profile.handle}</div>
-              )}
-            </div>
-          </div>
-          <MenuRow label="Account settings" onClick={openAccountSettings}/>
-          <MenuRow label="Sign out" onClick={async () => { setMenuOpen(false); await fb.signOut().catch(() => {}); refresh(); }}/>
-        </Popover>
-      )}
-
       <SignInModal
         open={signInOpen}
         onClose={() => setSignInOpen(false)}
@@ -234,16 +222,5 @@ export default function TitleBar({
         onSignedIn={() => refresh()}
       />
     </div>
-  );
-}
-
-// The house menu-row skin — same candy row the context menu and settings tabs
-// use, so it takes the identical accent flood on hover.
-function MenuRow({ label, onClick }) {
-  return (
-    <button type="button" data-own-press onClick={onClick}
-      className="candy-btn" data-shape="row" data-variant="menu">
-      <span className="candy-face">{label}</span>
-    </button>
   );
 }

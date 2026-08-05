@@ -46,9 +46,15 @@ export function candyCenterAudit(root = document.body, { quiet = false } = {}) {
     // aligned to the button, so it must NOT count as a reference (else every
     // candy-vs-candy row false-flags at +depth/2). Form fields count as text: an
     // <input>'s value lives in .value, so its .textContent is empty.
+    // A wrapper CONTAINING a candy control is not a text baseline either — it
+    // has no lip of its own but its ink does, so it sits with the buttons, not
+    // with the text. Without this a FoldMenu (a grid holding a candy trigger and
+    // its candy rows) reads as a fat text node and false-flags every candy
+    // sibling on the row at exactly +depth/2.
     const isFlatText = (el) =>
       el !== btn &&
       !el.classList.contains('candy-btn') && !el.classList.contains('candy-seg') &&
+      !el.querySelector('.candy-btn, .candy-seg') &&
       lipDepth(getComputedStyle(el)) === 0 &&
       (el.textContent.trim() || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
     const texts = [...row.children].filter(isFlatText);
