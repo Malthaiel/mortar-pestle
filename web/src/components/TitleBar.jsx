@@ -28,7 +28,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { IconMinus, IconSquare, IconRestore, IconX, IconSettings, IconTrash } from './icons.jsx';
 import { CircleChip } from './ui/Button.jsx';
 import { candyCenterOffset } from '../util/candy.js';
-import FoldMenu from './ui/FoldMenu.jsx';
+import FoldMenu, { FOLD_PAD } from './ui/FoldMenu.jsx';
 import NotificationBell from '../notifications/NotificationBell.jsx';
 import { useUpdateStatus } from '../hooks/useUpdateStatus.js';
 import { navigate } from '../router.js';
@@ -58,6 +58,20 @@ export default function TitleBar({
 }) {
   const [maximized, setMaximized] = useState(false);
   const [signInOpen, setSignInOpen] = useState(false);
+  // The account fold paints a backing panel FOLD_PAD outside the chip on every
+  // side, and .titlebar-cluster only leaves an 8px gap either side of it — so
+  // while the menu is open the icons flanking it stand off by that same pad.
+  // `foldT` is the panel's OWN transition string, handed over by FoldMenu, so
+  // the icons and the panel edge are one movement rather than two that agree.
+  // transform, not margin or gap: a layout shift would move the chip itself
+  // mid-fold and drag the open menu sideways with it.
+  const [foldOpen, setFoldOpen] = useState(false);
+  const [foldT, setFoldT] = useState('');
+  const standOff = (dir) => ({
+    display: 'inline-flex', alignItems: 'center', gap: 8,
+    transform: `translateX(${foldOpen ? dir * FOLD_PAD : 0}px)`,
+    transition: foldT ? `transform ${foldT}` : undefined,
+  });
 
   // The feedback module's Rust commands are the app's only account backend, and
   // makeFeedbackApi only needs something with `.invoke` — so the host shim is
@@ -143,13 +157,15 @@ export default function TitleBar({
       </div>
 
       <div className="titlebar-cluster">
-        <NotificationBell
-          variant="titlebar"
-          label="Notifications"
-          onClick={() => setNotifOpen?.(o => !o)}
-          isActive={!!notifOpen}
-          accent={accent}
-        />
+        <span style={standOff(-1)}>
+          <NotificationBell
+            variant="titlebar"
+            label="Notifications"
+            onClick={() => setNotifOpen?.(o => !o)}
+            isActive={!!notifOpen}
+            accent={accent}
+          />
+        </span>
 
         {/* Account button — the house candy `chip` shape, avatar left of the
             display name in one frame. Signed out it reads "Sign in" and skips
@@ -168,6 +184,7 @@ export default function TitleBar({
             triggerTitle={name || 'Account'}
             data-titlebar-avatar
             ariaLabel="Account"
+            onOpenChange={(o, t) => { setFoldOpen(o); setFoldT(t); }}
             items={[
               // "Settings", not "Account settings": the fold's rows are one
               // rectangle wide and the shut state is the trigger, so a label
@@ -199,19 +216,24 @@ export default function TitleBar({
           </button>
         )}
 
-        <CircleChip title="Minimize" size={BTN} className="is-hover-accent" style={CENTER} onClick={() => win.minimize()}>
-          <IconMinus size={14}/>
-        </CircleChip>
-        <CircleChip
-          title={maximized ? 'Restore' : 'Maximize'}
-          size={BTN}
-          className="is-hover-accent"
-          style={CENTER}
-          onClick={() => win.toggleMaximize()}
-        >{maximized ? <IconRestore size={14}/> : <IconSquare size={14}/>}</CircleChip>
-        <CircleChip title="Close" size={BTN} className="is-hover-accent" style={CENTER} onClick={() => win.close()}>
-          <IconX size={14}/>
-        </CircleChip>
+        {/* The three window controls travel together — they are one block to
+            the right of the account chip, and only the block's near edge has to
+            clear the fold's panel. */}
+        <span style={standOff(1)}>
+          <CircleChip title="Minimize" size={BTN} className="is-hover-accent" style={CENTER} onClick={() => win.minimize()}>
+            <IconMinus size={14}/>
+          </CircleChip>
+          <CircleChip
+            title={maximized ? 'Restore' : 'Maximize'}
+            size={BTN}
+            className="is-hover-accent"
+            style={CENTER}
+            onClick={() => win.toggleMaximize()}
+          >{maximized ? <IconRestore size={14}/> : <IconSquare size={14}/>}</CircleChip>
+          <CircleChip title="Close" size={BTN} className="is-hover-accent" style={CENTER} onClick={() => win.close()}>
+            <IconX size={14}/>
+          </CircleChip>
+        </span>
       </div>
 
       <SignInModal

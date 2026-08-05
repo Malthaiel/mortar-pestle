@@ -39,6 +39,14 @@ const DEPTH_FALLBACK = 'var(--candy-depth)';
 // Beat the two states cross-fade over on OPEN. Close hard-cuts instead.
 const SETTLE = 120;
 
+// How far the backing panel sits outside the rows on every side once open.
+// Exported because the HOST has to make room for it: the trigger's neighbours
+// have no idea a panel is about to appear around it, and on the titlebar there
+// is only an 8px gap to the icons either side and 6px of bar above the chip.
+// The open stack slides DOWN by this much for the same reason — the panel's top
+// edge would otherwise land above the titlebar and clip off-screen.
+export const FOLD_PAD = 6;
+
 // .candy-btn's OWN transition, restated verbatim. An inline `transition`
 // replaces the class's whole list, so a hinge that only declares its transform
 // leg strips the band's ease and the depth colour snaps while the face eases.
@@ -74,6 +82,12 @@ export default function FoldMenu({
   shape = 'chip',
   faceStyle,
   ariaLabel = 'Menu',
+  // Told whenever the fold opens or shuts, and handed the panel's own CSS
+  // transition string. The host needs BOTH: the panel appears FOLD_PAD outside
+  // the trigger on every side, into space the trigger's neighbours are sitting
+  // in, and a host that moves them on a clock of its own drifts against the
+  // fold. Passing the real string is what keeps them one motion.
+  onOpenChange,
   style,
   ...rest
 }) {
@@ -155,6 +169,22 @@ export default function FoldMenu({
   // so they cannot drift apart.
   const SHUT = closeAt(0) + DUR;
 
+  // Backing panel geometry. `depth` is a CSS length string off the live trigger
+  // ('5px' on a chip), or the raw var() fallback before the first measure —
+  // parseFloat gives NaN there, hence the 7px floor (--candy-depth's value).
+  const dpx = parseFloat(depth) || 7;
+  const fullH = n * box.h + (n - 1) * (dpx + 4);   // rows + GAP, same formula
+  // One clock for all four sides, and it is the OUTERMOST hinge's clock exactly
+  // — same DUR, same easing, same delay as wrapper 0's own transition. Wrapper 0
+  // is the fold that swings the entire lower block, so it is the one that
+  // defines how far the menu reaches; the panel is that flap's shadow.
+  // Spanning the whole envelope instead (first fold's start to the last fold's
+  // end, 2 * DUR) is what the first build did, and it visibly dragged behind the
+  // paper. The panel may run AHEAD of the inner folds — paper landing on a
+  // surface that is already there is right; a surface catching up under paper
+  // that already landed is not.
+  const panelT = `${DUR}ms ease-in-out ${open ? openAt(0) : closeAt(0)}ms`;
+
   // Whether the BOTTOM row is pressed. It squashes, releases, and only THEN
   // folds, so the compaction runs a beat ahead of its own fold.
   //
@@ -221,6 +251,13 @@ export default function FoldMenu({
     const t = setTimeout(() => setShown(false), SHUT);
     return () => clearTimeout(t);
   }, [open, SHUT]);
+
+  // Held in a ref so an inline arrow from the host (a new function identity
+  // every render) cannot make this fire on every render — it fires only when
+  // the state or the clock actually changes.
+  const notify = useRef(onOpenChange);
+  notify.current = onOpenChange;
+  useEffect(() => { notify.current?.(open, panelT); }, [open, panelT]);
 
   // Close on Escape and on any click outside. The fold replaces the menu's
   // PAINT, not a menu's behaviour.
@@ -440,7 +477,15 @@ export default function FoldMenu({
           // declared on the candy button itself, so on this div it would fall
           // back to --candy-depth (7px) while a chip trigger lifts by 5px.
           position: 'absolute', left: 0,
-          top: `calc(${depth} / -2 * var(--candy-center-on, 1))`,
+          // + FOLD_PAD while open: the panel reaches FOLD_PAD above row 0, and
+          // row 0 sits in a titlebar with only 6px of bar above it, so a stack
+          // left at the trigger's own line puts the panel's top edge off the top
+          // of the window. Sliding the whole stack down by exactly the pad lands
+          // that edge back on the trigger's original top line. It is animated on
+          // the panel's clock, and starts from 0, so at the handover frame the
+          // paper is still dead on the button it replaced — the locked "row 1
+          // lands ON the trigger" rule survives; the settle happens after.
+          top: `calc(${depth} / -2 * var(--candy-center-on, 1) + ${open ? FOLD_PAD : 0}px)`,
           // The GROUP sets the width and the rows take 100% of it, so every row
           // is the same rectangle and perspective-origin (which defaults to the
           // centre of whatever DECLARES perspective) lands on their centre — a
@@ -463,9 +508,38 @@ export default function FoldMenu({
           // survives the handover — see the position note above for what
           // display:none did to the open.
           visibility: shown ? 'visible' : 'hidden',
-          transition: `opacity ${open ? SETTLE : 0}ms ease-in-out ${open ? press : SHUT}ms`,
+          transition: `opacity ${open ? SETTLE : 0}ms ease-in-out ${open ? press : SHUT}ms,`
+            + ` top ${panelT}`,
         }}
       >
+        {/* The paper it unfolds ONTO. Without it the rows hang over whatever
+            page is behind the titlebar; this gives the open menu its own
+            surface. It grows out of the trigger's exact footprint and runs on
+            the outermost hinge's own clock — see panelT — so it opens as one
+            flap of the same fold rather than popping in whole.
+            Reuses .candy-modal, the skin every other floating panel in the app
+            wears (Popover's default), so this is not a new surface.
+            zIndex -1 puts it under the in-flow rows: the group declares
+            `perspective`, which is a stacking context, so a negative child
+            paints below its non-positioned siblings and nothing else. It is
+            NOT in the preserve-3d wrappers, so it takes no rotation. */}
+        <div
+          className="candy-modal"
+          aria-hidden="true"
+          style={{
+            position: 'absolute', zIndex: -1, pointerEvents: 'none',
+            // Shut, it is the trigger rectangle exactly — so the first frame of
+            // the open has nothing to pop. The pad only appears as it grows.
+            left: open ? -FOLD_PAD : 0,
+            top: open ? -FOLD_PAD : 0,
+            width: open ? `calc(100% + ${FOLD_PAD * 2}px)` : '100%',
+            // + dpx: the bottom row's lip is a box-shadow living OUTSIDE its
+            // layout box, so a panel sized to the boxes alone stops short of it.
+            height: open ? fullH + FOLD_PAD * 2 + dpx : box.h,
+            transition: ['left', 'top', 'width', 'height']
+              .map((p) => `${p} ${panelT}`).join(', '),
+          }}
+        />
         {stack(0)}
       </div>
     </div>
