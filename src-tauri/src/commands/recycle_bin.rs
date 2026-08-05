@@ -324,10 +324,6 @@ pub fn suggested_rename(label: &str) -> String {
     }
 }
 
-/// Resolve a restore target, tolerant of a missing parent dir (the
-/// `parent_missing` conflict case, where `vault::resolve_in` would error on
-/// `canonicalize`). `rel` was produced by `resolve_in` at delete time, so it is
-/// already normalized; the traversal check is belt-and-suspenders.
 /// Restore target for a captured *media folder* (anime videos / album tracks).
 /// Identical to `resolve_target` except it also accepts an **absolute** path, so
 /// an anime video folder living outside the library (a custom video root on
@@ -346,6 +342,10 @@ pub fn resolve_folder_target(root_opt: &Option<String>, rel: &str) -> Result<Pat
     resolve_target(root_opt, rel)
 }
 
+/// Resolve a restore target, tolerant of a missing parent dir (the
+/// `parent_missing` conflict case, where `vault::resolve_in` would error on
+/// `canonicalize`). `rel` was produced by `resolve_in` at delete time, so it is
+/// already normalized; the traversal check is belt-and-suspenders.
 pub fn resolve_target(root_opt: &Option<String>, rel: &str) -> Result<PathBuf, VaultError> {
     if rel.split('/').any(|c| c == "..") {
         return Err(VaultError::Invalid("Restore path traversal".into()));
@@ -932,6 +932,11 @@ pub fn recycle_bin_restore(
         return restore_record(&app, items, idx, &t, conflict.as_deref());
     }
 
+    // `track_folder_rel` is the CAPTURED MEDIA FOLDER slot, not a music-only one:
+    // `MusicAlbum::track_folder_rel` and `Anime::video_folder_rel` both land in it
+    // and share one blob subdir (`tracks`) and one restore arm below. So the
+    // `resolve_folder_target` guard on that arm covers anime videos in a custom
+    // video root as well — the name just doesn't say so.
     let (root_opt, original_rel, blob_payload, is_dir, sidecar_rels, track_folder_rel) = match &t.payload {
         Payload::VaultFile { root, original_rel } => {
             (root.clone(), original_rel.clone(), blob_root.join("content"), false, Vec::new(), None)
@@ -1374,4 +1379,57 @@ pub fn startup_purge(app: &AppHandle) -> PurgeReport {
         removed: 0,
         remaining: 0,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Only the ABSOLUTE arm of `resolve_folder_target` is covered here. The
+    // relative arm delegates to `resolve_target`, which resolves against the
+    // machine's real vault roots (`RootKind::root()` → `library_vault_root()`),
+    // so asserting on it would test this machine's config, not the logic.
+    //
+    // The absolute arm is the whole reason the function exists: a series whose
+    // videos live under a custom video root on another drive
+    // (`video_config::anime_video_root`) records an ABSOLUTE tombstone path.
+    // `resolve_target` rejects those as "escapes vault root", and
+    // `recycle_bin_restore` skips a failed *folder* resolve silently and then
+    // wipes the blob dir — so a regression here does not fail loudly, it
+    // permanently destroys the user's video files during a restore that
+    // reports success. That is what these asserts are standing in front of.
+
+    #[test]
+    fn absolute_custom_video_root_restores_verbatim() {
+        let rel = if cfg!(windows) {
+            r"D:\Anime\Videos\Frieren"
+        } else {
+            "/mnt/media/Anime/Videos/Frieren"
+        };
+        let got = resolve_folder_target(&None, rel).expect("absolute path must pass through");
+        assert_eq!(got, PathBuf::from(rel));
+    }
+
+    #[test]
+    fn absolute_path_with_traversal_is_refused() {
+        let rel = if cfg!(windows) {
+            r"D:\Anime\..\..\Windows\System32"
+        } else {
+            "/mnt/media/../../etc"
+        };
+        assert!(
+            resolve_folder_target(&None, rel).is_err(),
+            "`..` must be refused even on the absolute passthrough"
+        );
+    }
+
+    #[test]
+    fn relative_path_is_not_passed_through_verbatim() {
+        // The default (in-library) case still goes through `resolve_target`, so
+        // whatever comes back is rooted somewhere — never the bare relative path.
+        let rel = "Anime/Videos/Frieren";
+        if let Ok(got) = resolve_folder_target(&Some("library".into()), rel) {
+            assert_ne!(got, PathBuf::from(rel));
+        }
+    }
 }

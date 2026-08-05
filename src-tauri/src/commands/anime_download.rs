@@ -653,7 +653,7 @@ async fn process_job(app: &AppHandle, job_id: &str) {
             finalize_error(
                 app,
                 job_id,
-                "Your anime video folder isn't available — reconnect the drive or change it in Settings → Video.",
+                "Your anime video folder isn't available — reconnect the drive or change it in Settings → Library → Anime.",
             );
             return;
         }
@@ -1129,7 +1129,7 @@ pub async fn anime_move_videos(app: AppHandle) -> Result<MoveReport, String> {
     let library = PathBuf::from(vault::library_vault_root());
     let new_root = crate::commands::video_config::anime_video_root(&app, &library.to_string_lossy());
     std::fs::create_dir_all(&new_root).map_err(|_| {
-        "Your anime video folder isn't available — reconnect the drive or change it in Settings → Video."
+        "Your anime video folder isn't available — reconnect the drive or change it in Settings → Library → Anime."
             .to_string()
     })?;
 
