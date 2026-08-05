@@ -317,7 +317,10 @@ pub async fn music_stream_resolve(
             .rev()
             .find(|l| !l.trim().is_empty())
             .unwrap_or("no output");
-        format!("stream resolve failed: {tail}")
+        // Carry the child's exit status: a helper that ran and failed is a small
+        // code, a helper killed mid-flight (app relaunch) is a large one. Without
+        // it both land on the screen as the same bare "no output".
+        format!("stream resolve failed ({}): {tail}", out.status)
     }))
 }
 
