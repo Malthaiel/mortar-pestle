@@ -47,10 +47,16 @@ const SETTLE = 120;
 // edge would otherwise land above the titlebar and clip off-screen.
 export const FOLD_PAD = 6;
 
-// .candy-btn's OWN transition, restated verbatim. An inline `transition`
-// replaces the class's whole list, so a hinge that only declares its transform
-// leg strips the band's ease and the depth colour snaps while the face eases.
-const BAND_T = 'box-shadow 150ms cubic-bezier(0, 0, 0.58, 1)';
+// .candy-btn's OWN colour transitions, restated verbatim. An inline
+// `transition` replaces the class's whole list, so a hinge that only declares
+// its transform leg strips these and the button's colours snap.
+//
+// All FOUR legs, not just box-shadow: dropping `selected` mid-close fades the
+// accent out through `color`, `background` and `border-color` as well as the
+// depth band, and a row carrying an inline hinge (the innermost one, and the
+// trigger) would otherwise keep only the band's ease and hard-cut its face.
+const BAND_T = ['color', 'background', 'border-color', 'box-shadow']
+  .map((p) => `${p} 150ms cubic-bezier(0, 0, 0.58, 1)`).join(', ');
 
 // The account chip's face text, resolved through all three rules that reach it:
 // base .candy-face (mono, --text-muted), [data-shape="chip"] (600, no uppercase),
@@ -82,6 +88,19 @@ export default function FoldMenu({
   shape = 'chip',
   faceStyle,
   ariaLabel = 'Menu',
+  // Fold UPWARD instead of down — for a trigger in a bottom bar, where a
+  // downward stack would unfold off the bottom of the window. Row 0 still lands
+  // on the trigger's exact footprint; everything else mirrors about it.
+  //
+  // The rotation is NOT mirrored: the hinge still runs 180deg -> 0deg. Only the
+  // PIVOT moves, from the flap's top edge to its bottom (see HINGE_Y), and
+  // rotating about an origin below the flap already carries it down and over
+  // the row beneath. Flipping the sign as well would undo that.
+  up = false,
+  // Index of the row holding the current value, or -1 for a command menu with
+  // no selection (the titlebar account menu). Wears the app's standard
+  // `is-active` accent fill, same as any other selected candy button.
+  selected = -1,
   // Told whenever the fold opens or shuts, and handed the panel's own CSS
   // transition string. The host needs BOTH: the panel appears FOLD_PAD outside
   // the trigger on every side, into space the trigger's neighbours are sitting
@@ -138,7 +157,19 @@ export default function FoldMenu({
   // The pivot sits at the MIDDLE of the space between neighbours, not on a row's
   // own top edge — rotating about the edge lands the flap a whole GAP off its
   // target. Half of it makes the fold symmetric about the boundary.
-  const HINGE_Y = `calc((${GAP_V}) / -2)`;
+  //
+  // Folding up, the flap sits ABOVE the row it lands on and the gap is below it,
+  // so the same midpoint is measured from the flap's own bottom edge instead.
+  const HINGE_Y = up ? `calc(100% + (${GAP_V}) / 2)` : `calc((${GAP_V}) / -2)`;
+  // Which side of a flap the gap lives on. Folding up, the stack is laid out
+  // bottom-to-top (see `col`), so the separator has to move to the other edge —
+  // a marginTop in a column-reverse box separates a row from the WRONG
+  // neighbour, and the fold lands a whole GAP out.
+  const GAP_SIDE = up ? 'marginBottom' : 'marginTop';
+  // Every box that stacks rows has to run bottom-to-top when folding up: the
+  // group AND each preserve-3d wrapper, since the nesting means every level
+  // holds a row plus the wrapper carrying everything past it.
+  const col = up ? { display: 'flex', flexDirection: 'column-reverse' } : null;
 
   const hinge = (deg, delay) => ({
     transform: `rotateX(${deg}deg) translateZ(-1px)`,
@@ -321,12 +352,19 @@ export default function FoldMenu({
           state and the open state are two different buttons. */}
       <button
         type="button"
-        className={`candy-btn ${triggerClassName}${j === n - 1 && down ? ' is-pressed' : ''}`.trim()}
+        // The accent is held only while OPEN, so it releases on frame one of the
+        // close and eases out under the fold rather than riding it down and
+        // hard-cutting at the handover. .candy-btn's own 150ms colour ease does
+        // the work — fast, but a fade, not a cut. Restoring it is free: on open
+        // the group is still at opacity 0 until `press`, so the accent arrives
+        // behind the fade-in and is never seen to appear.
+        className={`candy-btn ${triggerClassName}${j === n - 1 && down ? ' is-pressed' : ''}${j === selected && open ? ' is-active' : ''}`.trim()}
         data-shape={shape}
         data-own-press
         data-self-press
+        aria-current={j === selected ? 'true' : undefined}
         style={j === n - 1 && j > 0
-          ? { ...row(lips[j - 1]), marginTop: GAP, ...hinge(open ? 0 : 180, open ? openAt(j - 1) : closeAt(j - 1)) }
+          ? { ...row(lips[j - 1]), [GAP_SIDE]: GAP, ...hinge(open ? 0 : 180, open ? openAt(j - 1) : closeAt(j - 1)) }
           : row(j === 0 ? true : lips[j - 1])}
         onClick={() => { setOpen(false); items[j].onClick?.(); }}
       >
@@ -363,7 +401,8 @@ export default function FoldMenu({
       {j === n - 2 && stack(j + 1)}
       {j < n - 2 && (
         <div style={{
-          marginTop: GAP,
+          [GAP_SIDE]: GAP,
+          ...col,
           transformStyle: 'preserve-3d',
           // A row's translateZ(-1px) puts it BEHIND this wrapper's own plane,
           // so the wrapper wins every hit test over it and the row never sees a
@@ -476,7 +515,7 @@ export default function FoldMenu({
           // It uses the MEASURED depth, not the raw var: --cbtn-depth is
           // declared on the candy button itself, so on this div it would fall
           // back to --candy-depth (7px) while a chip trigger lifts by 5px.
-          position: 'absolute', left: 0,
+          position: 'absolute', left: 0, ...col,
           // + FOLD_PAD while open: the panel reaches FOLD_PAD above row 0, and
           // row 0 sits in a titlebar with only 6px of bar above it, so a stack
           // left at the trigger's own line puts the panel's top edge off the top
@@ -486,6 +525,16 @@ export default function FoldMenu({
           // paper is still dead on the button it replaced — the locked "row 1
           // lands ON the trigger" rule survives; the settle happens after.
           top: `calc(${depth} / -2 * var(--candy-center-on, 1) + ${open ? FOLD_PAD : 0}px)`,
+          // Folding up, the stack is pinned by its BOTTOM to the trigger's own
+          // bottom line and grows upward, and the settle moves it UP by the pad
+          // instead of down. Written AFTER the `top` above so it wins — `top`
+          // has to go back to `auto` or it, not `bottom`, places the box.
+          // The lift is the same one with its sign flipped: a bigger `bottom`
+          // raises a box exactly as a smaller `top` does.
+          ...(up ? {
+            top: 'auto',
+            bottom: `calc(${depth} / 2 * var(--candy-center-on, 1) + ${open ? FOLD_PAD : 0}px)`,
+          } : {}),
           // The GROUP sets the width and the rows take 100% of it, so every row
           // is the same rectangle and perspective-origin (which defaults to the
           // centre of whatever DECLARES perspective) lands on their centre — a
@@ -509,7 +558,7 @@ export default function FoldMenu({
           // display:none did to the open.
           visibility: shown ? 'visible' : 'hidden',
           transition: `opacity ${open ? SETTLE : 0}ms ease-in-out ${open ? press : SHUT}ms,`
-            + ` top ${panelT}`,
+            + ` ${up ? 'bottom' : 'top'} ${panelT}`,
         }}
       >
         {/* The paper it unfolds ONTO. Without it the rows hang over whatever
@@ -531,12 +580,16 @@ export default function FoldMenu({
             // Shut, it is the trigger rectangle exactly — so the first frame of
             // the open has nothing to pop. The pad only appears as it grows.
             left: open ? -FOLD_PAD : 0,
-            top: open ? -FOLD_PAD : 0,
+            // Pinned to whichever edge the stack itself is pinned to, so it
+            // grows the same way the rows do. Folding up that anchor also
+            // absorbs the lip (see the height note), keeping BOTH directions
+            // the same shape: FOLD_PAD above the stack, FOLD_PAD + a lip below.
+            [up ? 'bottom' : 'top']: open ? -(up ? FOLD_PAD + dpx : FOLD_PAD) : 0,
             width: open ? `calc(100% + ${FOLD_PAD * 2}px)` : '100%',
             // + dpx: the bottom row's lip is a box-shadow living OUTSIDE its
             // layout box, so a panel sized to the boxes alone stops short of it.
             height: open ? fullH + FOLD_PAD * 2 + dpx : box.h,
-            transition: ['left', 'top', 'width', 'height']
+            transition: ['left', up ? 'bottom' : 'top', 'width', 'height']
               .map((p) => `${p} ${panelT}`).join(', '),
           }}
         />

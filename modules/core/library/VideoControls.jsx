@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useVideoPlayer } from './VideoPlayerProvider.jsx';
 import { IconVolume, IconPlay, IconPause, IconSkip, IconSkipBack, IconRewind, IconFastForward, IconSettings, IconMaximize, IconRotateCw } from '@host/components/icons.jsx';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
+import FoldMenu from '@host/components/ui/FoldMenu.jsx';
 import SubtitleSettingsPanel from './SubtitleSettingsPanel.jsx';
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
@@ -110,22 +111,37 @@ export default function VideoControls() {
           />
         )}
 
-        {/* Subtitle track */}
-        {v.probe && v.probe.subtitles && v.probe.subtitles.length > 0 && (
-          <CandySelect
-            value={String(v.subIdx)}
-            options={[
-              { value: '-1', label: 'Subs: Off' },
-              ...v.probe.subtitles.map((t, i) => ({
-                value: String(i),
-                label: `Subs: ${(t.language || 'und').toUpperCase()}${t.forced ? ' (F)' : ''}`,
-              })),
-            ]}
-            onChange={(val) => v.setSubtitleTrack(Number(val))}
-            title="Subtitle track"
-            direction="up"
-          />
-        )}
+        {/* Subtitle track — the first CandySelect converted to the app's default
+            dropdown (Component Map § Default Components → FoldMenu). `up`
+            because this bar sits at the bottom of the player and a downward
+            stack would unfold off the window. rowH is the transport buttons'
+            own 27px, taken from their `size` rather than eyeballed, so the fold
+            and its neighbours are the same rectangle. */}
+        {v.probe && v.probe.subtitles && v.probe.subtitles.length > 0 && (() => {
+          const subs = [
+            { value: -1, label: 'Subs: Off' },
+            ...v.probe.subtitles.map((t, i) => ({
+              value: i,
+              label: `Subs: ${(t.language || 'und').toUpperCase()}${t.forced ? ' (F)' : ''}`,
+            })),
+          ];
+          const at = subs.findIndex(o => o.value === v.subIdx);
+          return (
+            <FoldMenu
+              up
+              rowH={27}
+              selected={at}
+              triggerTitle="Subtitle track"
+              ariaLabel="Subtitle track"
+              items={subs.map(o => ({
+                label: o.label,
+                onClick: () => v.setSubtitleTrack(o.value),
+              }))}
+            >
+              {(subs[at] || subs[0]).label}
+            </FoldMenu>
+          );
+        })()}
 
         {/* Subtitle settings gear */}
         {v.probe && v.probe.subtitles && v.probe.subtitles.length > 0 && v.subIdx >= 0 && (
