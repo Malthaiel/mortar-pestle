@@ -317,7 +317,11 @@ export default function FoldPanel() {
             // inline transition REPLACES the whole list, and dropping it left
             // the depth band snapping to the hover accent while the face above
             // it still eased over 150ms.
-            transition: `opacity ${SETTLE}ms ease-in-out ${open ? press : SHUT}ms,`
+            // Close direction hard-cuts (0ms): the paper's last visible face
+            // reads "Appearance", not "Settings", so a cross-fade paints two
+            // different words stacked for ~50ms. Both sides flip on the same
+            // frame instead. Open still fades — never a complaint there.
+            transition: `opacity ${open ? SETTLE : 0}ms ease-in-out ${open ? press : SHUT}ms,`
               + ' box-shadow 150ms cubic-bezier(0, 0, 0.58, 1)',
           }}
         >
@@ -347,7 +351,8 @@ export default function FoldPanel() {
             perspective: PERSPECTIVE, width: box.w,
             opacity: open ? 1 : 0,
             pointerEvents: open ? 'auto' : 'none',
-            transition: `opacity ${SETTLE}ms ease-in-out ${open ? press : SHUT}ms`,
+            // Matches the shut button's hard cut on close — see the note there.
+            transition: `opacity ${open ? SETTLE : 0}ms ease-in-out ${open ? press : SHUT}ms`,
           }}
         >
           {/* top — never moves; everything folds onto it */}
