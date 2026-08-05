@@ -266,6 +266,12 @@ export default function FoldPanel() {
     return () => clearTimeout(t);
   }, [open, flapFlipAt]);
 
+  // A landing press on the shut button — pressed at SHUT, released at SHUT +
+  // press, so the paper landing on it read as impact — was built and REMOVED the
+  // same session (2026-08-04, user-directed, seen live). The button arrives at
+  // rest and stays there. Do not re-propose it; this is the second press on this
+  // button he has deleted.
+
   // Manual scrub. null = click-driven. One 0-360 sweep replays the letter fold
   // in order: 0-180 folds Navigation onto Sounds, 180-360 folds the pair onto
   // Appearance — the same two hinges the click sequences with delays, driven by
@@ -299,8 +305,9 @@ export default function FoldPanel() {
       <div style={{ display: 'grid', width: box.w }}>
         {/* Shut state. Real .candy-btn / .candy-face, so hover, press and depth
             all arrive for free; only the face metrics are overridden, to the
-            account chip's, so the swap lands on the same rectangle. It fades in
-            at REST — no held press, no release to sit through.
+            account chip's, so the swap lands on the same rectangle. Fades in on
+            open, hard-cuts in on close — no held press, and no landing press either.
+            It arrives at rest and stays there.
             data-own-press: candy defines its own :active, so it opts out of the
             global spring scale while keeping the press sound. */}
         <button
