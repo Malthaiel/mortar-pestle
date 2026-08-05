@@ -9,7 +9,7 @@
 // 3 screenshots) with a per-section "View all" popup. STT + Game Capture are
 // stubbed on Windows v1 â€” offline/empty states are intentional.
 //
-// Pointer arbitration: the OUTER panel drags by its â ¿ header grip only (dragProps
+// Pointer arbitration: the OUTER panel drags by its ⠿ header grip only (dragProps
 // on the header, not the panel body), because useOverlayPanelDrag only bails on
 // button/input/[data-no-drag] and a tile is a <div class="candy-btn"> â€” a
 // whole-body panel drag handle would fight the tile reorder. Tile bodies route to
@@ -302,7 +302,7 @@ export default function OverlayStudioPanel({ showToast }) {
         <div className="candy-card ov-studio-panel">
           <div className="candy-center-row ov-studio-head" {...dragProps} style={{ touchAction: 'none' }}>
             <span className="ov-studio-title section-title">Studio Overlay</span>
-            <span className="stt-grip" aria-hidden="true">â ¿</span>
+            <span className="stt-grip" aria-hidden="true">⠿</span>
           </div>
           <DraggableSidebarList
             items={ordered}
