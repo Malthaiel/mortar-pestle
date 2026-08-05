@@ -5,11 +5,20 @@ import { useEffect, useRef, useState } from 'react';
 import { useVideoPlayer } from './VideoPlayerProvider.jsx';
 import { IconVolume, IconPlay, IconPause, IconSkip, IconSkipBack, IconRewind, IconFastForward, IconSettings, IconMaximize, IconRotateCw } from '@host/components/icons.jsx';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
-import FoldMenu from '@host/components/ui/FoldMenu.jsx';
+import FoldMenu, { FoldStandOff } from '@host/components/ui/FoldMenu.jsx';
+import { candyCenterOffset } from '@host/util/candy.js';
 import SubtitleSettingsPanel from './SubtitleSettingsPanel.jsx';
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 const ICON = 14;   // uniform glyph size inside the 27px circle buttons
+// The subtitle fold is the Dev tab's "Fold up / down" chip copied 1-1, so it
+// takes that chip's 28px row rather than the bar's own 27 — user-directed, in
+// full knowledge that it stands 1px taller than its neighbours.
+const SUB_ROW = 28;
+// A candy button's depth lip is a box-shadow drawn OUTSIDE layout, so flex
+// centring centres the BOX and leaves the visible ink half a band low. Same
+// correction the titlebar and the Dev tab demo apply.
+const CENTER = candyCenterOffset();
 
 function fmt(sec) {
   if (!Number.isFinite(sec) || sec < 0) return '0:00';
@@ -24,6 +33,12 @@ export default function VideoControls() {
   const v = useVideoPlayer();
   const [subPanelOpen, setSubPanelOpen] = useState(false);
   const subAnchorRef = useRef(null);
+  // The subtitle fold's backing panel reaches FOLD_PAD outside the trigger, so
+  // the blocks either side of it stand off while it is open. `subFoldT` is the
+  // panel's OWN transition string, handed over by FoldMenu, so the controls and
+  // the panel edge are one movement rather than two that agree.
+  const [subFoldOpen, setSubFoldOpen] = useState(false);
+  const [subFoldT, setSubFoldT] = useState('');
   useEffect(() => {
     if (!subPanelOpen) return;
     const onDown = (e) => {
@@ -88,35 +103,43 @@ export default function VideoControls() {
 
         <span style={{ flex: 1 }}/>
 
-        {/* Speed */}
-        <CandySelect
-          value={String(v.speed)}
-          options={SPEEDS.map(s => ({ value: String(s), label: `${s}×` }))}
-          onChange={(val) => v.setSpeed(Number(val))}
-          title="Playback speed"
-          direction="up"
-        />
-
-        {/* Audio track */}
-        {v.probe && v.probe.audio && v.probe.audio.length > 1 && (
+        {/* Speed + Audio — the block on the subtitle fold's LEFT. `gap` is the
+            row's own 16, restated because the wrapper now owns the spacing
+            between these two. Children.toArray drops the false branch, so with
+            no second audio track this is a one-child block and simply slides. */}
+        <FoldStandOff dir={-1} open={subFoldOpen} t={subFoldT} gap={16}>
+          {/* Speed */}
           <CandySelect
-            value={String(v.audioIdx)}
-            options={v.probe.audio.map((t, i) => ({
-              value: String(i),
-              label: `${(t.language || 'und').toUpperCase()}${t.title ? ' · ' + t.title.slice(0, 18) : ''}`,
-            }))}
-            onChange={(val) => v.setAudioTrack(Number(val))}
-            title="Audio track"
+            value={String(v.speed)}
+            options={SPEEDS.map(s => ({ value: String(s), label: `${s}×` }))}
+            onChange={(val) => v.setSpeed(Number(val))}
+            title="Playback speed"
             direction="up"
           />
-        )}
 
-        {/* Subtitle track — the first CandySelect converted to the app's default
-            dropdown (Component Map § Default Components → FoldMenu). `up`
-            because this bar sits at the bottom of the player and a downward
-            stack would unfold off the window. rowH is the transport buttons'
-            own 27px, taken from their `size` rather than eyeballed, so the fold
-            and its neighbours are the same rectangle. */}
+          {/* Audio track */}
+          {v.probe && v.probe.audio && v.probe.audio.length > 1 && (
+            <CandySelect
+              value={String(v.audioIdx)}
+              options={v.probe.audio.map((t, i) => ({
+                value: String(i),
+                label: `${(t.language || 'und').toUpperCase()}${t.title ? ' · ' + t.title.slice(0, 18) : ''}`,
+              }))}
+              onChange={(val) => v.setAudioTrack(Number(val))}
+              title="Audio track"
+              direction="up"
+            />
+          )}
+        </FoldStandOff>
+
+        {/* Subtitle track — the Dev tab's "Fold up / down" chip (FoldUpPanel.jsx)
+            copied in 1-1, user-directed 2026-08-05: same `up`, same SUB_ROW, same
+            `titlebar-account is-hover-accent` skin, same centring lift. Only the
+            DATA differs — the rows are the probe's subtitle tracks and their
+            onClick calls setSubtitleTrack. Do not re-derive it from the old call
+            site; if the demo chip is tuned, re-copy.
+            `up` is right here for its own reason too: this bar sits at the bottom
+            of the player, so a downward stack would unfold off the window. */}
         {v.probe && v.probe.subtitles && v.probe.subtitles.length > 0 && (() => {
           const subs = [
             { value: -1, label: 'Subs: Off' },
@@ -129,10 +152,15 @@ export default function VideoControls() {
           return (
             <FoldMenu
               up
-              rowH={27}
-              selected={at}
+              style={CENTER}
+              rowH={SUB_ROW}
+              triggerClassName="titlebar-account is-hover-accent"
               triggerTitle="Subtitle track"
               ariaLabel="Subtitle track"
+              onOpenChange={(o, t) => { setSubFoldOpen(o); setSubFoldT(t); }}
+              // The one prop the demo chip has no use for: its rows are commands,
+              // these carry a VALUE, so the active track wears the accent fill.
+              selected={at}
               items={subs.map(o => ({
                 label: o.label,
                 onClick: () => v.setSubtitleTrack(o.value),
@@ -143,32 +171,36 @@ export default function VideoControls() {
           );
         })()}
 
-        {/* Subtitle settings gear */}
-        {v.probe && v.probe.subtitles && v.probe.subtitles.length > 0 && v.subIdx >= 0 && (
-          <div ref={subAnchorRef} style={{ position: 'relative' }}>
-            <IconBtn
-              onClick={() => setSubPanelOpen(o => !o)}
-              title="Subtitle settings"
-              size={27}
-            ><IconSettings size={ICON}/></IconBtn>
-            {subPanelOpen && <SubtitleSettingsPanel/>}
-          </div>
-        )}
+        {/* Gear + Chapters — the block on the subtitle fold's RIGHT, same rule
+            mirrored. Refresh onward is far enough not to be part of it. */}
+        <FoldStandOff dir={1} open={subFoldOpen} t={subFoldT} gap={16}>
+          {/* Subtitle settings gear */}
+          {v.probe && v.probe.subtitles && v.probe.subtitles.length > 0 && v.subIdx >= 0 && (
+            <div ref={subAnchorRef} style={{ position: 'relative' }}>
+              <IconBtn
+                onClick={() => setSubPanelOpen(o => !o)}
+                title="Subtitle settings"
+                size={27}
+              ><IconSettings size={ICON}/></IconBtn>
+              {subPanelOpen && <SubtitleSettingsPanel/>}
+            </div>
+          )}
 
-        {/* Chapters (only if any) */}
-        {v.probe && v.probe.chapters && v.probe.chapters.length > 0 && (
-          <CandySelect
-            value=""
-            placeholder={`Chapters (${v.probe.chapters.length})`}
-            options={v.probe.chapters.map(c => ({
-              value: String(c.start),
-              label: `${fmt(c.start)} — ${c.title}`,
-            }))}
-            onChange={(val) => { const t = Number(val); if (Number.isFinite(t)) v.seek(t); }}
-            title="Jump to chapter"
-            direction="up"
-          />
-        )}
+          {/* Chapters (only if any) */}
+          {v.probe && v.probe.chapters && v.probe.chapters.length > 0 && (
+            <CandySelect
+              value=""
+              placeholder={`Chapters (${v.probe.chapters.length})`}
+              options={v.probe.chapters.map(c => ({
+                value: String(c.start),
+                label: `${fmt(c.start)} — ${c.title}`,
+              }))}
+              onChange={(val) => { const t = Number(val); if (Number.isFinite(t)) v.seek(t); }}
+              title="Jump to chapter"
+              direction="up"
+            />
+          )}
+        </FoldStandOff>
 
         {/* Refresh stream — reload the current episode, resume at the same spot */}
         <IconBtn onClick={v.refresh} title="Refresh stream" size={27}><IconRotateCw size={ICON}/></IconBtn>
