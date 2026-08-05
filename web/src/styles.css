@@ -225,10 +225,6 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
   --shadow-card:  0 12px 48px rgba(0,0,0,0.60);
   --shadow-fab:   0 2px 10px rgba(0,0,0,0.40);
 
-  /* Candy SURFACE rest depth · Dark — a hair deeper than light (4px) because
-     dark surfaces sit on a darker bg and a shallow shadow nearly vanishes. */
-  --candy-surface-depth: 5px;
-
   /* 3D Button tokens · Dark */
   --btn3d-primary-face   : var(--accent, oklch(0.55 0.16 25));
   --btn3d-primary-base   : color-mix(in oklch, var(--accent, oklch(0.55 0.16 25)), black 25%);
@@ -3793,7 +3789,9 @@ body[data-anim-button-depth="off"] { --candy-center-on: 0; }
   --text-muted:   oklch(0.620 0.008 82);
   --text-faint:   oklch(0.460 0.005 78);
   --shadow-card:  0 12px 48px rgba(0, 0, 0, 0.70);
-  --candy-surface-depth: 5px;
+  /* NO --candy-surface-depth here: this scope is a descendant of <body>, so a
+     local declaration would beat body[data-surface-depth] and make the video
+     player + overlays ignore Settings → Appearance → Surface depth. Inherit. */
   /* .btn3d safety — the candy .button-* family doesn't read these, but any
      stray .btn3d utility in the chrome would otherwise render light. */
   --btn3d-icon-face:     var(--surface-2);
