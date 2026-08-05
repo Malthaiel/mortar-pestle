@@ -28,7 +28,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { IconMinus, IconSquare, IconRestore, IconX, IconSettings, IconTrash } from './icons.jsx';
 import { CircleChip } from './ui/Button.jsx';
 import { candyCenterOffset } from '../util/candy.js';
-import FoldMenu, { FOLD_PAD } from './ui/FoldMenu.jsx';
+import FoldMenu, { FoldStandOff } from './ui/FoldMenu.jsx';
 import NotificationBell from '../notifications/NotificationBell.jsx';
 import { useUpdateStatus } from '../hooks/useUpdateStatus.js';
 import { navigate } from '../router.js';
@@ -63,15 +63,13 @@ export default function TitleBar({
   // while the menu is open the icons flanking it stand off by that same pad.
   // `foldT` is the panel's OWN transition string, handed over by FoldMenu, so
   // the icons and the panel edge are one movement rather than two that agree.
-  // transform, not margin or gap: a layout shift would move the chip itself
-  // mid-fold and drag the open menu sideways with it.
+  //
+  // FoldStandOff (FoldMenu.jsx) owns the whole rule — including the seam cramp
+  // that keeps the three window controls off the window edge, and counts its own
+  // seams. One bell has none to give and just slides; three controls give up 3px
+  // a seam and pin their far edge.
   const [foldOpen, setFoldOpen] = useState(false);
   const [foldT, setFoldT] = useState('');
-  const standOff = (dir) => ({
-    display: 'inline-flex', alignItems: 'center', gap: 8,
-    transform: `translateX(${foldOpen ? dir * FOLD_PAD : 0}px)`,
-    transition: foldT ? `transform ${foldT}` : undefined,
-  });
 
   // The feedback module's Rust commands are the app's only account backend, and
   // makeFeedbackApi only needs something with `.invoke` — so the host shim is
@@ -157,7 +155,7 @@ export default function TitleBar({
       </div>
 
       <div className="titlebar-cluster">
-        <span style={standOff(-1)}>
+        <FoldStandOff dir={-1} open={foldOpen} t={foldT}>
           <NotificationBell
             variant="titlebar"
             label="Notifications"
@@ -165,7 +163,7 @@ export default function TitleBar({
             isActive={!!notifOpen}
             accent={accent}
           />
-        </span>
+        </FoldStandOff>
 
         {/* Account button — the house candy `chip` shape, avatar left of the
             display name in one frame. Signed out it reads "Sign in" and skips
@@ -218,8 +216,12 @@ export default function TitleBar({
 
         {/* The three window controls travel together — they are one block to
             the right of the account chip, and only the block's near edge has to
-            clear the fold's panel. */}
-        <span style={standOff(1)}>
+            clear the fold's panel. Its FAR edge is the window edge, so the
+            standoff comes out of the block's own two seams (8px → 5px while
+            open) rather than out of the 8px titlebar padding. The seams close
+            on TRANSFORMS, so the layout gap stays 8 on the 4px grid throughout
+            and the spacing audit needs no intent opt-out. */}
+        <FoldStandOff dir={1} open={foldOpen} t={foldT}>
           <CircleChip title="Minimize" size={BTN} className="is-hover-accent" style={CENTER} onClick={() => win.minimize()}>
             <IconMinus size={14}/>
           </CircleChip>
@@ -233,7 +235,7 @@ export default function TitleBar({
           <CircleChip title="Close" size={BTN} className="is-hover-accent" style={CENTER} onClick={() => win.close()}>
             <IconX size={14}/>
           </CircleChip>
-        </span>
+        </FoldStandOff>
       </div>
 
       <SignInModal

@@ -20,7 +20,7 @@
 // Structure: row 0 never moves and everything folds onto it. Rows 1..n-1 live
 // in nested preserve-3d wrappers, wrapper j carrying rows j+1..n-1, so folding
 // wrapper j carries every row below it as one piece. n rows means n-1 hinges.
-import { useEffect, useRef, useState } from 'react';
+import { Children, useEffect, useRef, useState } from 'react';
 
 // Camera distance. The article's 500 was sized for a 300px-tall image; against
 // 28px rows it sits far too close and the taper (the near edge of a folding
@@ -29,7 +29,30 @@ import { useEffect, useRef, useState } from 'react';
 // taper% = PERSPECTIVE / (PERSPECTIVE - rowHeight) — recompute if rows get tall.
 const PERSPECTIVE = 2000;
 
-// One fold.
+// One fold, and THE MIRROR RULE that goes with it. The close is the open played
+// backwards — same clock, same curve, same beats, reversed order — and nothing
+// in this file may add a beat to one direction that the other does not have.
+// One number for both directions and both orientations; there is no second
+// duration anywhere below.
+//
+// User-directed 2026-08-05, off a 60fps capture of both a down-fold and an
+// up-fold opening and closing repeatedly: "the unfold animation doesn't match
+// the folding/collapse animation — I want the unfolding animation turned into
+// the folding-in animation." Measured on that clip, the down menu opened over
+// 16 frames (a dead beat, then the row unfolding into place) and closed over
+// 10, and the close spent its first four visibly SHRINKING in place before
+// anything rotated. Three close-only beats caused it, and all three are gone:
+//   - a squash on the bottom row (open had no equivalent),
+//   - a lip drop fired one `press` EARLY as a compaction cue,
+//   - a shorter clock for an upward close (UP_DUR = 220 against DUR = 300).
+// The half-clock backing panel on a two-row close went with them.
+//
+// Each was defensible alone; together they made the two halves different
+// animations. Do not reintroduce one without the other direction's twin.
+//
+// ease-in-out is symmetric, so edge-on sits at exactly DUR/2 in both
+// directions, which is what lets every `flipped` swap below use one
+// expression. A curve that is NOT symmetric silently drifts them.
 const DUR = 300;
 // Fallback for the candy face's ease-down; the live value is read from
 // --cbtn-press-dur on mount, since Settings → Animations rewrites it.
@@ -46,6 +69,65 @@ const SETTLE = 120;
 // The open stack slides DOWN by this much for the same reason — the panel's top
 // edge would otherwise land above the titlebar and clip off-screen.
 export const FOLD_PAD = 6;
+
+// How far child `i` of a standoff block travels while the fold is open, in px.
+//
+// A block with no seam (a lone bell) has nothing to give and just slides the
+// whole pad. Otherwise the block's FAR edge is PINNED and its own seams absorb
+// the standoff: the child nearest the fold walks the full FOLD_PAD away, the
+// child at the far end does not move at all, and everything between is spread
+// evenly — which closes each seam by exactly FOLD_PAD / seams.
+//
+// Why pin the far edge: a plain block-wide translate is only right when the
+// block has room to move INTO. The titlebar's three window controls sit against
+// the window edge, so translating them ate the strip's own 8px padding — with
+// the account fold open, panel-to-Minimize measured 8px while Close-to-edge
+// measured 2px, the whole block shoved into the corner. Measured 2026-08-05.
+const standOffShift = (dir, i, seams) => {
+  if (seams <= 0) return dir * FOLD_PAD;
+  return dir > 0 ? FOLD_PAD * (1 - i / seams) : -FOLD_PAD * (i / seams);
+};
+
+/**
+ * The standoff a host owes a fold's NEIGHBOURS. Wraps the block of buttons that
+ * sits beside the trigger, in place of the plain flex `<span>` it would
+ * otherwise be. `dir` is -1 for a block on the fold's left, +1 for one on its
+ * right; `t` is the panel's OWN transition string, handed to the host by
+ * onOpenChange, so the neighbours and the panel edge are one movement rather
+ * than two that agree. The seam count is read off the children.
+ *
+ * TRANSFORMS ONLY, and that is not an optimisation — it is the feature. The
+ * first build animated the flex `gap` (plus a margin to hold the block's layout
+ * width) and Malthaiel called the result janky on sight: `gap` is a LAYOUT
+ * property, so the browser re-solves the strip every frame and rounds each seam
+ * to a whole pixel, which walks 8px -> 5px in about three visible steps instead
+ * of gliding. A transform is composited, takes subpixels, and never touches
+ * layout — so the cluster cannot reflow and the trigger cannot be dragged
+ * sideways mid-fold either, which is what the compensating margin was for.
+ *
+ * Each child gets its OWN wrapper rather than the transform being cloned onto
+ * the button: a candy button's press and hover states are transforms too, and
+ * an inline one on the button itself would outrank them and kill the press for
+ * as long as the menu is open.
+ */
+export function FoldStandOff({ dir, open, t, gap = 8, children, ...rest }) {
+  const kids = Children.toArray(children);
+  const seams = kids.length - 1;
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap }} {...rest}>
+      {kids.map((kid, i) => (
+        <span
+          key={kid.key ?? i}
+          style={{
+            display: 'inline-flex',
+            transform: `translateX(${open ? standOffShift(dir, i, seams) : 0}px)`,
+            transition: t ? `transform ${t}` : undefined,
+          }}
+        >{kid}</span>
+      ))}
+    </span>
+  );
+}
 
 // .candy-btn's OWN colour transitions, restated verbatim. An inline
 // `transition` replaces the class's whole list, so a hinge that only declares
@@ -184,15 +266,15 @@ export default function FoldMenu({
 
   // Fold start times, indexed by wrapper (0 = outermost, `last` = innermost).
   //
-  // Closing runs innermost-first and OPENING runs outermost-first, which is why
-  // the two delay sets are separate rather than one reversed.
+  // Closing runs innermost-first and OPENING runs outermost-first — that IS the
+  // reversal, and it is the only thing that differs between the two. The SPREAD
+  // is identical (`* DUR` in both), so the close is the open's mirror image
+  // wrapper for wrapper: whatever fraction of the stagger wrapper j sits at
+  // opening, wrapper `last - j` sits at exactly the same fraction closing.
   //
-  // The close spread is chosen so the whole close takes the same time no matter
-  // how many rows there are: more rows means the folds OVERLAP more, not that
-  // the menu takes longer. At n = 3 it reproduces the toy exactly — innermost at
-  // `press`, outermost at `2*press + DUR` — because SPAN is press + DUR.
-  const SPAN = press + DUR;
-  const closeAt = (j) => (last < 1 ? press : press + ((last - j) / last) * SPAN);
+  // The close used to spread over `press + DUR` instead, so it ran one press
+  // longer than the open at every row count above two. See the mirror rule.
+  const closeAt = (j) => (last < 1 ? press : press + ((last - j) / last) * DUR);
   const openAt = (j) => (last < 1 ? press : press + (j / last) * DUR);
 
   // Hand-over instant: the outermost fold is the last to finish, so this is when
@@ -214,23 +296,30 @@ export default function FoldMenu({
   // paper. The panel may run AHEAD of the inner folds — paper landing on a
   // surface that is already there is right; a surface catching up under paper
   // that already landed is not.
+  //
+  // One clock in BOTH directions. A two-row close used to run the panel on
+  // DUR/2, because with one hinge the row is edge-on — gone — at DUR/2 and the
+  // panel then spent the rest of the clock shrinking around nothing. True, but
+  // the OPEN has the identical artifact reversed (a panel already at full size
+  // while the row is still edge-on) and was never a complaint, and the
+  // half-clock was one of the three beats that made the close a different
+  // animation. See the mirror rule at `DUR`: no beat on one side without its
+  // twin on the other.
   const panelT = `${DUR}ms ease-in-out ${open ? openAt(0) : closeAt(0)}ms`;
 
-  // Whether the BOTTOM row is pressed. It squashes, releases, and only THEN
-  // folds, so the compaction runs a beat ahead of its own fold.
+  // The bottom row's SQUASH is gone (user-directed 2026-08-05, see the mirror
+  // rule at `DUR`). It pressed the innermost row, released it, and only then let
+  // it fold, so a close opened with a compaction beat the unfold had no twin
+  // for — the first four frames of every close were the stack shrinking in
+  // place before anything rotated. If it is ever wanted back, the open needs the
+  // mirrored beat (a landing press as the last row arrives) in the same change.
   //
-  // Squash-before-fold rather than squash-during is load-bearing, not taste. A
-  // pressed face is slid DOWN --cbtn-depth inside its own button, and the fold
-  // rotates that button 180deg, which flips the slide upward — so a flap still
-  // held at the moment it lands puts its face a full depth above its target.
-  // Released before its own fold starts, a flap is always at rest when it lands.
+  // What it was protecting against still matters and is still handled: a pressed
+  // face is slid DOWN --cbtn-depth inside its own button, and the fold rotates
+  // that button 180deg, flipping the slide upward — so a row still held at the
+  // moment it lands puts its face a full depth above its target. With no press
+  // at all, every row is at rest when it lands, which is the same guarantee.
   //
-  // Only the innermost row squashes. Every other one would be hidden under a
-  // row already folded across it, where a press cannot be read — and worse,
-  // leaks: styles.css slides a pressed face down over its own depth band, and a
-  // row lying on top hides all of that slide EXCEPT the bottom --cbtn-depth,
-  // which slides out as a bar of face colour. That bug cost four sessions.
-  const [down, setDown] = useState(false);
   // Per-wrapper lip state. A candy lip is a DOWNWARD box-shadow, so a row
   // rotated 180deg points its lip UP and stacks a whole depth of shadow above
   // whatever it lands on — the other half of landing flush, and invisible to a
@@ -248,9 +337,8 @@ export default function FoldMenu({
     });
 
     if (open) {
-      setDown(false);
       for (let j = 0; j < hinges; j += 1) {
-        // Lips return per row, each as its own unfold finishes — never during,
+        // Lips return per row, each as its own unfold FINISHES — never during,
         // or the lip grows back while the row is still rotating.
         at(openAt(j) + DUR, () => setAt(setLips, j, true));
         // Swapped at the edge-on frame: mid-fold the row is rotated 90deg and
@@ -259,15 +347,16 @@ export default function FoldMenu({
         at(openAt(j) + DUR / 2, () => setAt(setFlipped, j, false));
       }
     } else {
-      setDown(true);                                  // innermost row squashes
-      at(closeAt(last), () => setDown(false));        // released, then it folds
       for (let j = 0; j < hinges; j += 1) {
-        // The innermost row's compaction cue IS its squash, so its lip drops at
-        // its own fold. Every other row has no squash, so the lip drop is its
-        // whole compaction cue — and a cue fired DURING a rotation cannot be
-        // read at all. Dropped one press early it collapses while the row is
-        // still flat, held for a beat, and only then folds.
-        at(j === last ? closeAt(j) : closeAt(j) - press, () => setAt(setLips, j, false));
+        // The exact mirror of the open's lip line above: a lip returns as its
+        // unfold ends, so it drops as its fold BEGINS. Same instant, opposite
+        // direction, one row at a time.
+        //
+        // Every row but the innermost used to drop one `press` EARLY, as a
+        // legible compaction cue while it was still flat. That was the second of
+        // the three close-only beats (see the mirror rule at `DUR`) — a visible
+        // collapse the unfold never answered. Retired 2026-08-05.
+        at(closeAt(j), () => setAt(setLips, j, false));
         at(closeAt(j) + DUR / 2, () => setAt(setFlipped, j, true));
       }
     }
@@ -358,7 +447,7 @@ export default function FoldMenu({
         // the work — fast, but a fade, not a cut. Restoring it is free: on open
         // the group is still at opacity 0 until `press`, so the accent arrives
         // behind the fade-in and is never seen to appear.
-        className={`candy-btn ${triggerClassName}${j === n - 1 && down ? ' is-pressed' : ''}${j === selected && open ? ' is-active' : ''}`.trim()}
+        className={`candy-btn ${triggerClassName}${j === selected && open ? ' is-active' : ''}`.trim()}
         data-shape={shape}
         data-own-press
         data-self-press
@@ -458,11 +547,23 @@ export default function FoldMenu({
           gridArea: '1 / 1', alignSelf: 'start', height: rowH,
           opacity: open ? 0 : 1,
           pointerEvents: open ? 'none' : 'auto',
+          // The handover fades in BOTH directions, over the same SETTLE, and the
+          // close's fade ENDS on the frame the open's fade STARTS from — delay
+          // SHUT - SETTLE, not SHUT. It used to hard-cut (0ms at SHUT), which
+          // was the last of the asymmetric beats: the open dissolved into the
+          // paper and the close snapped back out of it.
+          //
+          // A cross-fade is safe here and was not in the FoldPanel toy it came
+          // from: row 1's underside carries the TRIGGER's own children verbatim,
+          // so the two faces being blended are the same glyphs in the same
+          // place. The toy blended "Appearance" against "Settings", which is
+          // what a fade cannot hide.
+          //
           // The box-shadow leg is .candy-btn's own, restated verbatim: an
           // inline transition REPLACES the whole list, and dropping it leaves
           // the depth band snapping to the hover accent while the face above it
           // still eases over 150ms.
-          transition: `opacity ${open ? SETTLE : 0}ms ease-in-out ${open ? press : SHUT}ms,`
+          transition: `opacity ${SETTLE}ms ease-in-out ${open ? press : SHUT - SETTLE}ms,`
             + ` ${BAND_T}`,
         }}
         {...rest}
@@ -557,7 +658,12 @@ export default function FoldMenu({
           // survives the handover — see the position note above for what
           // display:none did to the open.
           visibility: shown ? 'visible' : 'hidden',
-          transition: `opacity ${open ? SETTLE : 0}ms ease-in-out ${open ? press : SHUT}ms,`
+          // Mirrors the trigger's own handover exactly — same SETTLE, same
+          // SHUT - SETTLE delay closing. The two fade against each other, so
+          // any difference between these two lines is a flash. See the note on
+          // the trigger for why a cross-fade is safe in FoldMenu and was not in
+          // the toy it came from.
+          transition: `opacity ${SETTLE}ms ease-in-out ${open ? press : SHUT - SETTLE}ms,`
             + ` ${up ? 'bottom' : 'top'} ${panelT}`,
         }}
       >
@@ -577,6 +683,14 @@ export default function FoldMenu({
           aria-hidden="true"
           style={{
             position: 'absolute', zIndex: -1, pointerEvents: 'none',
+            // .candy-modal's box-shadow restated MINUS its --shadow-card leg —
+            // the soft 12px/48px blur every floating panel casts. The fold is
+            // not a panel hovering over the page; it is the trigger's own paper
+            // unfolding on the strip, and a blur under it reads as a second
+            // surface. The two flat candy bands stay, so it keeps the same
+            // depth every other candy surface has. User-directed 2026-08-05.
+            boxShadow: '0 var(--candy-surface-depth) 0 -2px var(--surface-3),'
+              + ' 0 var(--candy-surface-depth) 0 0 var(--border-2)',
             // Shut, it is the trigger rectangle exactly — so the first frame of
             // the open has nothing to pop. The pad only appears as it grows.
             left: open ? -FOLD_PAD : 0,
