@@ -2,7 +2,7 @@
 // backend, API key / Claude Code CLI, model, agent reach), Chat window (drag
 // tuning shared by every agent's floating window), and Concierge. The settings
 // bag renamed design → agents; the Rust design_* IPC names, the
-// components/design/ directory, and the dock design-mode button id stay.
+// components/agent-chat/ directory, and the dock design-mode button id stay.
 
 import { useCallback, useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';

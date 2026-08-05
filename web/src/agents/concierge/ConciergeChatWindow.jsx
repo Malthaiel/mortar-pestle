@@ -10,13 +10,13 @@
 // (header button) — threaded one-shot through `recipeNonce`.
 
 import { useEffect, useMemo, useState } from 'react';
-import { useAgentChat } from '../../components/design/useAgentChat.js';
+import { useAgentChat } from '../../components/agent-chat/useAgentChat.js';
 import { makeConciergeSystem } from './concierge-system-prompt.js';
 import { api } from '../../api.js';
 import AgentChatWindow from '../../components/agents/AgentChatWindow.jsx';
 import AgentAvatar from '../../components/agents/AgentAvatar.jsx';
-import MessageList from '../../components/design/MessageList.jsx';
-import ChatInput from '../../components/design/ChatInput.jsx';
+import MessageList from '../../components/agent-chat/MessageList.jsx';
+import ChatInput from '../../components/agent-chat/ChatInput.jsx';
 import RecipeTray from '../../components/agents/RecipeTray.jsx';
 import { getRecipe } from '../recipes/index.js';
 

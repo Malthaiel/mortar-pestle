@@ -21,7 +21,13 @@
 //   moment prep completes (counted late).
 //
 // rVFC never fires on WebKitGTK (SF1): frame advance is observed by the rAF
-// loop sampling currentTime. Time model: segments carry seconds; seconds
+// loop sampling currentTime. WebView2 DOES support requestVideoFrameCallback,
+// so unlike the two workarounds below this one was never gated on IS_WEBVIEW2 —
+// deliberately: the rAF sampler is one code path that works on both, and a
+// second Windows-only timing path would have to be judged frame-by-frame on
+// screen before it could be trusted. Left single-path until precision is
+// actually the complaint.
+// Time model: segments carry seconds; seconds
 // advance 1:1 across domains at rate 1, so seqTime = t0 + (currentTime -
 // srcIn). All state lives in refs — ONE rAF loop, zero per-frame React
 // state; onTick fans time out and the caller decides what re-renders.

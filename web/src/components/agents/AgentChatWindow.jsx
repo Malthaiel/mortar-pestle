@@ -10,7 +10,7 @@
 // buttons, so header controls + close never start a drag.
 
 import { createPortal } from 'react-dom';
-import { useDragChat, DRAG_CHAT_WIDTH, DRAG_CHAT_HEIGHT } from '../design/useDragChat.js';
+import { useDragChat, DRAG_CHAT_WIDTH, DRAG_CHAT_HEIGHT } from '../agent-chat/useDragChat.js';
 
 import { IconX } from '../icons.jsx';
 export default function AgentChatWindow({
@@ -28,8 +28,8 @@ export default function AgentChatWindow({
   posKey,
   width = DRAG_CHAT_WIDTH,
   height = DRAG_CHAT_HEIGHT,
-  animIn = 'atelierChatIn',
-  animOut = 'atelierChatOut',
+  animIn = 'agentChatIn',
+  animOut = 'agentChatOut',
 }) {
   const { position, pressed, dragHandleProps, dragRef } = useDragChat({ settings, setSetting, posKey });
 
