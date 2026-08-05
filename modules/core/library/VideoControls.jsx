@@ -10,11 +10,12 @@ import { candyCenterOffset } from '@host/util/candy.js';
 import SubtitleSettingsPanel from './SubtitleSettingsPanel.jsx';
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
-const ICON = 14;   // uniform glyph size inside the 27px circle buttons
-// The subtitle fold is the Dev tab's "Fold up / down" chip copied 1-1, so it
-// takes that chip's 28px row rather than the bar's own 27 — user-directed, in
-// full knowledge that it stands 1px taller than its neighbours.
-const SUB_ROW = 28;
+const ICON = 14;   // uniform glyph size inside the circle buttons
+// ONE height for the whole bar. The subtitle fold is the Dev tab's "Fold up /
+// down" chip copied 1-1 and that chip's row is 28, so the bar was raised 27 →
+// 28 to meet it rather than the copy being broken (user-directed 2026-08-05).
+// Every control reads this constant, so the two can no longer drift apart.
+const ROW = 28;
 // A candy button's depth lip is a box-shadow drawn OUTSIDE layout, so flex
 // centring centres the BOX and leaves the visible ink half a band low. Same
 // correction the titlebar and the Dev tab demo apply.
@@ -88,13 +89,13 @@ export default function VideoControls() {
         fontFamily: 'var(--font-mono)', fontSize: 14,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <IconBtn onClick={v.prev} title="Previous episode" size={27}><IconSkipBack size={ICON}/></IconBtn>
-          <IconBtn onClick={() => v.skip(-10)} title="Back 10s" size={27}><IconRewind size={ICON}/></IconBtn>
-          <IconBtn onClick={v.toggle} title={v.isPlaying ? 'Pause' : 'Play'} size={27} primary>
+          <IconBtn onClick={v.prev} title="Previous episode" size={ROW}><IconSkipBack size={ICON}/></IconBtn>
+          <IconBtn onClick={() => v.skip(-10)} title="Back 10s" size={ROW}><IconRewind size={ICON}/></IconBtn>
+          <IconBtn onClick={v.toggle} title={v.isPlaying ? 'Pause' : 'Play'} size={ROW} primary>
             {v.isPlaying ? <IconPause size={ICON}/> : <IconPlay size={ICON}/>}
           </IconBtn>
-          <IconBtn onClick={() => v.skip(+10)} title="Forward 10s" size={27}><IconFastForward size={ICON}/></IconBtn>
-          <IconBtn onClick={v.next} title="Next episode" size={27}><IconSkip size={ICON}/></IconBtn>
+          <IconBtn onClick={() => v.skip(+10)} title="Forward 10s" size={ROW}><IconFastForward size={ICON}/></IconBtn>
+          <IconBtn onClick={v.next} title="Next episode" size={ROW}><IconSkip size={ICON}/></IconBtn>
         </div>
 
         <span style={{ marginLeft: 8, color: 'white', minWidth: 140 }}>
@@ -133,7 +134,7 @@ export default function VideoControls() {
         </FoldStandOff>
 
         {/* Subtitle track — the Dev tab's "Fold up / down" chip (FoldUpPanel.jsx)
-            copied in 1-1, user-directed 2026-08-05: same `up`, same SUB_ROW, same
+            copied in 1-1, user-directed 2026-08-05: same `up`, same ROW, same
             `titlebar-account is-hover-accent` skin, same centring lift. Only the
             DATA differs — the rows are the probe's subtitle tracks and their
             onClick calls setSubtitleTrack. Do not re-derive it from the old call
@@ -153,7 +154,7 @@ export default function VideoControls() {
             <FoldMenu
               up
               style={CENTER}
-              rowH={SUB_ROW}
+              rowH={ROW}
               triggerClassName="titlebar-account is-hover-accent"
               triggerTitle="Subtitle track"
               ariaLabel="Subtitle track"
@@ -180,7 +181,7 @@ export default function VideoControls() {
               <IconBtn
                 onClick={() => setSubPanelOpen(o => !o)}
                 title="Subtitle settings"
-                size={27}
+                size={ROW}
               ><IconSettings size={ICON}/></IconBtn>
               {subPanelOpen && <SubtitleSettingsPanel/>}
             </div>
@@ -203,7 +204,7 @@ export default function VideoControls() {
         </FoldStandOff>
 
         {/* Refresh stream — reload the current episode, resume at the same spot */}
-        <IconBtn onClick={v.refresh} title="Refresh stream" size={27}><IconRotateCw size={ICON}/></IconBtn>
+        <IconBtn onClick={v.refresh} title="Refresh stream" size={ROW}><IconRotateCw size={ICON}/></IconBtn>
 
         {/* Volume */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: 150 }}>
@@ -213,13 +214,13 @@ export default function VideoControls() {
           <VolumeSlider value={v.volume} onChange={v.setVolume} accent="var(--accent, #c0392b)"/>
         </div>
 
-        <IconBtn onClick={v.requestFullscreen} title="Fullscreen" size={27}><IconMaximize size={ICON}/></IconBtn>
+        <IconBtn onClick={v.requestFullscreen} title="Fullscreen" size={ROW}><IconMaximize size={ICON}/></IconBtn>
       </div>
     </div>
   );
 }
 
-function IconBtn({ children, onClick, title, size = 27, primary = false }) {
+function IconBtn({ children, onClick, title, size = ROW, primary = false }) {
   return (
     <button
       onClick={onClick} title={title}
