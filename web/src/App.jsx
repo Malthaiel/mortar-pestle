@@ -351,12 +351,6 @@ function PageTransition({ direction, children }) {
   );
 }
 
-function isEditableTarget(target) {
-  if (!target) return false;
-  const tag = target.tagName;
-  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable;
-}
-
 // Best-effort label for a visited route. Prefers leaf filename for /page/*,
 // last segment for /knowledge/<slug>/<folder>, or the route's label.
 function deriveVisitLabel(route) {

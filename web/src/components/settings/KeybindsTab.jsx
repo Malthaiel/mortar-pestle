@@ -29,7 +29,6 @@ import {
 import { formatBinding, IS_MAC } from '../../keybinds/format.js';
 import { bindingsEqual } from '../../keybinds/match.js';
 import { OutlinedBtn, IconBtn } from '../ui/Button.jsx';
-import { SectionHeader } from '../ui/Section.jsx';
 
 import { IconRotateCw } from '../icons.jsx';
 const HOLD_MS = 1000;

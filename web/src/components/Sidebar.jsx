@@ -18,7 +18,7 @@
 // Module selection lives in useActiveModule; the dock owns its own ordering
 // under the unified `dock.order` setting (see components/dock/Dock.jsx).
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useHashRoute } from '../router.js';
 import { useKeybindHold } from '../keybinds/useKeybind.js';
 import { useRecentPages } from '../hooks/useRecentPages.js';

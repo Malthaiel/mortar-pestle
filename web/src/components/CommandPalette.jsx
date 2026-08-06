@@ -21,7 +21,6 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
-import { navigate } from '../router.js';
 import { useRecentPages } from '../hooks/useRecentPages.js';
 import { getCommandActions, subscribeCommandActions } from '../command-actions.js';
 import { IconCommand } from './icons.jsx';

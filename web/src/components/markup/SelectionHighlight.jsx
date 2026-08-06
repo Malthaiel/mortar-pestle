@@ -3,8 +3,11 @@
 // getBoundingClientRect; we re-measure on every render (cheap), and the
 // parent re-renders on every mousemove during hover.
 //
-// `pulsing` adds a brief markupPulse animation that re-fires whenever the
-// `pulseKey` prop changes — used right after a click to confirm the pick.
+// `pulsing` adds a brief one-shot pulse that re-fires whenever the `pulseKey`
+// prop changes — used right after a click to confirm the pick. The `key` on the
+// outline is what re-fires it: changing the key remounts the node, which
+// restarts the animation. Reuses the house `newBadgePulse` keyframes rather
+// than carrying a second near-identical pulse.
 
 import { Fragment, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -40,6 +43,7 @@ export default function SelectionHighlight({ element, crumbs = [], accent, onPic
           pointerEvents: 'none',
           zIndex: 'var(--z-design)',
           boxShadow: `0 0 0 4px color-mix(in oklch, ${accent || 'var(--accent)'} 16%, transparent)`,
+          animation: pulsing ? 'newBadgePulse 320ms ease-out 1' : undefined,
         }}
       />
       <div

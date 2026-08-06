@@ -53,7 +53,9 @@ export default [
       // not this gate's concern.
       'no-undef': 'off',
       // Pre-existing debt — surface as warnings, don't fail the gate on legacy code.
-      'no-unused-vars': 'warn',
+      // `caughtErrors: 'none'`: an ignored catch binding is deliberate, and
+      // flagging all 29 of them buried the 22 genuinely-dead identifiers.
+      'no-unused-vars': ['warn', { caughtErrors: 'none' }],
       'no-empty': 'warn',
       'no-useless-escape': 'warn',
     },

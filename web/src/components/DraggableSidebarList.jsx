@@ -33,9 +33,6 @@ const HOLD_MS = 180;
 const MOVE_THRESHOLD = 10;
 const GAP = 44;
 const STATE_THROTTLE = 60;
-// CURSOR_OFFSET: 4px nudge so the cursor remains visible inside the top-left
-// of the dragged tile (DESIGN.md § Drag and drop).
-const CURSOR_OFFSET = 4;
 // SHIFT_THRESHOLD_FRACTION: how far into a stationary module (from its top) the
 // cursor must travel before items shift to open the next slot. 0.5 = midpoint
 // (legacy). 0.2 = items shift when cursor is 20% past module top — clone

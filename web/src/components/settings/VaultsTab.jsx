@@ -18,7 +18,7 @@ import { useVaultStatus } from '../../hooks/useVaultStatus.js';
 // Active-vault status strip — connection dot + vault name + Reload, moved
 // from the System tab. Reload re-reads vault content into the running app;
 // it is distinct from each vault row's "Regen" (on-disk manifest rebuild).
-function ActiveVaultStrip({ accent }) {
+function ActiveVaultStrip() {
   const { vaultStatus, vaultName, loadVault } = useVaultStatus();
   return (
     <div className="candy-section" data-search-anchor="set-vaultConnection"

@@ -4,7 +4,7 @@
 // time, title, notes, reminder lead-time, and an optional linked vault page.
 // On save, writes via api.events.add and fires a confirmation notification.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../../api.js';
 import { useEventTypes } from '../../hooks/useEventTypes.js';

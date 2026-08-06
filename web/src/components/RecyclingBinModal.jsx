@@ -8,7 +8,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { OutlinedBtn, DangerOutlinedBtn, AppWindow } from './ui';
 import ConfirmModal from './ui/ConfirmModal.jsx';
-import { IconTrash, IconX } from './icons.jsx';
+import { IconTrash } from './icons.jsx';
 import { timeAgo } from '../util/time.js';
 import { useRecycleBin } from '../hooks/useRecycleBin.js';
 

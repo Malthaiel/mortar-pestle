@@ -4,7 +4,7 @@
 // directly under the brand-pill divider to match modules that DO define
 // rail stats.
 
-export default function RailEmptyState({ manifest, accent }) {
+export default function RailEmptyState({ manifest }) {
   if (!manifest) return null;
   const name = manifest.name || manifest.label || manifest.id || '';
   return (

@@ -9,7 +9,6 @@ import { safeDecode } from '../src/router.js';
 import { encodePath, decodePath } from '../../modules/core/library/paths.js';
 
 let cases = 0;
-const check = (fn, msg) => { assert.ok(fn, msg); cases++; };
 
 // ── isAbsolutePath ────────────────────────────────────────────────────────
 const ABSOLUTE = [

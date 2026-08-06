@@ -34,7 +34,7 @@ function replaceHash(newHash) {
 const VALID_SUBS = new Set(['calendar', 'recurring']);
 
 export default function PulsePage(props) {
-  const { sub, accent, settings } = props;
+  const { sub, accent } = props;
   const [keys, setKeys] = useState({ recurring: 0 });
   const routeSlots = useRouteSlots();
   const pulseData = usePulseSidebarData();

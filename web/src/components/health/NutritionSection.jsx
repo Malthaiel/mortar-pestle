@@ -105,6 +105,7 @@ export default function NutritionSection({ accent = 'var(--accent)', isToday = f
 
   const consumed = sumDay(day.meals);
   const targets = deriveTargets(lib.goals);
+  // Null until something in the window is logged — the readout strip then hides.
   const weekAvg = weeklyMacroAvg(history);
 
   const onLog = useCallback(async (entry) => {
@@ -163,6 +164,18 @@ export default function NutritionSection({ accent = 'var(--accent)', isToday = f
             <MacroBar key={m.key} label={m.label} accent={accent} consumed={consumed[m.key]} target={targets?.[m.key] || 0} />
           ))}
         </div>
+        {weekAvg && (
+          <div style={{
+            width: '100%', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
+            gap: 8, fontSize: 11, color: 'var(--text-muted)',
+          }}>
+            <span>{weekAvg.daysLogged}d avg</span>
+            <span style={{ display: 'flex', gap: 12 }}>
+              <span>{weekAvg.kcal} kcal</span>
+              {MACROS.map((m) => <span key={m.key}>{m.label} {weekAvg[m.key]}g</span>)}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Micros */}

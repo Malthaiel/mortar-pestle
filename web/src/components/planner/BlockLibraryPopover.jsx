@@ -136,7 +136,7 @@ export default function BlockLibraryPopover({ open, onClose, anchorRef, accent }
   );
 }
 
-function BlockChip({ block, accent, onContextMenu }) {
+function BlockChip({ block, onContextMenu }) {
   const [hover, setHover] = useState(false);
   const { startPaneDrag } = usePlanner();
   return (

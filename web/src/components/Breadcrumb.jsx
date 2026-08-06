@@ -127,7 +127,7 @@ function BreadcrumbLink({ href, accent, children }) {
   );
 }
 
-function BreadcrumbLeaf({ accent, muted, children }) {
+function BreadcrumbLeaf({ muted, children }) {
   return (
     <span style={{
       fontSize: 12, fontWeight: muted ? 500 : 600,

@@ -10,7 +10,7 @@ const ICON_SIZE = 18;
 
 // `updateDot` was removed with the Titlebar Overhaul — it only ever rode the
 // settings gear, which moved to the titlebar and now renders the dot itself.
-export default function DockButton({ Icon, label, onClick, isActive = false, accent, auraPulse = false, indicator, children, onContextMenu }) {
+export default function DockButton({ Icon, label, onClick, isActive = false, accent, indicator, children, onContextMenu }) {
   return (
     <div
       className="dock-btn-slot"
