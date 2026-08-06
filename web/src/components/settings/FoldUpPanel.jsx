@@ -34,23 +34,52 @@ export default function FoldUpPanel() {
   // One config, rendered twice — the pair differs by `up` and nothing else, so
   // it is written once. Two hand-kept copies would drift the moment either is
   // tuned, and a drifted control is worthless for comparing the two directions.
-  const chip = (up) => (
+  const chip = (up, items) => (
     <FoldMenu
       up={up}
       style={CENTER}
       rowH={BTN}
       triggerClassName="titlebar-account is-hover-accent"
       triggerTitle={name || 'Account'}
-      ariaLabel={`Account (fold ${up ? 'up' : 'down'})`}
-      items={[
-        { label: 'Settings', onClick: () => {} },
-        { label: 'Sign out', onClick: () => {} },
-      ]}
+      ariaLabel={`Account (${items.length} rows, fold ${up ? 'up' : 'down'})`}
+      items={items}
     >
       <UserAvatar src={profile?.avatar_url} name={name} size={MARK} />
       {name || 'Account'}
     </FoldMenu>
   );
+
+  // Clearance BOTH ways at once. The stacks are out of flow (FoldMenu's open
+  // state is position: absolute), so a row must reserve the travel itself or an
+  // upward stack clips against whatever sits above it and a downward one runs
+  // into the panel below. Centred rather than one box per direction, so the two
+  // triggers sit on the same line and the folds compare frame for frame.
+  //
+  // Derived from the row count, not a constant: a four-row stack is two rows
+  // taller than a two-row one, and the 96 that fitted the pair leaves the longer
+  // one clipped. ROW_STEP is FoldMenu's own row + GAP at chip depth (28 + 5 + 4).
+  const pair = (items) => (
+    <div style={{
+      height: ((items.length - 1) * (BTN + 9) + 32) * 2 + BTN,
+      display: 'flex', alignItems: 'center', gap: 24,
+    }}>
+      {chip(true, items)}
+      {chip(false, items)}
+    </div>
+  );
+
+  const TWO = [
+    { label: 'Settings', onClick: () => {} },
+    { label: 'Sign out', onClick: () => {} },
+  ];
+  // The duplicate pair: the same chip with two more rows, so the fold can be
+  // watched at a row count the account menu never reaches (the video player's
+  // Chapters menu will).
+  const FOUR = [
+    ...TWO,
+    { label: 'Profile', onClick: () => {} },
+    { label: 'Shortcuts', onClick: () => {} },
+  ];
 
   return (
     <div>
@@ -60,20 +89,8 @@ export default function FoldUpPanel() {
         margin: '20px 0 10px',
       }}>Fold up / down</div>
 
-      {/* Clearance BOTH ways at once. Two rows plus the gap plus FOLD_PAD is
-          under 80px at the 28px row height, so 96 of travel either side of a
-          centred trigger clears the heading above and the panel below alike.
-          Centred rather than one box per direction, so the two triggers sit on
-          the same line and the folds can be compared frame for frame.
-          The stacks are out of flow (FoldMenu's open state is position:
-          absolute), so neither one pushes the other sideways when it opens. */}
-      <div style={{
-        height: 96 * 2 + BTN, display: 'flex',
-        alignItems: 'center', gap: 24,
-      }}>
-        {chip(true)}
-        {chip(false)}
-      </div>
+      {pair(TWO)}
+      {pair(FOUR)}
     </div>
   );
 }
