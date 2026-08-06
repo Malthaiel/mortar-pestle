@@ -293,15 +293,41 @@ export default function FoldMenu({
   //
   // Opening is the same statement backwards: a row paints nothing until it
   // passes edge-on, then grows over the SECOND half of its fold. So the panel
-  // waits out the first half and runs the second — which is why the open delay
-  // carries a + DUR / 2 the close does not. Running from the fold's start
+  // waits out the first half and runs the second. Running from the fold's start
   // instead put the surface a full half-fold ahead of any visible row.
   //
   // Delay is the OUTERMOST hinge's, since wrapper 0 is the fold that swings the
   // whole lower block and so defines how far the menu reaches. It has to match
   // the FIRST height step exactly, or the panel goes wide before it goes tall.
-  const panelT = `${DUR / 2}ms ease-in-out `
-    + `${open ? openAt(0) + DUR / 2 : closeAt(0)}ms`;
+  //
+  // BOTH directions carry the + DUR / 2, closing included. Closing, the pad
+  // legs used to fire at `closeAt(0)` and land DUR / 2 before the fold did, so
+  // the paper above row 0 was sucked in while the rows were still visibly
+  // rotating — user-reported 2026-08-06, "at frame 192 the top part of the bg
+  // starts to compact too early for my liking". Started half a fold later they
+  // land exactly on SHUT, with the rest of the handover.
+  //
+  // Closing they also take the HEIGHT leg's own curve rather than ease-in-out,
+  // and this is the same statement a third time: ease-in-out spends its whole
+  // duration moving, so 6px of pad crawled in over 150ms beside a 28px height
+  // that stalls and then drops in the last handful of frames — "it collapses too
+  // slow horizontally compared to how fast it collapses vertically", 2026-08-06.
+  // One curve on both is what makes them one speed; it also holds the pad out
+  // until the very end, which is the "even later" half of the same report.
+  // Opening keeps ease-in-out: nothing there was reported and that motion is
+  // signed off.
+  //
+  // Closing it is an EIGHTH of a fold, not a half — "i want the top to still be
+  // a bit later", 2026-08-06, twice, after the curve alone and then a quarter
+  // fold were both still too early. This is about the floor: at 37ms the pad has
+  // barely three frames to cross and anything shorter simply snaps. The delay is
+  // written as its own end minus its own length, so the leg lands on SHUT by
+  // construction: it can never be pushed past the handover, where the group is
+  // already hidden and the rest of the motion would simply not be painted.
+  const panelD = open ? DUR / 2 : DUR / 8;
+  const panelT = `${panelD}ms `
+    + `${open ? 'ease-in-out' : 'cubic-bezier(0.32, 0, 0.67, 0)'} `
+    + `${open ? openAt(0) + DUR / 2 : SHUT - panelD}ms`;
 
   // The innermost row's SQUASH, the toy's `down`. Closing, that row is pressed
   // on frame one and released at `press` — which is exactly when its own fold
@@ -400,6 +426,22 @@ export default function FoldMenu({
     const t = setTimeout(() => setShown(false), SHUT);
     return () => clearTimeout(t);
   }, [open, SHUT]);
+
+  // The LAST leg of a close, and only that: every fold is done staging and the
+  // panel is down to its final row. There the paper collapses to nothing at the
+  // middle of the button instead of landing on the button's own rectangle —
+  // sized to row 0 it is exactly what row 0 already paints, so all that was ever
+  // left of it was its depth band peeking out UNDERNEATH. User-directed
+  // 2026-08-06: "sucked into the center of the fully closed candy button rather
+  // than beneath it".
+  //
+  // Gated on `shown`, not on `!open` alone: at REST this would leave the panel
+  // at zero height, and the open's first frame has to start from the trigger's
+  // exact rectangle or it pops (see the `left`/`height` notes below). `shown` is
+  // false at rest and true for the whole close, which is precisely the window
+  // this belongs in. It flips back off at SHUT, in the same commit that hides
+  // the group, so the snap back to full height is never painted.
+  const shut = !open && shown && vis === 1;
 
   // Held in a ref so an inline arrow from the host (a new function identity
   // every render) cannot make this fire on every render — it fires only when
@@ -740,20 +782,38 @@ export default function FoldMenu({
               + ' 0 var(--candy-surface-depth) 0 0 var(--border-2)',
             // Shut, it is the trigger rectangle exactly — so the first frame of
             // the open has nothing to pop. The pad only appears as it grows.
-            left: open ? -FOLD_PAD : 0,
+            //
+            // Keyed to `padOn`, NOT to `open`, and so is the width below: those
+            // two are the HORIZONTAL half of the same pad the height carries in
+            // its own `padOn` term, and the height's pad leaves at the last
+            // fold's start while `open` flips on frame one. Run off `open` on
+            // the panel's late clock they lagged the height by half a fold, and
+            // once the height had collapsed all that was left was 12px of
+            // surplus width poking an ear out either side of the shut button —
+            // screenshotted 2026-08-06, "i can see the sides of the bg sticking
+            // out". One flag and one clock for the whole pad, and they cannot
+            // come apart again. The VERTICAL pad legs stay on panelT: those two
+            // cancel against the stack's own slide and must not be split off it.
+            left: padOn ? -FOLD_PAD : 0,
             // Pinned to whichever edge the stack itself is pinned to, so it
             // grows the same way the rows do. Folding up that anchor also
             // absorbs the lip (see the height note), keeping BOTH directions
             // the same shape: FOLD_PAD above the stack, FOLD_PAD + a lip below.
             [up ? 'bottom' : 'top']: open ? -(up ? FOLD_PAD + dpx : FOLD_PAD) : 0,
-            width: open ? `calc(100% + ${FOLD_PAD * 2}px)` : '100%',
+            width: padOn ? `calc(100% + ${FOLD_PAD * 2}px)` : '100%',
             // Sized to the rows STILL SHOWING, not to the open/shut flag — see
             // `folded`. Same rows + GAP formula the stack itself is laid out by,
             // so the panel and the paper can never disagree about a row's
             // height. + dpx: the bottom row's lip is a box-shadow living OUTSIDE
             // its layout box, so a panel sized to the boxes alone stops short.
-            height: vis * box.h + (vis - 1) * (dpx + 4)
+            height: shut ? 0 : vis * box.h + (vis - 1) * (dpx + 4)
               + (padOn ? FOLD_PAD * 2 + dpx : 0),
+            // Height shrinks from the pinned edge alone, so on its own it sucks
+            // the paper toward the button's TOP (its BOTTOM folding up) and the
+            // last of it reads as sliding out under the button. Half a row of
+            // travel on the same clock puts the vanishing line on the button's
+            // centre instead. Sign follows the pin — see the `top`/`bottom` pair.
+            transform: shut ? `translateY(${(up ? -box.h : box.h) / 2}px)` : 'none',
             // Height alone runs on its own clock with NO delay: each `folded`
             // change already fires at its own fold's start, so a delay here
             // would push every step past the fold it belongs to. The other three
@@ -768,10 +828,14 @@ export default function FoldMenu({
             // the quarter point), where ease-in-out is nearly five times off
             // there. The two directions are exact mirrors of each other, so the
             // curves are too: in cubic closing, out cubic opening.
-            transition: ['left', up ? 'bottom' : 'top', 'width']
-              .map((p) => `${p} ${panelT}`)
-              .concat(`height ${DUR / 2}ms cubic-bezier(`
-                + (open ? '0.33, 1, 0.68, 1' : '0.32, 0, 0.67, 0') + ')')
+            // `transform` rides the HEIGHT's clock, not the pad's — it is half
+            // of one movement with it, and on panelT's clock (which now starts
+            // half a fold later) the paper would shrink first and only then
+            // slide, which reads as two beats.
+            transition: [`${up ? 'bottom' : 'top'} ${panelT}`]
+              .concat(['height', 'transform', 'left', 'width']
+                .map((p) => `${p} ${DUR / 2}ms cubic-bezier(`
+                  + (open ? '0.33, 1, 0.68, 1' : '0.32, 0, 0.67, 0') + ')'))
               .join(', '),
           }}
         />
