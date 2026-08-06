@@ -235,7 +235,7 @@ function onCandyPressDown(e) {
   if (candy.matches('[data-shape="seg-option"]')) return;             // never presses (would slip out of the tray clip)
   // These self-manage is-pressed. data-self-press is the generic form of the two
   // hardcoded classes: any candy button running its OWN press schedule opts out,
-  // because a 70ms global hold layered on top fights it — FoldPanel's rectangles
+  // because a 70ms global hold layered on top fights it — FoldMenu's rows
   // squash and release on a timed choreography, and the leftover global hold ran
   // 80ms into the bottom flap's fold, landing it a depth high (a pressed face is
   // slid DOWN, and a 180deg fold flips that slide UP).
