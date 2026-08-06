@@ -432,10 +432,10 @@ export default function FoldMenu({
   // whatever lip the row's own shape pins and made the paper heavier than the
   // trigger it came out of.
   // Do NOT hide the rows under row 1 once they are past edge-on. It was tried
-  // 2026-08-05 to fix a z-order tie at four rows (the innermost row's blank back
-  // painting over row 1's name) and it BROKE THE FOLD outright — reverted on
-  // sight. The tie is real and still open; the fix has to come from the z lift
-  // or the nesting, not from making rows invisible.
+  // 2026-08-05 to fix a z-order tie at four rows (a blank back painting over
+  // row 1's name) and it BROKE THE FOLD outright — reverted on sight. The tie
+  // was real and is FIXED, by lifting row 1 out of the ±1 alternation — see the
+  // note on its style in stack(). Nothing here needs to go invisible.
   const row = (lipOn) => ({
     width: '100%',                    // the GROUP sizes the stack — see there
     height: box.h,
@@ -490,7 +490,25 @@ export default function FoldMenu({
         aria-current={j === selected ? 'true' : undefined}
         style={j === n - 1 && j > 0
           ? { ...row(lips[j - 1]), [GAP_SIDE]: GAP, ...hinge(open ? 0 : 180, open ? openAt(j - 1) : closeAt(j - 1)) }
-          : row(j === 0 ? true : lips[j - 1])}
+          // Row 1 is lifted clear of every other row, and this is arithmetic,
+          // not a nudge. Each hinge carries translateZ(-1px), and two nested
+          // 180deg rotations compose to the identity — so a row's FINAL z
+          // alternates 0, +1, 0, +1 with nesting depth, and rows 1, 3, 5 all
+          // resolve to the same +1. Row 1 is the only row with a back face (the
+          // `j === 1` branch below); rows 3, 5 show a deliberately blank
+          // underside and sit LATER in document order, so from four rows up the
+          // blank one paints over the shut label for the last 150ms of the
+          // close — user-reported 2026-08-05, "the final fold is blank then it
+          // snaps to the malthaiel pfp", confirmed off a 60fps capture. Two and
+          // three rows have no row 3 to tie with, which is why the toy (three
+          // hardcoded rectangles) can never show it.
+          // -2px here reads as +2 through wrapper 0's own 180deg flip, landing
+          // row 1 at +3 — unreachable by the ±1 alternation at ANY row count,
+          // so this holds without a per-level scheme. Do not "fix" this by
+          // hiding the rows underneath: that was tried the same day and broke
+          // the fold outright (see row()).
+          : { ...row(j === 0 ? true : lips[j - 1]),
+            ...(j === 1 ? { transform: 'translateZ(-2px)' } : null) }}
         onClick={() => { setOpen(false); items[j].onClick?.(); }}
       >
         <span className="candy-face" style={FACE}>
