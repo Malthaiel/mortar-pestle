@@ -23,8 +23,6 @@
 // in nested preserve-3d wrappers, wrapper j carrying rows j+1..n-1, so folding
 // wrapper j carries every row below it as one piece. n rows means n-1 hinges.
 import { Children, useEffect, useRef, useState } from 'react';
-// TEMPORARY, with the DEV probe below — remove together.
-import { postAudit } from '../../util/auditBridge.js';
 
 // Camera distance. The article's 500 was sized for a 300px-tall image; against
 // 28px rows it sits far too close and the taper (the near edge of a folding
@@ -680,59 +678,6 @@ export default function FoldMenu({
 
   // Close on Escape and on any click outside. The fold replaces the menu's
   // PAINT, not a menu's behaviour.
-  // DEV probe — TEMPORARY, delete once the up variant's close is signed off.
-  //
-  // Every measurement in this saga so far came off video pixels, and two of them
-  // were wrong in ways that cost a chat each. This reads the real thing: both
-  // boxes straight out of the running window, every frame of a close, written to
-  // web/.audit/main.json under `fold` through the audit sink the spacing auditor
-  // already uses. The webview console does NOT reach the `tauri dev` terminal,
-  // so disk is the only route out.
-  //
-  // The GROUP's border box is the row stack's own extent (the panel is absolute,
-  // so it contributes nothing to it) and the PANEL's is the paper. Both rects
-  // come back in viewport coordinates AFTER UP_FLIP, so their four differences
-  // are the halos as seen, in both directions, with no mirroring to reason about.
-  const groupRef = useRef(null);
-  const panelRef = useRef(null);
-  const rowEls = useRef([]);
-  useEffect(() => {
-    if (!import.meta.env.DEV || open) return undefined;
-    const g0 = groupRef.current;
-    if (!g0 || !panelRef.current) return undefined;
-    const t0 = performance.now();
-    const samples = [];
-    let raf = 0;
-    const r = (el) => { const b = el.getBoundingClientRect(); return b.width ? b : null; };
-    const tick = () => {
-      const pb = r(panelRef.current);
-      // PAINTED extent, not the group's layout box — see the ref on the row.
-      const rs = rowEls.current.filter(Boolean).map((el) => el.getBoundingClientRect())
-        .filter((b) => b.width && b.height > 0.5);
-      if (pb && rs.length) {
-        const sTop = Math.min(...rs.map((b) => b.top));
-        const sBot = Math.max(...rs.map((b) => b.bottom));
-        const sLeft = Math.min(...rs.map((b) => b.left));
-        const sRight = Math.max(...rs.map((b) => b.right));
-        samples.push({
-          t: Math.round(performance.now() - t0),
-          // Halo per side, positive = paper standing outside the painted stack.
-          top: +(sTop - pb.top).toFixed(2),
-          bottom: +(pb.bottom - sBot).toFixed(2),
-          left: +(sLeft - pb.left).toFixed(2),
-          right: +(pb.right - sRight).toFixed(2),
-          ph: +pb.height.toFixed(2),
-          rows: rs.length,
-        });
-      }
-      if (performance.now() - t0 < SHUT + 150) raf = requestAnimationFrame(tick);
-      // Keyed by direction so one pass over both chips leaves BOTH traces in the
-      // file — a single `fold` key would have the second close overwrite the first.
-      else postAudit(up ? 'foldUp' : 'foldDown', { rows: items.length, dpx, surf, SHUT, samples });
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [open, up, items.length, dpx, surf, SHUT]);
 
   const rootRef = useRef(null);
   useEffect(() => {
@@ -813,11 +758,6 @@ export default function FoldMenu({
           state and the open state are two different buttons. */}
       <button
         type="button"
-        /* TEMPORARY, with the DEV probe — remove together. The GROUP's own box
-           is LAYOUT, so a folded row still counts at full height there and the
-           far side reads as a meaningless -108. A row's rect goes through its
-           hinge's rotation, so the union of these IS the painted extent. */
-        ref={(el) => { rowEls.current[j] = el; }}
         // The accent is held only while OPEN, so it releases on frame one of the
         // close and eases out under the fold rather than riding it down and
         // hard-cutting at the handover. .candy-btn's own 150ms colour ease does
@@ -983,7 +923,6 @@ export default function FoldMenu({
           vanishing point off to the right, skewing the fold sideways. */}
       <div
         role="menu"
-        ref={groupRef}
         aria-label={ariaLabel}
         // Shut, every row is rotated 180deg onto row 0, so their layout boxes
         // genuinely coincide and the spacing audit reads a ~35px overlap. That
@@ -1082,7 +1021,6 @@ export default function FoldMenu({
             paints below its non-positioned siblings and nothing else. It is
             NOT in the preserve-3d wrappers, so it takes no rotation. */}
         <div
-          ref={panelRef}
           className="candy-modal"
           aria-hidden="true"
           style={{
@@ -1209,7 +1147,44 @@ export default function FoldMenu({
             // The pinned side reads a dead-flat 11.0 in the same trace and is
             // untouched by this, which is what keeps all four halos even.
             height: vis * box.h + (vis - 1) * (dpx + 4)
-              + (padOn ? FOLD_PAD * 2 : 0) + padLip + (up ? dpx : 0),
+              // The trailing - 1 is HAND-TUNED, by eye, at his call, and it is
+              // the only number in this file that is not derived. `dpx - padLip`
+              // is the algebra: it puts up's far halo on exactly FOLD_PAD, down's
+              // own. He asked for "a bit more" past that; 2px overshot ("too far
+              // — back off"), 1px is where it landed. Measured, up's far edge
+              // runs 8.7 -> 0.0 and does reach zero, so this is about the
+              // APPROACH reading heavy, not the landing missing.
+              // ponytail: a flat 1px, not a formula, because nothing in the
+              // geometry asks for it. If it ever needs to scale, find the term
+              // it belongs to first.
+              + (padOn ? FOLD_PAD * 2 : 0) + padLip + (up ? dpx - padLip - 1 : 0)
+              // SWING room, both directions. This panel is sized to the rows'
+              // LAYOUT boxes, but a folding row pivots on a hinge half a GAP
+              // ABOVE itself (see HINGE_Y), so mid-rotation it throws its far
+              // edge OUTSIDE that box and eats the halo the paper is meant to
+              // keep. Measured off the live probe, far-edge halo at the deepest
+              // point of each swing: down 1.9 and 1.8, up -0.1, -1.1 and -2.9,
+              // against ~6 between folds — "the buttons are basically right
+              // against the bg rather than having space in between", 2026-08-07.
+              // Negative on up means the row crossed INTO the paper.
+              //
+              // Only while rows are actually folding: `!open && !tuck` is the
+              // hug beat. On the tuck the stack is down to row 0, which does not
+              // rotate, so there is no swing left to clear and the halo must be
+              // free to close with the other three.
+              // TAPERED by the folds still in flight, not flat. The swing is the
+              // rows that are rotating, so it has to shrink as they leave: flat
+              // 5px then 3px both read as too much room at the FINAL fold, where
+              // only row 1 is still turning onto row 0 and there is almost no
+              // overshoot left to clear. (vis - 1) is exactly that count.
+              // ponytail: a 3px ceiling, linear. The honest version is
+              // rowH * sin(angle) off the live hinge angle, a per-frame value a
+              // static leg cannot hold - build that term if this ever reads wrong
+              // directions. The honest version is rowH * sin(angle) off the live
+              // hinge angle, which is a per-frame value this static leg cannot
+              // hold — if the flat number ever reads wrong at some row height,
+              // that is the term to build.
+              + (!open && !tuck ? Math.round((3 * (vis - 1)) / Math.max(1, hinges)) : 0),
             // Height alone runs on its own clock with NO delay: each `folded`
             // change already fires at its own fold's start, so a delay here
             // would push every step past the fold it belongs to. The other three
@@ -1259,7 +1234,23 @@ export default function FoldMenu({
                   // it did not fix the reported unevenness, so the theory is dead
                   // and the branch is gone: both directions run the same delay, and
                   // the flip mirrors it like everything else.
-                  const late = p === 'height' && !open && tuck ? 2 * FRAME : 0;
+                  // The hold rides the LIP SIDE, and the lip side does not flip:
+                  // row 0's lip is a downward shadow in both directions (row()
+                  // negates --cbtn-depth precisely to keep it downward) and it
+                  // paints OVER this panel, so the edge beneath it needs two
+                  // extra frames or its VISIBLE halo lands while the other three
+                  // are still travelling. Down's lip side is the far end of
+                  // `height`; up's is `top`.
+                  //
+                  // Left on `height` for both, the hold lands on up's visual TOP
+                  // — no lip there — and held it out for the last beat: "2-3
+                  // frames before they all close the top side is still too big",
+                  // 2026-08-07, with all four otherwise landing together. This
+                  // was tried once earlier the same night and read as no-change,
+                  // because the far edge was still a whole dpx short at the time
+                  // and swamped it. Order matters: fix coverage first, then this.
+                  const lipLeg = up ? 'top' : 'height';
+                  const late = p === lipLeg && !open && tuck ? 2 * FRAME : 0;
                   return `${p} ${DUR / 2 - late}ms cubic-bezier(`
                     + (open ? '0.33, 1, 0.68, 1' : '0.32, 0, 0.67, 0') + ')'
                     + (late ? ` ${late}ms` : '');
