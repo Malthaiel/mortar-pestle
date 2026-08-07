@@ -154,6 +154,164 @@
 }
 .bcast-mixer-caret { margin-left: auto; }
 
+/* SF3 header row — the toggle takes the width, Advanced sits at the end. */
+.bcast-mixer-head { display: flex; align-items: center; }
+.bcast-mixer-head .bcast-mixer-tab { flex: 1; min-width: 0; }
+
+.bcast-mixer-props {
+  flex: 0 0 auto;
+  margin-right: 12px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.bcast-mixer-props:hover { color: var(--text); border-color: var(--text-faint); }
+
+/* --- SF3 advanced audio properties window ------------------------------- */
+
+.bcast-audio-props { display: flex; flex-direction: column; gap: 20px; padding: 2px; }
+.bcast-audio-props section { display: flex; flex-direction: column; gap: 8px; }
+
+.bcast-audio-h {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.bcast-audio-refresh {
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+}
+.bcast-audio-refresh:hover { color: var(--text); }
+
+.bcast-audio-note { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+.bcast-audio-error { font-size: 12px; color: var(--error); }
+
+.bcast-audio-row {
+  display: grid;
+  grid-template-columns: 190px 1fr;
+  gap: 12px;
+  align-items: center;
+  padding: 5px 0;
+}
+.bcast-audio-row-label { font-size: 12px; color: var(--text); }
+.bcast-audio-row-hint { display: block; font-size: 10px; color: var(--text-faint); }
+.bcast-audio-row-control { min-width: 0; }
+
+.bcast-audio-inline { display: flex; align-items: center; gap: 10px; }
+.bcast-audio-read {
+  flex: 0 0 auto;
+  min-width: 68px;
+  text-align: right;
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.bcast-audio-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+}
+.bcast-audio-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.bcast-audio-card-tag {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--bg-elevated, var(--bg));
+  border: 1px solid var(--border);
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+/* Six global channels. Fixed columns so every row's pickers line up. */
+.bcast-slot-table { display: flex; flex-direction: column; gap: 6px; }
+.bcast-slot-head,
+.bcast-slot-row {
+  display: grid;
+  grid-template-columns: 28px 1fr 1fr 150px;
+  gap: 10px;
+  align-items: center;
+}
+.bcast-slot-head {
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.bcast-slot-ch {
+  font-family: var(--font-mono), monospace;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+}
+.bcast-slot-name {
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bcast-slot-empty { color: var(--text-faint); font-style: italic; }
+
+.bcast-balance { display: flex; align-items: center; gap: 10px; }
+.bcast-balance-read {
+  flex: 0 0 auto;
+  min-width: 44px;
+  text-align: right;
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.bcast-track-matrix { display: flex; gap: 6px; }
+.bcast-track-btn {
+  width: 28px;
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.bcast-track-btn:hover { color: var(--text); }
+.bcast-track-btn.is-on {
+  background: var(--accent, var(--text));
+  border-color: var(--accent, var(--text));
+  color: var(--bg);
+}
+
 /* Horizontal scroll past ~6 strips rather than squeezing them thinner. */
 .bcast-mixer-rail {
   display: flex;

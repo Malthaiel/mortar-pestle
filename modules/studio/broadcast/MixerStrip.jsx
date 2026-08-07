@@ -95,7 +95,7 @@ function ChannelStrip({
   );
 }
 
-export default function MixerStrip({ api, snapshot, accent, expanded, onToggle }) {
+export default function MixerStrip({ api, snapshot, accent, expanded, onToggle, onOpenProps }) {
   const rows = useMemo(() => snapshot?.audio?.sources ?? [], [snapshot]);
   const [solo, setSolo] = useState(() => new Set());
 
@@ -210,11 +210,26 @@ export default function MixerStrip({ api, snapshot, accent, expanded, onToggle }
 
   return (
     <div className={`bcast-mixer${expanded ? ' is-open' : ''}`}>
-      <button type="button" className="bcast-mixer-tab" onClick={onToggle}>
-        <span>Mixer</span>
-        <span className="bcast-mixer-count">{rows.length}</span>
-        <span className="bcast-mixer-caret">{expanded ? '▾' : '▴'}</span>
-      </button>
+      {/* Header row: the toggle and the Advanced button are SIBLINGS. Nesting
+          the second inside the first is invalid markup and would make every
+          Advanced click also toggle the rail. */}
+      <div className="bcast-mixer-head">
+        <button type="button" className="bcast-mixer-tab" onClick={onToggle}>
+          <span>Mixer</span>
+          <span className="bcast-mixer-count">{rows.length}</span>
+          <span className="bcast-mixer-caret">{expanded ? '▾' : '▴'}</span>
+        </button>
+        {onOpenProps ? (
+          <button
+            type="button"
+            className="bcast-mixer-props"
+            onClick={onOpenProps}
+            title="Advanced audio properties"
+          >
+            Advanced
+          </button>
+        ) : null}
+      </div>
       {expanded ? (
         <div className="bcast-mixer-rail">
           {rows.length === 0 ? (

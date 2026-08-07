@@ -13,7 +13,7 @@ use tokio::sync::{broadcast, oneshot};
 
 use mortar_pestle_daemon::{framing, pipe};
 
-use crate::daemon::engine::{Cmd, Reply};
+use crate::daemon::engine::{Cmd, Reply, VolumeLevel};
 use crate::daemon::protocol::{Event, ProtoError, Request, Response};
 
 pub const PIPE_NAME: &str = r"\\.\pipe\mortar-pestle-broadcast";
@@ -391,11 +391,14 @@ async fn dispatch(req: Request, cmd_tx: &mpsc::Sender<Cmd>) -> Response {
         "display_destroy" => need_str(&args, "id").map(|id| Cmd::DisplayDestroy { id, reply: tx }),
         // --- SP6 audio mixer ---
         "set_volume" => (|| {
-            Ok(Cmd::SetVolume {
-                source: need_str(&args, "source")?,
-                deflection: need_f32(&args, "deflection")?,
-                reply: tx,
-            })
+            // Two callers, two units: the mixer strip sends a 0..1 deflection,
+            // SF3's numeric field sends exact dB. Deflection wins if both are
+            // present, since that is the drag the user is actively making.
+            let level = match args.get("deflection") {
+                Some(_) => VolumeLevel::Deflection(need_f32(&args, "deflection")?),
+                None => VolumeLevel::Db(need_f32(&args, "db")?),
+            };
+            Ok(Cmd::SetVolume { source: need_str(&args, "source")?, level, reply: tx })
         })(),
         "set_mute" => (|| {
             Ok(Cmd::SetMute {
@@ -455,6 +458,7 @@ async fn dispatch(req: Request, cmd_tx: &mpsc::Sender<Cmd>) -> Response {
             reply: tx,
         }),
         "subscribe_meters" => need_bool(&args, "on").map(|on| Cmd::SubscribeMeters { on, reply: tx }),
+        "list_audio_devices" => need_str(&args, "kind").map(|kind| Cmd::ListAudioDevices { kind, reply: tx }),
         other => Err(ProtoError {
             code: "not_implemented".into(),
             message: format!("unknown op '{other}'"),

@@ -17,6 +17,7 @@ import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { listen } from '@tauri-apps/api/event';
 import Inspector from './Inspector.jsx';
 import MixerStrip from './MixerStrip.jsx';
+import AudioPropsWindow from './AudioPropsWindow.jsx';
 import PreviewInteract from './PreviewInteract.jsx';
 import { KEYBIND_ENTRIES } from './index.jsx';
 import { pushUndo, runRedo, runUndo } from './broadcastUndo.js';
@@ -51,6 +52,7 @@ export default function BroadcastPage({ api, accent }) {
   // SP6 mixer rail. Collapsed by default: expanded is what turns the 30 Hz
   // meter stream on, so the quiet state is also the cheap one.
   const [mixerOpen, setMixerOpen] = useState(false);
+  const [audioProps, setAudioProps] = useState(false);
   const recording = alive && !!snapshot?.recording?.active;
   const paused = recording && !!snapshot?.recording?.paused;
   const armed = alive && !!snapshot?.replay?.armed;
@@ -309,6 +311,17 @@ export default function BroadcastPage({ api, accent }) {
           accent={accent}
           expanded={mixerOpen}
           onToggle={() => setMixerOpen((v) => !v)}
+          onOpenProps={() => setAudioProps(true)}
+        />
+      )}
+      {/* SF3: advanced audio lives in its own AppWindow — the strip stays a
+          fast-access surface and does not grow a settings panel. */}
+      {audioProps && (
+        <AudioPropsWindow
+          api={api}
+          snapshot={snapshot}
+          accent={accent}
+          onClose={() => setAudioProps(false)}
         />
       )}
       <ComposerBar

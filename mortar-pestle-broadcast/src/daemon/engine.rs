@@ -76,6 +76,8 @@ pub enum Cmd {
     GetProperties { scene: String, item: i64, reply: Reply },
     ClickPropertyButton { scene: String, item: i64, prop: String, reply: Reply },
     ListInputTypes { reply: Reply },
+    /// SP6 SF3 â€” device choices for a global-slot or monitoring picker.
+    ListAudioDevices { kind: String, reply: Reply },
     // --- SP4 output config (ephemeral reads; set_output_settings pushes state) ---
     ListEncoders { reply: Reply },
     GetOutputSettings { reply: Reply },
@@ -112,7 +114,7 @@ pub enum Cmd {
     /// for `stop`, where it is an `OBS_OUTPUT_*` value.
     StreamSignal { kind: &'static str, code: i64 },
     // --- SP6 audio mixer ---
-    SetVolume { source: String, deflection: f32, reply: Reply },
+    SetVolume { source: String, level: VolumeLevel, reply: Reply },
     SetMute { source: String, muted: bool, reply: Reply },
     SetMonitoring { source: String, kind: String, reply: Reply },
     SetBalance { source: String, balance: f32, reply: Reply },
@@ -314,7 +316,6 @@ struct Engine {
     /// (name, owned scene ref)
     scenes: Vec<(String, *mut ffi::obs_scene)>,
     current: Option<String>,
-    desktop_audio: *mut ffi::obs_source,
     /// (id, display) â€” ephemeral preview swapchains on app-owned HWNDs.
     /// Never persisted, never in StateSnapshot: a respawned engine starts
     /// with zero displays and the app re-creates them on its alive edge.
@@ -338,7 +339,6 @@ struct Engine {
     events: broadcast::Sender<Event>,
     // --- SP4 ---
     profile: Profile,
-    mic: *mut ffi::obs_source,
     encoders: Option<EncoderSet>,
     /// Boot-enumerated video encoder types (h264/hevc/av1) for snapshot caps.
     caps_encoders: Vec<EncoderInfo>,
@@ -416,7 +416,6 @@ pub fn spawn(
                 core,
                 scenes: Vec::new(),
                 current: None,
-                desktop_audio: std::ptr::null_mut(),
                 displays: Vec::new(),
                 picker: Vec::new(),
                 recording: None,
@@ -427,7 +426,6 @@ pub fn spawn(
                 last_error: None,
                 events,
                 profile,
-                mic: std::ptr::null_mut(),
                 encoders: None,
                 caps_encoders: Vec::new(),
                 cmd_tx,
@@ -446,8 +444,7 @@ pub fn spawn(
             eng.caps_encoders = unsafe { enumerate_encoder_types() };
             eng.load_collection();
             eng.ensure_default_scene();
-            eng.ensure_desktop_audio();
-            eng.ensure_mic();
+            eng.restore_global_slots();
             let _ = init_done.send(Ok(()));
             eng.push_state();
 
@@ -600,6 +597,10 @@ impl Engine {
                 let r = self.list_input_types();
                 self.finish_ephemeral(reply, r);
             }
+            Cmd::ListAudioDevices { kind, reply } => {
+                let r = self.list_audio_devices(&kind);
+                self.finish_ephemeral(reply, r);
+            }
             Cmd::ListEncoders { reply } => {
                 let r = Ok(json!({ "encoders": self.caps_encoders }));
                 self.finish_ephemeral(reply, r);
@@ -747,8 +748,8 @@ impl Engine {
                 self.finish_ephemeral(reply, r);
             }
             // --- SP6 audio mixer ---
-            Cmd::SetVolume { source, deflection, reply } => {
-                let r = self.set_volume(&source, deflection);
+            Cmd::SetVolume { source, level, reply } => {
+                let r = self.set_volume(&source, level);
                 self.finish(reply, r);
             }
             Cmd::SetMute { source, muted, reply } => {
@@ -918,12 +919,22 @@ impl Engine {
             .map(|channel| unsafe {
                 let src = ffi::obs_get_output_source(channel);
                 if src.is_null() {
-                    return GlobalSlot { channel, source: None, input_id: None };
+                    return GlobalSlot {
+                        channel,
+                        source: None,
+                        input_id: None,
+                        device_id: String::new(),
+                    };
                 }
+                let settings = ffi::obs_source_get_settings(src);
+                let key = cstring("device_id");
+                let device_id = cstr_owned(ffi::obs_data_get_string(settings, key.as_ptr()));
+                ffi::obs_data_release(settings);
                 let slot = GlobalSlot {
                     channel,
                     source: source_name(src),
                     input_id: source_type_id(src),
+                    device_id,
                 };
                 ffi::obs_source_release(src);
                 slot
@@ -1002,14 +1013,26 @@ impl Engine {
         Ok(json!({}))
     }
 
-    fn set_volume(&mut self, name: &str, deflection: f32) -> Result<Value, ProtoError> {
+    /// `level` is either a 0..1 fader deflection (the mixer strip) or an exact
+    /// dB value (SF3's numeric field). Both go through the SAME fader object,
+    /// so the cubic curve stays defined in exactly one place — a dB set and a
+    /// deflection set of the same level land on the identical gain.
+    fn set_volume(&mut self, name: &str, level: VolumeLevel) -> Result<Value, ProtoError> {
         if self.scratch_fader.is_null() {
             return Err(ProtoError::internal("fader unavailable"));
         }
         let fader = self.scratch_fader;
         self.with_source(name, |src| unsafe {
             ffi::obs_fader_attach_source(fader, src);
-            ffi::obs_fader_set_deflection(fader, deflection.clamp(0.0, 1.0));
+            match level {
+                VolumeLevel::Deflection(d) => {
+                    ffi::obs_fader_set_deflection(fader, d.clamp(0.0, 1.0));
+                }
+                // OBS's own range: -INF..+26 dB. Below the floor is silence.
+                VolumeLevel::Db(db) => {
+                    ffi::obs_fader_set_db(fader, db.min(26.0));
+                }
+            }
             ffi::obs_fader_detach_source(fader);
         })
     }
@@ -1064,7 +1087,7 @@ impl Engine {
 
     /// Assign (or clear, with an empty device id) one of libobs's six global
     /// audio channels. Adopt-don't-duplicate, exactly like
-    /// `ensure_desktop_audio`: a source of the same name is reused rather than
+    /// the boot restore: a source of the same name is reused rather than
     /// recreated, because obs_save_sources/obs_load_sources round-trip these
     /// and a blind create duplicates the source on every boot.
     fn set_global_slot(
@@ -1073,15 +1096,31 @@ impl Engine {
         input_id: &str,
         device_id: &str,
     ) -> Result<Value, ProtoError> {
+        let r = self.assign_global_slot(channel, input_id, device_id)?;
+        // Persist AFTER the assignment succeeds — a rejected slot must not be
+        // written, or the failure comes back on every subsequent boot.
+        self.save_slot_profile();
+        self.resync_meters();
+        Ok(r)
+    }
+
+    /// The libobs half of `set_global_slot`, without persistence or a meter
+    /// resync. Split out so the boot-time restore can reuse it before the
+    /// meter machinery is up.
+    fn assign_global_slot(
+        &mut self,
+        channel: u32,
+        input_id: &str,
+        device_id: &str,
+    ) -> Result<Value, ProtoError> {
         if !(1..=6).contains(&channel) {
             return Err(ProtoError::bad_request("channel must be 1..6"));
         }
+        if input_id.is_empty() {
+            unsafe { ffi::obs_set_output_source(channel, std::ptr::null_mut()) };
+            return Ok(json!({}));
+        }
         unsafe {
-            if device_id.is_empty() {
-                ffi::obs_set_output_source(channel, std::ptr::null_mut());
-                self.resync_meters();
-                return Ok(json!({}));
-            }
             let name = global_slot_name(channel);
             let cname = cstring(&name);
             let mut src = ffi::obs_get_source_by_name(cname.as_ptr());
@@ -1099,16 +1138,20 @@ impl Engine {
                     )));
                 }
             }
-            let settings = ffi::obs_data_create();
-            let k = cstring("device_id");
-            let v = cstring(device_id);
-            ffi::obs_data_set_string(settings, k.as_ptr(), v.as_ptr());
-            ffi::obs_source_update(src, settings);
-            ffi::obs_data_release(settings);
+            // An empty device_id means "whatever libobs defaults to" — writing
+            // it through would pin the source to a device literally named "",
+            // which captures silence.
+            if !device_id.is_empty() {
+                let settings = ffi::obs_data_create();
+                let k = cstring("device_id");
+                let v = cstring(device_id);
+                ffi::obs_data_set_string(settings, k.as_ptr(), v.as_ptr());
+                ffi::obs_source_update(src, settings);
+                ffi::obs_data_release(settings);
+            }
             ffi::obs_set_output_source(channel, src);
             ffi::obs_source_release(src);
         }
-        self.resync_meters();
         Ok(json!({}))
     }
 
@@ -1645,6 +1688,47 @@ impl Engine {
         Ok(json!({ "types": types }))
     }
 
+    /// Device choices for the SF3 pickers. `output`/`input` read the `device_id`
+    /// property off the wasapi source TYPE (obs_get_source_properties needs no
+    /// instance), which is how OBS's own settings page fills these lists — so an
+    /// unassigned slot can still offer devices. `monitoring` is a different
+    /// libobs API entirely and is enumerated by callback.
+    fn list_audio_devices(&self, kind: &str) -> Result<Value, ProtoError> {
+        if kind == "monitoring" {
+            return Ok(json!({ "devices": enumerate_monitoring_devices() }));
+        }
+        let input_id = match kind {
+            "output" => "wasapi_output_capture",
+            "input" => "wasapi_input_capture",
+            _ => return Err(ProtoError::bad_request("kind must be output, input or monitoring")),
+        };
+        let mut devices = Vec::new();
+        unsafe {
+            let cid = cstring(input_id);
+            let props = ffi::obs_get_source_properties(cid.as_ptr());
+            if props.is_null() {
+                return Ok(json!({ "devices": devices }));
+            }
+            let key = cstring("device_id");
+            let p = ffi::obs_properties_get(props, key.as_ptr());
+            if !p.is_null() {
+                for i in 0..ffi::obs_property_list_item_count(p) {
+                    let name = ffi::obs_property_list_item_name(p, i);
+                    let id = ffi::obs_property_list_item_string(p, i);
+                    if id.is_null() {
+                        continue;
+                    }
+                    devices.push(json!({
+                        "id": cstr_owned(id),
+                        "name": if name.is_null() { cstr_owned(id) } else { cstr_owned(name) },
+                    }));
+                }
+            }
+            ffi::obs_properties_destroy(props);
+        }
+        Ok(json!({ "devices": devices }))
+    }
+
     fn screenshot(
         &self,
         scene: Option<&str>,
@@ -1747,48 +1831,87 @@ impl Engine {
         }
     }
 
-    /// Desktop Audio is a REGULAR persisted source (round-trips through the
-    /// collection like everything else): reuse the loaded one by name, create
-    /// it only on a fresh start. Runs AFTER load_collection â€” creating it
-    /// before load duplicated it on every boot (obs_save_sources saves it,
-    /// obs_load_sources restores it, attach created a second).
-    fn ensure_desktop_audio(&mut self) {
-        unsafe {
-            let name = cstring("Desktop Audio");
-            let mut src = ffi::obs_get_source_by_name(name.as_ptr());
-            if src.is_null() {
-                let id = cstring("wasapi_output_capture");
-                src = ffi::obs_source_create(id.as_ptr(), name.as_ptr(), std::ptr::null_mut(), std::ptr::null_mut());
-                if src.is_null() {
-                    log::warn!("desktop audio source creation failed");
-                    return;
-                }
+    /// Reassign libobs's six global audio channels from the profile (SP6 SF3).
+    ///
+    /// Channel ASSIGNMENT does not round-trip through the collection — only the
+    /// sources themselves do — so it has to be re-applied on every boot. Before
+    /// SF3 that re-application was two hardcoded calls, which meant clearing
+    /// channel 1 or 2 in the UI silently came back on the next start. The
+    /// assignment now lives in the profile ini, so a cleared slot STAYS clear:
+    /// an empty `Slot<N>Input` is a real "user emptied this", distinct from an
+    /// absent key.
+    ///
+    /// Runs AFTER load_collection, preserving the adopt-don't-duplicate
+    /// contract — creating a source before load duplicated it every boot
+    /// (obs_save_sources saves it, obs_load_sources restores it, attach created
+    /// a second).
+    fn restore_global_slots(&mut self) {
+        // No slot keys at all = a box that has never seen SF3. Seed OBS's own
+        // defaults (desktop on 1/track 1, mic on 2/track 2) and persist them,
+        // so the next boot takes the restore path like any other.
+        let fresh = (1..=6).all(|ch| self.profile.get("Audio", &slot_input_key(ch)).is_none());
+        if fresh {
+            self.seed_default_slots();
+            return;
+        }
+        for ch in 1..=6u32 {
+            let input_id = self.profile.get_or("Audio", &slot_input_key(ch), "").to_string();
+            if input_id.is_empty() {
+                continue; // explicitly cleared, or never assigned
             }
-            ffi::obs_set_output_source(1, src);
-            // SP4 fixed track map (full matrix UI is SP6): desktop â†’ track 1.
-            // Set on adopt too â€” collections predating SP4 have no mixer mask.
-            ffi::obs_source_set_audio_mixers(src, 0b01);
-            self.desktop_audio = src; // owned ref either way; released in teardown
+            let device_id = self.profile.get_or("Audio", &slot_device_key(ch), "").to_string();
+            if let Err(e) = self.assign_global_slot(ch, &input_id, &device_id) {
+                log::warn!("channel {ch} restore failed: {}", e.message);
+            }
         }
     }
 
-    /// Mic twin of ensure_desktop_audio (same adopt-don't-duplicate contract,
-    /// runs after load_collection): "Mic/Aux" on channel 2, track 2 only.
-    fn ensure_mic(&mut self) {
-        unsafe {
-            let name = cstring("Mic/Aux");
-            let mut src = ffi::obs_get_source_by_name(name.as_ptr());
-            if src.is_null() {
-                let id = cstring("wasapi_input_capture");
-                src = ffi::obs_source_create(id.as_ptr(), name.as_ptr(), std::ptr::null_mut(), std::ptr::null_mut());
-                if src.is_null() {
-                    log::warn!("mic source creation failed");
-                    return;
-                }
+    /// First-boot seed: the OBS default pair, persisted so it is restorable.
+    fn seed_default_slots(&mut self) {
+        for (ch, input_id, mask) in
+            [(1u32, "wasapi_output_capture", 0b01u32), (2, "wasapi_input_capture", 0b10)]
+        {
+            match self.assign_global_slot(ch, input_id, "") {
+                Ok(_) => unsafe {
+                    // Collections predating SP4 carry no mixer mask; set it on
+                    // adopt as well as on create.
+                    let name = cstring(&global_slot_name(ch));
+                    let src = ffi::obs_get_source_by_name(name.as_ptr());
+                    if !src.is_null() {
+                        ffi::obs_source_set_audio_mixers(src, mask);
+                        ffi::obs_source_release(src);
+                    }
+                },
+                Err(e) => log::warn!("channel {ch} seed failed: {}", e.message),
             }
-            ffi::obs_set_output_source(2, src);
-            ffi::obs_source_set_audio_mixers(src, 0b10);
-            self.mic = src;
+        }
+        self.save_slot_profile();
+    }
+
+    /// Persist the CURRENT assignment of all six channels. Called after any
+    /// slot mutation; reads back from libobs rather than trusting a cached
+    /// copy, so the file always matches what the engine actually has wired.
+    fn save_slot_profile(&mut self) {
+        for ch in 1..=6u32 {
+            let (input_id, device_id) = unsafe {
+                let src = ffi::obs_get_output_source(ch);
+                if src.is_null() {
+                    (String::new(), String::new())
+                } else {
+                    let id = cstr_owned(ffi::obs_source_get_id(src));
+                    let settings = ffi::obs_source_get_settings(src);
+                    let k = cstring("device_id");
+                    let dev = cstr_owned(ffi::obs_data_get_string(settings, k.as_ptr()));
+                    ffi::obs_data_release(settings);
+                    ffi::obs_source_release(src);
+                    (id, dev)
+                }
+            };
+            self.profile.set("Audio", &slot_input_key(ch), input_id);
+            self.profile.set("Audio", &slot_device_key(ch), device_id);
+        }
+        if let Err(e) = self.profile.save() {
+            log::warn!("audio slot profile save failed: {e}");
         }
     }
 
@@ -2929,12 +3052,6 @@ impl Engine {
             for ch in 0..=6u32 {
                 ffi::obs_set_output_source(ch, std::ptr::null_mut());
             }
-            if !self.desktop_audio.is_null() {
-                ffi::obs_source_release(self.desktop_audio);
-            }
-            if !self.mic.is_null() {
-                ffi::obs_source_release(self.mic);
-            }
             for (_, scene) in self.scenes.drain(..) {
                 ffi::obs_scene_release(scene);
             }
@@ -3743,6 +3860,52 @@ unsafe fn scene_audio_source_names(scene: *mut ffi::obs_scene) -> Vec<String> {
 /// Names for the six global slots. Channels 1 and 2 keep the names SP1/SP4
 /// already persisted in the collection ("Desktop Audio", "Mic/Aux") - renaming
 /// them would orphan every existing user's saved audio settings.
+/// How a `set_volume` call expressed the level it wants (SP6). The mixer strip
+/// drags a 0..1 fader; SF3's numeric field types exact decibels. Both resolve
+/// through the same libobs fader, so the cubic curve is defined once.
+#[derive(Debug, Clone, Copy)]
+pub enum VolumeLevel {
+    Deflection(f32),
+    Db(f32),
+}
+
+/// Monitoring outputs (SP6 SF3). Not a source property like the capture
+/// devices — libobs exposes these only through a callback enumerator, which
+/// pushes into the Vec behind `data`.
+fn enumerate_monitoring_devices() -> Vec<Value> {
+    unsafe extern "C" fn push(
+        data: *mut std::ffi::c_void,
+        name: *const std::os::raw::c_char,
+        id: *const std::os::raw::c_char,
+    ) -> bool {
+        if !data.is_null() && !id.is_null() {
+            let out = unsafe { &mut *(data as *mut Vec<Value>) };
+            let id_s = cstr_owned(id);
+            let name_s = if name.is_null() { id_s.clone() } else { cstr_owned(name) };
+            out.push(json!({ "id": id_s, "name": name_s }));
+        }
+        true // keep enumerating
+    }
+    let mut out: Vec<Value> = Vec::new();
+    unsafe {
+        ffi::obs_enum_audio_monitoring_devices(
+            Some(push),
+            &mut out as *mut Vec<Value> as *mut std::ffi::c_void,
+        );
+    }
+    out
+}
+
+/// Profile ini keys for a global audio slot. `[Audio] Slot1Input=…` /
+/// `Slot1Device=…`, OBS's own PascalCase key style.
+fn slot_input_key(channel: u32) -> String {
+    format!("Slot{channel}Input")
+}
+
+fn slot_device_key(channel: u32) -> String {
+    format!("Slot{channel}Device")
+}
+
 fn global_slot_name(channel: u32) -> String {
     match channel {
         1 => "Desktop Audio".into(),

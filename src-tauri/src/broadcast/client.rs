@@ -246,6 +246,10 @@ pub struct GlobalSlot {
     pub source: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub input_id: Option<String>,
+    /// Chosen capture device (SP6 SF3) so the slot picker shows what is wired.
+    /// Empty = libobs default.
+    #[serde(default)]
+    pub device_id: String,
 }
 
 /// One mixer row. Name-addressed: a source has ONE set of audio settings no

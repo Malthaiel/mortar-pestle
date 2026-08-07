@@ -304,6 +304,11 @@ pub struct GlobalSlot {
     /// libobs input type id backing the slot (wasapi_output_capture etc.).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub input_id: Option<String>,
+    /// The slot's chosen capture device, so the SF3 picker can show what is
+    /// actually wired rather than always reading "Default". Empty string = the
+    /// source is on whatever libobs defaults to.
+    #[serde(default)]
+    pub device_id: String,
 }
 
 /// One mixer row. Name-addressed like scenes (audio sources are unique by
