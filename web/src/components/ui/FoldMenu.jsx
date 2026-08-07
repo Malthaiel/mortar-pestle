@@ -1071,7 +1071,57 @@ export default function FoldMenu({
             // whichever side the rows' bands point, and negating --cbtn-depth
             // (see row()) points them at the stack's local TOP. After the flip
             // it lands back under row 0, exactly where the down fold has it.
-            top: open || padOn ? -(FOLD_PAD + (up ? padLip : 0)) : 0,
+            // The allowance is OUTSIDE the padOn toggle, and both halves of that
+            // matter.
+            //
+            // It has to EXIST for up, because UP_FLIP mirrors the box and paint is
+            // deliberately not mirrored (see row(): --cbtn-depth is negated so lips
+            // still point down). A pure-flipped box therefore puts its lip room on
+            // the side the lips no longer land — deleting this term outright was
+            // tried 2026-08-06 and regresses the resting spacing that 38e6548 fixed
+            // ("the spacing ... are uneven", his own report). The term is what puts
+            // the room back under the rows' shadows after the flip.
+            //
+            // It must NOT ride the toggle, because inside it this edge went from
+            // -(FOLD_PAD + padLip) to 0 — SEVEN px of travel through the tuck where
+            // the other three travel six, same curve, same beat. More ground in the
+            // same time is a faster edge: "the bottom gets sucked in too early",
+            // then "the bottom is still sucked in before the top and sides are",
+            // 2026-08-06. Held outside, the allowance persists across the tuck and
+            // only the pad moves, so all four edges travel FOLD_PAD and land
+            // together — which is exactly how down already behaves, since down's
+            // allowance lives inside `height` where it is constant for the whole
+            // close and contributes zero travel.
+            //
+            // It is `dpx`, the FULL lip, and NOT `padLip` — that is the whole
+            // fix, and it is a MEASURED one. `padLip` hands over from dpx to
+            // dpx - surf on frame one of every close (see `padLip`). Down can
+            // carry that 4px because down only spends padLip inside `height`,
+            // the MOVING edge, which is losing a whole row in the same instant
+            // and buries it. Up spends it here, on the PINNED edge, where there
+            // is nothing to bury it in and it plays as naked travel on the one
+            // edge that must not move.
+            //
+            // Read off the pad strip of both chips through one close, his 21:10
+            // clip 2026-08-06, raw luma column per frame: down's pinned top edge
+            // holds y943 dead for all 34 frames, while up's pinned bottom edge
+            // walks 1152 -> 1151 -> 1150 -> 1149 -> 1148 over the first five and
+            // only then holds. Four pixels, exactly --candy-surface-depth, and
+            // both halves of his report — "the bottom gets sucked in too early",
+            // and the far edge left four pixels short of its travel, "the top is
+            // way too poked out". An earlier chat measured this edge as constant
+            // and it was not: that window STARTED at the departure frame, after
+            // the walk had already happened. Measure from before the event.
+            //
+            // Constant, the pinned edge travels exactly what down's does — the
+            // pad's own 6px at the tuck, cancelled by the group settle — in both
+            // directions. It also makes the OPEN honest, which was wrong too and
+            // unreported: shut this edge sat at 0 (padLip is 0 while hidden) and
+            // opened to -11, an 11px leg against down's 6.
+            //
+            // Nothing moves at rest. Open, `padLip` IS `dpx`, so the open
+            // geometry is byte-for-byte what 38e6548 signed off.
+            top: (open || padOn ? -FOLD_PAD : 0) - (up ? dpx : 0),
             width: padOn ? `calc(100% + ${FOLD_PAD * 2}px)` : '100%',
             // Sized to the rows STILL SHOWING, not to the open/shut flag — see
             // `folded`. Same rows + GAP formula the stack itself is laid out by,
@@ -1125,6 +1175,13 @@ export default function FoldMenu({
                 .map((p) => {
                   // Only the height, only closing, only on the tuck beat — the hug
                   // has to stay glued to the rows and cannot be delayed. See FRAME.
+                  //
+                  // NO up branch. A `&& !up` was tried 2026-08-06 — the theory was
+                  // that under UP_FLIP this delay lands on the visual TOP instead
+                  // of the bottom, so the up variant should not carry it. Removing
+                  // it did not fix the reported unevenness, so the theory is dead
+                  // and the branch is gone: both directions run the same delay, and
+                  // the flip mirrors it like everything else.
                   const late = p === 'height' && !open && tuck ? 2 * FRAME : 0;
                   return `${p} ${DUR / 2 - late}ms cubic-bezier(`
                     + (open ? '0.33, 1, 0.68, 1' : '0.32, 0, 0.67, 0') + ')'
