@@ -562,7 +562,23 @@ export default function FoldMenu({
         // the row above — so a panel that starts growing at the fold's start
         // runs a full half-fold ahead of anything visible. User-reported
         // 2026-08-05: "during the unfold the bg expands too fast."
-        at(openAt(j) + DUR / 2, () => setFolded(hinges - 1 - j));
+        // LEAD, and it is measured, not taste. The step fires at the edge-on
+        // frame and the panel then EASES into the new size over DUR / 2, while
+        // the row that just crossed edge-on is already painting — so for that
+        // leg the surface is catching up to a row that is ahead of it.
+        // Measured off a 60fps capture 2026-08-06, four rows, mid-open: rows
+        // painting to y=941 with the panel's full-width edge at y=937, against
+        // a settled halo of 7px. User-reported on BOTH directions, "the buttons
+        // are ahead of the background when opening rather than being inside of
+        // it".
+        //
+        // Two frames is the overshoot expressed on the leg's own clock: 8px of
+        // an out-cubic 37px step is about 22% of it, and 22% of DUR / 2 is 33ms.
+        // It is a LEAD on the step, NOT a longer leg — stretching the leg is the
+        // move this file rejects everywhere else, because it fixes the average
+        // speed and breaks the shape. Only the height step leads; the face swap
+        // stays on the true edge-on frame, where a swap is invisible.
+        at(openAt(j) + DUR / 2 - 2 * FRAME, () => setFolded(hinges - 1 - j));
         // Swapped at the edge-on frame: mid-fold the row is rotated 90deg and
         // paints zero pixels tall, so an instant swap there cannot be seen. A
         // cross-fade instead blooms a ghost word on a face-up row.
