@@ -40,8 +40,6 @@ const kindOf = (inputId) => (inputId === 'wasapi_input_capture' ? 'input' : 'out
 
 const TRACKS = [1, 2, 3, 4, 5, 6];
 
-const fmtDb = (db) => (!Number.isFinite(db) || db <= -60 ? '−∞' : `${db > 0 ? '+' : ''}${db.toFixed(1)} dB`);
-
 function Row({ label, children, hint }) {
   return (
     <div className="bcast-audio-row">
@@ -94,17 +92,15 @@ function SourceCard({ row, accent, call }) {
       </div>
 
       <Row label="Volume">
-        <div className="bcast-audio-inline">
-          <Slider
-            value={Math.round((row.volume_db ?? 0) * 10) / 10}
-            min={-60}
-            max={26}
-            step={0.1}
-            accent={accent}
-            onChange={(db) => call('set_volume', { source: row.name, db })}
-          />
-          <span className="bcast-audio-read">{fmtDb(row.volume_db)}</span>
-        </div>
+        <Slider
+          value={Math.round((row.volume_db ?? 0) * 10) / 10}
+          min={-60}
+          max={26}
+          step={0.1}
+          unit=" dB"
+          accent={accent}
+          onChange={(db) => call('set_volume', { source: row.name, db })}
+        />
       </Row>
 
       <Row label="Downmix to mono">
@@ -125,17 +121,15 @@ function SourceCard({ row, accent, call }) {
       </Row>
 
       <Row label="Sync offset" hint="milliseconds">
-        <div className="bcast-audio-inline">
-          <Slider
-            value={row.sync_offset_ms ?? 0}
-            min={-950}
-            max={20000}
-            step={5}
-            accent={accent}
-            onChange={(ms) => call('set_sync_offset', { source: row.name, offset_ms: ms })}
-          />
-          <span className="bcast-audio-read">{row.sync_offset_ms ?? 0} ms</span>
-        </div>
+        <Slider
+          value={row.sync_offset_ms ?? 0}
+          min={-950}
+          max={20000}
+          step={5}
+          unit=" ms"
+          accent={accent}
+          onChange={(ms) => call('set_sync_offset', { source: row.name, ms })}
+        />
       </Row>
 
       <Row label="Monitoring">
@@ -213,15 +207,18 @@ export default function AudioPropsWindow({ api, snapshot, accent, onClose }) {
     [globals],
   );
 
+  // libobs's enumerator never emits the default device, but obs_get_audio_
+  // monitoring_device REPORTS the id as "default" — so the placeholder has to
+  // carry that same id or the select matches no option and renders blank.
   const monitorOpts = useMemo(
     () => [
-      { value: '', label: 'Default' },
+      { value: 'default', label: 'Default' },
       ...(devices.monitoring || []).map((d) => ({ value: d.id, label: d.name })),
     ],
     [devices.monitoring],
   );
 
-  const monitoringValue = audio?.monitoring_device?.id || '';
+  const monitoringValue = audio?.monitoring_device?.id || 'default';
 
   return (
     <AppWindow open title="Advanced audio properties" accent={accent} onClose={onClose} width={720}>
@@ -236,7 +233,7 @@ export default function AudioPropsWindow({ api, snapshot, accent, onClose }) {
               options={monitorOpts}
               onChange={(id) => {
                 const found = (devices.monitoring || []).find((d) => d.id === id);
-                call('set_monitoring_device', { id, name: found?.name ?? '' });
+                call('set_monitoring_device', { id, name: found?.name ?? 'Default' });
               }}
               title="Monitoring output device"
             />

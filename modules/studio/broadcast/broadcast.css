@@ -218,16 +218,6 @@
 .bcast-audio-row-hint { display: block; font-size: 10px; color: var(--text-faint); }
 .bcast-audio-row-control { min-width: 0; }
 
-.bcast-audio-inline { display: flex; align-items: center; gap: 10px; }
-.bcast-audio-read {
-  flex: 0 0 auto;
-  min-width: 68px;
-  text-align: right;
-  font-family: var(--font-mono), monospace;
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
 .bcast-audio-card {
   border: 1px solid var(--border);
   border-radius: 10px;
