@@ -591,27 +591,8 @@ pub fn stt_open_kde_settings() -> Result<(), String> {
     open_global_shortcuts_settings()
 }
 
-/// Linux: launch the KDE settings shell directly via `std::process::Command` (no new
-/// dependency, NOT `tauri-plugin-shell`); KDE 6 → 5 fallback chain; best-effort.
-#[cfg(target_os = "linux")]
-fn open_global_shortcuts_settings() -> Result<(), String> {
-    // First launcher that spawns wins. `kcm_keys` is the global-shortcuts KCM.
-    const CANDIDATES: &[(&str, &[&str])] = &[
-        ("systemsettings", &["kcm_keys"]),
-        ("systemsettings5", &["kcm_keys"]),
-        ("kcmshell6", &["kcm_keys"]),
-        ("kcmshell5", &["kcm_keys"]),
-    ];
-    for (bin, args) in CANDIDATES {
-        if std::process::Command::new(bin).args(*args).spawn().is_ok() {
-            return Ok(());
-        }
-    }
-    Err("KDE System Settings not found (tried systemsettings/kcmshell)".to_string())
-}
-
-/// Windows/other: no system rebind UI (the trigger is fixed in v1). Silent no-op.
-#[cfg(not(target_os = "linux"))]
+/// No system rebind UI on Windows (the trigger is fixed in v1). Silent no-op —
+/// the KDE settings-shell launcher this paired with went with Linux (2026-08-06).
 fn open_global_shortcuts_settings() -> Result<(), String> {
     Ok(())
 }

@@ -1,713 +1,637 @@
-//! Embedded, fully-sandboxed in-app browser — now multi-tab.
+//! Windows (WebView2) in-app browser controller — the per-OS sibling of
+//! `browser.rs` (WebKitGTK on Linux). Selected by the `#[cfg]/#[path]` switch in
+//! `commands/mod.rs`; implements the SAME 15 `browser_*` commands the React
+//! chrome calls, so `lib.rs`/`build.rs`/`capabilities` only swap a cfg, not names.
 //!
-//! Each tab is its OWN raw `webkit2gtk::WebView` (deliberately NOT a
-//! Tauri-managed webview), packed as an overlay child over the main window's
-//! GTK container next to the privileged React chrome. Switching tabs shows the
-//! active view and hides + mutes the rest, so every tab keeps its live page
-//! state (scroll position, video playback, login). Because these views never
-//! go through Tauri's webview pipeline, the Tauri IPC bridge
-//! (`window.__TAURI_INTERNALS__`, the invoke key, the `ipc` message handler) is
-//! NEVER injected into them: there is no bridge for hostile content to reach.
-//! Defense-in-depth on top of that, applied PER WEBVIEW in `configure_webview`:
+//! Each tab is its OWN isolated Tauri child webview, added over the `main`
+//! window via the `unstable` multi-webview API (`Window::add_child`). The child
+//! is an External-URL webview: Tauri injects no IPC bridge into it
+//! (`withGlobalTauri:false` + it is NOT in the `default` capability's webview
+//! list; an explicit empty-permission `browser-content` capability is
+//! belt-and-suspenders), so `window.__TAURI_INTERNALS__` / `invoke` are
+//! unreachable from hostile content — the same "no bridge for content to reach"
+//! guarantee the Linux raw-webkit build has by construction.
 //!
-//!   * Network: one persistent, proxy-routed `WebContext` shared by every tab
-//!     (so login carries across tabs — one profile) routed through the
-//!     loopback-refusing `crate::proxy`.
-//!   * Navigation: `decide-policy` allows only `https:` to non-local hosts and
-//!     denies every new-window / non-https / local-host navigation.
-//!   * Permissions: `permission-request` denies everything (geo/cam/mic/…).
-//!   * New windows: `create` returns no widget.
-//!   * Downloads: the context cancels every download.
-//!   * Engine: WebRTC / media-stream / DNS-prefetch / clipboard / WebGL all
-//!     disabled; persistent storage; HW acceleration off; default TLS policy.
+//! The real network boundary is the shared loopback-refusing `crate::proxy`,
+//! pointed at via `WebviewBuilder::proxy_url` (wry emits `--proxy-server`); it
+//! refuses loopback/RFC1918 for ALL request types and honors the Shield
+//! host-blocklist + per-site allow-list. Shield cosmetics ride a document-start
+//! init-script (best-effort; WebView2 has no compiled content-filter).
 //!
-//! Each tab also emits `browser-tab-update` Tauri events (title / url / load
-//! state / favicon) so the React chrome can label the sidebar tab buttons.
+//! Tauri `Webview` is `Send + Clone` and every op dispatches to the UI thread
+//! internally, so state is a plain `Mutex` static — no GTK `thread_local!` /
+//! `run_on_main_thread` dance.
 //!
-//! The chrome drives everything through the `browser_*` commands below, each of
-//! which validates its input. GTK objects are `!Send`, so all state lives in a
-//! main-thread `thread_local!` and every command hops onto the GTK main thread
-//! via `run_on_main_thread` / `with_webview`.
+//! Phase 2 (2026-06-23) closed the Phase-1 gaps via a `with_webview` →
+//! `ICoreWebView2` reach-through (registered per tab at creation): permission
+//! deny-all (PermissionRequested), faithful canBack/canForward (HistoryChanged)
+//! + native GoBack/GoForward, favicons (FaviconChanged → PNG data URL), cookie
+//! enumeration + profile clear (ClearBrowsingData), and renderer-crash
+//! auto-reload (ProcessFailed). Remaining limit: cookie-list/clear need ≥1 open
+//! tab (the shared WebView2 profile lives on the child controllers).
 
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::rc::Rc;
+use std::collections::{BTreeSet, HashMap};
+use std::sync::Mutex;
 
-use gtk::gdk_pixbuf::prelude::*;
-use gtk::prelude::*;
-use tauri::{AppHandle, Emitter, Manager};
-use webkit2gtk::{
-    CookieManagerExt, CookiePersistentStorage, DownloadExt, HardwareAccelerationPolicy, LoadEvent,
-    NavigationPolicyDecision, NavigationPolicyDecisionExt, NetworkProxyMode, NetworkProxySettings,
-    PermissionRequestExt, PolicyDecisionExt, PolicyDecisionType, SettingsExt, URIRequestExt,
-    UserContentInjectedFrames, UserContentManager, UserContentManagerExt, UserStyleLevel,
-    UserStyleSheet, WebContext, WebContextExt, WebView, WebViewExt, WebsiteDataManager,
-    WebsiteDataManagerExt,
+use serde::Serialize;
+use tauri::{
+    webview::{NewWindowResponse, PageLoadEvent, WebviewBuilder},
+    AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Rect, Url, Webview, WebviewUrl,
 };
+// Phase 2 — raw WebView2 (ICoreWebView2) reach-through. `Microsoft::…::Win32::*`
+// brings the interfaces + consts; the named items are the event-handler structs
+// + `take_pwstr` (mirrors wry's own import). `Interface` powers `.cast()`.
+use base64::Engine;
+use webview2_com::{
+    take_pwstr, ClearBrowsingDataCompletedHandler, FaviconChangedEventHandler,
+    GetCookiesCompletedHandler, GetFaviconCompletedHandler, HistoryChangedEventHandler,
+    Microsoft::Web::WebView2::Win32::*, PermissionRequestedEventHandler, ProcessFailedEventHandler,
+};
+use windows::core::{Interface, BOOL, PCWSTR, PWSTR};
 
-/// Whole-browser state: the overlay (built once), the shared persistent context,
-/// the shared fullscreen hint label, the live tabs keyed by frontend id, and
-/// the active tab id. Only ever touched on the GTK main thread.
-struct BrowserState {
-    overlay: gtk::Overlay,
-    ctx: WebContext,
-    hint: gtk::Label,
-    tabs: HashMap<String, WebView>,
-    active: Option<String>,
-}
+/// Live tabs: frontend tab id → its child webview. `Webview` is `Send` so this
+/// needs no thread-local; `Mutex::new`/`HashMap::new` are const so no LazyLock.
+static TABS: Mutex<Option<HashMap<String, Webview>>> = Mutex::new(None);
+/// The active tab id (the one `browser_set_bounds`/`set_visible` act on).
+static ACTIVE: Mutex<Option<String>> = Mutex::new(None);
+/// The tab whose webview is reparented into the `overlay-host` window (the
+/// in-game browser panel). `None` ⇒ every tab is a child of `main`. Also the
+/// serialization point for attach/detach (the guard is held across the
+/// blocking reparent on purpose).
+static OVERLAY_ATTACHED: Mutex<Option<String>> = Mutex::new(None);
 
-thread_local! {
-    /// The browser state, created lazily on the first navigation/new-tab.
-    static STATE: RefCell<Option<BrowserState>> = const { RefCell::new(None) };
-
-    /// True while the active content view is in HTML fullscreen.
-    /// `browser_set_bounds` honors this and skips re-clamping, so the
-    /// frontend's resize-driven re-sync can't fight the enter-fullscreen
-    /// handler's margin drop.
-    static FULLSCREEN: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-}
-
-// Navigation/host allow-list helpers now live in the shared `browser_common`
-// module (kept identical with the Windows WebView2 driver so the two can't drift).
+// ── shared allow-list helpers ────────────────────────────────────────────────
+// SECURITY-CRITICAL nav/host gate — now shared with the Linux WebKitGTK driver
+// (`browser.rs`) via the `browser_common` module, so the two can't drift.
 use crate::commands::browser_common::{host_of_url, nav_allowed};
 
-/// Apply the full sandbox hardening + navigation/permission/new-window policy to
-/// a freshly built content view. Called for EVERY tab so the posture is
-/// replicated per webview.
-fn configure_webview(content: &WebView) {
-    if let Some(s) = WebViewExt::settings(content) {
-        s.set_enable_webrtc(false);
-        s.set_enable_media_stream(false);
-        s.set_enable_mock_capture_devices(false);
-        s.set_enable_dns_prefetching(false);
-        s.set_javascript_can_access_clipboard(false);
-        // Content-view inspector: dev builds only, so a release never hands
-        // untrusted content a devtools surface.
-        s.set_enable_developer_extras(cfg!(debug_assertions));
-        // Fullscreen video is intentionally allowed (YouTube, etc.). It adds no
-        // sandbox capability; ESC-to-exit can't be trapped by the page.
-        s.set_enable_fullscreen(true);
-        // GPU attack-surface hardening for the untrusted content view: deny it
-        // accelerated compositing and WebGL so hostile pages reach no GPU
-        // driver code paths and can't fingerprint via WebGL. (Does NOT touch
-        // the GStreamer video sink — normal/fullscreen video stays decoded.)
-        s.set_hardware_acceleration_policy(HardwareAccelerationPolicy::Never);
-        s.set_enable_webgl(false);
+// ── Shield (best-effort cosmetic layer; network blocking rides the proxy) ─────
+
+/// Document-start init-script: inject the Shield cosmetic stylesheet (id'd so it
+/// can be stripped per-site) + run the scriptlet bootstrap. Captured at tab
+/// creation; the proxy (network) + the per-nav strip below honor live state.
+fn shield_init_script() -> String {
+    let css = serde_json::to_string(&crate::blocker::cosmetic_css())
+        .unwrap_or_else(|_| "\"\"".to_string());
+    let scriptlets = crate::blocker::scriptlets::bootstrap();
+    format!(
+        "(function(){{try{{var d=document,s=d.createElement('style');\
+         s.id='__mortar-pestle_shield__';s.textContent={css};\
+         (d.head||d.documentElement).appendChild(s);}}catch(e){{}}}})();\n{scriptlets}"
+    )
+}
+
+/// Strip the injected cosmetic stylesheet (run after navigation when Shield is
+/// off for the host — globally disabled or per-site allow-listed). The proxy
+/// already stopped network ad/tracker loads; this just un-hides cosmetically.
+const STRIP_SHIELD_JS: &str =
+    "(function(){try{var e=document.getElementById('__mortar-pestle_shield__');if(e)e.remove();}catch(_){}})();";
+
+// ── tab-store plumbing ───────────────────────────────────────────────────────
+
+/// Run `f` against the webview for `id` (cloned out so the lock isn't held
+/// across the dispatch). No-op if the tab doesn't exist (mirrors Linux).
+fn with_tab<F: FnOnce(&Webview)>(id: &str, f: F) {
+    let wv = TABS
+        .lock()
+        .ok()
+        .and_then(|t| t.as_ref().and_then(|m| m.get(id).cloned()));
+    match wv {
+        Some(wv) => f(&wv),
+        None => log::warn!("browser(win): op on missing tab {id}"),
     }
-
-    content.connect_decide_policy(move |_wv, decision, dtype| {
-        match dtype {
-            PolicyDecisionType::NavigationAction | PolicyDecisionType::NewWindowAction => {
-                let uri = decision
-                    .downcast_ref::<NavigationPolicyDecision>()
-                    .and_then(|d| d.navigation_action())
-                    .and_then(|a| a.request())
-                    .and_then(|r| r.uri())
-                    .map(|g| g.to_string())
-                    .unwrap_or_default();
-                if dtype == PolicyDecisionType::NewWindowAction || !nav_allowed(&uri) {
-                    log::info!("browser: blocked navigation to {uri:?} ({dtype:?})");
-                    decision.ignore();
-                } else {
-                    decision.use_();
-                }
-                true
-            }
-            // Response (sub- + main-resource) AND any other/unknown decision type
-            // proceed via use_(). WebKitGTK 2.52.x interrupts an *undecided* response
-            // policy decision (WebKitPolicyError "Frame load interrupted") → empty
-            // page. Against the stale webkit2gtk 2.0.2 bindings a 2.52 response
-            // decision need not even map to `PolicyDecisionType::Response`, so we must
-            // decide EVERYTHING that isn't a navigation here — not just a named
-            // `Response` arm. The proxy + navigation allow-list above remain the
-            // security gate, so letting responses proceed is the intended posture.
-            _ => {
-                decision.use_();
-                true
-            }
-        }
-    });
-
-    content.connect_permission_request(|_wv, req| {
-        req.deny();
-        true
-    });
-
-    content.connect_create(|_wv, _action| -> Option<gtk::Widget> { None });
 }
 
-/// Wire a content view's signals to `browser-tab-update` events carrying the
-/// tab id and whatever changed (title / url + nav state / load state / favicon).
-fn wire_signals(app: &AppHandle, content: &WebView, id: &str) {
-    let a = app.clone();
-    let tid = id.to_string();
-    content.connect_title_notify(move |wv| {
-        let _ = a.emit(
-            "browser-tab-update",
-            serde_json::json!({ "tabId": tid, "title": wv.title().map(|g| g.to_string()) }),
-        );
-    });
-
-    let a = app.clone();
-    let tid = id.to_string();
-    content.connect_uri_notify(move |wv| {
-        let _ = a.emit(
-            "browser-tab-update",
-            serde_json::json!({
-                "tabId": tid,
-                "url": wv.uri().map(|g| g.to_string()),
-                "canBack": wv.can_go_back(),
-                "canForward": wv.can_go_forward(),
-            }),
-        );
-    });
-
-    let a = app.clone();
-    let tid = id.to_string();
-    content.connect_load_changed(move |wv, ev| {
-        log::debug!("browser: tab {tid} load {ev:?} uri={:?}", wv.uri().map(|g| g.to_string()));
-        // SF4a — (re)apply Shield's per-tab layers for the host being loaded,
-        // gated by the global flag + per-site allow-list. Fires on every load
-        // incl. reload, so toggling Shield then reloading takes effect.
-        if matches!(ev, LoadEvent::Started) {
-            if let Some(ucm) = wv.user_content_manager() {
-                let allowed = wv
-                    .uri()
-                    .and_then(|u| host_of_url(&u))
-                    .is_some_and(|h| crate::blocker::is_site_allowed(&h));
-                apply_tab_layers(&ucm, crate::blocker::enabled() && !allowed);
-            }
-        }
-        let _ = a.emit(
-            "browser-tab-update",
-            serde_json::json!({
-                "tabId": tid,
-                "loading": !matches!(ev, LoadEvent::Finished),
-                // Committed = the new document is in & about to paint; the frontend
-                // reveals the native view a beat after this (no white flash).
-                "committed": matches!(ev, LoadEvent::Committed),
-                "url": wv.uri().map(|g| g.to_string()),
-                "canBack": wv.can_go_back(),
-                "canForward": wv.can_go_forward(),
-            }),
-        );
-    });
-
-    let a = app.clone();
-    let tid = id.to_string();
-    content.connect_favicon_notify(move |wv| {
-        if let Some(data) = favicon_data_url(wv) {
-            let _ = a.emit(
-                "browser-tab-update",
-                serde_json::json!({ "tabId": tid, "favicon": data }),
-            );
-        }
-    });
-}
-
-/// Best-effort: render the view's current favicon to a PNG data URL. Returns
-/// None when there's no favicon or the conversion fails (the frontend then
-/// shows a globe glyph). Uses only the gtk-re-exported cairo/gdk/glib — no new
-/// crate. Deliberately does NOT enable an on-disk favicon DB; relies on
-/// WebKit's in-memory favicon for the session.
-fn favicon_data_url(wv: &WebView) -> Option<String> {
-    let surface = wv.favicon()?;
-    let img = gtk::cairo::ImageSurface::try_from(surface).ok()?;
-    let (w, h) = (img.width(), img.height());
-    if w <= 0 || h <= 0 {
-        return None;
+/// Run `f` against the active tab's webview (no-op if none / it's gone).
+fn with_active<F: FnOnce(&Webview)>(f: F) {
+    let active = ACTIVE.lock().ok().and_then(|a| a.clone());
+    if let Some(id) = active {
+        with_tab(&id, f);
     }
-    let pixbuf = gtk::gdk::pixbuf_get_from_surface(&img, 0, 0, w, h)?;
-    let bytes = pixbuf.save_to_bufferv("png", &[]).ok()?;
-    Some(format!(
-        "data:image/png;base64,{}",
-        gtk::glib::base64_encode(&bytes)
-    ))
 }
 
-/// Build (once) the overlay, the shared persistent proxied context, and the
-/// shared fullscreen hint, reparenting the main webview into the overlay. No
-/// content view is created here — tabs are added by `make_tab`. Runs on the GTK
-/// main thread (inside `with_webview`).
-fn embed(pw: &tauri::webview::PlatformWebview, proxy_port: u16, profile_dir: std::path::PathBuf) {
-    STATE.with(|cell| {
-        if cell.borrow().is_some() {
-            return;
-        }
-
-        let main_wv = pw.inner();
-        let main_widget: gtk::Widget = main_wv.clone().upcast();
-        // wry/tao build the window as `Window > GtkBox > main_webview`, and wry's
-        // borderless-resize handler unwraps `main_webview.parent().parent()` as a
-        // gtk::Window on every left button-press. The reparent below MUST keep
-        // the webview exactly two levels under the window, or that unwrap hits a
-        // non-Window grandparent and aborts.
-        let Some(vbox_w) = main_widget.parent() else {
-            log::error!("browser embed: main webview has no parent widget");
-            return;
-        };
-        let Some(win_w) = vbox_w.parent() else {
-            log::error!("browser embed: main webview parent has no window");
-            return;
-        };
-        let Ok(window) = win_w.downcast::<gtk::Window>() else {
-            log::error!("browser embed: main webview grandparent is not a gtk::Window");
-            return;
-        };
-        let Ok(vbox) = vbox_w.downcast::<gtk::Container>() else {
-            log::error!("browser embed: main webview parent is not a container");
-            return;
-        };
-
-        // Persistent, proxy-routed web context, SHARED by every tab. Cookies /
-        // localStorage / IndexedDB / cache live on disk under `profile_dir` so a
-        // logged-in session (YouTube/Google) survives an app restart. The proxy
-        // still refuses loopback/private destinations for ALL request types.
-        let cache_dir = profile_dir.join("cache");
-        let _ = std::fs::create_dir_all(&profile_dir);
-        let _ = std::fs::create_dir_all(&cache_dir);
-        let dm = WebsiteDataManager::builder()
-            .base_data_directory(profile_dir.to_string_lossy().into_owned())
-            .base_cache_directory(cache_dir.to_string_lossy().into_owned())
-            .build();
-        let proxy_uri = format!("http://127.0.0.1:{proxy_port}");
-        let mut proxy = NetworkProxySettings::new(Some(&proxy_uri), &[]);
-        dm.set_network_proxy_settings(NetworkProxyMode::Custom, Some(&mut proxy));
-        // Cookies are in-memory unless told to persist; point them at a SQLite
-        // file inside the profile (the cookie manager lives on the data manager
-        // in this crate — there is no NetworkSession in webkit2gtk 2.0.2).
-        if let Some(cm) = dm.cookie_manager() {
-            let cookies = profile_dir.join("cookies.sqlite");
-            cm.set_persistent_storage(&cookies.to_string_lossy(), CookiePersistentStorage::Sqlite);
-        }
-        let ctx = WebContext::with_website_data_manager(&dm);
-        ctx.connect_download_started(|_ctx, download| {
-            log::warn!(
-                "browser: download-started (cancelling) uri={:?}",
-                download.request().and_then(|r| r.uri()).map(|g| g.to_string())
-            );
-            download.cancel();
-        });
-
-        // Overlay the content over the main webview WITHOUT changing the
-        // webview's depth under the window: the Overlay becomes the window's
-        // DIRECT child with the main webview as its base child
-        // (`Window > Overlay > webview`). Tab content views are added later as
-        // overlay children, each positioned by `browser_set_bounds`.
-        vbox.remove(&main_widget);
-        window.remove(&vbox);
-        let overlay = gtk::Overlay::new();
-        overlay.add(&main_widget);
-
-        // Fullscreen "Press Esc" hint — a NATIVE label (a React toast can't
-        // paint over the native content views). Shared across tabs; raised above
-        // the content on enter-fullscreen.
-        let hint = gtk::Label::new(None);
-        hint.set_markup(
-            "<span background=\"#16161a\" foreground=\"#ffffff\">  \
-             Press Esc to exit fullscreen  </span>",
-        );
-        hint.set_halign(gtk::Align::Center);
-        hint.set_valign(gtk::Align::Start);
-        hint.set_margin_top(24);
-        overlay.add_overlay(&hint);
-
-        window.add(&overlay);
-        overlay.show_all();
-        hint.hide();
-
-        cell.replace(Some(BrowserState {
-            overlay,
-            ctx,
-            hint,
-            tabs: HashMap::new(),
-            active: None,
-        }));
-        log::info!("browser: overlay embedded (proxy 127.0.0.1:{proxy_port})");
-
-        // Shield content-filters — compile the vendored WebKit content-blocker
-        // JSON (network + cosmetic) into the store and attach the compiled
-        // filters when ready. Async + independent so one bad rule set can't kill
-        // the other; `reattach_content_filters` wires the ready set onto tabs.
-        let filters_dir = profile_dir.join("filters");
-        let _ = std::fs::create_dir_all(&filters_dir);
-        crate::blocker::ffi::compile(
-            &filters_dir,
-            "shield-cosmetic",
-            crate::blocker::content_filter_cosmetic_json(),
-            reattach_content_filters,
-        );
-        crate::blocker::ffi::compile(
-            &filters_dir,
-            "shield-net",
-            crate::blocker::content_filter_net_json(),
-            reattach_content_filters,
-        );
-    });
+/// A webview to run a profile-wide op (cookie list / clear) against. All tabs
+/// share one WebView2 profile (`data_directory`), so any live tab's controller
+/// sees the whole store; prefer the active tab, else any open one. None ⇒ no tab.
+fn pick_tab() -> Option<Webview> {
+    let active = ACTIVE.lock().ok().and_then(|a| a.clone());
+    let guard = TABS.lock().ok()?;
+    let map = guard.as_ref()?;
+    active
+        .as_ref()
+        .and_then(|id| map.get(id).cloned())
+        .or_else(|| map.values().next().cloned())
 }
 
-/// Re-attach the ready Shield content-filters to every open tab's UCM, gated
-/// per-tab by the global flag + per-site allow-list. Invoked on the GTK main
-/// thread when a filter finishes compiling (the `on_ready` hook passed to
-/// `blocker::ffi::compile`). `remove_all_filters` first keeps it idempotent as
-/// each of the two filters becomes ready.
-fn reattach_content_filters() {
-    STATE.with(|cell| {
-        if let Some(st) = cell.borrow().as_ref() {
-            for wv in st.tabs.values() {
-                let Some(ucm) = wv.user_content_manager() else {
-                    continue;
-                };
-                ucm.remove_all_filters();
-                let allowed = wv
-                    .uri()
-                    .and_then(|u| host_of_url(&u))
-                    .is_some_and(|h| crate::blocker::is_site_allowed(&h));
-                if crate::blocker::enabled() && !allowed {
-                    crate::blocker::ffi::add_ready_filters(&ucm);
-                }
-            }
-        }
-    });
-}
-
-/// (Re)build a tab's Shield layers to match `on`: clear the per-tab cosmetic
-/// stylesheet, content-filters, and scriptlets, then re-add them when `on`.
-/// Idempotent (always clears first), so it's safe on every navigation. `on`
-/// folds the global flag and the per-site allow-list; the proxy layer is global
-/// and untouched here.
-fn apply_tab_layers(ucm: &UserContentManager, on: bool) {
-    ucm.remove_all_style_sheets();
-    ucm.remove_all_filters();
-    ucm.remove_all_scripts();
-    if !on {
-        return;
-    }
-    let css = crate::blocker::cosmetic_css();
-    let sheet = UserStyleSheet::new(
-        &css,
-        UserContentInjectedFrames::AllFrames,
-        UserStyleLevel::User,
-        &[],
-        &[],
-    );
-    ucm.add_style_sheet(&sheet);
-    crate::blocker::scriptlets::attach(ucm);
-    crate::blocker::ffi::add_ready_filters(ucm);
-}
-
-// `host_of_url` now lives in the shared `browser_common` module (imported above).
-
-/// Create a content view for `id` (no-op if it already exists), hardened and
-/// wired, added to the overlay and started hidden. Must run on the GTK main
-/// thread with STATE already embedded.
-fn make_tab(app: &AppHandle, id: &str) {
-    STATE.with(|cell| {
-        let mut borrow = cell.borrow_mut();
-        let Some(st) = borrow.as_mut() else {
-            return;
-        };
-        if st.tabs.contains_key(id) {
-            return;
-        }
-
-        // Per-tab UserContentManager — carries the Shield (ad-blocker) layers
-        // (cosmetic stylesheet + WebKit content-filters + scriptlet bootstrap).
-        // A fresh tab has no host yet, so it's governed by the global flag;
-        // `apply_tab_layers` re-runs per-host on every navigation (see
-        // `wire_signals`), and `reattach_content_filters` re-adds filters when an
-        // async compile completes. Network blocking is handled out-of-band by
-        // `crate::proxy`, which checks the global flag per request.
-        let ucm = UserContentManager::new();
-        let content = WebView::builder()
-            .web_context(&st.ctx)
-            .user_content_manager(&ucm)
-            .build();
-        apply_tab_layers(&ucm, crate::blocker::enabled());
-        configure_webview(&content);
-        wire_signals(app, &content, id);
-
-        // Surface load failures that were previously SILENT (a failed load left
-        // the native view blank-white with no log line and no error page). Log
-        // the URI + error and emit a `failed` state to the chrome; return false
-        // so WebKit still renders its built-in error page instead of nothing.
-        // KEEP — durable diagnostics beyond this regression hunt.
-        let a = app.clone();
-        let tid = id.to_string();
-        content.connect_load_failed(move |_wv, ev, uri, err| {
-            log::warn!("browser: tab {tid} LOAD-FAILED {ev:?} uri={uri} err={err:?}");
-            let _ = a.emit(
-                "browser-tab-update",
-                serde_json::json!({ "tabId": tid, "loading": false, "failed": err.message().to_string() }),
-            );
-            false
-        });
-        let a = app.clone();
-        let tid = id.to_string();
-        content.connect_load_failed_with_tls_errors(move |_wv, uri, _cert, flags| {
-            log::warn!("browser: tab {tid} LOAD-FAILED-TLS uri={uri} flags={flags:?}");
-            let _ = a.emit(
-                "browser-tab-update",
-                serde_json::json!({ "tabId": tid, "loading": false, "failed": format!("TLS error: {flags:?}") }),
-            );
-            false
-        });
-
-        // FILL + zero margins clamp the view to EXACTLY the rect
-        // `browser_set_bounds` asks for (independent of the page's natural size).
-        content.set_halign(gtk::Align::Fill);
-        content.set_valign(gtk::Align::Fill);
-        content.set_margin_start(0);
-        content.set_margin_top(0);
-        content.set_margin_end(0);
-        content.set_margin_bottom(0);
-        content.set_size_request(0, 0);
-        st.overlay.add_overlay(&content);
-
-        // Per-tab fullscreen: drop margins so the video fills the window, raise
-        // the shared hint above the content, restore on leave. Only the active
-        // (visible) tab can trigger this.
-        let overlay = st.overlay.clone();
-        let hint_enter = st.hint.clone();
-        let saved = Rc::new(RefCell::new(None::<(i32, i32, i32, i32)>));
-        let sm_enter = saved.clone();
-        content.connect_enter_fullscreen(move |wv| {
-            log::info!("browser: enter-fullscreen");
-            FULLSCREEN.with(|f| f.set(true));
-            *sm_enter.borrow_mut() = Some((
-                wv.margin_start(),
-                wv.margin_top(),
-                wv.margin_end(),
-                wv.margin_bottom(),
-            ));
-            wv.set_margin_start(0);
-            wv.set_margin_top(0);
-            wv.set_margin_end(0);
-            wv.set_margin_bottom(0);
-            overlay.reorder_overlay(&hint_enter, -1);
-            hint_enter.show();
-            let h = hint_enter.clone();
-            gtk::glib::timeout_add_seconds_local(3, move || {
-                h.hide();
-                gtk::glib::ControlFlow::Break
-            });
-            false
-        });
-        let hint_leave = st.hint.clone();
-        let sm_leave = saved.clone();
-        content.connect_leave_fullscreen(move |wv| {
-            log::info!("browser: leave-fullscreen");
-            FULLSCREEN.with(|f| f.set(false));
-            if let Some((s, t, e, b)) = sm_leave.borrow_mut().take() {
-                wv.set_margin_start(s);
-                wv.set_margin_top(t);
-                wv.set_margin_end(e);
-                wv.set_margin_bottom(b);
-            }
-            hint_leave.hide();
-            false
-        });
-
-        // Renderer recovery: a killed/crashed web process leaves the view blank
-        // with no built-in recovery. Reload ONCE to respawn it; if it dies again
-        // within a few seconds it's a deterministic crash, so stop and surface a
-        // `crashed` state to the chrome instead of thrashing in a kill/reload
-        // loop. The termination reason is logged so a recurrence pinpoints why.
-        let a = app.clone();
-        let tid = id.to_string();
-        let last_recover: Rc<std::cell::Cell<Option<std::time::Instant>>> =
-            Rc::new(std::cell::Cell::new(None));
-        content.connect_web_process_terminated(move |wv, reason| {
-            log::warn!("browser: tab {tid} renderer terminated ({reason:?})");
-            let now = std::time::Instant::now();
-            let looping = last_recover
-                .get()
-                .map_or(false, |t| now.duration_since(t).as_secs() < 8);
-            if looping {
-                let _ = a.emit(
-                    "browser-tab-update",
-                    serde_json::json!({
-                        "tabId": tid,
-                        "loading": false,
-                        "crashed": format!("{reason:?}"),
-                    }),
-                );
-                return;
-            }
-            last_recover.set(Some(now));
-            let _ = a.emit(
-                "browser-tab-update",
-                serde_json::json!({ "tabId": tid, "loading": true, "crashed": null }),
-            );
-            wv.reload();
-        });
-
-        content.hide();
-        st.tabs.insert(id.to_string(), content);
-    });
-}
-
-/// Run `f` against the content view for `id` on the GTK main thread (no-op if
-/// it doesn't exist).
-fn with_tab<F>(app: &AppHandle, id: String, f: F) -> Result<(), String>
-where
-    F: Fn(&WebView) + Send + 'static,
-{
-    app.run_on_main_thread(move || {
-        STATE.with(|c| match c.borrow().as_ref() {
-            Some(st) => match st.tabs.get(&id) {
-                Some(wv) => f(wv),
-                None => log::warn!("browser: with_tab no-op — tab {id} not in STATE.tabs"),
-            },
-            None => log::warn!("browser: with_tab no-op — STATE not initialized"),
-        });
-    })
-    .map_err(|e| e.to_string())
-}
-
-/// Run `f` against the ACTIVE content view on the GTK main thread (no-op if
-/// none active).
-fn with_active<F>(app: &AppHandle, f: F) -> Result<(), String>
-where
-    F: Fn(&WebView) + Send + 'static,
-{
-    app.run_on_main_thread(move || {
-        STATE.with(|c| {
-            if let Some(st) = c.borrow().as_ref() {
-                if let Some(active) = st.active.as_ref() {
-                    if let Some(wv) = st.tabs.get(active) {
-                        f(wv);
-                    }
-                }
-            }
-        });
-    })
-    .map_err(|e| e.to_string())
-}
+// ── commands (signatures mirror commands/browser.rs) ─────────────────────────
 
 #[tauri::command]
-pub fn browser_new_tab(app: AppHandle, id: String, url: Option<String>) -> Result<(), String> {
+pub async fn browser_new_tab(app: AppHandle, id: String, url: Option<String>) -> Result<(), String> {
     let Some(port) = crate::proxy::port() else {
         return Err("browser proxy not ready".into());
     };
-    let window = app.get_webview_window("main").ok_or("no main window")?;
+    // Idempotent: re-seeding a tab that already has a view is a no-op.
+    if TABS
+        .lock()
+        .ok()
+        .and_then(|t| t.as_ref().map(|m| m.contains_key(&id)))
+        .unwrap_or(false)
+    {
+        return Ok(());
+    }
+
+    // WebView2 `add_child` (controller creation) is ASYNC and is pumped by the UI
+    // thread's message loop. Calling it directly on a command worker thread blocks
+    // forever — the creation callback is never pumped, deadlocking the thread and
+    // (because commands serialize) starving all other IPC. Dispatch the whole
+    // build+wire onto the main thread and await it via a oneshot: the Windows
+    // analogue of the Linux `with_webview`/`run_on_main_thread` discipline.
+    let (tx, rx) = tokio::sync::oneshot::channel::<Result<(), String>>();
+    let app = app.clone();
+    let id_log = id.clone(); // for the failure log below (id moves into the closure)
+    app.clone()
+        .run_on_main_thread(move || {
+            let _ = tx.send((|| -> Result<(), String> {
+    // Must be get_window, NOT get_webview_window: once the first tab's add_child
+    // gives "main" a second (child) webview, is_webview_window() is false and
+    // get_webview_window("main") returns None — the "no main window" bug that broke
+    // every tab after the first. get_window resolves the container regardless.
+    let main = app.get_window("main").ok_or("no main window")?;
     let profile_dir = app
         .path()
         .app_data_dir()
         .map_err(|e| format!("app_data_dir: {e}"))?
         .join("browser-profile");
-    let app2 = app.clone();
-    let id2 = id.clone();
-    window
-        .with_webview(move |pw| {
-            embed(&pw, port, profile_dir.clone());
-            make_tab(&app2, &id2);
+    let _ = std::fs::create_dir_all(&profile_dir);
+
+    let proxy = Url::parse(&format!("http://127.0.0.1:{port}")).map_err(|e| e.to_string())?;
+    // Initial URL: the given https URL if allowed, else about:blank (the chrome
+    // builds a view with url:null, then drives the real load via browser_navigate).
+    let start = url.as_deref().filter(|u| nav_allowed(u)).unwrap_or("about:blank");
+    let start_url = Url::parse(start).map_err(|e| e.to_string())?;
+    let label = format!("browser-content-{id}");
+
+    let (app_nav, id_nav) = (app.clone(), id.clone());
+    let (app_load, id_load) = (app.clone(), id.clone());
+    let (app_title, id_title) = (app.clone(), id.clone());
+
+    let builder = WebviewBuilder::new(label, WebviewUrl::External(start_url))
+        .proxy_url(proxy)
+        .data_directory(profile_dir)
+        // All-frames so cosmetics + scriptlets reach ad iframes (parity with the
+        // Linux UserScript AllFrames injection).
+        .initialization_script_for_all_frames(shield_init_script())
+        .on_navigation(move |u| {
+            let allowed = nav_allowed(u.as_str());
+            if allowed {
+                // Address bar + loading. Faithful canBack/canForward ride the
+                // Phase-2 HistoryChanged handler, not this emit.
+                let _ = app_nav.emit(
+                    "browser-tab-update",
+                    serde_json::json!({
+                        "tabId": id_nav, "url": u.as_str(),
+                        "loading": true, "committed": true,
+                    }),
+                );
+            } else {
+                log::info!("browser(win): blocked navigation to {u}");
+            }
+            allowed
+        })
+        .on_new_window(|_url, _features| NewWindowResponse::Deny)
+        .on_download(|_wv, _ev| false)
+        .on_document_title_changed(move |_wv, title| {
+            let _ = app_title.emit(
+                "browser-tab-update",
+                serde_json::json!({ "tabId": id_title, "title": title }),
+            );
+        })
+        .on_page_load(move |wv, payload| match payload.event() {
+            PageLoadEvent::Started => {
+                // Honor the live Shield toggle + per-site allow-list: strip the
+                // cosmetic sheet when off (the init-script always injects it).
+                let on = crate::blocker::enabled()
+                    && host_of_url(payload.url().as_str())
+                        .map_or(true, |h| !crate::blocker::is_site_allowed(&h));
+                if !on {
+                    let _ = wv.eval(STRIP_SHIELD_JS);
+                }
+            }
+            PageLoadEvent::Finished => {
+                let _ = app_load.emit(
+                    "browser-tab-update",
+                    serde_json::json!({
+                        "tabId": id_load, "loading": false,
+                    }),
+                );
+            }
+        });
+
+    let child = main
+        .add_child(builder, LogicalPosition::new(0.0, 0.0), LogicalSize::new(800.0, 600.0))
+        .map_err(|e| format!("add_child: {e}"))?;
+    // Start hidden; the chrome reveals + positions via set_visible/set_bounds.
+    let _ = child.hide();
+
+    // ── Phase 2: reach through to the child's ICoreWebView2 to wire the native
+    // gaps Tauri's typed surface doesn't expose. Runs on the UI thread; COM is
+    // already STA-initialized there, so no CoInitializeEx. Best-effort: a missing
+    // interface just leaves that gap at its Phase-1 fallback.
+    let (app_hist, id_hist) = (app.clone(), id.clone());
+    let (app_fav, id_fav) = (app.clone(), id.clone());
+    let (app_crash, id_crash) = (app.clone(), id.clone());
+    let _ = child.with_webview(move |pw| unsafe {
+        let Ok(core) = pw.controller().CoreWebView2() else {
+            log::warn!("browser(win): no CoreWebView2 on child; Phase-2 handlers skipped");
+            return;
+        };
+
+        // Permissions: silently deny every request (parity with Linux req.deny()).
+        let _ = core.add_PermissionRequested(
+            &PermissionRequestedEventHandler::create(Box::new(|_sender, args| {
+                if let Some(args) = args {
+                    args.SetState(COREWEBVIEW2_PERMISSION_STATE_DENY)?;
+                }
+                Ok(())
+            })),
+            &mut 0i64,
+        );
+
+        // Faithful canBack/canForward: re-query on every history change.
+        let _ = core.add_HistoryChanged(
+            &HistoryChangedEventHandler::create(Box::new(move |sender, _| {
+                if let Some(s) = sender {
+                    let (mut b, mut f) = (BOOL::default(), BOOL::default());
+                    let _ = s.CanGoBack(&mut b);
+                    let _ = s.CanGoForward(&mut f);
+                    let _ = app_hist.emit(
+                        "browser-tab-update",
+                        serde_json::json!({
+                            "tabId": id_hist,
+                            "canBack": b.as_bool(),
+                            "canForward": f.as_bool(),
+                        }),
+                    );
+                }
+                Ok(())
+            })),
+            &mut 0i64,
+        );
+
+        // Favicons: on change, fetch the PNG bytes → base64 data URL → emit.
+        if let Ok(core15) = core.cast::<ICoreWebView2_15>() {
+            let core_fav = core15.clone();
+            let _ = core15.add_FaviconChanged(
+                &FaviconChangedEventHandler::create(Box::new(move |_sender, _| {
+                    let (app_f, id_f) = (app_fav.clone(), id_fav.clone());
+                    let _ = core_fav.GetFavicon(
+                        COREWEBVIEW2_FAVICON_IMAGE_FORMAT_PNG,
+                        &GetFaviconCompletedHandler::create(Box::new(move |hr, stream| {
+                            hr?;
+                            if let Some(stream) = stream {
+                                let mut data = Vec::new();
+                                let mut buf = [0u8; 8192];
+                                loop {
+                                    let mut read = 0u32;
+                                    let eof = stream
+                                        .Read(
+                                            buf.as_mut_ptr() as *mut _,
+                                            buf.len() as u32,
+                                            Some(&mut read),
+                                        )
+                                        .is_err()
+                                        || read == 0;
+                                    if eof {
+                                        break;
+                                    }
+                                    data.extend_from_slice(&buf[..read as usize]);
+                                }
+                                if !data.is_empty() {
+                                    let b64 =
+                                        base64::engine::general_purpose::STANDARD.encode(&data);
+                                    let _ = app_f.emit(
+                                        "browser-tab-update",
+                                        serde_json::json!({
+                                            "tabId": id_f,
+                                            "favicon": format!("data:image/png;base64,{b64}"),
+                                        }),
+                                    );
+                                }
+                            }
+                            Ok(())
+                        })),
+                    );
+                    Ok(())
+                })),
+                &mut 0i64,
+            );
+        }
+
+        // Crash recovery: reload once; a repeat within 8s surfaces the crash card.
+        let mut last_recover: Option<std::time::Instant> = None;
+        let _ = core.add_ProcessFailed(
+            &ProcessFailedEventHandler::create(Box::new(move |sender, _args| {
+                let now = std::time::Instant::now();
+                let looping = last_recover.is_some_and(|t| now.duration_since(t).as_secs() < 8);
+                if looping {
+                    let _ = app_crash.emit(
+                        "browser-tab-update",
+                        serde_json::json!({
+                            "tabId": id_crash, "loading": false, "crashed": "Crashed",
+                        }),
+                    );
+                } else {
+                    last_recover = Some(now);
+                    let _ = app_crash.emit(
+                        "browser-tab-update",
+                        serde_json::json!({
+                            "tabId": id_crash, "loading": true,
+                            "crashed": serde_json::Value::Null,
+                        }),
+                    );
+                    if let Some(s) = sender {
+                        let _ = s.Reload();
+                    }
+                }
+                Ok(())
+            })),
+            &mut 0i64,
+        );
+    });
+
+    let mut guard = TABS.lock().map_err(|_| "tabs lock poisoned")?;
+    guard.get_or_insert_with(HashMap::new).insert(id, child);
+    Ok(())
+            })());
         })
         .map_err(|e| e.to_string())?;
-    // Load the (restore) URL only AFTER `with_webview` returns. Calling
-    // `load_uri` inside the closure runs it while wry holds the webview-
-    // dispatcher mutex; `load_uri` fires the `uri` notify synchronously, and
-    // that handler (`wire_signals`) calls `app.emit(...)` → `eval_script`, which
-    // re-locks the SAME mutex on this thread — a self-deadlock that freezes the
-    // whole UI. `with_tab` runs the load as its own main-thread task (the path
-    // `browser_navigate` already uses safely), so the dispatcher lock isn't held.
-    if let Some(u) = url {
-        if nav_allowed(&u) {
-            with_tab(&app, id, move |wv| wv.load_uri(&u))?;
+    // Loud failures: a browser_new_tab error reaches the dev log, never only the UI
+    // crash card. A silent error here hid the "no main window" bug for two chats.
+    let outcome = rx.await.unwrap_or_else(|_| Err("new_tab task dropped".to_string()));
+    if let Err(e) = &outcome {
+        log::error!("browser(win): browser_new_tab failed for tab {id_log}: {e}");
+    }
+    outcome
+}
+
+#[tauri::command]
+pub fn browser_switch_tab(id: String) -> Result<(), String> {
+    // Hide the previously-active view; the chrome shows the new one via
+    // set_visible. Set active even if there's no native view (a New-Tab Page),
+    // so with_active cleanly no-ops on it.
+    let prev = ACTIVE.lock().map_err(|_| "active lock")?.clone();
+    if let Some(p) = prev {
+        if p != id {
+            with_tab(&p, |wv| {
+                let _ = wv.hide();
+            });
         }
     }
+    *ACTIVE.lock().map_err(|_| "active lock")? = Some(id);
     Ok(())
 }
 
 #[tauri::command]
-pub fn browser_switch_tab(app: AppHandle, id: String) -> Result<(), String> {
-    app.run_on_main_thread(move || {
-        STATE.with(|c| {
-            if let Some(st) = c.borrow_mut().as_mut() {
-                // Hide + mute the previously-active tab so a backgrounded video
-                // can't keep playing audio. The page keeps running.
-                if let Some(prev) = st.active.clone() {
-                    if prev != id {
-                        if let Some(wv) = st.tabs.get(&prev) {
-                            wv.set_is_muted(true);
-                            wv.hide();
-                        }
-                    }
-                }
-                if st.tabs.contains_key(&id) {
-                    st.active = Some(id);
-                }
-            }
-        });
-    })
-    .map_err(|e| e.to_string())
+pub fn browser_close_tab(id: String) -> Result<(), String> {
+    if let Some(wv) = TABS
+        .lock()
+        .map_err(|_| "tabs lock")?
+        .as_mut()
+        .and_then(|m| m.remove(&id))
+    {
+        let _ = wv.close();
+    }
+    let mut a = ACTIVE.lock().map_err(|_| "active lock")?;
+    if a.as_deref() == Some(id.as_str()) {
+        *a = None;
+    }
+    // Closing the overlay-attached tab destroys its webview — clear the slot
+    // SILENTLY (no detached emit): the overlay chrome attaches the neighbor tab
+    // right after, and a transient detached would flicker main-window
+    // suppression. The close-then-close-panel path is covered by
+    // `overlay_detach_impl`, which always emits.
+    let mut ov = OVERLAY_ATTACHED.lock().map_err(|_| "overlay lock")?;
+    if ov.as_deref() == Some(id.as_str()) {
+        *ov = None;
+    }
+    Ok(())
 }
 
-/// Clear browsing data: delete all cookies (signs you out everywhere — auth is
-/// cookie-based) and clear the on-disk cache. Site localStorage/IndexedDB are
-/// NOT wiped (no `clear`/`remove` in webkit2gtk 2.0.2). Runs on the GTK main
-/// thread against the shared context.
+// ── in-game overlay browser panel (reparent the LIVE tab webview) ────────────
+// The overlay panel shows the *same* WebView2 instance the main window uses:
+// attach = `Webview::reparent` (SetParent under the hood) into `overlay-host`,
+// detach = reparent back to `main`. Playback/session state ride along untouched.
+// THREADING: `reparent` BLOCKS on the event loop (send_user_message + rx.recv),
+// and sync commands run ON the main thread — so attach/detach MUST be `async fn`
+// (worker-thread execution), and must never run inside `run_on_main_thread`.
+// The inverse of the `add_child` discipline above.
+
+/// Clone the webview handle for `id` out of the registry (lock not held across
+/// the subsequent blocking dispatch).
+fn tab_webview(id: &str) -> Option<Webview> {
+    TABS.lock()
+        .ok()
+        .and_then(|t| t.as_ref().and_then(|m| m.get(id).cloned()))
+}
+
+/// Hide `id`'s webview, then reparent it under `window_label`. Hide FIRST so the
+/// view never paints at stale coords in the new window (both are event-loop
+/// messages, processed in order; the chrome re-bounds + re-shows afterwards).
+/// A missing webview (e.g. a New-Tab Page tab) warns and is Ok — "attached"
+/// means the overlay owns the active browser surface, webview or not.
+fn reparent_tab(app: &AppHandle, id: &str, window_label: &str) -> Result<(), String> {
+    let Some(wv) = tab_webview(id) else {
+        log::warn!("browser(win): reparent of missing tab {id} (New-Tab Page?) — skipped");
+        return Ok(());
+    };
+    // get_window, not get_webview_window: the target ("main" or "overlay-host") holds
+    // child webviews once tabs attach, so is_webview_window() is false and
+    // get_webview_window returns None. get_window resolves the container either way.
+    let win = app
+        .get_window(window_label)
+        .ok_or_else(|| format!("no {window_label} window"))?;
+    let _ = wv.hide();
+    wv.reparent(&win)
+        .map_err(|e| format!("reparent to {window_label}: {e}"))
+}
+
+/// Move tab `id`'s live webview into the overlay-host window. Idempotent for
+/// the already-attached id (the DEV host webview reloads on every Shift+C).
+/// Any previously-attached tab is sent home first. The guard is held across the
+/// whole body on purpose — attach/detach serialize process-wide.
 #[tauri::command]
-pub fn browser_clear_data(app: AppHandle) -> Result<(), String> {
-    app.run_on_main_thread(|| {
-        STATE.with(|c| {
-            if let Some(st) = c.borrow().as_ref() {
-                // `delete_all_cookies` is deprecated upstream (2.16+) in favor of
-                // `WebsiteDataManager::clear`, which webkit2gtk 2.0.2 does not
-                // bind; this is the only cookie-clear API exposed here.
-                #[allow(deprecated)]
-                if let Some(cm) = st.ctx.website_data_manager().and_then(|dm| dm.cookie_manager()) {
-                    cm.delete_all_cookies();
-                }
-                st.ctx.clear_cache();
-            }
-        });
-    })
-    .map_err(|e| e.to_string())
+pub async fn browser_overlay_attach(app: AppHandle, id: String) -> Result<(), String> {
+    let mut attached = OVERLAY_ATTACHED.lock().map_err(|_| "overlay lock")?;
+    if attached.as_deref() == Some(id.as_str()) {
+        return Ok(());
+    }
+    if let Some(prev) = attached.take() {
+        let _ = reparent_tab(&app, &prev, "main");
+    }
+    reparent_tab(&app, &id, "overlay-host")?;
+    *attached = Some(id.clone());
+    let _ = app.emit("overlay-browser-attached", serde_json::json!({ "tabId": id }));
+    Ok(())
 }
 
-/// Clear ONLY the on-disk HTTP cache (keeps cookies / login). GTK main thread.
+/// Send the overlay-attached tab (if any) back to `main`, hidden; the main
+/// chrome re-asserts bounds/visibility on the `overlay-browser-detached` event.
 #[tauri::command]
-pub fn browser_clear_cache(app: AppHandle) -> Result<(), String> {
-    app.run_on_main_thread(|| {
-        STATE.with(|c| {
-            if let Some(st) = c.borrow().as_ref() {
-                st.ctx.clear_cache();
-            }
-        });
-    })
-    .map_err(|e| e.to_string())
+pub async fn browser_overlay_detach(app: AppHandle) -> Result<(), String> {
+    overlay_detach_impl(&app)
 }
 
-/// Clear ONLY cookies — signs you out everywhere (keeps the cache). GTK main
-/// thread. `delete_all_cookies` is deprecated upstream but the only cookie-clear
-/// API bound in webkit2gtk 2.0.2 (same as `browser_clear_data`).
+/// Detach body, callable from `lib.rs` (the `hide_overlay_host` safety hook, so
+/// a dead host webview can never strand a tab in the hidden window). ALWAYS
+/// emits `overlay-browser-detached` — `browser_close_tab` clears the slot
+/// silently, so the unconditional emit is what un-wedges main-window
+/// suppression in the close-tab-then-close-panel sequence.
+pub fn overlay_detach_impl(app: &AppHandle) -> Result<(), String> {
+    let mut attached = OVERLAY_ATTACHED.lock().map_err(|_| "overlay lock")?;
+    if let Some(prev) = attached.take() {
+        let _ = reparent_tab(app, &prev, "main");
+    }
+    let _ = app.emit("overlay-browser-detached", serde_json::json!({}));
+    Ok(())
+}
+
+/// The currently overlay-attached tab id (pull-on-mount for both chromes —
+/// event-only state dies on a webview reload, mirroring `overlay_get_live_target`).
 #[tauri::command]
-pub fn browser_clear_cookies(app: AppHandle) -> Result<(), String> {
-    app.run_on_main_thread(|| {
-        STATE.with(|c| {
-            if let Some(st) = c.borrow().as_ref() {
-                #[allow(deprecated)]
-                if let Some(cm) = st.ctx.website_data_manager().and_then(|dm| dm.cookie_manager()) {
-                    cm.delete_all_cookies();
+pub fn browser_overlay_attached() -> Result<Option<String>, String> {
+    Ok(OVERLAY_ATTACHED.lock().map_err(|_| "overlay lock")?.clone())
+}
+
+#[tauri::command]
+pub fn browser_navigate(id: String, url: String) -> Result<(), String> {
+    if !nav_allowed(&url) {
+        return Err("blocked: only https:// public URLs are allowed".into());
+    }
+    let u = Url::parse(&url).map_err(|e| e.to_string())?;
+    with_tab(&id, move |wv| {
+        let _ = wv.navigate(u);
+    });
+    Ok(())
+}
+
+// Back/forward use the content view's native session history via the Phase-2
+// ICoreWebView2 reach-through (CanGoBack/CanGoForward-guarded GoBack/GoForward) —
+// fixes the cross-origin `history.back()` no-op. Reload is native; stop stays
+// eval (no native verb). Faithful enabled-state rides the HistoryChanged handler.
+#[tauri::command]
+pub fn browser_back(id: String) -> Result<(), String> {
+    with_tab(&id, |wv| {
+        let _ = wv.with_webview(|pw| unsafe {
+            if let Ok(core) = pw.controller().CoreWebView2() {
+                let mut b = BOOL::default();
+                if core.CanGoBack(&mut b).is_ok() && b.as_bool() {
+                    let _ = core.GoBack();
                 }
             }
         });
-    })
-    .map_err(|e| e.to_string())
+    });
+    Ok(())
 }
 
-/// Total size (bytes) of the on-disk HTTP cache (`browser-profile/cache/`).
-/// Pure filesystem walk offloaded to a blocking thread — the cache can hold tens
-/// of thousands of files; does NOT touch GTK.
+#[tauri::command]
+pub fn browser_forward(id: String) -> Result<(), String> {
+    with_tab(&id, |wv| {
+        let _ = wv.with_webview(|pw| unsafe {
+            if let Ok(core) = pw.controller().CoreWebView2() {
+                let mut f = BOOL::default();
+                if core.CanGoForward(&mut f).is_ok() && f.as_bool() {
+                    let _ = core.GoForward();
+                }
+            }
+        });
+    });
+    Ok(())
+}
+
+#[tauri::command]
+pub fn browser_reload(id: String) -> Result<(), String> {
+    with_tab(&id, |wv| {
+        let _ = wv.reload();
+    });
+    Ok(())
+}
+
+#[tauri::command]
+pub fn browser_stop(id: String) -> Result<(), String> {
+    with_tab(&id, |wv| {
+        let _ = wv.eval("window.stop()");
+    });
+    Ok(())
+}
+
+#[tauri::command]
+pub fn browser_set_bounds(x: i32, y: i32, width: i32, height: i32) -> Result<(), String> {
+    with_active(move |wv| {
+        let _ = wv.set_bounds(Rect {
+            position: LogicalPosition::new(x.max(0) as f64, y.max(0) as f64).into(),
+            size: LogicalSize::new(width.max(0) as f64, height.max(0) as f64).into(),
+        });
+    });
+    Ok(())
+}
+
+#[tauri::command]
+pub fn browser_set_visible(visible: bool) -> Result<(), String> {
+    with_active(move |wv| {
+        let _ = if visible { wv.show() } else { wv.hide() };
+    });
+    Ok(())
+}
+
+// Profile clear via the Phase-2 reach-through (ICoreWebView2Profile2). The
+// profile is shared across tabs, so any live tab clears the whole store;
+// fire-and-forget (the no-op completion handler just closes the async op).
+// `None` ⇒ clear everything; `Some(kinds)` ⇒ a specific subset.
+fn clear_browsing(kinds: Option<COREWEBVIEW2_BROWSING_DATA_KINDS>) -> Result<(), String> {
+    let Some(wv) = pick_tab() else {
+        log::warn!("browser(win): clear needs an open browser tab (shared WebView2 profile)");
+        return Ok(());
+    };
+    let _ = wv.with_webview(move |pw| unsafe {
+        let Ok(core) = pw.controller().CoreWebView2() else { return };
+        let Ok(p13) = core.cast::<ICoreWebView2_13>() else { return };
+        let Ok(profile) = p13.Profile() else { return };
+        let Ok(profile2) = profile.cast::<ICoreWebView2Profile2>() else { return };
+        let done = ClearBrowsingDataCompletedHandler::create(Box::new(move |_| Ok(())));
+        let _ = match kinds {
+            Some(k) => profile2.ClearBrowsingData(k, &done),
+            None => profile2.ClearBrowsingDataAll(&done),
+        };
+    });
+    Ok(())
+}
+
+#[tauri::command]
+pub fn browser_clear_data() -> Result<(), String> {
+    clear_browsing(None)
+}
+
+#[tauri::command]
+pub fn browser_clear_cache() -> Result<(), String> {
+    clear_browsing(Some(
+        COREWEBVIEW2_BROWSING_DATA_KINDS_DISK_CACHE | COREWEBVIEW2_BROWSING_DATA_KINDS_CACHE_STORAGE,
+    ))
+}
+
+#[tauri::command]
+pub fn browser_clear_cookies() -> Result<(), String> {
+    clear_browsing(Some(COREWEBVIEW2_BROWSING_DATA_KINDS_COOKIES))
+}
+
+/// On-disk size (bytes) of the WebView2 profile (`browser-profile/`, incl. its
+/// `EBWebView/` cache). Honest readout; pure filesystem walk off-thread.
 #[tauri::command]
 pub async fn browser_cache_size(app: AppHandle) -> Result<u64, String> {
     let dir = app
         .path()
         .app_data_dir()
         .map_err(|e| format!("app_data_dir: {e}"))?
-        .join("browser-profile")
-        .join("cache");
+        .join("browser-profile");
     tauri::async_runtime::spawn_blocking(move || {
         let mut total: u64 = 0;
         for entry in walkdir::WalkDir::new(&dir).into_iter().flatten() {
@@ -721,187 +645,70 @@ pub async fn browser_cache_size(app: AppHandle) -> Result<u64, String> {
     .map_err(|e| e.to_string())
 }
 
-/// Distinct cookie sites + total cookie count. Used by the Settings "Browsing
-/// data" readout so you can see where you're logged in.
-#[derive(serde::Serialize)]
+#[derive(Serialize)]
 pub struct CookieSites {
     sites: Vec<String>,
     count: usize,
 }
 
-/// Read the cookie sites read-only from the WebKit/libsoup cookie SQLite jar.
-/// The persistent-cookie schema has shifted across WebKitGTK versions, so probe
-/// a few known (table, host-column) shapes; degrade to `Err` (UI shows
-/// "unavailable") if none match. NEVER opened read-write — WebKit holds the live
-/// handle, so a writer collision could corrupt the WAL.
+/// Enumerate the WebView2 cookie store: distinct hosts + total count, for the
+/// Settings "Browsing data" panel. Bridges the async COM completion to this async
+/// command via a oneshot; needs ≥1 open tab (shared profile). Zero tabs ⇒ empty.
 #[tauri::command]
-pub async fn browser_cookie_sites(app: AppHandle) -> Result<CookieSites, String> {
-    let db = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("app_data_dir: {e}"))?
-        .join("browser-profile")
-        .join("cookies.sqlite");
-    tauri::async_runtime::spawn_blocking(move || read_cookie_sites(&db))
-        .await
-        .map_err(|e| e.to_string())?
-}
-
-fn read_cookie_sites(db: &std::path::Path) -> Result<CookieSites, String> {
-    use rusqlite::{Connection, OpenFlags};
-    if !db.exists() {
-        return Ok(CookieSites { sites: vec![], count: 0 });
-    }
-    let conn = Connection::open_with_flags(db, OpenFlags::SQLITE_OPEN_READ_ONLY)
-        .map_err(|e| e.to_string())?;
-    let _ = conn.busy_timeout(std::time::Duration::from_millis(500));
-    // (table, host-column) candidates across WebKitGTK / libsoup versions.
-    for (table, col) in [("moz_cookies", "host"), ("cookies", "domain"), ("Cookie", "domain")] {
-        let Ok(mut stmt) = conn.prepare(&format!("SELECT \"{col}\" FROM \"{table}\"")) else {
-            continue;
-        };
-        let Ok(rows) = stmt.query_map([], |r| r.get::<_, String>(0)) else {
-            continue;
-        };
-        let mut count = 0usize;
-        let mut set = std::collections::BTreeSet::new();
-        for host in rows.flatten() {
-            count += 1;
-            let h = host.trim_start_matches('.').to_ascii_lowercase();
-            if !h.is_empty() {
-                set.insert(h);
+pub async fn browser_cookie_sites() -> Result<CookieSites, String> {
+    let Some(wv) = pick_tab() else {
+        return Ok(CookieSites { sites: Vec::new(), count: 0 });
+    };
+    let (tx, rx) = tokio::sync::oneshot::channel::<Result<CookieSites, String>>();
+    // Hold the sender in a shared slot so a synchronous setup failure (no _2
+    // interface, GetCookies refused) still answers `rx` instead of hanging it.
+    wv.with_webview(move |pw| {
+        let slot = std::rc::Rc::new(std::cell::RefCell::new(Some(tx)));
+        let slot2 = slot.clone();
+        let done = GetCookiesCompletedHandler::create(Box::new(move |hr, list| {
+            let result = (|| -> Result<CookieSites, String> {
+                hr.map_err(|e| e.to_string())?;
+                let mut sites = BTreeSet::new();
+                let mut count = 0usize;
+                if let Some(list) = list {
+                    let mut n = 0u32;
+                    unsafe { list.Count(&mut n) }.map_err(|e| e.to_string())?;
+                    count = n as usize;
+                    for i in 0..n {
+                        let Ok(cookie) = (unsafe { list.GetValueAtIndex(i) }) else {
+                            continue;
+                        };
+                        let mut dom = PWSTR::null();
+                        if unsafe { cookie.Domain(&mut dom) }.is_ok() {
+                            let d = take_pwstr(dom).trim_start_matches('.').to_ascii_lowercase();
+                            if !d.is_empty() {
+                                sites.insert(d);
+                            }
+                        }
+                    }
+                }
+                Ok(CookieSites { sites: sites.into_iter().collect(), count })
+            })();
+            if let Some(tx) = slot2.borrow_mut().take() {
+                let _ = tx.send(result);
+            }
+            Ok(())
+        }));
+        let setup = (|| -> windows::core::Result<()> {
+            unsafe {
+                let core = pw.controller().CoreWebView2()?;
+                core.cast::<ICoreWebView2_2>()?
+                    .CookieManager()?
+                    .GetCookies(PCWSTR::null(), &done)?;
+            }
+            Ok(())
+        })();
+        if let Err(e) = setup {
+            if let Some(tx) = slot.borrow_mut().take() {
+                let _ = tx.send(Err(e.to_string()));
             }
         }
-        return Ok(CookieSites { sites: set.into_iter().collect(), count });
-    }
-    Err("unrecognized cookie store schema".into())
-}
-
-#[tauri::command]
-pub fn browser_close_tab(app: AppHandle, id: String) -> Result<(), String> {
-    app.run_on_main_thread(move || {
-        STATE.with(|c| {
-            if let Some(st) = c.borrow_mut().as_mut() {
-                if let Some(wv) = st.tabs.remove(&id) {
-                    // Detach from the overlay and drop → the webview (and its
-                    // media) is destroyed, freeing memory.
-                    st.overlay.remove(&wv);
-                }
-                if st.active.as_deref() == Some(id.as_str()) {
-                    st.active = None;
-                }
-            }
-        });
     })
-    .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-pub fn browser_navigate(app: AppHandle, id: String, url: String) -> Result<(), String> {
-    if !nav_allowed(&url) {
-        return Err("blocked: only https:// public URLs are allowed".into());
-    }
-    with_tab(&app, id, move |wv| wv.load_uri(&url))
-}
-
-#[tauri::command]
-pub fn browser_back(app: AppHandle, id: String) -> Result<(), String> {
-    with_tab(&app, id, |wv| {
-        if wv.can_go_back() {
-            wv.go_back();
-        }
-    })
-}
-
-#[tauri::command]
-pub fn browser_forward(app: AppHandle, id: String) -> Result<(), String> {
-    with_tab(&app, id, |wv| {
-        if wv.can_go_forward() {
-            wv.go_forward();
-        }
-    })
-}
-
-#[tauri::command]
-pub fn browser_reload(app: AppHandle, id: String) -> Result<(), String> {
-    with_tab(&app, id, |wv| wv.reload())
-}
-
-#[tauri::command]
-pub fn browser_stop(app: AppHandle, id: String) -> Result<(), String> {
-    with_tab(&app, id, |wv| wv.stop_loading())
-}
-
-#[tauri::command]
-pub fn browser_set_bounds(
-    app: AppHandle,
-    x: i32,
-    y: i32,
-    width: i32,
-    height: i32,
-) -> Result<(), String> {
-    with_active(&app, move |wv| {
-        // While fullscreen, the margins are pinned to 0 by the enter-fullscreen
-        // handler; the frontend's resize-driven re-sync must NOT re-clamp them.
-        if FULLSCREEN.with(|f| f.get()) {
-            return;
-        }
-        // The content view fills its overlay minus four margins, so derive
-        // end/bottom from the overlay's own allocation — the rect is then exact
-        // regardless of the loaded page's natural size.
-        let (aw, ah) = wv
-            .parent()
-            .map(|p| (p.allocated_width(), p.allocated_height()))
-            .unwrap_or((0, 0));
-        let x = x.max(0);
-        let y = y.max(0);
-        let w = width.max(0);
-        let h = height.max(0);
-        wv.set_margin_start(x);
-        wv.set_margin_top(y);
-        wv.set_margin_end((aw - (x + w)).max(0));
-        wv.set_margin_bottom((ah - (y + h)).max(0));
-    })
-}
-
-#[tauri::command]
-pub fn browser_set_visible(app: AppHandle, visible: bool) -> Result<(), String> {
-    with_active(&app, move |wv| {
-        // Couple mute to visibility: hiding the active view (route leave) also
-        // mutes it; re-entering unmutes. The page keeps running while hidden so
-        // re-entering resumes it where it left off.
-        wv.set_is_muted(!visible);
-        if visible {
-            wv.show();
-        } else {
-            wv.hide();
-        }
-    })
-}
-
-// ── in-game overlay browser panel — Windows-only (see browser_windows.rs) ────
-// The WebKitGTK driver embeds tab views in the MAIN window's GTK overlay; there
-// is no reparent-into-another-window path here. Same command names so lib.rs /
-// build.rs / capabilities stay cfg-free; the overlay chrome degrades gracefully.
-
-#[tauri::command]
-pub fn browser_overlay_attach(_id: String) -> Result<(), String> {
-    Err("in-game overlay browser: Windows only".into())
-}
-
-#[tauri::command]
-pub fn browser_overlay_detach() -> Result<(), String> {
-    Ok(())
-}
-
-#[tauri::command]
-pub fn browser_overlay_attached() -> Result<Option<String>, String> {
-    Ok(None)
-}
-
-/// Detach body for the `lib.rs` `hide_overlay_host` safety hook — no-op on
-/// Linux (nothing ever attaches), but the symbol must exist for the cfg-free
-/// call site.
-pub fn overlay_detach_impl(_app: &AppHandle) -> Result<(), String> {
-    Ok(())
+    .map_err(|e| e.to_string())?;
+    rx.await.map_err(|_| "cookie query was dropped".to_string())?
 }

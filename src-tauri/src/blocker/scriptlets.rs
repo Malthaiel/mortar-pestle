@@ -13,13 +13,9 @@
 
 use std::sync::OnceLock;
 
-// The WebKit injector (`attach`) is Linux-only; `bootstrap`/`rule_count`/the
-// rule table are pure data, reused on Windows for the WebView2 init-script.
-#[cfg(target_os = "linux")]
-use webkit2gtk::{
-    UserContentInjectedFrames, UserContentManager, UserContentManagerExt, UserScript,
-    UserScriptInjectionTime,
-};
+// `bootstrap`/`rule_count`/the rule table are pure data, used for the WebView2
+// init-script. The WebKit injector that also consumed them went with Linux
+// (2026-08-06).
 
 /// Generated rule table: `[{"d":[domains],"s":name,"a":[args]}]`.
 const RULES_JSON: &str = include_str!("seed/scriptlets.json");
@@ -49,17 +45,3 @@ pub fn rule_count() -> usize {
     })
 }
 
-/// Attach the scriptlet bootstrap to `ucm`: main world, all frames,
-/// document-start. The caller gates on `enabled()` (+ the per-site allow-list
-/// once that lands). Pair with `remove_all_scripts` to detach.
-#[cfg(target_os = "linux")]
-pub fn attach(ucm: &UserContentManager) {
-    let script = UserScript::new(
-        bootstrap(),
-        UserContentInjectedFrames::AllFrames,
-        UserScriptInjectionTime::Start,
-        &[],
-        &[],
-    );
-    ucm.add_script(&script);
-}

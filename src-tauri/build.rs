@@ -47,7 +47,6 @@ fn main() {
         "vedit_lut_read",
         "open_devtools",
         "claude_token_stats",
-        "dev_service_action",
         "browser_navigate",
         "browser_back",
         "browser_forward",

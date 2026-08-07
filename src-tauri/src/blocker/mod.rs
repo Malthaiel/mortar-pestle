@@ -16,12 +16,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{LazyLock, RwLock};
 
 pub mod commands;
-// `ffi` wraps WebKit's compiled content-filter store (webkit2gtk-sys) — Linux
-// only. WebView2 has no equivalent; on Windows network blocking rides the proxy
-// (host layer) and cosmetics ride JS injection (the shared `cosmetic_css` +
-// `scriptlets::bootstrap`).
-#[cfg(target_os = "linux")]
-pub mod ffi;
+// Network blocking rides the proxy (host layer) and cosmetics ride JS injection
+// (`cosmetic_css` + `scriptlets::bootstrap`). The WebKit content-filter FFI that
+// used to back this on Linux went with the platform (2026-08-06).
 pub mod lists;
 pub mod scriptlets;
 

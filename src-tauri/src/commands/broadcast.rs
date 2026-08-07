@@ -332,7 +332,6 @@ async fn auto_remux_mkv(app: &AppHandle, mkv_path: &str) -> Result<(), String> {
 /// window shows a plain running→done state with no progress stream. Host-composing
 /// (owns ffmpeg + the shared argv builder), not an engine passthrough — the engine
 /// has no part in an offline file remux.
-#[cfg(any(target_os = "linux", target_os = "windows"))]
 #[tauri::command]
 pub async fn broadcast_remux_start(input: String, output: Option<String>) -> Result<(), VaultError> {
     let out = output
@@ -384,7 +383,6 @@ struct TwitchIngests {
 /// host, so that is what this matches on. `availability` is a float (`1.0`).
 /// Every entry also publishes an `rtmps://` template, which the plain catalog
 /// never offered.
-#[cfg(any(target_os = "linux", target_os = "windows"))]
 #[tauri::command]
 pub async fn broadcast_twitch_ingests() -> Result<Vec<IngestServer>, VaultError> {
     let res: TwitchIngests = reqwest::get("https://ingest.twitch.tv/ingests")
@@ -478,7 +476,6 @@ struct HelixData<T> {
 /// arrives pre-filled in that URL) → poll `/oauth2/token` every `interval` until
 /// it stops answering `authorization_pending` → Helix `/users` for the id and
 /// login → Helix `/streams/key` for the key.
-#[cfg(any(target_os = "linux", target_os = "windows"))]
 #[tauri::command]
 pub async fn broadcast_twitch_fetch_key(app: AppHandle) -> Result<TwitchKey, VaultError> {
     let http = reqwest::Client::new();

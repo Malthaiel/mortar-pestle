@@ -3,7 +3,6 @@
 // made with VITE_DEV_TOOLS=1 keeps it, which is how the installed RPM gets the
 // Dev Server control panel. Future dev panels join below.
 import { Component } from 'react';
-import DevServerPanel from './DevServerPanel.jsx';
 import GpuSpikePanel from './GpuSpikePanel.jsx';
 import FoldDownPanel from './FoldDownPanel.jsx';
 // SttDevPanel retired in Voice Transcription Phase 3 — the real surface is the
@@ -37,19 +36,12 @@ export default function DevTab({ accent }) {
       }}>
         Developer tooling.
       </div>
-      {import.meta.env.VITE_TARGET_OS === 'linux' ? (
-        <PanelBoundary>
-          <DevServerPanel accent={accent} />
-        </PanelBoundary>
-      ) : (
-        <div style={{
-          fontSize: 11, color: 'var(--text-faint)', marginBottom: 16,
-          fontFamily: 'var(--font-mono)',
-        }}>
-          Dev-server restart is Linux-only — Windows dev runs via{' '}
-          <code>npm run tauri dev</code> in a terminal.
-        </div>
-      )}
+      <div style={{
+        fontSize: 11, color: 'var(--text-faint)', marginBottom: 16,
+        fontFamily: 'var(--font-mono)',
+      }}>
+        Dev runs via <code>npm run tauri dev</code> in a terminal.
+      </div>
       <PanelBoundary>
         <GpuSpikePanel accent={accent} />
       </PanelBoundary>

@@ -1,36 +1,23 @@
 pub mod anime_download;
 pub mod anime_search;
-#[cfg(any(target_os = "linux", target_os = "windows"))]
 pub mod broadcast;
-// Windows port: the browser is a per-OS module — `browser.rs` drives WebKitGTK
-// on Linux, `browser_windows.rs` drives WebView2 child webviews on Windows. Both
-// expose the SAME `browser_*` command names, so the handler/build/capabilities
-// sites only swap a cfg. capture + stt are ported to Windows (named-pipe IPC).
-#[cfg(target_os = "linux")]
+// `browser` drives WebView2 child webviews. Was a per-OS pair until Linux was
+// dropped as a target (2026-08-06); the WebKitGTK driver and its cfg/#[path]
+// switch are gone and `browser_windows.rs` took the plain name.
 pub mod browser;
-#[cfg(target_os = "windows")]
-#[path = "browser_windows.rs"]
-pub mod browser;
-// Shared (cross-platform) browser nav/host allow-list helpers, used by both the
-// Linux `browser.rs` and Windows `browser_windows.rs` drivers.
+// Browser nav/host allow-list helpers, split out when the driver was per-OS.
 pub mod browser_common;
 pub mod build;
-#[cfg(any(target_os = "linux", target_os = "windows"))]
 pub mod capture;
 pub mod claude_usage;
 pub mod coach_job;
 pub mod coaching;
 // Comms-extraction job (Scrim Coaching): stt-engine-driving, so it shares stt's
 // per-OS gate (the `crate::stt` bridge only exists on linux/windows builds).
-#[cfg(any(target_os = "linux", target_os = "windows"))]
 pub mod comms_job;
 pub mod credentials;
 pub mod daily;
 pub mod design;
-// Windows port (SF5): systemd dev-service control is Linux-only — on Windows
-// the dev loop is `npm run tauri dev` in a terminal, no service to restart.
-#[cfg(target_os = "linux")]
-pub mod dev_service;
 pub mod devtools;
 pub mod docs;
 pub mod domain;
@@ -60,7 +47,6 @@ pub mod sessions;
 pub mod sidebar;
 pub mod site;
 pub mod skills;
-#[cfg(any(target_os = "linux", target_os = "windows"))]
 pub mod stt;
 pub mod vault;
 pub mod vaults;

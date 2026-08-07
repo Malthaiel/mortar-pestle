@@ -1,17 +1,11 @@
 use tauri::{Manager, RunEvent, WindowEvent};
 
 pub mod asset_protocol;
-// Windows port: the in-app browser (webkit2gtk), Shield blocker (webkit2gtk-sys
-// FFI), and forward proxy are Linux-only subsystems, stubbed/hidden on Windows v1.
-// STT and Game Capture are PORTED to Windows (named-pipe IPC) — see `pub mod stt`
-// + `pub mod capture` below. Gate the rest so the Windows build links. `overlay`
-// stays — it only shells out to `qdbus` and cleanly no-ops off-KDE.
-// Shield blocker — host/cosmetic/scriptlet layers are pure Rust (ported to
-// Windows); only the WebKit content-filter FFI (`blocker::ffi`) is Linux-only.
-#[cfg(any(target_os = "linux", target_os = "windows"))]
+// Shield blocker — host/cosmetic/scriptlet layers, all pure Rust. Network
+// blocking rides the forward proxy; cosmetics ride WebView2 JS injection. The
+// WebKit content-filter FFI went with Linux (2026-08-06, Linux Removal).
 pub mod blocker;
 pub mod broadcast;
-#[cfg(any(target_os = "linux", target_os = "windows"))]
 pub mod capture;
 pub mod commands;
 pub mod media_server;
@@ -19,11 +13,9 @@ pub mod overlay;
 pub mod parsers;
 // Loopback-refusing forward proxy = the browser's network boundary. Pure Rust
 // (std::net + tokio); ported to Windows alongside the WebView2 content views.
-#[cfg(any(target_os = "linux", target_os = "windows"))]
 pub mod proxy;
 pub mod render;
 // STT is ported to Windows (named-pipe IPC, SF1+); Linux uses the Unix socket.
-#[cfg(any(target_os = "linux", target_os = "windows"))]
 pub mod stt;
 pub mod tool_path;
 /// Push-to-talk sink: type a dictated transcript into the focused window via
@@ -72,7 +64,6 @@ fn hide_overlay_host(app: tauri::AppHandle) {
     // window (a crashed/hung host webview can't run its own detach). Spawned,
     // never inline — this command runs sync on the main thread and the detach
     // reparent blocks on the event loop.
-    #[cfg(any(target_os = "linux", target_os = "windows"))]
     {
         let app2 = app.clone();
         tauri::async_runtime::spawn(async move {
@@ -310,7 +301,6 @@ pub fn run() {
             // Shield blocker + forward proxy — the in-app browser's network
             // boundary, ported to Windows (the proxy + host/cosmetic blocker are
             // pure Rust; only the WebKit content-filter FFI stays Linux-only).
-            #[cfg(any(target_os = "linux", target_os = "windows"))]
             {
             // In-app browser ad/tracker blocker (Shield) — load the vendored
             // host blocklist before the proxy starts consulting it on CONNECT.
@@ -343,7 +333,6 @@ pub fn run() {
             // — `get_capture_state` is the real path now.
             // STT + Game Capture supervisors + engine→Tauri event bridges run on
             // Linux (Unix-socket IPC) AND Windows (named-pipe IPC).
-            #[cfg(any(target_os = "linux", target_os = "windows"))]
             {
             // Die-with-app safety net: assign the host to a KILL_ON_JOB_CLOSE
             // job BEFORE the first sidecar spawns, so the OS reaps all 3
@@ -690,17 +679,7 @@ pub fn run() {
                     }
                 });
             };
-            } // end STT + Game Capture (linux+windows) supervisor/bridge block
-
-            // In-game overlays — pin the overlay windows above everything (incl.
-            // a borderless game) via KWin's scripting API. Tauri/GTK always-on-top
-            // and static kwinrulesrc rules both no-op under KWin-Wayland here;
-            // `window.keepAbove = true` via a KWin script is what actually works
-            // (verified: keepAbove true, layer 3). Best-effort; logged, never fatal.
-            // Linux/KDE-only: Windows pins each scrim via `set_always_on_top` directly
-            // (SF4, in `overlay::state::overlay_go_live`).
-            #[cfg(target_os = "linux")]
-            overlay::kwin_rule::ensure_installed(app.handle());
+            } // end STT + Game Capture supervisor/bridge block
 
             // Sub-feature 11 — Tauri loads the frontend directly via devUrl
             // (Vite at 5173 in dev) or the bundled `web/dist/` (asset:// scheme
@@ -744,30 +723,28 @@ pub fn run() {
             commands::video_editor::vedit_lut_read,
             commands::devtools::open_devtools,
             commands::claude_usage::claude_token_stats,
-            #[cfg(target_os = "linux")]
-            commands::dev_service::dev_service_action,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::browser::browser_navigate,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::browser::browser_back,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::browser::browser_forward,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::browser::browser_reload,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::browser::browser_stop,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::browser::browser_set_bounds,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::browser::browser_set_visible,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::browser::browser_new_tab,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::browser::browser_close_tab,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::browser::browser_switch_tab,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::browser::browser_clear_data,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::browser::browser_clear_cache,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::browser::browser_clear_cookies,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::browser::browser_cache_size,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::browser::browser_cookie_sites,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::browser::browser_overlay_attach,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::browser::browser_overlay_detach,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::browser::browser_overlay_attached,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] blocker::commands::blocker_get_state,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] blocker::commands::blocker_set_enabled,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] blocker::commands::blocker_set_site_allowed,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] blocker::commands::blocker_refresh_lists,
+            commands::browser::browser_navigate,
+            commands::browser::browser_back,
+            commands::browser::browser_forward,
+            commands::browser::browser_reload,
+            commands::browser::browser_stop,
+            commands::browser::browser_set_bounds,
+            commands::browser::browser_set_visible,
+            commands::browser::browser_new_tab,
+            commands::browser::browser_close_tab,
+            commands::browser::browser_switch_tab,
+            commands::browser::browser_clear_data,
+            commands::browser::browser_clear_cache,
+            commands::browser::browser_clear_cookies,
+            commands::browser::browser_cache_size,
+            commands::browser::browser_cookie_sites,
+            commands::browser::browser_overlay_attach,
+            commands::browser::browser_overlay_detach,
+            commands::browser::browser_overlay_attached,
+            blocker::commands::blocker_get_state,
+            blocker::commands::blocker_set_enabled,
+            blocker::commands::blocker_set_site_allowed,
+            blocker::commands::blocker_refresh_lists,
             commands::vault::vault_read_file,
             commands::vault::vault_write_file,
             commands::vault::vault_delete_file,
@@ -854,11 +831,11 @@ pub fn run() {
             commands::coach_job::coach_job_status,
             commands::coach_job::coach_job_clear,
             commands::coach_job::coach_job_cancel,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::comms_job::comms_job_start,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::comms_job::comms_job_status,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::comms_job::comms_job_take,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::comms_job::comms_job_clear,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::comms_job::comms_job_cancel,
+            commands::comms_job::comms_job_start,
+            commands::comms_job::comms_job_status,
+            commands::comms_job::comms_job_take,
+            commands::comms_job::comms_job_clear,
+            commands::comms_job::comms_job_cancel,
             commands::music_listen::music_record_listen,
             commands::music_listen::music_listen_minutes_for_month,
             commands::music_search::music_search_releasegroups,
@@ -979,36 +956,36 @@ pub fn run() {
             commands::feedback::feedback_avatar_upload,
             commands::site::site_push_busy,
             commands::site::site_fetch_bookings,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::get_capture_state,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::capture_start,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::capture_stop,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::capture_arm,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::capture_disarm,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::capture_save_replay,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::capture_screenshot,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::capture_clip_delete,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::capture_list_clips,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::capture_list_screenshots,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::capture_rebind_hotkeys,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::capture_open_kde_settings,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::set_capture_config,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::get_captures_dir,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::set_captures_dir,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::capture::reset_captures_dir,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::stt::stt_load_model,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::stt::stt_transcribe_file,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::stt::stt_start_dictation,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::stt::stt_stop_dictation,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::stt::stt_set_scrim_key,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::stt::stt_cancel,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::stt::stt_unload,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::stt::stt_status,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::stt::stt_list_models,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::stt::stt_delete_model,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::stt::stt_download_model,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::stt::stt_reveal_model,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::stt::stt_rebind_hotkeys,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::stt::stt_open_kde_settings,
+            commands::capture::get_capture_state,
+            commands::capture::capture_start,
+            commands::capture::capture_stop,
+            commands::capture::capture_arm,
+            commands::capture::capture_disarm,
+            commands::capture::capture_save_replay,
+            commands::capture::capture_screenshot,
+            commands::capture::capture_clip_delete,
+            commands::capture::capture_list_clips,
+            commands::capture::capture_list_screenshots,
+            commands::capture::capture_rebind_hotkeys,
+            commands::capture::capture_open_kde_settings,
+            commands::capture::set_capture_config,
+            commands::capture::get_captures_dir,
+            commands::capture::set_captures_dir,
+            commands::capture::reset_captures_dir,
+            commands::stt::stt_load_model,
+            commands::stt::stt_transcribe_file,
+            commands::stt::stt_start_dictation,
+            commands::stt::stt_stop_dictation,
+            commands::stt::stt_set_scrim_key,
+            commands::stt::stt_cancel,
+            commands::stt::stt_unload,
+            commands::stt::stt_status,
+            commands::stt::stt_list_models,
+            commands::stt::stt_delete_model,
+            commands::stt::stt_download_model,
+            commands::stt::stt_reveal_model,
+            commands::stt::stt_rebind_hotkeys,
+            commands::stt::stt_open_kde_settings,
             overlay::state::overlay_go_live,
             overlay::state::overlay_go_offline,
             overlay::state::overlay_get_live_target,
@@ -1017,19 +994,19 @@ pub fn run() {
             overlay::state::overlay_note_toast,
             overlay::state::overlay_toast_pending,
             overlay::state::overlay_toast_done,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::broadcast::broadcast_get_state,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::broadcast::broadcast_request,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::broadcast::broadcast_start_record,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::broadcast::broadcast_stop_record,
+            commands::broadcast::broadcast_get_state,
+            commands::broadcast::broadcast_request,
+            commands::broadcast::broadcast_start_record,
+            commands::broadcast::broadcast_stop_record,
             #[cfg(target_os = "windows")] commands::broadcast::broadcast_display_create,
             #[cfg(target_os = "windows")] commands::broadcast::broadcast_display_bounds,
             #[cfg(target_os = "windows")] commands::broadcast::broadcast_display_destroy,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::broadcast::broadcast_restart_engine,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::broadcast::broadcast_open_log,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::broadcast::broadcast_paths,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::broadcast::broadcast_remux_start,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::broadcast::broadcast_twitch_ingests,
-            #[cfg(any(target_os = "linux", target_os = "windows"))] commands::broadcast::broadcast_twitch_fetch_key,
+            commands::broadcast::broadcast_restart_engine,
+            commands::broadcast::broadcast_open_log,
+            commands::broadcast::broadcast_paths,
+            commands::broadcast::broadcast_remux_start,
+            commands::broadcast::broadcast_twitch_ingests,
+            commands::broadcast::broadcast_twitch_fetch_key,
         ])
         .on_window_event(|window, event| {
             if let WindowEvent::Focused(focused) = event {
@@ -1068,17 +1045,14 @@ pub fn run() {
                 // Game Capture reap (5-SF2d): terminate the spawned engine + (Unix)
                 // unlink the control socket. Ported to Windows (SF7 swaps the libc
                 // signals for proc_util::terminate_pid). No-op when adopted/down.
-                #[cfg(any(target_os = "linux", target_os = "windows"))]
                 capture::supervisor::shutdown();
                 // STT reap — mirror capture: terminate the worker. Ported to Windows
                 // (SF6 swaps the libc signals for proc_util::terminate_pid).
-                #[cfg(any(target_os = "linux", target_os = "windows"))]
                 stt::supervisor::shutdown();
                 // Broadcast reap — terminate the spawned libobs engine (no-op when
                 // adopted/down; the daemon saves its collection on pipe shutdown,
                 // and a forceful kill is recoverable — collections autosave on
                 // every mutation).
-                #[cfg(any(target_os = "linux", target_os = "windows"))]
                 broadcast::supervisor::shutdown();
             }
         });
