@@ -57,7 +57,12 @@ const DUR = 300;
 const PRESS_FALLBACK = 70;
 // Used only until the trigger is measured; every shape pins its own lip.
 const DEPTH_FALLBACK = 'var(--candy-depth)';
-// Beat the two states cross-fade over on OPEN. Close hard-cuts instead.
+// The TRIGGER's fade-out on open. The open group no longer cross-fades against
+// it — it hard-cuts in at frame one, mirroring the close's hard cut out (see the
+// group's transition), so the paper is present for the whole open exactly as it
+// is for the whole close. The trigger is fully occluded by the shut stack while
+// this runs (the group is absolutely positioned, so it paints over a
+// non-positioned sibling), so the length here is now invisible either way.
 const SETTLE = 120;
 
 // One frame at 60fps. The panel's BOTTOM edge is delayed by TWO of these on a
@@ -392,10 +397,44 @@ export default function FoldMenu({
   // nothing until it passes edge-on, so extent that starts with the fold runs
   // half a fold ahead of anything visible ("during the unfold the bg expands too
   // fast", 2026-08-05). Only the halo moved.
+  //
+  // The halo beat now starts at FRAME ONE, not at `press`. Landing it on `press`
+  // was the previous answer to the same report and it was not enough: the group's
+  // own opacity ALSO waited out `press` and then cross-faded over SETTLE, so for
+  // the first ~190ms of an open the paper was either absent or see-through —
+  // which is the whole window in which the halo does its growing. "the bg doesnt
+  // begin expanding the moment the button is pressed. compare this to when its
+  // compacting and the bg is present during the entirety of the animation",
+  // 2026-08-07, user-directed "just try to mirror the closing animation".
+  //
+  // So the two ends are now true mirrors: the close's last beat LANDS on SHUT
+  // (`SHUT - panelD`), the open's first beat STARTS on the click (0). Every
+  // panel edge already runs the same DUR / 2 leg in both directions; only the
+  // delays differed.
+  //
+  // The FOLDS are untouched and still start at `press` — that motion is signed
+  // off, and the close's own first beat (the squash) occupies the same `press`.
+  // Only the paper moved forward.
+  // ONE CURVE FOR ALL FOUR EDGES, opening as well as closing. This used to be
+  // ease-in-out opening while `height`, `left` and `width` ran the out cubic
+  // below, and the two do not leave the line at the same speed: two frames into
+  // a 150ms leg ease-in-out has crossed about 16% of its 6px (a single
+  // sub-visible pixel) against the cubic's ~50%. Three edges were therefore
+  // open and the fourth was not.
+  //
+  // The fourth is the VISUAL BOTTOM on `up` — UP_FLIP mirrors the placed box, so
+  // the panel's local `top` is the edge on screen's bottom. "the bottom isnt
+  // visible quick enough (about 2 frames after the button is clicked and its
+  // still not visible while the left, right, and top are)", 2026-08-07.
+  //
+  // Safe to change because groupT rides this same string: the panel's pinned
+  // edge cancels against the group's own FOLD_PAD slide, and the two cancel on
+  // ANY curve so long as it is the SAME curve. That is the constraint the old
+  // comment was protecting, not ease-in-out specifically.
   const panelD = open ? DUR / 2 : DUR / 8;
   const panelT = `${panelD}ms `
-    + `${open ? 'ease-in-out' : 'cubic-bezier(0.32, 0, 0.67, 0)'} `
-    + `${open ? press : SHUT - panelD}ms`;
+    + `cubic-bezier(${open ? '0.33, 1, 0.68, 1' : '0.32, 0, 0.67, 0'}) `
+    + `${open ? 0 : SHUT - panelD}ms`;
   // The GROUP's own FOLD_PAD settle — the stack sits a pad low while open so the
   // panel's top edge lands on the trigger's line, and it has to give that back by
   // the time the fold ends. On panelT (37ms starting at SHUT - 37) the whole 6px
@@ -526,15 +565,46 @@ export default function FoldMenu({
   // keeps the old "ears of surplus width poking out of the shut button" bug dead:
   // the pad and the height reach zero on the same frame, so neither can outlive
   // the other.
-  const padOn = hinges ? !tuck : open;
+  // `open || !tuck`, never `!tuck` alone, and the OR is the whole point: opening,
+  // the pad has to land in the SAME COMMIT the click does, and no state set from
+  // an effect ever can. `useEffect` flushes AFTER paint, so `setTuck(false)` —
+  // synchronous or on a timer, both were tried 2026-08-07 — still let render #1
+  // paint with `open: true, tuck: true`. That frame is half-built geometry: `top`
+  // and `padLip` follow `open` and move, while `left`, `width` and the 12px pad
+  // follow `tuck` and do not, so the far edge (which is `top` PLUS `height`)
+  // travels BACKWARDS into the stack for a frame and then reverses.
+  //
+  // Measured off the live probe, down chip, halo per side per frame:
+  //
+  //   t=3    top -0.10   bottom  0.00   left -0.08   panelH 28.00
+  //   t=9    top  0.38   bottom -0.48   left -0.08   panelH 28.00
+  //   t=12   top  0.83   bottom -0.94   left -0.08   panelH 28.00
+  //   t=16   top  1.29   bottom  0.02   left  0.40   panelH 29.41
+  //
+  // Negative means the paper is INSIDE the painted rows. "the sides late by 1
+  // frame and the bottom late by 3 frames", and on up "the top is 1 frame too
+  // late". Reading `open` directly costs nothing and cannot drift: it is set in
+  // the click handler itself.
+  //
+  // CLOSING is untouched — `open` is already false there, so this is `!tuck`
+  // exactly as before, and the pad still leaves on its own late beat.
+  const padOn = hinges ? (open || !tuck) : open;
   //
   // Per-wrapper lip state. A candy lip is a DOWNWARD box-shadow, so a row
   // rotated 180deg points its lip UP and stacks a whole depth of shadow above
   // whatever it lands on — the other half of landing flush, and invisible to a
   // box measurement (the boxes land dead flush; only the paint sits high).
-  const [lips, setLips] = useState(() => Array(hinges).fill(true));
+  // Both of these START AT THE SHUT RESTING STATE — lips OFF, flipped ON — which
+  // is what a close leaves behind, not what they used to be seeded with (the
+  // opposite of both). It was invisible while the group waited out `press` and
+  // cross-faded in, and it stopped being invisible the moment the group started
+  // hard-cutting in at frame one: on the FIRST open after a mount, row 1 painted
+  // its front label through its own back (upside down) and every row carried a
+  // lip while it rotated, for the 70ms before the folds begin. Seeded correctly,
+  // the first open is byte-identical to every later one.
+  const [lips, setLips] = useState(() => Array(hinges).fill(false));
   // Which wrappers are past edge-on, so the row inside each can swap its face.
-  const [flipped, setFlipped] = useState(() => Array(hinges).fill(false));
+  const [flipped, setFlipped] = useState(() => Array(hinges).fill(true));
 
   useEffect(() => {
     if (!hinges) return undefined;
@@ -546,12 +616,12 @@ export default function FoldMenu({
 
     if (open) {
       setDown(false);
-      // The halo beat, and the mirror of the close's tuck. At `press`, not at
-      // frame one: the pad's own legs carry no CSS delay, so this timer IS their
-      // start, and it has to land on the same instant panelT's delay does or the
-      // sides and the pinned edge come apart. Before this the pad waited for
-      // `folded`, half a fold later — see padOn.
-      at(press, () => setTuck(false));
+      // Nothing on the OPEN reads this any more — `padOn` gets its answer from
+      // `open` directly, because no effect can beat the paint (see padOn). This
+      // is bookkeeping for the NEXT CLOSE: the close's own beat sets it back to
+      // true half a fold before SHUT, and it has to be false going in or the pad
+      // would never be out during the close at all. Timing here is free.
+      setTuck(false);
       for (let j = 0; j < hinges; j += 1) {
 
         // Lips return per row, each as its own unfold FINISHES — never during,
@@ -665,7 +735,30 @@ export default function FoldMenu({
   // tucks (see the note below, and the two measurements that pinned it). The
   // 4px handover between the two happens on frame one of the close, on the
   // height's own leg, while the height is already losing a row — nothing to see.
-  const padLip = open ? dpx : (shown ? dpx - surf : 0);
+  // The shut value is `dpx - surf`, NOT 0, and it applies whether the panel is
+  // shown or hidden — the `shown ? … : 0` branch that used to sit here is gone.
+  //
+  // It is invisible at rest either way (the panel is behind row 0), so the only
+  // thing that value ever does is set the OPEN's starting point, and 0 started it
+  // 1px INSIDE row 0's paint. Down's visible bottom halo is the geometric one
+  // minus (lip - band): row 0's 5px lip paints OVER this panel and the panel's own
+  // 4px band paints under its box, so the first 1px of growth is swallowed and the
+  // bottom lands a frame after the other three. Measured off the live probe, down
+  // chip, right after the padOn fix:
+  //
+  //   t=1   geom bottom  0.00  -> visible -1.00      geom top -0.10 -> visible -0.10
+  //   t=5   geom bottom  0.91  -> visible -0.09      geom top  0.38 -> visible  0.38
+  //   t=9   geom bottom  1.73  -> visible  0.73      geom top  0.83 -> visible  0.83
+  //
+  // "the bottom is just one frame too late", 2026-08-07, with everything else
+  // signed off. At `dpx - surf` the panel's band ends exactly on row 0's lip
+  // (box bottom + surf === row 0 bottom + dpx, for ANY depth setting — it is
+  // derived, not tuned), so the very first pixel of growth is visible.
+  //
+  // UP is untouched by this, which is why it stays perfect: its height term is
+  // `+ padLip + (dpx - padLip - 1)`, where padLip cancels out algebraically, and
+  // its `top` leg never read padLip at all.
+  const padLip = open ? dpx : dpx - surf;
 
 
 
@@ -761,9 +854,11 @@ export default function FoldMenu({
         // The accent is held only while OPEN, so it releases on frame one of the
         // close and eases out under the fold rather than riding it down and
         // hard-cutting at the handover. .candy-btn's own 150ms colour ease does
-        // the work — fast, but a fade, not a cut. Restoring it is free: on open
-        // the group is still at opacity 0 until `press`, so the accent arrives
-        // behind the fade-in and is never seen to appear.
+        // the work — fast, but a fade, not a cut. Restoring it is free even
+        // though the group is now opaque from frame one: the selected row is
+        // folded UNDER row 1's opaque face at rest and does not clear edge-on
+        // until ~220ms, by which point its own 150ms colour ease (started on
+        // the click) has long finished. Still never seen to appear.
         // is-pressed on the innermost row only, and only for the first `press`
         // of a close — the squash. See `down`.
         className={`candy-btn ${triggerClassName}${j === selected && open ? ' is-active' : ''}${j === n - 1 && down ? ' is-pressed' : ''}`.trim()}
@@ -861,9 +956,10 @@ export default function FoldMenu({
       position: 'relative', zIndex: 130,
     }}>
       {/* Shut state. A real .candy-btn, so hover, press and depth arrive for
-          free. Fades in on open, HARD-CUTS in on close: the paper's last
+          free. Fades OUT on open, HARD-CUTS back in on close: the paper's last
           visible face and this button paint different things for the length of
-          any cross-fade, which reads as a flash. */}
+          any cross-fade, which reads as a flash. Its open fade is now hidden
+          anyway — the group cuts in at frame one and paints straight over it. */}
       <button
         ref={triggerRef}
         type="button"
@@ -1002,10 +1098,28 @@ export default function FoldMenu({
           // survives the handover — see the position note above for what
           // display:none did to the open.
           visibility: shown ? 'visible' : 'hidden',
-          // Mirrors the trigger's own handover exactly — fade on open, hard cut
-          // on close, same clock. Any difference between these two lines is a
-          // flash, so they change together or not at all.
-          transition: `opacity ${open ? SETTLE : 0}ms ease-in-out ${open ? press : SHUT}ms,`
+          // HARD CUT AT BOTH ENDS, and that is the mirror: the close holds this
+          // group at opacity 1 for its whole 740ms and cuts it at SHUT, so the
+          // paper is present for every frame of a close. The open used to wait
+          // `press` and then cross-fade over SETTLE against the trigger, so the
+          // paper was absent for 70ms and see-through for 120 more — the exact
+          // window the halo grows in. User-directed 2026-08-07, "mirror the
+          // closing animation".
+          //
+          // Cutting in at frame one costs nothing to look at: this div is
+          // ABSOLUTE and the trigger is not, so the shut stack paints over the
+          // trigger completely, and the shut stack IS the trigger's face — row
+          // 1's underside carries the trigger's own children (see stack()) with
+          // row 0's lip beneath it. The trigger is left on its own SETTLE fade
+          // underneath, where nothing can see it.
+          //
+          // This is NOT the display:none failure recorded on `position` above.
+          // That one snapped the opacity because the element had no previous
+          // frame to interpolate from, which killed the HINGE transitions too,
+          // so the stack sat unfolded and parked. Here the element is only ever
+          // `visibility: hidden`, every transition keeps its start value, and
+          // the folds still begin at `press` exactly as before.
+          transition: `opacity 0ms ease-in-out ${open ? 0 : SHUT}ms,`
             + ` top ${groupT}`,
         }}
       >
@@ -1217,44 +1331,50 @@ export default function FoldMenu({
             // The length is geometry: a row paints rowH * cos(angle) and hits
             // zero at half its fold, so half a fold is the only length that
             // tracks it. Add BEATS, never duration — see `tuck`.
-            // The pinned edge is the ONE leg that changes clock with direction:
-            // panelT opening (it has to cancel the group's slide), the pad's own
-            // clock closing (or it tucks in two frames before the handover) — see
-            // the value above.
-            transition: (open ? [`top ${panelT}`] : [])
-              .concat(['height', 'left', 'width']
-                .concat(open ? [] : ['top'])
-                .map((p) => {
-                  // Only the height, only closing, only on the tuck beat — the hug
-                  // has to stay glued to the rows and cannot be delayed. See FRAME.
-                  //
-                  // NO up branch. A `&& !up` was tried 2026-08-06 — the theory was
-                  // that under UP_FLIP this delay lands on the visual TOP instead
-                  // of the bottom, so the up variant should not carry it. Removing
-                  // it did not fix the reported unevenness, so the theory is dead
-                  // and the branch is gone: both directions run the same delay, and
-                  // the flip mirrors it like everything else.
-                  // The hold rides the LIP SIDE, and the lip side does not flip:
-                  // row 0's lip is a downward shadow in both directions (row()
-                  // negates --cbtn-depth precisely to keep it downward) and it
-                  // paints OVER this panel, so the edge beneath it needs two
-                  // extra frames or its VISIBLE halo lands while the other three
-                  // are still travelling. Down's lip side is the far end of
-                  // `height`; up's is `top`.
-                  //
-                  // Left on `height` for both, the hold lands on up's visual TOP
-                  // — no lip there — and held it out for the last beat: "2-3
-                  // frames before they all close the top side is still too big",
-                  // 2026-08-07, with all four otherwise landing together. This
-                  // was tried once earlier the same night and read as no-change,
-                  // because the far edge was still a whole dpx short at the time
-                  // and swamped it. Order matters: fix coverage first, then this.
-                  const lipLeg = up ? 'top' : 'height';
-                  const late = p === lipLeg && !open && tuck ? 2 * FRAME : 0;
-                  return `${p} ${DUR / 2 - late}ms cubic-bezier(`
-                    + (open ? '0.33, 1, 0.68, 1' : '0.32, 0, 0.67, 0') + ')'
-                    + (late ? ` ${late}ms` : '');
-                }))
+            // ALL FOUR EDGES, ONE LEG, both directions. The pinned edge used to
+            // be pulled out and handed `panelT` on open, which is what put it on
+            // ease-in-out while the other three ran the cubic — see panelT. Now
+            // that panelT carries the same cubic, its open string is character
+            // for character what this map already emits (same DUR / 2, same
+            // curve, same 0ms delay), so the special case is pure duplication and
+            // is gone. `panelT` still goes to the HOST (FoldStandOff) and to
+            // groupT, both of which want exactly this clock.
+            transition: ['height', 'left', 'width', 'top']
+              .map((p) => {
+                // Only the height, only closing, only on the tuck beat — the hug
+                // has to stay glued to the rows and cannot be delayed. See FRAME.
+                //
+                // NO up branch. A `&& !up` was tried 2026-08-06 — the theory was
+                // that under UP_FLIP this delay lands on the visual TOP instead
+                // of the bottom, so the up variant should not carry it. Removing
+                // it did not fix the reported unevenness, so the theory is dead
+                // and the branch is gone: both directions run the same delay, and
+                // the flip mirrors it like everything else.
+                // The hold rides the LIP SIDE, and the lip side does not flip:
+                // row 0's lip is a downward shadow in both directions (row()
+                // negates --cbtn-depth precisely to keep it downward) and it
+                // paints OVER this panel, so the edge beneath it needs two
+                // extra frames or its VISIBLE halo lands while the other three
+                // are still travelling. Down's lip side is the far end of
+                // `height`; up's is `top`.
+                //
+                // Left on `height` for both, the hold lands on up's visual TOP
+                // — no lip there — and held it out for the last beat: "2-3
+                // frames before they all close the top side is still too big",
+                // 2026-08-07, with all four otherwise landing together. This
+                // was tried once earlier the same night and read as no-change,
+                // because the far edge was still a whole dpx short at the time
+                // and swamped it. Order matters: fix coverage first, then this.
+                //
+                // CLOSING ONLY (`!open`), so the open's four edges leave the
+                // line together — the whole point of folding `top` into this
+                // list.
+                const lipLeg = up ? 'top' : 'height';
+                const late = p === lipLeg && !open && tuck ? 2 * FRAME : 0;
+                return `${p} ${DUR / 2 - late}ms cubic-bezier(`
+                  + (open ? '0.33, 1, 0.68, 1' : '0.32, 0, 0.67, 0') + ')'
+                  + (late ? ` ${late}ms` : '');
+              })
               .join(', '),
           }}
         />
