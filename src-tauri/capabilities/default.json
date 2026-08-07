@@ -42,7 +42,6 @@
     "allow-vedit-lut-read",
     "allow-open-devtools",
     "allow-claude-token-stats",
-    "allow-dev-service-action",
     "allow-browser-navigate",
     "allow-browser-back",
     "allow-browser-forward",
