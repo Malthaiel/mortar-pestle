@@ -235,15 +235,29 @@ pub struct StreamResolve {
 /// when the search runs, the script writes the found URL back into that map so
 /// the next play is fast. Stream URLs are IP + time-bound — callers re-resolve
 /// on every play and never persist them.
+///
+/// A `watch_url` (a loose YouTube search hit, no album card behind it) short-
+/// circuits all of that: the script resolves that exact upload, nothing is
+/// cached or written back.
 #[tauri::command]
 pub async fn music_stream_resolve(
     app: AppHandle,
-    album_path: String,
-    n: i64,
+    album_path: Option<String>,
+    n: Option<i64>,
+    watch_url: Option<String>,
 ) -> Result<StreamResolve, String> {
     let Some(script) = resolve_script(&app) else {
         return Err("download script not found (scripts/download_album.py)".into());
     };
+
+    if let Some(url) = watch_url.filter(|u| !u.is_empty()) {
+        let mut cmd = crate::commands::proc_util::python_cmd();
+        cmd.arg(&script).arg("--resolve").arg("--watch-url").arg(&url);
+        return run_resolve_cmd(cmd).await;
+    }
+
+    let album_path = album_path.ok_or("music_stream_resolve needs albumPath + n or watchUrl")?;
+    let n = n.ok_or("music_stream_resolve needs albumPath + n or watchUrl")?;
 
     // Album context: artist/title/duration for the search path, cached watch
     // URL + exact Track Sources key for the fast path / writeback.
@@ -279,6 +293,11 @@ pub async fn music_stream_resolve(
     if let Some(d) = track.duration {
         cmd.arg("--duration-sec").arg(d.to_string());
     }
+    run_resolve_cmd(cmd).await
+}
+
+/// Run a prepared `--resolve` invocation and read its NDJSON back.
+async fn run_resolve_cmd(mut cmd: tokio::process::Command) -> Result<StreamResolve, String> {
     cmd.stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -321,6 +340,96 @@ pub async fn music_stream_resolve(
         // code, a helper killed mid-flight (app relaunch) is a large one. Without
         // it both land on the screen as the same bare "no output".
         format!("stream resolve failed ({}): {tail}", out.status)
+    }))
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct YoutubeHit {
+    pub watch_url: String,
+    pub title: String,
+    pub uploader: String,
+    pub duration: Option<f64>,
+}
+
+/// Free-text YouTube search — the second catalogue behind the Music search bar
+/// (MusicBrainz is the first). Shells out to the same download script, which
+/// owns the yt-dlp invocation; results are metadata only, nothing is downloaded
+/// and no stream is resolved until a hit is actually played.
+#[tauri::command]
+pub async fn music_search_youtube(
+    app: AppHandle,
+    query: String,
+    limit: Option<u32>,
+) -> Result<Vec<YoutubeHit>, String> {
+    let q = query.trim();
+    if q.is_empty() {
+        return Ok(Vec::new());
+    }
+    let Some(script) = resolve_script(&app) else {
+        return Err("download script not found (scripts/download_album.py)".into());
+    };
+    let mut cmd = crate::commands::proc_util::python_cmd();
+    cmd.arg(&script)
+        .arg("--search")
+        .arg(q)
+        .arg("--limit")
+        .arg(limit.unwrap_or(15).clamp(1, 50).to_string())
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    let out = cmd
+        .output()
+        .await
+        .map_err(|e| format!("failed to spawn python3: {e}"))?;
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let mut err_msg: Option<String> = None;
+    for line in stdout.lines() {
+        let Ok(v) = serde_json::from_str::<serde_json::Value>(line) else {
+            continue;
+        };
+        match v.get("event").and_then(|x| x.as_str()) {
+            Some("search") => {
+                let arr = v.get("results").and_then(|x| x.as_array());
+                return Ok(arr
+                    .map(|rows| {
+                        rows.iter()
+                            .filter_map(|r| {
+                                let url = r.get("watchUrl").and_then(|x| x.as_str())?;
+                                Some(YoutubeHit {
+                                    watch_url: url.to_string(),
+                                    title: r
+                                        .get("title")
+                                        .and_then(|x| x.as_str())
+                                        .unwrap_or("")
+                                        .to_string(),
+                                    uploader: r
+                                        .get("uploader")
+                                        .and_then(|x| x.as_str())
+                                        .unwrap_or("")
+                                        .to_string(),
+                                    duration: r.get("duration").and_then(|x| x.as_f64()),
+                                })
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default());
+            }
+            Some("error") => {
+                err_msg = v.get("message").and_then(|x| x.as_str()).map(String::from);
+            }
+            _ => {}
+        }
+    }
+    Err(err_msg.unwrap_or_else(|| {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let tail = stderr
+            .lines()
+            .rev()
+            .find(|l| !l.trim().is_empty())
+            .unwrap_or("no output");
+        format!("YouTube search failed ({}): {tail}", out.status)
     }))
 }
 

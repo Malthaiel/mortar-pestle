@@ -1,9 +1,11 @@
 // Library left sidebar — now the shared candy tree (TreeSidebar), matching the
 // vault. The two media types are collapsible folder pills (Anime · Music), each
-// holding status-count rows (LABEL · count) that route to the existing filtered
-// library grids; Homepage, Total, Downloaded / Not Downloaded sit alongside the
-// statuses. Counts come from the shared useAnimeStats / useMusicStats stores (the
-// same aggregation the topbars now read). Both folders collapsed by default.
+// holding a nested "Library" folder of status-count rows (LABEL · count) that
+// route to the existing filtered library grids; Total, Downloaded / Not Downloaded
+// ride inside it alongside the statuses, while Homepage (and Music's Playlists)
+// stay directly under the media pill. Counts come from the shared useAnimeStats /
+// useMusicStats stores (the same aggregation the topbars now read). All folders
+// collapsed by default.
 // Toolbar: Collapse/Expand all, Reveal current, Reveal in files (the active media
 // type's folder under the Library vault).
 
@@ -18,11 +20,17 @@ import { useMusicStats } from './music/useMusicStats.js';
 const ANIME = '/tools/library/anime';
 const MUSIC = '/tools/library/music';
 
-// Status-count rows for each folder. status keys match the frontmatter Status
-// values (and URL segments) the topbar tiles used; Homepage carries no count.
+// Rows that sit directly under the media pill (no count).
+const animeTopRows = [{ label: 'Homepage', path: ANIME }];
+const musicTopRows = [
+  { label: 'Homepage',  path: MUSIC },
+  { label: 'Playlists', path: `${MUSIC}/playlists` },
+];
+
+// Status-count rows for each media type's nested "Library" folder. status keys
+// match the frontmatter Status values (and URL segments) the topbar tiles used.
 function animeRows(s) {
   return [
-    { label: 'Homepage',       path: ANIME },
     { label: 'Watching',       path: `${ANIME}/library/Currently-Watching`, count: s.byStatus['Currently-Watching'] || 0 },
     { label: 'Completed',      path: `${ANIME}/library/Completed`,          count: s.byStatus['Completed'] || 0 },
     { label: 'On-Hold',        path: `${ANIME}/library/On-Hold`,            count: s.byStatus['On-Hold'] || 0 },
@@ -35,8 +43,6 @@ function animeRows(s) {
 }
 function musicRows(s) {
   return [
-    { label: 'Homepage',       path: MUSIC },
-    { label: 'Playlists',      path: `${MUSIC}/playlists` },
     { label: 'Listening',      path: `${MUSIC}/library/Currently-Listening`, count: s.byStatus['Currently-Listening'] || 0 },
     { label: 'Listened',       path: `${MUSIC}/library/Listened`,            count: s.byStatus['Listened'] || 0 },
     { label: 'Plan',           path: `${MUSIC}/library/Plan-to-Listen`,      count: s.byStatus['Plan-to-Listen'] || 0 },
@@ -70,9 +76,12 @@ export default function LibraryNav({ route, accent }) {
       onActivate: () => navigate(r.path),
       trailing: r.count == null ? null : <Count value={loading ? '—' : r.count}/>,
     });
+    const libFolder = (id, rows) => ({ id, label: 'Library', isFolder: true, children: rows.map(toNode) });
     return [
-      { id: 'anime', label: 'Anime', isFolder: true, children: animeRows(anime).map(toNode) },
-      { id: 'music', label: 'Music', isFolder: true, children: musicRows(music).map(toNode) },
+      { id: 'anime', label: 'Anime', isFolder: true,
+        children: [...animeTopRows.map(toNode), libFolder('anime:library', animeRows(anime))] },
+      { id: 'music', label: 'Music', isFolder: true,
+        children: [...musicTopRows.map(toNode), libFolder('music:library', musicRows(music))] },
     ];
   }, [anime, music, currentPath, loading]);
 
@@ -80,11 +89,14 @@ export default function LibraryNav({ route, accent }) {
     isOpen: exp.isOpen,
     toggle: exp.toggle,
     anyExpanded: exp.anyExpanded,
-    expandAll: () => exp.expandAll(['anime', 'music']),
+    expandAll: () => exp.expandAll(['anime', 'anime:library', 'music', 'music:library']),
     collapseAll: exp.collapseAll,
     canReveal: true,
     revealCurrent: () => {
-      exp.reveal([seg === 'music' ? 'music' : 'anime']);
+      const media = seg === 'music' ? 'music' : 'anime';
+      // Open the media pill AND its nested Library folder — the active row lives
+      // inside the latter for every filtered grid.
+      exp.reveal([media, `${media}:library`]);
       setTimeout(() => {
         const el = document.querySelector('[data-current-file="true"]');
         if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });

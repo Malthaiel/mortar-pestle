@@ -20,7 +20,13 @@ import BrowseResultCard from './BrowseResultCard.jsx';
 import CollageCover from './CollageCover.jsx';
 import PosterRow from '@modules/core/library/PosterRow.jsx';
 import { Seg } from '@host/components/ui/index.js';
-import { SEARCH_TABS, useSearchTab, ResultRow, trackRowProps, recordingRowProps } from './searchShared.jsx';
+import {
+  SEARCH_TABS, useSearchTab, SEARCH_SOURCES, useSearchSource,
+  ResultRow, trackRowProps, recordingRowProps, youtubeRowProps,
+} from './searchShared.jsx';
+import { usePlaylistMenu } from './contextMenus.js';
+import { useMusicPlayer } from './MusicPlayerProvider.jsx';
+import { youtubeQueueItem } from './util.js';
 import { encodePath } from '../paths.js';
 import { navigate as go } from '@host/router.js';
 
@@ -50,6 +56,7 @@ function errText(e, fallback) {
 export default function MusicHome({ accent, query = '', albums, ownedIds, onPlay }) {
   const { playlists } = usePlaylists();
   const [tab, setTab] = useSearchTab('tools:musicSearchTab');
+  const [source, setSource] = useSearchSource('tools:musicSearchSource');
   const q = (query || '').trim();
 
   return (
@@ -61,9 +68,12 @@ export default function MusicHome({ accent, query = '', albums, ownedIds, onPlay
       }}>
         {q ? (
           <>
-            <Seg options={SEARCH_TABS} value={tab} onChange={setTab} accent={accent}/>
-            <SearchResults query={q} tab={tab} accent={accent} albums={albums} ownedIds={ownedIds}
-                           onPlay={onPlay} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <Seg options={SEARCH_SOURCES} value={source} onChange={setSource} accent={accent}/>
+              <Seg options={SEARCH_TABS} value={tab} onChange={setTab} accent={accent}/>
+            </div>
+            <SearchResults query={q} tab={tab} source={source} accent={accent} albums={albums}
+                           ownedIds={ownedIds} onPlay={onPlay} />
           </>
         ) : (
           <>
@@ -125,10 +135,12 @@ function YourPlaylists({ playlists, accent }) {
 
 function PlaylistMiniCard({ playlist, accent }) {
   const count = playlist.trackCount || 0;
+  const playlistMenu = usePlaylistMenu(accent);
   return (
     <div
       onClick={() => toPlaylist(playlist.path)}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toPlaylist(playlist.path); } }}
+      onContextMenu={(e) => playlistMenu(e, playlist)}
       role="button" tabIndex={0}
       className="candy-btn" data-shape="tile"
       style={{ '--accent': accent || 'var(--accent)' }}
@@ -198,39 +210,52 @@ function MoreFromYourArtists({ albums, ownedIds, accent }) {
 
 // Exported: the topbar's MusicSearchBar popup renders the identical stacks, so
 // the popup and the full page can never drift apart.
-export function SearchResults({ query, tab, accent, albums, ownedIds, onPlay }) {
+export function SearchResults({ query, tab, source = 'both', accent, albums, ownedIds, onPlay }) {
   const [mbAlbums, setMbAlbums] = useState(null);
   const [mbArtists, setMbArtists] = useState(null);
   const [mbSongs, setMbSongs] = useState(null);
   const [localSongs, setLocalSongs] = useState(null);
+  const [ytSongs, setYtSongs] = useState(null);
+  const [ytError, setYtError] = useState(null);
   const [error, setError] = useState(null);
+  const { playTracks } = useMusicPlayer();
   const reqId = useRef(0);
 
   // Which stacks this tab renders — also gates the fetches, so switching to
-  // Artists never spends a MusicBrainz call on recordings.
+  // Artists never spends a MusicBrainz call on recordings. `source` gates the
+  // two remote catalogues on top of that; the local-library stacks ignore it.
+  const wantMb = source !== 'yt';
+  const wantYt = source !== 'mb';
   const showAlbums  = tab === 'all' || tab === 'albums';
   const showSongs   = tab === 'all' || tab === 'songs';
   const showArtists = tab === 'all' || tab === 'artists';
 
   useEffect(() => {
     const myId = ++reqId.current;
-    setError(null); setMbAlbums(null); setMbArtists(null); setMbSongs(null); setLocalSongs(null);
+    setError(null); setYtError(null);
+    setMbAlbums(null); setMbArtists(null); setMbSongs(null); setLocalSongs(null); setYtSongs(null);
     const t = setTimeout(async () => {
       try {
-        const [al, ar, rec, tr] = await Promise.all([
-          showAlbums  ? musicApi.searchReleaseGroups(query, 18, 0).catch(() => []) : Promise.resolve(null),
-          showArtists ? musicApi.searchArtists(query).catch(() => [])              : Promise.resolve(null),
-          showSongs   ? musicApi.searchRecordings(query).catch(() => [])           : Promise.resolve(null),
-          showSongs   ? musicApi.searchTracks(query, 40).catch(() => [])           : Promise.resolve(null),
+        const [al, ar, rec, tr, yt] = await Promise.all([
+          wantMb && showAlbums  ? musicApi.searchReleaseGroups(query, 18, 0).catch(() => []) : Promise.resolve(null),
+          wantMb && showArtists ? musicApi.searchArtists(query).catch(() => [])              : Promise.resolve(null),
+          wantMb && showSongs   ? musicApi.searchRecordings(query).catch(() => [])           : Promise.resolve(null),
+          showSongs             ? musicApi.searchTracks(query, 40).catch(() => [])           : Promise.resolve(null),
+          // yt-dlp shells out (1-3s) and can fail on its own (tool missing, no
+          // network) — its error is kept separate so it never blanks the
+          // MusicBrainz stacks.
+          wantYt && showSongs
+            ? musicApi.searchYoutube(query, 15).catch((e) => { setYtError(errText(e, 'YouTube search failed.')); return []; })
+            : Promise.resolve(null),
         ]);
         if (myId !== reqId.current) return;
-        setMbAlbums(al); setMbArtists(ar); setMbSongs(rec); setLocalSongs(tr);
+        setMbAlbums(al); setMbArtists(ar); setMbSongs(rec); setLocalSongs(tr); setYtSongs(yt);
       } catch (e) {
         if (myId === reqId.current) setError(errText(e, 'Search failed.'));
       }
     }, 350);
     return () => clearTimeout(t);
-  }, [query, showAlbums, showSongs, showArtists]);
+  }, [query, showAlbums, showSongs, showArtists, wantMb, wantYt]);
 
   const localHits = useMemo(() => {
     const ql = query.toLowerCase();
@@ -266,7 +291,21 @@ export function SearchResults({ query, tab, accent, albums, ownedIds, onPlay }) 
         </div>
       )}
 
-      {showSongs && (
+      {wantYt && showSongs && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <GroupHeading>Songs · YouTube</GroupHeading>
+          {ytError && <div style={{ color: 'var(--text)', fontSize: 12 }}>{ytError}</div>}
+          {!ytError && ytSongs === null && <Muted>Searching…</Muted>}
+          {!ytError && ytSongs && (ytSongs.length === 0
+            ? <Muted>No songs.</Muted>
+            : <RowList>{ytSongs.map(h => (
+                <ResultRow key={h.watchUrl} {...youtubeRowProps(h)}
+                           onClick={() => playTracks([youtubeQueueItem(h)], 0)} />
+              ))}</RowList>)}
+        </div>
+      )}
+
+      {wantMb && showSongs && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <GroupHeading>Songs · MusicBrainz</GroupHeading>
           {!error && mbSongs === null && <Muted>Searching…</Muted>}
@@ -283,7 +322,7 @@ export function SearchResults({ query, tab, accent, albums, ownedIds, onPlay }) 
         </div>
       )}
 
-      {showAlbums && (
+      {wantMb && showAlbums && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <GroupHeading>Albums · MusicBrainz</GroupHeading>
@@ -306,7 +345,7 @@ export function SearchResults({ query, tab, accent, albums, ownedIds, onPlay }) 
         </div>
       )}
 
-      {showArtists && (
+      {wantMb && showArtists && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <GroupHeading>Artists · MusicBrainz</GroupHeading>
           {!error && mbArtists === null && <Muted>Searching…</Muted>}

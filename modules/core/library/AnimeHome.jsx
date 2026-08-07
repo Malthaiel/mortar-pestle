@@ -10,7 +10,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { videoApi } from './api.js';
 import PosterRow from './PosterRow.jsx';
 import AnimeResultCard from './AnimeResultCard.jsx';
-import { SeriesCard } from './SeriesBrowser.jsx';
+import { SeriesCard, useSeriesMenu } from './SeriesBrowser.jsx';
 import { buildLibraryIndex } from './useLibraryMap.js';
 import { coverSrc } from './util.js';
 import { encodePath } from './paths.js';
@@ -117,6 +117,7 @@ function ContinueWatching({ series, accent }) {
 
 function ContinueCard({ series, accent }) {
   const [hover, setHover] = useState(false);
+  const seriesMenu = useSeriesMenu(accent);
   const img = coverSrc(series.image);
   const total = series.episodesTotal || 0;
   const watched = watchedCount(series);
@@ -128,6 +129,7 @@ function ContinueCard({ series, accent }) {
   return (
     <div
       onClick={open}
+      onContextMenu={(e) => seriesMenu(e, series)}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}

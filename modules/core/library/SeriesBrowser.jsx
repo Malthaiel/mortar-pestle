@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { videoApi, prefetchCredits } from './api.js';
 import { coverSrc, STATUS_DOT_COLOR, resolveDot } from './util.js';
 import { FilterChip as Pill } from '@host/components/ui/index.js';
+import { useContextMenu } from '@host/context-menu/useContextMenu.js';
 
 // Single pill per sort dimension; click activates with the default direction,
 // click again flips direction. Active pill renders the direction arrow.
@@ -142,8 +143,38 @@ export default function SeriesBrowser({ accent, onSelect, selectedPath, initialS
   );
 }
 
+// Right-click menu for a series tile. Two rows because anime_uninstall's
+// delete_files flag is the only real choice the detail page's confirm dialog
+// offers — exposing both here avoids lifting that dialog out of SeriesDetail.
+// Exported so AnimeHome's ContinueCard shares one implementation.
+export function useSeriesMenu(accent) {
+  const { openContextMenu } = useContextMenu();
+  const uninstall = async (series, deleteFiles) => {
+    // eslint-disable-next-line no-alert
+    if (!window.confirm(
+      `Remove “${series.title}” from your library?` +
+      (deleteFiles ? ' Its video files are deleted too.' : ' Downloaded video files are kept on disk.') +
+      ' The card goes to the recycling bin.'
+    )) return;
+    try {
+      const rep = await videoApi.animeUninstall(series.path, deleteFiles);
+      window.dispatchEvent(new CustomEvent('video-library-changed', { detail: {} }));
+      // eslint-disable-next-line no-alert
+      if (rep && !rep.ok) window.alert((rep.warnings || [])[0] || 'Could not remove the library card.');
+    } catch (err) {
+      // eslint-disable-next-line no-alert
+      window.alert(`Remove failed: ${err?.message || err}`);
+    }
+  };
+  return (e, series) => openContextMenu(e, [
+    { label: 'Remove from library', danger: true, onClick: () => uninstall(series, false) },
+    { label: 'Remove + delete video files', danger: true, onClick: () => uninstall(series, true) },
+  ], { accent, header: series.title });
+}
+
 export function SeriesCard({ series, accent, selected, onSelect }) {
   const img = coverSrc(series.image);
+  const seriesMenu = useSeriesMenu(accent);
   const total = series.episodesTotal || 0;
   // Franchise rows: server pre-rolls watchedEpisodes to an integer count.
   // Non-franchise rows: it's an integer array — count its length.
@@ -160,6 +191,7 @@ export function SeriesCard({ series, accent, selected, onSelect }) {
   return (
     <div
       onClick={activate}
+      onContextMenu={(e) => seriesMenu(e, series)}
       onMouseEnter={() => prefetchCredits(series.providerId)}
       onKeyDown={onKeyDown}
       role="button"

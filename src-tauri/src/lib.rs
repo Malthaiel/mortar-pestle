@@ -874,6 +874,7 @@ pub fn run() {
             commands::music_download::music_download_status,
             commands::music_download::music_download_cancel,
             commands::music_download::music_stream_resolve,
+            commands::music_download::music_search_youtube,
             commands::library_import::library_import_enqueue,
             commands::library_import::library_import_status,
             commands::library_import::library_import_cancel,

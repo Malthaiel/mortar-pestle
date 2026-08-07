@@ -14,7 +14,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Popover, Seg } from '@host/components/ui';
 import { navigate as go } from '@host/router.js';
-import { SEARCH_TABS, useSearchTab } from './searchShared.jsx';
+import { SEARCH_TABS, useSearchTab, SEARCH_SOURCES, useSearchSource } from './searchShared.jsx';
 import { SearchResults } from './MusicHome.jsx';
 
 const PANEL_W = 560;
@@ -26,6 +26,7 @@ export default function MusicSearchBar({ accent, query, setQuery, albums, ownedI
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
   const [tab, setTab] = useSearchTab('tools:musicSearchTab');
+  const [source, setSource] = useSearchSource('tools:musicSearchSource');
   const q = (query || '').trim();
   const show = open && !!q && !suppress;
 
@@ -82,7 +83,8 @@ export default function MusicSearchBar({ accent, query, setQuery, albums, ownedI
         onChange={(e) => { setQuery(e.target.value); setOpen(!!e.target.value.trim()); }}
         onFocus={() => setOpen(!!q)}
         onKeyDown={onKeyDown}
-        placeholder="Search your library and MusicBrainz"
+        placeholder={'Search your library and ' +
+          (source === 'yt' ? 'YouTube' : source === 'mb' ? 'MusicBrainz' : 'MusicBrainz + YouTube')}
         className="candy-input"
         data-music-search
         style={{
@@ -105,9 +107,10 @@ export default function MusicSearchBar({ accent, query, setQuery, albums, ownedI
           style={{ position: 'fixed', zIndex: 1100, top: pos.top, left: pos.left, width: pos.width, maxHeight: '60vh' }}
           bodyStyle={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 14 }}
         >
+          <Seg options={SEARCH_SOURCES} value={source} onChange={setSource} accent={accent} />
           <Seg options={SEARCH_TABS} value={tab} onChange={setTab} accent={accent} />
           <SearchResults
-            query={q} tab={tab} accent={accent}
+            query={q} tab={tab} source={source} accent={accent}
             albums={albums} ownedIds={ownedIds} onPlay={onPlay}
           />
         </Popover>

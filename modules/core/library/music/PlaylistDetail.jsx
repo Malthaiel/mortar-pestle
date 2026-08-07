@@ -15,6 +15,7 @@ import CollageCover from './CollageCover.jsx';
 import { encodePath } from '../paths.js';
 import { navigate } from '@host/router.js';
 import { fmtDuration } from './searchShared.jsx';
+import { useContextMenu } from '@host/context-menu/useContextMenu.js';
 
 // PlaylistTrack → player queue item. Each track keeps its own album cover/artist
 // (playlists span albums), which is why playback uses playTracks, not
@@ -53,6 +54,7 @@ export default function PlaylistDetail({ path, accent }) {
 
   const { playTracks, enqueue, currentTrack, isPlaying } = useMusicPlayer();
   const { saveTracks, rename, setCover, deletePlaylist } = usePlaylists();
+  const { openContextMenu } = useContextMenu();
 
   const load = () => {
     const myId = ++reqId.current;
@@ -115,6 +117,11 @@ export default function PlaylistDetail({ path, accent }) {
     });
   };
   const removeAt = (i) => persist(tracks.filter((_, idx) => idx !== i));
+  // Right-click a row → the same removal the per-row × does (playlist entry only,
+  // never the underlying track).
+  const rowMenu = (e, i, t) => openContextMenu(e, [
+    { label: 'Remove from playlist', danger: true, onClick: () => removeAt(i) },
+  ], { accent, header: t.title });
   const drop = (to) => {
     if (dragIdx == null || dragIdx === to) return;
     const next = tracks.slice();
@@ -262,6 +269,7 @@ export default function PlaylistDetail({ path, accent }) {
               onMouseEnter={() => setHoverIdx(i)}
               onMouseLeave={() => setHoverIdx((o) => (o === i ? null : o))}
               onClick={() => rowPlayable(i) && playFrom(i)}
+              onContextMenu={(e) => rowMenu(e, i, t)}
               title={rowPlayable(i) ? '' : 'audio not downloaded'}
               style={{
                 display: 'flex',

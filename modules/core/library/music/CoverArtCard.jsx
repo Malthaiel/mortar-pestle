@@ -1,11 +1,14 @@
 // Album cover card used in the AlbumBrowser grid. Square cover, title +
-// artist + year beneath. Hover overlays a circular play button.
+// artist + year beneath. Hover overlays a circular play button. Right-click
+// deletes the album (shared menu — every grid that renders this tile gets it).
 
 import { useState } from 'react';
 import { coverSrc, STATUS_DOT_COLOR, resolveDot } from './util.js';
+import { useAlbumMenu } from './contextMenus.js';
 
 export default function CoverArtCard({ album, accent, selected, onSelect, onPlay }) {
   const [hover, setHover] = useState(false);
+  const albumMenu = useAlbumMenu(accent);
   const img = coverSrc(album.image, 320);
   const statusDot = resolveDot(STATUS_DOT_COLOR, album.status, accent);
   const activate = () => onSelect(album.path);
@@ -16,6 +19,7 @@ export default function CoverArtCard({ album, accent, selected, onSelect, onPlay
     <div
       onClick={activate}
       onKeyDown={onKeyDown}
+      onContextMenu={(e) => albumMenu(e, album)}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       role="button"

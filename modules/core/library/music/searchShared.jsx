@@ -13,13 +13,28 @@ export const SEARCH_TABS = [
   { value: 'artists', label: 'Artists' },
 ];
 
+// Which catalogue(s) a query hits. Local-library results always render — this
+// only gates the two remote sources.
+export const SEARCH_SOURCES = [
+  { value: 'both', label: 'Both' },
+  { value: 'mb',   label: 'MusicBrainz' },
+  { value: 'yt',   label: 'YouTube' },
+];
+
 const VALID = new Set(SEARCH_TABS.map(t => t.value));
+const VALID_SRC = new Set(SEARCH_SOURCES.map(s => s.value));
 
 // localStorage-backed tab choice. Guards against a stale/garbage stored value
 // so a renamed tab can never wedge the surface into rendering nothing.
 export function useSearchTab(key) {
   const [raw, setRaw] = usePersistedState(key, 'all');
   return [VALID.has(raw) ? raw : 'all', setRaw];
+}
+
+// Same contract for the source selector.
+export function useSearchSource(key) {
+  const [raw, setRaw] = usePersistedState(key, 'both');
+  return [VALID_SRC.has(raw) ? raw : 'both', setRaw];
 }
 
 // Track-highlight handoff between the browser pane and the detail pane.
@@ -105,5 +120,14 @@ export function recordingRowProps(hit) {
     title: hit.title,
     sub: [hit.artist, hit.release].filter(Boolean).join(' · '),
     right: fmtDuration(hit.length),
+  };
+}
+
+// Rows for a list of YouTube hits (music_search_youtube shape).
+export function youtubeRowProps(hit) {
+  return {
+    title: hit.title,
+    sub: hit.uploader || '',
+    right: fmtDuration(hit.duration),
   };
 }

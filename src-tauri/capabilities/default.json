@@ -183,6 +183,7 @@
     "allow-music-download-status",
     "allow-music-download-cancel",
     "allow-music-stream-resolve",
+    "allow-music-search-youtube",
     "allow-library-import-enqueue",
     "allow-library-import-status",
     "allow-library-import-cancel",

@@ -153,7 +153,9 @@ export function MusicPlayerProvider({ children }) {
   const [resolvingStream, setResolvingStream] = useState(false);
   const resolveSeqRef = useRef(0);
   const streamSrcKeyRef = useRef(null); // stream key currently loaded in <audio>
-  const streamKeyOf = (t) => (t ? `${t.albumPath}|${t.n}` : '');
+  // Loose YouTube hits carry no album card, so albumPath|n would be "null|null"
+  // for every one of them — key those by their watch URL instead.
+  const streamKeyOf = (t) => (t ? (t.watchUrl || `${t.albumPath}|${t.n}`) : '');
   const isPlayable = (t) =>
     !!t && (t.available || (t.streamable && !failedStreamsRef.current.has(streamKeyOf(t))));
 
@@ -210,9 +212,11 @@ export function MusicPlayerProvider({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [queue, index, repeat, shuffle]);
 
-  // Persist last-played track + position periodically.
+  // Persist last-played track + position periodically. Loose YouTube hits have
+  // no album card to restore from, so they're skipped rather than blanking the
+  // last real album (the restore below keys entirely on albumPath).
   useEffect(() => {
-    if (!currentTrack) return;
+    if (!currentTrack || !currentTrack.albumPath) return;
     const interval = setInterval(() => {
       const a = audioRef.current;
       if (!a) return;
@@ -318,7 +322,9 @@ export function MusicPlayerProvider({ children }) {
       }
       const seq = ++resolveSeqRef.current;
       setResolvingStream(true);
-      invoke('music_stream_resolve', { albumPath: currentTrack.albumPath, n: currentTrack.n })
+      invoke('music_stream_resolve', currentTrack.watchUrl
+        ? { watchUrl: currentTrack.watchUrl }
+        : { albumPath: currentTrack.albumPath, n: currentTrack.n })
         .then(res => {
           if (seq !== resolveSeqRef.current) return; // track changed mid-resolve
           setResolvingStream(false);

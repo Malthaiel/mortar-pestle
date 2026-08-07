@@ -186,6 +186,7 @@ fn main() {
         "music_download_status",
         "music_download_cancel",
         "music_stream_resolve",
+        "music_search_youtube",
         "library_import_enqueue",
         "library_import_status",
         "library_import_cancel",

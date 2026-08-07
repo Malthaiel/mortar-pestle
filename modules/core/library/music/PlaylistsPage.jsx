@@ -5,6 +5,7 @@
 
 import { useState } from 'react';
 import { usePlaylists } from './PlaylistProvider.jsx';
+import { usePlaylistMenu } from './contextMenus.js';
 import CollageCover from './CollageCover.jsx';
 import PlaylistModal from './PlaylistModal.jsx';
 import PlaylistDetail from './PlaylistDetail.jsx';
@@ -115,9 +116,11 @@ function PlaylistGrid({ accent }) {
 function PlaylistCard({ playlist, accent, onOpen }) {
   const [hover, setHover] = useState(false);
   const count = playlist.trackCount || 0;
+  const playlistMenu = usePlaylistMenu(accent);
   return (
     <button
       onClick={onOpen}
+      onContextMenu={(e) => playlistMenu(e, playlist)}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{

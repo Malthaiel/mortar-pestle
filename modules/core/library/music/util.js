@@ -38,3 +38,23 @@ export function resolveDot(map, value, accent) {
   if (!(value in map)) return 'var(--text-muted)';
   return map[value] === null ? accent : map[value];
 }
+
+// A loose YouTube search hit as a player queue item. Same field set
+// trackToQueueItem builds (PlaylistDetail), minus any album card: `watchUrl`
+// is what music_stream_resolve keys on instead of albumPath + n.
+export function youtubeQueueItem(hit) {
+  return {
+    albumPath: null,
+    albumTitle: 'YouTube',
+    albumImage: null,
+    artist: hit.uploader || '',
+    n: null,
+    title: hit.title || '',
+    audioPath: null,
+    available: false,
+    streamable: true,
+    watchUrl: hit.watchUrl,
+    wikilink: null,
+    duration: hit.duration ?? null,
+  };
+}

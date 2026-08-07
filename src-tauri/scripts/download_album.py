@@ -434,6 +434,28 @@ def run_resolve(args):
     emit({"event": "resolve", "watchUrl": url, "streamUrl": stream})
 
 
+def run_search(args):
+    """--search mode: free-text YouTube search → one `search` event, no download.
+
+    Metadata only (--flat-playlist), so nothing is resolved to a stream until a
+    hit is actually played."""
+    if not shutil.which("yt-dlp"):
+        fatal("required tool not found on PATH: yt-dlp")
+    limit = max(1, min(50, args.limit or 15))
+    results = []
+    for c in ytdlp_json(f"ytsearch{limit}:{args.search}"):
+        u = watch_url(c)
+        if not u:
+            continue
+        results.append({
+            "watchUrl": u,
+            "title": cand_field(c, "title") or "",
+            "uploader": cand_field(c, "uploader", "channel", "uploader_id") or "",
+            "duration": c.get("duration") or None,
+        })
+    emit({"event": "search", "results": results})
+
+
 def _run_ytdlp_streaming(dl_args, n):
     """Run yt-dlp, streaming its download progress as NDJSON `progress` events
     (throttled to ~0.4s). Returns the process return code. Lines that don't parse
@@ -710,10 +732,16 @@ def main():
     ap.add_argument("--album-page")
     ap.add_argument("--track-key")
     ap.add_argument("--track-n", type=int, default=0)
+    # Search mode — free-text YouTube search, metadata only.
+    ap.add_argument("--search", help="free-text YouTube search; prints hits, downloads nothing")
+    ap.add_argument("--limit", type=int, default=15)
     args = ap.parse_args()
 
     if args.resolve:
         run_resolve(args)
+        return
+    if args.search:
+        run_search(args)
         return
     if not args.rg_mbid or not args.vault:
         ap.error("--rg-mbid and --vault are required")

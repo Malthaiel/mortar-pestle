@@ -18,6 +18,8 @@ export const musicApi = {
   searchReleaseGroups: (query, limit, offset) => _api.invoke('music_search_releasegroups', { query, limit, offset }),
   searchArtists:       (query) => _api.invoke('music_search_artists', { query }),
   searchRecordings:    (query) => _api.invoke('music_search_recordings', { query }),
+  // YouTube search (yt-dlp `ytsearch`, shelled out through the download script).
+  searchYoutube:       (query, limit) => _api.invoke('music_search_youtube', { query, limit: limit ?? null }),
   // Local track-title search across every album page's tracklist.
   searchTracks:        (query, limit) => _api.invoke('music_search_tracks', { query, limit: limit ?? null }),
   artistReleaseGroups: (artistMbid) => _api.invoke('music_artist_releasegroups', { artistMbid }),
