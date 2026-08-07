@@ -27,6 +27,7 @@ const SERVICE_NAMES = {
   'vod-solo': 'VOD review — one player',
   'vod-team': 'VOD review — team',
   theory: 'Theory coaching',
+  extended: 'Extended session',
   custom: 'Custom request',
 };
 

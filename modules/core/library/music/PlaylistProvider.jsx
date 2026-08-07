@@ -82,6 +82,13 @@ export function PlaylistProvider({ children }) {
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error('[playlists] list failed', e);
+      // A failed list renders identically to "you have no playlists", and the
+      // renderer console never reaches the dev log — so surface it as a toast.
+      window.dispatchEvent(new CustomEvent('agentic:notify', { detail: {
+        type: 'error', title: 'Playlists failed to load',
+        message: e?.message || String(e),
+        accent: 'var(--error)', iconKey: 'alert', duration: 4500,
+      } }));
     }
   }, []);
 
