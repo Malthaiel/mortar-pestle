@@ -189,10 +189,10 @@ export default function FoldMenu({
   // downward stack would unfold off the bottom of the window. Row 0 still lands
   // on the trigger's exact footprint; everything else mirrors about it.
   //
-  // The rotation is NOT mirrored: the hinge still runs 180deg -> 0deg. Only the
-  // PIVOT moves, from the flap's top edge to its bottom (see HINGE_Y), and
-  // rotating about an origin below the flap already carries it down and over
-  // the row beneath. Flipping the sign as well would undo that.
+  // It is the SAME fold, scaled -1 in Y about row 0's centre — one flip on the
+  // group, not a mirrored set of rules. Nothing else in this file branches on
+  // it except the two things that are paint rather than geometry (glyphs and
+  // depth). See UP_FLIP for why, and for what the five-branch version cost.
   up = false,
   // Index of the row holding the current value, or -1 for a command menu with
   // no selection (the titlebar account menu). Wears the app's standard
@@ -262,18 +262,43 @@ export default function FoldMenu({
   // own top edge — rotating about the edge lands the flap a whole GAP off its
   // target. Half of it makes the fold symmetric about the boundary.
   //
-  // Folding up, the flap sits ABOVE the row it lands on and the gap is below it,
-  // so the same midpoint is measured from the flap's own bottom edge instead.
-  const HINGE_Y = up ? `calc(100% + (${GAP_V}) / 2)` : `calc((${GAP_V}) / -2)`;
-  // Which side of a flap the gap lives on. Folding up, the stack is laid out
-  // bottom-to-top (see `col`), so the separator has to move to the other edge —
-  // a marginTop in a column-reverse box separates a row from the WRONG
-  // neighbour, and the fold lands a whole GAP out.
-  const GAP_SIDE = up ? 'marginBottom' : 'marginTop';
-  // Every box that stacks rows has to run bottom-to-top when folding up: the
-  // group AND each preserve-3d wrapper, since the nesting means every level
-  // holds a row plus the wrapper carrying everything past it.
-  const col = up ? { display: 'flex', flexDirection: 'column-reverse' } : null;
+  // ONE value, both directions. `up` does not move this pivot, or the gap side,
+  // or the stacking order — see UP_FLIP.
+  const HINGE_Y = `calc((${GAP_V}) / -2)`;
+
+  // UP is the DOWN fold, turned upside down. Nothing below branches on it.
+  //
+  // It used to: `up` moved the hinge pivot to the flap's bottom, moved the gap
+  // to marginBottom, laid every preserve-3d wrapper out column-reverse, and
+  // pinned the group and the panel by `bottom` instead of `top` — five parallel
+  // rules that had to be kept in step with a close that was tuned entirely
+  // against `down`. They were not, and could not be: every beat added to the
+  // close (the hug/tuck split, the group settle, the bottom-edge frame delay)
+  // was a beat somebody had to re-derive by hand for the other direction.
+  // User-directed 2026-08-06, after the mirrored close came out wrong: "mirror
+  // it 1-1 but just flip it upside down".
+  //
+  // So the geometry is mirrored ONCE, here, by the compositor: the whole open
+  // group is scaled -1 in Y about ROW 0's CENTRE, which is the one point that
+  // must not move (row 0 lands on the trigger's exact footprint in both
+  // directions). Every fold, every clock and every panel leg below is the
+  // down-fold's, unchanged, and comes out mirrored for free.
+  //
+  // Two things do NOT want mirroring, and both are PAINT rather than geometry:
+  //
+  //   1. glyphs — flipped text is unreadable, so each label counter-flips (see
+  //      `label`). Row 1's underside already counter-flips for its own 180deg
+  //      rotation, so under UP_FLIP the two cancel and it takes none.
+  //   2. depth — a candy lip and the panel's own band are DOWNWARD shadows, and
+  //      a press slides the face DOWN. Mirrored they would light every row from
+  //      below. Both ride --cbtn-depth (styles.css: the box-shadow AND the
+  //      :active translateY), so negating that one value on the rows puts the
+  //      band and the press back the right way up after the flip — see row().
+  //      The panel restates its own band, so it negates there.
+  const UP_FLIP = up ? {
+    transform: 'scaleY(-1)',
+    transformOrigin: `50% ${box.h / 2}px`,
+  } : null;
 
   const hinge = (deg, delay) => ({
     transform: `rotateX(${deg}deg) translateZ(-1px)`,
@@ -350,10 +375,27 @@ export default function FoldMenu({
   // written as its own end minus its own length, so the leg lands on SHUT by
   // construction: it can never be pushed past the handover, where the group is
   // already hidden and the rest of the motion would simply not be painted.
+  //
+  // OPENING it is the mirror of the close's TUCK, and it is the HALO's clock,
+  // not the row extent's. The two used to share one: the pad and the first
+  // height step both fired at `openAt(0) + DUR / 2` = 220ms, so for the first
+  // 220ms of an open there was a stack fading in over a panel still at exactly
+  // the trigger's rectangle — and that rectangle sits behind row 0's own opaque
+  // face, so there was no visible surface at all. User-reported 2026-08-06,
+  // "the opening unfolding animation background doesnt appear instantly after
+  // clicking the button". The close answers this with two beats (hug then
+  // tuck); the open now has its two, in mirror order — halo FIRST, from `press`,
+  // so a surface exists the moment the button's press lands, then the row extent
+  // on its own `+ DUR / 2` clock so it can never outrun a visible row.
+  //
+  // The `+ DUR / 2` on the ROW EXTENT is untouched and must stay: a row paints
+  // nothing until it passes edge-on, so extent that starts with the fold runs
+  // half a fold ahead of anything visible ("during the unfold the bg expands too
+  // fast", 2026-08-05). Only the halo moved.
   const panelD = open ? DUR / 2 : DUR / 8;
   const panelT = `${panelD}ms `
     + `${open ? 'ease-in-out' : 'cubic-bezier(0.32, 0, 0.67, 0)'} `
-    + `${open ? openAt(0) + DUR / 2 : SHUT - panelD}ms`;
+    + `${open ? press : SHUT - panelD}ms`;
   // The GROUP's own FOLD_PAD settle — the stack sits a pad low while open so the
   // panel's top edge lands on the trigger's line, and it has to give that back by
   // the time the fold ends. On panelT (37ms starting at SHUT - 37) the whole 6px
@@ -463,6 +505,14 @@ export default function FoldMenu({
   // starts covering more than row 0. A one-row menu has no hinge to hang either
   // on, so it falls back to the open flag.
   //
+  // BOTH directions ride `tuck` now, which is the same statement twice: the pad
+  // is one beat of its own at each end of the motion, LAST out on a close and
+  // FIRST in on an open. Opening it used to ride `folded`, whose outermost step
+  // is the first height step, so the halo and the row extent arrived in the same
+  // instant and the first 220ms of an open painted nothing (see panelT). Now
+  // `tuck` drops at `press` and the halo grows on the panelT beat that ends
+  // exactly where the extent begins.
+  //
   // CLOSING it rides `tuck`, i.e. it survives the whole staged collapse and goes
   // in its own beat right before the height, not half a fold before it — see the
   // two beats on `tuck`. The halo is the only part of
@@ -476,7 +526,7 @@ export default function FoldMenu({
   // keeps the old "ears of surplus width poking out of the shut button" bug dead:
   // the pad and the height reach zero on the same frame, so neither can outlive
   // the other.
-  const padOn = hinges ? (open ? folded < hinges : !tuck) : open;
+  const padOn = hinges ? !tuck : open;
   //
   // Per-wrapper lip state. A candy lip is a DOWNWARD box-shadow, so a row
   // rotated 180deg points its lip UP and stacks a whole depth of shadow above
@@ -496,8 +546,14 @@ export default function FoldMenu({
 
     if (open) {
       setDown(false);
-      setTuck(false);                                 // frame one, so the panel
-      for (let j = 0; j < hinges; j += 1) {           // starts from the trigger
+      // The halo beat, and the mirror of the close's tuck. At `press`, not at
+      // frame one: the pad's own legs carry no CSS delay, so this timer IS their
+      // start, and it has to land on the same instant panelT's delay does or the
+      // sides and the pinned edge come apart. Before this the pad waited for
+      // `folded`, half a fold later — see padOn.
+      at(press, () => setTuck(false));
+      for (let j = 0; j < hinges; j += 1) {
+
         // Lips return per row, each as its own unfold FINISHES — never during,
         // or the lip grows back while the row is still rotating.
         at(openAt(j) + DUR, () => setAt(setLips, j, true));
@@ -620,7 +676,13 @@ export default function FoldMenu({
     width: '100%',                    // the GROUP sizes the stack — see there
     height: box.h,
     display: 'block',                 // the class is inline-flex; these stack
-    '--cbtn-depth': lipOn ? depth : '0px',
+    // NEGATED under UP_FLIP, and that one sign covers both things this variable
+    // drives in styles.css: the lip (`box-shadow: 0 var(--cbtn-depth) 0`) and
+    // the press (`.candy-face { transform: translateY(var(--cbtn-depth)) }`).
+    // Rendered upward inside a group that is then mirrored, both come out
+    // pointing DOWN — a row keeps its own lip under it and still presses
+    // downward, exactly as it does in the unflipped fold.
+    '--cbtn-depth': lipOn ? (up ? `calc(${depth} * -1)` : depth) : '0px',
     // Re-armed against each wrapper's pointerEvents: 'none' — but ONLY while
     // open. An unconditional 'auto' also beats the GROUP's own open ? auto :
     // none, so the rows keep hit-testing through the whole close: the one you
@@ -641,7 +703,15 @@ export default function FoldMenu({
     placeItems: 'center',
     ...faceStyle,
   };
-  const label = { gridArea: '1 / 1', whiteSpace: 'nowrap' };
+  // Counter-flips the glyphs back the right way up under UP_FLIP. It goes on
+  // the LABEL, never on `.candy-face` — the face's transform slot belongs to
+  // .candy-btn's :active press, and an inline one here outranks the stylesheet
+  // and kills the press for every row in the fold.
+  const label = {
+    gridArea: '1 / 1',
+    whiteSpace: 'nowrap',
+    ...(up ? { transform: 'scaleY(-1)' } : null),
+  };
 
   // Rows nest: wrapper j holds row j+1 and everything under it. The LAST row
   // gets no wrapper of its own — its hinge rides the button, exactly as the toy
@@ -669,7 +739,7 @@ export default function FoldMenu({
         data-self-press
         aria-current={j === selected ? 'true' : undefined}
         style={j === n - 1 && j > 0
-          ? { ...row(lips[j - 1]), [GAP_SIDE]: GAP, ...hinge(open ? 0 : 180, open ? openAt(j - 1) : closeAt(j - 1)) }
+          ? { ...row(lips[j - 1]), marginTop: GAP, ...hinge(open ? 0 : 180, open ? openAt(j - 1) : closeAt(j - 1)) }
           // Row 1 is lifted clear of every other row, and this is arithmetic,
           // not a nudge. Each hinge carries translateZ(-1px), and two nested
           // 180deg rotations compose to the identity — so a row's FINAL z
@@ -708,7 +778,13 @@ export default function FoldMenu({
             <span style={{
               ...label,
               opacity: flipped[0] ? 1 : 0,
-              transform: 'scaleY(-1)',
+              // Two flips that cancel: this face is upside down because its row
+              // is rotated 180deg, and upside down AGAIN under UP_FLIP. So the
+              // counter-flip is exactly the one `label` already carries, and up
+              // wants neither. Written as an override rather than left to the
+              // spread, because the down direction needs it and label does not
+              // carry it there.
+              transform: up ? 'none' : 'scaleY(-1)',
               // gap: inherit, never a number. This span is a hand-built copy of
               // the trigger's face and the shut state swaps one for the other,
               // so any gap of its own shifts the avatar against the name at the
@@ -724,8 +800,7 @@ export default function FoldMenu({
       {j === n - 2 && stack(j + 1)}
       {j < n - 2 && (
         <div style={{
-          [GAP_SIDE]: GAP,
-          ...col,
+          marginTop: GAP,
           transformStyle: 'preserve-3d',
           // A row's translateZ(-1px) puts it BEHIND this wrapper's own plane,
           // so the wrapper wins every hit test over it and the row never sees a
@@ -845,7 +920,10 @@ export default function FoldMenu({
           // It uses the MEASURED depth, not the raw var: --cbtn-depth is
           // declared on the candy button itself, so on this div it would fall
           // back to --candy-depth (7px) while a chip trigger lifts by 5px.
-          position: 'absolute', left: 0, ...col,
+          position: 'absolute', left: 0,
+          // The ONE place the direction exists — see UP_FLIP. Everything from
+          // here down is written for the downward fold and mirrors for free.
+          ...UP_FLIP,
           // + FOLD_PAD while open: the panel reaches FOLD_PAD above row 0, and
           // row 0 sits in a titlebar with only 6px of bar above it, so a stack
           // left at the trigger's own line puts the panel's top edge off the top
@@ -854,17 +932,21 @@ export default function FoldMenu({
           // the panel's clock, and starts from 0, so at the handover frame the
           // paper is still dead on the button it replaced — the locked "row 1
           // lands ON the trigger" rule survives; the settle happens after.
-          top: `calc(${depth} / -2 * var(--candy-center-on, 1) + ${open ? FOLD_PAD : 0}px)`,
-          // Folding up, the stack is pinned by its BOTTOM to the trigger's own
-          // bottom line and grows upward, and the settle moves it UP by the pad
-          // instead of down. Written AFTER the `top` above so it wins — `top`
-          // has to go back to `auto` or it, not `bottom`, places the box.
-          // The lift is the same one with its sign flipped: a bigger `bottom`
-          // raises a box exactly as a smaller `top` does.
-          ...(up ? {
-            top: 'auto',
-            bottom: `calc(${depth} / 2 * var(--candy-center-on, 1) + ${open ? FOLD_PAD : 0}px)`,
-          } : {}),
+          //
+          // The settle's SIGN is the one thing UP_FLIP cannot mirror, because
+          // `top` is layout and the flip is a transform — the box is placed
+          // first, then mirrored, so a settle written to move the group down
+          // still moves it down. Negated for up, which is the same statement it
+          // always was: the panel reaches a pad PAST row 0 on the far side, and
+          // the group gives that pad back toward the trigger. Flipped, the far
+          // side is below, so the group slides up. `groupT` is untouched, so it
+          // still cancels against the panel's own pinned-edge leg to the frame.
+          //
+          // The centring lift is NOT negated: UP_FLIP pivots on row 0's centre,
+          // so row 0 does not move and its optical lift is the trigger's own in
+          // both directions.
+          top: `calc(${depth} / -2 * var(--candy-center-on, 1)`
+            + ` + ${open ? (up ? -FOLD_PAD : FOLD_PAD) : 0}px)`,
           // The GROUP sets the width and the rows take 100% of it, so every row
           // is the same rectangle and perspective-origin (which defaults to the
           // centre of whatever DECLARES perspective) lands on their centre — a
@@ -891,7 +973,7 @@ export default function FoldMenu({
           // on close, same clock. Any difference between these two lines is a
           // flash, so they change together or not at all.
           transition: `opacity ${open ? SETTLE : 0}ms ease-in-out ${open ? press : SHUT}ms,`
-            + ` ${up ? 'bottom' : 'top'} ${groupT}`,
+            + ` top ${groupT}`,
         }}
       >
         {/* The paper it unfolds ONTO. Without it the rows hang over whatever
@@ -916,8 +998,11 @@ export default function FoldMenu({
             // unfolding on the strip, and a blur under it reads as a second
             // surface. The two flat candy bands stay, so it keeps the same
             // depth every other candy surface has. User-directed 2026-08-05.
-            boxShadow: '0 var(--candy-surface-depth) 0 -2px var(--surface-3),'
-              + ' 0 var(--candy-surface-depth) 0 0 var(--border-2)',
+            // NEGATED under UP_FLIP, for the same reason the rows negate their
+            // --cbtn-depth: this is a downward band, and a mirrored one would
+            // light the paper from underneath.
+            boxShadow: `0 ${up ? 'calc(var(--candy-surface-depth) * -1)' : 'var(--candy-surface-depth)'} 0 -2px var(--surface-3),`
+              + ` 0 ${up ? 'calc(var(--candy-surface-depth) * -1)' : 'var(--candy-surface-depth)'} 0 0 var(--border-2)`,
             // Shut, it is the trigger rectangle exactly — so the first frame of
             // the open has nothing to pop. The pad only appears as it grows.
             //
@@ -931,10 +1016,8 @@ export default function FoldMenu({
             // see the sides of the bg sticking out". One flag and one clock for
             // the whole pad, and they cannot come apart again.
             left: padOn ? -FOLD_PAD : 0,
-            // Pinned to whichever edge the stack itself is pinned to, so it
-            // grows the same way the rows do. Folding up that anchor also
-            // absorbs the lip (see the height note), keeping BOTH directions
-            // the same shape: FOLD_PAD above the stack, FOLD_PAD + a lip below.
+            // Pinned to the same edge the stack is, so it grows the way the rows
+            // do.
             //
             // `open || padOn`, so this leg is `open`-driven OPENING and
             // `padOn`-driven CLOSING, and its clock (see the transition) splits
@@ -949,8 +1032,14 @@ export default function FoldMenu({
             // pad standing above it and no sides left, screenshotted 2026-08-06:
             // "i can see the top of it poking out without the sides present".
             // Closing, all four pad edges leave together on the tuck beat.
-            [up ? 'bottom' : 'top']: open || padOn
-              ? -(up ? FOLD_PAD + padLip : FOLD_PAD) : 0,
+            // Always `top`, both directions — UP_FLIP mirrors the placed box.
+            //
+            // The lip allowance moves to THIS edge for up, and that is not a
+            // second rule, it is the same one: the allowance belongs on
+            // whichever side the rows' bands point, and negating --cbtn-depth
+            // (see row()) points them at the stack's local TOP. After the flip
+            // it lands back under row 0, exactly where the down fold has it.
+            top: open || padOn ? -(FOLD_PAD + (up ? padLip : 0)) : 0,
             width: padOn ? `calc(100% + ${FOLD_PAD * 2}px)` : '100%',
             // Sized to the rows STILL SHOWING, not to the open/shut flag — see
             // `folded`. Same rows + GAP formula the stack itself is laid out by,
@@ -998,9 +1087,9 @@ export default function FoldMenu({
             // panelT opening (it has to cancel the group's slide), the pad's own
             // clock closing (or it tucks in two frames before the handover) — see
             // the value above.
-            transition: (open ? [`${up ? 'bottom' : 'top'} ${panelT}`] : [])
+            transition: (open ? [`top ${panelT}`] : [])
               .concat(['height', 'left', 'width']
-                .concat(open ? [] : [up ? 'bottom' : 'top'])
+                .concat(open ? [] : ['top'])
                 .map((p) => {
                   // Only the height, only closing, only on the tuck beat — the hug
                   // has to stay glued to the rows and cannot be delayed. See FRAME.

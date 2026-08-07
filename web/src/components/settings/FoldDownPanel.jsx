@@ -34,6 +34,25 @@ export default function FoldDownPanel() {
   const profile = session?.profile || null;
   const name = profile?.display_name || profile?.handle || '';
 
+  // One menu, twice, differing only in `up` — the direction is a PROP, not a
+  // second component. The up one is pinned to the BOTTOM of the same reserve
+  // box because its stack grows the other way; that is the only difference the
+  // host owes it.
+  const menu = (up) => (
+    <FoldMenu
+      up={up}
+      style={CENTER}
+      rowH={BTN}
+      triggerClassName="titlebar-account is-hover-accent"
+      triggerTitle={name || 'Account'}
+      ariaLabel={`Account (${ITEMS.length} rows, folds ${up ? 'up' : 'down'})`}
+      items={ITEMS}
+    >
+      <UserAvatar src={profile?.avatar_url} name={name} size={MARK} />
+      {name || 'Account'}
+    </FoldMenu>
+  );
+
   return (
     <div>
       <div style={{
@@ -44,19 +63,14 @@ export default function FoldDownPanel() {
 
       {/* Derived from the row count, not a constant — a four-row stack is two
           rows taller than a two-row one. ROW_STEP is FoldMenu's own row + GAP
-          at chip depth (28 + 5 + 4). */}
-      <div style={{ height: BTN + (ITEMS.length - 1) * (BTN + 9) + 32 }}>
-        <FoldMenu
-          style={CENTER}
-          rowH={BTN}
-          triggerClassName="titlebar-account is-hover-accent"
-          triggerTitle={name || 'Account'}
-          ariaLabel={`Account (${ITEMS.length} rows)`}
-          items={ITEMS}
-        >
-          <UserAvatar src={profile?.avatar_url} name={name} size={MARK} />
-          {name || 'Account'}
-        </FoldMenu>
+          at chip depth (28 + 5 + 4). Both menus share it: the down one hangs
+          into it, the up one sits at its floor and grows back through it. */}
+      <div style={{
+        display: 'flex', gap: 32, alignItems: 'stretch',
+        height: BTN + (ITEMS.length - 1) * (BTN + 9) + 32,
+      }}>
+        <div>{menu(false)}</div>
+        <div style={{ display: 'flex', alignItems: 'flex-end' }}>{menu(true)}</div>
       </div>
     </div>
   );
