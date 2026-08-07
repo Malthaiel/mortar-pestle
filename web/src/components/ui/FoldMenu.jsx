@@ -649,7 +649,23 @@ export default function FoldMenu({
   // same frame the top halo closes. It may go NEGATIVE (a `high` surface depth of
   // 7px against a chip's 5px lip), which is correct and wants no clamp: the panel
   // simply has to end a hair above row 0's bottom for its band to hide.
-  const padLip = open || shown ? dpx - surf : 0;
+  // OPEN it is the FULL lip, not `dpx - surf`, and that is a RESTING-SPACING
+  // call rather than a travel one. The algebra above says the two visible halos
+  // come out equal at `dpx - surf`; the pixels say otherwise. Measured at full
+  // open, four rows, down direction: 6px between row 0's box and the panel's
+  // top edge against 3px at the bottom — user-reported 2026-08-06 on BOTH
+  // directions, "the spacing between the shortcuts button and the edge of the
+  // background / the settings button and the edge of the background are uneven
+  // … i want those two spacings to be applied to the opposite side of the bg".
+  // In both menus the halo he likes is the one at the TOP; the short one is the
+  // bottom, on the side the row's own lip paints over.
+  //
+  // It reverts to `dpx - surf` for the whole close, because THAT value is what
+  // makes all four visible halos the same function of progress while the panel
+  // tucks (see the note below, and the two measurements that pinned it). The
+  // 4px handover between the two happens on frame one of the close, on the
+  // height's own leg, while the height is already losing a row — nothing to see.
+  const padLip = open ? dpx : (shown ? dpx - surf : 0);
 
 
 
