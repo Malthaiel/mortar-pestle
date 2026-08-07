@@ -293,7 +293,17 @@ export default function BroadcastPage({ api, accent }) {
           ) : !alive ? (
             <EmptyState message={starting ? 'Broadcast engine is starting…' : 'Broadcast engine is down.'} />
           ) : (
-            <EngineDisplay api={api} alive={alive}>
+            /* The preview is a real child HWND, so it paints ON TOP of the
+               whole webview — no web-drawn panel can ever cover it, and
+               z-index is not in the conversation. Dropping `alive` tears the
+               native window down (and rebuilds it on close), which is the only
+               way to put an AppWindow in front of it. Deliberately NOT extended
+               to the stream confirm modal: blanking the preview mid-stream to
+               ask a question would be worse than the overlap.
+               NB: plain block comment, not {(slash-star)} — this is a ternary
+               arm, a JS expression position where a JSX comment parses as an
+               object literal and is a syntax error. */
+            <EngineDisplay api={api} alive={alive && !audioProps}>
               <PreviewInteract api={api} snapshot={snapshot} />
             </EngineDisplay>
           )}
