@@ -66,11 +66,12 @@ export function fmtDuration(sec) {
 
 // One search result as a full-width row: title, optional sub-line, optional
 // right-aligned readout. `dim` greys a track whose audio isn't on disk.
-export function ResultRow({ title, sub, right, dim, selected, onClick }) {
+export function ResultRow({ title, sub, right, dim, selected, onClick, onContextMenu }) {
   const [hover, setHover] = useState(false);
   return (
     <button
       onClick={onClick}
+      onContextMenu={onContextMenu}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       title={dim ? `${title} — not downloaded` : title}

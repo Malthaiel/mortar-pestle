@@ -14,7 +14,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { musicApi } from './api.js';
-import { usePlaylists } from './PlaylistProvider.jsx';
+import { usePlaylists, refFromQueueItem } from './PlaylistProvider.jsx';
 import CoverArtCard from './CoverArtCard.jsx';
 import BrowseResultCard from './BrowseResultCard.jsx';
 import CollageCover from './CollageCover.jsx';
@@ -27,6 +27,7 @@ import {
 import { usePlaylistMenu } from './contextMenus.js';
 import { useMusicPlayer } from './MusicPlayerProvider.jsx';
 import { youtubeQueueItem } from './util.js';
+import { useAddToPlaylistMenu } from './useAddToPlaylistMenu.jsx';
 import { encodePath } from '../paths.js';
 import { navigate as go } from '@host/router.js';
 
@@ -221,6 +222,14 @@ export function SearchResults({ query, tab, source = 'both', accent, albums, own
   const { playTracks } = useMusicPlayer();
   const reqId = useRef(0);
 
+  // Right-click any result row to add that song to a playlist, without having
+  // to play it first. Local rows go through refFromQueueItem as-is; a YouTube
+  // hit is mapped to a queue item first so it carries watchUrl. A not-yet-
+  // downloaded local row has no audioPath and no watchUrl, so the hook reports
+  // nothing addable rather than writing a row that points nowhere.
+  const { openMenu: openPlaylistMenu, modalEl: playlistModal } = useAddToPlaylistMenu(accent);
+  const addToPlaylist = (e, item) => openPlaylistMenu(e, [refFromQueueItem(item)]);
+
   // Which stacks this tab renders — also gates the fetches, so switching to
   // Artists never spends a MusicBrainz call on recordings. `source` gates the
   // two remote catalogues on top of that; the local-library stacks ignore it.
@@ -270,6 +279,7 @@ export function SearchResults({ query, tab, source = 'both', accent, albums, own
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+      {playlistModal}
       {showAlbums && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <GroupHeading>In your library</GroupHeading>
@@ -289,7 +299,8 @@ export function SearchResults({ query, tab, source = 'both', accent, albums, own
             ? <Muted>No songs in your library match.</Muted>
             : <RowList>{localSongs.map(t => (
                 <ResultRow key={`${t.albumPath}#${t.disc}.${t.n}`} {...trackRowProps(t)}
-                           onClick={() => toAlbum(t.albumPath)} />
+                           onClick={() => toAlbum(t.albumPath)}
+                           onContextMenu={(e) => addToPlaylist(e, t)} />
               ))}</RowList>)}
         </div>
       )}
@@ -303,7 +314,8 @@ export function SearchResults({ query, tab, source = 'both', accent, albums, own
             ? <Muted>No songs.</Muted>
             : <RowList>{ytSongs.map(h => (
                 <ResultRow key={h.watchUrl} {...youtubeRowProps(h)}
-                           onClick={() => playTracks([youtubeQueueItem(h)], 0)} />
+                           onClick={() => playTracks([youtubeQueueItem(h)], 0)}
+                           onContextMenu={(e) => addToPlaylist(e, youtubeQueueItem(h))} />
               ))}</RowList>)}
         </div>
       )}
