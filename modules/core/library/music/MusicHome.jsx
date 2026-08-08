@@ -22,7 +22,7 @@ import PosterRow from '@modules/core/library/PosterRow.jsx';
 import { Seg } from '@host/components/ui/index.js';
 import {
   SEARCH_TABS, useSearchTab, SEARCH_SOURCES, useSearchSource,
-  ResultRow, trackRowProps, recordingRowProps, youtubeRowProps,
+  ResultRow, trackRowProps, recordingRowProps, youtubeRowProps, isYoutubeUrl,
 } from './searchShared.jsx';
 import { usePlaylistMenu } from './contextMenus.js';
 import { useMusicPlayer } from './MusicPlayerProvider.jsx';
@@ -224,11 +224,14 @@ export function SearchResults({ query, tab, source = 'both', accent, albums, own
   // Which stacks this tab renders — also gates the fetches, so switching to
   // Artists never spends a MusicBrainz call on recordings. `source` gates the
   // two remote catalogues on top of that; the local-library stacks ignore it.
-  const wantMb = source !== 'yt';
-  const wantYt = source !== 'mb';
-  const showAlbums  = tab === 'all' || tab === 'albums';
-  const showSongs   = tab === 'all' || tab === 'songs';
-  const showArtists = tab === 'all' || tab === 'artists';
+  // A pasted YouTube link overrides both: MusicBrainz can only return junk for
+  // a URL, and the one hit belongs in the Songs stack whatever tab is active.
+  const isUrl = isYoutubeUrl(query);
+  const wantMb = source !== 'yt' && !isUrl;
+  const wantYt = source !== 'mb' || isUrl;
+  const showAlbums  = !isUrl && (tab === 'all' || tab === 'albums');
+  const showSongs   = isUrl || tab === 'all' || tab === 'songs';
+  const showArtists = !isUrl && (tab === 'all' || tab === 'artists');
 
   useEffect(() => {
     const myId = ++reqId.current;
@@ -240,7 +243,7 @@ export function SearchResults({ query, tab, source = 'both', accent, albums, own
           wantMb && showAlbums  ? musicApi.searchReleaseGroups(query, 18, 0).catch(() => []) : Promise.resolve(null),
           wantMb && showArtists ? musicApi.searchArtists(query).catch(() => [])              : Promise.resolve(null),
           wantMb && showSongs   ? musicApi.searchRecordings(query).catch(() => [])           : Promise.resolve(null),
-          showSongs             ? musicApi.searchTracks(query, 40).catch(() => [])           : Promise.resolve(null),
+          showSongs && !isUrl   ? musicApi.searchTracks(query, 40).catch(() => [])           : Promise.resolve(null),
           // yt-dlp shells out (1-3s) and can fail on its own (tool missing, no
           // network) — its error is kept separate so it never blanks the
           // MusicBrainz stacks.
@@ -278,7 +281,7 @@ export function SearchResults({ query, tab, source = 'both', accent, albums, own
         </div>
       )}
 
-      {showSongs && (
+      {showSongs && !isUrl && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <GroupHeading>Songs in your library</GroupHeading>
           {localSongs === null && <Muted>Searching…</Muted>}

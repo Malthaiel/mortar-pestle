@@ -7,6 +7,8 @@ import { useState } from 'react';
 import { useMusicPlayer } from './MusicPlayerProvider.jsx';
 import QueuePanel from './QueuePanel.jsx';
 import LyricsPanel from './LyricsPanel.jsx';
+import { useAddToPlaylistMenu } from './useAddToPlaylistMenu.jsx';
+import { refFromQueueItem } from './PlaylistProvider.jsx';
 import { IconVolume } from '@host/components/icons.jsx';
 import { IconBtn, Dot } from '@host/components/ui/index.js';
 import { navigate } from '@host/router.js';
@@ -64,13 +66,25 @@ export default function SidebarMusicSlot() {
 
   const extrasOpen = hasTrack && (slotHover || queueOpen || lyricsOpen);
 
+  // Right-click the slot to add what's playing to a playlist — the same menu,
+  // modal and toasts as the "+ Playlist" button on a track row. A streamed
+  // YouTube hit has no vault track to reference, so openMenu no-ops on it and
+  // the browser's own menu is left suppressed either way.
+  const { openMenu, modalEl } = useAddToPlaylistMenu(accent);
+  const onSlotContextMenu = (e) => {
+    if (!hasTrack) return;
+    openMenu(e, [refFromQueueItem(currentTrack)], currentTrack.title || 'Add to playlist');
+  };
+
   return (
     <>
       <QueuePanel open={queueOpen} onClose={() => setQueueOpen(false)} accent={accent}/>
       <LyricsPanel open={lyricsOpen} onClose={() => setLyricsOpen(false)} accent={accent}/>
+      {modalEl}
       <div
         onMouseEnter={() => setSlotHover(true)}
         onMouseLeave={() => setSlotHover(false)}
+        onContextMenu={onSlotContextMenu}
         className="candy-row"
         style={{
           padding: '12px 16px 14px',

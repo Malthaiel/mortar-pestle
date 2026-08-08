@@ -55,6 +55,10 @@ CAA = "https://coverartarchive.org"
 ALBUMS_REL = "Music/Albums"
 TRACKS_REL = "Music/Tracks"
 EXCLUDE_WORDS = ["live", "remix", "cover", "karaoke", "instrumental", "demo"]
+# A pasted YouTube link in the search box is a source, not a search term.
+YT_URL_RE = re.compile(
+    r"^(?:https?://)?(?:www\.|m\.|music\.)?(?:youtube\.com/|youtu\.be/)", re.I
+)
 
 _last_mb = [0.0]
 # Running total of bytes on disk for the album (completed/skipped tracks), used
@@ -185,10 +189,14 @@ def fmt_hms(total_ms):
 
 
 # ── yt-dlp ───────────────────────────────────────────────────────────────────
-def ytdlp_json(spec, flat=True, timeout=180):
+def ytdlp_json(spec, flat=True, timeout=180, no_playlist=False):
     args = ["yt-dlp", "--skip-download", "--dump-json"]
     if flat:
         args.append("--flat-playlist")
+    if no_playlist:
+        # A watch URL copied out of a playlist carries `&list=` along with it;
+        # without this yt-dlp expands the whole list instead of the one video.
+        args.append("--no-playlist")
     args.append(spec)
     try:
         out = subprocess.run(args, capture_output=True, text=True, timeout=timeout)
@@ -437,13 +445,16 @@ def run_resolve(args):
 def run_search(args):
     """--search mode: free-text YouTube search → one `search` event, no download.
 
-    Metadata only (--flat-playlist), so nothing is resolved to a stream until a
-    hit is actually played."""
+    A pasted YouTube link is handed to yt-dlp verbatim instead (one hit), so the
+    same row/click/play path covers both. Metadata only (--flat-playlist), so
+    nothing is resolved to a stream until a hit is actually played."""
     if not shutil.which("yt-dlp"):
         fatal("required tool not found on PATH: yt-dlp")
     limit = max(1, min(50, args.limit or 15))
+    q = (args.search or "").strip()
+    is_url = bool(YT_URL_RE.match(q))
     results = []
-    for c in ytdlp_json(f"ytsearch{limit}:{args.search}"):
+    for c in ytdlp_json(q if is_url else f"ytsearch{limit}:{q}", no_playlist=is_url):
         u = watch_url(c)
         if not u:
             continue

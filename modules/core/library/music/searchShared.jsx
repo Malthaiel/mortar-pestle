@@ -123,6 +123,13 @@ export function recordingRowProps(hit) {
   };
 }
 
+// A pasted YouTube link is a source, not a search term — the search surfaces
+// use this to skip the MusicBrainz stacks (a URL can only return junk there)
+// and show the single YouTube row. Mirrors YT_URL_RE in download_album.py,
+// which is what actually resolves it.
+const YT_URL_RE = /^(?:https?:\/\/)?(?:www\.|m\.|music\.)?(?:youtube\.com\/|youtu\.be\/)/i;
+export const isYoutubeUrl = (q) => YT_URL_RE.test((q || '').trim());
+
 // Rows for a list of YouTube hits (music_search_youtube shape).
 export function youtubeRowProps(hit) {
   return {
