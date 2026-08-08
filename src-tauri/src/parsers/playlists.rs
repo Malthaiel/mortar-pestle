@@ -39,6 +39,12 @@ const SENT: char = '\u{0001}';
 static RE_WIKILINK: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^\[\[([^\]|]+?)(?:\|([^\]]+))?\]\]$").unwrap());
 static RE_EMBED: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^!\[\[([^\]]+?)\]\]$").unwrap());
+// A streamed track has no file and no track page, so its Title cell holds a
+// plain markdown link to the source instead of a wikilink or an embed. Keeping
+// it in the SAME cell means the table columns never changed — playlists written
+// before 2026-08-08 parse byte-identically.
+static RE_URLLINK: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^\[([^\]]*)\]\((https?://[^)\s]+)\)$").unwrap());
 static RE_DURATION: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^(\d+):(\d{1,2})(?::(\d{1,2}))?$").unwrap());
 static RE_NUM_PREFIX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\d+\s*-\s*").unwrap());
@@ -73,6 +79,9 @@ pub struct PlaylistTrack {
     pub available: bool,
     pub duration: Option<i64>,
     pub wikilink: Option<String>,
+    /// Set only for a streamed track — no file, no track page, just the source
+    /// link `music_stream_resolve` keys on.
+    pub watch_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -101,6 +110,10 @@ pub struct TrackRefInput {
     pub album_title: Option<String>,
     #[serde(default)]
     pub duration: Option<i64>,
+    /// A streamed track carries neither `wikilink` nor `audio_path`; this is the
+    /// only thing pointing at it, emitted as a markdown link in the Title cell.
+    #[serde(default)]
+    pub watch_url: Option<String>,
 }
 
 fn root() -> PathBuf {
@@ -186,6 +199,7 @@ fn ext_of(path: &str) -> Option<String> {
 enum CellLink {
     Link { target: String, display: String },
     Embed { target: String },
+    Url { target: String, display: String },
     Plain { text: String },
 }
 
@@ -203,6 +217,12 @@ fn parse_cell_link(cell: &str) -> CellLink {
             .map(|x| x.as_str().trim().to_string())
             .unwrap_or_else(|| target.clone());
         return CellLink::Link { target, display };
+    }
+    if let Some(m) = RE_URLLINK.captures(c) {
+        return CellLink::Url {
+            display: m.get(1).unwrap().as_str().trim().to_string(),
+            target: m.get(2).unwrap().as_str().trim().to_string(),
+        };
     }
     CellLink::Plain { text: c.to_string() }
 }
@@ -277,15 +297,22 @@ fn row_to_track(
     row: &ParsedRow,
     cache: &mut HashMap<String, Option<String>>,
 ) -> PlaylistTrack {
-    // Title cell → wikilink/audio + display title.
-    let (wikilink, audio_path, title) = match &row.title {
+    // Title cell → wikilink/audio/watch URL + display title.
+    let (wikilink, audio_path, watch_url, title) = match &row.title {
         CellLink::Link { target, display } => (
             Some(target.clone()),
             Some(format!("{target}.opus")),
+            None,
             display.clone(),
         ),
-        CellLink::Embed { target } => (None, Some(target.clone()), title_from_audio_leaf(target)),
-        CellLink::Plain { text } => (None, None, text.clone()),
+        CellLink::Embed { target } => (
+            None,
+            Some(target.clone()),
+            None,
+            title_from_audio_leaf(target),
+        ),
+        CellLink::Url { target, display } => (None, None, Some(target.clone()), display.clone()),
+        CellLink::Plain { text } => (None, None, None, text.clone()),
     };
     let available = audio_path
         .as_ref()
@@ -314,6 +341,7 @@ fn row_to_track(
         available,
         duration: row.duration,
         wikilink,
+        watch_url,
     }
 }
 
@@ -419,7 +447,16 @@ fn title_cell(r: &TrackRefInput) -> String {
             format!("[[{}\\|{}]]", cell_escape(wl), cell_escape(&r.title))
         }
         (_, Some(audio)) if !audio.is_empty() => format!("![[{}]]", cell_escape(audio)),
-        _ => cell_escape(&r.title),
+        _ => match &r.watch_url {
+            // Streamed track: a plain markdown link, clickable in Obsidian and
+            // round-tripped by RE_URLLINK. Parens in a URL would break the
+            // link syntax, so fall back to the bare title rather than emit a
+            // row that re-parses as something else.
+            Some(u) if !u.is_empty() && !u.contains(')') => {
+                format!("[{}]({})", cell_escape(&r.title), u)
+            }
+            _ => cell_escape(&r.title),
+        },
     }
 }
 
@@ -615,6 +652,7 @@ mod tests {
             album_path: album_path.map(String::from),
             album_title: album.map(String::from),
             duration: dur,
+            watch_url: None,
         }
     }
 
@@ -640,6 +678,31 @@ mod tests {
             title_from_audio_leaf("Knowledge/Music/MusicBrainz Pipeline/Tracks/A - B/03 - Pulsewidth.opus"),
             "Pulsewidth"
         );
+    }
+
+    #[test]
+    fn emit_then_parse_streamed_row() {
+        // A streamed track has no file and no track page — only its source
+        // link. It must survive emit → parse with the URL intact, and must NOT
+        // come back as an owned track (no wikilink, no audio_path).
+        let mut ref_ = r(None, None, "Obnyal Potseloval", None, Some("YouTube"), Some(176));
+        ref_.watch_url = Some("https://www.youtube.com/watch?v=pEW8FbqIUII".into());
+        let page = emit_canonical("Streamed", None, "2026-08-08", &[ref_]);
+        assert!(page.contains("[Obnyal Potseloval](https://www.youtube.com/watch?v=pEW8FbqIUII)"));
+        let rows = parse_tracks_table(&page);
+        assert_eq!(rows.len(), 1);
+        let mut cache = HashMap::new();
+        let t = row_to_track(1, &rows[0], &mut cache);
+        assert_eq!(t.watch_url.as_deref(), Some("https://www.youtube.com/watch?v=pEW8FbqIUII"));
+        assert_eq!(t.title, "Obnyal Potseloval");
+        assert!(t.wikilink.is_none() && t.audio_path.is_none() && !t.available);
+
+        // A plain-title row (no link of any kind) still parses as before.
+        let plain = emit_canonical("Plain", None, "2026-08-08", &[r(None, None, "Just A Title", None, None, None)]);
+        let prows = parse_tracks_table(&plain);
+        let pt = row_to_track(1, &prows[0], &mut cache);
+        assert!(pt.watch_url.is_none());
+        assert_eq!(pt.title, "Just A Title");
     }
 
     #[test]

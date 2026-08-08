@@ -33,7 +33,8 @@ export function usePlaylists() {
 
 // De-dupe / identity key for a track reference.
 export function trackKey(ref) {
-  return ref.audioPath || ref.wikilink || ref.title || '';
+  // watchUrl before title: two streamed hits can share a title but never a URL.
+  return ref.audioPath || ref.wikilink || ref.watchUrl || ref.title || '';
 }
 
 // Build a writer ref from a now-playing/album-mapped queue item (carries the
@@ -49,6 +50,9 @@ export function refFromQueueItem(item) {
     albumPath: item.albumPath ? item.albumPath.replace(/\.md$/, '') : null,
     albumTitle: item.albumTitle || null,
     duration: item.duration ?? null,
+    // A streamed hit has no file and no track page — the source link is the
+    // only thing the playlist row can point at.
+    watchUrl: item.watchUrl || null,
   };
 }
 
@@ -62,6 +66,7 @@ export function refFromPlaylistTrack(t) {
     albumPath: t.albumPath ? t.albumPath.replace(/\.md$/, '') : null,
     albumTitle: t.albumTitle || null,
     duration: t.duration ?? null,
+    watchUrl: t.watchUrl || null,
   };
 }
 

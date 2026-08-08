@@ -36,22 +36,20 @@ export function useAddToPlaylistMenu(accent) {
   // from have to be parked at open time rather than read from a live prop.
   const pending = useRef([]);
 
-  // Only references the app can actually resolve to audio are addable. A loose
-  // YouTube hit carries neither, so it filters out here and canAdd() is false.
-  const addable = (refs) => (refs || []).filter((r) => r && (r.audioPath || r.wikilink));
+  // Only references the app can actually resolve to audio are addable: a file on
+  // disk, a vault track page, or (since 2026-08-08) a source link for a streamed
+  // song. Anything with none of the three filters out and canAdd() is false.
+  const addable = (refs) => (refs || []).filter((r) => r && (r.audioPath || r.wikilink || r.watchUrl));
 
   const openMenu = (e, refs, header = 'Add to playlist') => {
     e.stopPropagation();
     e.preventDefault();
     const list = addable(refs);
-    // A playlist entry stores a file path or a vault track page; a song streamed
-    // straight off YouTube has neither, so it can't be written yet. Name the
-    // app's limit, not a chore for the user — adding to a playlist IS saving it,
-    // so "save it first" reads as nonsense. Dead row (the shape defaultMenus
-    // uses for "No link actions") rather than a swallowed click, since the
-    // player tile right-clicks whatever is playing, streamed or not.
+    // Nothing addable at all (no file, no track page, no source link) still gets
+    // a dead row rather than a swallowed click — the player tile right-clicks
+    // whatever is playing. Same shape defaultMenus uses for "No link actions".
     const items = list.length === 0
-      ? [{ label: "Streamed songs can't go in a playlist yet", disabled: true }]
+      ? [{ label: 'Nothing here to add', disabled: true }]
       : [
           ...playlists.map((p) => ({ label: p.title, onClick: () => onAdd(p, list) })),
           {

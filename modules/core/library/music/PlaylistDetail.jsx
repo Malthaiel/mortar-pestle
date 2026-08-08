@@ -32,7 +32,11 @@ function trackToQueueItem(t, pl) {
     available: t.available,
     // Streamable needs a real album card to resolve against — playlist rows
     // whose album is gone (recycled) stay truly unavailable.
-    streamable: !t.available && !!t.albumPath && t.n != null,
+    // A row carrying its own source link streams from that link directly;
+    // otherwise streaming needs a real album card to resolve against, so rows
+    // whose album is gone (recycled) stay truly unavailable.
+    streamable: !!t.watchUrl || (!t.available && !!t.albumPath && t.n != null),
+    watchUrl: t.watchUrl || null,
     wikilink: t.wikilink || null,
     duration: t.duration ?? null,
   };

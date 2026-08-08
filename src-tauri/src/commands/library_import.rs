@@ -438,6 +438,9 @@ async fn process_music_job(app: &AppHandle, job_id: &str) {
                     album_path,
                     album_title: if t.album.is_empty() { None } else { Some(t.album.clone()) },
                     duration: if t.duration_secs > 0 { Some(t.duration_secs) } else { None },
+                    // CSV/TXT import carries no source link — imported rows are
+                    // matched against the library, never streamed.
+                    watch_url: None,
                 }
             })
             .collect();
