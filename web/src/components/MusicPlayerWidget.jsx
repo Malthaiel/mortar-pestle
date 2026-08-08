@@ -10,6 +10,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useMusicPlayer } from '@modules/core/library/music/MusicPlayerProvider.jsx';
 import LyricsPanel from '@modules/core/library/music/LyricsPanel.jsx';
 import QueuePanel from '@modules/core/library/music/QueuePanel.jsx';
+import { useAddToPlaylistMenu } from '@modules/core/library/music/useAddToPlaylistMenu.jsx';
+import { refFromQueueItem } from '@modules/core/library/music/PlaylistProvider.jsx';
 import { mediaUrl } from '../api.js';
 import { navigate } from '../router.js';
 
@@ -42,6 +44,15 @@ export default function MusicPlayerWidget() {
     : '';
 
   const stop = (e) => e.stopPropagation();
+
+  // Right-click anywhere on the tile to add what's playing to a playlist — the
+  // same menu as the "+ Playlist" pill on a track row. No track playing → return
+  // before openMenu so the app-wide default menu still appears.
+  const { openMenu: openPlaylistMenu, modalEl: playlistModal } = useAddToPlaylistMenu(accent);
+  const onTileContextMenu = (e) => {
+    if (!hasTrack) return;
+    openPlaylistMenu(e, [refFromQueueItem(currentTrack)]);
+  };
   const openAlbum = (e) => {
     e.stopPropagation();
     if (!currentTrack?.albumPath) return;
@@ -108,7 +119,8 @@ export default function MusicPlayerWidget() {
     // they ARE descendants of `.music-tile`, but the tile height
     // was reading viewport-cqw (always capped at 1px). This wrapper fixes it.
     <>
-    <div style={{ containerType: 'inline-size', width: '100%' }} onWheel={onWheel}>
+    {playlistModal}
+    <div style={{ containerType: 'inline-size', width: '100%' }} onWheel={onWheel} onContextMenu={onTileContextMenu}>
     <div className="candy-btn music-tile" data-shape="tile" aria-label="Music player tile">
       <div className="candy-face" style={{
         display: 'flex', flexDirection: 'column',

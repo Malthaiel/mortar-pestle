@@ -1,7 +1,11 @@
 // The add-to-playlist ContextMenu + its "New playlist…" modal, with no trigger
-// of its own. Two surfaces open the identical menu: AddToPlaylistButton (the
-// always-visible "+ Playlist" pill on track rows, album headers and queue rows)
-// and SidebarMusicSlot (right-click the slim player to add what's playing).
+// of its own. Three surfaces open the identical menu: AddToPlaylistButton (the
+// always-visible "+ Playlist" pill on track rows, album headers and queue rows),
+// MusicPlayerWidget (right-click the sidebar player tile to add what's playing)
+// and SidebarMusicSlot — which nothing currently mounts; the widget superseded
+// it, so the WIDGET is the live sidebar player. Wiring the slot first was the
+// 2026-08-08 miss: its Component Map row still calls it "the slim persistent
+// right-sidebar player", and a grep for its name returns only its own defn.
 //
 // Lives in its own file rather than beside the button because React Fast
 // Refresh refuses to hot-update a module that exports both a hook and a
@@ -40,12 +44,14 @@ export function useAddToPlaylistMenu(accent) {
     e.stopPropagation();
     e.preventDefault();
     const list = addable(refs);
-    // A song streamed straight off YouTube has no vault track to reference, so
-    // it can't go in a playlist. Say so in a dead row (the same shape
-    // defaultMenus uses for "No link actions") rather than swallow the click —
-    // the sidebar slot right-clicks whatever is playing, streamed or not.
+    // A playlist entry stores a file path or a vault track page; a song streamed
+    // straight off YouTube has neither, so it can't be written yet. Name the
+    // app's limit, not a chore for the user — adding to a playlist IS saving it,
+    // so "save it first" reads as nonsense. Dead row (the shape defaultMenus
+    // uses for "No link actions") rather than a swallowed click, since the
+    // player tile right-clicks whatever is playing, streamed or not.
     const items = list.length === 0
-      ? [{ label: 'Save this song first to add it', disabled: true }]
+      ? [{ label: "Streamed songs can't go in a playlist yet", disabled: true }]
       : [
           ...playlists.map((p) => ({ label: p.title, onClick: () => onAdd(p, list) })),
           {
