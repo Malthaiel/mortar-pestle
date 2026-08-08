@@ -34,7 +34,7 @@ const fmtDb = (db) => (!Number.isFinite(db) || db <= -60 ? '−∞' : `${db > 0 
 const PEAK_DECAY = 0.85;
 
 function ChannelStrip({
-  row, accent, soloed, anySolo, onDraft, onCommit, onMute, onSolo, onMonitor, registerMeter,
+  row, accent, soloed, anySolo, onDraft, onCommit, onMute, onSolo, onMonitor, onFilters, registerMeter,
 }) {
   // Draft while dragging so the fader tracks the finger; the engine snapshot
   // takes over again on release.
@@ -44,7 +44,14 @@ function ChannelStrip({
   const bars = Math.max(1, Math.min(row.channels || 2, 2));
 
   return (
-    <div className="bcast-strip" style={{ opacity: dimmed ? 0.45 : 1 }}>
+    <div
+      className="bcast-strip"
+      style={{ opacity: dimmed ? 0.45 : 1 }}
+      // OBS parity: right-click a channel goes to its filters. Straight to the
+      // window rather than through a context menu — a menu holding one item is
+      // chrome around a single click.
+      onContextMenu={(e) => { e.preventDefault(); onFilters(row.name); }}
+    >
       <div className="bcast-strip-name" title={row.name}>
         {row.is_global ? <span className="bcast-strip-pin" title="Global — stays across scenes">•</span> : null}
         {row.name}
@@ -84,6 +91,16 @@ function ChannelStrip({
         >
           S
         </button>
+        {/* Lit when the source already carries filters, so the chain is visible
+            from the rail without opening anything. */}
+        <button
+          type="button"
+          className={`bcast-strip-btn${row.filters?.length ? ' is-fx' : ''}`}
+          onClick={() => onFilters(row.name)}
+          title={row.filters?.length ? `Filters (${row.filters.length})` : 'Filters'}
+        >
+          F
+        </button>
       </div>
       <CandySelect
         value={row.monitoring}
@@ -95,7 +112,7 @@ function ChannelStrip({
   );
 }
 
-export default function MixerStrip({ api, snapshot, accent, expanded, onToggle, onOpenProps }) {
+export default function MixerStrip({ api, snapshot, accent, expanded, onToggle, onOpenProps, onOpenFilters }) {
   const rows = useMemo(() => snapshot?.audio?.sources ?? [], [snapshot]);
   const [solo, setSolo] = useState(() => new Set());
 
@@ -250,6 +267,7 @@ export default function MixerStrip({ api, snapshot, accent, expanded, onToggle, 
                 onMute={(name, muted) => call('set_mute', { source: name, muted })}
                 onSolo={onSolo}
                 onMonitor={(name, type) => call('set_monitoring', { source: name, type })}
+                onFilters={onOpenFilters}
               />
             ))
           )}

@@ -127,6 +127,16 @@ pub enum Cmd {
     /// respawned engine starts unsubscribed and the app re-subscribes on its
     /// alive edge, exactly like displays.
     SubscribeMeters { on: bool, reply: Reply },
+    // --- SP6 SF4 filter stack ---
+    AddFilter { source: String, id: String, name: String, reply: Reply },
+    RemoveFilter { source: String, name: String, reply: Reply },
+    ReorderFilter { source: String, name: String, index: usize, reply: Reply },
+    SetFilterEnabled { source: String, name: String, on: bool, reply: Reply },
+    /// Ephemeral: the add-picker's menu. Types are fixed for the process life,
+    /// but cheap enough to enumerate on demand rather than cache.
+    ListFilterTypes { kind: String, reply: Reply },
+    GetFilterProperties { source: String, name: String, reply: Reply },
+    SetFilterSettings { source: String, name: String, settings: Value, replace: bool, reply: Reply },
     Shutdown { reply: Reply },
 }
 
@@ -788,6 +798,34 @@ impl Engine {
                 let r = self.subscribe_meters(on);
                 self.finish_ephemeral(reply, r);
             }
+            Cmd::AddFilter { source, id, name, reply } => {
+                let r = self.add_filter(&source, &id, &name);
+                self.finish(reply, r);
+            }
+            Cmd::RemoveFilter { source, name, reply } => {
+                let r = self.remove_filter(&source, &name);
+                self.finish(reply, r);
+            }
+            Cmd::ReorderFilter { source, name, index, reply } => {
+                let r = self.reorder_filter(&source, &name, index);
+                self.finish(reply, r);
+            }
+            Cmd::SetFilterEnabled { source, name, on, reply } => {
+                let r = self.set_filter_enabled(&source, &name, on);
+                self.finish(reply, r);
+            }
+            Cmd::ListFilterTypes { kind, reply } => {
+                let r = self.list_filter_types(&kind);
+                self.finish_ephemeral(reply, r);
+            }
+            Cmd::GetFilterProperties { source, name, reply } => {
+                let r = self.get_filter_properties(&source, &name);
+                self.finish_ephemeral(reply, r);
+            }
+            Cmd::SetFilterSettings { source, name, settings, replace, reply } => {
+                let r = self.set_filter_settings(&source, &name, &settings, replace);
+                self.finish(reply, r);
+            }
             Cmd::Shutdown { reply } => {
                 let _ = reply.send(Ok(json!({})));
                 return true;
@@ -1001,16 +1039,50 @@ impl Engine {
     where
         F: FnOnce(*mut ffi::obs_source),
     {
+        self.with_source_val(name, |src| {
+            f(src);
+            Ok(json!({}))
+        })
+    }
+
+    /// `with_source` for ops that answer with DATA rather than an empty ack
+    /// (SF4's filter property reads). The resolve-and-release contract lives
+    /// here once; `with_source` is the ack-only wrapper over it.
+    fn with_source_val<F>(&mut self, name: &str, f: F) -> Result<Value, ProtoError>
+    where
+        F: FnOnce(*mut ffi::obs_source) -> Result<Value, ProtoError>,
+    {
         unsafe {
             let c = cstring(name);
             let src = ffi::obs_get_source_by_name(c.as_ptr());
             if src.is_null() {
                 return Err(ProtoError::bad_request(format!("no such source: {name}")));
             }
-            f(src);
+            let r = f(src);
             ffi::obs_source_release(src);
+            r
         }
-        Ok(json!({}))
+    }
+
+    /// Run `f` against one filter ON a named source. Every SF4 filter verb
+    /// resolves through here. `obs_source_get_filter_by_name` returns an
+    /// INCREMENTED ref, so the filter needs its own release on top of the
+    /// parent's — forgetting it leaks the filter, not the source.
+    fn with_filter<F>(&mut self, source: &str, filter: &str, f: F) -> Result<Value, ProtoError>
+    where
+        F: FnOnce(*mut ffi::obs_source, *mut ffi::obs_source) -> Result<Value, ProtoError>,
+    {
+        let fname = filter.to_string();
+        self.with_source_val(source, move |src| unsafe {
+            let c = cstring(&fname);
+            let flt = ffi::obs_source_get_filter_by_name(src, c.as_ptr());
+            if flt.is_null() {
+                return Err(ProtoError::bad_request(format!("no such filter: {fname}")));
+            }
+            let r = f(src, flt);
+            ffi::obs_source_release(flt);
+            r
+        })
     }
 
     /// `level` is either a 0..1 fader deflection (the mixer strip) or an exact
@@ -1083,6 +1155,200 @@ impl Engine {
             return Err(ProtoError::bad_request("track mask exceeds 6 tracks"));
         }
         self.with_source(name, |src| unsafe { ffi::obs_source_set_audio_mixers(src, mask) })
+    }
+
+    // --- SF4 filter stack -----------------------------------------------------
+    //
+    // The READ side already shipped: `enum_filters` populates
+    // `AudioSourceInfo.filters` on every snapshot, so nothing below has to
+    // report the chain back — these are writes plus the two property verbs.
+
+    fn add_filter(&mut self, source: &str, id: &str, name: &str) -> Result<Value, ProtoError> {
+        let (type_id, fname) = (id.to_string(), name.to_string());
+        self.with_source_val(source, move |src| unsafe {
+            // The filter NAME is the addressing key for every other verb here,
+            // so a duplicate would make remove/get_properties hit whichever
+            // instance libobs happens to find first.
+            let c = cstring(&fname);
+            let existing = ffi::obs_source_get_filter_by_name(src, c.as_ptr());
+            if !existing.is_null() {
+                ffi::obs_source_release(existing);
+                return Err(ProtoError::bad_request(format!("filter already exists: {fname}")));
+            }
+            // Validate the type BEFORE creating. `obs_source_create` does NOT
+            // return null for an unknown id — it builds an unknown-type
+            // placeholder, which is how OBS survives loading a collection whose
+            // plugin is missing. Verified by probe 2026-08-07: an id of
+            // "not_a_filter" attached happily and reported ok. So a null check
+            // is not a guard at all; the registry walk is.
+            if !filter_type_exists(&type_id) {
+                return Err(ProtoError::bad_request(format!("unknown filter type: {type_id}")));
+            }
+            // NULL settings is deliberate: libobs then fills the type's OWN
+            // defaults, which are the values OBS ships. We keep no defaults
+            // table of our own to drift out of date.
+            let cid = cstring(&type_id);
+            let flt = ffi::obs_source_create(
+                cid.as_ptr(),
+                c.as_ptr(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+            );
+            if flt.is_null() {
+                return Err(ProtoError::internal(format!("could not create filter: {type_id}")));
+            }
+            ffi::obs_source_filter_add(src, flt);
+            // filter_add takes its own ref; the create ref is spent.
+            ffi::obs_source_release(flt);
+            Ok(json!({}))
+        })
+    }
+
+    fn remove_filter(&mut self, source: &str, name: &str) -> Result<Value, ProtoError> {
+        self.with_filter(source, name, |src, flt| unsafe {
+            ffi::obs_source_filter_remove(src, flt);
+            Ok(json!({}))
+        })
+    }
+
+    fn set_filter_enabled(
+        &mut self,
+        source: &str,
+        name: &str,
+        on: bool,
+    ) -> Result<Value, ProtoError> {
+        self.with_filter(source, name, |_src, flt| unsafe {
+            ffi::obs_source_set_enabled(flt, on);
+            Ok(json!({}))
+        })
+    }
+
+    /// libobs moves a filter ONE STEP at a time (up/down/top/bottom); the UI
+    /// hands back an absolute index. Walk the movement until the position
+    /// matches, bounded by the chain length so a libobs no-op cannot spin.
+    fn reorder_filter(
+        &mut self,
+        source: &str,
+        name: &str,
+        index: usize,
+    ) -> Result<Value, ProtoError> {
+        let fname = name.to_string();
+        self.with_source_val(source, move |src| unsafe {
+            let chain = enum_filters(src);
+            let len = chain.len();
+            if index >= len {
+                return Err(ProtoError::bad_request(format!(
+                    "index {index} out of range for {len} filters"
+                )));
+            }
+            let c = cstring(&fname);
+            let flt = ffi::obs_source_get_filter_by_name(src, c.as_ptr());
+            if flt.is_null() {
+                return Err(ProtoError::bad_request(format!("no such filter: {fname}")));
+            }
+            let pos_of = |chain: &[FilterInfo]| chain.iter().position(|f| f.name == fname);
+            let mut cur = match pos_of(&chain) {
+                Some(p) => p,
+                None => {
+                    ffi::obs_source_release(flt);
+                    return Err(ProtoError::internal(format!("filter not in chain: {fname}")));
+                }
+            };
+            for _ in 0..len {
+                if cur == index {
+                    break;
+                }
+                let movement = if cur > index {
+                    ffi::obs_order_movement_OBS_ORDER_MOVE_UP
+                } else {
+                    ffi::obs_order_movement_OBS_ORDER_MOVE_DOWN
+                };
+                ffi::obs_source_filter_set_order(src, flt, movement);
+                match pos_of(&enum_filters(src)) {
+                    Some(p) if p != cur => cur = p,
+                    // libobs refused to move it — stop rather than spin.
+                    _ => break,
+                }
+            }
+            ffi::obs_source_release(flt);
+            Ok(json!({ "index": cur }))
+        })
+    }
+
+    fn get_filter_properties(&mut self, source: &str, name: &str) -> Result<Value, ProtoError> {
+        self.with_filter(source, name, |_src, flt| unsafe {
+            // Same marshaling pair the scene-item `get_properties` uses — a
+            // filter is an ordinary source once it is resolved.
+            let props = ffi::obs_source_properties(flt);
+            let list = if props.is_null() {
+                Vec::new()
+            } else {
+                let l = props_to_json(props);
+                ffi::obs_properties_destroy(props);
+                l
+            };
+            Ok(json!({ "props": list, "settings": source_settings_json(flt) }))
+        })
+    }
+
+    fn set_filter_settings(
+        &mut self,
+        source: &str,
+        name: &str,
+        settings: &Value,
+        replace: bool,
+    ) -> Result<Value, ProtoError> {
+        let settings = settings.clone();
+        self.with_filter(source, name, move |_src, flt| unsafe {
+            let data = data_from_value(&settings);
+            if replace {
+                // Whole-settings restore (PropertiesForm's undo path): replace,
+                // don't merge, or ghost keys from the undone edit survive.
+                ffi::obs_source_reset_settings(flt, data);
+            } else {
+                ffi::obs_source_update(flt, data);
+            }
+            ffi::obs_data_release(data);
+            Ok(json!({}))
+        })
+    }
+
+    /// Filter TYPES available to add, split by what they process. Mirrors
+    /// `list_input_types`; `obs_enum_filter_types` has one out-param instead of
+    /// two because filters carry no unversioned id.
+    fn list_filter_types(&self, kind: &str) -> Result<Value, ProtoError> {
+        let want = match kind {
+            "audio" => ffi::OBS_SOURCE_AUDIO,
+            "video" => ffi::OBS_SOURCE_VIDEO,
+            other => {
+                return Err(ProtoError::bad_request(format!("unknown filter kind: {other}")))
+            }
+        };
+        let mut types = Vec::new();
+        unsafe {
+            let mut idx = 0usize;
+            loop {
+                let mut id: *const std::os::raw::c_char = std::ptr::null();
+                if !ffi::obs_enum_filter_types(idx, &mut id) {
+                    break;
+                }
+                idx += 1;
+                if id.is_null() {
+                    continue;
+                }
+                let caps = ffi::obs_get_source_output_flags(id);
+                if caps & ffi::OBS_SOURCE_CAP_DISABLED != 0 || caps & want == 0 {
+                    continue;
+                }
+                let display = ffi::obs_source_get_display_name(id);
+                types.push(json!({
+                    "id": cstr_owned(id),
+                    "display_name": if display.is_null() { cstr_owned(id) } else { cstr_owned(display) },
+                    "caps": caps,
+                }));
+            }
+        }
+        Ok(json!({ "types": types }))
     }
 
     /// Assign (or clear, with an empty device id) one of libobs's six global
@@ -3793,6 +4059,25 @@ fn monitoring_device() -> Option<DeviceRef> {
             id: CStr::from_ptr(id).to_string_lossy().into_owned(),
             name: CStr::from_ptr(name).to_string_lossy().into_owned(),
         })
+    }
+}
+
+/// Is `id` a REGISTERED filter type? The only reliable answer, because
+/// `obs_source_create` happily returns an unknown-type placeholder for a
+/// garbage id rather than null (see `add_filter`).
+fn filter_type_exists(id: &str) -> bool {
+    unsafe {
+        let mut idx = 0usize;
+        loop {
+            let mut cur: *const std::os::raw::c_char = std::ptr::null();
+            if !ffi::obs_enum_filter_types(idx, &mut cur) {
+                return false;
+            }
+            idx += 1;
+            if !cur.is_null() && CStr::from_ptr(cur).to_string_lossy() == id {
+                return true;
+            }
+        }
     }
 }
 

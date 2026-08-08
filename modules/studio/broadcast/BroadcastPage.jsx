@@ -18,6 +18,7 @@ import { listen } from '@tauri-apps/api/event';
 import Inspector from './Inspector.jsx';
 import MixerStrip from './MixerStrip.jsx';
 import AudioPropsWindow from './AudioPropsWindow.jsx';
+import FilterStack from './FilterStack.jsx';
 import PreviewInteract from './PreviewInteract.jsx';
 import { KEYBIND_ENTRIES } from './index.jsx';
 import { pushUndo, runRedo, runUndo } from './broadcastUndo.js';
@@ -53,6 +54,8 @@ export default function BroadcastPage({ api, accent }) {
   // meter stream on, so the quiet state is also the cheap one.
   const [mixerOpen, setMixerOpen] = useState(false);
   const [audioProps, setAudioProps] = useState(false);
+  // Source name whose filter stack is open, or null. Doubles as the open flag.
+  const [filterSource, setFilterSource] = useState(null);
   const recording = alive && !!snapshot?.recording?.active;
   const paused = recording && !!snapshot?.recording?.paused;
   const armed = alive && !!snapshot?.replay?.armed;
@@ -303,7 +306,7 @@ export default function BroadcastPage({ api, accent }) {
                NB: plain block comment, not {(slash-star)} — this is a ternary
                arm, a JS expression position where a JSX comment parses as an
                object literal and is a syntax error. */
-            <EngineDisplay api={api} alive={alive && !audioProps}>
+            <EngineDisplay api={api} alive={alive && !audioProps && !filterSource}>
               <PreviewInteract api={api} snapshot={snapshot} />
             </EngineDisplay>
           )}
@@ -322,6 +325,7 @@ export default function BroadcastPage({ api, accent }) {
           expanded={mixerOpen}
           onToggle={() => setMixerOpen((v) => !v)}
           onOpenProps={() => setAudioProps(true)}
+          onOpenFilters={setFilterSource}
         />
       )}
       {/* SF3: advanced audio lives in its own AppWindow — the strip stays a
@@ -332,6 +336,19 @@ export default function BroadcastPage({ api, accent }) {
           snapshot={snapshot}
           accent={accent}
           onClose={() => setAudioProps(false)}
+        />
+      )}
+      {/* SF4: the filter chain is read live off the snapshot, so add/remove/
+          reorder land here as a new prop with nothing mirrored locally. */}
+      {filterSource && (
+        <FilterStack
+          api={api}
+          source={filterSource}
+          filters={
+            (snapshot?.audio?.sources ?? []).find((s) => s.name === filterSource)?.filters ?? []
+          }
+          accent={accent}
+          onClose={() => setFilterSource(null)}
         />
       )}
       <ComposerBar

@@ -459,6 +459,56 @@ async fn dispatch(req: Request, cmd_tx: &mpsc::Sender<Cmd>) -> Response {
         }),
         "subscribe_meters" => need_bool(&args, "on").map(|on| Cmd::SubscribeMeters { on, reply: tx }),
         "list_audio_devices" => need_str(&args, "kind").map(|kind| Cmd::ListAudioDevices { kind, reply: tx }),
+        // --- SP6 SF4 filter stack. `source` + `name` address every filter verb;
+        // `name` is the FILTER's name, never the source's.
+        "add_filter" => (|| {
+            Ok(Cmd::AddFilter {
+                source: need_str(&args, "source")?,
+                id: need_str(&args, "id")?,
+                name: need_str(&args, "name")?,
+                reply: tx,
+            })
+        })(),
+        "remove_filter" => (|| {
+            Ok(Cmd::RemoveFilter {
+                source: need_str(&args, "source")?,
+                name: need_str(&args, "name")?,
+                reply: tx,
+            })
+        })(),
+        "reorder_filter" => (|| {
+            Ok(Cmd::ReorderFilter {
+                source: need_str(&args, "source")?,
+                name: need_str(&args, "name")?,
+                index: need_u64(&args, "index")? as usize,
+                reply: tx,
+            })
+        })(),
+        "set_filter_enabled" => (|| {
+            Ok(Cmd::SetFilterEnabled {
+                source: need_str(&args, "source")?,
+                name: need_str(&args, "name")?,
+                on: need_bool(&args, "on")?,
+                reply: tx,
+            })
+        })(),
+        "list_filter_types" => need_str(&args, "kind").map(|kind| Cmd::ListFilterTypes { kind, reply: tx }),
+        "get_filter_properties" => (|| {
+            Ok(Cmd::GetFilterProperties {
+                source: need_str(&args, "source")?,
+                name: need_str(&args, "name")?,
+                reply: tx,
+            })
+        })(),
+        "set_filter_settings" => (|| {
+            Ok(Cmd::SetFilterSettings {
+                source: need_str(&args, "source")?,
+                name: need_str(&args, "name")?,
+                settings: args.get("settings").cloned().unwrap_or(Value::Null),
+                replace: args.get("replace").and_then(Value::as_bool).unwrap_or(false),
+                reply: tx,
+            })
+        })(),
         other => Err(ProtoError {
             code: "not_implemented".into(),
             message: format!("unknown op '{other}'"),
