@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { musicApi } from './api.js';
 import { useMusicPlayer } from './MusicPlayerProvider.jsx';
 import CoverArtCard from './CoverArtCard.jsx';
+import { TILE_GRID } from './util.js';
 import { encodePath } from '../paths.js';
 import { navigate as go } from '@host/router.js';
 
@@ -74,7 +75,7 @@ export default function MusicLibrary({ accent, status = null }) {
           : 'No albums yet — download some from Browse.'
         }</Muted>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 14 }}>
+        <div style={TILE_GRID}>
           {items.map(a => (
             <CoverArtCard key={a.path} album={a} accent={accent} selected={false} onSelect={onSelect} onPlay={onPlay} />
           ))}

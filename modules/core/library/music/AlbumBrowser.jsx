@@ -10,6 +10,7 @@ import CoverArtCard from './CoverArtCard.jsx';
 import { FilterChip as Pill, Seg } from '@host/components/ui/index.js';
 import { usePlaylists, isSavedTracks } from './PlaylistProvider.jsx';
 import { PlaylistCard } from './PlaylistsPage.jsx';
+import { TILE_GRID, TILE_GAP } from './util.js';
 import { encodePath } from '../paths.js';
 import { navigate as go } from '@host/router.js';
 
@@ -23,29 +24,6 @@ const SORT_DIMENSIONS = [
   { key: 'title',    label: 'Title',      defaultDir: 'asc',  value: a => (a.title || '').toLowerCase() },
 ];
 
-// Cover-tile sizing for both grids in this panel. Tracks are 1fr, so tiles ALWAYS
-// consume the full row — dragging the seam resizes them continuously and never
-// leaves slack. A per-tile max-width would cap the growth but strand that slack
-// as dead space, so the floor is the only knob: the grid gains a column the
-// instant one more TILE_MIN-wide tile fits, which drops every tile back to the
-// floor and starts the growth over. Tile width therefore ranges
-//   TILE_MIN … TILE_MIN + (TILE_MIN + TILE_GAP) / columns
-// so the widest tile occurs at the fewest columns. The panel's own 320px floor
-// (SPLIT_MIN in MusicPage) keeps that at 2 columns, never 1 — which is what let
-// a single cover balloon across the whole panel before.
-const TILE_MIN = 100;   // -> tiles run 100…158px across the panel's whole range
-const TILE_GAP = 16;   // VISUAL separation, equal on all four sides (4px grid)
-
-// A tile's press-depth band is a box-shadow hanging BELOW it, outside layout, so
-// a plain `gap` reads ~10.5px tighter vertically than horizontally (util/candy.js).
-// Row gap adds the depth back; the padding below the last row does the same so
-// the grid's outer margin matches the gap between tiles on every side.
-const TILE_GRID = {
-  display: 'grid',
-  gridTemplateColumns: `repeat(auto-fill, minmax(${TILE_MIN}px, 1fr))`,
-  columnGap: TILE_GAP,
-  rowGap: `calc(${TILE_GAP}px + var(--candy-tile-depth))`,
-};
 
 const SORT_LS_KEY = 'tools:musicSort';
 const VIEW_LS_KEY = 'tools:musicPaneView';

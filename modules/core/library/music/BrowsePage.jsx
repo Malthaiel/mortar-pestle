@@ -10,16 +10,13 @@ import { FilterChip, TextInput } from '@host/components/ui/index.js';
 import { navigate as go } from '@host/router.js';
 import BrowseResultCard from './BrowseResultCard.jsx';
 import BrowsePreview from './BrowsePreview.jsx';
+import { TILE_GRID } from './util.js';
 
 const MODE_ALBUMS = 'albums';
 const MODE_ARTISTS = 'artists';
 const BROWSE = '/tools/library/music/browse';
 
-const GRID = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))',
-  gap: 14,
-};
+const GRID = TILE_GRID;   // the module-wide cover-tile grid (util.js)
 
 // Surface the real error: Tauri rejects a command with either a serialized
 // VaultError ({ code, message }) or a bare string (e.g. a panic or arg error).
@@ -187,7 +184,11 @@ export default function BrowsePage({ accent, initialQuery = '', initialMode = MO
       </div>
 
       {/* Content */}
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 18 }}>
+      {/* Bottom padding clears the last tile row's press-depth band (util.js § TILE_GRID). */}
+      <div style={{
+        flex: 1, minHeight: 0, overflowY: 'auto',
+        padding: 18, paddingBottom: 'calc(18px + var(--candy-tile-depth))',
+      }}>
         {loading && (
           <div style={{ color: 'var(--text-faint)', fontSize: 12 }}>Searching…</div>
         )}

@@ -4,6 +4,30 @@
 
 import { mediaUrl } from '@host/api.js';
 
+// The one cover-tile grid for the whole music module (album browser panel, home,
+// library, browse, playlists). Two rules are baked in, both easy to get wrong:
+//
+//  1. Tracks are 1fr with NO max-width, so tiles always consume the row and
+//     resize continuously as a pane is dragged; the grid gains a column the
+//     instant another TILE_MIN-wide tile fits. A per-tile cap would stop the
+//     growth but strand the slack as dead space. Tile width therefore runs
+//     TILE_MIN … TILE_MIN + (TILE_MIN + TILE_GAP) / columns  (100–158px here).
+//  2. A candy tile's press-depth band is a box-shadow BELOW it, outside layout,
+//     so a uniform `gap` reads ~10.5px tighter vertically than horizontally
+//     (see util/candy.js). The row gap adds --candy-tile-depth back; the column
+//     gap must NOT — the shadow points down, not sideways.
+//
+// A container using this should pad its bottom edge to
+// `calc(TILE_GAPpx + var(--candy-tile-depth))` so the last row's band clears.
+export const TILE_MIN = 100;
+export const TILE_GAP = 16;   // VISUAL separation, equal on all sides (4px grid)
+export const TILE_GRID = {
+  display: 'grid',
+  gridTemplateColumns: `repeat(auto-fill, minmax(${TILE_MIN}px, 1fr))`,
+  columnGap: TILE_GAP,
+  rowGap: `calc(${TILE_GAP}px + var(--candy-tile-depth))`,
+};
+
 export function coverSrc(image, width, opts) {
   if (!image) return null;
   const url = mediaUrl(image, opts) || null;

@@ -27,7 +27,7 @@ import {
 import ResultRow from './ResultRow.jsx';
 import { usePlaylistMenu, useSongMenu } from './contextMenus.js';
 import { useMusicPlayer } from './MusicPlayerProvider.jsx';
-import { youtubeQueueItem } from './util.js';
+import { youtubeQueueItem, TILE_GRID } from './util.js';
 import { encodePath } from '../paths.js';
 import { navigate as go } from '@host/router.js';
 
@@ -44,7 +44,7 @@ const toArtistPage = (mbid, name) =>
 const toPlaylists = () => go('/tools/library/music/playlists');
 const toPlaylist = (path) => go('/tools/library/music/playlists/' + encodePath(path));
 
-const GRID = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 14 };
+const GRID = TILE_GRID;   // the module-wide cover-tile grid (util.js)
 
 function errText(e, fallback) {
   if (!e) return fallback;

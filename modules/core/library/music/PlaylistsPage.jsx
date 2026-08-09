@@ -9,14 +9,11 @@ import { usePlaylistMenu } from './contextMenus.js';
 import CollageCover from './CollageCover.jsx';
 import PlaylistModal from './PlaylistModal.jsx';
 import PlaylistDetail from './PlaylistDetail.jsx';
+import { TILE_GRID } from './util.js';
 import { encodePath } from '../paths.js';
 import { navigate } from '@host/router.js';
 
-const GRID = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))',
-  gap: 12,
-};
+const GRID = TILE_GRID;   // the module-wide cover-tile grid (util.js)
 
 export default function PlaylistsPage({ accent, rest }) {
   if (rest) return <PlaylistDetail path={rest} accent={accent} />;
@@ -66,7 +63,11 @@ function PlaylistGrid({ accent }) {
         </button>
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 18 }}>
+      {/* Bottom padding clears the last tile row's press-depth band (util.js § TILE_GRID). */}
+      <div style={{
+        flex: 1, minHeight: 0, overflowY: 'auto',
+        padding: 18, paddingBottom: 'calc(18px + var(--candy-tile-depth))',
+      }}>
         {playlists.length === 0 ? (
           <div
             style={{
