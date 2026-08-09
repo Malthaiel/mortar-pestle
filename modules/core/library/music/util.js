@@ -11,7 +11,9 @@ import { mediaUrl } from '@host/api.js';
 //     resize continuously as a pane is dragged; the grid gains a column the
 //     instant another TILE_MIN-wide tile fits. A per-tile cap would stop the
 //     growth but strand the slack as dead space. Tile width therefore runs
-//     TILE_MIN … TILE_MIN + (TILE_MIN + TILE_GAP) / columns  (100–158px here).
+//     TILE_MIN … TILE_MIN + (TILE_MIN + TILE_GAP) / columns  (93–148px here).
+//     The peak lands at the FEWEST columns any surface shows (2), so it reduces
+//     to 1.5 * TILE_MIN + 8 — lower the floor to lower the peak, one knob.
 //  2. A candy tile's press-depth band is a box-shadow BELOW it, outside layout,
 //     so a uniform `gap` reads ~10.5px tighter vertically than horizontally
 //     (see util/candy.js). The row gap adds --candy-tile-depth back; the column
@@ -19,7 +21,7 @@ import { mediaUrl } from '@host/api.js';
 //
 // A container using this should pad its bottom edge to
 // `calc(TILE_GAPpx + var(--candy-tile-depth))` so the last row's band clears.
-export const TILE_MIN = 100;
+export const TILE_MIN = 93;    // -> peak 147.5px (1.5 * 93 + 8)
 export const TILE_GAP = 16;   // VISUAL separation, equal on all sides (4px grid)
 export const TILE_GRID = {
   display: 'grid',
