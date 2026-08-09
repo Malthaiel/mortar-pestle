@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { musicApi, subscribeManifest } from './api.js';
 import { useMusicPlayer } from './MusicPlayerProvider.jsx';
 import CoverArtCard from './CoverArtCard.jsx';
-import { Seg } from '@host/components/ui/index.js';
+import { FilterChip as Pill, Seg } from '@host/components/ui/index.js';
 import { usePlaylists, isSavedTracks } from './PlaylistProvider.jsx';
 import { PlaylistCard } from './PlaylistsPage.jsx';
 import { encodePath } from '../paths.js';
