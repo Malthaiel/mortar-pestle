@@ -199,7 +199,11 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
         {showPlaylists && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {view === 'both' && visiblePlaylists.length > 0 && <SectionHeading>Playlists</SectionHeading>}
-            {visiblePlaylists.length === 0 && <Empty>No playlists match.</Empty>}
+            {/* Distinct copy per cause: a filtered-to-nothing list and a genuinely
+                empty one look identical otherwise, which cost a debugging session. */}
+            {visiblePlaylists.length === 0 && (
+              <Empty>{query.trim() ? 'No playlists match.' : 'No playlists yet.'}</Empty>
+            )}
             <div style={TILE_GRID}>
               {visiblePlaylists.map(p => (
                 <PlaylistCard key={p.path} playlist={p} accent={accent}
