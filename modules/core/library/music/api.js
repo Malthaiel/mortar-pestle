@@ -26,10 +26,14 @@ export const musicApi = {
   releaseGroupDetail:  (rgMbid) => _api.invoke('music_releasegroup_detail', { rgMbid }),
   releasePersonnel:    (rgMbid) => _api.invoke('music_release_personnel', { rgMbid }),
   // Browse — download engine (script-backed, sequential, background).
-  downloadEnqueue: (rgMbid, title, artist, cover, onlyMissing, metadataOnly, initialStatus) =>
+  // One job shape covers three runs: a whole album (rgMbid), one album track
+  // (rgMbid + trackN), and a loose single (no rgMbid — watchUrl, or artist + title).
+  downloadEnqueue: ({ rgMbid, title, artist, cover, onlyMissing, metadataOnly, initialStatus, trackN, watchUrl }) =>
     _api.invoke('music_download_enqueue', {
-      rgMbid, title, artist, cover, onlyMissing,
+      rgMbid: rgMbid || '', title: title || '', artist: artist || '',
+      cover: cover || null, onlyMissing: !!onlyMissing,
       metadataOnly: !!metadataOnly, initialStatus: initialStatus || null,
+      trackN: trackN ?? null, watchUrl: watchUrl || null,
     }),
   downloadStatus:  () => _api.invoke('music_download_status', {}),
   downloadCancel:  (jobId) => _api.invoke('music_download_cancel', { jobId }),

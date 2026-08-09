@@ -41,14 +41,15 @@ export function useAddToPlaylistMenu(accent) {
   // song. Anything with none of the three filters out and canAdd() is false.
   const addable = (refs) => (refs || []).filter((r) => r && (r.audioPath || r.wikilink || r.watchUrl));
 
-  const openMenu = (e, refs, header = 'Add to playlist') => {
-    e.stopPropagation();
-    e.preventDefault();
+  // The rows themselves, so a bigger menu (useSongMenu) can nest them as a
+  // submenu instead of growing a second copy of this list.
+  const buildItems = (refs) => {
     const list = addable(refs);
+    pending.current = list;
     // Nothing addable at all (no file, no track page, no source link) still gets
     // a dead row rather than a swallowed click — the player tile right-clicks
     // whatever is playing. Same shape defaultMenus uses for "No link actions".
-    const items = list.length === 0
+    return list.length === 0
       ? [{ label: 'Nothing here to add', disabled: true }]
       : [
           ...playlists.map((p) => ({ label: p.title, onClick: () => onAdd(p, list) })),
@@ -57,8 +58,12 @@ export function useAddToPlaylistMenu(accent) {
             onClick: () => setModal(true),
           },
         ];
-    pending.current = list;
-    openContextMenu({ x: e.clientX, y: e.clientY }, items, { header, accent });
+  };
+
+  const openMenu = (e, refs, header = 'Add to playlist') => {
+    e.stopPropagation();
+    e.preventDefault();
+    openContextMenu({ x: e.clientX, y: e.clientY }, buildItems(refs), { header, accent });
   };
 
   const onAdd = async (pl, list) => {
@@ -127,5 +132,5 @@ export function useAddToPlaylistMenu(accent) {
     />
   );
 
-  return { openMenu, modalEl, canAdd: (refs) => addable(refs).length > 0 };
+  return { openMenu, buildItems, modalEl, canAdd: (refs) => addable(refs).length > 0 };
 }

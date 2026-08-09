@@ -5,6 +5,7 @@ import { useRef, useState } from 'react';
 import { useMusicPlayer } from './MusicPlayerProvider.jsx';
 import AddToPlaylistButton from './AddToPlaylistButton.jsx';
 import { refFromQueueItem } from './PlaylistProvider.jsx';
+import { useSongMenu } from './contextMenus.js';
 
 const DOCK_WIDTH = 300;
 
@@ -15,6 +16,7 @@ export default function QueuePanel({ open, onClose, accent }) {
   const [hoverIdx, setHoverIdx] = useState(null);
   const rowRefs = useRef([]);
   const dragRef = useRef({ from: null, to: null });
+  const songMenu = useSongMenu(accent);
 
   // Pointer-drag reorder — HTML5 DnD doesn't fire in the Tauri WebKitGTK webview.
   // A per-row grip handle starts the drag; we track the pointer against row rects
@@ -102,6 +104,9 @@ export default function QueuePanel({ open, onClose, accent }) {
               onMouseEnter={() => setHoverIdx(i)}
               onMouseLeave={() => setHoverIdx(o => (o === i ? null : o))}
               onClick={() => (t.available || t.streamable) && jumpToQueueIndex(i)}
+              onContextMenu={(e) => songMenu.openMenu(e, t, [
+                { label: 'Remove from queue', danger: true, onClick: () => removeFromQueue(i) },
+              ])}
               className={'candy-btn' + (active ? ' is-playing' : '') + (!(t.available || t.streamable) ? ' is-unavailable' : '')}
               data-shape="track"
               style={{
@@ -165,6 +170,7 @@ export default function QueuePanel({ open, onClose, accent }) {
           );
         })}
       </div>
+      {songMenu.modalEl}
     </div>
   );
 }

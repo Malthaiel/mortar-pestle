@@ -254,8 +254,9 @@ export function DownloadsProvider({ children, settings }) {
       }
       if (row.source === 'music') {
         await invoke('music_download_enqueue', {
-          rgMbid: a.rgMbid, title: a.title ?? row.title, artist: a.artist ?? row.subtitle,
+          rgMbid: a.rgMbid ?? '', title: a.title ?? row.title, artist: a.artist ?? row.subtitle,
           cover: a.cover ?? row.cover ?? null, onlyMissing: !!a.onlyMissing,
+          trackN: a.trackN ?? null, watchUrl: a.watchUrl ?? null,
         });
       } else {
         // Mirror AnimeDownloadProvider's qBittorrent pre-flight so a retry never

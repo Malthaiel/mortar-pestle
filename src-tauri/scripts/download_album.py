@@ -18,10 +18,19 @@ Progress is emitted as NDJSON on stdout (one JSON object per line) for the Rust
 download worker; human diagnostics go to stderr. Exit 0 on completion (even with
 some failed tracks), non-zero only on a fatal error.
 
-  download_album.py --rg-mbid <id> --vault <path> [--only-missing] [--max-tracks N]
-                    [--metadata-only] [--status S]
+  download_album.py --rg-mbid <id> --vault <path> [--only-missing] [--only-track N]
+                    [--max-tracks N] [--metadata-only] [--status S]
   download_album.py --resolve (--watch-url U | --artist A --track-title T
                     [--album-title B] [--duration-sec N]) [--album-page P --track-key K]
+  download_album.py --single --vault <path> (--watch-url U | --artist A --track-title T)
+
+Only-track mode (per-song download): downloads just track N of the album and
+treats every other track exactly like an --only-missing skip, so the album page
+rewrite keeps all their rows.
+
+Single mode (loose song, no release group): downloads one YouTube song into
+`Music/Tracks/Singles/` and writes its track page. No album page, no
+MusicBrainz call — the same release/track/done NDJSON events as an album run.
 
 Resolve mode (streaming): finds one track's YouTube watch URL (cached via
 --watch-url, else the same resolve_source() search the download path uses) and
@@ -54,6 +63,7 @@ MB_UA = "Citadel/1.0 (altaccountrawr@proton.me)"
 CAA = "https://coverartarchive.org"
 ALBUMS_REL = "Music/Albums"
 TRACKS_REL = "Music/Tracks"
+SINGLES_REL = f"{TRACKS_REL}/Singles"
 EXCLUDE_WORDS = ["live", "remix", "cover", "karaoke", "instrumental", "demo"]
 # A pasted YouTube link in the search box is a source, not a search term.
 YT_URL_RE = re.compile(
@@ -442,6 +452,79 @@ def run_resolve(args):
     emit({"event": "resolve", "watchUrl": url, "streamUrl": stream})
 
 
+def run_single(args):
+    """--single mode: one loose song → Music/Tracks/Singles/<Artist - Title>.opus.
+
+    No release group, so no MusicBrainz call and no album page — just the audio,
+    a Music-Track page, and the same release/track/done events an album run emits
+    (the Rust worker and the Downloads popup need no changes)."""
+    for dep in ("yt-dlp", "ffmpeg", "ffprobe"):
+        if not shutil.which(dep):
+            fatal(f"required tool not found on PATH: {dep}")
+    if not args.vault:
+        fatal("--single requires --vault")
+
+    url = args.watch_url
+    title, artist = args.track_title, args.artist
+    dur_sec = args.duration_sec or 0
+
+    if url and not (title and artist):
+        # Fill the gaps from the upload itself rather than trusting the caller.
+        hits = ytdlp_json(url, no_playlist=True)
+        c = hits[0] if hits else {}
+        title = title or cand_field(c, "title")
+        artist = artist or cand_field(c, "uploader", "channel", "uploader_id")
+        dur_sec = dur_sec or (c.get("duration") or 0)
+    if not url:
+        if not (artist and title):
+            fatal("--single needs --watch-url or --artist + --track-title")
+        url, info = resolve_source(
+            {"title": title, "length_ms": dur_sec * 1000 if dur_sec else None},
+            artist, args.album_title or "", None,
+        )
+        if not url:
+            fatal(info or "no YouTube source found")
+    title = title or "Untitled"
+    artist = artist or "Unknown Artist"
+
+    key = sanitize_segment(f"{artist} - {title}")
+    folder_abs = os.path.join(args.vault, SINGLES_REL)
+    os.makedirs(folder_abs, exist_ok=True)
+    out_base = os.path.join(folder_abs, key)
+
+    emit({"event": "release", "title": title, "artist": artist, "trackTotal": 1,
+          "year": "", "albumPath": "", "cover": ""})
+    emit({"event": "track", "n": 1, "total": 1, "title": title, "status": "start"})
+
+    meta = {"url": url, "artist": artist, "album": "", "title": title,
+            "n": 1, "year": "", "disc": None}
+    # No MusicBrainz duration to verify against — the upload IS the source of truth.
+    opus = download_opus(url, out_base, meta, None)
+    if not opus:
+        emit({"event": "track", "n": 1, "total": 1, "title": title,
+              "status": "fail", "reason": "download/verify failed"})
+        fatal("single download failed")
+    emit({"event": "track", "n": 1, "total": 1, "title": title, "status": "ok"})
+
+    actual = probe_duration(opus)
+    t = {"key": key, "title": title, "artist": artist, "n": 1, "disc": 1,
+         "folder": "Singles", "url": url, "rec_id": None,
+         "duration": fmt_ms(round((actual or dur_sec) * 1000)) if (actual or dur_sec) else None}
+    write_track_page(folder_abs, "", t,
+                     {"title": "", "artists": [artist], "year": "", "genres": []})
+
+    try:
+        size = os.path.getsize(opus)
+    except OSError:
+        size = 0
+    emit({"event": "done", "ok": True, "single": True, "albumPath": "",
+          "downloaded": 1, "trackTotal": 1, "savePath": folder_abs,
+          "sizeBytes": int(size), "failed": [],
+          "audioPath": f"{SINGLES_REL}/{key}.opus", "trackPath": f"{SINGLES_REL}/{key}.md",
+          "title": title, "artist": artist, "watchUrl": url,
+          "duration": t["duration"]})
+
+
 def run_search(args):
     """--search mode: free-text YouTube search → one `search` event, no download.
 
@@ -727,6 +810,8 @@ def main():
     ap.add_argument("--rg-mbid")
     ap.add_argument("--vault")
     ap.add_argument("--only-missing", action="store_true")
+    ap.add_argument("--only-track", type=int, default=0,
+                    help="download only track N; every other track is skipped, not dropped")
     ap.add_argument("--max-tracks", type=int, default=0)
     ap.add_argument("--metadata-only", action="store_true",
                     help="write the album page only; no audio (Add to Library / imports)")
@@ -735,6 +820,9 @@ def main():
     # Resolve mode (streaming) — one track, no download, no --rg-mbid/--vault.
     ap.add_argument("--resolve", action="store_true",
                     help="resolve one track to a live stream URL; no download")
+    # Single mode — one loose song with no release group.
+    ap.add_argument("--single", action="store_true",
+                    help="download one loose song into Music/Tracks/Singles/")
     ap.add_argument("--watch-url")
     ap.add_argument("--artist")
     ap.add_argument("--album-title")
@@ -753,6 +841,9 @@ def main():
         return
     if args.search:
         run_search(args)
+        return
+    if args.single:
+        run_single(args)
         return
     if not args.rg_mbid or not args.vault:
         ap.error("--rg-mbid and --vault are required")
@@ -873,6 +964,17 @@ def main():
         out_base = os.path.join(folder_abs, key)
         opus_path = out_base + ".opus"
         t["nn"], t["key"], t["folder"] = nn, key, folder_name
+
+        # --only-track: every other track is a skip, NOT a drop. The album page is
+        # a full rewrite from done_meta below, so a track missing here loses its row.
+        if args.only_track and t["n"] != args.only_track:
+            emit({"event": "track", "n": t["n"], "total": len(tracks), "title": t["title"], "status": "skip"})
+            try:
+                _album_bytes[0] += os.path.getsize(opus_path)
+            except OSError:
+                pass
+            done_meta.append({**t, "url": _existing_source(album_abs, key), "duration": fmt_ms(t["length_ms"])})
+            continue
 
         if args.only_missing and os.path.exists(opus_path):
             emit({"event": "track", "n": t["n"], "total": len(tracks), "title": t["title"], "status": "skip"})

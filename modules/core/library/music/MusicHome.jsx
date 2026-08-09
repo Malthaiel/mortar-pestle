@@ -14,7 +14,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { musicApi } from './api.js';
-import { usePlaylists, refFromQueueItem } from './PlaylistProvider.jsx';
+import { usePlaylists } from './PlaylistProvider.jsx';
 import CoverArtCard from './CoverArtCard.jsx';
 import BrowseResultCard from './BrowseResultCard.jsx';
 import CollageCover from './CollageCover.jsx';
@@ -25,10 +25,9 @@ import {
   trackRowProps, recordingRowProps, youtubeRowProps, isYoutubeUrl,
 } from './searchShared.jsx';
 import ResultRow from './ResultRow.jsx';
-import { usePlaylistMenu } from './contextMenus.js';
+import { usePlaylistMenu, useSongMenu } from './contextMenus.js';
 import { useMusicPlayer } from './MusicPlayerProvider.jsx';
 import { youtubeQueueItem } from './util.js';
-import { useAddToPlaylistMenu } from './useAddToPlaylistMenu.jsx';
 import { encodePath } from '../paths.js';
 import { navigate as go } from '@host/router.js';
 
@@ -228,8 +227,18 @@ export function SearchResults({ query, tab, source = 'both', accent, albums, own
   // hit is mapped to a queue item first so it carries watchUrl. A not-yet-
   // downloaded local row has no audioPath and no watchUrl, so the hook reports
   // nothing addable rather than writing a row that points nowhere.
-  const { openMenu: openPlaylistMenu, modalEl: playlistModal } = useAddToPlaylistMenu(accent);
-  const addToPlaylist = (e, item) => openPlaylistMenu(e, [refFromQueueItem(item)]);
+  // Right-click any result row for the shared song menu (Save / Download / Add
+  // to playlist) without having to play it first. Local rows are already queue-
+  // item shaped; a YouTube hit is mapped first so it carries watchUrl, and a
+  // MusicBrainz recording carries only artist + title (the script searches).
+  const { openMenu: openSongMenu, modalEl: playlistModal } = useSongMenu(accent);
+  const songMenuFor = (e, item) => openSongMenu(e, item);
+  const mbSongItem = (r) => ({
+    albumPath: null, albumTitle: r.release || null, albumImage: null,
+    artist: r.artist || '', n: null, title: r.title || '',
+    audioPath: null, available: false, watchUrl: null, wikilink: null,
+    duration: r.length ?? null,
+  });
 
   // Which stacks this tab renders — also gates the fetches, so switching to
   // Artists never spends a MusicBrainz call on recordings. `source` gates the
@@ -301,7 +310,7 @@ export function SearchResults({ query, tab, source = 'both', accent, albums, own
             : <RowList>{localSongs.map(t => (
                 <ResultRow key={`${t.albumPath}#${t.disc}.${t.n}`} {...trackRowProps(t)}
                            onClick={() => toAlbum(t.albumPath)}
-                           onContextMenu={(e) => addToPlaylist(e, t)} />
+                           onContextMenu={(e) => songMenuFor(e, t)} />
               ))}</RowList>)}
         </div>
       )}
@@ -316,7 +325,7 @@ export function SearchResults({ query, tab, source = 'both', accent, albums, own
             : <RowList>{ytSongs.map(h => (
                 <ResultRow key={h.watchUrl} {...youtubeRowProps(h)}
                            onClick={() => playTracks([youtubeQueueItem(h)], 0)}
-                           onContextMenu={(e) => addToPlaylist(e, youtubeQueueItem(h))} />
+                           onContextMenu={(e) => songMenuFor(e, youtubeQueueItem(h))} />
               ))}</RowList>)}
         </div>
       )}
@@ -333,7 +342,8 @@ export function SearchResults({ query, tab, source = 'both', accent, albums, own
                              ? toRelease(r.releaseGroupMbid)
                              // MusicBrainz doesn't always attach a release to a
                              // recording; fall back to a search for it.
-                             : toBrowse(`${r.title} ${r.artist || ''}`.trim(), 'albums'))} />
+                             : toBrowse(`${r.title} ${r.artist || ''}`.trim(), 'albums'))}
+                           onContextMenu={(e) => songMenuFor(e, mbSongItem(r))} />
               ))}</RowList>)}
         </div>
       )}

@@ -9,13 +9,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { musicApi } from './api.js';
 import { useMusicPlayer } from './MusicPlayerProvider.jsx';
-import { usePlaylists, refFromPlaylistTrack } from './PlaylistProvider.jsx';
+import { usePlaylists, refFromPlaylistTrack, isSavedTracks } from './PlaylistProvider.jsx';
+import { Seg } from '@host/components/ui/index.js';
 import PlaylistModal from './PlaylistModal.jsx';
 import CollageCover from './CollageCover.jsx';
 import { encodePath } from '../paths.js';
 import { navigate } from '@host/router.js';
 import { fmtDuration } from './searchShared.jsx';
-import { useContextMenu } from '@host/context-menu/useContextMenu.js';
+import { useSongMenu } from './contextMenus.js';
 
 // PlaylistTrack → player queue item. Each track keeps its own album cover/artist
 // (playlists span albums), which is why playback uses playTracks, not
@@ -42,6 +43,13 @@ function trackToQueueItem(t, pl) {
   };
 }
 
+const DL_FILTER_KEY = 'tools:savedTracksFilter';
+const DL_FILTER_OPTIONS = [
+  { value: 'both', label: 'Both' },
+  { value: 'yes', label: 'Downloaded' },
+  { value: 'no', label: 'Not downloaded' },
+];
+
 export default function PlaylistDetail({ path, accent }) {
   const [pl, setPl] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -52,13 +60,22 @@ export default function PlaylistDetail({ path, accent }) {
   const [dragIdx, setDragIdx] = useState(null);
   const [overIdx, setOverIdx] = useState(null);
   const [hoverIdx, setHoverIdx] = useState(null);
+  // Saved Tracks mixes songs on disk with songs that only stream, so it gets the
+  // same downloaded/not-downloaded split the album panel has. Rows are hidden,
+  // never re-indexed — reorder/remove keep addressing the real track list.
+  const [dlFilter, setDlFilter] = useState(() => {
+    try { return localStorage.getItem(DL_FILTER_KEY) || 'both'; } catch { return 'both'; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem(DL_FILTER_KEY, dlFilter); } catch {}
+  }, [dlFilter]);
   const reqId = useRef(0);
   const rowRefs = useRef([]);
   const dragRef = useRef({ from: null, to: null });
 
   const { playTracks, enqueue, currentTrack, isPlaying } = useMusicPlayer();
   const { saveTracks, rename, setCover, deletePlaylist } = usePlaylists();
-  const { openContextMenu } = useContextMenu();
+  const songMenu = useSongMenu(accent);
 
   const load = () => {
     const myId = ++reqId.current;
@@ -99,6 +116,9 @@ export default function PlaylistDetail({ path, accent }) {
 
   const tracks = pl.tracks || [];
   const items = tracks.map((t) => trackToQueueItem(t, pl));
+  const saved = isSavedTracks(pl);
+  const rowVisible = (i) =>
+    !saved || dlFilter === 'both' || (dlFilter === 'yes') === !!items[i]?.available;
   const rowPlayable = (i) => !!(items[i] && (items[i].available || items[i].streamable));
   const playable = items.filter((it) => it.available || it.streamable);
 
@@ -121,11 +141,11 @@ export default function PlaylistDetail({ path, accent }) {
     });
   };
   const removeAt = (i) => persist(tracks.filter((_, idx) => idx !== i));
-  // Right-click a row → the same removal the per-row × does (playlist entry only,
-  // never the underlying track).
-  const rowMenu = (e, i, t) => openContextMenu(e, [
+  // Right-click a row → the shared song menu, plus this surface's own removal
+  // (playlist entry only, never the underlying track).
+  const rowMenu = (e, i) => songMenu.openMenu(e, items[i], [
     { label: 'Remove from playlist', danger: true, onClick: () => removeAt(i) },
-  ], { accent, header: t.title });
+  ]);
   const drop = (to) => {
     if (dragIdx == null || dragIdx === to) return;
     const next = tracks.slice();
@@ -243,12 +263,20 @@ export default function PlaylistDetail({ path, accent }) {
             <button className="candy-btn" data-own-press onClick={() => setEditOpen(true)} style={{ height: 36 }}>
               <span className="candy-face" style={{ padding: '0 16px' }}>Edit</span>
             </button>
-            <button className="candy-btn is-danger" data-own-press onClick={onDelete} style={{ height: 36 }}>
-              <span className="candy-face" style={{ padding: '0 16px' }}>Delete</span>
-            </button>
+            {!saved && (
+              <button className="candy-btn is-danger" data-own-press onClick={onDelete} style={{ height: 36 }}>
+                <span className="candy-face" style={{ padding: '0 16px' }}>Delete</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
+
+      {saved && tracks.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px 0' }}>
+          <Seg options={DL_FILTER_OPTIONS} value={dlFilter} onChange={setDlFilter} accent={accent} />
+        </div>
+      )}
 
       {/* Tracklist */}
       <div style={{ padding: '12px 14px 32px', display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -257,7 +285,13 @@ export default function PlaylistDetail({ path, accent }) {
             Empty playlist. Add tracks with <b>+ Playlist</b> from the Downloaded tab.
           </div>
         )}
+        {tracks.length > 0 && !tracks.some((_, i) => rowVisible(i)) && (
+          <div style={{ color: 'var(--text-faint)', fontSize: 13, textAlign: 'center', padding: '36px 24px' }}>
+            No tracks match this filter.
+          </div>
+        )}
         {tracks.map((t, i) => {
+          if (!rowVisible(i)) return null;
           // Stream tracks have no audioPath (null === null would light every
           // stream row) — fall back to album+track identity.
           const playingThis = !!currentTrack && (currentTrack.audioPath
@@ -273,7 +307,7 @@ export default function PlaylistDetail({ path, accent }) {
               onMouseEnter={() => setHoverIdx(i)}
               onMouseLeave={() => setHoverIdx((o) => (o === i ? null : o))}
               onClick={() => rowPlayable(i) && playFrom(i)}
-              onContextMenu={(e) => rowMenu(e, i, t)}
+              onContextMenu={(e) => rowMenu(e, i)}
               title={rowPlayable(i) ? '' : 'audio not downloaded'}
               style={{
                 display: 'flex',
@@ -357,6 +391,7 @@ export default function PlaylistDetail({ path, accent }) {
         busy={editBusy}
         error={editErr}
       />
+      {songMenu.modalEl}
     </div>
   );
 }

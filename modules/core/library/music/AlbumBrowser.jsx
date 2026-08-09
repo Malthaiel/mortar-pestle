@@ -1,13 +1,17 @@
-// LEFT pane of the Music page. Fetches the album list, exposes sort / search /
-// status pills / genre chips, renders a cover-art grid.
+// LEFT pane of the Music page — the permanent library column beside EVERY Music
+// screen. Fetches the album list + playlists, exposes a Playlists / Albums /
+// Both selector plus sort / search / status pills, and renders the tiles.
+// Saved Tracks is pinned first among the playlists.
 
 import { useEffect, useMemo, useState } from 'react';
 import { musicApi, subscribeManifest } from './api.js';
 import { useMusicPlayer } from './MusicPlayerProvider.jsx';
 import CoverArtCard from './CoverArtCard.jsx';
-import { FilterChip as Pill, Seg } from '@host/components/ui/index.js';
-import { SEARCH_TABS, useSearchTab, trackRowProps, markTrackHighlight } from './searchShared.jsx';
-import ResultRow from './ResultRow.jsx';
+import { Seg } from '@host/components/ui/index.js';
+import { usePlaylists, isSavedTracks } from './PlaylistProvider.jsx';
+import { PlaylistCard } from './PlaylistsPage.jsx';
+import { encodePath } from '../paths.js';
+import { navigate as go } from '@host/router.js';
 
 // Single pill per sort dimension; click activates with the default direction,
 // click again flips direction. Active pill renders the direction arrow.
@@ -20,6 +24,12 @@ const SORT_DIMENSIONS = [
 ];
 
 const SORT_LS_KEY = 'tools:musicSort';
+const VIEW_LS_KEY = 'tools:musicPaneView';
+const VIEW_OPTIONS = [
+  { value: 'playlists', label: 'Playlists' },
+  { value: 'albums', label: 'Albums' },
+  { value: 'both', label: 'Both' },
+];
 
 export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
   const [albums, setAlbums] = useState(null);
@@ -37,10 +47,15 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
   });
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState(null); // null = all
-  const [tab, setTab] = useSearchTab('tools:musicPaneTab');
-  const [artistFilter, setArtistFilter] = useState(null); // null = all
-  const [songs, setSongs] = useState(null);
+  const [view, setView] = useState(() => {
+    try { return VIEW_OPTIONS.some(o => o.value === localStorage.getItem(VIEW_LS_KEY)) ? localStorage.getItem(VIEW_LS_KEY) : 'both'; } catch { return 'both'; }
+  });
   const { playAlbumTracks } = useMusicPlayer();
+  const { playlists } = usePlaylists();
+
+  useEffect(() => {
+    try { localStorage.setItem(VIEW_LS_KEY, view); } catch {}
+  }, [view]);
 
   useEffect(() => {
     try { localStorage.setItem(SORT_LS_KEY, `${sortDim}-${sortDir}`); } catch {}
@@ -85,36 +100,13 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
   // libraries.
   const statuses = ['Plan-to-Listen', 'Currently-Listening', 'Listened', 'Dropped'];
 
-  // Local track search for the Songs tab. Library-only here — this pane is your
-  // own collection, so it never reaches out to MusicBrainz.
-  useEffect(() => {
-    if (tab !== 'songs') { setSongs(null); return; }
-    const q = query.trim();
-    if (!q) { setSongs([]); return; }
-    let cancelled = false;
-    setSongs(null);
-    const t = setTimeout(() => {
-      musicApi.searchTracks(q, 60)
-        .then(hits => { if (!cancelled) setSongs(hits || []); })
-        .catch(() => { if (!cancelled) setSongs([]); });
-    }, 250);
-    return () => { cancelled = true; clearTimeout(t); };
-  }, [tab, query]);
-
-  // Owned artists with their album counts, most albums first.
-  const artists = useMemo(() => {
-    const counts = new Map();
-    for (const a of albums || []) {
-      const name = a.artist || '';
-      if (!name) continue;
-      counts.set(name, (counts.get(name) || 0) + 1);
-    }
+  // Saved Tracks is pinned first; the rest keep the provider's order. The search
+  // box filters playlists by title, the same way it filters albums.
+  const visiblePlaylists = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return [...counts.entries()]
-      .filter(([name]) => !q || name.toLowerCase().includes(q))
-      .sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0]))
-      .map(([name, count]) => ({ name, count }));
-  }, [albums, query]);
+    const list = (playlists || []).filter(p => !q || (p.title || '').toLowerCase().includes(q));
+    return [...list].sort((a, b) => (isSavedTracks(b) ? 1 : 0) - (isSavedTracks(a) ? 1 : 0));
+  }, [playlists, query]);
 
   const filtered = useMemo(() => {
     if (!albums) return [];
@@ -124,7 +116,6 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
       (a.title || '').toLowerCase().includes(q) ||
       (a.artist || '').toLowerCase().includes(q)
     );
-    if (artistFilter) out = out.filter(a => a.artist === artistFilter);
     if (statusFilter) out = out.filter(a => a.status === statusFilter);
     const dim = SORT_DIMENSIONS.find(d => d.key === sortDim) || SORT_DIMENSIONS[0];
     const mult = sortDir === 'desc' ? -1 : 1;
@@ -135,7 +126,7 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
       return 0;
     };
     return [...out].sort(cmp);
-  }, [albums, query, statusFilter, artistFilter, sortDim, sortDir]);
+  }, [albums, query, statusFilter, sortDim, sortDir]);
 
   const onPlay = async (album) => {
     try {
@@ -144,21 +135,11 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
     } catch {}
   };
 
-  const showGrid = tab === 'all' || tab === 'albums';
+  const showAlbums = view === 'albums' || view === 'both';
+  const showPlaylists = view === 'playlists' || view === 'both';
 
-  // A song opens its album on the right with that row highlighted. Mark first,
-  // then select: AlbumDetail claims the mark as it mounts on the new album.
-  const onSelectSong = (hit) => {
-    markTrackHighlight(hit.albumPath, hit.n, hit.disc);
-    onSelect(hit.albumPath);
-  };
-
-  // Picking an artist drops you back into the album grid, narrowed to them.
-  const onSelectArtist = (name) => {
-    setArtistFilter(name);
-    setQuery('');
-    setTab('albums');
-  };
+  // A playlist opens in the right column — the same route the Playlists page uses.
+  const openPlaylist = (path) => go('/tools/library/music/playlists/' + encodePath(path));
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
@@ -169,13 +150,11 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
         borderBottom: '1px solid var(--border)',
         flexShrink: 0,
       }}>
-        <Seg options={SEARCH_TABS} value={tab} onChange={setTab} accent={accent}/>
+        <Seg options={VIEW_OPTIONS} value={view} onChange={setView} accent={accent}/>
 
         <input
           type="text" value={query}
-          placeholder={tab === 'songs' ? 'Search song titles'
-                     : tab === 'artists' ? 'Search artists'
-                     : 'Search title or artist'}
+          placeholder={view === 'playlists' ? 'Search playlists' : 'Search title or artist'}
           onChange={(e) => setQuery(e.target.value)}
           style={{
             padding: '7px 10px',
@@ -186,17 +165,9 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
           }}
         />
 
-        {/* Status + sort are album-shaped; they'd be dead controls on the
-            Songs and Artists tabs. */}
-        {showGrid && (
+        {/* Status + sort are album-shaped; dead controls with only playlists up. */}
+        {showAlbums && (
           <>
-            {artistFilter && (
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                <Pill active accent={accent} onClick={() => setArtistFilter(null)}>
-                  {artistFilter} ×
-                </Pill>
-              </div>
-            )}
             <PillRow
               options={statuses}
               value={statusFilter}
@@ -210,13 +181,31 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
         )}
       </div>
 
-      {/* Body — album grid, song rows, or artist rows */}
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 18 }}>
-        {albums === null && (
+      {/* Body — playlist tiles and/or the album grid */}
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 18, display: 'flex', flexDirection: 'column', gap: 18 }}>
+        {albums === null && showAlbums && (
           <div style={{ color: 'var(--text-faint)', fontSize: 12 }}>Loading…</div>
         )}
 
-        {showGrid && (
+        {showPlaylists && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {view === 'both' && visiblePlaylists.length > 0 && <SectionHeading>Playlists</SectionHeading>}
+            {visiblePlaylists.length === 0 && <Empty>No playlists match.</Empty>}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))',
+              gap: 14,
+            }}>
+              {visiblePlaylists.map(p => (
+                <PlaylistCard key={p.path} playlist={p} accent={accent} onOpen={openPlaylist} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {showAlbums && view === 'both' && albums && filtered.length > 0 && <SectionHeading>Albums</SectionHeading>}
+
+        {showAlbums && (
           <>
             {albums && filtered.length === 0 && <Empty>No albums match.</Empty>}
             <div style={{
@@ -238,32 +227,18 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
           </>
         )}
 
-        {tab === 'songs' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {songs === null && <Empty>Searching…</Empty>}
-            {songs && songs.length === 0 && (
-              <Empty>{query.trim() ? 'No songs match.' : 'Type to search your songs.'}</Empty>
-            )}
-            {(songs || []).map(t => (
-              <ResultRow key={`${t.albumPath}#${t.disc}.${t.n}`} {...trackRowProps(t)}
-                         selected={t.albumPath === selectedPath}
-                         onClick={() => onSelectSong(t)} />
-            ))}
-          </div>
-        )}
-
-        {tab === 'artists' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {albums && artists.length === 0 && <Empty>No artists match.</Empty>}
-            {artists.map(a => (
-              <ResultRow key={a.name} title={a.name}
-                         right={`${a.count} album${a.count === 1 ? '' : 's'}`}
-                         onClick={() => onSelectArtist(a.name)} />
-            ))}
-          </div>
-        )}
       </div>
     </div>
+  );
+}
+
+// Only shown in "Both", where the two grids need telling apart.
+function SectionHeading({ children }) {
+  return (
+    <div style={{
+      fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-faint)',
+      letterSpacing: '0.08em', textTransform: 'uppercase',
+    }}>{children}</div>
   );
 }
 

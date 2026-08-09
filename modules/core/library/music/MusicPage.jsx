@@ -1,8 +1,10 @@
-// Music section page. A persistent MusicTopBar sits atop every mode; the mode is
-// parsed from the URL rest (everything after /tools/library/music/):
+// Music section page. A persistent MusicTopBar sits atop every mode, and the
+// AlbumBrowser library column is docked to the left of ALL of them (it used to
+// exist only inside the `downloaded` route). The mode picks what fills the right
+// half; it is parsed from the URL rest (everything after /tools/library/music/):
 //   ""                                   → MusicHome (combined search-first home)
 //   "library" | "library/<status>"       → MusicLibrary grid (all / status-filtered)
-//   "downloaded" | "downloaded/<album>"  → AlbumBrowser (left, resizable) + AlbumDetail
+//   "downloaded" | "downloaded/<album>"  → AlbumDetail
 //   "playlists" | "playlists/<path>"     → PlaylistsPage (grid / detail)
 //   "browse"                             → MusicBrainz discovery + download
 //   legacy "personal[/<album>]" or bare "<album>" → downloaded (back-compat)
@@ -218,7 +220,21 @@ export default function MusicPage({ accent, rest }) {
   } else if (mode === 'playlists') {
     content = <PlaylistsPage accent={accent} rest={album}/>;
   } else {
-    content = (
+    content = selectedPath
+      ? <AlbumDetail accent={accent} albumPath={selectedPath}/>
+      : <EmptyDetail/>;
+  }
+
+  // The library column is permanent (Spotify-style): every mode renders inside
+  // the right half of the same split, so the panel never unmounts on navigation.
+  return (
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      <MusicTopBar
+        accent={accent}
+        query={query} setQuery={setQuery}
+        albums={albums} ownedIds={ownedIds} onPlay={playAlbum}
+        suppressPopup={onSearchPage}
+      />
       <div
         ref={containerRef}
         style={{
@@ -255,24 +271,9 @@ export default function MusicPage({ accent, rest }) {
           flex: 1, minWidth: RIGHT_MIN, minHeight: 0,
           display: 'flex', flexDirection: 'column',
         }}>
-          {selectedPath
-            ? <AlbumDetail accent={accent} albumPath={selectedPath}/>
-            : <EmptyDetail/>
-          }
+          {content}
         </div>
       </div>
-    );
-  }
-
-  return (
-    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-      <MusicTopBar
-        accent={accent}
-        query={query} setQuery={setQuery}
-        albums={albums} ownedIds={ownedIds} onPlay={playAlbum}
-        suppressPopup={onSearchPage}
-      />
-      {content}
     </div>
   );
 }

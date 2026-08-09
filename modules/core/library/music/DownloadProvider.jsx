@@ -60,6 +60,12 @@ export function DownloadProvider({ children }) {
     jobs.forEach(j => {
       if ((j.state === 'done' || j.state === 'error') && !notified.current[j.id]) {
         notified.current[j.id] = true;
+        // A finished loose single (no release group) tells PlaylistProvider to
+        // auto-save it — Saved Tracks is the only place it could appear. Guarded
+        // by the same per-job dedupe as the notification.
+        if (j.state === 'done' && j.audioPath && !j.rgMbid) {
+          window.dispatchEvent(new CustomEvent('music-single-downloaded', { detail: j }));
+        }
         window.dispatchEvent(new CustomEvent('agentic:notify', { detail: {
           type: 'download', sourceId: j.id,
           title: j.title || 'Album',
@@ -74,11 +80,7 @@ export function DownloadProvider({ children }) {
     });
   }, [jobs]);
 
-  const enqueue = useCallback(
-    ({ rgMbid, title, artist, cover, onlyMissing, metadataOnly, initialStatus }) =>
-      musicApi.downloadEnqueue(rgMbid, title, artist, cover || null, !!onlyMissing, !!metadataOnly, initialStatus || null),
-    [],
-  );
+  const enqueue = useCallback((job) => musicApi.downloadEnqueue(job), []);
   const cancel = useCallback((jobId) => musicApi.downloadCancel(jobId), []);
 
   return <Ctx.Provider value={{ jobs, enqueue, cancel }}>{children}</Ctx.Provider>;

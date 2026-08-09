@@ -14,6 +14,7 @@ import MusicCredits from './MusicCredits.jsx';
 import MusicNotes from './MusicNotes.jsx';
 import { useDownloads } from './DownloadProvider.jsx';
 import { consumeTrackHighlight, fmtDuration } from './searchShared.jsx';
+import { useSongMenu } from './contextMenus.js';
 import { navigate } from '@host/router.js';
 
 const LISTEN_STATUSES = ['Plan-to-Listen', 'Currently-Listening', 'Listened', 'Dropped'];
@@ -52,6 +53,7 @@ export default function AlbumDetail({ accent, albumPath }) {
   const [busy, setBusy] = useState(false);
   const { playAlbumTracks, enqueue, currentTrack, isPlaying } = useMusicPlayer();
   const { jobs: dlJobs, enqueue: enqueueDownload } = useDownloads();
+  const songMenu = useSongMenu(accent);
   const [dlJobId, setDlJobId] = useState(null);
   const [dlError, setDlError] = useState(null);
 
@@ -412,6 +414,12 @@ export default function AlbumDetail({ accent, albumPath }) {
                     highlighted={!!highlight && highlight.n === t.n && (highlight.disc ?? 1) === (t.disc || 1)}
                     playlistRef={playlistRef}
                     playing={playingThis && isPlaying}
+                    onMenu={(e) => songMenu.openMenu(e, {
+                      albumPath: album.path, albumTitle: album.title, albumImage: album.image,
+                      artist: album.artist, n: t.n, title: t.title,
+                      audioPath: t.audioPath, wikilink: t.wikilink, duration: t.duration,
+                      available: t.available, rgMbid: album.providerId || null,
+                    })}
                     onPlay={() => playFrom(idx)}
                     onEnqueue={() => {
                       enqueue([{
@@ -433,11 +441,13 @@ export default function AlbumDetail({ accent, albumPath }) {
       <MusicNotes album={album} accent={accent} />
 
       <MusicCredits album={album} accent={accent} />
+
+      {songMenu.modalEl}
     </div>
   );
 }
 
-function TrackRow({ track, idx, accent, playing, highlighted, onPlay, onEnqueue, playlistRef }) {
+function TrackRow({ track, idx, accent, playing, highlighted, onPlay, onEnqueue, onMenu, playlistRef }) {
   const [hover, setHover] = useState(false);
   const rowRef = useRef(null);
   // Scroll a song arrived-at from search into view; long tracklists otherwise
@@ -465,6 +475,7 @@ function TrackRow({ track, idx, accent, playing, highlighted, onPlay, onEnqueue,
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       onClick={() => onPlay()}
+      onContextMenu={onMenu}
       style={{ '--accent': accent || 'var(--accent)' }}
     >
       <div className="candy-face">

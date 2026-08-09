@@ -58,6 +58,14 @@ pub struct DownloadJob {
     pub dl_speed: Option<f64>,
     pub eta_secs: Option<i64>,
     pub save_path: Option<String>,
+    /// Per-song download of an album track (`--only-track N`). None = whole album.
+    pub track_n: Option<i64>,
+    /// Loose single (no release group): the YouTube upload to download. Set with
+    /// an empty `rg_mbid` — that pair is what makes a job a `--single` run.
+    pub watch_url: Option<String>,
+    /// Vault-relative .opus of a finished single — what the Saved Tracks
+    /// auto-append reads off the done event.
+    pub audio_path: Option<String>,
     #[serde(skip)]
     pub child_pid: Option<u32>,
     #[serde(skip)]
@@ -138,9 +146,13 @@ pub async fn music_download_enqueue(
     only_missing: Option<bool>,
     metadata_only: Option<bool>,
     initial_status: Option<String>,
+    track_n: Option<i64>,
+    watch_url: Option<String>,
 ) -> Result<String, String> {
-    if rg_mbid.trim().is_empty() {
-        return Err("release-group MBID required".into());
+    let watch_url = watch_url.filter(|u| !u.trim().is_empty());
+    // No release group = a loose single, which needs its own source instead.
+    if rg_mbid.trim().is_empty() && watch_url.is_none() && (title.trim().is_empty() || artist.trim().is_empty()) {
+        return Err("release-group MBID required (or watchUrl / artist + title for a single)".into());
     }
     let id = format!("dl{}", JOB_SEQ.fetch_add(1, Ordering::Relaxed));
     let should_start = {
@@ -163,6 +175,9 @@ pub async fn music_download_enqueue(
             dl_speed: None,
             eta_secs: None,
             save_path: None,
+            track_n: track_n.filter(|n| *n > 0),
+            watch_url,
+            audio_path: None,
             child_pid: None,
             only_missing: only_missing.unwrap_or(false),
             cancel_requested: false,
@@ -457,7 +472,7 @@ async fn run_worker(app: AppHandle) {
 }
 
 async fn process_job(app: &AppHandle, job_id: &str) {
-    let (rg_mbid, only_missing, metadata_only, initial_status) = {
+    let (rg_mbid, only_missing, metadata_only, initial_status, track_n, watch_url, title, artist) = {
         let guard = DOWNLOAD_STATE.lock().unwrap();
         match guard.jobs.iter().find(|j| j.id == job_id) {
             Some(j) => (
@@ -465,6 +480,10 @@ async fn process_job(app: &AppHandle, job_id: &str) {
                 j.only_missing,
                 j.metadata_only,
                 j.initial_status.clone(),
+                j.track_n,
+                j.watch_url.clone(),
+                j.title.clone(),
+                j.artist.clone(),
             ),
             None => return,
         }
@@ -479,18 +498,32 @@ async fn process_job(app: &AppHandle, job_id: &str) {
     let vault = crate::commands::vault::library_vault_root();
 
     let mut cmd = crate::commands::proc_util::python_cmd();
-    cmd.arg(&script)
-        .arg("--rg-mbid")
-        .arg(&rg_mbid)
-        .arg("--vault")
-        .arg(&vault);
-    if only_missing {
-        cmd.arg("--only-missing");
-    }
-    if metadata_only {
-        cmd.arg("--metadata-only");
-        cmd.arg("--status")
-            .arg(initial_status.as_deref().unwrap_or("Plan-to-Listen"));
+    cmd.arg(&script).arg("--vault").arg(&vault);
+    if rg_mbid.trim().is_empty() {
+        // Loose single — no release group, so no album page and no MusicBrainz.
+        cmd.arg("--single");
+        if let Some(u) = watch_url.as_deref().filter(|u| !u.is_empty()) {
+            cmd.arg("--watch-url").arg(u);
+        }
+        if !artist.is_empty() {
+            cmd.arg("--artist").arg(&artist);
+        }
+        if !title.is_empty() {
+            cmd.arg("--track-title").arg(&title);
+        }
+    } else {
+        cmd.arg("--rg-mbid").arg(&rg_mbid);
+        if let Some(n) = track_n {
+            cmd.arg("--only-track").arg(n.to_string());
+        }
+        if only_missing {
+            cmd.arg("--only-missing");
+        }
+        if metadata_only {
+            cmd.arg("--metadata-only");
+            cmd.arg("--status")
+                .arg(initial_status.as_deref().unwrap_or("Plan-to-Listen"));
+        }
     }
     cmd.stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -590,6 +623,12 @@ fn handle_event(app: &AppHandle, job_id: &str, line: &str) {
                 if let Some(sp) = s("savePath") {
                     job.save_path = Some(sp);
                 }
+                if let Some(ap) = s("audioPath") {
+                    job.audio_path = Some(ap);
+                }
+                if let Some(u) = s("watchUrl") {
+                    job.watch_url = Some(u);
+                }
                 if let Some(b) = v.get("sizeBytes").and_then(|x| x.as_i64()) {
                     job.size_bytes = Some(b);
                 }
@@ -623,6 +662,8 @@ fn record_history(app: &AppHandle, job_id: &str) {
         "onlyMissing": j.only_missing,
         "metadataOnly": j.metadata_only,
         "initialStatus": j.initial_status,
+        "trackN": j.track_n,
+        "watchUrl": j.watch_url,
     });
     crate::commands::downloads_history::record(
         app,
@@ -714,6 +755,9 @@ mod tests {
             dl_speed: None,
             eta_secs: None,
             save_path: None,
+            track_n: None,
+            watch_url: None,
+            audio_path: None,
             child_pid: None,
             only_missing: false,
             cancel_requested: false,

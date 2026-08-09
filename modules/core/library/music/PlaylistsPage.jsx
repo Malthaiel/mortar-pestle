@@ -113,7 +113,7 @@ function PlaylistGrid({ accent }) {
   );
 }
 
-function PlaylistCard({ playlist, accent, onOpen }) {
+export function PlaylistCard({ playlist, accent, onOpen }) {
   const [hover, setHover] = useState(false);
   const count = playlist.trackCount || 0;
   const playlistMenu = usePlaylistMenu(accent);

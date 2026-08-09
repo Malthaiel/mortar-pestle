@@ -6,11 +6,17 @@
 // the manifest. Every mutation re-emits the whole page through the Rust writer
 // (`music_write_playlist`); toasts are dispatched by callers via `agentic:notify`.
 
-import { createContext, useContext, useCallback, useEffect, useState } from 'react';
+import { createContext, useContext, useCallback, useEffect, useRef, useState } from 'react';
 import { musicApi } from './api.js';
 
 const Ctx = createContext(null);
 const PLAYLISTS_CHANGED = 'music-playlists-changed';
+
+// The one playlist the app owns: a heart/save list (Spotify's Liked Songs), NOT
+// a downloads log — a saved track may be on disk or streamed, exactly like an
+// album. Created on demand the first time something is saved; never deletable.
+export const SAVED_TITLE = 'Saved Tracks';
+export const isSavedTracks = (pl) => (pl?.title || '').trim() === SAVED_TITLE;
 
 function announce() {
   window.dispatchEvent(new CustomEvent(PLAYLISTS_CHANGED));
@@ -27,6 +33,9 @@ export function usePlaylists() {
       rename: async () => {},
       setCover: async () => {},
       deletePlaylist: async () => {},
+      savedPlaylist: null,
+      isSaved: () => false,
+      toggleSaved: async () => false,
     }
   );
 }
@@ -163,8 +172,83 @@ export function PlaylistProvider({ children }) {
   }, []);
 
   const deletePlaylist = useCallback(async (playlist) => {
+    if (isSavedTracks(playlist)) throw new Error(`“${SAVED_TITLE}” can’t be deleted.`);
     await musicApi.deletePlaylist(playlist.path);
     announce();
+  }, []);
+
+  // ── Saved Tracks ──────────────────────────────────────────────────────────
+  const savedPlaylist = playlists.find(isSavedTracks) || null;
+  const [savedKeys, setSavedKeys] = useState(() => new Set());
+
+  // The summary list carries no rows, so the hearted set comes from reading the
+  // page itself — re-read on every refresh, which is what every mutation ends in.
+  useEffect(() => {
+    if (!savedPlaylist) { setSavedKeys(new Set()); return undefined; }
+    let live = true;
+    musicApi
+      .readPlaylist(savedPlaylist.path)
+      .then((d) => {
+        if (live) setSavedKeys(new Set((d.tracks || []).map((t) => trackKey(refFromPlaylistTrack(t)))));
+      })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [savedPlaylist?.path, playlists]);
+
+  const isSaved = useCallback((ref) => !!ref && savedKeys.has(trackKey(ref)), [savedKeys]);
+
+  // Heart / unheart one song. Returns the new saved state.
+  const toggleSaved = useCallback(async (ref) => {
+    if (!savedPlaylist) {
+      await createPlaylist(SAVED_TITLE, [ref]);
+      return true;
+    }
+    const cur = await musicApi.readPlaylist(savedPlaylist.path);
+    const rows = (cur.tracks || []).map(refFromPlaylistTrack);
+    const key = trackKey(ref);
+    const has = rows.some((r) => trackKey(r) === key);
+    await saveTracks(cur, has ? rows.filter((r) => trackKey(r) !== key) : rows.concat([ref]));
+    return !has;
+  }, [savedPlaylist, createPlaylist, saveTracks]);
+
+  // Save without un-saving — the auto-save path must never toggle a song off.
+  // addTracks already de-dupes and throws `{duplicate:true}` when it's a no-op.
+  const ensureSaved = useCallback(async (ref) => {
+    if (!savedPlaylist) {
+      await createPlaylist(SAVED_TITLE, [ref]);
+      return;
+    }
+    try {
+      await addTracks(savedPlaylist, [ref]);
+    } catch (e) {
+      if (!e?.duplicate) throw e;
+    }
+  }, [savedPlaylist, createPlaylist, addTracks]);
+
+  // The listener registers once, so route it through a ref that always holds the
+  // current fn (which closes over the live saved playlist).
+  const ensureSavedRef = useRef(ensureSaved);
+  ensureSavedRef.current = ensureSaved;
+
+  // A downloaded LOOSE song (no album card) auto-saves — Saved Tracks is the only
+  // place it could ever appear. Album-track downloads never touch it.
+  useEffect(() => {
+    const h = (e) => {
+      const j = e.detail || {};
+      if (!j.audioPath) return;
+      ensureSavedRef.current({
+        wikilink: j.audioPath.replace(/\.opus$/i, ''),
+        audioPath: j.audioPath,
+        title: j.title || '',
+        artist: j.artist || null,
+        albumPath: null,
+        albumTitle: null,
+        duration: j.duration ?? null,
+        watchUrl: j.watchUrl || null,
+      }).catch(() => {});
+    };
+    window.addEventListener('music-single-downloaded', h);
+    return () => window.removeEventListener('music-single-downloaded', h);
   }, []);
 
   const value = {
@@ -176,6 +260,9 @@ export function PlaylistProvider({ children }) {
     rename,
     setCover,
     deletePlaylist,
+    savedPlaylist,
+    isSaved,
+    toggleSaved,
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
