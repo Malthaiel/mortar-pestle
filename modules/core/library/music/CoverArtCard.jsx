@@ -1,16 +1,17 @@
-// Album cover card used in the AlbumBrowser grid. Square cover, title +
-// artist + year beneath. Hover overlays a circular play button. Right-click
-// deletes the album (shared menu — every grid that renders this tile gets it).
+// Album cover card used in every music grid. Cover art ONLY — the title, artist,
+// status dot, year and rating that used to sit beneath were removed 2026-08-08
+// (user-directed: at the 93-143px tile widths the captions were unreadable clutter).
+// Hover overlays a circular play button. Right-click deletes the album (shared menu
+// — every grid that renders this tile gets it).
 
 import { useState } from 'react';
-import { coverSrc, STATUS_DOT_COLOR, resolveDot } from './util.js';
+import { coverSrc } from './util.js';
 import { useAlbumMenu } from './contextMenus.js';
 
 export default function CoverArtCard({ album, accent, selected, onSelect, onPlay }) {
   const [hover, setHover] = useState(false);
   const albumMenu = useAlbumMenu(accent);
   const img = coverSrc(album.image, 320);
-  const statusDot = resolveDot(STATUS_DOT_COLOR, album.status, accent);
   const activate = () => onSelect(album.path);
   const onKeyDown = (e) => {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(); }
@@ -64,48 +65,6 @@ export default function CoverArtCard({ album, accent, selected, onSelect, onPlay
               transition: 'transform 0.14s ease',
             }}
           >▶</button>
-        </div>
-      </div>
-      <div style={{
-        marginTop: 10, display: 'flex', flexDirection: 'column', gap: 2,
-        minWidth: 0,
-      }}>
-        <div title={album.title} style={{
-          fontSize: 13, fontWeight: 500, color: 'var(--text)',
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }}>{album.title}</div>
-        <div title={album.artist} style={{
-          fontSize: 11, color: 'var(--text-muted)',
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }}>{album.artist}</div>
-        <div style={{
-          fontSize: 10, color: 'var(--text-faint)',
-          fontFamily: 'var(--font-mono)', letterSpacing: '0.04em', marginTop: 3,
-          display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap',
-          rowGap: 4,
-        }}>
-          {album.status && (
-            <span style={{
-              display: 'inline-flex', alignItems: 'center', gap: 5,
-              color: 'var(--text-muted)',
-            }}>
-              <span style={{
-                width: 5, height: 5, borderRadius: '50%',
-                background: statusDot || 'var(--text-faint)',
-                flexShrink: 0,
-              }}/>
-              <span>{album.status}</span>
-            </span>
-          )}
-          {album.year && (
-            <span style={{ fontVariantNumeric: 'tabular-nums' }}>{album.year}</span>
-          )}
-          {album.personalRating > 0 && (
-            <span style={{
-              color: accent, marginLeft: 'auto', fontWeight: 600,
-              fontVariantNumeric: 'tabular-nums',
-            }}>★{album.personalRating}</span>
-          )}
         </div>
       </div>
       </div>

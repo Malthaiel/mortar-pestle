@@ -146,20 +146,6 @@ export function PlaylistCard({ playlist, accent, onOpen }) {
         >
           <CollageCover image={playlist.image} urls={playlist.coverUrls} title={playlist.title} accent={accent} />
         </div>
-        <div style={{ marginTop: 10, minWidth: 0 }}>
-          <div
-            style={{
-              fontSize: 13,
-              fontWeight: 600,
-              color: 'var(--text)',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {playlist.title}
-          </div>
-        </div>
       </div>
     </div>
   );

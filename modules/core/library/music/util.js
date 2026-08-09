@@ -22,7 +22,7 @@ import { mediaUrl } from '@host/api.js';
 // A container using this should pad its bottom edge to
 // `calc(TILE_GAPpx + var(--candy-tile-depth))` so the last row's band clears.
 export const TILE_MIN = 93;    // -> peak 147.5px (1.5 * 93 + 8)
-export const TILE_GAP = 16;   // VISUAL separation, equal on all sides (4px grid)
+export const TILE_GAP = 8;    // VISUAL separation, equal on all sides (4px grid)
 export const TILE_GRID = {
   display: 'grid',
   gridTemplateColumns: `repeat(auto-fill, minmax(${TILE_MIN}px, 1fr))`,
