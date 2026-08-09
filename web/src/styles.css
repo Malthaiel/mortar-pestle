@@ -8,6 +8,11 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
      and small (circles / small squares). Each is independently picker-
      adjustable via `Settings → Animations → Button depth`. */
   --candy-depth: 7px;
+  /* Cover-tile rest depth (data-shape="tile"). Pinned deeper than the button
+     default and NOT picker-adjustable. Named because a grid of tiles has to add
+     it to its row-gap for the shadow to clear (util/candy.js) — the grid reads
+     this var rather than restating the number. */
+  --candy-tile-depth: 10.5px;
   /* Un-shadowable mirror of --candy-depth. .music-tile redefines --candy-depth
      for its tile-px-scaled controls, which would distort normal candy buttons
      nested in a tile (the Planner pane widgets' header chips); content hosts
@@ -1278,7 +1283,7 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
 /* tile — album/anime cover card. White face, 4px frame, deeper 10.5px band,
    column layout, body font; the cover hosts a nested ▶ play button. */
 .candy-btn[data-shape="tile"] {
-  --cbtn-depth: 10.5px;
+  --cbtn-depth: var(--candy-tile-depth);
   --cbtn-frame: 4px;
 }
 .candy-btn[data-shape="tile"] > .candy-face {
