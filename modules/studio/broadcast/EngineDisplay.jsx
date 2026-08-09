@@ -110,12 +110,21 @@ export default function EngineDisplay({ api, alive, id = 'preview', children }) 
   // Alignment listeners: window resize + ResizeObserver(holder) + one settle
   // rAF after mount (BrowserPage idiom — covers sidebar collapse, dock
   // show/hide, DPI-change-driven window resizes).
+  //
+  // The PARENT is observed as well, and it is not redundant: the region is a
+  // width-bound 16:9 box centred in the area with margin:auto, so opening the
+  // mixer MOVES it without resizing it. ResizeObserver is blind to pure
+  // movement, so watching the holder alone left the native HWND frozen at its
+  // mixer-closed position, 98 px low and overlapping the rail.
   useEffect(() => {
     if (!alive) return undefined;
     const onResize = () => syncBounds();
     window.addEventListener('resize', onResize);
     const ro = new ResizeObserver(syncBounds);
-    if (holderRef.current) ro.observe(holderRef.current);
+    if (holderRef.current) {
+      ro.observe(holderRef.current);
+      if (holderRef.current.parentElement) ro.observe(holderRef.current.parentElement);
+    }
     const raf = requestAnimationFrame(syncBounds);
     return () => {
       window.removeEventListener('resize', onResize);
