@@ -22,8 +22,9 @@ import PosterRow from '@modules/core/library/PosterRow.jsx';
 import { Seg } from '@host/components/ui/index.js';
 import {
   SEARCH_TABS, useSearchTab, SEARCH_SOURCES, useSearchSource,
-  ResultRow, trackRowProps, recordingRowProps, youtubeRowProps, isYoutubeUrl,
+  trackRowProps, recordingRowProps, youtubeRowProps, isYoutubeUrl,
 } from './searchShared.jsx';
+import ResultRow from './ResultRow.jsx';
 import { usePlaylistMenu } from './contextMenus.js';
 import { useMusicPlayer } from './MusicPlayerProvider.jsx';
 import { youtubeQueueItem } from './util.js';

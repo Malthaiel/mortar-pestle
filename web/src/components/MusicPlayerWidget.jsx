@@ -1,5 +1,6 @@
 // Music player tile — candy-styled big-button shell wrapping the current
-// track. Prototype that will eventually replace `SidebarMusicSlot`. Reads
+// track. THE live sidebar player — it superseded `SidebarMusicSlot`, which was
+// deleted 2026-08-08 after a grep proved nothing mounted it. Reads
 // from the shared `MusicPlayerProvider` context so cover / title / artist /
 // position / live waveform mirror the real player state.
 //
@@ -33,7 +34,7 @@ export default function MusicPlayerWidget() {
   const scrubRef = useRef(null);
   const draggingRef = useRef(false);
   const [openPanel, setOpenPanel] = useState(null); // null | 'lyrics' | 'queue'
-  const accent = 'var(--accent)';                   // mirrors SidebarMusicSlot
+  const accent = 'var(--accent)';
   const hasTrack = !!currentTrack;
   const cover   = hasTrack ? mediaUrl(currentTrack.albumImage) || null : null;
   const title   = hasTrack ? (currentTrack.title  || '—') : '';

@@ -5,9 +5,9 @@
   "type": "module",
   "description": "Mortar & Pestle — personal operating system for thinking, planning, and producing",
   "scripts": {
-    "dev": "tauri dev",
-    "build": "tauri build",
-    "tauri": "tauri",
+    "dev": "node scripts/devlog.mjs dev",
+    "build": "node scripts/devlog.mjs build",
+    "tauri": "node scripts/devlog.mjs",
     "sync-versions": "node scripts/sync-versions.mjs",
     "verify": "node scripts/verify.mjs"
   },

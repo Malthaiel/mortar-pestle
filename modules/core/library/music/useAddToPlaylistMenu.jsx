@@ -1,10 +1,10 @@
 // The add-to-playlist ContextMenu + its "New playlist…" modal, with no trigger
 // of its own. Three surfaces open the identical menu: AddToPlaylistButton (the
 // always-visible "+ Playlist" pill on track rows, album headers and queue rows),
-// MusicPlayerWidget (right-click the sidebar player tile to add what's playing)
-// and SidebarMusicSlot — which nothing currently mounts; the widget superseded
-// it, so the WIDGET is the live sidebar player. Wiring the slot first was the
-// 2026-08-08 miss: its Component Map row still calls it "the slim persistent
+// and MusicPlayerWidget (right-click the sidebar player tile to add what's
+// playing). It was briefly also wired into SidebarMusicSlot, which nothing
+// mounted; that file was deleted 2026-08-08. Wiring the slot first was the
+// 2026-08-08 miss: its Component Map row still called it "the slim persistent
 // right-sidebar player", and a grep for its name returns only its own defn.
 //
 // Lives in its own file rather than beside the button because React Fast

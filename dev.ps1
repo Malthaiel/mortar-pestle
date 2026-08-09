@@ -7,12 +7,11 @@
 # processes both times, and nobody noticed until a closeout went looking for
 # proof that was never written.
 #
-# ponytail: the pipe lives here rather than in a doc, because the doc already
-# said it and was skipped anyway. Run `.\dev.ps1` instead of `npm run tauri dev`.
+# SUPERSEDED 2026-08-08: this launcher was ALSO skipped, three more times. The
+# tee now lives in `scripts/devlog.mjs`, which every npm script routes through,
+# so the plain `npm run tauri dev` that everyone actually types writes the log
+# on its own. This file is kept only so existing muscle memory still works, and
+# it deliberately does no logging of its own — one tee, one place to change.
 
 Set-Location $PSScriptRoot
-
-# Overwrite rather than append: the log's job is to prove THIS run's HMR, and a
-# growing multi-session log makes "is this line from the current window?"
-# unanswerable — which is the exact failure it exists to prevent.
-npm run tauri dev 2>&1 | Tee-Object -FilePath devrun.log
+npm run dev

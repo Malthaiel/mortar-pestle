@@ -6,7 +6,8 @@ import { musicApi, subscribeManifest } from './api.js';
 import { useMusicPlayer } from './MusicPlayerProvider.jsx';
 import CoverArtCard from './CoverArtCard.jsx';
 import { FilterChip as Pill, Seg } from '@host/components/ui/index.js';
-import { SEARCH_TABS, useSearchTab, ResultRow, trackRowProps, markTrackHighlight } from './searchShared.jsx';
+import { SEARCH_TABS, useSearchTab, trackRowProps, markTrackHighlight } from './searchShared.jsx';
+import ResultRow from './ResultRow.jsx';
 
 // Single pill per sort dimension; click activates with the default direction,
 // click again flips direction. Active pill renders the direction arrow.
