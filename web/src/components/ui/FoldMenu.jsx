@@ -465,7 +465,24 @@ export default function FoldMenu({
   // row 1's name) and it BROKE THE FOLD outright — reverted on sight. The tie
   // was real and is FIXED, by lifting row 1 out of the ±1 alternation — see the
   // note on its style in stack(). Nothing here needs to go invisible.
-  const row = (lipOn) => ({
+  // `under` marks ROW 1 while it is still folded onto row 0 — the shut stack and
+  // the first half of an open. There the fold LOOKS like one button but is two:
+  // row 1 draws the face, row 0 draws the lip beneath it. :hover only ever
+  // reaches the top one, so the face lit accent while the lip stayed grey —
+  // user-reported 2026-08-08, "only the top of the button is highlighted the
+  // accent color rather than the whole button including the dropshadow". Giving
+  // row 1 its own lip for that window puts face and lip on ONE element, so they
+  // light together under whatever hover rule the trigger's skin carries — no
+  // colour is restated here, which is the only version that survives a skin
+  // change. Row 0's grey lip is still drawn, exactly underneath and fully
+  // occluded (row 1 resolves to z +3; see the note in stack()).
+  //
+  // The SIGN is the opposite of the resting one, and for the same reason the
+  // resting one is negated under UP_FLIP: row 1 is rotated 180deg here, so its
+  // local down is the screen's up. Two flips cancel on `up`, hence the swap.
+  // FoldPaper is unaffected — it takes the max over the rows and row 1's box is
+  // flush on row 0's, so the union does not move.
+  const row = (lipOn, under = false) => ({
     width: '100%',                    // the GROUP sizes the stack — see there
     height: box.h,
     display: 'block',                 // the class is inline-flex; these stack
@@ -475,7 +492,9 @@ export default function FoldMenu({
     // Rendered upward inside a group that is then mirrored, both come out
     // pointing DOWN — a row keeps its own lip under it and still presses
     // downward, exactly as it does in the unflipped fold.
-    '--cbtn-depth': lipOn ? (up ? `calc(${depth} * -1)` : depth) : '0px',
+    '--cbtn-depth': lipOn ? (up ? `calc(${depth} * -1)` : depth)
+      : under ? (up ? depth : `calc(${depth} * -1)`)
+        : '0px',
     // Re-armed against each wrapper's pointerEvents: 'none' — but ONLY while
     // open. An unconditional 'auto' also beats the GROUP's own open ? auto :
     // none, so the rows keep hit-testing through the whole close: the one you
@@ -538,7 +557,7 @@ export default function FoldMenu({
         data-self-press
         aria-current={j === selected ? 'true' : undefined}
         style={j === n - 1 && j > 0
-          ? { ...row(lips[j - 1]), marginTop: GAP, ...hinge(open ? 0 : 180, open ? openAt(j - 1) : closeAt(j - 1)) }
+          ? { ...row(lips[j - 1], j === 1 && flipped[0]), marginTop: GAP, ...hinge(open ? 0 : 180, open ? openAt(j - 1) : closeAt(j - 1)) }
           // Row 1 is lifted clear of every other row, and this is arithmetic,
           // not a nudge. Each hinge carries translateZ(-1px), and two nested
           // 180deg rotations compose to the identity — so a row's FINAL z
@@ -556,7 +575,7 @@ export default function FoldMenu({
           // so this holds without a per-level scheme. Do not "fix" this by
           // hiding the rows underneath: that was tried the same day and broke
           // the fold outright (see row()).
-          : { ...row(j === 0 ? true : lips[j - 1]),
+          : { ...row(j === 0 ? true : lips[j - 1], j === 1 && flipped[0]),
             ...(j === 1 ? { transform: 'translateZ(-2px)' } : null) }}
         onClick={() => { setOpen(false); items[j].onClick?.(); }}
       >
