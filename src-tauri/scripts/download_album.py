@@ -511,7 +511,8 @@ def run_single(args):
          "folder": "Singles", "url": url, "rec_id": None,
          "duration": fmt_ms(round((actual or dur_sec) * 1000)) if (actual or dur_sec) else None}
     write_track_page(folder_abs, "", t,
-                     {"title": "", "artists": [artist], "year": "", "genres": []})
+                     {"title": "", "artists": [artist], "year": "", "genres": [],
+                      "provider": "youtube"})
 
     try:
         size = os.path.getsize(opus)
@@ -768,7 +769,8 @@ def write_track_page(folder_abs, album_link, t, fm):
     lines = ["---"]
     lines.append("Type: Music-Track")
     lines.append("Domain: Music")
-    lines.append("Provider: musicbrainz")
+    # A --single run never touches MusicBrainz — its source is the upload itself.
+    lines.append(f"Provider: {fm.get('provider') or 'musicbrainz'}")
     if t.get("rec_id"):
         lines.append(f"Provider ID: {t['rec_id']}")
     lines.append(f"Title: {yaml_str(t['title'])}")
@@ -923,7 +925,8 @@ def main():
 
     emit({
         "event": "release", "title": title, "artist": artist0,
-        "trackTotal": len(tracks), "year": year, "albumPath": f"{ALBUMS_REL}/{album_basename}.md",
+        "trackTotal": 1 if args.only_track else len(tracks), "year": year,
+        "albumPath": f"{ALBUMS_REL}/{album_basename}.md",
         "cover": image_url,
     })
 
@@ -958,6 +961,14 @@ def main():
     # ── per-track download ──
     done_meta = []
     failed = []
+    fetched = 0
+    # A one-track run is a one-track job to the Downloads popup: the album's 14
+    # tracks would otherwise read as "Downloaded · 14 tracks" for a single song.
+    ui_total = 1 if args.only_track else len(tracks)
+
+    def ui_n(t):
+        return 1 if args.only_track else t["n"]
+
     for t in tracks:
         nn = f"{t['n']:02d}"
         key = sanitize_segment(f"{nn} - {t['title']}")
@@ -968,12 +979,12 @@ def main():
         # --only-track: every other track is a skip, NOT a drop. The album page is
         # a full rewrite from done_meta below, so a track missing here loses its row.
         if args.only_track and t["n"] != args.only_track:
-            emit({"event": "track", "n": t["n"], "total": len(tracks), "title": t["title"], "status": "skip"})
+            # No skip event: the popup is tracking a one-track job, not the album.
             try:
                 _album_bytes[0] += os.path.getsize(opus_path)
             except OSError:
                 pass
-            done_meta.append({**t, "url": _existing_source(album_abs, key), "duration": fmt_ms(t["length_ms"])})
+            _keep_row(done_meta, t, album_abs, key)
             continue
 
         if args.only_missing and os.path.exists(opus_path):
@@ -982,15 +993,18 @@ def main():
                 _album_bytes[0] += os.path.getsize(opus_path)
             except OSError:
                 pass
-            done_meta.append({**t, "url": _existing_source(album_abs, key), "duration": fmt_ms(t["length_ms"])})
+            _keep_row(done_meta, t, album_abs, key)
             continue
 
-        emit({"event": "track", "n": t["n"], "total": len(tracks), "title": t["title"], "status": "start"})
+        emit({"event": "track", "n": ui_n(t), "total": ui_total, "title": t["title"], "status": "start"})
         url, info = resolve_source(t, artist0, title, artist_mbid)
         if not url:
             failed.append({"nn": nn, "title": t["title"], "reason": info or "no source"})
-            emit({"event": "track", "n": t["n"], "total": len(tracks), "title": t["title"],
+            # Real track number on a fail: the Rust worker files this into the
+            # job's failed list, which has to name the track that actually failed.
+            emit({"event": "track", "n": t["n"], "total": ui_total, "title": t["title"],
                   "status": "fail", "reason": info or "no source"})
+            _keep_row(done_meta, t, album_abs, key)
             continue
 
         expected = round(t["length_ms"] / 1000) if t.get("length_ms") else None
@@ -999,17 +1013,19 @@ def main():
         result = download_opus(url, out_base, meta, expected)
         if not result:
             failed.append({"nn": nn, "title": t["title"], "reason": "download/verify failed"})
-            emit({"event": "track", "n": t["n"], "total": len(tracks), "title": t["title"],
+            emit({"event": "track", "n": t["n"], "total": ui_total, "title": t["title"],
                   "status": "fail", "reason": "download/verify failed"})
+            _keep_row(done_meta, t, album_abs, key)
             continue
 
         t["url"], t["duration"] = url, fmt_ms(t["length_ms"])
         done_meta.append(t)
+        fetched += 1
         try:
             _album_bytes[0] += os.path.getsize(opus_path)
         except OSError:
             pass
-        emit({"event": "track", "n": t["n"], "total": len(tracks), "title": t["title"],
+        emit({"event": "track", "n": ui_n(t), "total": ui_total, "title": t["title"],
               "status": "ok", "flag": info})
 
     if not done_meta:
@@ -1034,9 +1050,20 @@ def main():
             write_track_page(folder_abs, album_link, t, fm)
 
     emit({"event": "done", "ok": True, "albumPath": f"{ALBUMS_REL}/{album_basename}.md",
-          "downloaded": len(done_meta), "trackTotal": len(tracks),
+          "downloaded": fetched, "trackTotal": ui_total,
           "savePath": folder_abs, "sizeBytes": int(_album_bytes[0]),
           "failed": [{"n": int(f["nn"]), "title": f["title"]} for f in failed]})
+
+
+def _keep_row(done_meta, t, album_abs, key):
+    """Keep a track's row on the album page when this run didn't fetch it.
+
+    The page is a full rewrite from done_meta, so a skipped OR failed track that
+    never lands here loses its row — on a re-run over an existing album that
+    DELETES a line the card already had. The row comes back sourceless (unless
+    the page still knows its URL), which reads as not-downloaded. That is right."""
+    done_meta.append({**t, "url": _existing_source(album_abs, key),
+                      "duration": fmt_ms(t["length_ms"])})
 
 
 def _existing_source(album_abs, key):
