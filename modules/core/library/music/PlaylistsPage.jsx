@@ -113,58 +113,53 @@ function PlaylistGrid({ accent }) {
   );
 }
 
+// Rides the shared candy tile shape (.candy-btn[data-shape="tile"]) — the same
+// master CoverArtCard uses, so the album and playlist grids read identically.
+// The shape owns the frame, the press depth and the hover colour flip; no
+// hand-rolled border/hover state here.
 export function PlaylistCard({ playlist, accent, onOpen }) {
-  const [hover, setHover] = useState(false);
-  const count = playlist.trackCount || 0;
   const playlistMenu = usePlaylistMenu(accent);
+  const onKeyDown = (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); }
+  };
   return (
-    <button
+    <div
       onClick={onOpen}
+      onKeyDown={onKeyDown}
       onContextMenu={(e) => playlistMenu(e, playlist)}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 8,
-        textAlign: 'left',
-        padding: 8,
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-md)',
-        background: hover ? 'var(--surface-2)' : 'transparent',
-        cursor: 'pointer',
-        transition: 'background 120ms ease',
-      }}
+      role="button"
+      tabIndex={0}
+      className="candy-btn"
+      data-shape="tile"
+      style={{ '--accent': accent || 'var(--accent)' }}
     >
-      <div
-        style={{
-          width: '100%',
-          aspectRatio: '1 / 1',
-          borderRadius: 6,
-          overflow: 'hidden',
-          boxShadow: '0 6px 18px rgba(0,0,0,0.22)',
-          background: 'var(--surface-2)',
-        }}
-      >
-        <CollageCover image={playlist.image} urls={playlist.coverUrls} title={playlist.title} accent={accent} />
-      </div>
-      <div style={{ minWidth: 0 }}>
+      <div className="candy-face">
         <div
           style={{
-            fontSize: 13,
-            fontWeight: 600,
-            color: 'var(--text)',
+            width: '100%',
+            aspectRatio: '1 / 1',
+            borderRadius: 6,
             overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
+            background: 'var(--surface-2)',
           }}
         >
-          {playlist.title}
+          <CollageCover image={playlist.image} urls={playlist.coverUrls} title={playlist.title} accent={accent} />
         </div>
-        <div style={{ fontSize: 11, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
-          {count} track{count === 1 ? '' : 's'}
+        <div style={{ marginTop: 10, minWidth: 0 }}>
+          <div
+            style={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: 'var(--text)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {playlist.title}
+          </div>
         </div>
       </div>
-    </button>
+    </div>
   );
 }

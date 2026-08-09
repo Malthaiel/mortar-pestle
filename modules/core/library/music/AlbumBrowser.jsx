@@ -23,6 +23,30 @@ const SORT_DIMENSIONS = [
   { key: 'title',    label: 'Title',      defaultDir: 'asc',  value: a => (a.title || '').toLowerCase() },
 ];
 
+// Cover-tile sizing for both grids in this panel. Tracks are 1fr, so tiles ALWAYS
+// consume the full row — dragging the seam resizes them continuously and never
+// leaves slack. A per-tile max-width would cap the growth but strand that slack
+// as dead space, so the floor is the only knob: the grid gains a column the
+// instant one more TILE_MIN-wide tile fits, which drops every tile back to the
+// floor and starts the growth over. Tile width therefore ranges
+//   TILE_MIN … TILE_MIN + (TILE_MIN + TILE_GAP) / columns
+// so the widest tile occurs at the fewest columns. The panel's own 320px floor
+// (SPLIT_MIN in MusicPage) keeps that at 2 columns, never 1 — which is what let
+// a single cover balloon across the whole panel before.
+const TILE_MIN = 100;   // -> tiles run 100…158px across the panel's whole range
+const TILE_GAP = 16;   // VISUAL separation, equal on all four sides (4px grid)
+
+// A tile's press-depth band is a box-shadow hanging BELOW it, outside layout, so
+// a plain `gap` reads ~10.5px tighter vertically than horizontally (util/candy.js).
+// Row gap adds the depth back; the padding below the last row does the same so
+// the grid's outer margin matches the gap between tiles on every side.
+const TILE_GRID = {
+  display: 'grid',
+  gridTemplateColumns: `repeat(auto-fill, minmax(${TILE_MIN}px, 1fr))`,
+  columnGap: TILE_GAP,
+  rowGap: `calc(${TILE_GAP}px + var(--candy-tile-depth))`,
+};
+
 const SORT_LS_KEY = 'tools:musicSort';
 const VIEW_LS_KEY = 'tools:musicPaneView';
 const VIEW_OPTIONS = [
@@ -182,7 +206,14 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
       </div>
 
       {/* Body — playlist tiles and/or the album grid */}
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 18, display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <div style={{
+        flex: 1, minHeight: 0, overflowY: 'auto',
+        // Edge margin equals the gap BETWEEN tiles on all four sides; the bottom
+        // carries the depth band the same way the row gap does.
+        padding: TILE_GAP,
+        paddingBottom: `calc(${TILE_GAP}px + var(--candy-tile-depth))`,
+        display: 'flex', flexDirection: 'column', gap: 18,
+      }}>
         {albums === null && showAlbums && (
           <div style={{ color: 'var(--text-faint)', fontSize: 12 }}>Loading…</div>
         )}
@@ -191,13 +222,10 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {view === 'both' && visiblePlaylists.length > 0 && <SectionHeading>Playlists</SectionHeading>}
             {visiblePlaylists.length === 0 && <Empty>No playlists match.</Empty>}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))',
-              gap: 14,
-            }}>
+            <div style={TILE_GRID}>
               {visiblePlaylists.map(p => (
-                <PlaylistCard key={p.path} playlist={p} accent={accent} onOpen={openPlaylist} />
+                <PlaylistCard key={p.path} playlist={p} accent={accent}
+                              onOpen={() => openPlaylist(p.path)} />
               ))}
             </div>
           </div>
@@ -208,11 +236,7 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
         {showAlbums && (
           <>
             {albums && filtered.length === 0 && <Empty>No albums match.</Empty>}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))',
-              gap: 14,
-            }}>
+            <div style={TILE_GRID}>
               {filtered.map(a => (
                 <CoverArtCard
                   key={a.path}
