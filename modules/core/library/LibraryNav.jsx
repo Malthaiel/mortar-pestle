@@ -2,8 +2,8 @@
 // vault. The two media types are collapsible folder pills (Anime · Music), each
 // holding a nested "Library" folder of status-count rows (LABEL · count) that
 // route to the existing filtered library grids; Total, Downloaded / Not Downloaded
-// ride inside it alongside the statuses, while Homepage (and Music's Playlists)
-// stay directly under the media pill. Counts come from the shared useAnimeStats /
+// ride inside it alongside the statuses, while Homepage stays directly under the
+// media pill. Counts come from the shared useAnimeStats /
 // useMusicStats stores (the same aggregation the topbars now read). All folders
 // collapsed by default.
 // Toolbar: Collapse/Expand all, Reveal current, Reveal in files (the active media
@@ -22,10 +22,9 @@ const MUSIC = '/tools/library/music';
 
 // Rows that sit directly under the media pill (no count).
 const animeTopRows = [{ label: 'Homepage', path: ANIME }];
-const musicTopRows = [
-  { label: 'Homepage',  path: MUSIC },
-  { label: 'Playlists', path: `${MUSIC}/playlists` },
-];
+// Playlists lost its row 2026-08-08: the Music library column is permanent now
+// and lists playlists itself, so the tree entry was a second door to one room.
+const musicTopRows = [{ label: 'Homepage', path: MUSIC }];
 
 // Status-count rows for each media type's nested "Library" folder. status keys
 // match the frontmatter Status values (and URL segments) the topbar tiles used.
