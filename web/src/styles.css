@@ -1803,18 +1803,8 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
   font-size: 11.5px;
   letter-spacing: 0;
 }
-/* Danger chip — neutral candy at rest; red text + frame on hover only. */
-.candy-btn[data-shape="chip"].is-danger,
-.candy-btn[data-shape="chip"].is-danger:is(:hover, :active) { --cbtn-band: var(--surface); }
-.candy-btn[data-shape="chip"].is-danger > .candy-face {
-  color: var(--text-muted);
-  background: var(--surface-3);
-}
-.candy-btn[data-shape="chip"].is-danger:hover > .candy-face {
-  color: var(--error);
-  background: var(--surface-3);
-  border-color: color-mix(in oklch, var(--error), black 18%);
-}
+/* The danger chip's red-on-hover override is GONE with the standing red (see
+   § is-danger): a Delete chip is now an ordinary chip in every state. */
 
 /* icon — square icon-only button: dock tools (button-dock-icon) + the MusicTile
    transport row. 36×36, 10px radius, centred glyph (SVG or text glyph). Neutral
@@ -2141,15 +2131,14 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
   background: color-mix(in oklch, var(--accent), white 8%);
 }
 
-/* is-danger — destructive emphasis (Delete). Like is-primary but a FIXED bright
-   red (not --accent), so it stays red whatever the accent is; the band + frame
-   keep the danger red on hover/press while the face brightens ~8%. */
-.candy-btn.is-danger,
-.candy-btn.is-danger:is(:hover, :active) { --cbtn-band: oklch(0.60 0.20 25); }
-.candy-btn.is-danger > .candy-face { color: #fff; background: var(--cbtn-band); }
-.candy-btn.is-danger:hover > .candy-face {
-  background: color-mix(in oklch, var(--cbtn-band), white 8%);
-}
+/* is-danger — SEMANTIC ONLY, no paint of its own. User-directed 2026-08-10:
+   "remove the red color on deletion and everywhere else it is (only highlight is
+   the accent color)". A Delete button is an ordinary candy button that lights
+   accent on hover, exactly like every other control; the destructive part is
+   handled by its confirm, not by its colour. The context menu had already
+   retired its own standing red under an earlier directive — this finishes the
+   job on the five buttons outside it. Keep the class on the markup: it still
+   says what the button MEANS, and a future paint has one place to land. */
 
 /* Context-menu danger rows (Delete) — App-Wide Context Menu plan. Per user
    directive a menu Delete row is visually IDENTICAL to a normal row (e.g. Edit)
@@ -2206,7 +2195,10 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
    :not(.candy-face): that scores (0,2,0) and re-arms the trap for the next
    control nested in a candy face. */
 .candy-face :where(div, span):where(:not(.candy-face)) { transition: color 150ms cubic-bezier(0, 0, 0.58, 1); }
-.candy-btn:is(:hover, :active, .is-active, .is-selected, .is-primary, .is-danger) .candy-face :where(div, span) { color: #fff; }
+/* .is-danger is deliberately NOT in this list any more: it no longer paints a
+   filled band (see § is-danger), so forcing white on its children would leave a
+   Delete button reading white-on-grey at rest. */
+.candy-btn:is(:hover, :active, .is-active, .is-selected, .is-primary) .candy-face :where(div, span) { color: #fff; }
 
 /* While a DraggableSidebarList reorder is in flight ([data-dragging] on the list
    container), kill pointer events on every sibling control so no other tile lights
@@ -2826,28 +2818,35 @@ body[data-music-tile-depth="small"] .button-music-tile {
  * pointer-events: the tile's .candy-face is pointer-transparent, and this panel is
  * no longer inside .button-planner-calendar (which the tile whitelists), so it has
  * to claim events itself or the whole calendar goes dead. */
+/* OUTER = the clip. Carries NOTHING that has layout height of its own — no border,
+   no padding, no top margin — so max-height is the only animated property and 0
+   really reaches 0. Every earlier attempt failed here: a real border can't compress
+   below its own 4px, and a top margin (even delayed) moves the layout 12px in a
+   single frame, which is what read as the snap at the end of the close.
+   The bottom 12px is the gap below this module, identical open or shut, so it never
+   animates. The top 12px lives on the INNER panel, inside this clip. */
 .button-planner-calendar-body {
   --candy-depth: var(--candy-depth-small);
-  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
   min-height: 0;
   margin: 0 14px 12px;
-  background: var(--surface);
-  border: 2px solid color-mix(in oklch, var(--surface), black 22%);
-  border-radius: var(--radius-md);
   overflow: hidden;
   pointer-events: auto;
-  transition:
-    max-height 320ms cubic-bezier(0.32, 0.72, 0, 1),
-    border-width 320ms cubic-bezier(0.32, 0.72, 0, 1),
-    margin-bottom 320ms cubic-bezier(0.32, 0.72, 0, 1);
+  transition: max-height 320ms cubic-bezier(0.32, 0.72, 0, 1);
 }
-/* Fully closed, max-height:0 can NOT take the panel below its own 2px top + 2px
-   bottom border — borders don't compress — so a 4px line stayed visible under the
-   button. Thin the border to 0 (and drop the bottom gap) on the same curve, keyed
-   off the button's state via the adjacent sibling so no extra attribute is needed. */
-.button-planner-calendar[data-collapsed="true"] + .button-planner-calendar-body {
-  border-width: 0;
-  margin-bottom: 0;
+/* INNER = the recessed screen. Its margin-top is the button↔calendar gap, and being
+   inside the clip it shrinks away with the height for free. flex:1 + min-height:0
+   against the outer's max-height is what gives it a bounded box to scroll in.
+   The frame is an INSET SHADOW, not a border, so it adds no height even here. */
+.button-planner-calendar-panel {
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-top: 12px;
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  box-shadow: inset 0 0 0 2px color-mix(in oklch, var(--surface), black 22%);
 }
 /* Chevron rotates: right (collapsed) → down (expanded). Driven by an inline
  * rotate() in PlannerDock.jsx; the transition lives here so it can be gated. */
@@ -3263,14 +3262,8 @@ button.rating-dot:disabled {
 .candy-tile:is(:hover, :active, .is-selected) :where(div, span) {
   color: #fff !important;
 }
-button.button-misc-form.is-danger {
-  color: white;
-  background: oklch(0.60 0.20 25);
-  border-color: oklch(0.45 0.20 25);
-  box-shadow:
-    0 var(--candy-depth) 0 -2px oklch(0.52 0.20 25),
-    0 var(--candy-depth) 0 0 oklch(0.45 0.20 25);
-}
+/* button.button-misc-form.is-danger's red fill is gone too — same directive as
+   § is-danger. The legacy form button keeps its own neutral skin. */
 button.button-misc-form.is-danger:hover {
   box-shadow:
     0 var(--candy-depth-hover-shadow) 0 -2px oklch(0.52 0.20 25),

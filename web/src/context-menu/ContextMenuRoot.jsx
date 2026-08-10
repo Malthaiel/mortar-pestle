@@ -1,120 +1,309 @@
-// Portaled renderer for the app-wide context menu. Forked from the original
-// components/ui/ContextMenu.jsx (viewport-clamp + capture-phase Esc/click-outside
-// close) and extended across the App-Wide Context Menu sub-features: flat rows
-// with a check/radio glyph slot + optional shortcut (SF0), icons + standing-red
-// danger (SF1), separators + section headers (SF2), roving keyboard navigation
-// with disabled-item skipping (SF3), and fly-out submenus (SF4).
+// The app-wide right-click menu, as a FOLD. User-directed 2026-08-10: "i want
+// the right click menu to literally just be one of these buttons" — the fold
+// menu from Settings → Dev. Right-clicking anywhere in the app unfolds that same
+// stack of candy rectangles at the cursor.
 //
-// Submenus use a CENTRALIZED model: the root component owns `openPath` (the
-// chain of parent-row indices whose children are open) + `activeIndex` (the
-// cursor within the DEEPEST level). One focus owner, one keyboard handler — the
-// nested panels are presentational portals that report pointer events upward.
+// This replaced a flat portaled panel with roving keyboard navigation, hover-
+// intent submenus, separators, section headers, shortcut hints and a standing
+// red for destructive rows. All of that is gone on purpose — a fold is a stack
+// of IDENTICAL rectangles, and every one of those features either broke that
+// (a hairline is not a rectangle) or was a second system bolted beside it.
+// What survives is what fits INSIDE a row's face: a glyph and words.
+//
+// The item API did NOT change, so all 28 call sites are untouched. Anything the
+// fold has no room for is dropped here, in normalize(), rather than at the
+// callers:
+//   sep / divider  -> dropped (the fold already leaves a gap between rows)
+//   header/section -> a dead row, same rectangle, muted label
+//   shortcut       -> dropped (user-directed; may come back)
+//   danger         -> dropped (accent is the only highlight in the app now)
+//   checked        -> the fold's own `selected` accent fill
+//   children       -> a fly-out: a folded card that swings out of the parent
+//                     row like a door, then unfolds down. See Flyout.
+//
+// Dismissal is owned HERE for the whole tree, which is why every FoldMenu below
+// is in controlled mode: a fly-out is a sibling fold, so each fold's own
+// click-outside listener would read a click on its child as "dismiss me".
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { candyGap } from '../util/candy.js';
-import { IconCheck, IconChevronRight, IconDot } from '../components/icons.jsx';
+import FoldMenu, { FOLD_PAD } from '../components/ui/FoldMenu.jsx';
+import { IconChevronRight } from '../components/icons.jsx';
+import { iconFor } from './menuIcons.js';
 
 const MIN_WIDTH = 200;
-const MAX_WIDTH = 320;
-const PAD = 8;
-const HOVER_INTENT = 120; // ms before a hover opens/closes a submenu
-
-let _menuSeq = 0;
+const PAD = 8;          // keep the paper this far off every window edge
+const ROW_H = 28;       // the menu row height the flat panel already had
+// One fold, from FoldMenu's own DUR. The door swings for exactly as long as a
+// row folds, and the rows start unfolding as it lands.
+const SWING = 300;
 
 const isSep = (it) => !!(it && (it.sep || it.divider));
 const isHeader = (it) => !!(it && (it.header || it.section));
 const hasKids = (it) => !!(it && it.children && it.children.length);
-const isNavigable = (it) => !!it && !isSep(it) && !isHeader(it) && !it.disabled;
-const firstNavigable = (arr) => {
-  for (let i = 0; i < arr.length; i++) if (isNavigable(arr[i])) return i;
-  return -1;
+
+// The face of a row: a fixed glyph slot, then the words. The slot is a fixed
+// width rather than shrink-to-fit so every label in the stack starts on the same
+// vertical line, glyph or not (a section title has no glyph).
+function rowFace(it, { muted, chevron } = {}) {
+  const Icon = it.icon || iconFor(it);
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 8, width: '100%',
+      opacity: muted ? 0.45 : 1,
+    }}>
+      <span style={{
+        width: 14, flexShrink: 0, display: 'inline-flex',
+        alignItems: 'center', justifyContent: 'center',
+      }}>
+        {typeof Icon === 'function' ? <Icon size={14} /> : Icon}
+      </span>
+      <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap' }}>{it.label}</span>
+      {chevron && (
+        <span aria-hidden style={{
+          marginLeft: 12, display: 'inline-flex', lineHeight: 1, opacity: 0.6,
+        }}><IconChevronRight size={11} /></span>
+      )}
+    </span>
+  );
+}
+
+// A section title, as a row. It keeps the rectangle (the fold cannot take a
+// shorter one) and gives up the glyph and the click.
+function headerFace(label) {
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 8, width: '100%',
+      fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em',
+      textTransform: 'uppercase', color: 'var(--text-faint)', fontWeight: 600,
+    }}>
+      <span style={{ width: 14, flexShrink: 0 }} />
+      <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap' }}>{label}</span>
+    </span>
+  );
+}
+
+/**
+ * Flatten one level of the caller's items into fold rows.
+ * Returns { rows, selected, kids } — `kids` maps a row index to its child items,
+ * and `selected` is the index the fold paints with its accent fill.
+ */
+function normalize(items) {
+  const rows = [];
+  const kids = new Map();
+  let selected = -1;
+  for (const it of items) {
+    if (!it || isSep(it)) continue;
+    if (isHeader(it)) {
+      rows.push({ label: headerFace(it.header || it.label), disabled: true });
+      continue;
+    }
+    const i = rows.length;
+    if (it.checked && selected < 0) selected = i;
+    if (hasKids(it)) {
+      kids.set(i, it.children);
+      // keepOpen: this row opens something, so the fold must NOT fold shut under
+      // it. The click event rides through so the fly-out can anchor off the
+      // row's real rect instead of guessing where the row ended up.
+      rows.push({ label: rowFace(it, { chevron: true }), keepOpen: true });
+      continue;
+    }
+    rows.push({
+      label: rowFace(it, { muted: it.disabled }),
+      disabled: !!it.disabled,
+      onClick: it.onClick,
+    });
+  }
+  return { rows, selected, kids };
+}
+
+// Row text: the flat panel's own type, restated on the fold's face. FoldMenu's
+// face defaults to the account chip's mono 11.5 — right for a titlebar chip,
+// wrong for a menu — and `justifyItems: stretch` is what puts the label on the
+// left instead of centred in the rectangle.
+const FACE = {
+  fontFamily: 'var(--font-body)',
+  fontSize: 12,
+  fontWeight: 500,
+  letterSpacing: 0,
+  textTransform: 'none',
+  padding: '0 10px',
+  alignItems: 'center',
+  justifyItems: 'stretch',
 };
 
-// Walk `items` down a path of parent-row indices to the items at that level.
-function levelItemsFor(items, path) {
-  let cur = items;
-  for (const idx of path) {
-    const parent = cur[idx];
-    if (!hasKids(parent)) return cur; // stale path — stop where it breaks
-    cur = parent.children;
-  }
-  return cur;
+/**
+ * One fold in the tree. The root is anchored at the click point; a fly-out is
+ * anchored to its parent row and arrives through the door swing.
+ *
+ * Mount order matters and is the same for both: render SHUT, measure the real
+ * stack, place it, and only then unfold. Measuring first is what lets a menu
+ * near the bottom of the window fold UPWARD instead of off the screen — and the
+ * layout box is honest even while the rows are folded, because a fold is a
+ * transform and transforms do not touch layout.
+ */
+function Level({ anchor, items, title, accent, open, onDismiss, onClosed, depth }) {
+  const wrapRef = useRef(null);
+  const [pos, setPos] = useState(null);
+  const [up, setUp] = useState(false);
+  const [unfolded, setUnfolded] = useState(false);
+  const [swung, setSwung] = useState(false);
+  const [flyout, setFlyout] = useState(null); // { index, rect, items }
+
+  const { rows, selected, kids } = normalize(items);
+
+  useLayoutEffect(() => {
+    const stack = wrapRef.current?.querySelector('[role="menu"]');
+    if (!stack) return;
+    const w = stack.offsetWidth + FOLD_PAD * 2;
+    const h = stack.offsetHeight + FOLD_PAD * 2;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    // A fly-out starts at its parent row's right edge and flips to the parent's
+    // left when there is no room; the root starts at the cursor.
+    let left = anchor.x;
+    if (left + w + PAD > vw) left = anchor.flipX != null ? anchor.flipX - w : vw - w - PAD;
+    setPos({ left: Math.max(PAD, left), top: Math.max(PAD, anchor.y) });
+    // Row 0 stays on the anchor in both directions — only the stack below it
+    // changes side — so this is purely "which way is there room for".
+    setUp(anchor.y + h + PAD > vh && anchor.y - h > PAD);
+  }, [items, anchor.x, anchor.y]);
+
+  // Unfold on the frame AFTER the stack has been placed, so nothing is ever
+  // seen folding at the wrong spot. A fly-out waits out its door swing first.
+  useEffect(() => {
+    if (!pos || !open) return undefined;
+    if (depth === 0) {
+      const r = requestAnimationFrame(() => setUnfolded(true));
+      return () => cancelAnimationFrame(r);
+    }
+    const r = requestAnimationFrame(() => setSwung(true));
+    const t = setTimeout(() => setUnfolded(true), SWING);
+    return () => { cancelAnimationFrame(r); clearTimeout(t); };
+  }, [pos, open, depth]);
+
+  // The whole tree shuts together: fold the rows back up and let the door swing
+  // closed behind them.
+  //
+  // A menu dismissed before it ever unfolded (a click landing in the same frame
+  // as the right-click) has no close to play, and FoldMenu correctly reports
+  // nothing — so report it here instead, or the host waits on an onClosed that
+  // never comes and the menu stays mounted forever.
+  const unfoldedRef = useRef(false);
+  unfoldedRef.current = unfolded;
+  useEffect(() => {
+    if (open) return;
+    if (!unfoldedRef.current) { onClosed?.(); return; }
+    setUnfolded(false);
+    setSwung(false);
+    setFlyout(null);
+  }, [open]);
+
+  const openFlyout = (i, e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setFlyout((cur) => (cur && cur.index === i ? cur : { index: i, rect, items: kids.get(i) }));
+  };
+
+  // Wire each parent row's click to its own fly-out. normalize() cannot do this
+  // — it has no idea where the row will land.
+  const wired = rows.map((r, i) => (kids.has(i) ? { ...r, onClick: (e) => openFlyout(i, e) } : r));
+
+  const node = (
+    <div
+      ref={wrapRef}
+      // What "inside the menu" means to the dismissal listener, and to the
+      // provider's native-menu suppressor.
+      data-ctx-fold=""
+      onContextMenu={(e) => {
+        // Right-clicking the menu itself must not stack a second menu on top.
+        e.preventDefault();
+        if (e.nativeEvent) e.nativeEvent.__agenticCtxHandled = true;
+      }}
+      style={{
+        position: 'fixed',
+        left: pos ? pos.left : -9999,
+        top: pos ? pos.top : -9999,
+        zIndex: 9999,
+        // Placed but not yet measured = never shown. visibility, not display:
+        // the stack has to be laid out for the measurement to exist at all.
+        visibility: pos ? 'visible' : 'hidden',
+        ['--accent']: accent,
+        // Only a fly-out swings. The perspective lives on the wrapper so the
+        // door has depth without touching the fold's own perspective inside it.
+        ...(depth > 0 ? { perspective: 1200 } : null),
+      }}
+    >
+      <div style={depth > 0 ? {
+        transformOrigin: 'left center',
+        transform: `rotateY(${swung ? 0 : -92}deg)`,
+        transition: `transform ${SWING}ms ease-in-out`,
+      } : undefined}>
+        <FoldMenu
+          noTrigger
+          up={up}
+          open={unfolded}
+          onRequestClose={onDismiss}
+          onClosed={onClosed}
+          items={wired}
+          selected={selected}
+          rowH={ROW_H}
+          minWidth={MIN_WIDTH}
+          shape="row"
+          faceStyle={FACE}
+          ariaLabel={typeof title === 'string' ? title : 'Menu'}
+        >
+          {title}
+        </FoldMenu>
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      {createPortal(node, document.body)}
+      {flyout && (
+        <Level
+          depth={depth + 1}
+          // The child hangs off the parent row's right edge, its own row 0
+          // level with that row. flipX is the parent stack's left edge, which is
+          // where it goes when the window runs out on the right.
+          anchor={{
+            x: flyout.rect.right + FOLD_PAD,
+            y: flyout.rect.top,
+            flipX: flyout.rect.left - FOLD_PAD,
+          }}
+          items={flyout.items}
+          accent={accent}
+          open={open}
+          onDismiss={onDismiss}
+        />
+      )}
+    </>
+  );
 }
 
 export default function ContextMenuRoot({ point, items = [], opts = {}, onClose }) {
-  const [openPath, setOpenPath] = useState([]); // parent indices, one per open submenu
-  const [activeIndex, setActiveIndex] = useState(-1); // cursor within the deepest level
+  const [open, setOpen] = useState(true);
   const accent = opts.accent || 'var(--accent)';
-  const menuId = useMemo(() => `ctx-menu-${++_menuSeq}`, []);
 
-  const panelEls = useRef(new Map()); // depth -> panel element (containment + focus)
-  const rowEls = useRef(new Map()); // "depth:index" -> row element (submenu anchor)
-  const hoverTimer = useRef(0);
-  const typeBuf = useRef({ str: '', t: 0 });
+  // A second right-click while a menu is up re-uses this instance with fresh
+  // props — re-arm it rather than leaving a shut fold on screen.
+  useEffect(() => { setOpen(true); }, [items, point && point.x, point && point.y]);
 
-  // Resolve the open levels from items + openPath. levels[0] is the root menu;
-  // each later entry records the parent row that spawned it (for positioning).
-  const levels = useMemo(() => {
-    const out = [{ items, parentDepth: -1, parentIndex: -1 }];
-    let cur = items;
-    for (let d = 0; d < openPath.length; d++) {
-      const idx = openPath[d];
-      const parent = cur[idx];
-      if (!hasKids(parent)) break;
-      cur = parent.children;
-      out.push({ items: cur, parentDepth: d, parentIndex: idx });
-    }
-    return out;
-  }, [items, openPath]);
-
-  const deepest = levels.length - 1;
-  const deepestItems = levels[deepest].items;
-  const navIndices = useMemo(
-    () => deepestItems.map((it, i) => (isNavigable(it) ? i : -1)).filter((i) => i >= 0),
-    [deepestItems],
-  );
-
-  // Latest state for the capture-phase Escape handler (avoids stale closures).
-  const stateRef = useRef({ openPath, activeIndex });
-  stateRef.current.openPath = openPath;
-  stateRef.current.activeIndex = activeIndex;
-
-  // A fresh menu (new items or new anchor point) resets the open path + cursor.
+  // The ONE dismissal owner for the tree (see the file header). Capture phase so
+  // a surface that stops propagation on its own keys cannot swallow Escape.
   useEffect(() => {
-    setOpenPath([]);
-    setActiveIndex(-1);
-  }, [items, point && point.x, point && point.y]);
-
-  // Take focus on the ROOT panel on open so arrow keys land here; restore on close.
-  useEffect(() => {
-    const prev = typeof document !== 'undefined' ? document.activeElement : null;
-    const el = panelEls.current.get(0);
-    if (el) {
-      try { el.focus({ preventScroll: true }); }
-      catch (e) { try { el.focus(); } catch (e2) {} }
-    }
-    return () => {
-      clearTimeout(hoverTimer.current);
-      try { prev && prev.focus && prev.focus({ preventScroll: true }); } catch (e) {}
-    };
-  }, []);
-
-  // Close on Escape / outside click — capture phase so a parent's stopPropagation
-  // can't swallow it. Escape closes the deepest submenu first, then the whole menu.
-  useEffect(() => {
+    const dismiss = () => setOpen(false);
     function onKey(e) {
       if (e.key !== 'Escape') return;
       e.stopPropagation();
-      const op = stateRef.current.openPath;
-      if (op.length > 0) { setOpenPath(op.slice(0, -1)); setActiveIndex(op[op.length - 1]); }
-      else onClose && onClose();
+      dismiss();
     }
     function onDown(e) {
-      for (const el of panelEls.current.values()) {
-        if (el && el.contains(e.target)) return; // click landed inside some panel
-      }
-      onClose && onClose();
+      // Every level portals into <body>, so "inside" means inside any of the
+      // menu's own fixed wrappers.
+      if (e.target.closest && e.target.closest('[data-ctx-fold]')) return;
+      dismiss();
     }
     window.addEventListener('keydown', onKey, true);
     window.addEventListener('mousedown', onDown, true);
@@ -122,321 +311,22 @@ export default function ContextMenuRoot({ point, items = [], opts = {}, onClose 
       window.removeEventListener('keydown', onKey, true);
       window.removeEventListener('mousedown', onDown, true);
     };
-  }, [onClose]);
-
-  function moveActive(dir) {
-    if (!navIndices.length) return;
-    const cur = navIndices.indexOf(activeIndex);
-    const next = cur === -1
-      ? (dir > 0 ? 0 : navIndices.length - 1)
-      : (cur + dir + navIndices.length) % navIndices.length;
-    setActiveIndex(navIndices[next]);
-  }
-
-  function edgeActive(dir) {
-    if (!navIndices.length) return;
-    setActiveIndex(dir > 0 ? navIndices[0] : navIndices[navIndices.length - 1]);
-  }
-
-  function openSubmenu() {
-    const it = deepestItems[activeIndex];
-    if (!hasKids(it)) return;
-    const next = [...openPath, activeIndex];
-    setOpenPath(next);
-    setActiveIndex(firstNavigable(it.children));
-  }
-
-  function closeSubmenu() {
-    if (!openPath.length) return;
-    const parentIdx = openPath[openPath.length - 1];
-    setOpenPath(openPath.slice(0, -1));
-    setActiveIndex(parentIdx);
-  }
-
-  function activate() {
-    const it = deepestItems[activeIndex];
-    if (!it) return;
-    if (hasKids(it)) { openSubmenu(); return; }
-    if (isNavigable(it)) { it.onClick && it.onClick(); onClose && onClose(); }
-  }
-
-  function typeAhead(ch) {
-    const now = Date.now();
-    const buf = typeBuf.current;
-    buf.str = (now - buf.t > 600 ? '' : buf.str) + ch.toLowerCase();
-    buf.t = now;
-    const from = navIndices.indexOf(activeIndex);
-    const order = navIndices.slice(from + 1).concat(navIndices.slice(0, from + 1));
-    const hit = order.find((i) => String(deepestItems[i].label || '').toLowerCase().startsWith(buf.str));
-    if (hit !== undefined) setActiveIndex(hit);
-  }
-
-  function onKeyDown(e) {
-    const k = e.key;
-    if (k === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); moveActive(1); }
-    else if (k === 'ArrowUp') { e.preventDefault(); e.stopPropagation(); moveActive(-1); }
-    else if (k === 'Home') { e.preventDefault(); e.stopPropagation(); edgeActive(1); }
-    else if (k === 'End') { e.preventDefault(); e.stopPropagation(); edgeActive(-1); }
-    else if (k === 'ArrowRight') { e.preventDefault(); e.stopPropagation(); openSubmenu(); }
-    else if (k === 'ArrowLeft') { e.preventDefault(); e.stopPropagation(); closeSubmenu(); }
-    else if (k === 'Enter' || k === ' ') { e.preventDefault(); e.stopPropagation(); activate(); }
-    else if (k === 'Tab') { e.preventDefault(); e.stopPropagation(); onClose && onClose(); }
-    else if (k.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) { e.stopPropagation(); typeAhead(k); }
-    // Escape falls through to the capture-phase window listener above.
-  }
-
-  // Hover-intent: opening/closing a submenu waits ~120ms so a fast diagonal sweep
-  // toward an open child doesn't snap it shut. The cursor highlight is immediate
-  // when hovering the current deepest level.
-  function onRowHover(d, i, kids) {
-    clearTimeout(hoverTimer.current);
-    if (d === deepest) setActiveIndex(i);
-    hoverTimer.current = setTimeout(() => {
-      const base = openPath.slice(0, d); // close anything deeper than this level
-      if (kids) {
-        const next = [...base, i];
-        setOpenPath(next);
-        setActiveIndex(firstNavigable(levelItemsFor(items, next)));
-      } else {
-        setOpenPath(base);
-        setActiveIndex(i);
-      }
-    }, HOVER_INTENT);
-  }
-
-  function onRowClick(d, i, it) {
-    clearTimeout(hoverTimer.current);
-    if (hasKids(it)) {
-      const next = [...openPath.slice(0, d), i];
-      setOpenPath(next);
-      setActiveIndex(firstNavigable(it.children));
-      return;
-    }
-    it.onClick && it.onClick();
-    onClose && onClose();
-  }
-
-  function registerRowEl(d, i, el) {
-    const key = `${d}:${i}`;
-    if (el) rowEls.current.set(key, el);
-    else rowEls.current.delete(key);
-  }
-  function reportPanelEl(d, el) {
-    if (el) panelEls.current.set(d, el);
-    else panelEls.current.delete(d);
-  }
+  }, []);
 
   if (!point) return null;
 
-  return levels.map((level, depth) => {
-    const anchorEl = depth === 0
-      ? null
-      : rowEls.current.get(`${level.parentDepth}:${level.parentIndex}`) || null;
-    return (
-      <MenuPanel
-        key={depth}
-        depth={depth}
-        items={level.items}
-        point={depth === 0 ? point : undefined}
-        anchorEl={anchorEl}
-        header={depth === 0 ? opts.header : undefined}
-        accent={accent}
-        menuId={menuId}
-        activeIndex={depth === deepest ? activeIndex : -1}
-        openIndex={openPath[depth] != null ? openPath[depth] : -1}
-        interactive={depth === 0}
-        onKeyDown={depth === 0 ? onKeyDown : undefined}
-        onRowHover={onRowHover}
-        onRowClick={onRowClick}
-        registerRowEl={registerRowEl}
-        reportPanelEl={reportPanelEl}
-      />
-    );
-  });
-}
-
-function MenuPanel({
-  depth, items, point, anchorEl, header, accent, menuId,
-  activeIndex, openIndex, interactive,
-  onKeyDown, onRowHover, onRowClick, registerRowEl, reportPanelEl,
-}) {
-  const ref = useRef(null);
-  const [pos, setPos] = useState({ left: -9999, top: -9999, ready: false });
-
-  // Report this panel's element up for click-outside containment + root focus.
-  useEffect(() => {
-    reportPanelEl(depth, ref.current);
-    return () => reportPanelEl(depth, null);
-  }, [depth]);
-
-  // Position: root anchors at the click point (viewport-clamped); a submenu flies
-  // out from its parent row's right edge, edge-flipping leftward when it'd overflow.
-  useLayoutEffect(() => {
-    if (!ref.current) return;
-    const my = ref.current.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    if (point) {
-      let left = point.x;
-      let top = point.y;
-      if (left + my.width + PAD > vw) left = Math.max(PAD, vw - my.width - PAD);
-      if (top + my.height + PAD > vh) top = Math.max(PAD, vh - my.height - PAD);
-      setPos({ left, top, ready: true });
-    } else if (anchorEl) {
-      const row = anchorEl.getBoundingClientRect();
-      const panel = anchorEl.closest('[role="menu"]');
-      const pr = panel ? panel.getBoundingClientRect() : row;
-      let left = pr.right - 4; // slight overlap with the parent panel
-      let top = row.top - 4; // align with the parent row, minus panel padding
-      if (left + my.width + PAD > vw) left = pr.left - my.width + 4; // flip left
-      if (left < PAD) left = PAD;
-      if (top + my.height + PAD > vh) top = Math.max(PAD, vh - my.height - PAD);
-      setPos({ left, top, ready: true });
-    }
-  }, [point && point.x, point && point.y, anchorEl, items]);
-
-  return createPortal(
-    <div
-      ref={ref}
-      role="menu"
-      className="ctx-menu"
-      tabIndex={interactive ? -1 : undefined}
-      aria-activedescendant={interactive && activeIndex >= 0 ? `${menuId}-${depth}-${activeIndex}` : undefined}
-      onKeyDown={onKeyDown}
-      onContextMenu={(e) => {
-        // Right-clicking the menu itself shouldn't re-trigger the suppressor.
-        e.preventDefault();
-        if (e.nativeEvent) e.nativeEvent.__agenticCtxHandled = true;
-      }}
-      style={{
-        position: 'fixed',
-        left: pos.left, top: pos.top,
-        minWidth: MIN_WIDTH, maxWidth: MAX_WIDTH,
-        // Backdrop pinned to the dock's slate bg (#151411) per user request — not
-        // var(--bg) — so the popup reads as part of the dock chrome.
-        background: '#151411',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-md, 8px)',
-        boxShadow: '0 12px 32px rgba(0,0,0,0.32), 0 2px 8px rgba(0,0,0,0.18)',
-        padding: 4,
-        zIndex: 9999,
-        opacity: pos.ready ? 1 : 0,
-        transition: 'opacity 90ms ease',
-        outline: 'none',
-        ['--accent']: accent,
-      }}
-    >
-      {header && <MenuHeader label={header} first />}
-      {/* Candy rows cast a --candy-depth downward shadow outside layout — a flat
-          margin gets eaten. candyGap() adds the depth so ~base px stays visible
-          and tracks the user's depth picker; paddingBottom clears the last row's
-          slab so it doesn't spill past the menu's bottom edge. See util/candy.js. */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: candyGap(3), paddingBottom: 'var(--candy-depth)' }}>
-        {items.map((it, i) => {
-          if (isSep(it)) return <MenuSep key={i} />;
-          if (isHeader(it)) return <MenuHeader key={i} label={it.header || it.label} inline newSection={i > 0} />;
-          const kids = hasKids(it);
-          return (
-            <MenuRow
-              key={i}
-              it={it}
-              id={`${menuId}-${depth}-${i}`}
-              accent={accent}
-              active={i === activeIndex || i === openIndex}
-              hasChildren={kids}
-              onHover={() => onRowHover(depth, i, kids)}
-              onClick={() => onRowClick(depth, i, it)}
-              registerEl={(el) => registerRowEl(depth, i, el)}
-            />
-          );
-        })}
-      </div>
-    </div>,
-    document.body
-  );
-}
-
-function MenuHeader({ label, first, inline, newSection }) {
   return (
-    <div style={{
-      padding: inline ? '0 10px' : (first ? '2px 10px 4px' : '8px 10px 4px'),
-      fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em',
-      textTransform: 'uppercase', color: 'var(--text-faint)', fontWeight: 600,
-      // Inline headers cast no candy shadow: cancel the depth-gap below so the
-      // label hugs its rows, and add a little space above a mid-menu header so a
-      // fresh section reads without a separator.
-      ...(inline ? {
-        marginTop: newSection ? 5 : 0,
-        marginBottom: 'calc(-1 * var(--candy-depth))',
-      } : null),
-    }}>{label}</div>
-  );
-}
-
-function MenuSep() {
-  // A hairline casts no candy shadow, so cancel the stack's depth-gap below it to
-  // keep the line visually centered between its neighbors.
-  return (
-    <div role="separator" style={{
-      height: 1, background: 'var(--border-soft)', margin: '0 6px',
-      marginBottom: 'calc(-1 * var(--candy-depth))',
-    }} />
-  );
-}
-
-function MenuRow({ it, id, accent, active, hasChildren, onHover, onClick, registerEl }) {
-  const disabled = !!it.disabled;
-  const glyph = it.kind === 'radio'
-    ? (it.checked ? <IconDot size={8} /> : null)
-    : (it.checked ? <IconCheck size={12} /> : null);
-  // icon may be a component (e.g. IconTrash) or a ready node; render either.
-  const Icon = it.icon;
-  const lead = Icon ? (typeof Icon === 'function' ? <Icon size={14} /> : Icon) : glyph;
-  const cls = 'candy-btn'
-    + (it.danger ? ' is-danger' : '')
-    + (active && !disabled ? ' is-active' : '');
-  return (
-    <button
-      ref={registerEl}
-      type="button"
-      role="menuitem"
-      id={id}
-      disabled={disabled}
-      aria-disabled={disabled}
-      aria-haspopup={hasChildren ? 'menu' : undefined}
-      data-own-press
-      className={cls}
-      data-shape="row"
-      data-variant="menu"
-      onMouseEnter={onHover}
-      onClick={(e) => {
-        e.stopPropagation();
-        if (disabled) return;
-        onClick();
-      }}
-      style={{ opacity: disabled ? 0.4 : 1 }}
-    >
-      <span className="candy-face">
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, width: '100%' }}>
-          <span style={{
-            width: 14, flexShrink: 0, display: 'inline-flex',
-            alignItems: 'center', justifyContent: 'center',
-            color: Icon ? undefined : accent, fontSize: 12,
-          }}>{lead}</span>
-          <span style={{ flex: 1, minWidth: 0 }}>{it.label}</span>
-          {hasChildren ? (
-            <span aria-hidden style={{
-              marginLeft: 12, display: 'inline-flex', lineHeight: 1,
-              color: 'var(--text-faint)',
-            }}><IconChevronRight size={11} /></span>
-          ) : it.shortcut ? (
-            <span style={{
-              marginLeft: 12, fontSize: 10, fontFamily: 'var(--font-mono)',
-              color: 'var(--text-faint)', letterSpacing: '0.04em',
-            }}>{it.shortcut}</span>
-          ) : null}
-        </span>
-      </span>
-    </button>
+    <Level
+      depth={0}
+      anchor={{ x: point.x, y: point.y }}
+      items={items}
+      title={opts.header}
+      accent={accent}
+      open={open}
+      onDismiss={() => setOpen(false)}
+      // Unmount only once the close has PLAYED — dropping the menu on the click
+      // would cut the fold off mid-flight.
+      onClosed={onClose}
+    />
   );
 }

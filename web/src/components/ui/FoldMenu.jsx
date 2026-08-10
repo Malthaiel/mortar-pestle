@@ -187,10 +187,37 @@ export default function FoldMenu({
   // in, and a host that moves them on a clock of its own drifts against the
   // fold. Passing the real string is what keeps them one motion.
   onOpenChange,
+  // CONTROLLED MODE (the context menu). Pass `open` and the host owns the
+  // state: every close request — a row click, Escape, a click outside — is
+  // reported through onRequestClose instead of flipping local state, and the
+  // internal dismissal listeners stand down (see the effect below for why a
+  // fly-out makes them actively wrong). Leave `open` undefined and the fold is
+  // exactly the self-driven button it has always been.
+  open: openProp,
+  onRequestClose,
+  // Fired once the close has fully PLAYED (at SHUT). A host that mounts the
+  // fold only while its menu is up needs this to unmount — dropping it on the
+  // close request instead cuts the fold off mid-flight.
+  onClosed,
+  // The trigger becomes an invisible measurement stub: still laid out, still a
+  // real .candy-btn of the row's own shape, so the lip and the row height are
+  // read off a live element exactly as they always were — but never painted and
+  // never clickable. For a menu that opens AT A POINT there is no button to
+  // fold out of; the stack is the whole control.
+  noTrigger = false,
+  // Floor for the row rectangle. The trigger normally supplies it by being a
+  // real button with content; a stub measures ~padding-wide, so a point menu
+  // states its own floor and the rows still take max-content above it.
+  minWidth = 0,
   style,
   ...rest
 }) {
-  const [open, setOpen] = useState(false);
+  const [openState, setOpenState] = useState(false);
+  const isCtl = openProp !== undefined;
+  const open = isCtl ? !!openProp : openState;
+  // One close path for every caller. Controlled, it is a REQUEST — the host
+  // flips `open` and the fold plays the same close it always did.
+  const requestClose = () => { if (isCtl) onRequestClose?.(); else setOpenState(false); };
   const [press, setPress] = useState(PRESS_FALLBACK);
   // The row's resting lip, read off the live trigger. See the header note: this
   // is per-shape and cannot be assumed to be --candy-depth.
@@ -414,18 +441,28 @@ export default function FoldMenu({
       setHolding(true);
       timers.current.push(setTimeout(() => setHolding(false), left));
     }
-    timers.current.push(setTimeout(() => setOpen(true), left + press));
+    timers.current.push(setTimeout(() => setOpenState(true), left + press));
   };
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
 
   const [shown, setShown] = useState(false);
+  // Only a fold that was actually OPEN reports a finished close. Without this
+  // the mount itself (open === false) would fire onClosed one SHUT later and
+  // unmount a menu that never opened.
+  const wasOpen = useRef(false);
+  // Same reason as `notify` below: an inline arrow from the host is a new
+  // identity every render, and this one is read from inside a timeout.
+  const closedRef = useRef(onClosed);
+  closedRef.current = onClosed;
   // Layout effect: a plain one runs after paint, so frame one of an open used to
   // render with the group still `visibility: hidden` — a wasted frame at the
   // front of the halo's ramp, and one the "hard cut in at frame one" note above
   // already assumed was not there.
   useLayoutEffect(() => {
-    if (open) { setShown(true); return undefined; }
-    const t = setTimeout(() => setShown(false), SHUT);
+    if (open) { wasOpen.current = true; setShown(true); return undefined; }
+    const played = wasOpen.current;
+    wasOpen.current = false;
+    const t = setTimeout(() => { setShown(false); if (played) closedRef.current?.(); }, SHUT);
     return () => clearTimeout(t);
   }, [open, SHUT]);
 
@@ -438,13 +475,17 @@ export default function FoldMenu({
 
   // Close on Escape and on any click outside. The fold replaces the menu's
   // PAINT, not a menu's behaviour.
-
+  //
+  // CONTROLLED folds opt out entirely, and that is not tidiness: a context menu
+  // renders its fly-out as a SIBLING fold, so a click on a child row lands
+  // outside the parent's root and this listener would read it as "dismiss me".
+  // One owner for the whole tree instead — the host's.
   const rootRef = useRef(null);
   useEffect(() => {
-    if (!open) return undefined;
-    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    if (!open || isCtl) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') requestClose(); };
     const onDown = (e) => {
-      if (!rootRef.current?.contains(e.target)) setOpen(false);
+      if (!rootRef.current?.contains(e.target)) requestClose();
     };
     document.addEventListener('keydown', onKey);
     document.addEventListener('mousedown', onDown);
@@ -452,7 +493,7 @@ export default function FoldMenu({
       document.removeEventListener('keydown', onKey);
       document.removeEventListener('mousedown', onDown);
     };
-  }, [open]);
+  }, [open, isCtl]);
 
   // Always writes --cbtn-depth rather than adding and removing the key: React
   // only touches style keys that CHANGED, and a key that disappears takes its
@@ -556,6 +597,10 @@ export default function FoldMenu({
         data-own-press
         data-self-press
         aria-current={j === selected ? 'true' : undefined}
+        // A dead row — a section title, or an action that doesn't apply here.
+        // The native attribute is the whole implementation: it kills the click,
+        // and with it the close, so the row is inert without a second guard.
+        disabled={!!items[j].disabled}
         style={j === n - 1 && j > 0
           ? { ...row(lips[j - 1], j === 1 && flipped[0]), marginTop: GAP, ...hinge(open ? 0 : 180, open ? openAt(j - 1) : closeAt(j - 1)) }
           // Row 1 is lifted clear of every other row, and this is arithmetic,
@@ -577,7 +622,13 @@ export default function FoldMenu({
           // the fold outright (see row()).
           : { ...row(j === 0 ? true : lips[j - 1], j === 1 && flipped[0]),
             ...(j === 1 ? { transform: 'translateZ(-2px)' } : null) }}
-        onClick={() => { setOpen(false); items[j].onClick?.(); }}
+        // `keepOpen` is for a row that OPENS something rather than doing
+        // something — a fly-out's parent. The event goes through so the host can
+        // anchor off the row's own rect rather than guessing where it is.
+        onClick={(e) => {
+          if (!items[j].keepOpen) requestClose();
+          items[j].onClick?.(e);
+        }}
       >
         <span className="candy-face" style={FACE}>
           {/* Row 1's UNDERSIDE is the one face left showing when shut: every
@@ -656,11 +707,13 @@ export default function FoldMenu({
         className={`candy-btn ${triggerClassName}${holding ? ' is-pressed' : ''}`.trim()}
         data-shape={shape}
         data-own-press
-        title={triggerTitle}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onPointerDown={() => { downAt.current = performance.now(); }}
-        onClick={openAfterPress}
+        title={noTrigger ? undefined : triggerTitle}
+        aria-haspopup={noTrigger ? undefined : 'menu'}
+        aria-expanded={noTrigger ? undefined : open}
+        aria-hidden={noTrigger || undefined}
+        tabIndex={noTrigger ? -1 : undefined}
+        onPointerDown={noTrigger ? undefined : () => { downAt.current = performance.now(); }}
+        onClick={noTrigger ? undefined : openAfterPress}
         style={{
           // `style` lands on BOTH states, never on the root wrapper. It carries
           // the host's optical-centring lift, and candyCenterOffset() reads
@@ -674,8 +727,14 @@ export default function FoldMenu({
           // has no width of its own — it wraps the avatar plus a display name of
           // whatever length), and the rows are measured FROM it.
           gridArea: '1 / 1', alignSelf: 'start', height: rowH,
+          // The stub is never painted and never hit — but it is still LAID OUT,
+          // which is the whole point: `visibility: hidden` keeps its box and its
+          // computed style, so the lip and the row height below are read off a
+          // real candy button of the rows' own shape rather than assumed.
+          // `display: none` would take the box away and with it the measurement.
+          ...(noTrigger ? { visibility: 'hidden' } : null),
           opacity: open ? 0 : 1,
-          pointerEvents: open ? 'none' : 'auto',
+          pointerEvents: open || noTrigger ? 'none' : 'auto',
           // Fades in on open over SETTLE, HARD-CUTS in on close (0ms at SHUT) —
           // the toy's own handover, restored 2026-08-05. A symmetric fade was
           // tried in between and taken back out: the close's fade re-derives
@@ -774,7 +833,7 @@ export default function FoldMenu({
           // rectangle of paper any more. The floor keeps the shut state honest:
           // while the longest label fits inside the trigger, the stack is
           // exactly the trigger's width and the handover moves nothing.
-          perspective: PERSPECTIVE, width: 'max-content', minWidth: box.w,
+          perspective: PERSPECTIVE, width: 'max-content', minWidth: Math.max(box.w, minWidth),
           opacity: open ? 1 : 0,
           pointerEvents: open ? 'auto' : 'none',
           // Hidden only once the close has finished PLAYING, so the fold is
