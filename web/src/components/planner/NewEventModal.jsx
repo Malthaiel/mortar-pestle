@@ -152,7 +152,7 @@ export default function NewEventModal({ open, onClose, onCreated, accent = 'var(
     }}>
       <div onClick={() => { if (!busy) onClose(); }} className="candy-backdrop"/>
       <div
-        className="candy-modal"
+        className="candy-modal planner-uniform-btns" data-uniform-height="--planner-btn-h"
         role="dialog" aria-modal="true" aria-label="New Event"
         onClick={e => e.stopPropagation()}
         style={{
@@ -167,7 +167,7 @@ export default function NewEventModal({ open, onClose, onCreated, accent = 'var(
         }}>
           <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--text)' }}>New Event</div>
           <button type="button" data-own-press className="candy-btn" data-shape="chip" onClick={() => { if (!busy) onClose(); }}
-            aria-label="Close"><span className="candy-face" style={{ padding: 5 }}><IconX/></span></button>
+            aria-label="Close"><span className="candy-face"><IconX/></span></button>
         </div>
 
         {/* Body */}
@@ -183,7 +183,7 @@ export default function NewEventModal({ open, onClose, onCreated, accent = 'var(
               <button type="button" data-own-press className={`candy-btn${editTypes ? ' is-active' : ''}`} data-shape="chip"
                 onClick={() => { setEditTypes(e => !e); setShowNewType(false); setConfirmDeleteId(null); }}
                 style={{ '--accent': accent }}>
-                <span className="candy-face" style={{ fontSize: 10, padding: '3px 9px' }}>{editTypes ? 'Done' : 'Edit'}</span>
+                <span className="candy-face">{editTypes ? 'Done' : 'Edit'}</span>
               </button>
             }>
               <div className="candy-chip-row" style={{ '--candy-gap': '8px' }}>
@@ -199,7 +199,7 @@ export default function NewEventModal({ open, onClose, onCreated, accent = 'var(
                 {editTypes && (
                   <button type="button" data-own-press className="candy-btn" data-shape="chip"
                     onClick={() => setShowNewType(s => !s)}>
-                    <span className="candy-face" style={{ fontSize: 10, padding: '4px 10px' }}>＋ New</span>
+                    <span className="candy-face">＋ New</span>
                   </button>
                 )}
               </div>
@@ -214,11 +214,11 @@ export default function NewEventModal({ open, onClose, onCreated, accent = 'var(
                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); createType(); } }}
                     placeholder="Type name" style={inputStyle}/>
                   <AccentGrid value={newTypeColor} onChange={setNewTypeColor}/>
-                  <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                     <button type="button" data-own-press className="candy-btn" data-shape="chip" onClick={() => setShowNewType(false)}>
-                      <span className="candy-face" style={{ fontSize: 10, padding: '4px 10px' }}>Cancel</span></button>
+                      <span className="candy-face">Cancel</span></button>
                     <button type="button" data-own-press onClick={createType} className="candy-btn is-active" data-shape="chip"
-                      style={{ '--accent': accent }}><span className="candy-face" style={{ fontSize: 10, padding: '4px 10px' }}>Add type</span></button>
+                      style={{ '--accent': accent }}><span className="candy-face">Add type</span></button>
                   </div>
                 </div>
               )}
@@ -236,7 +236,7 @@ export default function NewEventModal({ open, onClose, onCreated, accent = 'var(
                 <button type="button" data-own-press className={`candy-btn${allDay ? ' is-active' : ''}`} data-shape="chip"
                   onClick={() => { const nv = !allDay; setAllDay(nv); if (nv) setReminderLead(null); }}
                   style={{ '--accent': accent, marginLeft: 'auto', flexShrink: 0 }}>
-                  <span className="candy-face" style={{ fontSize: 10, padding: '4px 12px', whiteSpace: 'nowrap' }}>All Day</span>
+                  <span className="candy-face" style={{ whiteSpace: 'nowrap' }}>All Day</span>
                 </button>
               </div>
             </Field>
@@ -291,7 +291,7 @@ export default function NewEventModal({ open, onClose, onCreated, accent = 'var(
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{link}</span>
                   </span>
                   <button type="button" data-own-press className="candy-btn" data-shape="chip" onClick={() => { setLink(null); setLinkQuery(''); }}>
-                    <span className="candy-face" style={{ fontSize: 10, padding: '3px 8px' }}>Clear</span></button>
+                    <span className="candy-face">Clear</span></button>
                 </div>
               ) : (
                 <div style={{ position: 'relative' }}>
@@ -370,10 +370,9 @@ function Field({ label, action, children }) {
 function ReminderChip({ label, active, accent, onClick }) {
   return (
     <button type="button" data-own-press onClick={onClick} className="candy-btn" data-shape="chip">
-      <span className="candy-face" style={{
-        fontSize: 10, padding: '4px 10px',
-        ...(active ? { borderColor: accent, color: accent, background: `color-mix(in oklch, ${accent} 14%, var(--surface))` } : null),
-      }}>{label}</span></button>
+      <span className="candy-face" style={
+        active ? { borderColor: accent, color: accent, background: `color-mix(in oklch, ${accent} 14%, var(--surface))` } : undefined
+      }>{label}</span></button>
   );
 }
 
@@ -387,19 +386,18 @@ function TypePill({ type, active, accent, editing, confirming, onClick, onAskDel
       }}>
         Delete {type.name}?
         <button type="button" data-own-press className="candy-btn is-danger" data-shape="chip" onClick={onConfirmDelete}
-          title="Delete type"><span className="candy-face" style={{ fontSize: 10, padding: '2px 7px' }}>✓</span></button>
+          title="Delete type"><span className="candy-face">✓</span></button>
         <button type="button" data-own-press className="candy-btn" data-shape="chip" onClick={onCancelDelete}
-          title="Keep type"><span className="candy-face" style={{ fontSize: 10, padding: '2px 7px' }}>✕</span></button>
+          title="Keep type"><span className="candy-face">✕</span></button>
       </span>
     );
   }
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
       <button type="button" data-own-press onClick={onClick} className="candy-btn" data-shape="chip">
-        <span className="candy-face" style={{
-          gap: 6, fontSize: 11, padding: '4px 10px',
-          ...(active ? { borderColor: accent, color: 'var(--text)', background: `color-mix(in oklch, ${accent} 12%, var(--surface))` } : null),
-        }}>
+        <span className="candy-face" style={
+          active ? { borderColor: accent, color: 'var(--text)', background: `color-mix(in oklch, ${accent} 12%, var(--surface))` } : undefined
+        }>
           <span style={{ width: 9, height: 9, borderRadius: '50%', background: type.color || 'var(--text-faint)', flexShrink: 0 }}/>
           {type.name}
         </span>
@@ -407,7 +405,7 @@ function TypePill({ type, active, accent, editing, confirming, onClick, onAskDel
       {editing && (
         <button type="button" data-own-press className="candy-btn is-danger" data-shape="chip" onClick={onAskDelete}
           aria-label={`Delete ${type.name}`} title={`Delete ${type.name}`}>
-          <span className="candy-face" style={{ fontSize: 10, padding: '2px 6px', lineHeight: 1 }}>×</span></button>
+          <span className="candy-face" style={{ lineHeight: 1 }}>×</span></button>
       )}
     </span>
   );

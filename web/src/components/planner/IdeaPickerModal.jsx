@@ -61,7 +61,7 @@ export default function IdeaPickerModal({ open, onClose, onPick }) {
       paddingTop: '14vh',
     }}>
       <div onClick={onClose} className="candy-backdrop" />
-      <div role="dialog" aria-label="Move note to an Idea" className="candy-modal" style={{
+      <div role="dialog" aria-label="Move note to an Idea" className="candy-modal planner-uniform-btns" data-uniform-height="--planner-btn-h" style={{
         position: 'relative', width: 420, maxHeight: '60vh',
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
         animation: 'fadeIn 0.16s ease',

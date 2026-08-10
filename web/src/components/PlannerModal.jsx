@@ -134,7 +134,7 @@ export default function PlannerModal({ open, onClose, accent }) {
         role="dialog"
         aria-modal="true"
         aria-label="Planner"
-        className="candy-modal"
+        className="candy-modal planner-uniform-btns" data-uniform-height="--planner-btn-h"
         style={{
           position: 'relative',
           width: '92vw',

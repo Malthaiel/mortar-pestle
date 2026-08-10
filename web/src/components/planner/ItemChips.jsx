@@ -34,7 +34,12 @@ function writeLS(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore *
 // align-items:center seats the (smaller) action buttons vertically against the
 // chip; each button carries its own explicit height (~25% under the chip) rather
 // than stretching to it, so ✓ / ROUTE / × read as peer controls, not a segmented bar.
-const CHIP_ROW_STYLE = { display: 'flex', alignItems: 'center', gap: '6px', width: '100%' };
+// No gap here: the row sits inside the Planner's one-gap scope (styles.css
+// § Planner — one button height), and a gap written on the tag outranks it, so a
+// hard 6px here left these rows 2px tighter than every other row in the window
+// while the scope rule looked like it was working. Outside that scope the
+// candy-face's own gap still separates the chips.
+const CHIP_ROW_STYLE = { display: 'flex', alignItems: 'center', width: '100%' };
 
 // Press-and-hold (dwell) on a chip to pick it up for a calendar drag, while a
 // quick click falls through to the live input's native focus (caret where
@@ -339,7 +344,7 @@ export function ChipIconBtn({ title, onClick, round, active, children }) {
       data-shape="icon"
       onMouseDown={(e) => e.stopPropagation()}
       onClick={onClick}
-      style={{ flexShrink: 0, width: 23, height: 23, borderRadius: round ? '50%' : 6, '--cbtn-depth': 'var(--candy-depth-small)' }}
+      style={{ flexShrink: 0, '--cbtn-size': '23px', borderRadius: round ? '50%' : 6, '--cbtn-depth': 'var(--candy-depth-small)' }}
     ><span className="candy-face">{children}</span></button>
   );
 }

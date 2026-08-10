@@ -30,6 +30,16 @@ loadAll().then(() => {
     // cssVarAudit: unresolved no-fallback var(--x) in inline styles (CSS drops
     // the whole declaration silently — the GameWikiRail toolbar-padding class).
     import('./util/cssVarAudit.js').then((m) => m.startCssVarAudit());
+    // rowAudit: the SIDE-BY-SIDE checker — heights, painted bottoms, gaps and
+    // round-shape aspect WITHIN one visual row. The other two look past the
+    // inside of a row, which is where every "these buttons don't match" fault
+    // lives. Self-tests itself on startup (rowselftest in the payload).
+    import('./util/rowAudit.js').then((m) => m.startRowAudit());
+    // remote: runs an instruction written to web/.audit/cmd.txt and reports the
+    // result back through the same bridge — lets a modal be OPENED and MEASURED
+    // without the user driving the mouse. Without it the audits above only ever
+    // see whatever surface happened to be on screen.
+    import('./util/remote.js').then((m) => m.startRemote());
   }
 }).catch((err) => {
   // module-loader throws on manifest validation / dep cycles / missing entries.

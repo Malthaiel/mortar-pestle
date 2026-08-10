@@ -67,7 +67,7 @@ export function CircleChip({ children, onClick, title, size = 30, className = ''
       data-own-press
       className={`candy-btn${className ? ' ' + className : ''}`}
       data-shape="circle"
-      style={{ width: size, height: size, ...style }}
+      style={{ '--cbtn-size': `${size}px`, ...style }}
     ><span className="candy-face">{children}</span></button>
   );
 }
@@ -83,7 +83,11 @@ export function IconBtn({ children, onClick, title, size = 28, accent, primary, 
     ? 'candy-btn is-primary'
     : `candy-btn${active ? ' is-active' : ''}`;
   const extraStyle = {};
-  if (size) { extraStyle.width = size; extraStyle.height = size; }
+  // Size lands on --cbtn-size, which the circle shape reads for BOTH axes. A
+  // written width/height pair beat every stylesheet rule, so a window asking for
+  // one control height could never win against it — and pinning only the height
+  // left the width behind, turning circles into ovals. See styles.css § icon.
+  if (size) extraStyle['--cbtn-size'] = `${size}px`;
   if (accent) extraStyle['--accent'] = accent;
   if (playing) {
     extraStyle.boxShadow =

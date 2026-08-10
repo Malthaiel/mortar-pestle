@@ -46,7 +46,7 @@ export default function NewIdeaModal({ open, noteText, onClose, onCreate }) {
       display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: '14vh',
     }}>
       <div onClick={onClose} className="candy-backdrop" />
-      <div role="dialog" aria-label="New Idea from note" className="candy-modal" style={{
+      <div role="dialog" aria-label="New Idea from note" className="candy-modal planner-uniform-btns" data-uniform-height="--planner-btn-h" style={{
         position: 'relative', width: 440,
         display: 'flex', flexDirection: 'column', gap: 14, overflow: 'hidden',
         animation: 'fadeIn 0.16s ease', padding: 18,

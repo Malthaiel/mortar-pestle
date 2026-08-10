@@ -27,6 +27,27 @@ function auditLabel() {
   return h.includes('overlay') ? 'overlay-host' : 'main';
 }
 
+// WHAT WAS ACTUALLY ON SCREEN (Planner Button Sizing, 2026-08-10). `route` only
+// names the page behind the overlays, so a reading taken while the surface under
+// edit was SHUT looks exactly like a clean bill of health for it — that is how the
+// Planner sizing chat read `route: music/playlists` for an hour and never noticed
+// the modal it was editing had never once been measured. Listing the mounted
+// modals/popovers makes an off-target reading self-evidently void instead of
+// quietly wrong. Classes, not a boolean: the class IS the greppable locator.
+function openSurfaces() {
+  if (typeof document === 'undefined') return [];
+  const sel = '.candy-modal, [role="dialog"], .popover-panel, .ov-panel';
+  // height > 0 is NOT enough: closed modals stay mounted at full size behind
+  // opacity:0 or visibility:hidden (measured — three of them on a bare page), so
+  // a height-only filter reports every dialog in the app as open and the stamp
+  // becomes a liar. checkVisibility() is the platform's own answer and folds in
+  // display, visibility, opacity and content-visibility in one call.
+  return [...document.querySelectorAll(sel)]
+    .filter((el) => el.checkVisibility?.({ opacityProperty: true, visibilityProperty: true }) ?? el.getBoundingClientRect().height > 0)
+    .map((el) => (typeof el.className === 'string' && el.className.trim()) || el.tagName.toLowerCase())
+    .slice(0, 12);
+}
+
 // kind: 'spacing' | 'center' — the sink merges each kind into its own slice of the
 // per-label file, so the two audits don't clobber each other within one window.
 export function postAudit(kind, data) {
@@ -41,6 +62,7 @@ export function postAudit(kind, data) {
         ts: Date.now(),
         label: auditLabel(),
         route: typeof location !== 'undefined' ? location.hash : '',
+        open: openSurfaces(),
         data,
       }),
     }).catch(() => {});

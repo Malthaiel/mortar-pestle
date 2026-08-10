@@ -67,7 +67,7 @@ export default function CopyFramePopup({ open, onClose, onCopy, sourceDay, accen
     }}>
       <div onClick={() => { if (!popping) onClose(); }} className="candy-backdrop"/>
       <div
-        className="candy-modal"
+        className="candy-modal planner-uniform-btns" data-uniform-height="--planner-btn-h"
         role="dialog" aria-modal="true" aria-label="Copy day frame"
         onClick={e => e.stopPropagation()}
         style={{
@@ -85,7 +85,7 @@ export default function CopyFramePopup({ open, onClose, onCopy, sourceDay, accen
           </div>
           <button type="button" data-own-press className="candy-btn" data-shape="chip"
             onClick={() => { if (!popping) onClose(); }} aria-label="Close">
-            <span className="candy-face" style={{ padding: 5 }}><IconX/></span>
+            <span className="candy-face"><IconX/></span>
           </button>
         </div>
 
@@ -94,11 +94,11 @@ export default function CopyFramePopup({ open, onClose, onCopy, sourceDay, accen
           <div style={{ display: 'flex', gap: 8 }}>
             <button type="button" data-own-press className="candy-btn" data-shape="chip"
               onClick={selectAll} style={{ '--accent': accent }}>
-              <span className="candy-face" style={{ fontSize: 10, padding: '3px 9px' }}>Select All</span>
+              <span className="candy-face">Select All</span>
             </button>
             <button type="button" data-own-press className="candy-btn" data-shape="chip"
               onClick={selectNone}>
-              <span className="candy-face" style={{ fontSize: 10, padding: '3px 9px' }}>Select None</span>
+              <span className="candy-face">Select None</span>
             </button>
           </div>
           {DAY_ORDER.map((wd) => {

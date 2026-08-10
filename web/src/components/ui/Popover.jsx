@@ -43,6 +43,7 @@ export default function Popover({
   closeOnOutside = true,
   outsideExempt,
   escToClose = true,
+  panelProps,        // extra attributes for the panel (e.g. data-uniform-height)
   children,
 }) {
   const panelRef = useRef(null);
@@ -73,6 +74,7 @@ export default function Popover({
       role={role}
       aria-label={ariaLabel || (typeof title === 'string' ? title : undefined)}
       className={panelClassName}
+      {...panelProps}
       style={{
         ...(accent ? { '--accent': accent } : {}),
         display: 'flex', flexDirection: 'column', overflow: 'hidden',

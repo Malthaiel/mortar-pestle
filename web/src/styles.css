@@ -1406,11 +1406,17 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
   height: auto;
   flex: 1;
   min-height: 0;
-  overflow: hidden;
 }
 .candy-btn[data-shape="tile"].music-tile.is-planner > .candy-face {
   display: flex;
   flex-direction: column;
+  /* Corner clip lives on the FACE, not the tile. On the tile it also clipped the
+     press: the face slides down --cbtn-depth on :active, and the tile's box cut
+     that travel off flat, so the press read as the face shrinking instead of
+     sinking (the music player twin, which has no clip, presses clean). The face
+     inherits the tile's border-radius, so clipping here rounds the dock's square
+     corners identically and moves with the press. */
+  overflow: hidden;
 }
 /* Planner Pack pane widgets ride the plain .music-tile shape one-to-one (same
    fixed 200·tile-px height, same face chrome) — see PaneWidgetShell in
@@ -1725,6 +1731,12 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
   --cbtn-depth: var(--candy-depth-small);
 }
 .candy-btn[data-shape="chip"] > .candy-face {
+  /* A chip is a one-line pill. Left wrappable, a chip squeezed even 1.7px under
+     its own text breaks the label in half and grows taller than every button
+     beside it — silently, since nothing about the row looks wrong until you read
+     it (the Planner calendar header, 2026-08-10). Squashing is now visible as a
+     squashed pill instead of as two stacked words. */
+  white-space: nowrap;
   padding: 5px 10px;
   font-size: 10.5px;
   font-weight: 600;
@@ -1810,7 +1822,13 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
    accent flip — the dock's hover-expand is the hover affordance; accent is the
    .is-active "current tool" / toggle-on state). Callers set their own size
    inline (DockButton 36, MusicTile 40·--tile-px). */
-.candy-btn[data-shape="icon"] { width: 36px; height: 36px; border-radius: 10px; --cbtn-depth: var(--candy-depth-small); }
+/* Size via --cbtn-size, NOT a hard width/height pair written by each caller: a
+   size on the tag beats every stylesheet rule, so a window that wants one height
+   for all its controls could never win (the Planner shipped a 24px rule that lost
+   silently to a 30px close button and 23px task icons). One variable also keeps
+   the two axes tied, so pinning a height can no longer leave the width behind and
+   render a circle as an oval. Callers still pass a number; it lands on the var. */
+.candy-btn[data-shape="icon"] { width: var(--cbtn-size, 36px); height: var(--cbtn-size, 36px); border-radius: 10px; --cbtn-depth: var(--candy-depth-small); }
 .candy-btn[data-shape="icon"] > .candy-face {
   padding: 0; width: 100%; height: 100%;
   font-family: var(--font-body); font-size: 15px; font-weight: 400;
@@ -1834,7 +1852,9 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
    only hover as icon. .is-active flips accent (Shuffle/Repeat/Queue toggles);
    .is-primary holds accent at rest (the always-on Play). Sizes vary per caller,
    set inline (IconBtn 28, transport 28, tool 24, primary 38, planner 26). */
-.candy-btn[data-shape="circle"] { width: 28px; height: 28px; border-radius: 999px; --cbtn-depth: var(--candy-depth-small); }
+/* Sizes vary per caller and arrive on --cbtn-size (see the icon shape above for
+   why it is a variable and not a written width/height pair). */
+.candy-btn[data-shape="circle"] { width: var(--cbtn-size, 28px); height: var(--cbtn-size, 28px); border-radius: 999px; --cbtn-depth: var(--candy-depth-small); }
 .candy-btn[data-shape="circle"] > .candy-face {
   padding: 0; width: 100%; height: 100%;
   font-family: var(--font-body); font-size: 13px; font-weight: 400;
@@ -2172,11 +2192,20 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
 .candy-btn:disabled,
 .candy-btn[aria-disabled="true"] { opacity: 0.55; cursor: not-allowed; }
 
-/* Nested label/value elements flip white with the face. :not(.candy-face) so this
-   color-only transition SHORTHAND doesn't clobber a NESTED candy button's own face
-   transition (transform/background) — that clobber was the instant-press + hover
-   band-desync bug on candy-btns nested inside another candy-btn's face. */
-.candy-face :where(div, span):not(.candy-face) { transition: color 150ms cubic-bezier(0, 0, 0.58, 1); }
+/* Nested label/value elements flip white with the face. The color-only transition
+   SHORTHAND resets transition-property, so it clobbers the OWN transition of any
+   div/span nested in a candy face — that clobber was the instant-press + hover
+   band-desync bug on candy-btns nested inside another candy-btn's face, and it
+   came back in 2026-08 as the planner calendar's dead press + dead open glide
+   (a bespoke candy div, not a .candy-face, so the old :not(.candy-face) carve-out
+   missed it).
+   Both selector parts are wrapped in :where() so the whole rule weighs (0,1,0) —
+   a bare `.candy-face`. It still beats an element that declares nothing, and now
+   LOSES on source order to any later component rule that declares its own
+   transition, which is exactly who should win. Do NOT re-raise this to
+   :not(.candy-face): that scores (0,2,0) and re-arms the trap for the next
+   control nested in a candy face. */
+.candy-face :where(div, span):where(:not(.candy-face)) { transition: color 150ms cubic-bezier(0, 0, 0.58, 1); }
 .candy-btn:is(:hover, :active, .is-active, .is-selected, .is-primary, .is-danger) .candy-face :where(div, span) { color: #fff; }
 
 /* While a DraggableSidebarList reorder is in flight ([data-dragging] on the list
@@ -2225,49 +2254,52 @@ body[data-anim-button-depth="off"] .candy-btn:is(:active, .is-pressed, [data-can
  * handlers so the depression stays in sync when the pointer leaves the
  * surface mid-drag via pointer capture (CSS :active alone would release). */
 
+/* Rides the app-default TWO-LAYER candy recipe (.candy-btn base + .candy-face).
+ * --cbtn-band paints the base's whole band from the dial's own near-black, so
+ * the band + frame colours are derived, not restated. --cbtn-frame 3px keeps the
+ * dial's slightly heavier bezel.
+ *
+ * Was legacy single-layer until 2026-08-10: hover translated the whole element
+ * UP and press translated it down while zeroing the shadow, so the depth slab
+ * read as rising. It also needed a counter-rule to undo its own hover lift when
+ * an inner control was pressed. The two-layer base never moves, so hover is
+ * colour-only and that whole class of drift is gone by construction — the
+ * :hover:has(button:active) unlift rule died with it. */
 .planner-ring-button {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  background: #141310;
-  border: 3px solid #0c0b09;
+  --cbtn-band: #141310;
+  --cbtn-frame: 3px;
+  --cbtn-depth: var(--candy-depth);
   border-radius: 12px;
   cursor: inherit;
-  outline: none;
-  box-shadow:
-    0 var(--candy-depth) 0 -2px color-mix(in oklch, #141310, black 10%),
-    0 var(--candy-depth) 0 0 color-mix(in oklch, #141310, black 22%);
-  transition:
-    transform var(--cbtn-press-dur, 150ms) cubic-bezier(0, 0, 0.58, 1),
-    box-shadow 150ms cubic-bezier(0, 0, 0.58, 1);
 }
-.planner-ring-button:hover {
-  transform: translate(0, var(--candy-depth-hover-transform));
-  box-shadow:
-    0 var(--candy-depth-hover-shadow) 0 -2px color-mix(in oklch, #141310, black 10%),
-    0 var(--candy-depth-hover-shadow) 0 0 color-mix(in oklch, #141310, black 22%);
+.planner-ring-button > .candy-face {
+  /* position:relative so .planner-ring-inner-controls (absolute) anchors to the
+     FACE, not the base — otherwise the readout + transport buttons stay put while
+     the dial sinks under them. */
+  position: relative;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  background: #141310;
 }
-.planner-ring-button:active:not(:has(button:active)),
-.planner-ring-button.is-pressed {
-  transform: translate(0, var(--candy-depth)) !important;
-  box-shadow:
-    0 0 0 -2px color-mix(in oklch, #141310, black 10%),
-    0 0 0 0 color-mix(in oklch, #141310, black 22%) !important;
+/* The face is pointer-transparent by default (the immovable base is the sole hit
+   target). The dial is a drag-to-SET-time surface, so the SVG alone gets events
+   back — NOT a blanket `> *`, which would override .planner-ring-inner-controls'
+   deliberate pointer-events:none and block drag-to-set through the readout. */
+.planner-ring-button > .candy-face > svg { pointer-events: auto; }
+/* NO accent highlight on this button, in any state (user-directed 2026-08-10).
+   The generic candy hover flips both the band and the face to accent; flipping
+   this face would erase the accent-coloured ring arcs drawn on it (the whole
+   reason the dial is near-black), and the band reads as a red bar under a black
+   dial. Pin both to the dial's own near-black and lift the face a few percent
+   for feedback instead. */
+.planner-ring-button:is(:hover, :active) { --cbtn-band: #141310; }
+.planner-ring-button:is(:hover, :active) > .candy-face {
+  background: color-mix(in oklch, #141310, white 6%);
 }
-/* Mirror of the tile #4 fix, one level down: when an inner ring button
- * (Reset / START / Skip) is the press target, the ring is :hover but excluded
- * from :active (see :not(:has(button:active)) above). Without this it would sit
- * in its raised hover position while the button presses down — the ring drifts
- * up ~2px. Cancel the hover lift + restore the grounded shadow so the ring
- * stays put and only the button moves. */
-.planner-ring-button:hover:has(button:active) {
-  transform: none;
-  box-shadow:
-    0 var(--candy-depth) 0 -2px color-mix(in oklch, #141310, black 10%),
-    0 var(--candy-depth) 0 0 color-mix(in oklch, #141310, black 22%);
-}
+/* An inner control (Reset / START / Skip) owns its own press — the dial must not
+   sink under it. Mirrors the music-tile press-exclusion one level down. */
+.planner-ring-button:active:has(button:active) > .candy-face { transform: none; }
 
 /* Inner-controls layer sits absolutely inside the rect, bounded just inside
  * the inner ring stroke. pointer-events: none on the container lets the SVG
@@ -2729,87 +2761,93 @@ body[data-music-tile-depth="small"] .button-music-tile {
 .sidebar-pattern        { background-image: var(--sidebar-pattern-bg); }
 .sidebar-pattern-mirror { background-image: var(--sidebar-pattern-bg-mirror); }
 
-/* The day calendar lives INSIDE this candy frame — the header strip toggles it,
- * the body slides open/closed. Uses the candy machinery with the neutral surface palette and the
- * shallower --candy-depth-small. When COLLAPSED the frame behaves like a
- * candy button — hover lifts, press depresses — triggered off the header child
- * via :has() so only header interaction moves it. When EXPANDED it's a static
- * frame and only the header strip tints on hover. The body's max-height is
- * animated from measured JS px — see .button-planner-calendar-body. */
+/* CALENDAR toggle — a plain candy button STRIP on the app-default two-layer
+ * recipe (.candy-btn base + .candy-face), neutral surface palette, shallower
+ * --candy-depth-small. The base's band + frame come free from the .candy-btn
+ * defaults (--cbtn-band: var(--surface), --cbtn-frame: 2px), byte-identical to
+ * the colours this used to hand-roll.
+ *
+ * TWO retired shapes are worth remembering, both user-directed 2026-08-10:
+ *  1. It was legacy SINGLE-layer — the whole element translated down and its
+ *     box-shadow collapsed to 0 on press, so the depth slab appeared to RISE
+ *     rather than the button sinking into it. That is the tell of the retired
+ *     one-layer system; the base never moves now, only the face slides.
+ *  2. It was a FRAME that enclosed the entire day calendar, so opening the
+ *     calendar grew the button into one giant pressable slab, and its press was
+ *     gated on [data-collapsed="true"] — dead whenever the calendar was open, so
+ *     half the clicks gave no feedback. It is now a fixed-footprint strip and the
+ *     calendar is a sibling panel below it (.button-planner-calendar-body), which
+ *     also means the press needs no :has() exclusion: nothing live is inside it. */
 .button-planner-calendar {
   --candy-depth: var(--candy-depth-small);
-  position: relative;
+  --cbtn-depth: var(--candy-depth);
+  /* NO width:100% — .candy-btn is inline-flex, and 100% plus the inline 14px side
+     margins overflowed the dock by 28px (the button ran off the right edge). As a
+     stretch-aligned item in the dock's flex column it fills the row on its own,
+     margins subtracted. */
   display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  border-radius: var(--radius-md);
-  background: var(--surface-3);
-  border: 2px solid color-mix(in oklch, var(--surface), black 22%);
-  box-shadow:
-    0 var(--candy-depth) 0 -2px color-mix(in oklch, var(--surface), black 10%),
-    0 var(--candy-depth) 0 0 color-mix(in oklch, var(--surface), black 22%);
-  transition:
-    transform var(--cbtn-press-dur, 150ms) cubic-bezier(0, 0, 0.58, 1),
-    box-shadow 150ms cubic-bezier(0, 0, 0.58, 1);
+  cursor: pointer;
 }
-.button-planner-calendar[data-collapsed="true"] { cursor: pointer; }
-.button-planner-calendar[data-collapsed="true"]:has(.button-planner-calendar-header:hover) {
-  transform: translate(0, var(--candy-depth-hover-transform));
-  box-shadow:
-    0 var(--candy-depth-hover-shadow) 0 -2px color-mix(in oklch, var(--surface), black 10%),
-    0 var(--candy-depth-hover-shadow) 0 0 color-mix(in oklch, var(--surface), black 22%);
+/* NO accent highlight, in any state (user-directed 2026-08-10). The generic candy
+   hover flips the band AND the face AND nested label text to accent/white. Pin all
+   three neutral and tint the face a few percent instead — the legacy strip never
+   flipped colour either. */
+.button-planner-calendar:is(:hover, :active) { --cbtn-band: var(--surface); }
+.button-planner-calendar > .candy-face { background: var(--surface-3); }
+.button-planner-calendar:is(:hover, :active) > .candy-face {
+  background: color-mix(in oklch, var(--surface-3), white 4%);
 }
-.button-planner-calendar[data-collapsed="true"]:has(.button-planner-calendar-header:active) {
-  transform: translate(0, var(--candy-depth)) !important;
-  box-shadow:
-    0 0 0 -2px color-mix(in oklch, var(--surface), black 10%),
-    0 0 0 0 color-mix(in oklch, var(--surface), black 22%);
-}
+.button-planner-calendar:is(:hover, :active) .candy-face :where(div, span) { color: var(--text); }
 
-/* Header strip — the clickable toggle. Transparent so the frame's surface-3
- * shows through; no chrome of its own. data-own-press in JSX suppresses the
- * global tactile scale so the frame's translate is the only press motion. */
+/* The strip's face. Wears .candy-face AND this class on one span, so the base
+ * recipe supplies frame + radius + press slide and this supplies the label layout.
+ * Was a nested <button> back when the frame enclosed the calendar; the strip IS
+ * the button now, so the element and its appearance/border/background resets are
+ * gone. */
 .button-planner-calendar-header {
-  appearance: none;
-  -webkit-appearance: none;
-  touch-action: manipulation;
-  user-select: none;
-  -webkit-user-select: none;
-  display: flex;
-  align-items: center;
   justify-content: space-between;
   gap: 8px;
   width: 100%;
   flex-shrink: 0;
   padding: 6px 12px;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-  outline: none;
   font-size: 11px;
   font-weight: 700;
   font-family: var(--font-mono);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--text-muted);
-  transition:
-    color 150ms cubic-bezier(0, 0, 0.58, 1),
-    background 150ms cubic-bezier(0, 0, 0.58, 1);
-}
-.button-planner-calendar-header:hover { color: var(--text); }
-/* Expanded → the frame is static; the header strip gets a faint hover tint. */
-.button-planner-calendar[data-collapsed="false"] .button-planner-calendar-header:hover {
-  background: color-mix(in oklch, var(--surface-3), white 4%);
 }
 
-/* Calendar body — recessed "screen" set into the candy frame. Hairline divider
- * from the header; height animates (max-height) for the open/close slide. At
- * max-height:0 the border-box clamps to 0 so the divider line vanishes too. */
+/* Day calendar — its own recessed "screen", a SIBLING of the strip above rather
+ * than content inside it. Carries the frame the strip used to provide: 2px border
+ * in the same derived tone, matching radius, recessed --surface fill. Height
+ * animates (max-height) for the open/close slide; box-sizing:border-box so at
+ * max-height:0 the border collapses with it instead of leaving a 4px seam.
+ * pointer-events: the tile's .candy-face is pointer-transparent, and this panel is
+ * no longer inside .button-planner-calendar (which the tile whitelists), so it has
+ * to claim events itself or the whole calendar goes dead. */
 .button-planner-calendar-body {
+  --candy-depth: var(--candy-depth-small);
+  box-sizing: border-box;
   min-height: 0;
+  margin: 0 14px 12px;
   background: var(--surface);
-  border-top: 1px solid var(--border);
-  transition: max-height 320ms cubic-bezier(0.32, 0.72, 0, 1);
+  border: 2px solid color-mix(in oklch, var(--surface), black 22%);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  pointer-events: auto;
+  transition:
+    max-height 320ms cubic-bezier(0.32, 0.72, 0, 1),
+    border-width 320ms cubic-bezier(0.32, 0.72, 0, 1),
+    margin-bottom 320ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+/* Fully closed, max-height:0 can NOT take the panel below its own 2px top + 2px
+   bottom border — borders don't compress — so a 4px line stayed visible under the
+   button. Thin the border to 0 (and drop the bottom gap) on the same curve, keyed
+   off the button's state via the adjacent sibling so no extra attribute is needed. */
+.button-planner-calendar[data-collapsed="true"] + .button-planner-calendar-body {
+  border-width: 0;
+  margin-bottom: 0;
 }
 /* Chevron rotates: right (collapsed) → down (expanded). Driven by an inline
  * rotate() in PlannerDock.jsx; the transition lives here so it can be gated. */
@@ -3752,6 +3790,10 @@ button.button-misc-card.is-expanded .card-chevron {
  * for the small-depth circles in a track row, 2026-07-24). */
 .candy-center-row { display: flex; align-items: center; }
 :where(.candy-center-row) > .candy-btn,
+/* Planner: same lift, applied to the whole window instead of row by row — its
+   headers never opted into .candy-center-row, so every button read low. The
+   Seg shell carries its own depth, so it lifts and its options do not. */
+:where(.planner-uniform-btns) :is(.candy-seg, .candy-btn:not([data-shape="seg-option"])),
 .candy-btn:is([data-shape="chip-field"], [data-shape="track"]) > .candy-face > .candy-btn {
   position: relative;
   top: calc(var(--cbtn-depth, var(--candy-depth)) / -2 * var(--candy-center-on, 1));
@@ -4774,3 +4816,50 @@ button.cal-customdays__step:hover {
 /* Corner grip — two hairline edges, no glow (house rule). */
 .ov-resize-handle { position: absolute; right: 3px; bottom: 3px; width: 12px; height: 12px; cursor: nwse-resize; border-right: 2px solid var(--text-faint); border-bottom: 2px solid var(--text-faint); border-radius: 0 0 4px 0; opacity: .7; touch-action: none; }
 .ov-resize-handle:hover { opacity: 1; }
+
+/* ═══ Planner — one button height ══════════════════════════════════════════
+ * Inside the Planner window and the popups it opens, every candy button is
+ * exactly --planner-btn-h tall, so a row of chips + circles + icon buttons
+ * shares one baseline instead of each call site's own face padding deciding
+ * its height. The face fills the base (height: 100%), so a site-level padding
+ * override can no longer change the height — only the var can.
+ * Scoped by class, not blanket: the rest of the app keeps its shape heights.
+ *
+ * The scope is DECLARED to the auditor with data-uniform-height="--planner-btn-h"
+ * on each root (util/rowAudit.js reads the variable named there and flags any
+ * control that misses it), so the rule below and the check on it can never drift
+ * apart — the attribute names the variable rather than repeating its value.
+ *
+ * --cbtn-size !important is the ONE forcing declaration and it earns its keep:
+ * the square shapes take BOTH axes from that variable, so a circle stays a circle
+ * at the new size instead of stretching into an oval, and IconBtn/ChipIconBtn's
+ * per-call sizes (30, 28, 23 — all written on the tag, all previously unbeatable)
+ * fall in line. Without !important an inline custom property outranks any scope
+ * rule, which is exactly how the first attempt at this lost in silence.
+ *
+ * daycell is exempt: a month-grid square is not a control in a row, and forcing
+ * its height deforms the calendar. */
+.planner-uniform-btns { --planner-btn-h: 24px; }
+.planner-uniform-btns .candy-btn:not([data-shape="daycell"]) {
+  height: var(--planner-btn-h);
+  --cbtn-size: var(--planner-btn-h) !important;
+}
+.planner-uniform-btns .candy-btn:not([data-shape="daycell"]) > .candy-face {
+  height: 100%;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+/* The Seg (Day | 3-day) is a bordered+padded shell around its own candy
+   buttons, so pinning the buttons alone left the shell taller than every
+   neighbour. Pin the SHELL to the row height and let its options fill it.
+   The tray also carries the FULL --candy-depth (7px) while every chip and circle
+   beside it carries --candy-depth-small (5px). That lip is a box-shadow outside
+   layout, so at an identical 24px height the tray still painted 2px lower than
+   its neighbours AND the shared centering lift raised it 1px further — a
+   mismatch invisible to any height measurement, and the reason "Day / 3-day is
+   still too big" survived a height pin. Matching the depth fixes both at once. */
+.planner-uniform-btns .candy-seg { height: var(--planner-btn-h); --cbtn-depth: var(--candy-depth-small); }
+.planner-uniform-btns .candy-seg .candy-btn { height: 100%; }
+/* One gap for every run of adjacent buttons, so no row invents its own. */
+.planner-uniform-btns :where(div, span):has(> .candy-btn + .candy-btn) { gap: var(--planner-btn-gap); }
+.planner-uniform-btns { --planner-btn-gap: 8px; }

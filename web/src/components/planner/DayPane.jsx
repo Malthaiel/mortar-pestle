@@ -82,7 +82,7 @@ function AddChip({ isToday, onClick, children }) {
       style={isToday ? undefined : { opacity: 0.45 }}
       onClick={onClick}
     >
-      <span className="candy-face" style={{ gap: 5, fontSize: 10, padding: '4px 10px' }}>{children}</span>
+      <span className="candy-face">{children}</span>
     </button>
   );
 }
@@ -339,14 +339,14 @@ export default function DayPane({ accent = 'var(--accent)', pivotDs, onPivotChan
           aria-expanded={pickerOpen}
           onClick={() => setPickerOpen(v => !v)}
         >
-          <span className="candy-face" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px' }}>
+          <span className="candy-face">
             <PaneHeader variant="date">{humanDate(pivotDs)}</PaneHeader>
             <span aria-hidden style={{ fontSize: 9, color: 'var(--text-muted)' }}>▾</span>
           </span>
         </button>
         {!isToday && (
           <button type="button" className="candy-btn" data-shape="chip" data-own-press onClick={() => onPivotChange(todayDs)} aria-label="Jump to today">
-            <span className="candy-face" style={{ fontSize: 10, padding: '4px 10px' }}>Today</span>
+            <span className="candy-face">Today</span>
           </button>
         )}
       </div>

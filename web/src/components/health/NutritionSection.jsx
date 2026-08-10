@@ -140,7 +140,10 @@ export default function NutritionSection({ accent = 'var(--accent)', isToday = f
     <section style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <PaneHeader>Nutrition</PaneHeader>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        {/* No gap: this header sits in the Planner's one-gap scope, and a gap on
+            the tag outranks it — 6px here left this the only 6px row in a window
+            of 8px rows. */}
+        <div style={{ display: 'flex', alignItems: 'center' }}>
           <button type="button" className="candy-btn" data-shape="chip" title="New meal" onClick={() => setBuilderOpen(true)}>
             <span className="candy-face">Meal</span>
           </button>
@@ -178,8 +181,15 @@ export default function NutritionSection({ accent = 'var(--accent)', isToday = f
         )}
       </div>
 
-      {/* Micros */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {/* Micros — gap 16, not the 8 the rest of the window uses, because this one
+          space is not the whole story. The More micros chip is the last thing in
+          the section, so what sits under it is the OUTER column's 16px gap, not
+          this one; and a candy control skews the two sides differently (lifted
+          --cbtn-depth/2 = 2.5px, then a 5px shadow slab drawn below its box).
+          Above = gap − 2.5, below = 2.5 + 16 − 5 = 13.5. Declaring 8 painted
+          5.5 above against 13.5 below; 16 paints 13.5 both sides. Measured, not
+          guessed — re-measure before changing either number. */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
           {DEFAULT_MICROS.map(renderMicro)}
           {showMore && moreMicros.map(renderMicro)}

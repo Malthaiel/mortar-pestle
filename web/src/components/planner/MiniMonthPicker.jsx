@@ -41,9 +41,9 @@ export default function MiniMonthPicker({ value, onSelect, accent = 'var(--accen
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <button type="button" data-own-press className="candy-btn" data-shape="chip" onClick={() => step(-1)} aria-label="Previous month"><span className="candy-face" style={{ padding: 4 }}><IconChevronLeft/></span></button>
+        <button type="button" data-own-press className="candy-btn" data-shape="chip" onClick={() => step(-1)} aria-label="Previous month"><span className="candy-face"><IconChevronLeft/></span></button>
         <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', letterSpacing: '-0.01em' }}>{monthLabel}</div>
-        <button type="button" data-own-press className="candy-btn" data-shape="chip" onClick={() => step(1)} aria-label="Next month"><span className="candy-face" style={{ padding: 4 }}><IconChevronRight/></span></button>
+        <button type="button" data-own-press className="candy-btn" data-shape="chip" onClick={() => step(1)} aria-label="Next month"><span className="candy-face"><IconChevronRight/></span></button>
       </div>
 
       <div className="candy-chip-row" style={{ justifyContent: 'center', margin: '8px 0', '--candy-gap': '8px' }}>
@@ -95,6 +95,6 @@ export default function MiniMonthPicker({ value, onSelect, accent = 'var(--accen
 function QuickBtn({ onClick, children }) {
   return (
     <button type="button" data-own-press className="candy-btn" data-shape="chip" onClick={onClick}>
-      <span className="candy-face" style={{ fontSize: 10, padding: '3px 9px' }}>{children}</span></button>
+      <span className="candy-face">{children}</span></button>
   );
 }

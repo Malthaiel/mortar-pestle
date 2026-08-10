@@ -2,7 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, statSync } from 'node:fs';
 import aosComponentId from './vite-plugins/aos-component-id.js';
 import moduleSizes from './vite-plugins/module-sizes.js';
 
@@ -31,12 +31,47 @@ function auditSink() {
             let prior = {};
             try { prior = JSON.parse(readFileSync(file, 'utf-8')); } catch { /* first write */ }
             const kind = String(msg.kind || 'spacing').replace(/[^a-z]/gi, '') || 'spacing';
-            const merged = { ...prior, label, nonce: msg.nonce, ts: msg.ts, route: msg.route, [kind]: msg.data };
+            const merged = { ...prior, label, nonce: msg.nonce, ts: msg.ts, route: msg.route, open: msg.open, [kind]: msg.data };
             mkdirSync(dir, { recursive: true });
             writeFileSync(file, JSON.stringify(merged, null, 2));
             res.statusCode = 204; res.end();
           } catch { res.statusCode = 400; res.end(); }
         });
+      });
+    },
+  };
+}
+
+// DEV command slot — the RETURN half of the audit bridge (Planner Button Sizing,
+// 2026-08-10). /__audit carries measurements OUT of the window; this carries an
+// instruction IN, so a surface can be OPENED and MEASURED without the user
+// driving the mouse and reporting the result in prose. That prose loop is what
+// killed the Planner sizing chat: six edits, zero measurements, three rounds of
+// eyeballing, because the modal under edit was never on screen when an audit ran.
+//
+// Deliberately dumb: no queue, no state, no POST. The command IS a file
+// (web/.audit/cmd.txt — .txt, NOT .js, so Vite's watcher can never mistake it
+// for a module and full-reload the window mid-measurement) written with the
+// ordinary Write tool; this endpoint just
+// hands back its text plus its mtime as the id. The client runs an id once and
+// remembers it, so re-serving the same file is a no-op and a rewrite is a new
+// command. Client half + result path: web/src/util/remote.js.
+//
+// serve-only, and Vite's dev server binds 127.0.0.1 — the slot does not exist in
+// the NSIS bundle. It accepts any JS from anything local, which on a single-user
+// desktop grants no authority the terminal doesn't already have.
+function cmdSlot() {
+  const file = path.resolve(__dirname, '.audit', 'cmd.txt');
+  return {
+    name: 'cmd-slot',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use('/__cmd', (req, res) => {
+        res.setHeader('content-type', 'application/json');
+        res.setHeader('cache-control', 'no-store');
+        try {
+          res.end(JSON.stringify({ id: statSync(file).mtimeMs, js: readFileSync(file, 'utf-8') }));
+        } catch { res.end('{}'); }   // no command file yet — the normal resting state
       });
     },
   };
@@ -54,7 +89,7 @@ const targetOs = process.env.VITE_TARGET_OS
     : process.platform === 'darwin' ? 'macos' : 'linux');
 
 export default defineConfig({
-  plugins: [aosComponentId({ enabled: aosDesignEnabled }), react(), moduleSizes(), auditSink()],
+  plugins: [aosComponentId({ enabled: aosDesignEnabled }), react(), moduleSizes(), auditSink(), cmdSlot()],
   define: {
     'import.meta.env.PACKAGE_VERSION': JSON.stringify(pkg.version),
     'import.meta.env.VITE_TARGET_OS': JSON.stringify(targetOs),

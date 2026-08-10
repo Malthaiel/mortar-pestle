@@ -194,6 +194,17 @@ export default function CalendarPane({ accent, pushUndo, pivotDs, onPivotChange 
         borderBottom: '1px solid var(--border-soft)',
         flexShrink: 0,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        // space-between alone sets no FLOOR: once the pane narrows, the two
+        // groups slide together until they nearly touch (measured 1.4px between
+        // Today and the library chip, against 8px everywhere else on the line).
+        // The gap is the floor; space-between still spreads whatever is left over.
+        // The floor is not free: it cost 8px of line, which overran the 461px of
+        // usable header by 2.1px and squashed the widest chip 1.7px below its own
+        // text, wrapping the label onto two lines. Hence the short labels below —
+        // "Blocks"/"Frame" leave ~45px of slack, so the floor is affordable at
+        // this pane width. Chip labels can no longer wrap (styles.css § chip), so
+        // the next overrun shows as a squashed pill, not as mangled text.
+        gap: 'var(--planner-btn-gap)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Seg
@@ -261,7 +272,7 @@ export default function CalendarPane({ accent, pushUndo, pivotDs, onPivotChange 
             onClick={() => setLibOpen(v => !v)}
             aria-expanded={libOpen}
             aria-label="Block Library"
-          ><span className="candy-face">Block Library</span></button>
+          ><span className="candy-face">Blocks</span></button>
           <button
             type="button"
             className={`candy-btn${frameEditMode ? ' is-active' : ''}`}
@@ -270,7 +281,7 @@ export default function CalendarPane({ accent, pushUndo, pivotDs, onPivotChange 
             onClick={() => setFrameEditMode(v => !v)}
             aria-pressed={frameEditMode}
             aria-label="Edit Daily Frame"
-          ><span className="candy-face">{frameEditMode ? 'Done' : 'Edit Frame'}</span></button>
+          ><span className="candy-face">{frameEditMode ? 'Done' : 'Frame'}</span></button>
         </div>
       </div>
 

@@ -161,6 +161,7 @@ export default function BlockEditorModal({ open, block, accent, onSave, onCancel
         role="dialog"
         aria-modal="true"
         aria-label={isEdit ? 'Edit block' : 'New block'}
+        className="planner-uniform-btns" data-uniform-height="--planner-btn-h"
         style={{
           position: 'relative',
           width: 'min(520px, 95vw)',

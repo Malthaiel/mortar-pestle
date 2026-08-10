@@ -90,6 +90,8 @@ export default function BlockLibraryPopover({ open, onClose, anchorRef, accent }
         escToClose={false}
         closeOnOutside={!editorOpen}
         outsideExempt=".planner-blocklib-chip"
+        panelClassName="candy-modal planner-uniform-btns"
+        panelProps={{ 'data-uniform-height': '--planner-btn-h' }}
         style={{ position: 'fixed', zIndex: 1100, top: pos?.top, left: pos?.left, width: PANEL_W, maxHeight: 420 }}
         bodyStyle={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 12 }}
       >
@@ -119,7 +121,7 @@ export default function BlockLibraryPopover({ open, onClose, anchorRef, accent }
             title="Add block"
             className="candy-btn"
             data-shape="chip"
-          ><span className="candy-face" style={{ fontSize: 10, padding: '5px 11px', gap: 4 }}><IconPlus size={11}/>Add Block</span></button>
+          ><span className="candy-face"><IconPlus size={11}/>Add Block</span></button>
         </div>
       </Popover>
 
