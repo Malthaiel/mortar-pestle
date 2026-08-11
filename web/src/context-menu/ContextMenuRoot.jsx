@@ -65,6 +65,23 @@ const SHUT_ANGLE = 180;
 // "nope. terrible. remove it completely it doesnt work." May be revisited — do
 // not re-add it unprompted.
 
+// WHERE THE REAL CURSOR IS. A fly-out has to answer "is the hand still on my
+// parent row" at the instant it starts folding BACK, and it cannot ask CSS:
+// `:hover` is the browser's own bookkeeping about a stack the card is sitting on
+// top of, and it is exactly what the logged "doesn't highlight if i'm hovering
+// over it" symptom says is unreliable here. A real pointer position hit-tested
+// against the row's real rect depends on neither. Passive, capture, one listener
+// for the app's life — the menu is mounted too rarely to arm this on demand, and
+// a cursor that has not moved since is still where it was.
+let cursor = { x: -1, y: -1 };
+if (typeof window !== 'undefined') {
+  window.addEventListener('pointermove', (e) => { cursor = { x: e.clientX, y: e.clientY }; }, { capture: true, passive: true });
+}
+const cursorOver = (el) => {
+  const r = el?.getBoundingClientRect();
+  return !!r && cursor.x >= r.left && cursor.x <= r.right && cursor.y >= r.top && cursor.y <= r.bottom;
+};
+
 const isSep = (it) => !!(it && (it.sep || it.divider));
 const isHeader = (it) => !!(it && (it.header || it.section));
 const hasKids = (it) => !!(it && it.children && it.children.length);
@@ -170,7 +187,7 @@ const FACE = {
  * layout box is honest even while the rows are folded, because a fold is a
  * transform and transforms do not touch layout.
  */
-function Level({ anchor, items, title, accent, open, onDismiss, onClosed, depth }) {
+function Level({ anchor, items, title, accent, open, onDismiss, onClosed, depth, trigger }) {
   const wrapRef = useRef(null);
   const [pos, setPos] = useState(null);
   const [up, setUp] = useState(false);
@@ -200,6 +217,28 @@ function Level({ anchor, items, title, accent, open, onDismiss, onClosed, depth 
     const t = setTimeout(() => setFaceUp(swung), SWING / 2);
     return () => clearTimeout(t);
   }, [swung, depth]);
+  // Whether the card's LEFT side (the underside, below) is lit accent. Opening,
+  // it always is — the highlight is the row handing itself to the card. Closing,
+  // only if the hand is still on the row it is folding back onto, which is the
+  // hover the row itself cannot show while the card covers it. User-directed
+  // 2026-08-11. Read once per direction change, off the real cursor and the
+  // trigger's real rect; `swung` is the only thing that says which way we are
+  // going, so it is the only thing this watches.
+  const [hot, setHot] = useState(true);
+  useEffect(() => {
+    if (depth === 0) return;
+    setHot(swung || cursorOver(trigger));
+  }, [swung, depth, trigger]);
+  // The row's real box, for the face that lies on it — see the underside below.
+  // Read from the live element rather than taken from `anchor`, which carries
+  // only where the card goes, and never in a constant: the row height is a
+  // candy row's own, and it moves with the theme's density.
+  const [tbox, setTbox] = useState(null);
+  useLayoutEffect(() => {
+    if (!trigger) return;
+    const r = trigger.getBoundingClientRect();
+    setTbox({ w: r.width, h: r.height });
+  }, [trigger]);
   // Which side of the parent row this card ended up on. The door has to hinge on
   // the edge it is ATTACHED to, so a card flipped to the parent's left swings off
   // its RIGHT edge — see the door's style. Invisible until 2026-08-10, when the
@@ -219,12 +258,29 @@ function Level({ anchor, items, title, accent, open, onDismiss, onClosed, depth 
     // A fly-out starts at its parent row's right edge and flips to the parent's
     // left when there is no room; the root starts at the cursor.
     let left = anchor.x;
+    let right = null;
     let flipped = false;
     if (left + w + PAD > vw) {
-      if (anchor.flipX != null) { left = anchor.flipX - w; flipped = true; } else left = vw - w - PAD;
+      // A FLIPPED card is anchored by its RIGHT edge, not by a left computed as
+      // `flipX - w`. `w` is an ESTIMATE — the stack plus two pads — and the box
+      // that actually gets folded is the hinge's, which is FoldMenu's shut stub
+      // and a few px wider. Subtracting the wrong width from flipX put the whole
+      // flipped card 9.3px off the row it folds onto (measured 2026-08-11, face
+      // 242.8->390.2 against a row at 252.1->399.6). Anchored by the right edge,
+      // the seam sits on flipX whatever the card measures, and the 180 lands it
+      // on the row by construction — same guarantee the rightward case gets from
+      // `left = anchor.x`. The estimate is still fine for the two things it is
+      // asked here: does it FIT, and would flipping run off the other edge.
+      if (anchor.flipX != null && anchor.flipX - w >= PAD) {
+        flipped = true;
+        left = null;
+        right = vw - anchor.flipX;
+      } else if (anchor.flipX != null) { left = PAD; } else left = vw - w - PAD;
     }
     setFlip(flipped);
-    setPos({ left: Math.max(PAD, left), top: Math.max(PAD, anchor.y) });
+    setPos(flipped
+      ? { right, top: Math.max(PAD, anchor.y) }
+      : { left: Math.max(PAD, left), top: Math.max(PAD, anchor.y) });
     // Row 0 stays on the anchor in both directions — only the stack below it
     // changes side — so this is purely "which way is there room for".
     setUp(anchor.y + h + PAD > vh && anchor.y - h > PAD);
@@ -287,7 +343,9 @@ function Level({ anchor, items, title, accent, open, onDismiss, onClosed, depth 
   // file already fixed once for the whole-menu close.
   const openFlyout = (i, e) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    const fresh = { index: i, rect, items: kids.get(i), face: rows[i].label, open: true };
+    // `el` is the row itself, kept so the card can hit-test the real cursor
+    // against the real button when it folds back — see `hot`.
+    const fresh = { index: i, rect, el: e.currentTarget, items: kids.get(i), face: rows[i].label, open: true };
     setFlyout((cur) => {
       if (!cur || cur.index !== i) return fresh;
       // Clicking a card that is already folding away brings it straight back,
@@ -298,7 +356,32 @@ function Level({ anchor, items, title, accent, open, onDismiss, onClosed, depth 
 
   // Wire each parent row's click to its own fly-out. normalize() cannot do this
   // — it has no idea where the row will land.
-  const wired = rows.map((r, i) => (kids.has(i) ? { ...r, onClick: (e) => openFlyout(i, e) } : r));
+  //
+  // A row whose card is OUT goes blank, and stays blank until the card has
+  // finished folding back — `flyout` is cleared by the child's onClosed, which is
+  // the instant the card lands, so the words come back underneath it rather than
+  // beside it. That is the whole read of the gesture: the words were LIFTED OFF
+  // this button and carried to the fly-out, leaving an empty button behind to
+  // click again. User-directed 2026-08-11.
+  //
+  // Hidden, not removed, and hidden the same way the card's blank side is: this
+  // row is the widest thing in some menus, and dropping its label would resize
+  // the whole stack the moment a card opened. `display: contents` keeps the
+  // wrapper out of the layout entirely so the words go on sizing the row.
+  //
+  // `rows`, not `wired`, is what openFlyout hands the card (`rows[i].label`), so
+  // the card still gets the REAL words — blanking here cannot reach it.
+  const wired = rows.map((r, i) => {
+    if (!kids.has(i)) return r;
+    const lifted = flyout && flyout.index === i;
+    return {
+      ...r,
+      onClick: (e) => openFlyout(i, e),
+      label: lifted
+        ? <span style={{ display: 'contents', visibility: 'hidden' }}>{r.label}</span>
+        : r.label,
+    };
+  });
 
   const node = (
     <div
@@ -313,7 +396,11 @@ function Level({ anchor, items, title, accent, open, onDismiss, onClosed, depth 
       }}
       style={{
         position: 'fixed',
-        left: pos ? pos.left : -9999,
+        // Left OR right, never both — a flipped card hangs off its right edge so
+        // that the seam lands on the row whatever the card measures. See the
+        // placement effect.
+        left: pos ? (pos.left != null ? pos.left : 'auto') : -9999,
+        right: pos && pos.right != null ? pos.right : 'auto',
         top: pos ? pos.top : -9999,
         zIndex: 9999,
         // Placed but not yet measured = never shown. visibility, not display:
@@ -377,7 +464,22 @@ function Level({ anchor, items, title, accent, open, onDismiss, onClosed, depth 
           faceStyle={FACE}
           ariaLabel={typeof title === 'string' ? title : 'Menu'}
         >
-          {title}
+          {/* The card's RIGHT-HAND side, seen for the second half of the swing
+              and the first beat of the rows. It is BLANK by spec (user-directed
+              2026-08-11: "the left side to say quick actions and the right side
+              to be blank"). The words still have to be RENDERED, though — this
+              face is pin 2 of the fold's width, the one thing holding a fly-out
+              as wide as the row it peeled off, and he rejected letting it
+              shrink. `visibility: hidden` measures and does not paint; dropping
+              the node instead would take the width with it. */}
+          {/* `display: contents` is LOAD-BEARING: a plain inline wrapper here is
+              a box of its own, and it made the card 150.7 wide against a 147.5
+              row — 3.2px of paper that the fold, pinned at the seam, hung off
+              the LEFT, so the card landed beside the row and then vanished
+              ("looks like the folded button snaps to its correct position").
+              With `contents` the wrapper has no box at all and the words size
+              the face exactly as they did before they were hidden. */}
+          <span style={{ display: 'contents', visibility: 'hidden' }}>{title}</span>
         </FoldMenu>
         </div>
         {/* The card's BACK — the face lying on the parent row for the whole
@@ -399,8 +501,25 @@ function Level({ anchor, items, title, accent, open, onDismiss, onClosed, depth 
             here at all; every variant was tried and photographed failing.
             aria-hidden: the real card carries the accessible tree. */}
         {depth > 0 && (
-          <span aria-hidden className="candy-btn" data-shape="row" style={{
-            position: 'absolute', inset: 0, display: 'block',
+          <span aria-hidden className={`candy-btn${hot ? ' is-active' : ''}`} data-shape="row" style={{
+            // SIZED OFF THE ROW IT LIES ON, not off the card. `inset: 0` filled
+            // the hinge, and the hinge is as wide as FoldMenu's shut STUB, which
+            // is styled as a chip (its own font, its own 8px padding) and pays no
+            // attention to the rows' faceStyle — measured 150.7 against a 147.5
+            // row. The fold mirrors about the seam, so the card's far edge lands
+            // on the row's far edge and every extra pixel hangs off the OTHER
+            // side: "the fold lands slightly more left than the original quick
+            // actions button - then disappears, which makes it look like the
+            // folded button snaps to its correct position" (2026-08-11).
+            // Reading the trigger's real rect is the only thing that cannot
+            // drift: the row is the target, so the row is what gets measured.
+            // Anchored on the hinge's own edge — the LEFT one normally, the
+            // RIGHT one when the card flipped — because that is the edge the
+            // 180 maps onto the row.
+            position: 'absolute', top: 0, display: 'block',
+            ...(flip ? { right: 0 } : { left: 0 }),
+            width: tbox ? tbox.w : '100%',
+            height: tbox ? tbox.h : '100%',
             pointerEvents: 'none',
             transform: 'rotateY(180deg)',
             visibility: faceUp ? 'hidden' : 'visible',
@@ -432,6 +551,7 @@ function Level({ anchor, items, title, accent, open, onDismiss, onClosed, depth 
           items={flyout.items}
           title={flyout.face}
           accent={accent}
+          trigger={flyout.el}
           // Shut when the whole tree shuts, OR when its own row toggled it off.
           open={open && flyout.open !== false}
           onDismiss={onDismiss}
