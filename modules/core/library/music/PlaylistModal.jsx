@@ -48,7 +48,9 @@ export default function PlaylistModal({
   if (!open) return null;
 
   const a = accent || 'var(--accent)';
-  const existing = initialImage ? coverSrc(initialImage) : null;
+  // Covers are Library-vault-relative, so they must resolve against that mount —
+  // without { library: true } this 404s against the content vault (cf. CollageCover).
+  const existing = initialImage ? coverSrc(initialImage, 320, { library: true }) : null;
   const shownCover = preview || existing;
   const canSubmit = title.trim().length > 0 && !busy;
   const submit = () => {

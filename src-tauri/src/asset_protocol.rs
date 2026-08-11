@@ -62,6 +62,15 @@ pub fn handle(
 }
 
 fn serve_native_path(decoded: &str, request: &Request<Vec<u8>>) -> Response<Cow<'static, [u8]>> {
+    // A URL path always opens with `/`. On Linux that slash IS the filesystem
+    // root, so the decoded string is already a usable path. On Windows a native
+    // path opens with a drive letter (`C:\…`) or a UNC prefix (`\\server\…`), so
+    // the URL's slash is pure syntax — leaving it on yields `/C:\Users\…`, which
+    // `canonicalize` rejects, and the handler 404s every local file. That is a
+    // Linux-era straggler: it broke `mediaUrl()` app-wide on Windows (11 call
+    // sites), surfacing as blank playlist covers while remote art still loaded.
+    #[cfg(windows)]
+    let decoded = decoded.strip_prefix('/').unwrap_or(decoded);
     let requested = PathBuf::from(decoded);
     let canonical = match fs::canonicalize(&requested) {
         Ok(p) => p,
