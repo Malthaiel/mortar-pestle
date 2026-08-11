@@ -27,12 +27,19 @@ import FoldPaper, { FOLD_PAD, paperT } from './FoldPaper.jsx';
 
 export { FOLD_PAD };
 
+// Both re-exported below their definitions, as FOLD_PERSPECTIVE / FOLD_DUR. A
+// host that folds something of its OWN alongside this one (the context menu's
+// fly-out is a fold panel hinged on a menu row) has to fold on the same camera
+// and the same clock, and typing 2000 and 300 into that file again is how the
+// two silently drift. See `feedback_measure_never_predict`.
+
 // Camera distance. The article's 500 was sized for a 300px-tall image; against
 // 28px rows it sits far too close and the taper (the near edge of a folding
 // flap draws wider than its hinge) reads as the rows changing shape. Pulling
 // the camera back flattens the taper without killing the fold.
 // taper% = PERSPECTIVE / (PERSPECTIVE - rowHeight) — recompute if rows get tall.
 const PERSPECTIVE = 2000;
+export { PERSPECTIVE as FOLD_PERSPECTIVE };
 
 // One fold. One number for both directions and both orientations; there is no
 // second duration anywhere below.
@@ -55,6 +62,7 @@ const PERSPECTIVE = 2000;
 // directions, which is what lets every `flipped` swap below use one
 // expression. A curve that is NOT symmetric silently drifts them.
 const DUR = 300;
+export { DUR as FOLD_DUR };
 // Fallback for the candy face's ease-down; the live value is read from
 // --cbtn-press-dur on mount, since Settings → Animations rewrites it.
 const PRESS_FALLBACK = 70;
@@ -205,9 +213,9 @@ export default function FoldMenu({
   // never clickable. For a menu that opens AT A POINT there is no button to
   // fold out of; the stack is the whole control.
   noTrigger = false,
-  // Floor for the row rectangle. The trigger normally supplies it by being a
-  // real button with content; a stub measures ~padding-wide, so a point menu
-  // states its own floor and the rows still take max-content above it.
+  // Explicit floor for the row rectangle, on top of the trigger's own width.
+  // Unset by default, and a noTrigger fold has NOTHING else — its stub is not a
+  // floor (see the group's minWidth), so it shrink-wraps its longest row.
   minWidth = 0,
   style,
   ...rest
@@ -828,8 +836,21 @@ export default function FoldMenu({
           // The centring lift is NOT flipped: UP_FLIP pivots on row 0's centre,
           // so row 0 does not move and its optical lift is the trigger's own in
           // both directions.
-          top: `calc(${depth} / -2 * var(--candy-center-on, 1)`
-            + ' + var(--fold-settle, 0px))',
+          //
+          // A noTrigger fold takes NO lift, for the same reason it takes no
+          // width floor: there is no button underneath for it to hand back to,
+          // so there is nothing to be optically flush WITH — and the host has
+          // already placed the stack off a real measured rect. The context
+          // menu's fly-out is anchored to its parent row, which is itself a
+          // candy row carrying that lift, so applying it again counted it
+          // twice: the card came to rest 3.5px (depth / 2) ABOVE the row it had
+          // peeled off. User-reported 2026-08-10, "its final resting place is
+          // slightly above the original button"; measured off the live window,
+          // group top 316.0 against a row top of 319.5.
+          top: noTrigger
+            ? 'var(--fold-settle, 0px)'
+            : `calc(${depth} / -2 * var(--candy-center-on, 1)`
+              + ' + var(--fold-settle, 0px))',
           // The GROUP sets the width and the rows take 100% of it, so every row
           // is the same rectangle and perspective-origin (which defaults to the
           // centre of whatever DECLARES perspective) lands on their centre — a
@@ -843,7 +864,18 @@ export default function FoldMenu({
           // rectangle of paper any more. The floor keeps the shut state honest:
           // while the longest label fits inside the trigger, the stack is
           // exactly the trigger's width and the handover moves nothing.
-          perspective: PERSPECTIVE, width: 'max-content', minWidth: Math.max(box.w, minWidth),
+          //
+          // A noTrigger stub is NOT a floor. There is no button to hand back to,
+          // so there is nothing for the stack to stay flush WITH — and the stub
+          // is still handed `children` as its shut face, so any host that gives
+          // one (a context-menu fly-out is handed its PARENT ROW's face) would
+          // pin the whole stack to that face's width through a button nobody can
+          // see. The shut face still sizes row 1's own grid column, which is why
+          // a fly-out stays as wide as the row it peeled off — that one is
+          // wanted, and it is not this line's doing.
+          perspective: PERSPECTIVE,
+          width: 'max-content',
+          minWidth: noTrigger ? minWidth : Math.max(box.w, minWidth),
           // A noTrigger fold is painted from the moment it MOUNTS, shut stack and
           // all, because there is no button underneath for it to hand back to —
           // the stack IS the whole control (see the prop). A fold that opens out

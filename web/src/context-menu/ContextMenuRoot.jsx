@@ -32,16 +32,34 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import FoldMenu, { FOLD_PAD } from '../components/ui/FoldMenu.jsx';
+import FoldMenu, { FOLD_PAD, FOLD_DUR, FOLD_PERSPECTIVE } from '../components/ui/FoldMenu.jsx';
 import { IconChevronRight } from '../components/icons.jsx';
 import { iconFor } from './menuIcons.js';
 
-const MIN_WIDTH = 200;
+// No width floor. The menu is exactly as wide as its longest row needs, so the
+// air to the right of the longest label equals the air to the left of the first
+// glyph — the face's own symmetric 10px padding, and nothing else. It was a flat
+// 200 (the old panel's width), which left ~64px of dead paper past "Command
+// Palette". User-directed 2026-08-10.
 const PAD = 8;          // keep the paper this far off every window edge
 const ROW_H = 28;       // the menu row height the flat panel already had
-// One fold, from FoldMenu's own DUR. The door swings for exactly as long as a
-// row folds, and the rows start unfolding as it lands.
-const SWING = 300;
+// One fold, TAKEN from FoldMenu rather than retyped. The fly-out folds for
+// exactly as long as a row folds, and the rows start unfolding as it lands.
+const SWING = FOLD_DUR;
+// The angle a folded panel rests at. 180 = folded flat back onto the thing it is
+// hinged to, which is the whole of what makes this read as paper: at 180 the
+// card lies ON the parent row, full size and fully visible, and the unfold is
+// legible from frame one.
+//
+// It was 90 — a DOOR, not a fold. A panel at 90deg is edge-on, so it is
+// INVISIBLE at rest and the first third of the animation delivers a sliver:
+// measured 35.7px of 147.7 at the 100ms mark. User-reported 2026-08-10, "when i
+// click quick actions to unfold the first 40% is just cut out", and re-reported
+// after an angle tweak that kept the door — the mechanism was the bug, not the
+// number. The reference is the same one FoldMenu's rows fold on
+// (`hinge(open ? 0 : 180)`), which is Josh Comeau's two-panel fold:
+// https://www.joshwcomeau.com/react/folding-the-dom/
+const SHUT_ANGLE = 180;
 // A cursor "suck" (the whole menu scaling out of the click point and back into
 // it, on the fold's own clock) was built and REMOVED the same day, 2026-08-10:
 // "nope. terrible. remove it completely it doesnt work." May be revisited — do
@@ -78,10 +96,17 @@ function rowFace(it, { muted, chevron } = {}) {
       }}>
         {typeof Icon === 'function' ? <Icon size={14} /> : Icon}
       </span>
-      <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap' }}>{it.label}</span>
+      <span style={{ whiteSpace: 'nowrap' }}>{it.label}</span>
+      {/* The chevron HUGS the words — same 8px the glyph keeps off them — rather
+          than being pushed to the far edge. It used to take `marginLeft: 12`
+          against a `flex: 1` label, which parked it on the right wall: that made
+          a parent row 6.8px wider than the longest plain row, so the chevron
+          row sized the whole menu and every text row was left with slack it did
+          not ask for. Neither the margin nor the flex can come back without
+          bringing that with it. User-directed 2026-08-10. */}
       {chevron && (
         <span aria-hidden style={{
-          marginLeft: 12, display: 'inline-flex', lineHeight: 1, opacity: 0.6,
+          display: 'inline-flex', lineHeight: 1, opacity: 0.6,
         }}><IconChevronRight size={11} /></span>
       )}
     </span>
@@ -151,6 +176,30 @@ function Level({ anchor, items, title, accent, open, onDismiss, onClosed, depth 
   const [up, setUp] = useState(false);
   const [unfolded, setUnfolded] = useState(false);
   const [swung, setSwung] = useState(false);
+  // WHICH FACE OF THE CARD IS TOWARD THE VIEWER. Not a duplicate of `swung` —
+  // `swung` is where the paper is GOING, this is what has actually turned past
+  // edge-on, and the two are half a swing apart.
+  //
+  // It exists because nothing about 3D could be made to hide the card's own
+  // face while it lies folded. `backface-visibility` on the panel, on a wrapper
+  // around it, and on the blank cover were all tried and all MEASURED not to
+  // work: the hinge is the root of its own 3D context (its parent flattens it,
+  // to hold the camera), so a backface test inside it never sees the hinge's
+  // own 180 and every layer reports itself front-facing. Photographed
+  // 2026-08-11: with the card folded, its rows painted over the cover reading
+  // "sgnitteS" — the words of the fly-out's own first row, mirrored. Four
+  // earlier rounds all failed because they went after the parent's TITLE face,
+  // which was never the thing on screen.
+  //
+  // So the swap is done in the open, on the fold's own clock: at SWING / 2 the
+  // card is exactly edge-on and NOTHING of it is visible, which is the one
+  // instant a hard cut cannot be seen. Same instant in both directions.
+  const [faceUp, setFaceUp] = useState(false);
+  useEffect(() => {
+    if (depth === 0) return undefined;
+    const t = setTimeout(() => setFaceUp(swung), SWING / 2);
+    return () => clearTimeout(t);
+  }, [swung, depth]);
   // Which side of the parent row this card ended up on. The door has to hinge on
   // the edge it is ATTACHED to, so a card flipped to the parent's left swings off
   // its RIGHT edge — see the door's style. Invisible until 2026-08-10, when the
@@ -220,10 +269,15 @@ function Level({ anchor, items, title, accent, open, onDismiss, onClosed, depth 
 
   // `face` is the parent row's OWN label node, handed to the child fold as its
   // shut face (FoldMenu paints it on row 1's underside — the one face a shut
-  // stack shows). So the card that swings out is a copy of the row it came from,
-  // and the gesture reads as that button peeling off and unfolding rather than a
-  // blank rectangle arriving. User-directed 2026-08-10: "the 'Quick Actions'
-  // button for example gets unfolded horizontally".
+  // stack shows). So the words are on screen for the first beat of the unfold
+  // and the last beat of the fold, and gone in between, exactly as the account
+  // chip in Settings → Dev holds its name and avatar across the same two beats.
+  // That parity is the spec: user-directed 2026-08-10, "1 side needs the quick
+  // actions text… look at how the dev tab settings foldmenu buttons show the
+  // username and pfp during the first unfold and on the last fold".
+  //
+  // Only the card's UNDERSIDE is blank — see the door below. It pins nothing:
+  // this face is what keeps the fly-out as wide as the row it peeled off.
   //
   // The row TOGGLES its own fly-out (user-directed 2026-08-10). A second click
   // does not unmount it — it flips `open` false and the card plays its own close
@@ -266,43 +320,97 @@ function Level({ anchor, items, title, accent, open, onDismiss, onClosed, depth 
         // the stack has to be laid out for the measurement to exist at all.
         visibility: pos ? 'visible' : 'hidden',
         ['--accent']: accent,
-        // Only a fly-out swings. The perspective lives on the wrapper so the
-        // door has depth without touching the fold's own perspective inside it.
-        ...(depth > 0 ? { perspective: 1200 } : null),
+        // Only a fly-out folds. The camera lives on the wrapper so the panel has
+        // depth without touching the fold's own camera inside it — and it is
+        // FoldMenu's camera, not a second one, so a fly-out folding beside a row
+        // and the row itself are seen from the same distance.
+        ...(depth > 0 ? { perspective: FOLD_PERSPECTIVE } : null),
       }}
     >
-      {/* The door. It hinges on the edge the card is attached to and swings the
-          free edge toward the viewer, so the sign mirrors with the side. */}
+      {/* The fold. The hinge is the SEAM — the middle of the FOLD_PAD gap the
+          card is anchored across, not the card's own edge, exactly as FoldMenu
+          hinges a row on the middle of the gap to its neighbour rather than on
+          its own top edge (`HINGE_Y`). Hinging on the card's edge instead leaves
+          the panel a whole half-gap from where the paper actually creases.
+          The sign mirrors with the side, so the free edge always lifts toward
+          the viewer whichever way the card flipped.
+          preserve-3d is what gives this panel two real sides: without it the
+          children are flattened into one plane and both faces paint at once. */}
       <div style={depth > 0 ? {
-        transformOrigin: flip ? 'right center' : 'left center',
-        transform: `rotateY(${swung ? 0 : (flip ? 92 : -92)}deg)`,
+        // The underside below hangs off this box, so it has to be the one that
+        // positions it — the only other positioned ancestor is the fixed
+        // wrapper, and `inset: 0` against that fills the viewport.
+        position: 'relative',
+        transformOrigin: flip
+          ? `calc(100% + ${FOLD_PAD / 2}px) center`
+          : `${-FOLD_PAD / 2}px center`,
+        transform: `rotateY(${swung ? 0 : (flip ? -SHUT_ANGLE : SHUT_ANGLE)}deg)`,
         transition: `transform ${SWING}ms ease-in-out`,
+        transformStyle: 'preserve-3d',
       } : undefined}>
+        {/* The card's FRONT. Not drawn at all while the card lies face-down —
+            see `faceUp`. `visibility`, not `display`: the stack still has to be
+            laid out while it is hidden, because the placement above measures
+            the real `[role="menu"]` box before anything is shown. */}
+        <div style={{
+          transformStyle: 'preserve-3d',
+          visibility: depth > 0 && !faceUp ? 'hidden' : 'visible',
+        }}>
         <FoldMenu
           noTrigger
           up={up}
           open={unfolded}
           onRequestClose={onDismiss}
           // A fly-out owns the second half of its own close: the rows fold up on
-          // the fold's clock, and this is the instant they finish — the door
-          // swings shut from here, so the two beats cannot drift. The host is
-          // told the level is FINISHED only once that door has shut, or a
-          // toggled-off fly-out unmounts mid-swing. SWING is this file's own
-          // constant — the door belongs to this file, so it is not a second
-          // clock for someone else's motion.
+          // the fold's clock, and this is the instant they finish — the panel
+          // folds back from here, so the two beats cannot drift. The host is
+          // told the level is FINISHED only once it has landed, or a toggled-off
+          // fly-out unmounts mid-fold. SWING is FoldMenu's own DUR, so this is
+          // not a second clock for someone else's motion.
           onClosed={depth > 0
             ? () => { setSwung(false); setTimeout(() => onClosed?.(), SWING); }
             : onClosed}
           items={wired}
           selected={selected}
           rowH={ROW_H}
-          minWidth={MIN_WIDTH}
           shape="row"
           faceStyle={FACE}
           ariaLabel={typeof title === 'string' ? title : 'Menu'}
         >
           {title}
         </FoldMenu>
+        </div>
+        {/* The card's BACK — the face lying on the parent row for the whole
+            swing, and the ONLY thing drawn while `faceUp` is false. It carries
+            the parent row's own words, which is the spec: user-directed
+            2026-08-10, "1 side needs the quick actions text… look at how the dev
+            tab settings foldmenu buttons show the username and pfp during the
+            first unfold and on the last fold". The blank side is the other one —
+            it faces away and is never seen.
+            The `rotateY(180)` is what makes those words READ. This face lives
+            inside the hinge, so while the card is folded the hinge's own 180 is
+            mirroring everything in here; a second 180 composes to identity and
+            the text comes out the right way round. It must be a ROTATION, not
+            `scaleX(-1)`: a mirror flips the facing too, which shipped once and
+            hid both faces at rest ("the exact same as before with 40%
+            missing").
+            It swaps with the front at SWING / 2 — see `faceUp`. `visibility`
+            rather than a backface rule, because backface rules do not work in
+            here at all; every variant was tried and photographed failing.
+            aria-hidden: the real card carries the accessible tree. */}
+        {depth > 0 && (
+          <span aria-hidden className="candy-btn" data-shape="row" style={{
+            position: 'absolute', inset: 0, display: 'block',
+            pointerEvents: 'none',
+            transform: 'rotateY(180deg)',
+            visibility: faceUp ? 'hidden' : 'visible',
+          }}>
+            {/* height: 100% is LOAD-BEARING. This face is the layer that PAINTS
+                — the shell around it is transparent — and one with no text has
+                no line box, so it collapsed to zero and painted nothing. */}
+            <span className="candy-face" style={{ ...FACE, height: '100%' }}>{title}</span>
+          </span>
+        )}
       </div>
     </div>
   );
