@@ -28,7 +28,7 @@ import { useActiveModule } from '../hooks/useActiveModule.jsx';
 import { useSidebarSwap } from '../hooks/useSidebarSwap.js';
 import { useManifests, useLeftSidebarSlots, usePageSidebars } from '../module-sdk/useModuleRegistry.js';
 import SidebarToggleButton from './SidebarToggleButton.jsx';
-import SidebarSeam from './SidebarSeam.jsx';
+import ResizeSeam, { SNAP_EASE } from './ui/ResizeSeam.jsx';
 import CollapsibleRail from './ui/CollapsibleRail.jsx';
 import SidebarEmptyState from './SidebarEmptyState.jsx';
 import RailStack from './sidebar/RailStack.jsx';
@@ -38,7 +38,7 @@ const EXPANDED_DEFAULT  = 280;
 const EXPANDED_MIN      = 200;
 const EXPANDED_MAX      = 520;
 const COLLAPSE_TRIGGER  = 140;
-const SNAP_TARGETS      = [240, 280, 320, 360, 400];
+// The presets ARE the snap set — ResizeSeam derives it from them.
 const PRESETS = [
   { label: 'Compact', value: 220 },
   { label: 'Default', value: 280 },
@@ -60,6 +60,9 @@ function readInitialWidth() {
 export default function Sidebar({ accent, settings }) {
   const [width, setWidth] = useState(readInitialWidth);
   const [isResizing, setIsResizing] = useState(false);
+  // Held apart from isResizing: a drag normally kills the width transition so
+  // the rail tracks the cursor 1:1, but a snap has to GLIDE the last few px.
+  const [snapping, setSnapping] = useState(false);
   const route = useHashRoute();
   const rootCounts = useRootCounts();
   const manifests = useManifests();
@@ -147,7 +150,7 @@ export default function Sidebar({ accent, settings }) {
       containerStyle={{
         background: 'var(--surface)',
         borderRight: '1px solid var(--border)',
-        transition: isResizing ? 'none' : 'width 180ms ease',
+        transition: snapping ? `width ${SNAP_EASE}` : isResizing ? 'none' : 'width 180ms ease',
         zIndex: 50,
       }}
       layerStyle={{ borderTop: '1px solid var(--border)', marginTop: 0, transition: isResizing ? 'none' : 'opacity 180ms ease' }}
@@ -164,21 +167,20 @@ export default function Sidebar({ accent, settings }) {
       railContent={railContent}
       seam={
         <div style={{ position: 'absolute', top: 0, bottom: 0, right: 0, display: 'flex', zIndex: 70 }}>
-          <SidebarSeam
+          <ResizeSeam
             width={width}
             onWidthChange={setWidth}
             accent={accent}
             defaultWidth={EXPANDED_DEFAULT}
             minWidth={EXPANDED_MIN}
             maxWidth={EXPANDED_MAX}
-            snapTargets={SNAP_TARGETS}
             collapseThreshold={COLLAPSE_TRIGGER}
             onCollapse={() => setSidebarExpanded(false)}
             onDragStart={() => setIsResizing(true)}
             onDragEnd={() => setIsResizing(false)}
+            onSnapChange={setSnapping}
             presets={PRESETS}
             storageKey={STORAGE_WIDTH_KEY}
-            edgeRingSide="right"
             ariaLabel="Resize sidebar"
           />
         </div>

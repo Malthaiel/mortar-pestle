@@ -8,7 +8,7 @@ import Breadcrumb from './Breadcrumb.jsx';
 import DraggableSidebarList from './DraggableSidebarList.jsx';
 import ToolkitToggleButton from './ToolkitToggleButton.jsx';
 import RightRailStack from './sidebar/RightRailStack.jsx';
-import SidebarSeam from './SidebarSeam.jsx';
+import ResizeSeam, { SNAP_EASE } from './ui/ResizeSeam.jsx';
 import { useToolkitExpanded } from '../hooks/useToolkitExpanded.js';
 import { useKeybindHold } from '../keybinds/useKeybind.js';
 
@@ -18,7 +18,7 @@ const TOOLKIT_RAIL_WIDTH      = 56;
 const TOOLKIT_WIDTH_DEFAULT   = 300;
 const TOOLKIT_WIDTH_MIN       = 240;
 const TOOLKIT_WIDTH_MAX       = 480;
-const TOOLKIT_SNAP_TARGETS    = [260, 300, 340, 380, 420];
+// The presets ARE the snap set — ResizeSeam derives it from them.
 const TOOLKIT_PRESETS = [
   { label: 'Compact', value: 260 },
   { label: 'Default', value: 300 },
@@ -73,6 +73,9 @@ export default function AppShell({ children, onOpenSettings, settingsOpen, accen
   const effectiveToolkitExpanded = toolkitExpanded || peekActive;
   const [toolkitWidth, setToolkitWidth] = useState(readInitialToolkitWidth);
   const [isResizingToolkit, setIsResizingToolkit] = useState(false);
+  // Apart from isResizingToolkit: a drag kills the width transition so the rail
+  // tracks the cursor 1:1, but a snap has to GLIDE the last few px.
+  const [snappingToolkit, setSnappingToolkit] = useState(false);
 
   const route = useHashRoute();
   const redirectedRef = useRef(false);
@@ -131,21 +134,20 @@ export default function AppShell({ children, onOpenSettings, settingsOpen, accen
         {children}
       </div>
       {rightSlots.length > 0 && effectiveToolkitExpanded && (
-        <SidebarSeam
+        <ResizeSeam
           width={toolkitWidth}
           onWidthChange={setToolkitWidth}
           accent={accentColor}
           defaultWidth={TOOLKIT_WIDTH_DEFAULT}
           minWidth={TOOLKIT_WIDTH_MIN}
           maxWidth={TOOLKIT_WIDTH_MAX}
-          snapTargets={TOOLKIT_SNAP_TARGETS}
           presets={TOOLKIT_PRESETS}
           storageKey={STORAGE_TOOLKIT_WIDTH}
           ariaLabel="Resize right sidebar"
-          edgeRingSide="right"
           inverted
           onDragStart={() => setIsResizingToolkit(true)}
           onDragEnd={() => setIsResizingToolkit(false)}
+          onSnapChange={setSnappingToolkit}
         />
       )}
       {rightSlots.length > 0 && (
@@ -158,7 +160,8 @@ export default function AppShell({ children, onOpenSettings, settingsOpen, accen
           background: 'var(--surface)',
           display: 'flex', flexDirection: 'column',
           overflow: 'hidden',
-          transition: isResizingToolkit ? 'none' : 'width 180ms ease',
+          transition: snappingToolkit ? `width ${SNAP_EASE}`
+            : isResizingToolkit ? 'none' : 'width 180ms ease',
         }}>
           {/* Full-rail background-texture backdrop (one origin for the radial
               arcs motif; fixed, doesn't scroll). Hidden on the collapsed rail. */}

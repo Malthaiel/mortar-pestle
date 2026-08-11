@@ -20,7 +20,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { IconX, IconCalendar } from './icons.jsx';
 import { IconBtn } from './ui/index.js';
-import SidebarSeam from './SidebarSeam.jsx';
+import ResizeSeam, { SNAP_EASE } from './ui/ResizeSeam.jsx';
 import { usePlannerUndo } from '../hooks/usePlannerUndo.js';
 import { usePlannerSplit, HEALTH_CONFIG } from '../hooks/usePlannerSplit.js';
 import { todayLocalStr } from '../util/time.js';
@@ -41,6 +41,9 @@ export default function PlannerModal({ open, onClose, accent }) {
   const { width: calWidth, setWidth: setCalWidth, config: splitCfg } = usePlannerSplit();
   const { width: healthWidth, setWidth: setHealthWidth, config: healthCfg } = usePlannerSplit(HEALTH_CONFIG);
   const [isResizing, setIsResizing] = useState(false);
+  // Shared by both seams, exactly as isResizing is: only one can be dragged at
+  // a time, and a snap glide on the column that isn't moving is a no-op.
+  const [snapping, setSnapping] = useState(false);
   const bodyRowRef = useRef(null);
   const [rowW, setRowW] = useState(0);
 
@@ -169,7 +172,8 @@ export default function PlannerModal({ open, onClose, accent }) {
             flex: calWidth == null ? 1 : `0 0 ${calWidth}px`,
             minWidth: calWidth == null ? splitCfg.min : 0,
             display: 'flex', flexDirection: 'column', minHeight: 0,
-            transition: isResizing ? 'none' : 'flex-basis 180ms ease',
+            transition: snapping ? `flex-basis ${SNAP_EASE}`
+              : isResizing ? 'none' : 'flex-basis 180ms ease',
           }}>
             <CalendarPane
               accent={accent}
@@ -178,20 +182,19 @@ export default function PlannerModal({ open, onClose, accent }) {
               onPivotChange={setPivotDs}
             />
           </div>
-          <SidebarSeam
+          <ResizeSeam
             width={calEff}
             onWidthChange={setCalWidth}
             accent={accent || 'var(--text)'}
             defaultWidth={null}
             minWidth={Math.min(splitCfg.min, Math.floor(calEff))}
             maxWidth={Math.max(splitCfg.max, Math.ceil(calEff))}
-            snapTargets={splitCfg.snap}
             presets={splitCfg.presets}
             storageKey={splitCfg.key}
             ariaLabel="Resize calendar pane"
-            edgeRingSide="right"
             onDragStart={() => setIsResizing(true)}
             onDragEnd={() => setIsResizing(false)}
+            onSnapChange={setSnapping}
           />
           {/* Middle: the unified day pane — the flex absorber, floored so the
               always-on health column can't crush it (small-window fallback: the
@@ -208,27 +211,27 @@ export default function PlannerModal({ open, onClose, accent }) {
           </div>
           {/* Health seam — left-edge + inverted: dragging left grows the
               column to the right of it. */}
-          <SidebarSeam
+          <ResizeSeam
             width={healthEff}
             onWidthChange={setHealthWidth}
             accent={accent || 'var(--text)'}
             defaultWidth={healthCfg.def}
             minWidth={Math.min(healthCfg.min, Math.floor(healthEff))}
             maxWidth={Math.max(healthCfg.max, Math.ceil(healthEff))}
-            snapTargets={healthCfg.snap}
             presets={healthCfg.presets}
             storageKey={healthCfg.key}
             ariaLabel="Resize health column"
-            edgeRingSide="left"
             inverted
             onDragStart={() => setIsResizing(true)}
             onDragEnd={() => setIsResizing(false)}
+            onSnapChange={setSnapping}
           />
           {/* Right: the always-on Health column (pinned/resizable px basis). */}
           <div style={{
             flex: `0 0 ${healthEff}px`, minWidth: 0, minHeight: 0,
             display: 'flex', flexDirection: 'column',
-            transition: isResizing ? 'none' : 'flex-basis 180ms ease',
+            transition: snapping ? `flex-basis ${SNAP_EASE}`
+              : isResizing ? 'none' : 'flex-basis 180ms ease',
           }}>
             <HealthColumn
               accent={accent}

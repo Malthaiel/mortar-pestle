@@ -11,7 +11,7 @@
 import { matchChord } from '@host/keybinds/match.js';
 import { getLiveKeybinds } from '@host/keybinds/registry.js';
 
-// Module-local by host convention (App.jsx / SettingsDrawer / SidebarSeam
+// Module-local by host convention (App.jsx / SettingsDrawer / ResizeSeam
 // each carry their own copy — it is deliberately not exported from the host).
 export function isEditableTarget(target) {
   if (!target) return false;

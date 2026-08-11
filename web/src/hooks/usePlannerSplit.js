@@ -1,7 +1,7 @@
 // Planner pane widths — the draggable seams between columns. Persisted as
 // pixel widths (the modal is a stable desktop surface, so px tracks the same
 // way the left sidebar and right toolkit widths do — see AppShell.jsx /
-// Sidebar.jsx). SidebarSeam owns the actual localStorage write (via
+// Sidebar.jsx). ResizeSeam owns the actual localStorage write (via
 // `config.key`); this hook seeds the initial value and syncs other windows
 // through the `storage` event.
 //
@@ -27,11 +27,13 @@ import { useEffect, useState } from 'react';
 const CALENDAR_CONFIG = {
   key: 'planner:calWidth:v5',
   def: 640, min: 380, max: 980,
-  snap: [480, 640, 820],
+  // The presets ARE the snap set — ResizeSeam derives it from them. Labels are
+  // Compact / Default / Wide at every seam in the app ('Balanced' was this
+  // seam's own word for the middle option).
   presets: [
-    { label: 'Compact',  value: 480 },
-    { label: 'Balanced', value: 640 },
-    { label: 'Wide',     value: 820 },
+    { label: 'Compact', value: 480 },
+    { label: 'Default', value: 640 },
+    { label: 'Wide',    value: 820 },
   ],
 };
 
@@ -42,9 +44,10 @@ const CALENDAR_CONFIG = {
 export const HEALTH_CONFIG = {
   key: 'planner:healthWidth:v1',
   def: 320, min: 240, max: 480,
-  snap: [280, 320, 400],
+  // 'Narrow' was this seam's own word for the smallest option; every seam in
+  // the app now reads Compact / Default / Wide.
   presets: [
-    { label: 'Narrow',  value: 280 },
+    { label: 'Compact', value: 280 },
     { label: 'Default', value: 320 },
     { label: 'Wide',    value: 400 },
   ],

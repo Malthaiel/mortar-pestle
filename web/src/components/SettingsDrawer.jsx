@@ -35,7 +35,10 @@ import KeybindsTab from './settings/KeybindsTab.jsx';
 import VaultsTab from './settings/VaultsTab.jsx';
 import ThemePicker from './settings/ThemePicker.jsx';
 import { THEME_BY_ID } from '../themes/registry.js';
-import SidebarSeam from './SidebarSeam.jsx';
+// No onSnapChange here: this rail carries an always-on `width 200ms` transition
+// (it also animates the collapse), so it already eases into every snap. The
+// other four seams kill their transition during a drag and need to be told.
+import ResizeSeam from './ui/ResizeSeam.jsx';
 import {
   IconSearch,
   IconSparkles,
@@ -127,7 +130,7 @@ const RAIL_EXPANDED_DEFAULT = 180;
 const RAIL_EXPANDED_MIN     = 120;
 const RAIL_EXPANDED_MAX     = 320;
 const RAIL_COLLAPSE_TRIGGER = 90;
-const RAIL_SNAP_TARGETS     = [140, 180, 220, 260, 300];
+// The presets ARE the snap set — ResizeSeam derives it from them.
 const RAIL_PRESETS = [
   { label: 'Compact', value: 140 },
   { label: 'Default', value: 180 },
@@ -418,14 +421,13 @@ export default function SettingsDrawer({ open, onClose, settings, setSetting, se
             })}
           </div>
 
-          <SidebarSeam
+          <ResizeSeam
             width={railWidth}
             onWidthChange={setRailWidth}
             accent={accent}
             defaultWidth={RAIL_EXPANDED_DEFAULT}
             minWidth={RAIL_EXPANDED_MIN}
             maxWidth={RAIL_EXPANDED_MAX}
-            snapTargets={RAIL_SNAP_TARGETS}
             collapseThreshold={RAIL_COLLAPSE_TRIGGER}
             collapsed={railCollapsed}
             onCollapse={handleCollapse}

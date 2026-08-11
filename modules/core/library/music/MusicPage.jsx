@@ -19,7 +19,7 @@ import PlaylistsPage from './PlaylistsPage.jsx';
 import MusicHome    from './MusicHome.jsx';
 import MusicLibrary from './MusicLibrary.jsx';
 import MusicTopBar  from './MusicTopBar.jsx';
-import SidebarSeam from '@host/components/SidebarSeam.jsx';
+import ResizeSeam, { SNAP_EASE } from '@host/components/ui/ResizeSeam.jsx';
 import { encodePath, decodePath } from '../paths.js';
 import { navigate as go } from '@host/router.js';
 
@@ -28,9 +28,16 @@ const LAST_VIEWED_KEY = 'tools:lastMusicPath';
 const SPLIT_WIDTH_KEY = 'music:split:width';
 const SPLIT_MIN      = 320;  // album-browser (left) floor
 const RIGHT_MIN      = 360;  // detail (right) floor — reserved so it never overflows
-const SEAM_W         = 6;    // SidebarSeam hotzone width
+const SEAM_W         = 6;    // ResizeSeam hotzone width
 const SPLIT_FALLBACK = 480;  // used before the container is measured
-const SNAP_TARGETS   = [360, 440, 520, 600];
+// The presets ARE the snap set — ResizeSeam derives it from them. Same three
+// words as every other seam in the app; the values are the old snap targets,
+// less the fourth (520) that never had a name.
+const SPLIT_PRESETS = [
+  { label: 'Compact', value: 360 },
+  { label: 'Default', value: 440 },
+  { label: 'Wide',    value: 600 },
+];
 
 // Split the rest into a mode:
 //   "" (bare /tools/library/music)        → home (the combined search-first surface)
@@ -147,6 +154,9 @@ export default function MusicPage({ accent, rest }) {
   const [containerW, setContainerW] = useState(0);
   const [leftWidth, setLeftWidth] = useState(readInitialSplitWidth);
   const [isResizing, setIsResizing] = useState(false);
+  // Apart from isResizing: a drag kills the width transition so the pane tracks
+  // the cursor 1:1, but a snap has to GLIDE the last few px.
+  const [snapping, setSnapping] = useState(false);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -247,24 +257,25 @@ export default function MusicPage({ accent, rest }) {
           minWidth: SPLIT_MIN, minHeight: 0,
           borderRight: '1px solid var(--border)',
           display: 'flex', flexDirection: 'column',
-          transition: isResizing ? 'none' : 'width 120ms cubic-bezier(0.32, 0.72, 0, 1)',
+          transition: snapping ? `width ${SNAP_EASE}`
+            : isResizing ? 'none' : 'width 120ms cubic-bezier(0.32, 0.72, 0, 1)',
         }}>
           <AlbumBrowser accent={accent} onSelect={onSelectAlbum} selectedPath={selectedPath}/>
         </div>
 
-        <SidebarSeam
+        <ResizeSeam
           width={leftWidth}
           onWidthChange={setLeftWidth}
           accent={accent || 'var(--text)'}
           defaultWidth={defaultW}
           minWidth={SPLIT_MIN}
           maxWidth={dynamicMax}
-          snapTargets={SNAP_TARGETS}
+          presets={SPLIT_PRESETS}
           storageKey={SPLIT_WIDTH_KEY}
           ariaLabel="Resize album browser"
-          edgeRingSide="right"
           onDragStart={() => setIsResizing(true)}
           onDragEnd={() => setIsResizing(false)}
+          onSnapChange={setSnapping}
         />
 
         <div style={{
