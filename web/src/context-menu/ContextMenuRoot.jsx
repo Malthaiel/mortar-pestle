@@ -14,7 +14,12 @@
 // fold has no room for is dropped here, in normalize(), rather than at the
 // callers:
 //   sep / divider  -> dropped (the fold already leaves a gap between rows)
-//   header/section -> a dead row, same rectangle, muted label
+//   header/section -> DROPPED (2026-08-10). They were dead rows — the same
+//                     rectangle in muted 9px type, no glyph, no click — and a
+//                     dead rectangle in a stack of buttons reads as a broken
+//                     button, not as a label: "remove the unclickable buttons
+//                     like navigate". The grouping they carried is gone with
+//                     them; the fold's gaps are the only separation now.
 //   shortcut       -> dropped (user-directed; may come back)
 //   danger         -> dropped (accent is the only highlight in the app now)
 //   checked        -> the fold's own `selected` accent fill
@@ -37,6 +42,10 @@ const ROW_H = 28;       // the menu row height the flat panel already had
 // One fold, from FoldMenu's own DUR. The door swings for exactly as long as a
 // row folds, and the rows start unfolding as it lands.
 const SWING = 300;
+// A cursor "suck" (the whole menu scaling out of the click point and back into
+// it, on the fold's own clock) was built and REMOVED the same day, 2026-08-10:
+// "nope. terrible. remove it completely it doesnt work." May be revisited — do
+// not re-add it unprompted.
 
 const isSep = (it) => !!(it && (it.sep || it.divider));
 const isHeader = (it) => !!(it && (it.header || it.section));
@@ -79,22 +88,6 @@ function rowFace(it, { muted, chevron } = {}) {
   );
 }
 
-// A section title, as a row. It keeps the rectangle (the fold cannot take a
-// shorter one) and gives up the glyph and the click.
-function headerFace(label) {
-  return (
-    <span style={{
-      // flex, not inline-flex — see rowFace for what the line box did to this one.
-      display: 'flex', alignItems: 'center', gap: 8, width: '100%',
-      fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em',
-      textTransform: 'uppercase', color: 'var(--text-faint)', fontWeight: 600,
-    }}>
-      <span style={{ width: 14, flexShrink: 0 }} />
-      <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap' }}>{label}</span>
-    </span>
-  );
-}
-
 /**
  * Flatten one level of the caller's items into fold rows.
  * Returns { rows, selected, kids } — `kids` maps a row index to its child items,
@@ -105,11 +98,9 @@ function normalize(items) {
   const kids = new Map();
   let selected = -1;
   for (const it of items) {
-    if (!it || isSep(it)) continue;
-    if (isHeader(it)) {
-      rows.push({ label: headerFace(it.header || it.label), disabled: true });
-      continue;
-    }
+    // Separators and section titles both go: nothing that cannot be clicked
+    // earns a rectangle in a stack of buttons. See the file header.
+    if (!it || isSep(it) || isHeader(it)) continue;
     const i = rows.length;
     if (it.checked && selected < 0) selected = i;
     if (hasKids(it)) {
@@ -233,10 +224,22 @@ function Level({ anchor, items, title, accent, open, onDismiss, onClosed, depth 
   // and the gesture reads as that button peeling off and unfolding rather than a
   // blank rectangle arriving. User-directed 2026-08-10: "the 'Quick Actions'
   // button for example gets unfolded horizontally".
+  //
+  // The row TOGGLES its own fly-out (user-directed 2026-08-10). A second click
+  // does not unmount it — it flips `open` false and the card plays its own close
+  // (rows fold up, then the door swings shut) and reports back through
+  // `onClosed`, which is the only thing that clears it. Dropping the state on
+  // the click instead would make it vanish on frame one, which is the bug this
+  // file already fixed once for the whole-menu close.
   const openFlyout = (i, e) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    setFlyout((cur) => (cur && cur.index === i ? cur
-      : { index: i, rect, items: kids.get(i), face: rows[i].label }));
+    const fresh = { index: i, rect, items: kids.get(i), face: rows[i].label, open: true };
+    setFlyout((cur) => {
+      if (!cur || cur.index !== i) return fresh;
+      // Clicking a card that is already folding away brings it straight back,
+      // rather than making you wait out a close you just interrupted.
+      return cur.open === false ? fresh : { ...cur, open: false };
+    });
   };
 
   // Wire each parent row's click to its own fly-out. normalize() cannot do this
@@ -282,8 +285,14 @@ function Level({ anchor, items, title, accent, open, onDismiss, onClosed, depth 
           onRequestClose={onDismiss}
           // A fly-out owns the second half of its own close: the rows fold up on
           // the fold's clock, and this is the instant they finish — the door
-          // swings shut from here, so the two beats cannot drift.
-          onClosed={depth > 0 ? () => setSwung(false) : onClosed}
+          // swings shut from here, so the two beats cannot drift. The host is
+          // told the level is FINISHED only once that door has shut, or a
+          // toggled-off fly-out unmounts mid-swing. SWING is this file's own
+          // constant — the door belongs to this file, so it is not a second
+          // clock for someone else's motion.
+          onClosed={depth > 0
+            ? () => { setSwung(false); setTimeout(() => onClosed?.(), SWING); }
+            : onClosed}
           items={wired}
           selected={selected}
           rowH={ROW_H}
@@ -315,8 +324,11 @@ function Level({ anchor, items, title, accent, open, onDismiss, onClosed, depth 
           items={flyout.items}
           title={flyout.face}
           accent={accent}
-          open={open}
+          // Shut when the whole tree shuts, OR when its own row toggled it off.
+          open={open && flyout.open !== false}
           onDismiss={onDismiss}
+          // Cleared only once the close has fully played — see openFlyout.
+          onClosed={() => setFlyout(null)}
         />
       )}
     </>
