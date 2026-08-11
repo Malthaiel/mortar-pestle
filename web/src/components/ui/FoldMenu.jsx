@@ -330,13 +330,23 @@ export default function FoldMenu({
   //
   // Closing runs innermost-first, opening runs outermost-first. The SPREADS
   // differ on purpose and this is the toy's own schedule, not a bug: closing
-  // spreads over `press + DUR`, opening over `DUR`. At two hinges that is the
-  // toy exactly — closing, the flap goes at `press` and the pair at
+  // steps by `(press + DUR) / 2`, opening by `DUR / 2`. At two hinges that is
+  // the toy exactly — closing, the flap goes at `press` and the pair at
   // `2 * press + DUR`; opening, the pair at `press` and the flap at
   // `press + DUR`. The extra press closing is the beat the compaction (squash,
   // then lip) plays into before the outer fold takes the stack away.
-  const closeAt = (j) => (last < 1 ? press : press + ((last - j) / last) * (press + DUR));
-  const openAt = (j) => (last < 1 ? press : press + (j / last) * DUR);
+  //
+  // The STEP is per hinge and CONSTANT — the schedule is pinned at the
+  // reference count (the four-row Settings → Dev fold, `last` 2), not divided
+  // across however many hinges there are. Dividing was the original form
+  // (`(j / last) * DUR`) and it held the TOTAL fixed instead: every fold took
+  // the same ~670ms, so each row went faster the more rows there were. Fine at
+  // the two fold counts that existed, wrong the moment the context menu handed
+  // it eight rows — 50ms a row against the dev tab's 150ms, "when i right click
+  // and have like 10 options it gets super fast", 2026-08-10. A long menu now
+  // takes longer to open, which is the honest cost of one cadence.
+  const closeAt = (j) => (last < 1 ? press : press + (last - j) * ((press + DUR) / 2));
+  const openAt = (j) => (last < 1 ? press : press + j * (DUR / 2));
 
   // Hand-over instant: the outermost fold is the last to finish, so this is when
   // the real candy button takes back over. EVERY close timing derives from it,
@@ -834,14 +844,27 @@ export default function FoldMenu({
           // while the longest label fits inside the trigger, the stack is
           // exactly the trigger's width and the handover moves nothing.
           perspective: PERSPECTIVE, width: 'max-content', minWidth: Math.max(box.w, minWidth),
-          opacity: open ? 1 : 0,
+          // A noTrigger fold is painted from the moment it MOUNTS, shut stack and
+          // all, because there is no button underneath for it to hand back to —
+          // the stack IS the whole control (see the prop). A fold that opens out
+          // of a real trigger still appears only for its own open, so the shut
+          // stack cannot flash beside the button it came from.
+          //
+          // The context menu's fly-out is what needed this. It swings out of its
+          // parent row like a door over SWING, and only THEN unfolds — so for
+          // that whole swing the fold was not open yet, and both of these
+          // hid it: nothing was painted, the swing was invisible, and the card
+          // appeared out of nowhere already landed. User-reported 2026-08-10,
+          // "the fly-out doesnt have an unfolding/folding in animations" — the
+          // unfold was playing the whole time; the door was not.
+          opacity: open || noTrigger ? 1 : 0,
           pointerEvents: open ? 'auto' : 'none',
           // Hidden only once the close has finished PLAYING, so the fold is
           // never cut off mid-flight. visibility, not display: a hidden element
           // still has a box and a computed style, so its opacity transition
           // survives the handover — see the position note above for what
           // display:none did to the open.
-          visibility: shown ? 'visible' : 'hidden',
+          visibility: shown || noTrigger ? 'visible' : 'hidden',
           // HARD CUT AT BOTH ENDS, and that is the mirror: the close holds this
           // group at opacity 1 for its whole 740ms and cuts it at SHUT, so the
           // paper is present for every frame of a close. The open used to wait

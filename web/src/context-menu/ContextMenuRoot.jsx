@@ -45,11 +45,22 @@ const hasKids = (it) => !!(it && it.children && it.children.length);
 // The face of a row: a fixed glyph slot, then the words. The slot is a fixed
 // width rather than shrink-to-fit so every label in the stack starts on the same
 // vertical line, glyph or not (a section title has no glyph).
+//
+// `flex`, NOT `inline-flex`, and that is the whole of the row's vertical
+// centring. FoldMenu hands every label a plain block span; an INLINE-level box
+// inside it sits on a text LINE, so the line box grows to hold a descender the
+// row does not have — measured 17.58px of wrapper around 14.4px of content,
+// every pixel of the slack below the glyphs. Centring the wrapper therefore
+// printed the content 1.6px HIGH on every row, and a section title (9px type on
+// the same 14.4px line, pushed onto its baseline) 2.8px LOW. Block-level flex
+// takes no line box, so the wrapper is exactly its content and FoldMenu's
+// `alignItems: center` lands it dead centre. User-reported 2026-08-10,
+// "icons/text not centered within the buttons"; measured off the live window.
 function rowFace(it, { muted, chevron } = {}) {
   const Icon = it.icon || iconFor(it);
   return (
     <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 8, width: '100%',
+      display: 'flex', alignItems: 'center', gap: 8, width: '100%',
       opacity: muted ? 0.45 : 1,
     }}>
       <span style={{
@@ -73,7 +84,8 @@ function rowFace(it, { muted, chevron } = {}) {
 function headerFace(label) {
   return (
     <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 8, width: '100%',
+      // flex, not inline-flex — see rowFace for what the line box did to this one.
+      display: 'flex', alignItems: 'center', gap: 8, width: '100%',
       fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em',
       textTransform: 'uppercase', color: 'var(--text-faint)', fontWeight: 600,
     }}>
@@ -148,7 +160,12 @@ function Level({ anchor, items, title, accent, open, onDismiss, onClosed, depth 
   const [up, setUp] = useState(false);
   const [unfolded, setUnfolded] = useState(false);
   const [swung, setSwung] = useState(false);
-  const [flyout, setFlyout] = useState(null); // { index, rect, items }
+  // Which side of the parent row this card ended up on. The door has to hinge on
+  // the edge it is ATTACHED to, so a card flipped to the parent's left swings off
+  // its RIGHT edge — see the door's style. Invisible until 2026-08-10, when the
+  // swing started painting at all.
+  const [flip, setFlip] = useState(false);
+  const [flyout, setFlyout] = useState(null); // { index, rect, items, face }
 
   const { rows, selected, kids } = normalize(items);
 
@@ -162,7 +179,11 @@ function Level({ anchor, items, title, accent, open, onDismiss, onClosed, depth 
     // A fly-out starts at its parent row's right edge and flips to the parent's
     // left when there is no room; the root starts at the cursor.
     let left = anchor.x;
-    if (left + w + PAD > vw) left = anchor.flipX != null ? anchor.flipX - w : vw - w - PAD;
+    let flipped = false;
+    if (left + w + PAD > vw) {
+      if (anchor.flipX != null) { left = anchor.flipX - w; flipped = true; } else left = vw - w - PAD;
+    }
+    setFlip(flipped);
     setPos({ left: Math.max(PAD, left), top: Math.max(PAD, anchor.y) });
     // Row 0 stays on the anchor in both directions — only the stack below it
     // changes side — so this is purely "which way is there room for".
@@ -192,16 +213,30 @@ function Level({ anchor, items, title, accent, open, onDismiss, onClosed, depth 
   const unfoldedRef = useRef(false);
   unfoldedRef.current = unfolded;
   useEffect(() => {
-    if (open) return;
+    // A second right-click while a menu is up re-uses this instance with fresh
+    // props, so a stale fly-out is dropped on the RE-ARM. It used to be dropped
+    // at the start of the close instead, which unmounted the card on frame one
+    // and threw away the close it was about to play.
+    if (open) { setFlyout(null); return; }
     if (!unfoldedRef.current) { onClosed?.(); return; }
+    // Rows fold up first; the door swings shut behind them, off the fold's OWN
+    // onClosed rather than a second clock here (see the FoldMenu below). The
+    // fly-out stays mounted for all of it — the tree is unmounted by the root's
+    // onClosed, which is always the last to fire because the root has the most
+    // rows to fold.
     setUnfolded(false);
-    setSwung(false);
-    setFlyout(null);
   }, [open]);
 
+  // `face` is the parent row's OWN label node, handed to the child fold as its
+  // shut face (FoldMenu paints it on row 1's underside — the one face a shut
+  // stack shows). So the card that swings out is a copy of the row it came from,
+  // and the gesture reads as that button peeling off and unfolding rather than a
+  // blank rectangle arriving. User-directed 2026-08-10: "the 'Quick Actions'
+  // button for example gets unfolded horizontally".
   const openFlyout = (i, e) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    setFlyout((cur) => (cur && cur.index === i ? cur : { index: i, rect, items: kids.get(i) }));
+    setFlyout((cur) => (cur && cur.index === i ? cur
+      : { index: i, rect, items: kids.get(i), face: rows[i].label }));
   };
 
   // Wire each parent row's click to its own fly-out. normalize() cannot do this
@@ -233,9 +268,11 @@ function Level({ anchor, items, title, accent, open, onDismiss, onClosed, depth 
         ...(depth > 0 ? { perspective: 1200 } : null),
       }}
     >
+      {/* The door. It hinges on the edge the card is attached to and swings the
+          free edge toward the viewer, so the sign mirrors with the side. */}
       <div style={depth > 0 ? {
-        transformOrigin: 'left center',
-        transform: `rotateY(${swung ? 0 : -92}deg)`,
+        transformOrigin: flip ? 'right center' : 'left center',
+        transform: `rotateY(${swung ? 0 : (flip ? 92 : -92)}deg)`,
         transition: `transform ${SWING}ms ease-in-out`,
       } : undefined}>
         <FoldMenu
@@ -243,7 +280,10 @@ function Level({ anchor, items, title, accent, open, onDismiss, onClosed, depth 
           up={up}
           open={unfolded}
           onRequestClose={onDismiss}
-          onClosed={onClosed}
+          // A fly-out owns the second half of its own close: the rows fold up on
+          // the fold's clock, and this is the instant they finish — the door
+          // swings shut from here, so the two beats cannot drift.
+          onClosed={depth > 0 ? () => setSwung(false) : onClosed}
           items={wired}
           selected={selected}
           rowH={ROW_H}
@@ -273,6 +313,7 @@ function Level({ anchor, items, title, accent, open, onDismiss, onClosed, depth 
             flipX: flyout.rect.left - FOLD_PAD,
           }}
           items={flyout.items}
+          title={flyout.face}
           accent={accent}
           open={open}
           onDismiss={onDismiss}
