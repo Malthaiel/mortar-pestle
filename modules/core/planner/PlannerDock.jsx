@@ -63,7 +63,10 @@ export default function PlannerDock() {
 
   // Daily frame blocks in the dock calendar — interactive (drag/retime/rename/
   // create/delete) like the planner, scoped to today (the dock is day-only).
-  const [frameEditMode, setFrameEditMode] = useState(false);
+  // No frameEditMode state here any more — the Edit Frame chip that owned it was
+  // deleted from this widget 2026-08-10, so nothing could ever set it true.
+  // CalendarPanel defaults the prop to false, so the frame blocks still render;
+  // they are just not editable from the sidebar.
   const frameDateKeys = useMemo(() => [todayLocalStr()], []);
   const { mergeIntoSessions, handlers: frameHandlers } = useFrameEditing(frameDateKeys);
   const sessionsWithFrame = useMemo(() => mergeIntoSessions(sessions), [mergeIntoSessions, sessions]);
@@ -265,32 +268,32 @@ export default function PlannerDock() {
             innerControls={controlsJSX}
           />
 
-          {/* Calendar frame — the candy button that ENCLOSES the day calendar.
-              The header strip toggles collapse (chevron right→down); the body
-              slides open/closed via the measured max-height (`avail` above), so
-              the whole tile grows/shrinks with it. Collapsed, the frame behaves
-              like a candy button (hover lift, press depress — see CSS :has);
-              expanded, it's a static frame. State persists via module settings. */}
-          <div
-            className="button-planner-calendar"
+          {/* CALENDAR toggle — a plain candy button STRIP, the app-default two-layer
+              shape (<button class="candy-btn"><span class="candy-face">). It used to
+              be a frame that ENCLOSED the whole day calendar, so opening the calendar
+              grew the button into one giant pressable slab; the calendar is now a
+              sibling panel below (user-directed 2026-08-10). The button keeps its
+              own footprint in both states and presses either way. */}
+          <button
+            type="button"
+            className="candy-btn button-planner-calendar"
             data-collapsed={calendarCollapsed ? 'true' : 'false'}
+            aria-expanded={!calendarCollapsed}
+            aria-label={calendarCollapsed ? 'Expand day calendar' : 'Collapse day calendar'}
+            onClick={() => setModuleSetting('calendarCollapsed', !calendarCollapsed)}
             // Even spacing: all three compact gaps render a VISIBLE 12px, each
             // slab-compensated because the slabs differ:
             //   ② ring → calendar : marginTop = (ring slab 18·tile-px) + 12
-            //   ③ calendar → bottom: marginBottom = (this frame's slab) + 12
-            // NB on THIS frame var(--candy-depth) = --candy-depth-small (~5px),
+            //   ③ button → panel  : marginBottom = this button's slab ONLY. The
+            //      12px belongs to the panel below (a constant margin-bottom there),
+            //      so the gap is identical open or shut and nothing has to animate
+            //      a margin — see .button-planner-calendar-body.
+            // NB on THIS button var(--candy-depth) = --candy-depth-small (~5px),
             // so ② must spell out 18·tile-px (the RING's slab) literally — using
             // var(--candy-depth) here would compensate the wrong (5px) slab.
-            style={{ margin: 'calc(18 * var(--tile-px) + 12px) 14px calc(var(--candy-depth) + 12px)', flexShrink: 0 }}
+            style={{ margin: 'calc(18 * var(--tile-px) + 12px) 14px var(--candy-depth)', flexShrink: 0 }}
           >
-            <button
-              type="button"
-              data-own-press
-              className="button-planner-calendar-header"
-              aria-expanded={!calendarCollapsed}
-              aria-label={calendarCollapsed ? 'Expand day calendar' : 'Collapse day calendar'}
-              onClick={() => setModuleSetting('calendarCollapsed', !calendarCollapsed)}
-            >
+            <span className="candy-face button-planner-calendar-header">
               <span>CALENDAR</span>
               <span
                 className="planner-calendar-toggle-chevron"
@@ -298,30 +301,33 @@ export default function PlannerDock() {
               >
                 <IconChevronRight/>
               </span>
-            </button>
-            <div
+            </span>
+          </button>
+          {/* Day calendar — its own recessed frame, a SIBLING of the button above.
+              Slides open/closed on the measured max-height (`avail`), so the tile
+              grows/shrinks with it. data-no-drag: blocks the sidebar list's
+              hold-to-reorder and exempts presses in here from the tile's face slide. */}
+          <div
+              data-no-drag
               ref={calBodyRef}
               className="button-planner-calendar-body"
-              style={{
-                maxHeight: calendarCollapsed ? 0 : avail,
-                overflowY: calendarCollapsed ? 'hidden' : 'auto',
-              }}
+              style={{ maxHeight: calendarCollapsed ? 0 : avail }}
             >
-              {/* padding-bottom: --candy-depth reserves the Edit-Frame chip's depth
-                  lip so it doesn't bleed onto the CalendarPanel below at 0 gap
-                  (spacingAudit flagged the 5px overrun; --candy-depth is
-                  --candy-depth-small here, set on .button-planner-calendar). */}
-              <div data-no-drag style={{ display: 'flex', justifyContent: 'flex-end', padding: '6px 8px var(--candy-depth)' }}>
-                <button
-                  type="button"
-                  className={`candy-btn${frameEditMode ? ' is-active' : ''}`}
-                  data-shape="chip"
-                  data-own-press
-                  onClick={() => setFrameEditMode(v => !v)}
-                  aria-pressed={frameEditMode}
-                  aria-label="Edit Daily Frame"
-                ><span className="candy-face">{frameEditMode ? 'Done' : 'Edit Frame'}</span></button>
-              </div>
+              {/* Inner panel. The 12px gap between the button and the calendar lives
+                  on THIS element's margin-top, INSIDE the outer clip, so it shrinks
+                  away with the height instead of being a second animated property —
+                  a margin on the outer changed the layout by 12px in a single frame
+                  and read as a snap at the end of the close. The outer is a flex
+                  column and this is flex:1/min-height:0, which is what gives this
+                  element a bounded height to scroll inside while the outer's
+                  max-height is what animates. */}
+              <div
+                className="button-planner-calendar-panel"
+                style={{ overflowY: calendarCollapsed ? 'hidden' : 'auto' }}
+              >
+              {/* NB the Edit Frame chip that used to sit here was deleted 2026-08-10
+                  (user-directed) — the sidebar widget has no frame-editing entry
+                  point now. The PlannerModal keeps its own; this is widget-only. */}
               <CalendarPanel
                 hideHeader
                 sessions={sessionsWithFrame}
@@ -350,8 +356,6 @@ export default function PlannerDock() {
                 taskDrag={taskDrag}
                 onTaskDrop={handleTaskDrop}
                 {...frameHandlers}
-                frameEditMode={frameEditMode}
-                onFrameEditExit={() => setFrameEditMode(false)}
                 onBlockTap={onBlockTap}
                 pullSelect={pullMode ? {
                   source: pullMode.source,
@@ -387,7 +391,7 @@ export default function PlannerDock() {
                   onStopRun={stopBlockRun}
                 />
               )}
-            </div>
+              </div>
           </div>
         </div>
     </div>
@@ -484,7 +488,13 @@ function TimerWidget({
               // guard the music scrub bar uses; reorder still works from the tile
               // chrome around the ring.
               data-no-drag
-              className={`planner-ring-button${pressed ? ' is-pressed' : ''}`}
+              // Two-layer candy default (.candy-btn base + .candy-face): the base
+              // holds the band and NEVER moves; only the face slides on press.
+              // Was legacy single-layer (whole element translated, shadow collapsed
+              // to 0) — which read as the depth slab rising instead of the button
+              // sinking. .is-pressed rides the shared state rule (styles.css § States)
+              // so the JS drag-press stays in sync through pointer capture.
+              className={`candy-btn planner-ring-button${pressed ? ' is-pressed' : ''}`}
               style={{
                 // Match the calendar button's footprint: it's full-width with a
                 // 14px margin per side (see line ~195), so inset the ring the same
@@ -493,6 +503,7 @@ function TimerWidget({
                 height: Math.round(121 * scale),
               }}
             >
+              <div className="candy-face">
               <DualRingRect
                 remainingMins={secsLeft / 60}
                 phase={phase}
@@ -525,6 +536,7 @@ function TimerWidget({
                   </div>
                 </div>
               )}
+              </div>
             </div>
           </div>
 
