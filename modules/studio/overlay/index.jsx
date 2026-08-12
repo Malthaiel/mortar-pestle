@@ -2,8 +2,10 @@ import React, { Suspense } from 'react';
 import SidebarPill from '@host/components/SidebarPill.jsx';
 import { LazyErrorBoundary, lazyChunkError } from '@host/components/LazyErrorBoundary.jsx';
 import SttProvider from './SttProvider.jsx';
+import CaptureHotkeyBridge from './CaptureHotkeyBridge.jsx';
 import OverlaySettingsTab from './OverlaySettingsTab.jsx';
 import OverlayNav from './OverlayNav.jsx';
+import { registerModuleKeybinds } from '@host/keybinds/registry.js';
 
 // Studio-tier Overlay hub (Overlay epic, sub-plan 1 — Module Merge). The single
 // in-app front for the in-game overlays: a 4-page secondary nav — Browser ·
@@ -29,13 +31,33 @@ function OverlayComingSoon({ title }) {
   );
 }
 
+// GLOBAL hold-to-show chord, not an in-app one: edited here but enforced by the capture
+// daemon's system-wide keyboard hook, so it fires while a game has focus.
+// CaptureHotkeyBridge watches this row and pushes the Win32 virtual-key + modifier mask
+// to the daemon (the STT scrim-note row works the same way). A modifier is required —
+// a bare letter would be swallowed for as long as it is held.
+const KEYBIND_ENTRIES = [
+  {
+    id: 'capture.overlay',
+    group: 'Capture',
+    label: 'Hold to show the in-game capture overlay',
+    default: { kind: 'chord', key: 'c', modifiers: ['shift'] },
+  },
+];
+
 export default {
   register(api) {
     const { IconGamepad } = api.ui.icons;
+    registerModuleKeybinds(KEYBIND_ENTRIES);
     // App-level provider (always mounted in studio builds) — preloads the model
     // and keeps dictation alive across navigation. Serves the MAIN window; the
     // overlay host mounts its own SttProvider instance later (Overlay sub-plan 3).
-    api.slots.registerProvider(({ children }) => <SttProvider api={api}>{children}</SttProvider>);
+    api.slots.registerProvider(({ children }) => (
+      <SttProvider api={api}>
+        <CaptureHotkeyBridge api={api} />
+        {children}
+      </SttProvider>
+    ));
     api.slots.registerLeftSidebar({
       id: 'overlay',
       render: ({ collapsed, accent, active }) => (

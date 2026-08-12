@@ -12,6 +12,10 @@ mod portal;
 pub mod state;
 #[cfg(windows)]
 mod winhook;
+/// Rebind the overlay chord from the `set_overlay_key` socket verb (Windows only —
+/// on Linux the portal owns the bindings).
+#[cfg(windows)]
+pub use winhook::set_overlay_key;
 
 use std::sync::{Arc, Mutex};
 

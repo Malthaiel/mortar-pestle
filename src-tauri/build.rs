@@ -292,6 +292,7 @@ fn main() {
         "capture_list_clips",
         "capture_list_screenshots",
         "capture_rebind_hotkeys",
+        "capture_set_overlay_key",
         "capture_open_kde_settings",
         "set_capture_config",
         "get_captures_dir",

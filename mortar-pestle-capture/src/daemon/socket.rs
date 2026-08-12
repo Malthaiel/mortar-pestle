@@ -317,7 +317,27 @@ fn dispatch(ctx: &ControlContext, req: Request) -> Response {
         #[cfg(windows)]
         "rebind_hotkeys" => err_response(
             req.id,
-            ProtoError::new("not_implemented", "hotkey rebinding is fixed on Windows (SF6)"),
+            ProtoError::new("not_implemented", "record is fixed on Windows; the overlay chord rebinds via set_overlay_key"),
+        ),
+        // `set_overlay_key {vk, mods}` — rebind the hold-to-show overlay chord on the
+        // live WH_KEYBOARD_LL hook. `vk` is a Win32 virtual-key, `mods` the
+        // ctrl|alt|shift bitmask (1|2|4). In-memory only: the host re-pushes on every
+        // (re)connect, mirroring the STT scrim key. Linux binds through the portal.
+        #[cfg(windows)]
+        "set_overlay_key" => {
+            let vk = req.args.get("vk").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+            let mods = req.args.get("mods").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+            if vk == 0 {
+                err_response(req.id, ProtoError::new("bad_request", "vk must be a non-zero Win32 virtual-key"))
+            } else {
+                crate::daemon::hotkeys::set_overlay_key(vk, mods);
+                snapshot_response(ctx, req.id)
+            }
+        }
+        #[cfg(unix)]
+        "set_overlay_key" => err_response(
+            req.id,
+            ProtoError::new("not_implemented", "overlay chord is portal-managed on Linux"),
         ),
         "shutdown" => {
             // Tear the capture thread down, then wake `serve`'s accept loop so the

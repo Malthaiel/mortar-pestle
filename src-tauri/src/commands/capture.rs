@@ -183,6 +183,22 @@ pub async fn capture_rebind_hotkeys() -> Result<Option<StateSnapshot>, VaultErro
     Ok(decode_optional_snapshot(data))
 }
 
+/// `capture_set_overlay_key` — rebind the hold-to-show overlay chord on the engine's
+/// global keyboard hook (socket op `set_overlay_key`). `vk` is a Win32 virtual-key,
+/// `mods` the ctrl|alt|shift bitmask (1|2|4). The engine holds it in memory only, so
+/// `CaptureHotkeyBridge` re-pushes on every engine (re)start as well as on rebind —
+/// same contract as `stt_set_scrim_key`. Errors are the caller's to swallow (engine
+/// down ⇒ the next start re-pushes).
+#[tauri::command]
+pub async fn capture_set_overlay_key(vk: u32, mods: u32) -> Result<Option<StateSnapshot>, VaultError> {
+    let client = require_client()?;
+    let data = client
+        .request("set_overlay_key", json!({ "vk": vk, "mods": mods }))
+        .await
+        .map_err(map_err)?;
+    Ok(decode_optional_snapshot(data))
+}
+
 /// Best-effort decode of a mutation's response `data` into a [`StateSnapshot`].
 /// The mutations echo a snapshot, but a decode miss is non-fatal — the frontend
 /// re-fetches via `get_capture_state` / the `capture-state` event, so a `None`

@@ -11,11 +11,14 @@
 //! installing thread pumps messages); a tokio task drains the edges onto the SAME
 //! `EngineCmd` path the socket verbs use, exactly like the Linux `portal.rs`.
 //!
-//! Extended from STT's single F8 to capture's modifier chords (FIXED in v1,
-//! `can_configure:false`):
+//! Extended from STT's single F8 to capture's modifier chords:
 //!   - **record** (Ctrl+Alt+R): toggle StartClip/StopClip on the authoritative state.
-//!   - **overlay** (Shift+C, hold): emit the `overlay` wire event (press = show,
-//!     release = hide) the host bridges to `overlay-capture` (SF9 consumes it).
+//!     FIXED.
+//!   - **overlay** (Shift+C by default, hold): emit the `overlay` wire event (press =
+//!     show, release = hide) the host bridges to `overlay-capture` (SF9 consumes it).
+//!     REBINDABLE — the host pushes the user's chord via the `set_overlay_key` socket
+//!     verb (Settings ▸ Keybinds ▸ Capture), held in memory only, so the push repeats
+//!     on every (re)connect exactly like the STT scrim key.
 //! Modifier state is read in the callback via `GetAsyncKeyState` on the R/C keydown.
 
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -46,6 +49,11 @@ const VK_MENU: i32 = 0x12; // Alt
 const VK_C: u32 = 0x43;
 const VK_R: u32 = 0x52;
 
+/// Modifier bits for the overlay chord (wire contract with `set_overlay_key`).
+const MOD_CTRL: u32 = 1;
+const MOD_ALT: u32 = 2;
+const MOD_SHIFT: u32 = 4;
+
 /// An edge posted from the captureless hook callback to the async drainer.
 #[derive(Clone, Copy)]
 enum HotkeyEdge {
@@ -70,6 +78,51 @@ static OVERLAY_SHOWN: AtomicBool = AtomicBool::new(false);
 /// The hook thread's Win32 thread id — lets the drainer `PostThreadMessageW(WM_QUIT)`
 /// to break the message pump for a clean unhook on shutdown. 0 until the thread is up.
 static HOOK_TID: AtomicU32 = AtomicU32::new(0);
+/// The LIVE overlay chord, read by the hook callback on every keydown so a rebind
+/// takes effect without reinstalling the hook. Defaults to the historical Shift+C;
+/// the host pushes the user's binding via the `set_overlay_key` socket verb on every
+/// (re)connect (Settings ▸ Keybinds ▸ Capture is the source of truth, mirroring the
+/// STT scrim key). Record (Ctrl+Alt+R) stays fixed.
+static OVERLAY_VK: AtomicU32 = AtomicU32::new(VK_C);
+static OVERLAY_MODS: AtomicU32 = AtomicU32::new(MOD_SHIFT);
+/// Engine + event sender, kept so a rebind can re-publish the hotkeys snapshot (the
+/// settings readout shows the LIVE chord, never a restated constant).
+static SNAP: OnceLock<(Arc<Mutex<Engine>>, mpsc::UnboundedSender<EngineEvent>)> = OnceLock::new();
+
+/// Rebind the overlay chord (socket verb `set_overlay_key`). `mods` is the MOD_* mask;
+/// a `vk` of 0 is rejected by the caller. Re-publishes the snapshot so every client
+/// re-renders with the new trigger text.
+pub fn set_overlay_key(vk: u32, mods: u32) {
+    OVERLAY_VK.store(vk, Ordering::Release);
+    OVERLAY_MODS.store(mods, Ordering::Release);
+    log::info!("winhook: overlay chord rebound to {}", chord_label());
+    if let Some((engine, event_tx)) = SNAP.get() {
+        publish_snapshot(engine, event_tx);
+    }
+}
+
+/// Human-readable form of the live overlay chord, e.g. `Shift+C (hold)`.
+fn chord_label() -> String {
+    let mods = OVERLAY_MODS.load(Ordering::Acquire);
+    let mut s = String::new();
+    if mods & MOD_CTRL != 0 {
+        s.push_str("Ctrl+");
+    }
+    if mods & MOD_ALT != 0 {
+        s.push_str("Alt+");
+    }
+    if mods & MOD_SHIFT != 0 {
+        s.push_str("Shift+");
+    }
+    let vk = OVERLAY_VK.load(Ordering::Acquire);
+    match vk {
+        0x70..=0x87 => s.push_str(&format!("F{}", vk - 0x6F)),
+        0x30..=0x5A => s.push(vk as u8 as char), // digits + letters are their ASCII code
+        other => s.push_str(&format!("VK_{other:#04X}")),
+    }
+    s.push_str(" (hold)");
+    s
+}
 
 /// Install the hook (dedicated thread + message pump) + the async edge drainer. Called
 /// once from `daemon::run` (within the tokio runtime).
@@ -80,6 +133,8 @@ pub fn spawn(
     events_tx: broadcast::Sender<Event>,
     rebind_rx: mpsc::UnboundedReceiver<()>,
 ) {
+    // First-wins, like EDGE_TX: lets `set_overlay_key` re-publish after a rebind.
+    let _ = SNAP.set((Arc::clone(&engine), event_tx.clone()));
     publish_snapshot(&engine, &event_tx);
 
     let (edge_tx, edge_rx) = mpsc::unbounded_channel::<HotkeyEdge>();
@@ -135,6 +190,16 @@ fn key_down(vk: i32) -> bool {
     (unsafe { GetAsyncKeyState(vk) } as u16 & 0x8000) != 0
 }
 
+/// `true` iff every modifier the live overlay chord requires is currently held.
+/// Extra modifiers are tolerated, exactly as the fixed Shift+C gate was.
+#[inline]
+fn overlay_mods_down() -> bool {
+    let mods = OVERLAY_MODS.load(Ordering::Acquire);
+    (mods & MOD_CTRL == 0 || key_down(VK_CONTROL))
+        && (mods & MOD_ALT == 0 || key_down(VK_MENU))
+        && (mods & MOD_SHIFT == 0 || key_down(VK_SHIFT))
+}
+
 #[inline]
 fn post(edge: HotkeyEdge) {
     if let Some(tx) = EDGE_TX.get() {
@@ -157,9 +222,9 @@ unsafe extern "system" fn hook_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -
                     if !R_DOWN.swap(true, Ordering::AcqRel) && key_down(VK_CONTROL) && key_down(VK_MENU) {
                         post(HotkeyEdge::RecordToggle);
                     }
-                } else if vk == VK_C {
-                    if !C_DOWN.swap(true, Ordering::AcqRel) && key_down(VK_SHIFT) {
-                        // Shift+C down → show the overlay (held).
+                } else if vk == OVERLAY_VK.load(Ordering::Acquire) {
+                    if !C_DOWN.swap(true, Ordering::AcqRel) && overlay_mods_down() {
+                        // Overlay chord down → show the overlay (held).
                         OVERLAY_SHOWN.store(true, Ordering::Release);
                         post(HotkeyEdge::OverlayShow);
                     }
@@ -173,7 +238,7 @@ unsafe extern "system" fn hook_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -
             WM_KEYUP | WM_SYSKEYUP => {
                 if vk == VK_R {
                     R_DOWN.store(false, Ordering::Release);
-                } else if vk == VK_C
+                } else if vk == OVERLAY_VK.load(Ordering::Acquire)
                     && C_DOWN.swap(false, Ordering::AcqRel)
                     && OVERLAY_SHOWN.swap(false, Ordering::AcqRel)
                 {
@@ -207,8 +272,9 @@ async fn drain(
                 None => break, // hook thread / sender gone
             },
             msg = rebind_rx.recv() => match msg {
-                // No in-app remap on Windows v1 — the chords are fixed.
-                Some(()) => log::info!("winhook: rebind requested but Windows chords are fixed (Ctrl+Alt+R / Shift+C)"),
+                // No KDE-style portal UI on Windows — the overlay chord is rebound
+                // through `set_overlay_key`, and record is fixed.
+                Some(()) => log::info!("winhook: portal rebind N/A on Windows (overlay uses set_overlay_key; record is fixed)"),
                 None => break, // all rebind senders dropped → daemon shutting down
             },
         }
@@ -240,7 +306,7 @@ fn handle_record(engine: &Arc<Mutex<Engine>>, cmd_tx: &std::sync::mpsc::Sender<E
 /// engine state, so it bypasses `EngineEvent` and rides the wire bus straight to the
 /// host bridge (SF9), which shows/hides the always-on-top `overlay-capture` window.
 fn emit_overlay(events_tx: &broadcast::Sender<Event>, show: bool) {
-    log::info!("winhook: overlay {} (Shift+C)", if show { "show" } else { "hide" });
+    log::info!("winhook: overlay {} ({})", if show { "show" } else { "hide" }, chord_label());
     let _ = events_tx.send(Event {
         event: "overlay".to_string(),
         data: serde_json::json!({ "show": show }),
@@ -249,8 +315,9 @@ fn emit_overlay(events_tx: &broadcast::Sender<Event>, show: bool) {
 
 /// Overwrite the engine's `HotkeysSnapshot` (`bound:true`, the two active chords +
 /// the two reserved slots) so `get_state` reflects the live binds; emit `StateChanged`
-/// so every client re-renders. `can_configure:false` surfaces that Windows v1 cannot
-/// remap (not hidden), mirroring the STT winhook.
+/// so every client re-renders. `can_configure:false` means "no PORTAL rebind UI" (a
+/// KDE concept); the overlay chord is rebound from Settings ▸ Keybinds via
+/// `set_overlay_key`, and this re-publishes so the readout shows the live trigger.
 fn publish_snapshot(engine: &Arc<Mutex<Engine>>, event_tx: &mpsc::UnboundedSender<EngineEvent>) {
     {
         let mut e = engine.lock().expect("engine mutex poisoned");
@@ -268,7 +335,7 @@ fn publish_snapshot(engine: &Arc<Mutex<Engine>>, event_tx: &mpsc::UnboundedSende
                 Shortcut {
                     id: "overlay".to_owned(),
                     description: "Show the in-game capture overlay (hold)".to_owned(),
-                    trigger_description: "Shift+C (hold)".to_owned(),
+                    trigger_description: chord_label(),
                     reserved: false,
                 },
                 Shortcut {
@@ -288,4 +355,31 @@ fn publish_snapshot(engine: &Arc<Mutex<Engine>>, event_tx: &mpsc::UnboundedSende
         };
     }
     let _ = event_tx.send(EngineEvent::StateChanged);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The chord label is what the settings readout shows, so a rebind that renders
+    /// wrong is a silent lie about which key is live. Covers the three vk ranges.
+    #[test]
+    fn chord_label_renders_the_live_binding() {
+        // Serialized within one test: the atomics are process-global.
+        OVERLAY_VK.store(VK_C, Ordering::Release);
+        OVERLAY_MODS.store(MOD_SHIFT, Ordering::Release);
+        assert_eq!(chord_label(), "Shift+C (hold)");
+
+        OVERLAY_VK.store(0x78, Ordering::Release); // VK_F9
+        OVERLAY_MODS.store(0, Ordering::Release);
+        assert_eq!(chord_label(), "F9 (hold)");
+
+        OVERLAY_VK.store(0x58, Ordering::Release); // 'X'
+        OVERLAY_MODS.store(MOD_CTRL | MOD_ALT, Ordering::Release);
+        assert_eq!(chord_label(), "Ctrl+Alt+X (hold)");
+
+        // Restore the shipped default so no other test sees the mutation.
+        OVERLAY_VK.store(VK_C, Ordering::Release);
+        OVERLAY_MODS.store(MOD_SHIFT, Ordering::Release);
+    }
 }

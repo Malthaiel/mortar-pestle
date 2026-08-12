@@ -968,6 +968,7 @@ pub fn run() {
             commands::capture::capture_list_clips,
             commands::capture::capture_list_screenshots,
             commands::capture::capture_rebind_hotkeys,
+            commands::capture::capture_set_overlay_key,
             commands::capture::capture_open_kde_settings,
             commands::capture::set_capture_config,
             commands::capture::get_captures_dir,

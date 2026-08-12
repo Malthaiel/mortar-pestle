@@ -291,6 +291,7 @@
     "allow-capture-list-clips",
     "allow-capture-list-screenshots",
     "allow-capture-rebind-hotkeys",
+    "allow-capture-set-overlay-key",
     "allow-capture-open-kde-settings",
     "allow-set-capture-config",
     "allow-get-captures-dir",
