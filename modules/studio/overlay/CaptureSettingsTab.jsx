@@ -121,8 +121,13 @@ function AudioReadout({ snapshot }) {
   );
 }
 
-// Live hotkey rows + the rebind path. `can_configure` (portal v2+) lights an
-// in-place Rebind; otherwise the KDE Shortcuts deep-link is the reconfigure path.
+// Live hotkey rows + the rebind path. Two different worlds: on Linux the portal owns
+// the bindings (`can_configure` lights an in-place Rebind, else the KDE Shortcuts
+// deep-link), while on Windows the overlay chord is rebound from Settings ▸ Keybinds
+// (CaptureHotkeyBridge pushes it to the daemon hook) and record is fixed — so the KDE
+// affordances are hidden there rather than offering the user a dead end.
+const IS_WINDOWS = /win/i.test(navigator.userAgentData?.platform || navigator.platform || '');
+
 function HotkeyRows({ snapshot }) {
   const hk = snapshot?.hotkeys;
   const shortcuts = hk?.shortcuts || [];
@@ -143,13 +148,17 @@ function HotkeyRows({ snapshot }) {
           <span style={triggerKbd}>{s.trigger_description || '—'}</span>
         </div>
       ))}
-      <div style={{ display: 'flex', gap: 8, paddingTop: 8, flexWrap: 'wrap' }}>
-        {hk?.can_configure && <button type="button" onClick={rebind} style={actionBtn}>Rebind…</button>}
-        <button type="button" onClick={openKde} style={actionBtn}>Open KDE Shortcuts</button>
-      </div>
+      {!IS_WINDOWS && (
+        <div style={{ display: 'flex', gap: 8, paddingTop: 8, flexWrap: 'wrap' }}>
+          {hk?.can_configure && <button type="button" onClick={rebind} style={actionBtn}>Rebind…</button>}
+          <button type="button" onClick={openKde} style={actionBtn}>Open KDE Shortcuts</button>
+        </div>
+      )}
       <div style={hintText}>
         The Record shortcut toggles recording. Reserved shortcuts are bound now for a future release.{' '}
-        {hk?.can_configure ? 'Use Rebind to reconfigure in place.' : 'Reconfigure these in KDE System Settings → Shortcuts.'}
+        {IS_WINDOWS
+          ? 'Change the overlay shortcut in Settings → Keybinds → Capture; Record is fixed.'
+          : hk?.can_configure ? 'Use Rebind to reconfigure in place.' : 'Reconfigure these in KDE System Settings → Shortcuts.'}
       </div>
     </SectionBand>
   );
