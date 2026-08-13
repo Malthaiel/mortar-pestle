@@ -51,8 +51,6 @@ const ANIM_TOGGLES = [
   ['section-accordion',      'Section accordion',      ['collapse', 'expand', 'chevron'],       'navigation'],
   ['pulse-indicators',       'Pulse indicators',       ['badge', 'dot', 'glow'],                'navigation'],
   ['drag-tile-follow',       'Drag tile follow',       ['reorder', 'clone', 'cursor'],          'navigation'],
-  ['drag-tile-smoothness',   'Drag tile smoothness',   ['lag', 'drag', 'trail'],                'navigation'],
-  ['drag-drop-glide',        'Drop release glide',     ['snap', 'settle', 'duration'],          'navigation'],
   ['theme-transition',       'Theme color transition', ['crossfade', 'dark', 'light'],          'appearance'],
   ['planner-day-slide',      'Planner day slide',      ['planner', 'slide', 'day', 'pivot'],    'planner'],
   ['counter-tick',           'Section counter tick',   ['planner', 'counter', 'count', 'tick'], 'planner'],

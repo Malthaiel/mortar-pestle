@@ -7,6 +7,7 @@
 // MixSuite's channel strips and Broadcast's mixer strip.
 
 import { useRef } from 'react';
+import { GLIDE } from '../../util/motion.js';
 
 export default function VFader({ value, onDraft, onCommit, accent }) {
   const trackRef = useRef(null);
@@ -34,8 +35,8 @@ export default function VFader({ value, onDraft, onCommit, accent }) {
       style={{ position: 'relative', width: 24, height: '100%', cursor: 'ns-resize', display: 'flex', justifyContent: 'center' }}
     >
       <div style={{ width: 4, height: '100%', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 3 }} />
-      <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', bottom: 0, width: 4, height: `${pct}%`, background: accent, borderRadius: 3, pointerEvents: 'none' }} />
-      <div style={{ position: 'absolute', left: '50%', transform: 'translate(-50%, 50%)', bottom: `${pct}%`, width: 18, height: 10, background: 'var(--text)', borderRadius: 3, boxShadow: '0 1px 3px rgba(0,0,0,0.45)', pointerEvents: 'none' }} />
+      <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', bottom: 0, width: 4, height: `${pct}%`, background: accent, borderRadius: 3, pointerEvents: 'none', transition: `height ${GLIDE}` }} />
+      <div style={{ position: 'absolute', left: '50%', transform: 'translate(-50%, 50%)', bottom: `${pct}%`, width: 18, height: 10, background: 'var(--text)', borderRadius: 3, boxShadow: '0 1px 3px rgba(0,0,0,0.45)', pointerEvents: 'none', transition: `bottom ${GLIDE}` }} />
     </div>
   );
 }

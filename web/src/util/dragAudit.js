@@ -1,3 +1,4 @@
+import { GLIDE_MS } from './motion.js';
 // DEV drop-sequence auditor — the MOTION counterpart to candyCenterAudit
 // (optical centering) and spacingAudit (vertical rhythm). Those two measure
 // static layout; this one drives ONE real reorder on a DraggableSidebarList
@@ -29,7 +30,6 @@
 
 const HOLD_WAIT = 220;   // > the 180ms hold so pickup arms for every consumer (incl. dock)
 const TOL = 1.0;         // px — sub-pixel rounding
-const GLIDE = { off: 0, '25': 480, '50': 240, '75': 160, '100': 120 };
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const frame = () => new Promise((r) => requestAnimationFrame(r));
@@ -61,7 +61,9 @@ export async function dragAudit(target = '[data-drag-list]', { from = 0, to = nu
   if (!src) { console.warn(`[dragAudit] no item at index ${from}`); return null; }
 
   const horizontal = getComputedStyle(list).flexDirection.startsWith('row');
-  const glideMs = GLIDE[document.body?.getAttribute('data-anim-drag-drop-glide') || '75'] ?? 160;
+  // One glide app-wide; the 'drag-drop-glide' bucket this used to read was
+  // deleted 2026-08-13.
+  const glideMs = GLIDE_MS;
 
   const r = src.getBoundingClientRect();
   const start = { x: r.left + Math.min(24, r.width / 2), y: r.top + Math.min(24, r.height / 2) };

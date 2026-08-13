@@ -27,7 +27,8 @@ const EDGE_GAP = 8;
 const DOCK_GAP_BOTTOM = 60;
 
 // Trailing-glide chase rate per frame — shared vocabulary with the sidebar tile
-// drag (data-anim-drag-tile-smoothness). Higher closes more of the gap to the
+// drag. (Both used to read a `drag-tile-smoothness` setting; it was deleted
+// 2026-08-13 for one app-wide motion.) Higher closes more of the gap to the
 // target each frame: 1 = instant 1:1, 0.08 = heavy weighty trail.
 const CHASE = { none: 1.0, light: 0.35, medium: 0.18, heavy: 0.08 };
 

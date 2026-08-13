@@ -48,6 +48,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { createPortal } from 'react-dom';
 import FoldMenu from './FoldMenu.jsx';
 import { IconChevronLeft, IconChevronRight, IconDot } from '../icons.jsx';
+import { GLIDE } from '../../util/motion.js';
 
 const HOTZONE_PX  = 6;
 const SEAM_WIDTH  = 2;
@@ -75,14 +76,10 @@ const ROW_H       = 28;
 // on two different clocks and only agreed by accident inside a snap. One
 // constant, one curve, applied for the WHOLE drag: user-directed 2026-08-13,
 // "the same drag the menu has, on the actual left-to-right resizing as well".
-// 120ms `ease` was measurably a trail but did not READ as one: mid-motion it
-// looked right, and the moment the cursor stopped the pane covered the leftover
-// gap in a twelfth of a second, which the eye files as a snap rather than a
-// glide. The arrival is the only part anyone watches, so it is long and
-// decelerating — a hard ease-out that spends most of its time near the end.
-// User-reported 2026-08-13, "it snaps to its new position rather than smoothly
-// gliding there".
-export const DRAG_EASE = '260ms cubic-bezier(0.22, 1, 0.36, 1)';
+// Tuned here first, then promoted to the app's one glide (`util/motion.js`)
+// once he asked for it on every drag and on scrolling. Re-exported rather than
+// restated so the five hosts that import it keep working.
+export const DRAG_EASE = GLIDE;
 
 // A glyph per preset, keyed on the label, the same way `context-menu/menuIcons`
 // keys the right-click rows — the labels are Compact / Default / Wide at every

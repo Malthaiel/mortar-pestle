@@ -15,6 +15,7 @@
 // re-enables pointer events immediately so a no-op drop stays clickable.
 
 import { useEffect, useRef, useState } from 'react';
+import { GLIDE_MS } from '@host/util/motion.js';
 
 export default function useClipDrag({
   elRef,
@@ -59,10 +60,11 @@ export default function useClipDrag({
     const originLane = lanes.find(l => l.idx === laneIdx) || lanes[0];
     const blockRect = el.getBoundingClientRect();
 
-    const smooth = document.body?.getAttribute('data-anim-drag-tile-smoothness') || 'medium';
-    const chaseRate = ({ none: 1, light: 0.35, medium: 0.18, heavy: 0.08 })[smooth] ?? 0.18;
-    const glideKey = document.body?.getAttribute('data-anim-drag-drop-glide') || '75';
-    glideRef.current = ({ off: 0, '25': 480, '50': 240, '75': 160, '100': 120 })[glideKey] ?? 160;
+    // One motion app-wide: the 'drag-tile-smoothness' and 'drag-drop-glide'
+    // settings these read were deleted 2026-08-13. 0.18 is what 'medium'
+    // was; the release rides the app glide.
+    const chaseRate = 0.18;
+    glideRef.current = GLIDE_MS;
 
     const d = {
       lanes, originLane, chaseRate,

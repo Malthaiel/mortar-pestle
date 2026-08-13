@@ -27,8 +27,6 @@ const ROWS = [
   { key: 'section-accordion',      label: 'Section accordion',       description: 'Expand/collapse settle for sidebar sections and the chevron flip rotation that accompanies it.' },
   { key: 'pulse-indicators',       label: 'Pulse indicators',        description: 'Active-pill left-bar pulse, "new" badge pulse, conflict-toast spring.' },
   { key: 'drag-tile-follow',       label: 'Drag tile follow',        description: 'Clone motion during sidebar module reorder. Off: parks at origin. Cursor: tile stays at its rail position on pickup and translates by the cursor delta as you drag — the grab point stays under your cursor with no snap-to-center. Slot snap: snaps to current drop slot in 160ms with a subtle scale settle and soft snap thock.' },
-  { key: 'drag-tile-smoothness',   label: 'Drag tile smoothness',    description: 'Lag / drag applied to the cursor-following clone during a sidebar module reorder (cursor mode only). None: instant 1:1 with the cursor. Light: subtle settle. Medium: balanced weighty feel (default). Heavy: significant drag — the tile noticeably trails the cursor and coasts to catch up when you stop.' },
-  { key: 'drag-drop-glide',        label: 'Drop release glide',      description: 'How fast the picked-up tile glides into its new slot when you let go. The press-release animation also rides this duration. Off: tile snaps to slot instantly with no glide. 25%–100% scales the duration (lower = slower / longer; 100% is the snappiest). Default: 75%.' },
   { key: 'theme-transition',       label: 'Theme color transition',  description: 'Smooth 120ms color cross-fade when switching between light and dark themes. Without this, the theme switch is instant.' },
   { key: 'planner-day-slide',      label: 'Planner day slide',       description: 'Directional slide when the Planner day pane changes day — past days enter from the left, future days from the right.' },
   { key: 'counter-tick',           label: 'Section counter tick',    description: 'The Planner day pane’s section counters (events / tasks / notes) count up to new values instead of snapping.' },
@@ -141,13 +139,6 @@ function Row({ row, value, bucketConfig, accent, onChange }) {
 }
 
 function labelForEnum(v, key) {
-  // Per-key label overrides. The drop-release glide's "off | 25 | 50 | 75
-  // | 100" values read as "Off | 25% speed | …" to the user, so the bucket
-  // dropdown shows speed-as-percentage rather than a bare integer.
-  if (key === 'drag-drop-glide') {
-    if (v === 'off') return 'Off';
-    return `${v}% speed`;
-  }
   return v.replace(/-/g, ' ').replace(/^./, c => c.toUpperCase());
 }
 
@@ -328,39 +319,6 @@ function AnimVisual({ animKey, value, accent }) {
         animation: 'preview-drag 1.8s ease-in-out infinite',
       }}/>;
     }
-    case 'drag-tile-smoothness':
-      return <div style={{
-        width: 36, height: 18, borderRadius: 4,
-        background: `color-mix(in oklch, ${a} 40%, transparent)`,
-        border: `1px solid ${a}`,
-        animation: 'preview-smoothness 1.8s ease-in-out infinite',
-      }}/>;
-    case 'drag-drop-glide':
-      return (
-        <div style={{
-          position: 'relative', width: 44, height: 20,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
-          <div style={{
-            position: 'absolute', inset: 0,
-            border: `1px dashed color-mix(in oklch, ${a} 55%, transparent)`,
-            borderRadius: 4,
-          }}/>
-          <div style={{
-            width: 36, height: 16, borderRadius: 4,
-            background: `color-mix(in oklch, ${a} 40%, transparent)`,
-            border: `1px solid ${a}`,
-            animation: 'preview-glide 1.8s cubic-bezier(0.16, 1, 0.3, 1) infinite',
-          }}/>
-        </div>
-      );
-    case 'theme-transition':
-      return <div style={{
-        width: 36, height: 36,
-        borderRadius: 'var(--radius-md)',
-        border: `1px solid ${a}`,
-        animation: 'preview-theme 2s ease-in-out infinite',
-      }}/>;
     case 'planner-day-slide':
       return <div style={{
         width: 36, height: 36,

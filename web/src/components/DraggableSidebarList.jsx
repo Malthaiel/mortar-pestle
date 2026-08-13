@@ -2,6 +2,7 @@ import { useRef, useState, useCallback, useEffect, useLayoutEffect } from 'react
 import { flushSync } from 'react-dom';
 import { playReorderPickup, playReorderDrop } from '../hooks/useTactileSound.js';
 import { computeSlotY } from './dragMath.js';
+import { GLIDE, GLIDE_MS, GLIDE_TIMING } from '../util/motion.js';
 
 // ── Drop-sequence invariants (the drop-flicker saga, 2026-07-01) ─────────────
 // The drop is a multi-frame pipeline: clone glides to slot (glideMs) → commit
@@ -146,15 +147,17 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
     let cardEl = null;
     if (mode === 'cursor') {
       // Capture cursor at lift time. The tile starts at its rail origin and
-      // chases the cursor delta with exponential smoothing — each frame the
-      // rendered position closes a fixed fraction of the gap to the target,
-      // giving the tile a weighty, slightly-laggy feel as it slides through
-      // the rail. CHASE_RATE comes from the `drag-tile-smoothness` setting:
-      // higher = snappier (less drag), lower = laggier. 'medium' (0.18) puts
-      // the tile within ~1px of the cursor after ~25 frames once you stop.
+      // chases the cursor delta with exponential smoothing, closing a fixed
+      // fraction of the gap each frame so it slides through the rail with
+      // weight. CHASE_RATE was the 'drag-tile-smoothness' setting until
+      // 2026-08-13; the setting is gone (one motion, no per-drag knobs) and
+      // 0.18 is what 'medium' was — the value the feature shipped with.
+      // ponytail: this is exponential decay, NOT the app glide's fixed-duration
+      // curve. Matching it exactly means restarting a tween per pointer move,
+      // which tangles with the rubber-band and grow-to-contain maths in this
+      // same loop. Left alone deliberately; see the motion-unification plan.
       const ic = { x: cursorRef.current.x, y: cursorRef.current.y };
-      const smoothnessBucket = document.body?.getAttribute('data-anim-drag-tile-smoothness') || 'medium';
-      const CHASE_RATE = ({ none: 1.0, light: 0.35, medium: 0.18, heavy: 0.08 })[smoothnessBucket] ?? 0.18;
+      const CHASE_RATE = 0.18;
       // Rubber-band bounds: keep the tile inside its list container. The container
       // doesn't move during a pointer drag, so measure it once. Past an edge only R
       // of the overage passes to the target, so the tile resists leaving the panel
@@ -231,7 +234,7 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
       // the reflow, the browser may batch the transition switch with the initial
       // transform and animate from (0, 0) to the first slot on mount.
       void clone.offsetWidth;
-      clone.style.transition = 'transform 160ms cubic-bezier(0.32, 0.72, 0, 1)';
+      clone.style.transition = `transform ${GLIDE}`;
     }
 
     return () => {
@@ -277,7 +280,7 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
     // between the two so the new transition rule is committed before the
     // transform delta is computed. Same pattern the slot-snap init uses at
     // mount (search for `void clone.offsetWidth`).
-    clone.style.transition = `transform ${glideMs}ms cubic-bezier(0.32, 0.72, 0, 1)`;
+    clone.style.transition = `transform ${glideMs}ms ${GLIDE_TIMING}`;
     void clone.offsetWidth;
     clone.style.transform = `translate3d(${cx}px, ${cy}px, 0)`;
     // Swap is-dragging → is-drop-accent for the glide. The bridge class carries
@@ -296,7 +299,7 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
     // resting px, not '' — an auto/none target won't animate).
     const gc = containerRef?.current;
     if (gc && (gc.style.minHeight || gc.style.paddingTop)) {
-      const ease = `${glideMs}ms cubic-bezier(0.32, 0.72, 0, 1)`;
+      const ease = `${glideMs}ms ${GLIDE_TIMING}`;
       gc.style.transition = `min-height ${ease}, padding-top ${ease}`;
       if (gc.style.minHeight) gc.style.minHeight = `${growBaseRef.current}px`;
       if (gc.style.paddingTop) {
@@ -547,25 +550,12 @@ export default function DraggableSidebarList({
       const from = drag.idx;
       playReorderDrop();
 
-      // Drop-release glide bucket. 'off' skips the release animation entirely
-      // (synchronous cleanup, clone vanishes, source reappears at new slot —
-      // matches the pre-feature behavior). 25/50/75/100 are speed buckets:
-      // higher = snappier (shorter duration). 75 is the default the feature
-      // shipped with; 100 trims another 25% off; 25 stretches 3× for a
-      // cinematic settle.
-      const glideBucket = document.body?.getAttribute('data-anim-drag-drop-glide') || '75';
-      const glideMs = ({ off: 0, '25': 480, '50': 240, '75': 160, '100': 120 })[glideBucket] ?? 160;
-
-      if (glideMs === 0) {
-        flushSync(() => {
-          cleanup();
-          if (typeof from === 'number' && typeof to === 'number' && from !== to) {
-            onReorder(from, to);
-          }
-        });
-        accentTileUnderCursor();
-        return;
-      }
+      // The drop glide is the app's ONE glide now — the 'drag-drop-glide'
+      // speed bucket was deleted 2026-08-13 (user-directed: one motion, no
+      // per-drag knobs), so this is no longer a setting to read. Its 'off'
+      // value took a whole second code path (synchronous cleanup, no release
+      // animation at all); that path went with it, since GLIDE_MS is never 0.
+      const glideMs = GLIDE_MS;
 
       // Two-phase release. Phase 1 (now): clear listeners + dRef but keep
       // dragState alive with `releasing: true` so the source slot stays
@@ -776,7 +766,7 @@ export default function DraggableSidebarList({
                 // collapse keyframe + the drop-gap, or it lands instantly at t=0 and
                 // shoves neighbours by one gap on pickup (the pickup-snap bug).
                 transition: dragState?.dragging
-                  ? 'margin 160ms cubic-bezier(0.32, 0.72, 0, 1)'
+                  ? `margin ${GLIDE}`
                   : 'none',
                 [marginStart]: isDrop ? gapSize : 0,
                 // Source slot cancels one flex gap so its collapse doesn't leave a

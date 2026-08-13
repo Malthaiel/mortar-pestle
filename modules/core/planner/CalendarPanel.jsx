@@ -5,6 +5,7 @@ import { fmtHHMMString, fmtHHMMFromHM, fmtClockCompact, fmtHourLabel } from '@ho
 import { useContextMenu } from '@host/context-menu/useContextMenu.js';
 import NewEventModal from '@host/components/planner/NewEventModal.jsx';
 import { descFromSession, descFromPlan, isEligibleForPull } from './blockPull.js';
+import { GLIDE_MS } from '@host/util/motion.js';
 
 function pad(n) { return String(n).padStart(2, '0'); }
 // Minutes-from-midnight → "HH:MM". No %24 on the hour, so a block ending at
@@ -138,10 +139,11 @@ function useBlockDrag({ elRef, startMins, endMins, hourHeight, onCommit, setPres
     const dur = endMins - startMins;
     const originTop = (startMins / 60) * hourHeight;
 
-    const smooth = document.body?.getAttribute('data-anim-drag-tile-smoothness') || 'medium';
-    const chaseRate = ({ none: 1, light: 0.35, medium: 0.18, heavy: 0.08 })[smooth] ?? 0.18;
-    const glideKey = document.body?.getAttribute('data-anim-drag-drop-glide') || '75';
-    glideRef.current = ({ off: 0, '25': 480, '50': 240, '75': 160, '100': 120 })[glideKey] ?? 160;
+    // One motion app-wide: the 'drag-tile-smoothness' and 'drag-drop-glide'
+    // settings these read were deleted 2026-08-13. 0.18 is what 'medium'
+    // was; the release rides the app glide.
+    const chaseRate = 0.18;
+    glideRef.current = GLIDE_MS;
 
     const d = {
       cols, originCol, originTop, dur, chaseRate,

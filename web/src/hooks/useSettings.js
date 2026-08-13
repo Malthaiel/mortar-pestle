@@ -24,8 +24,6 @@ export const ANIMATION_KEYS = [
   'section-accordion',
   'pulse-indicators',
   'drag-tile-follow',
-  'drag-tile-smoothness',
-  'drag-drop-glide',
   'theme-transition',
   'planner-day-slide',
   'counter-tick',
@@ -44,24 +42,6 @@ export const ANIMATION_KEY_CONFIG = {
     // and only hops between slots, which reads as "nothing lifts" in short lists.
     default: 'cursor',
     values: ['off', 'cursor', 'slot-snap'],
-  },
-  // Chase-rate bucket for the 'cursor' drag-tile-follow mode. The picked-up
-  // tile follows the cursor delta with exponential smoothing; this picks the
-  // smoothing factor: none = 1.0 (instant 1:1), light = 0.35, medium = 0.18
-  // (default), heavy = 0.08 (significant drag). Read by DraggableSidebarList.
-  'drag-tile-smoothness': {
-    default: 'medium',
-    values: ['none', 'light', 'medium', 'heavy'],
-  },
-  // Glide duration for the drop-release animation. When the user lets go of
-  // a picked-up tile, PlainDragTile animates the clone from its current
-  // position into the final slot. This bucket picks how fast that glide
-  // runs: 100 = 120ms (snappy), 75 = 160ms (default, brisk), 50 = 240ms,
-  // 25 = 480ms (slow + cinematic), 'off' = skip the animation entirely
-  // (clone instantly snaps to slot — matches the pre-feature behavior).
-  'drag-drop-glide': {
-    default: '75',
-    values: ['off', '25', '50', '75', '100'],
   },
 };
 
@@ -86,14 +66,10 @@ export const ANIMATION_PRESETS = {
   full:    { ...ANIMATIONS_DEFAULT },
   minimal: Object.fromEntries(ANIMATION_KEYS.map(k => {
     if (k === 'drag-tile-follow') return [k, 'cursor'];
-    if (k === 'drag-tile-smoothness') return [k, 'medium'];
-    if (k === 'drag-drop-glide') return [k, '75'];
     return [k, ['page-transitions', 'drawer-modal', 'section-accordion', 'theme-transition'].includes(k)];
   })),
   quiet:   Object.fromEntries(ANIMATION_KEYS.map(k => {
     if (k === 'drag-tile-follow') return [k, 'off'];
-    if (k === 'drag-tile-smoothness') return [k, 'none'];
-    if (k === 'drag-drop-glide') return [k, 'off'];
     return [k, false];
   })),
 };

@@ -192,7 +192,7 @@ export const RESET_SCOPES = {
   'sounds':             { label: 'Sounds', keys: ['sounds', 'soundsPreset'] },
   'navigation/dock':    { label: 'Navigation › Dock', keys: ['dock'] },
   'navigation/left':    { label: 'Navigation › Left Sidebar', keys: ['sidebarGroupMode', 'vaultTreeReveal', 'vaultTreeSuffix'] },
-  'navigation/general': { label: 'Navigation › General', bag: 'animations', fields: ['flyout', 'section-accordion', 'page-transitions', 'pulse-indicators', 'drag-tile-follow', 'drag-tile-smoothness', 'drag-drop-glide'] },
+  'navigation/general': { label: 'Navigation › General', bag: 'animations', fields: ['flyout', 'section-accordion', 'page-transitions', 'pulse-indicators', 'drag-tile-follow'] },
   // The agents bag interleaves (mode / auth / drag tuning), so both real
   // sub-tabs reset the whole bag; the Vault Agent placeholder resets nothing.
   'agents/general':     { label: 'Agents', keys: ['agents'] },

@@ -47,7 +47,7 @@ export default function NavigationTab({ settings, setSetting, accent, section, o
       {active === 'general' && (
         <SectionBand title="Motion">
           <AnimationField
-            keys={['flyout', 'section-accordion', 'page-transitions', 'pulse-indicators', 'drag-tile-follow', 'drag-tile-smoothness', 'drag-drop-glide']}
+            keys={['flyout', 'section-accordion', 'page-transitions', 'pulse-indicators', 'drag-tile-follow']}
             settings={settings} setSetting={setSetting} accent={accent}
           />
         </SectionBand>

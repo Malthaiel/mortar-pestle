@@ -38,25 +38,30 @@
 // driven frame-by-frame in JS. Independent of the smoothness level;
 // prefers-reduced-motion snaps without easing.
 
-// Smoothness levels → { enabled, lerp }. lerp is the per-frame approach factor
-// toward the target; 'off' bypasses easing entirely (native wheel scroll).
+import { GLIDE_MS, glideEase } from './motion.js';
+
+// Smoothness levels → { enabled, ms }. The CURVE is no longer a per-level knob
+// — every level rides the app's one glide (`util/motion.js`) and only the
+// duration changes, so a wheel scroll and a dragged pane are the same motion at
+// three lengths. `medium` IS the app default, `GLIDE_MS`, not a number of its
+// own. 'off' bypasses easing entirely (native wheel scroll).
 const SMOOTHNESS_PRESETS = {
-  off:    { enabled: false, lerp: 1    },
-  light:  { enabled: true,  lerp: 0.30 },
-  medium: { enabled: true,  lerp: 0.18 },
-  heavy:  { enabled: true,  lerp: 0.10 },
+  off:    { enabled: false, ms: 0 },
+  light:  { enabled: true,  ms: Math.round(GLIDE_MS * 0.6) },
+  medium: { enabled: true,  ms: GLIDE_MS },
+  heavy:  { enabled: true,  ms: Math.round(GLIDE_MS * 1.6) },
 };
 // Live config; mirrors 'medium' until useSettings applies the stored level.
-const config = { enabled: true, lerp: 0.18 };
+const config = { enabled: true, ms: GLIDE_MS };
 
 // Apply a smoothness level (off | light | medium | heavy). Unknown → medium.
 export function setSmoothness(level) {
   const p = SMOOTHNESS_PRESETS[level] || SMOOTHNESS_PRESETS.medium;
   config.enabled = p.enabled;
-  config.lerp = p.lerp;
+  config.ms = p.ms;
 }
 
-const SETTLE = 0.5;       // px threshold to snap-and-stop the rAF loop
+const SETTLE = 0.5;       // px slack when deciding an element is AT its edge
 const WHEEL_MIN = 48;     // |deltaY| below this in pixel-mode ⇒ treat as trackpad
 const EXCLUDE = '.cm-scroller, .cm-editor, .xterm, .xterm-viewport, .xterm-screen';
 const SCROLL_HOLD = 420;  // ms the glow stays lit after the last scroll, then fades
@@ -124,17 +129,30 @@ function resolveScroll(node, delta) {
     : null;
 }
 
+// A TWEEN, not an approach factor. The old `cur += (target - cur) * lerp` is
+// exponential decay: it has no duration, it never truly arrives (it is chased
+// off by the SETTLE threshold), and its shape is fixed by the framerate rather
+// than chosen. The app now has ONE glide (`util/motion.js`) that every dragged
+// thing rides, and a wheel scroll has to be the same motion — so this runs the
+// real curve over a real duration, from a captured start value to the target.
+// User-directed 2026-08-13: "replace the current scroll with the one you just
+// created... the default that you're creating for literally everything".
+//
+// Each new wheel notch RESTARTS the tween from wherever the glide currently is
+// (`from` = live scroll position, `t0` = now), so notches compound into one
+// continuous motion instead of queueing.
 function animate(el) {
   const s = state.get(el);
   if (!s) return;
   const prop = s.axis === 'x' ? 'scrollLeft' : 'scrollTop';
-  const cur = el[prop];
-  if (Math.abs(s.target - cur) < SETTLE) {
+  const elapsed = performance.now() - s.t0;
+  const x = s.ms > 0 ? Math.min(1, elapsed / s.ms) : 1;
+  el[prop] = s.from + (s.target - s.from) * glideEase(x);
+  if (x >= 1) {
     el[prop] = s.target;
     s.raf = 0;
     return;
   }
-  el[prop] = cur + (s.target - cur) * config.lerp;
   s.raf = requestAnimationFrame(() => animate(el));
 }
 
@@ -170,8 +188,11 @@ function onWheel(e) {
   const cur = axis === 'x' ? el.scrollLeft : el.scrollTop;
   const base = midGlide ? s.target : cur;
   const target = Math.max(0, Math.min(max, base + delta));
-  if (!s) { s = { axis, target, raf: 0 }; state.set(el, s); }
-  else { s.axis = axis; s.target = target; }
+  // Restart the tween from where the scroll actually IS, not from where the
+  // last one began — mid-glide notches must extend the motion, not jump it.
+  const tween = { axis, target, from: cur, t0: performance.now(), ms: config.ms, raf: s ? s.raf : 0 };
+  if (!s) { s = tween; state.set(el, s); }
+  else { Object.assign(s, tween); }
   if (!s.raf) s.raf = requestAnimationFrame(() => animate(el));
 }
 
