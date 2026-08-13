@@ -28,7 +28,7 @@ import { useActiveModule } from '../hooks/useActiveModule.jsx';
 import { useSidebarSwap } from '../hooks/useSidebarSwap.js';
 import { useManifests, useLeftSidebarSlots, usePageSidebars } from '../module-sdk/useModuleRegistry.js';
 import SidebarToggleButton from './SidebarToggleButton.jsx';
-import ResizeSeam, { SNAP_EASE } from './ui/ResizeSeam.jsx';
+import ResizeSeam, { DRAG_EASE } from './ui/ResizeSeam.jsx';
 import CollapsibleRail from './ui/CollapsibleRail.jsx';
 import SidebarEmptyState from './SidebarEmptyState.jsx';
 import RailStack from './sidebar/RailStack.jsx';
@@ -60,9 +60,6 @@ function readInitialWidth() {
 export default function Sidebar({ accent, settings }) {
   const [width, setWidth] = useState(readInitialWidth);
   const [isResizing, setIsResizing] = useState(false);
-  // Held apart from isResizing: a drag normally kills the width transition so
-  // the rail tracks the cursor 1:1, but a snap has to GLIDE the last few px.
-  const [snapping, setSnapping] = useState(false);
   const route = useHashRoute();
   const rootCounts = useRootCounts();
   const manifests = useManifests();
@@ -150,7 +147,9 @@ export default function Sidebar({ accent, settings }) {
       containerStyle={{
         background: 'var(--surface)',
         borderRight: '1px solid var(--border)',
-        transition: snapping ? `width ${SNAP_EASE}` : isResizing ? 'none' : 'width 180ms ease',
+        // A drag TRAILS the cursor on ResizeSeam's shared clock rather than
+        // tracking it 1:1 — same lag and same curve as the seam's own menu.
+        transition: isResizing ? `width ${DRAG_EASE}` : 'width 180ms ease',
         zIndex: 50,
       }}
       layerStyle={{ borderTop: '1px solid var(--border)', marginTop: 0, transition: isResizing ? 'none' : 'opacity 180ms ease' }}
@@ -178,7 +177,6 @@ export default function Sidebar({ accent, settings }) {
             onCollapse={() => setSidebarExpanded(false)}
             onDragStart={() => setIsResizing(true)}
             onDragEnd={() => setIsResizing(false)}
-            onSnapChange={setSnapping}
             presets={PRESETS}
             storageKey={STORAGE_WIDTH_KEY}
             ariaLabel="Resize sidebar"

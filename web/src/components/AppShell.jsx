@@ -8,7 +8,7 @@ import Breadcrumb from './Breadcrumb.jsx';
 import DraggableSidebarList from './DraggableSidebarList.jsx';
 import ToolkitToggleButton from './ToolkitToggleButton.jsx';
 import RightRailStack from './sidebar/RightRailStack.jsx';
-import ResizeSeam, { SNAP_EASE } from './ui/ResizeSeam.jsx';
+import ResizeSeam, { DRAG_EASE } from './ui/ResizeSeam.jsx';
 import { useToolkitExpanded } from '../hooks/useToolkitExpanded.js';
 import { useKeybindHold } from '../keybinds/useKeybind.js';
 
@@ -73,9 +73,6 @@ export default function AppShell({ children, onOpenSettings, settingsOpen, accen
   const effectiveToolkitExpanded = toolkitExpanded || peekActive;
   const [toolkitWidth, setToolkitWidth] = useState(readInitialToolkitWidth);
   const [isResizingToolkit, setIsResizingToolkit] = useState(false);
-  // Apart from isResizingToolkit: a drag kills the width transition so the rail
-  // tracks the cursor 1:1, but a snap has to GLIDE the last few px.
-  const [snappingToolkit, setSnappingToolkit] = useState(false);
 
   const route = useHashRoute();
   const redirectedRef = useRef(false);
@@ -147,7 +144,6 @@ export default function AppShell({ children, onOpenSettings, settingsOpen, accen
           inverted
           onDragStart={() => setIsResizingToolkit(true)}
           onDragEnd={() => setIsResizingToolkit(false)}
-          onSnapChange={setSnappingToolkit}
         />
       )}
       {rightSlots.length > 0 && (
@@ -160,8 +156,9 @@ export default function AppShell({ children, onOpenSettings, settingsOpen, accen
           background: 'var(--surface)',
           display: 'flex', flexDirection: 'column',
           overflow: 'hidden',
-          transition: snappingToolkit ? `width ${SNAP_EASE}`
-            : isResizingToolkit ? 'none' : 'width 180ms ease',
+          // A drag TRAILS the cursor on ResizeSeam's shared clock rather than
+          // tracking it 1:1 — same lag and same curve as the seam's own menu.
+          transition: isResizingToolkit ? `width ${DRAG_EASE}` : 'width 180ms ease',
         }}>
           {/* Full-rail background-texture backdrop (one origin for the radial
               arcs motif; fixed, doesn't scroll). Hidden on the collapsed rail. */}

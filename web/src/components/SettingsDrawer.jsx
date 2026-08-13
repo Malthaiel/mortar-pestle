@@ -35,10 +35,7 @@ import KeybindsTab from './settings/KeybindsTab.jsx';
 import VaultsTab from './settings/VaultsTab.jsx';
 import ThemePicker from './settings/ThemePicker.jsx';
 import { THEME_BY_ID } from '../themes/registry.js';
-// No onSnapChange here: this rail carries an always-on `width 200ms` transition
-// (it also animates the collapse), so it already eases into every snap. The
-// other four seams kill their transition during a drag and need to be told.
-import ResizeSeam from './ui/ResizeSeam.jsx';
+import ResizeSeam, { DRAG_EASE } from './ui/ResizeSeam.jsx';
 import {
   IconSearch,
   IconSparkles,
@@ -182,6 +179,11 @@ export default function SettingsDrawer({ open, onClose, settings, setSetting, se
   // Rail state — MUST be before early return
   const [railWidth, setRailWidth] = useState(readStoredWidth);
   const [railCollapsed, setRailCollapsed] = useState(readStoredCollapsed);
+  // This rail's width transition is always on (it animates the collapse too),
+  // so a drag used to inherit the collapse's 200ms and lagged noticeably
+  // heavier than every other seam. It runs on ResizeSeam's shared clock while
+  // dragging now, and keeps the 200ms for the collapse.
+  const [railResizing, setRailResizing] = useState(false);
 
   // "Keybinds →" card links open the Keybinds tab pre-filtered to one group;
   // transient UI state, cleared on dismiss or when leaving the tab.
@@ -402,7 +404,9 @@ export default function SettingsDrawer({ open, onClose, settings, setSetting, se
               background: 'var(--surface-2)',
               overflowX: 'hidden',
               overflowY: 'auto',
-              transition: 'width 200ms cubic-bezier(0.16, 1, 0.3, 1), padding 200ms ease',
+              transition: railResizing
+                ? `width ${DRAG_EASE}, padding 200ms ease`
+                : 'width 200ms cubic-bezier(0.16, 1, 0.3, 1), padding 200ms ease',
             }}
           >
             {visibleTabs.map((t) => {
@@ -432,6 +436,8 @@ export default function SettingsDrawer({ open, onClose, settings, setSetting, se
             collapsed={railCollapsed}
             onCollapse={handleCollapse}
             onUncollapse={handleUncollapse}
+            onDragStart={() => setRailResizing(true)}
+            onDragEnd={() => setRailResizing(false)}
             presets={RAIL_PRESETS}
             storageKey={STORAGE_RAIL_WIDTH}
             ariaLabel="Resize settings rail"
