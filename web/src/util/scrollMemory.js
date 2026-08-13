@@ -30,6 +30,8 @@
 // re-executes all JS. The overlay and the main window share one origin, which is
 // what the scope half of the key guards against.
 
+import { GLIDE_MS, glideEase } from './motion.js';
+
 const PREFIX = 'scroll-pos:';
 const MODULE_KEY = 'dock:active-module:v1';   // owned by hooks/useActiveModule.jsx
 // CodeMirror and xterm own their own scrolling (same exclusions smoothWheel.js
@@ -40,6 +42,9 @@ const SKIP = '.cm-scroller, .xterm-viewport, [data-aos-component="CommandPalette
 const ids = new WeakMap();      // el -> 'Component#index' (scope is resolved per call)
 const touched = new WeakSet();  // boxes the user has scrolled this mount — never re-restore
 const timers = new Map();       // key -> debounce timeout
+const applied = new WeakMap();  // el -> the last position WE wrote (clamped, read back)
+const chasing = new WeakMap();  // el -> the position we are still trying to reach
+const glides = new WeakMap();   // el -> in-flight animation frame
 
 function routeScope() {
   const h = typeof window === 'undefined' ? '' : (window.location.hash || '');
@@ -87,12 +92,67 @@ function save(key, el) {
   }, 150));
 }
 
+// ── restoring ──────────────────────────────────────────────────────────────
+// Arriving at a remembered position is a scroll, so it rides the app's ONE glide
+// (util/motion.js) rather than teleporting — same curve and duration as every
+// dragged thing and every wheel scroll.
+function reduceMotion() {
+  return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+function put(el, top, left) {
+  el.scrollTop = top;
+  el.scrollLeft = left;
+  // Read BACK: the browser clamps to the content that exists right now, and the
+  // clamped value is what the scroll event will carry.
+  applied.set(el, { top: el.scrollTop, left: el.scrollLeft });
+}
+
+// How long we keep re-aiming at a saved position while content streams in.
+// ponytail: a deadline instead of watching each box's size — the chase is only
+// ever a few passes, and an abandoned one must not outlive the surface.
+const CHASE_MS = 5000;
+
+function glideTo(el, top, left) {
+  cancelAnimationFrame(glides.get(el));
+  const prior = chasing.get(el);
+  chasing.set(el, { top, left, until: prior?.until ?? (performance.now() + CHASE_MS) });
+  if (reduceMotion()) { put(el, top, left); return; }
+  const from = { top: el.scrollTop, left: el.scrollLeft };
+  const t0 = performance.now();
+  const step = () => {
+    if (!chasing.has(el)) { glides.delete(el); return; }   // the user took over
+    const x = Math.min(1, (performance.now() - t0) / GLIDE_MS);
+    const e = glideEase(x);
+    put(el, from.top + (top - from.top) * e, from.left + (left - from.left) * e);
+    if (x < 1) { glides.set(el, requestAnimationFrame(step)); return; }
+    glides.delete(el);
+    const c = chasing.get(el);
+    if (!c) return;
+    if (el.scrollTop >= c.top - 1) { chasing.delete(el); return; }
+    // Landed short — the content was still filling in. Re-aim shortly. Content
+    // can grow without a childList mutation (an image loading, a row measuring),
+    // so the chase drives its own retry rather than waiting on the observer.
+    if (performance.now() < c.until) setTimeout(() => { budget = PASS_BUDGET; schedule(); }, 120);
+    else chasing.delete(el);
+  };
+  glides.set(el, requestAnimationFrame(step));
+}
+
 // Scroll events don't bubble, but the capture phase still runs down through
 // document to the target — so one capture listener sees every box in the app.
 function onScroll(e) {
   const el = e.target;
   if (!el || el.nodeType !== 1) return;   // document/window scroll, not a box
+  const mine = applied.get(el);
+  const ours = mine && Math.abs(el.scrollTop - mine.top) <= 2 && Math.abs(el.scrollLeft - mine.left) <= 2;
+  if (ours) return;   // our own restore — and NEVER save it: a restore clamped
+                      // short would otherwise overwrite the real saved position
+                      // with the short one, which is how a memory quietly dies.
   touched.add(el);
+  chasing.delete(el);
+  cancelAnimationFrame(glides.get(el));
+  glides.delete(el);
   const key = keyOf(el);
   if (key) save(key, el);
 }
@@ -114,6 +174,7 @@ function entries() {
 function restoreAll() {
   const route = routeScope();
   const mod = moduleScope();
+  let moved = false;
   for (const [key, raw] of entries()) {
     const m = /^(.+)#(\d+)@(.*)$/.exec(key);
     if (!m) continue;
@@ -124,13 +185,25 @@ function restoreAll() {
     let el;
     try { el = document.querySelectorAll(`[data-aos-component="${CSS.escape(comp)}"]`)[+idx]; }
     catch { continue; }
-    // Never fight the user, and never fight an explicit scroll like VaultTree's
-    // Reveal-current button: only an untouched box still sitting at 0 is restored.
-    if (!el || touched.has(el) || el.scrollTop || el.scrollLeft) continue;
+    if (!el || touched.has(el)) continue;   // never fight the user
     const [top, left] = String(raw).split(',').map(Number);
-    if (top > 0 && el.scrollHeight > el.clientHeight) el.scrollTop = top;
-    if (left > 0 && el.scrollWidth > el.clientWidth) el.scrollLeft = left;
+    let chase = chasing.get(el);
+    if (chase && performance.now() > chase.until) { chasing.delete(el); chase = null; }
+    // A box already positioned by something else (VaultTree's Reveal-current
+    // button) is left alone — unless it is one WE are still chasing.
+    if (!chase && (el.scrollTop || el.scrollLeft)) continue;
+    // Keep chasing until the saved position is actually reached. A lazily
+    // filled tree (the vault tree, deepest and slowest in the app) is still
+    // short when the first pass runs, so the browser clamps that restore
+    // hundreds of pixels above where the user left it. One shot lands short;
+    // this re-aims as the rows arrive.
+    if (chase && el.scrollTop >= top - 1) continue;
+    if ((top > 0 && el.scrollHeight > el.clientHeight) || (left > 0 && el.scrollWidth > el.clientWidth)) {
+      glideTo(el, top, left);
+      moved = true;
+    }
   }
+  return moved;
 }
 
 // Content arrives late (fetches, lazy chunks, cascade-revealing trees), so one
@@ -146,7 +219,13 @@ let pending = null;
 
 function schedule() {
   if (budget <= 0 || pending) return;
-  pending = setTimeout(() => { pending = null; budget--; restoreAll(); }, 120);
+  pending = setTimeout(() => {
+    pending = null;
+    budget--;
+    // A pass that actually moved something is progress, not spin — refill, so a
+    // slow tree filling in over several seconds keeps being chased.
+    if (restoreAll()) budget = PASS_BUDGET;
+  }, 120);
 }
 
 function refill() {

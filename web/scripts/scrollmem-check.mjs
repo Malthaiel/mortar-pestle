@@ -41,11 +41,16 @@ class El {
     this.parent = parent;
     this.cls = cls;
     this.nodeType = 1;
-    this.scrollTop = 0; this.scrollLeft = 0;
+    this._top = 0;
+    this.scrollLeft = 0;
     this.scrollHeight = scrollHeight; this.clientHeight = clientHeight;
     this.scrollWidth = 0; this.clientWidth = 0;
     registry.push(this);
   }
+  // The browser CLAMPS scrollTop to the content that exists right now. This is
+  // the whole point of check 8: a lazily-filled tree is short at restore time.
+  get scrollTop() { return this._top; }
+  set scrollTop(v) { this._top = Math.max(0, Math.min(v, Math.max(0, this.scrollHeight - this.clientHeight))); }
   // Real closest()/matches() take a selector LIST and understand attribute
   // selectors; the stub supports the two forms scrollMemory.js actually uses.
   matches(sel) {
@@ -63,6 +68,8 @@ class El {
 }
 globalThis.document = {
   body: {},
+  // motion.js publishes the glide to CSS custom properties at import time.
+  documentElement: { style: { setProperty() {} } },
   addEventListener: (type, fn) => { if (type === 'scroll') document._onScroll = fn; },
   querySelectorAll: (sel) => {
     const comp = /\[data-aos-component="(.+)"\]/.exec(sel)?.[1];
@@ -75,6 +82,9 @@ globalThis.window = {
   location: { hash: '#/tools/library' },
   addEventListener: (t, fn) => { winHandlers[t] = fn; },
 };
+
+globalThis.requestAnimationFrame = (fn) => setTimeout(() => fn(performance.now()), 16);
+globalThis.cancelAnimationFrame = (id) => clearTimeout(id);
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const scroll = (el, top) => { el.scrollTop = top; document._onScroll({ target: el }); };
@@ -111,14 +121,14 @@ registry.length = 0;
 setModule('library');
 const remounted = new El('LibraryNav');
 winHandlers.hashchange();          // refills the pass budget
-await sleep(200);
+await sleep(600);           // > GLIDE_MS — the restore is now an eased glide
 assert.strictEqual(remounted.scrollTop, 420, 'restored the library position');
 console.log('3 OK  restored on remount:', remounted.scrollTop);
 
 // 4. a box the user has scrolled is never overwritten by a later pass
 scroll(remounted, 12);
 winHandlers.hashchange();
-await sleep(200);
+await sleep(600);
 assert.strictEqual(remounted.scrollTop, 12, 'user scroll survives a restore pass');
 console.log('4 OK  user scroll wins over restore');
 
@@ -134,7 +144,7 @@ window.location.hash = '#/page/B.md';
 const pageTx2 = new El(null, { cls: 'page-tx' });
 const bodyB = new El('PageView', { parent: pageTx2 });
 winHandlers.hashchange();
-await sleep(200);
+await sleep(600);
 assert.strictEqual(bodyB.scrollTop, 0, 'note B did not inherit note A');
 assert.ok(store.has('scroll-pos:PageView#0@/page/A.md'), 'route-scoped key: ' + [...store.keys()].join(' '));
 console.log('5 OK  page bodies scoped per route');
@@ -158,6 +168,44 @@ recordRoute('/vault/knowledge/Plans/Broadcast', '/vault');
 assert.strictEqual(lastRouteFor('/tools/library'), '/tools/library/anime/x');
 assert.strictEqual(lastRoute(), '/vault/knowledge/Plans/Broadcast');
 console.log('7 OK  page memory: per-module + global');
+
+// 8. THE VAULT CASE: a lazily-filled tree is short when the restore pass runs,
+// so the browser clamps the restore. The position must keep being chased as the
+// rows arrive, or the tree lands hundreds of pixels above where it was left.
+registry.length = 0;
+setModule('vault');
+const deep = new El('VaultTree', { scrollHeight: 9000, clientHeight: 600 });
+scroll(deep, 4200);
+await sleep(200);
+assert.strictEqual(store.get('scroll-pos:VaultTree#0@vault'), '4200,0');
+
+registry.length = 0;
+const lazy = new El('VaultTree', { scrollHeight: 900, clientHeight: 600 });  // rows still loading
+winHandlers.hashchange();
+await sleep(200);
+const clampedTo = lazy.scrollTop;
+lazy.scrollHeight = 9000;                                                    // rows arrive
+await sleep(800);
+assert.ok(clampedTo < 4200, 'the first restore really was clamped short (' + clampedTo + ')');
+assert.strictEqual(lazy.scrollTop, 4200, `chased to the real position, got ${lazy.scrollTop}`);
+assert.strictEqual(store.get('scroll-pos:VaultTree#0@vault'), '4200,0', 'the clamped value never overwrote the saved one');
+console.log(`8 OK  lazy tree: clamped to ${clampedTo}, chased to ${lazy.scrollTop}`);
+
+// 9. the glide is the app default curve, not a jump
+registry.length = 0;
+setModule('library');
+const glideBox = new El('LibraryNav', { scrollHeight: 5000, clientHeight: 500 });
+scroll(glideBox, 3000);
+await sleep(200);
+registry.length = 0;
+const glideBox2 = new El('LibraryNav', { scrollHeight: 5000, clientHeight: 500 });
+winHandlers.hashchange();
+await sleep(200);   // 120ms restore debounce + ~80ms into the 260ms glide
+const mid = glideBox2.scrollTop;
+await sleep(600);
+assert.ok(mid > 0 && mid < 3000, `mid-glide sample should be between 0 and 3000, got ${mid}`);
+assert.strictEqual(glideBox2.scrollTop, 3000, 'glide finished on the saved position');
+console.log(`9 OK  glided (sampled ${Math.round(mid)} mid-flight, landed ${glideBox2.scrollTop})`);
 
 console.log('\nALL PASS');
 
