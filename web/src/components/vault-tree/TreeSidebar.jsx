@@ -13,7 +13,6 @@
 
 import { useState, useEffect } from 'react';
 import { useSettings } from '../../hooks/useSettings.js';
-import { useScrollMemory } from '../../util/scrollMemory.js';
 import {
   AnimCtx, SuffixCtx, REVEAL, MUTED, GAP,
   CandyHeader, TreeRow, TreeChildren, Collapsible, StaggerChild,
@@ -77,13 +76,12 @@ function TreeNode({ node, controller, accent, topLevel = false }) {
   );
 }
 
-export default function TreeSidebar({ nodes, controller, buttons, accent, showSuffix = false, toolbarExtra, scrollKey }) {
+export default function TreeSidebar({ nodes, controller, buttons, accent, showSuffix = false, toolbarExtra }) {
   const { settings } = useSettings();
   // Reuse the vault tree's cascade-timing preset so every sidebar animates alike.
   const anim = REVEAL[settings.vaultTreeReveal] || REVEAL.normal;
-  // Remember this tree's scroll position across remounts (e.g. the scrim overlay
-  // rebuilds on Shift+C). No-op unless the surface passes a stable scrollKey.
-  const scrollRef = useScrollMemory(scrollKey);
+  // Scroll position is remembered app-wide by util/scrollMemory.js — delegated,
+  // so this shell (and every consumer of it) needs no prop and no ref.
 
   return (
     <AnimCtx.Provider value={anim}>
@@ -100,7 +98,7 @@ export default function TreeSidebar({ nodes, controller, buttons, accent, showSu
         </div>
         {/* Scrolling tree body — the only scroller. overflowX hidden keeps long
             names ellipsizing (the min-width:0 chain). */}
-        <div ref={scrollRef} style={{
+        <div style={{
           flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden',
           display: 'flex', flexDirection: 'column', gap: GAP, padding: '0 8px',
         }}>

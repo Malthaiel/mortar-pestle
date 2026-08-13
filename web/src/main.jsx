@@ -4,12 +4,16 @@ import App from './App.jsx';
 import { LazyErrorBoundary, FatalCard } from './components/LazyErrorBoundary.jsx';
 import { loadAll } from './module-loader.js';
 import { initSmoothWheel } from './util/smoothWheel.js';
+import { installScrollMemory } from './util/scrollMemory.js';
 import './pages/docs/register.jsx';   // side effect: registerPageSidebar('docs', …)
 import './fonts.css';
 import './styles.css';
 
 loadAll().then(() => {
   initSmoothWheel();
+  // Every scroll box in the app remembers where it was left. Delegated, so no
+  // surface has to opt in — see util/scrollMemory.js.
+  installScrollMemory();
   createRoot(document.getElementById('root')).render(
     <StrictMode>
       <LazyErrorBoundary full tag="[root]" label="Mortar & Pestle">

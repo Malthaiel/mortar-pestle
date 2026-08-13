@@ -33,7 +33,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useManifests } from '../module-sdk/useModuleRegistry.js';
 import { useModuleEnabledMap } from './useModuleEnabled.js';
-import { useHashRoute, navigate } from '../router.js';
+import { useHashRoute, navigate, safeDecode } from '../router.js';
+import { recordRoute, lastRoute, lastRouteFor, moduleKeyFor } from '../util/pageMemory.js';
+import { api } from '../api.js';
 import { DOCK_DEFAULT } from './useSettings.js';
 
 const STORAGE_KEY = 'dock:active-module:v1';
@@ -159,6 +161,49 @@ export function ActiveModuleProvider({ settings, setSetting, children }) {
     }
   }, [route?.path, dockModules, manifests, enabledMap]);
 
+  // ── Page memory (util/pageMemory.js) ───────────────────────────────────────
+  // Record every route, keyed by the module that owns it. Feeds two restores:
+  // the dock buttons below, and the boot restore after that.
+  const sidebarBases = useMemo(
+    () => Object.values(manifests).filter(isLeftSidebarManifest).map(m => m.routeBase),
+    [manifests],
+  );
+
+  useEffect(() => {
+    if (!route?.path || route.path === '/') return;
+    recordRoute(route.path, moduleKeyFor(route.path, sidebarBases));
+  }, [route?.path, sidebarBases]);
+
+  // Boot restore — an empty hash is a fresh launch, so land on the page we left.
+  // Waits for the manifests: they decide whether the remembered page's module
+  // still exists and is enabled. Runs once (a deep-link in wins over memory).
+  const bootedRef = useRef(false);
+  useEffect(() => {
+    if (bootedRef.current) return;
+    if (route?.path && route.path !== '/') { bootedRef.current = true; return; }
+    if (!Object.keys(manifests).length) return;
+    bootedRef.current = true;
+    const last = lastRoute();
+    if (!last) return;
+    let owner = null;
+    for (const m of Object.values(manifests)) {
+      if (!isLeftSidebarManifest(m)) continue;
+      if (!routeMatchesModule(last, m)) continue;
+      if (!owner || m.routeBase.length > owner.routeBase.length) owner = m;
+    }
+    const home = owner ? owner.routeBase : '/' + FIRST_LAUNCH_FALLBACK;
+    // A disabled module's home is dead too, so that falls all the way back.
+    if (owner && !isEnabled(enabledMap, owner.id)) { navigate('/' + FIRST_LAUNCH_FALLBACK); return; }
+    // The remembered note may have been deleted since. One read decides between
+    // the page and its module's home; every other kind of route lands as-is.
+    const page = /^\/page\/(.+)$/.exec(last);
+    if (page) {
+      api.getPage(safeDecode(page[1])).then(() => navigate(last)).catch(() => navigate(home));
+      return;
+    }
+    navigate(last);
+  }, [route?.path, manifests, enabledMap]);
+
   const setActiveModule = useCallback((id, opts = {}) => {
     const source = opts.source || 'dock-click';
     if (id === null || id === undefined) {
@@ -177,7 +222,8 @@ export function ActiveModuleProvider({ settings, setSetting, children }) {
     if (source === 'dock-click'
         && readBag(dockModules, 'clickBehavior') === 'navigate-and-swap'
         && typeof manifest.routeBase === 'string') {
-      navigate(manifest.routeBase);
+      // Return to where the user was inside this module, not to its root.
+      navigate(lastRouteFor(manifest.routeBase) || manifest.routeBase);
     }
   }, [manifests, enabledMap, dockModules]);
 
