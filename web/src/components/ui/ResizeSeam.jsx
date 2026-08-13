@@ -51,11 +51,11 @@ import { IconChevronLeft, IconChevronRight, IconDot } from '../icons.jsx';
 
 const HOTZONE_PX  = 6;
 const SEAM_WIDTH  = 2;
-// Wider than the old 12px, itself wider than the original 8. The ceiling is set
-// by the tightest seam in the app: the toolkit rail and the Planner health
-// column both put their two closest presets 40px apart, so anything past 20
-// would leave no unsnapped width between them at all.
-const SNAP_RADIUS = 18;
+// 12 was too tight to find, 18 grabbed too eagerly — user-tuned to 12 + 2 on
+// 2026-08-13. The ceiling is 20 regardless: the toolkit rail and the Planner
+// health column both put their two closest presets 40px apart, so anything
+// past that leaves no unsnapped width between them at all.
+const SNAP_RADIUS = 14;
 const RUBBER_MAX  = 28;
 // Cursor to the paper's edge. FoldPaper reaches FOLD_PAD outside the rows, so
 // the gap you actually see is this minus that.
@@ -75,7 +75,14 @@ const ROW_H       = 28;
 // on two different clocks and only agreed by accident inside a snap. One
 // constant, one curve, applied for the WHOLE drag: user-directed 2026-08-13,
 // "the same drag the menu has, on the actual left-to-right resizing as well".
-export const DRAG_EASE = '120ms ease';
+// 120ms `ease` was measurably a trail but did not READ as one: mid-motion it
+// looked right, and the moment the cursor stopped the pane covered the leftover
+// gap in a twelfth of a second, which the eye files as a snap rather than a
+// glide. The arrival is the only part anyone watches, so it is long and
+// decelerating — a hard ease-out that spends most of its time near the end.
+// User-reported 2026-08-13, "it snaps to its new position rather than smoothly
+// gliding there".
+export const DRAG_EASE = '260ms cubic-bezier(0.22, 1, 0.36, 1)';
 
 // A glyph per preset, keyed on the label, the same way `context-menu/menuIcons`
 // keys the right-click rows — the labels are Compact / Default / Wide at every
@@ -179,6 +186,25 @@ function dividerX(el) {
   return best != null && Math.abs(best - mid) <= HOTZONE_PX ? best : mid;
 }
 
+/**
+ * What z-index a body portal needs to sit exactly where this seam sits.
+ *
+ * The hit strip is portaled to `document.body`, which throws away every
+ * stacking context it was born in — and one constant cannot serve all six
+ * seams. The left sidebar's strip must stay UNDER an open modal (1000) or it
+ * steals a 12px column of it; the Planner's two seams live INSIDE that modal
+ * and must sit above it. So it is read off the real ancestor chain rather than
+ * picked: the highest z-index above the seam, plus one.
+ */
+function stackZ(el) {
+  let z = 4;
+  for (let a = el.parentElement; a; a = a.parentElement) {
+    const v = parseInt(getComputedStyle(a).zIndex, 10);
+    if (Number.isFinite(v)) z = Math.max(z, v + 1);
+  }
+  return z;
+}
+
 export default function ResizeSeam({
   width,
   onWidthChange,
@@ -223,6 +249,7 @@ export default function ResizeSeam({
   const dragStateRef = useRef(null);
   const lastSnappedRef = useRef(null);
   const seamRef = useRef(null);
+  const hitRef = useRef(null);
   const accentColor = accent || 'var(--text)';
   const snapSet = presets.map(p => p.value);
 
@@ -254,7 +281,7 @@ export default function ResizeSeam({
     if (!menuOpen) return undefined;
     const onKey = (e) => { if (e.key === 'Escape') setMenuOpen(false); };
     const onDown = (e) => {
-      if (seamRef.current?.contains(e.target)) return;
+      if (hitRef.current?.contains(e.target)) return;
       if (e.target.closest?.('[data-seam-fold]')) return;
       setMenuOpen(false);
     };
@@ -275,7 +302,7 @@ export default function ResizeSeam({
     const el = seamRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    setLine({ top: r.top, height: r.height, x: dividerX(el) });
+    setLine({ top: r.top, height: r.height, x: dividerX(el), z: stackZ(el) });
   }, []);
   useEffect(() => {
     if (!visible) return undefined;
@@ -284,6 +311,15 @@ export default function ResizeSeam({
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [visible, measure]);
+  // And once whenever the pane resizes or the window does, because the HIT
+  // STRIP below is positioned off this measurement and exists before anything
+  // is hovered — the rAF loop above only runs once the seam is already showing,
+  // which is a hover the strip is what delivers.
+  useLayoutEffect(() => { measure(); }, [measure, width, collapsed]);
+  useEffect(() => {
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [measure]);
 
   const snapIfNear = useCallback((raw) => {
     for (const t of snapSet) {
@@ -348,7 +384,10 @@ export default function ResizeSeam({
       // before the snap below matters — SNAP_RADIUS is 18px now, so running a
       // click through it would silently resize a pane nobody dragged.
       if (!dragStateRef.current.moved) {
-        anchorXRef.current = ev.clientX;
+        // Anchored on the MEASURED divider, not on where the click landed —
+        // the hotzone is 12px wide, so anchoring on the click made the menu
+        // pop up in a different place every time. User-reported 2026-08-13.
+        anchorXRef.current = seamRef.current ? dividerX(seamRef.current) : ev.clientX;
         setCursor({ x: ev.clientX, y: ev.clientY });
         setMenuOpen(o => !o);
         return;
@@ -437,29 +476,57 @@ export default function ResizeSeam({
 
   return (
     <>
+      {/* Layout only — it holds the seam's place in the flex row and is what
+          dividerX() walks from. It cannot be the hit target: it sits entirely
+          on ONE side of the divider (the left sidebar's is 273..279 against a
+          divider at 279.5), so every pixel of grab space was on the left and
+          none on the right, and it cannot grow rightward either — the rail's
+          own overflow:hidden clips it, the same clip that forced the accent
+          line into a portal. User-reported 2026-08-13, "i'm able to click more
+          to the left of the line but not at all to the right". */}
       <div
         ref={seamRef}
-        onMouseEnter={(e) => { setCursor({ x: e.clientX, y: e.clientY }); measure(); setHover(true); }}
-        onMouseLeave={() => setHover(false)}
-        // Tracked before a drag as well as during one, so the menu can follow
-        // the cursor the moment it appears.
-        onPointerMove={(e) => { if (!dragging) setCursor({ x: e.clientX, y: e.clientY }); }}
-        onPointerDown={onPointerDown}
-        onDoubleClick={onDoubleClick}
-        role="separator"
-        aria-orientation="vertical"
-        aria-label={ariaLabel}
-        title="Drag to resize · double-click to reset"
+        aria-hidden
         style={{
           width: HOTZONE_PX,
           alignSelf: 'stretch',
           flexShrink: 0,
-          cursor: 'col-resize',
           position: 'relative',
           zIndex: 4,
+          pointerEvents: 'none',
           ...outerStyle,
         }}
       />
+
+      {/* The real control: HOTZONE_PX of grab space either side of the measured
+          divider, portaled so nothing can clip it. */}
+      {line && createPortal(
+        <div
+          ref={hitRef}
+          onMouseEnter={(e) => { setCursor({ x: e.clientX, y: e.clientY }); measure(); setHover(true); }}
+          onMouseLeave={() => setHover(false)}
+          // Tracked before a drag as well as during one, so the menu can follow
+          // the cursor the moment it appears.
+          onPointerMove={(e) => { if (!dragging) setCursor({ x: e.clientX, y: e.clientY }); }}
+          onPointerDown={onPointerDown}
+          onDoubleClick={onDoubleClick}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label={ariaLabel}
+          title="Drag to resize · double-click to reset"
+          style={{
+            position: 'fixed',
+            top: line.top,
+            height: line.height,
+            left: line.x - HOTZONE_PX,
+            width: HOTZONE_PX * 2,
+            cursor: 'col-resize',
+            background: 'transparent',
+            zIndex: line.z,
+          }}
+        />,
+        document.body,
+      )}
 
       {/* The line. Always mounted so it can FADE rather than pop, and fixed to
           the measured divider so no ancestor's overflow clip can eat it. */}
