@@ -43,6 +43,7 @@ skipped=true (and nothing written) when a card with this MAL ID already exists.
 """
 
 import argparse
+import gzip
 import json
 import os
 import re
@@ -90,35 +91,63 @@ def fatal(code, detail=""):
 # Transient statuses worth retrying: rate-limit (429) + gateway/5xx blips.
 JIKAN_RETRY_CODES = frozenset({429, 500, 502, 503, 504})
 
+# Backoff between attempts (4 waits → 5 attempts, ~67s total). Jikan enforces
+# BOTH 3 req/s and 60 req/min; a per-second trip clears in ~1s, so the first
+# retry is quick, while the later waits are long enough to outlast the minute
+# bucket. The old 1s/2s schedule gave up after ~4s and could never survive a
+# minute-window 429 — see the 2026-08-12 Hyouka investigation.
+JIKAN_BACKOFF = (2, 5, 15, 45)
+JIKAN_RETRY_AFTER_CAP = 60
+
+
+def _retry_wait(err, attempt):
+    """Seconds to wait before the next attempt. A 429 carrying Retry-After
+    is authoritative (capped) — the server knows when its bucket refills;
+    everything else falls back to the fixed schedule."""
+    fallback = JIKAN_BACKOFF[min(attempt, len(JIKAN_BACKOFF) - 1)]
+    if not isinstance(err, urllib.error.HTTPError) or err.code != 429:
+        return fallback
+    raw = (err.headers or {}).get("Retry-After")
+    try:
+        # Jikan sends delay-seconds; an HTTP-date variant is not worth parsing.
+        return min(max(int(str(raw).strip()), 0), JIKAN_RETRY_AFTER_CAP)
+    except (TypeError, ValueError):
+        return fallback
+
 
 def jikan_get(path):
-    """Throttled (>=0.4s) Jikan GET. Retries transient failures — 429,
-    5xx (500/502/503/504), timeouts and connection errors — up to 3
-    attempts with exponential backoff (1s, then 2s)."""
+    """Throttled (>=0.4s) Jikan GET. Retries transient failures — 429
+    (honoring Retry-After), 5xx (500/502/503/504), timeouts and connection
+    errors — up to 5 attempts, backing off per JIKAN_BACKOFF."""
     last_err = None
-    for attempt in range(3):
+    for attempt in range(len(JIKAN_BACKOFF) + 1):
         elapsed = time.monotonic() - _last_jikan[0]
         if elapsed < 0.4:
             time.sleep(0.4 - elapsed)
         req = urllib.request.Request(
             f"{JIKAN_BASE}/{path}",
-            # Send an EMPTY Accept-Encoding. urllib otherwise auto-injects
-            # `Accept-Encoding: identity`, which Jikan's nginx 504s on for
-            # some entries (that variant misses cache → slow origin) while it
-            # serves the default cached response instantly. An empty value
-            # both suppresses urllib's identity injection and hits that warm
-            # cache bucket — same request shape curl/reqwest use. See the
-            # 2026-06-17 Hibike! Euphonium (mal-27989) 504 investigation.
+            # Ask for gzip explicitly. Jikan's edge cache keys on
+            # Accept-Encoding, and only the gzip bucket is warm — the empty
+            # and `identity` variants are served an INSTANT (~0.4s) cached
+            # 504, which is not an origin timeout despite the status. A/B on
+            # mal-12189, alternating, 2026-08-12: empty [504,504,504,504] vs
+            # gzip [200,200,200,200]. This inverts the 2026-06-17 Hibike!
+            # Euphonium (mal-27989) finding — the warm bucket moved. Re-A/B
+            # before touching this; urllib does NOT auto-decompress, so the
+            # gzip branch below is required.
             headers={
                 "User-Agent": JIKAN_UA,
                 "Accept": "application/json",
-                "Accept-Encoding": "",
+                "Accept-Encoding": "gzip",
             },
         )
         try:
             with urllib.request.urlopen(req, timeout=20) as r:
                 _last_jikan[0] = time.monotonic()
-                return json.load(r)
+                body = r.read()
+                if r.headers.get("Content-Encoding") == "gzip":
+                    body = gzip.decompress(body)
+                return json.loads(body)
         except urllib.error.HTTPError as e:
             _last_jikan[0] = time.monotonic()
             last_err = e
@@ -127,11 +156,11 @@ def jikan_get(path):
         except (urllib.error.URLError, TimeoutError) as e:
             _last_jikan[0] = time.monotonic()
             last_err = e
-        if attempt < 2:
-            time.sleep(2 ** attempt)  # 1s, then 2s
+        if attempt < len(JIKAN_BACKOFF):
+            time.sleep(_retry_wait(last_err, attempt))
     raise RuntimeError(
-        f"Jikan API unavailable after 3 attempts (last: {last_err}). "
-        "Please retry shortly."
+        f"Jikan API unavailable after {len(JIKAN_BACKOFF) + 1} attempts "
+        f"(last: {last_err}). Please retry shortly."
     )
 
 
