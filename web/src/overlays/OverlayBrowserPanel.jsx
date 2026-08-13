@@ -17,6 +17,7 @@ import { invoke } from '@tauri-apps/api/core';
 import useOverlayPanelDrag from './useOverlayPanelDrag.js';
 import useOverlayPanelResize from './useOverlayPanelResize.js';
 import { useSettings } from '../hooks/useSettings.js';
+import { GLIDE, GLIDE_MS } from '../util/motion.js';
 import { IconGlobe, IconX } from '../components/icons.jsx';
 import BrowserPage from '@modules/core/browser/BrowserPage.jsx';
 import TabSidebar from '@modules/core/browser/TabSidebar.jsx';
@@ -53,15 +54,28 @@ export default function OverlayBrowserPanel({ visible }) {
   // Drag/resize pump: a translate() move changes the holder's viewport rect
   // without firing its ResizeObserver, so nudge BrowserPage's syncBounds
   // (rAF-throttled) while the pointer moves.
+  //
+  // It keeps pumping for GLIDE_MS past the LAST move (Motion Unification,
+  // 2026-08-13). The panel trails the cursor on the app's glide now, so the DOM
+  // holder is still travelling after the pointer stops — and a native webview
+  // is placed from that holder's measured rect, not by CSS. Stopping the pump
+  // at pointer-up would strand the webview at the release-frame position while
+  // the chrome slid out from under it for a quarter second.
   const syncRef = useRef(null);
   const rafRef = useRef(0);
+  const untilRef = useRef(0);
   const pump = () => {
     if (rafRef.current) return;
-    rafRef.current = requestAnimationFrame(() => { rafRef.current = 0; syncRef.current?.(); });
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = 0;
+      syncRef.current?.();
+      if (performance.now() < untilRef.current) pump();
+    });
   };
+  const pumpMove = () => { untilRef.current = performance.now() + GLIDE_MS; pump(); };
   useEffect(() => () => cancelAnimationFrame(rafRef.current), []);
-  const pumpDragProps = { ...dragProps, onPointerMove: (e) => { dragProps.onPointerMove(e); pump(); } };
-  const pumpResizeProps = { ...resizeProps, onPointerMove: (e) => { resizeProps.onPointerMove(e); pump(); } };
+  const pumpDragProps = { ...dragProps, onPointerMove: (e) => { dragProps.onPointerMove(e); pumpMove(); } };
+  const pumpResizeProps = { ...resizeProps, onPointerMove: (e) => { resizeProps.onPointerMove(e); pumpMove(); } };
 
   if (!open) return null;
 
@@ -71,7 +85,9 @@ export default function OverlayBrowserPanel({ visible }) {
   // chrome fades with the host.
   return (
     <div className="video-cinema" style={{ position: 'absolute', top: 0, left: 0, background: 'transparent', padding: 0, ...dragStyle }}>
-      <div className="candy-card ov-browser-panel" style={{ width: size.w, height: size.h }}>
+      {/* The corner resize TRAILS the cursor on the app's one glide, the same as
+          the header drag above it (Motion Unification, 2026-08-13). */}
+      <div className="candy-card ov-browser-panel" style={{ width: size.w, height: size.h, transition: `width ${GLIDE}, height ${GLIDE}` }}>
         {/* Header (drag handle) — title · close */}
         <div className="candy-center-row ov-browser-head" {...pumpDragProps} style={{ touchAction: 'none' }}>
           <span className="ov-browser-title section-title"><IconGlobe size={13} /> Browser</span>

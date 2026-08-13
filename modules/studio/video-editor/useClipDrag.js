@@ -15,7 +15,7 @@
 // re-enables pointer events immediately so a no-op drop stays clickable.
 
 import { useEffect, useRef, useState } from 'react';
-import { GLIDE_MS } from '@host/util/motion.js';
+import { GLIDE } from '@host/util/motion.js';
 
 export default function useClipDrag({
   elRef,
@@ -32,7 +32,6 @@ export default function useClipDrag({
   const [liveStart, setLiveStart] = useState(null);
   const [releasing, setReleasing] = useState(false);
   const drag = useRef(null);
-  const glideRef = useRef(160);
 
   // Defensive teardown if the clip unmounts mid-drag before pointerup runs.
   useEffect(() => () => {
@@ -64,7 +63,6 @@ export default function useClipDrag({
     // settings these read were deleted 2026-08-13. 0.18 is what 'medium'
     // was; the release rides the app glide.
     const chaseRate = 0.18;
-    glideRef.current = GLIDE_MS;
 
     const d = {
       lanes, originLane, chaseRate,
@@ -148,8 +146,9 @@ export default function useClipDrag({
   }
 
   const dragTransform = `translate3d(${moveDelta.x}px, ${moveDelta.y}px, 0)`;
-  const dragTransition = releasing && glideRef.current > 0
-    ? `transform ${glideRef.current}ms cubic-bezier(0.32,0.72,0,1)`
-    : 'none';
+  // The release rides the app's ONE glide — curve included. It used to restate
+  // a second curve (0.32,0.72,0,1) beside the unified duration, which is the
+  // restated-constant bug wearing half a fix (Motion Unification, 2026-08-13).
+  const dragTransition = releasing ? `transform ${GLIDE}` : 'none';
   return { moving, releasing, dragTransform, dragTransition, onPointerDown, liveStart };
 }

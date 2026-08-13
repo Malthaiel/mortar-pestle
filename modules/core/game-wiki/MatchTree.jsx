@@ -5,7 +5,7 @@
 // Folder click expands AND selects its first child (the GameWikiTree toggle-and-navigate
 // precedent). Player Stats + Graphs leaves show a hero portrait + the player's name (Steam
 // persona when resolved via `personas`, hero name as the fallback until then). Resize lives in
-// the parent (RailSplitter); this only renders + reports selection.
+// the parent (ResizeSeam); this only renders + reports selection.
 
 import { useEffect, useState } from 'react';
 import { useSettings } from '@host/hooks/useSettings.js';

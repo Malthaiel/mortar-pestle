@@ -5,6 +5,7 @@
 // Position persists per panel key to localStorage so a panel reopens where it was
 // left. onPointerDown bails on interactive children so buttons/inputs still work.
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { GLIDE } from '../util/motion.js';
 
 // Keep a dragged panel on-screen. Without this, a panel dragged past the overlay
 // window edge is clipped by the host's overflow:hidden and effectively lost —
@@ -85,7 +86,14 @@ export default function useOverlayPanelDrag(key, initial = { x: 0, y: 0 }) {
   }, [key]);
 
   return {
-    style: { transform: `translate(${pos.x}px, ${pos.y}px)` },
+    // The panel TRAILS the cursor on the app's one glide instead of tracking it
+    // 1:1 (Motion Unification, 2026-08-13). Left on permanently rather than
+    // gated to the drag: the same trail is what a release settles on, and the
+    // on-resize reclamp then glides back into view instead of teleporting.
+    style: {
+      transform: `translate(${pos.x}px, ${pos.y}px)`,
+      transition: `transform ${GLIDE}`,
+    },
     dragProps: { onPointerDown, onPointerMove, onPointerUp: end, onPointerCancel: end },
     nudgeX,
     nudgeY,

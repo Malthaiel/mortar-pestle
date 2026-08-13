@@ -21,10 +21,10 @@
 // scroll/selection, so we never intercept inside them. prefers-reduced-motion
 // disables smoothing entirely.
 //
-// Smoothness is user-adjustable (Settings → Animations → Scrolling). The level
-// maps to a per-frame approach factor (lower = floatier / longer glide); 'off'
-// disables easing so the wheel scrolls natively. useSettings.js calls
-// setSmoothness() live whenever settings.scrollSmoothness changes.
+// Smoothness is NOT adjustable. One glide, no knobs (user-directed 2026-08-13,
+// the same call that deleted the two drag-speed settings): a wheel notch rides
+// `util/motion.js` at GLIDE_MS, exactly like every dragged thing in the app.
+// Only prefers-reduced-motion, a trackpad, or an excluded scroller opts out.
 //
 // Separately, a JS-driven scrollbar "glow": each scrollable element gets a
 // --sb-glow custom property (0 grey … 1 accent) that styles.css feeds into a
@@ -39,27 +39,6 @@
 // prefers-reduced-motion snaps without easing.
 
 import { GLIDE_MS, glideEase } from './motion.js';
-
-// Smoothness levels → { enabled, ms }. The CURVE is no longer a per-level knob
-// — every level rides the app's one glide (`util/motion.js`) and only the
-// duration changes, so a wheel scroll and a dragged pane are the same motion at
-// three lengths. `medium` IS the app default, `GLIDE_MS`, not a number of its
-// own. 'off' bypasses easing entirely (native wheel scroll).
-const SMOOTHNESS_PRESETS = {
-  off:    { enabled: false, ms: 0 },
-  light:  { enabled: true,  ms: Math.round(GLIDE_MS * 0.6) },
-  medium: { enabled: true,  ms: GLIDE_MS },
-  heavy:  { enabled: true,  ms: Math.round(GLIDE_MS * 1.6) },
-};
-// Live config; mirrors 'medium' until useSettings applies the stored level.
-const config = { enabled: true, ms: GLIDE_MS };
-
-// Apply a smoothness level (off | light | medium | heavy). Unknown → medium.
-export function setSmoothness(level) {
-  const p = SMOOTHNESS_PRESETS[level] || SMOOTHNESS_PRESETS.medium;
-  config.enabled = p.enabled;
-  config.ms = p.ms;
-}
 
 const SETTLE = 0.5;       // px slack when deciding an element is AT its edge
 const WHEEL_MIN = 48;     // |deltaY| below this in pixel-mode ⇒ treat as trackpad
@@ -146,7 +125,7 @@ function animate(el) {
   if (!s) return;
   const prop = s.axis === 'x' ? 'scrollLeft' : 'scrollTop';
   const elapsed = performance.now() - s.t0;
-  const x = s.ms > 0 ? Math.min(1, elapsed / s.ms) : 1;
+  const x = Math.min(1, elapsed / GLIDE_MS);
   el[prop] = s.from + (s.target - s.from) * glideEase(x);
   if (x >= 1) {
     el[prop] = s.target;
@@ -157,7 +136,6 @@ function animate(el) {
 }
 
 function onWheel(e) {
-  if (!config.enabled) return;           // smoothness 'off' — leave native
   if (e.ctrlKey) return;                 // zoom gesture — leave native
   if (e.deltaY === 0) return;            // no vertical signal to map — native
   if (reduceMotion()) return;
@@ -190,7 +168,7 @@ function onWheel(e) {
   const target = Math.max(0, Math.min(max, base + delta));
   // Restart the tween from where the scroll actually IS, not from where the
   // last one began — mid-glide notches must extend the motion, not jump it.
-  const tween = { axis, target, from: cur, t0: performance.now(), ms: config.ms, raf: s ? s.raf : 0 };
+  const tween = { axis, target, from: cur, t0: performance.now(), raf: s ? s.raf : 0 };
   if (!s) { s = tween; state.set(el, s); }
   else { Object.assign(s, tween); }
   if (!s.raf) s.raf = requestAnimationFrame(() => animate(el));

@@ -13,7 +13,7 @@ import { IconTable } from '@host/components/icons.jsx';
 import { extractMatch, extractPlayers, extractLanes } from './matchData.js';
 import MatchTree from './MatchTree.jsx';
 import TreeToolbar from '@host/components/vault-tree/TreeToolbar.jsx';
-import RailSplitter from './RailSplitter.jsx';
+import ResizeSeam, { DRAG_EASE } from '@host/components/ui/ResizeSeam.jsx';
 import ScoreboardTab from './ScoreboardTab.jsx';
 import PlayerStatsTab from './PlayerStatsTab.jsx';
 import LanesTab from './LanesTab.jsx';
@@ -26,6 +26,13 @@ const muted = { color: 'var(--text-muted)', fontSize: 13 };
 // Rail width persistence (per-popup; the tree is denser than the old 186px rail).
 const RAIL_KEY = 'mvpopup.railW';
 const RAIL_MIN = 150, RAIL_MAX = 360, RAIL_DEFAULT = 210;
+// The presets ARE the snap set — ResizeSeam derives it from them. Same three
+// labels as every other seam in the app, so the seam's icon table covers them.
+const RAIL_PRESETS = [
+  { label: 'Compact', value: 170 },
+  { label: 'Default', value: RAIL_DEFAULT },
+  { label: 'Wide',    value: 300 },
+];
 const readRailW = () => {
   const v = Number(localStorage.getItem(RAIL_KEY));
   return Number.isFinite(v) && v >= RAIL_MIN && v <= RAIL_MAX ? v : RAIL_DEFAULT;
@@ -38,6 +45,7 @@ const NO_PERSONAS = new Map();
 export default function MatchViewPopup({ sidecarPath, matchN, accent, onClose }) {
   const [sel, setSel] = useState({ section: 'scoreboard' });
   const [railW, setRailW] = useState(readRailW);
+  const [railResizing, setRailResizing] = useState(false);
   const [tfOpen, setTfOpen] = useState(false);
   const [state, setState] = useState({ status: 'loading' });
   const [ctrl, setCtrl] = useState(null); // MatchTree controller handle (collapse/expand-all) for the toolbar
@@ -55,8 +63,6 @@ export default function MatchViewPopup({ sidecarPath, matchN, accent, onClose })
       .catch(() => { if (!cancelled) setState({ status: 'missing' }); });
     return () => { cancelled = true; };
   }, [sidecarPath]);
-
-  const setWidth = (w) => { setRailW(w); localStorage.setItem(RAIL_KEY, String(w)); };
 
   const { status, m, raw } = state;
   const ready = status === 'ready';
@@ -88,6 +94,9 @@ export default function MatchViewPopup({ sidecarPath, matchN, accent, onClose })
         width: railW, flexShrink: 0,
         background: 'var(--surface-2)',
         display: 'flex', flexDirection: 'column',
+        // A drag TRAILS the cursor on ResizeSeam's shared clock rather than
+        // tracking it 1:1 — same lag and same curve as every other seam.
+        transition: railResizing ? `width ${DRAG_EASE}` : 'width 180ms ease',
       }}>
         <div style={{ flexShrink: 0, padding: '10px 10px 6px' }}>
           <TreeToolbar
@@ -106,7 +115,19 @@ export default function MatchViewPopup({ sidecarPath, matchN, accent, onClose })
           )}
         </div>
       </div>
-      <RailSplitter width={railW} min={RAIL_MIN} max={RAIL_MAX} onWidth={setWidth} />
+      <ResizeSeam
+        width={railW}
+        onWidthChange={setRailW}
+        accent={accent}
+        defaultWidth={RAIL_DEFAULT}
+        minWidth={RAIL_MIN}
+        maxWidth={RAIL_MAX}
+        presets={RAIL_PRESETS}
+        storageKey={RAIL_KEY}
+        ariaLabel="Resize match rail"
+        onDragStart={() => setRailResizing(true)}
+        onDragEnd={() => setRailResizing(false)}
+      />
 
       {/* Content pane */}
       <div style={{ flex: 1, minWidth: 0, padding: '20px 24px', overflowY: 'auto' }}>

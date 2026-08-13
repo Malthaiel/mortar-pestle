@@ -3,7 +3,6 @@ import { invoke } from '@tauri-apps/api/core';
 import { emitSidebarGroupModeChange } from './useSidebarGroupMode.js';
 import { sharedEvents, readModuleBag, writeModuleSetting } from '../module-sdk/index.js';
 import { KEYBINDS_DEFAULT, publishKeybinds } from '../keybinds/registry.js';
-import { setSmoothness } from '../util/smoothWheel.js';
 import { THEME_BY_ID, DEFAULT_THEME_ID } from '../themes/registry.js';
 import { paintTheme } from '../themes/applyTheme.js';
 
@@ -256,11 +255,6 @@ export const SETTINGS_DEFAULTS = {
   // Hover-preview trailing-drag bucket for the animation preview cards.
   // 'none' | 'light' | 'medium' | 'heavy'. Read in AnimationRows.jsx (AnimationField).
   previewFollowDrag: 'light',
-  // Smooth mouse-wheel scrolling level (Settings → Appearance → Motion).
-  // 'off' = native instant scroll; 'light' | 'medium' | 'heavy' ease each wheel
-  // notch toward its target (lower lerp = floatier). useSettings pushes this to
-  // util/smoothWheel.js via setSmoothness(); see SMOOTHNESS_PRESETS there.
-  scrollSmoothness: 'medium',
   // Candy-button hover press strength. Scales how far the button visually
   // depresses on hover (rest depth → 0). Values: '100' / '75' / '50' / '25'
   // / 'off'. Written to body[data-hover-press]; styles.css redeclares
@@ -892,13 +886,6 @@ export function useSettings(pageKey = 'pulse') {
   useEffect(() => {
     document.documentElement.setAttribute('data-sidebar-pattern', globalSettings.sidebarPattern || 'grid');
   }, [globalSettings.sidebarPattern]);
-
-  // Smooth mouse-wheel scrolling level → util/smoothWheel.js. Unlike the body
-  // data-attr effects above, this pushes to a module config since the easing
-  // runs in a plain util (not CSS). 'off' restores native wheel scrolling.
-  useEffect(() => {
-    setSmoothness(globalSettings.scrollSmoothness || 'medium');
-  }, [globalSettings.scrollSmoothness]);
 
   const settings = useMemo(
     () => ({ ...globalSettings, accentColor: previewAccent ?? accent }),

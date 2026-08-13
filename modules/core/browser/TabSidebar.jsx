@@ -15,6 +15,7 @@ import { useTabDrag } from './useTabDrag.js';
 import { IconGlobe, IconX, IconPlus } from '@host/components/icons.jsx';
 import { useContextMenu } from '@host/context-menu/useContextMenu.js';
 import { useSettings } from '@host/hooks/useSettings.js';
+import { GLIDE } from '@host/util/motion.js';
 import TreeToolbar from '@host/components/vault-tree/TreeToolbar.jsx';
 import NameInputModal from '@host/components/vault-tree/NameInputModal.jsx';
 import { usePersistedState } from '@host/components/vault-tree/useTreeExpansion.js';
@@ -169,7 +170,14 @@ export default function TabSidebar({ api, accent }) {
 
       {drag && (
         <div style={{
-          position: 'fixed', left: drag.x + 12, top: drag.y + 10, zIndex: 9999, pointerEvents: 'none',
+          // Placed by transform, not by left/top, so the ghost can TRAIL the
+          // cursor on the app's one glide like every other dragged thing
+          // (Motion Unification, 2026-08-13). A transition never runs on an
+          // element's first paint, so it still appears AT the cursor.
+          position: 'fixed', left: 0, top: 0,
+          transform: `translate3d(${drag.x + 12}px, ${drag.y + 10}px, 0)`,
+          transition: `transform ${GLIDE}`,
+          zIndex: 9999, pointerEvents: 'none',
           background: 'var(--bg, #1b1b1f)', color: 'var(--text, #eee)',
           border: '1px solid var(--accent)', borderRadius: 999, padding: '4px 11px',
           fontFamily: 'var(--font-mono)', fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',

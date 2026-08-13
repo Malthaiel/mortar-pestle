@@ -116,12 +116,6 @@ const FOLLOW_DRAG_OPTIONS = [
   { value: 'medium', label: 'Medium' },
   { value: 'heavy',  label: 'Heavy'  },
 ];
-const SCROLL_SMOOTHNESS_OPTIONS = [
-  { value: 'off',    label: 'Off'    },
-  { value: 'light',  label: 'Light'  },
-  { value: 'medium', label: 'Medium' },
-  { value: 'heavy',  label: 'Heavy'  },
-];
 const RAIL_COLLAPSED       = 64;
 const RAIL_EXPANDED_DEFAULT = 180;
 const RAIL_EXPANDED_MIN     = 120;
@@ -777,9 +771,6 @@ function AppearanceTab({ settings, setSetting, setPreviewAccent, accent, resolve
           </div>
         </Row>
         <AnimationField keys={['drawer-modal', 'theme-transition', 'spring-press']} settings={settings} setSetting={setSetting} accent={accent}/>
-        <StackedRow label="Scroll smoothness" anchor="set-scrollSmoothness" hint="Eases mouse-wheel scrolling so each notch glides to its target instead of jumping. Trackpads, the editor, and the terminal always scroll natively; OS 'reduce motion' disables it.">
-          <Seg value={settings.scrollSmoothness || 'medium'} options={SCROLL_SMOOTHNESS_OPTIONS} onChange={v => setSetting('scrollSmoothness', v)} accent={accent}/>
-        </StackedRow>
         <StackedRow label="Preview follow drag" anchor="set-previewFollowDrag" hint="How much the hover-preview card lags behind your cursor as it trails it. None snaps instantly; higher = more drag. Honors the master animations toggle.">
           <Seg value={settings.previewFollowDrag || 'light'} options={FOLLOW_DRAG_OPTIONS} onChange={v => setSetting('previewFollowDrag', v)} accent={accent}/>
         </StackedRow>

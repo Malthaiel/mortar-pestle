@@ -1,5 +1,6 @@
 import { usePlanner } from './PlannerProvider.jsx';
 import { dragDurationFor } from './dragDurations.js';
+import { GLIDE } from '@host/util/motion.js';
 
 // Fixed-position overlay that follows the cursor while dragging a task / quick
 // note / library block onto the dock or calendar. Styled as a preview of the
@@ -13,7 +14,13 @@ export function TaskDragOverlay() {
   const mins = taskDrag.kind === 'block' ? null : dragDurationFor(taskDrag.kind);
   return (
     <div style={{
-      position: 'fixed', left: taskDrag.x + 14, top: taskDrag.y + 8,
+      // Placed by transform rather than left/top so it can TRAIL the cursor on
+      // the app's one glide, like every other dragged thing (Motion
+      // Unification, 2026-08-13). A transition never runs on first paint, so
+      // the preview still appears AT the cursor rather than flying in.
+      position: 'fixed', left: 0, top: 0,
+      transform: `translate3d(${taskDrag.x + 14}px, ${taskDrag.y + 8}px, 0)`,
+      transition: `transform ${GLIDE}`,
       zIndex: 2000, pointerEvents: 'none',
       borderRadius: 'var(--radius-md)', overflow: 'hidden',
       background: `color-mix(in oklch, ${accent} 92%, var(--surface-3))`,

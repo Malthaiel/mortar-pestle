@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { GLIDE_MS, glideEase } from '@host/util/motion.js';
 
 // The planner's sole watchface: a rounded-rectangle dual-arc dial. Outer thin
 // arc = session progress (depletes once over the whole session), inner thicker
@@ -57,10 +58,37 @@ export default function DualRingRect({
     return () => cancelAnimationFrame(raf);
   }, [running]);
 
+  // The dial TRAILS the cursor on the app's one glide (Motion Unification,
+  // 2026-08-13), the only value-drag that takes it — this is a coarse dial at
+  // 6px per minute, not a precision instrument that has to stay under the
+  // fingertip. There is no element to hand a CSS transition to (the arc is a
+  // <path> redrawn from a number), so the NUMBER is tweened: a rAF clock runs
+  // the same curve, restarting from the live eased value on every pointer move
+  // exactly like the wheel-scroll tween. `shownRef` is what gets drawn, both
+  // here and in drawRef below, so a re-render mid-glide paints where the arc
+  // actually IS rather than snapping to the raw target.
+  const shownRef = useRef(null);
+  const tweenRef = useRef(null);
+  useEffect(() => {
+    if (dragMins == null) { shownRef.current = null; tweenRef.current = null; return undefined; }
+    tweenRef.current = { from: shownRef.current ?? dragMins, to: dragMins, t0: performance.now() };
+    let raf;
+    const tick = () => {
+      const t = tweenRef.current;
+      if (!t) return;
+      const x = Math.min(1, (performance.now() - t.t0) / GLIDE_MS);
+      shownRef.current = t.from + (t.to - t.from) * glideEase(x);
+      drawRef.current();
+      if (x < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [dragMins]);
+
   const isDragMode = dragMins != null;
   let outerFraction, innerFraction;
   if (isDragMode) {
-    outerFraction = Math.min(1, dragMins / 60);
+    outerFraction = Math.min(1, (shownRef.current ?? dragMins) / 60);
     innerFraction = 1;
   } else {
     const liveRemainingSec = Math.max(0, totalSec - subSecRef.current);
@@ -165,7 +193,7 @@ export default function DualRingRect({
   // the render body above.
   drawRef.current = () => {
     let oF, iF;
-    if (isDragMode) { oF = Math.min(1, dragMins / 60); iF = 1; }
+    if (isDragMode) { oF = Math.min(1, (shownRef.current ?? dragMins) / 60); iF = 1; }
     else {
       const liveRemainingSec = Math.max(0, totalSec - subSecRef.current);
       oF = Math.min(1, liveRemainingSec / 3600);
