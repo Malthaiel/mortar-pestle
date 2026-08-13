@@ -220,7 +220,7 @@ export function ActiveModuleProvider({ settings, setSetting, children }) {
       return;
     }
     settle(last);
-  }, [route?.path, manifests, enabledMap]);
+  }, [route?.path, manifests, enabledMap, sidebarBases]);
 
   const setActiveModule = useCallback((id, opts = {}) => {
     const source = opts.source || 'dock-click';
