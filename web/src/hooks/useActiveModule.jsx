@@ -169,7 +169,14 @@ export function ActiveModuleProvider({ settings, setSetting, children }) {
     [manifests],
   );
 
+  // Startup emits a transient route of its own (measured 2026-08-13: `/vault` at
+  // 984 ms, 46 ms before the boot restore landed on the real page). Recording it
+  // is a race the wrong value can win — and when it wins it overwrites that
+  // module's remembered deep page with its bare routeBase. So nothing is
+  // recorded until the boot decision below has resolved.
+  const bootSettledRef = useRef(false);
   useEffect(() => {
+    if (!bootSettledRef.current) return;
     if (!route?.path || route.path === '/') return;
     recordRoute(route.path, moduleKeyFor(route.path, sidebarBases));
   }, [route?.path, sidebarBases]);
@@ -180,11 +187,13 @@ export function ActiveModuleProvider({ settings, setSetting, children }) {
   const bootedRef = useRef(false);
   useEffect(() => {
     if (bootedRef.current) return;
-    if (route?.path && route.path !== '/') { bootedRef.current = true; return; }
+    // Deep-linked in (or HMR remount): memory doesn't apply, so recording starts
+    // immediately.
+    if (route?.path && route.path !== '/') { bootedRef.current = true; bootSettledRef.current = true; return; }
     if (!Object.keys(manifests).length) return;
     bootedRef.current = true;
     const last = lastRoute();
-    if (!last) return;
+    if (!last) { bootSettledRef.current = true; return; }
     let owner = null;
     for (const m of Object.values(manifests)) {
       if (!isLeftSidebarManifest(m)) continue;
@@ -192,16 +201,25 @@ export function ActiveModuleProvider({ settings, setSetting, children }) {
       if (!owner || m.routeBase.length > owner.routeBase.length) owner = m;
     }
     const home = owner ? owner.routeBase : '/' + FIRST_LAUNCH_FALLBACK;
+    // Recording resumes once we have actually landed — never before, or the
+    // transient startup route above gets saved as "where you were".
+    // Landing on `last` needs no record — it IS the stored value. A fallback
+    // does: otherwise every future launch keeps retrying the dead page.
+    const settle = (to) => {
+      navigate(to);
+      bootSettledRef.current = true;
+      if (to !== last) recordRoute(to, moduleKeyFor(to, sidebarBases));
+    };
     // A disabled module's home is dead too, so that falls all the way back.
-    if (owner && !isEnabled(enabledMap, owner.id)) { navigate('/' + FIRST_LAUNCH_FALLBACK); return; }
+    if (owner && !isEnabled(enabledMap, owner.id)) { settle('/' + FIRST_LAUNCH_FALLBACK); return; }
     // The remembered note may have been deleted since. One read decides between
     // the page and its module's home; every other kind of route lands as-is.
     const page = /^\/page\/(.+)$/.exec(last);
     if (page) {
-      api.getPage(safeDecode(page[1])).then(() => navigate(last)).catch(() => navigate(home));
+      api.getPage(safeDecode(page[1])).then(() => settle(last)).catch(() => settle(home));
       return;
     }
-    navigate(last);
+    settle(last);
   }, [route?.path, manifests, enabledMap]);
 
   const setActiveModule = useCallback((id, opts = {}) => {
