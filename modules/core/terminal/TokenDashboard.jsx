@@ -111,7 +111,7 @@ export default function TokenDashboard({ accent }) {
           disabled={loading}
           title="Refresh"
           className="candy-btn"
-          style={{ '--accent': accentColor, height: 32, borderRadius: 8, flexShrink: 0, opacity: loading ? 0.6 : 1 }}
+          style={{ '--accent': accentColor, height: 32, '--corner-max': '16px', flexShrink: 0, opacity: loading ? 0.6 : 1 }}
         >
           <span className="candy-face" style={{ padding: '0 12px', gap: 6, fontSize: 12 }}>
             <IconRotateCw size={14}/> {loading ? '…' : 'Refresh'}

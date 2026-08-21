@@ -224,7 +224,7 @@ export const SETTINGS_DEFAULTS = {
   // daily log. Default OFF: nothing goes to the internet until it's switched on.
   sitePushEnabled: false,
   density: 'cozy',
-  radiusScale: 'default',
+  radiusScale: 50,   // corner roundness 0-100; see cornerPercent
   calendarHourHeight: 52,
   timeFormat24h: true,
   showCalendarHourGutter: true,
@@ -538,12 +538,18 @@ const OLD_ACCENT_DEFAULTS = {
   } catch {}
 })();
 
-const RADIUS_SCALE = {
-  sharp:    { sm: 2,  md: 4,  lg: 6  },
-  default:  { sm: 4,  md: 8,  lg: 12 },
-  rounded:  { sm: 7,  md: 14, lg: 20 },
-  pill:     { sm: 11, md: 22, lg: 32 },
-};
+// Corner roundness — ONE number (0-100) drives every corner in the app via the
+// inherited --corner custom property. 0 = square, 50 = the historical default
+// look (styles.css tokens are calibrated so 0.5 reproduces 4/8/12 exactly),
+// 100 = every shape as round as it goes (pill / circle). Shapes declare their
+// own --corner-max in styles.css; nothing else needs to know about this.
+// Legacy string values (the retired sharp/default/rounded/pill Seg) map onto
+// the same scale so a persisted setting keeps working.
+const RADIUS_LEGACY = { sharp: 25, default: 50, rounded: 75, pill: 100 };
+export function cornerPercent(v) {
+  if (typeof v === 'number' && Number.isFinite(v)) return Math.min(100, Math.max(0, v));
+  return RADIUS_LEGACY[v] ?? 50;
+}
 const DENSITY_SCALE = { compact: 0.85, cozy: 1, comfortable: 1.15 };
 
 // Candy surface-depth bucket → px. Named tiers (surfaces are conceptual depth,
@@ -784,10 +790,12 @@ export function useSettings(pageKey = 'pulse') {
     const density = DENSITY_SCALE[globalSettings.density] || 1;
     root.style.setProperty('--density', String(density));
     root.style.setProperty('--space-scale', String(density));
-    const r = RADIUS_SCALE[globalSettings.radiusScale] || RADIUS_SCALE.default;
-    root.style.setProperty('--radius-sm', r.sm + 'px');
-    root.style.setProperty('--radius-md', r.md + 'px');
-    root.style.setProperty('--radius-lg', r.lg + 'px');
+    root.style.setProperty('--corner', String(cornerPercent(globalSettings.radiusScale) / 100));
+    // The three size tokens now derive from --corner in styles.css. Clear any
+    // inline values a pre-knob session left on :root, or they'd win over it.
+    root.style.removeProperty('--radius-sm');
+    root.style.removeProperty('--radius-md');
+    root.style.removeProperty('--radius-lg');
     // Font families — resolve each setting key to a CSS stack via FONT_OPTIONS.
     // The ?? fallback covers a persisted key that's missing or renamed.
     root.style.setProperty('--font-body',    FONT_OPTIONS[globalSettings.fontBody]?.stack    ?? FONT_OPTIONS['dm-sans'].stack);

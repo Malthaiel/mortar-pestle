@@ -87,7 +87,7 @@ export default function CommsTranscriptView({ sidecarPath, roster = [], onReassi
         <div style={{
           marginTop: 8, maxHeight: 320, overflowY: 'auto',
           border: '1px solid color-mix(in oklch, var(--text) 12%, transparent)',
-          borderRadius: 8, padding: '8px 10px',
+          borderRadius: 'var(--radius-md)', padding: '8px 10px',
           fontFamily: 'var(--font-mono)', fontSize: 12.5, lineHeight: 1.55,
         }}>
           {segs.map((s, i) => {

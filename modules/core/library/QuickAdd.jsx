@@ -52,7 +52,7 @@ export function AddToLibraryButton({ accent, statuses, defaultStatus, busy, adde
       {open && (
         <div style={{
           position: 'absolute', top: '100%', left: 0, marginTop: 6, zIndex: 40,
-          minWidth: 188, padding: 6, borderRadius: 10,
+          minWidth: 188, padding: 6, borderRadius: 'calc(var(--corner) * 20px)',
           background: 'var(--surface)', border: '1px solid var(--border)',
           boxShadow: '0 10px 28px rgba(0,0,0,0.38)',
           display: 'flex', flexDirection: 'column', gap: 2,

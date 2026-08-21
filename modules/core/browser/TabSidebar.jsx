@@ -218,7 +218,7 @@ function TabRow({ tab, accent, active, dragging, dropBefore, onClick, onClose, o
         onPointerDown={onPointerDown} onClick={onClick} onContextMenu={onContextMenu}
         onMouseDown={(e) => { if (e.button === 1) { e.preventDefault(); onClose(); } }}
         title={titleOf(tab)}
-        style={{ '--cbtn-depth': 'var(--candy-depth-nav)', ...(accent ? { '--accent': accent } : {}), borderRadius: 999 }}
+        style={{ '--cbtn-depth': 'var(--candy-depth-nav)', ...(accent ? { '--accent': accent } : {}), '--corner-max': `${NAV_H / 2}px` }}
       >
         <span className="candy-face" style={{
           justifyContent: 'flex-start', gap: 6, minWidth: 0,

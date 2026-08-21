@@ -42,7 +42,7 @@ export default function TabRail({ api }) {
         title="New tab"
         aria-label="New tab"
         onClick={() => store.newTab()}
-        style={{ ...dot, borderRadius: 999 }}
+        style={dot}
       >
         <span className="candy-face" style={{ color: 'var(--text)' }}><IconPlus size={16} /></span>
       </button>
@@ -51,4 +51,4 @@ export default function TabRail({ api }) {
 }
 
 const rail = { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '4px 0' };
-const dot = { width: 32, height: 32, borderRadius: 8, cursor: 'pointer' };
+const dot = { width: 32, height: 32, '--corner-max': '16px', cursor: 'pointer' };

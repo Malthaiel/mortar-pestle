@@ -31,7 +31,7 @@ function ToolBtn({ title, accent, onClick, disabled, dataAttr, active, activeAcc
         flexShrink: 0,
         // Size the BUTTON (square, at tree-row height) so the face fills it per the
         // base .candy-btn[data-shape="icon"] rule. Depth = nav rows.
-        width: ROW_H, height: ROW_H, borderRadius: 8,
+        width: ROW_H, height: ROW_H, '--corner-max': `${ROW_H / 2}px`,
         '--cbtn-depth': 'var(--candy-depth-nav)',
         // An active toggle can override the fill colour (e.g. a red "live on" band):
         // is-active reads --accent, so a per-button activeAccent re-tints just this one.

@@ -344,7 +344,7 @@ export function ChipIconBtn({ title, onClick, round, active, children }) {
       data-shape="icon"
       onMouseDown={(e) => e.stopPropagation()}
       onClick={onClick}
-      style={{ flexShrink: 0, '--cbtn-size': '23px', borderRadius: round ? '50%' : 6, '--cbtn-depth': 'var(--candy-depth-small)' }}
+      style={{ flexShrink: 0, '--cbtn-size': '23px', '--corner-max': round ? '11.5px' : '12px', '--cbtn-depth': 'var(--candy-depth-small)' }}
     ><span className="candy-face">{children}</span></button>
   );
 }

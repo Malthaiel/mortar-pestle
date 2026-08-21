@@ -157,7 +157,6 @@ export function CandyHeader({ label, open, onToggle, accent, onContextMenu, lead
       style={{
         '--cbtn-depth': 'var(--candy-depth-nav)',
         ...(accent ? { '--accent': accent } : {}),
-        borderRadius: 999,
         // Hug content: each pill is only as wide as its text + caret, capped at the
         // sidebar width (override data-shape="row"'s width:100%).
         alignSelf: 'flex-start', width: 'fit-content', maxWidth: '100%',
@@ -204,7 +203,6 @@ export function TreeRow({ node, label, selected, accent, onClick, onContextMenu,
       style={{
         '--cbtn-depth': 'var(--candy-depth-nav)',
         ...(accent ? { '--accent': accent } : {}),
-        borderRadius: 999,
         alignSelf: 'flex-start', width: 'fit-content', maxWidth: '100%',
       }}
     >

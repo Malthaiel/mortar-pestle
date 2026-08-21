@@ -117,15 +117,25 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
 
   --density:      1;
   --space-scale:  1;
-  --radius-sm:    4px;
-  --radius-md:    8px;
-  --radius-lg:    12px;
+  /* ── Corner roundness ─────────────────────────────────────────────────────
+     ONE inherited knob drives every corner in the app. 0 = square, 1 = as
+     round as the shape can go (pill / circle). Settings → Appearance → Corners
+     writes --corner on :root (useSettings). 0.5 reproduces the pre-knob
+     defaults exactly (4/8/12), so the midpoint IS the historical look.
+     Per-area override is one line on any container, because the knob
+     inherits: `.tree-toolbar { --corner: 1; }` rounds just that subtree.
+     Shapes never hardcode a radius — they declare --corner-max (their
+     fully-round radius, = half their own height) and the base rule scales it. */
+  --corner:       0.5;
+  --radius-sm:    calc(var(--corner) * 8px);
+  --radius-md:    calc(var(--corner) * 16px);
+  --radius-lg:    calc(var(--corner) * 24px);
   /* Overlay Studio panel spacing. ONE token drives the inter-tile list gap AND
      all four sides of the panel padding so the two can never drift (batch 1 had
      6px vertical vs 12px horizontal). Invariant: container padding == inter-item
      gap, equal on both axes (DESIGN.md § Spacing and density). */
   --ov-gap:       8px;
-  --cal-radius:   8px;    /* planner hour-box corner radius; matches --radius-md/block radius so a full-hour block sits flush in its box */
+  --cal-radius:   var(--radius-md);    /* planner hour-box corner radius; matches --radius-md/block radius so a full-hour block sits flush in its box */
 
   /* 3D Button tokens · Light. Per-role face/base/text for the .btn3d utility.
      See Decisions/2026-05-26 3D Button Depth as Tactile Language. */
@@ -922,7 +932,7 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
   font-size: 10px;
   font-family: var(--font-mono);
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: color-mix(in oklch, var(--surface), black 14%);
   color: var(--text-muted);
 }
@@ -1226,7 +1236,11 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
   text-decoration: none;   /* HeaderChip renders as <a> when href is given */
   user-select: none;
   -webkit-user-select: none;
-  border-radius: var(--radius-md);
+  /* --corner-max = this shape's FULLY-ROUND radius (half its measured height).
+     Shapes below override it and nothing else; the knob does the rest. Re-declared
+     on every .candy-btn so a nested button can't inherit its parent's max. */
+  --corner-max: 16px;
+  border-radius: calc(var(--corner) * var(--corner-max));
   box-shadow:
     0 var(--cbtn-depth) 0 -2px color-mix(in oklch, var(--cbtn-band), black 10%),
     0 var(--cbtn-depth) 0 0 color-mix(in oklch, var(--cbtn-band), black 22%);
@@ -1285,6 +1299,7 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
 .candy-btn[data-shape="tile"] {
   --cbtn-depth: var(--candy-tile-depth);
   --cbtn-frame: 4px;
+  --corner-max: 24px;  /* tall surface — capped; half-height would be a blob */
 }
 .candy-btn[data-shape="tile"] > .candy-face {
   flex-direction: column;
@@ -1431,10 +1446,10 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
    neutral in every state; the accent shows only as a RING on hover + selected —
    matching legacy .button-misc-swatch (28×28, surface gap + accent ring). */
 .candy-btn[data-shape="swatch"] {
+  --corner-max: 12px;
   --cbtn-depth: var(--candy-depth-small);   /* 5px — small shape, matches legacy */
   width: 28px;
   height: 28px;
-  border-radius: 8px;
 }
 .candy-btn[data-shape="swatch"] > .candy-face {
   padding: 0;
@@ -1455,7 +1470,7 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
    pill geometry; pair with .is-primary (in States, below) to hold the accent face
    at rest for always-red emphasis, or leave neutral for a default action pill that
    flips on hover. */
-.candy-btn[data-shape="block"] { border-radius: 999px; }
+.candy-btn[data-shape="block"] { --corner-max: 18px; }  /* 33px tall */
 
 /* block[data-variant="brand"] — full-bleed sidebar section header (the MORTAR & PESTLE
    / TOOLKIT toggles). The button IS the section: full width, squared corners, fills
@@ -1490,7 +1505,7 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
 .candy-btn[data-shape="row"] {
   display: flex;
   width: 100%;
-  border-radius: var(--radius-md);
+  --corner-max: 13px;  /* 26px tall */
 }
 .candy-btn[data-shape="row"] > .candy-face {
   justify-content: flex-start;
@@ -1539,7 +1554,7 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
   font-family: var(--font-mono);
   color: var(--text-muted);
   background: color-mix(in oklch, var(--surface), black 14%);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 
 /* field — editable text input styled as a candy button. The SAME recipe the
@@ -1553,7 +1568,6 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
 .candy-btn[data-shape="field"] {
   display: flex;
   width: 100%;
-  border-radius: var(--radius-md);
   cursor: text;
   --cbtn-depth: var(--candy-depth-small);
 }
@@ -1602,7 +1616,6 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
 .candy-btn[data-shape="chip-field"] {
   display: flex;
   width: 100%;
-  border-radius: var(--radius-md);
   cursor: text;
   --cbtn-depth: var(--candy-depth-small);
 }
@@ -1685,12 +1698,12 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
   padding: 3px;
   background: var(--surface-3);
   border: 2px solid color-mix(in oklch, var(--cbtn-band), black 22%);
-  border-radius: 999px;
+  border-radius: calc(var(--corner) * 17px)  /* seg tray, 34px tall */;
   box-shadow:
     0 var(--cbtn-depth) 0 -2px color-mix(in oklch, var(--cbtn-band), black 10%),
     0 var(--cbtn-depth) 0 0 color-mix(in oklch, var(--cbtn-band), black 22%);
 }
-.candy-btn[data-shape="seg-option"] { border-radius: 999px; box-shadow: none; }
+.candy-btn[data-shape="seg-option"] { --corner-max: 14px; box-shadow: none; }  /* 28px tall */
 .candy-btn[data-shape="seg-option"] > .candy-face {
   padding: 5px 12px;
   gap: 5px;
@@ -1727,7 +1740,7 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
    higher (candyCenterOffset lifts by half the button's OWN depth). The lip is a
    box-shadow drawn OUTSIDE layout, so matching heights could never fix it. */
 .candy-btn[data-shape="chip"] {
-  border-radius: 999px;
+  --corner-max: 14px;  /* 28px tall */
   --cbtn-depth: var(--candy-depth-small);
 }
 .candy-btn[data-shape="chip"] > .candy-face {
@@ -1767,7 +1780,7 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
    account button takes, which is the point: one corner value, not two that
    drift. (0,3,0) beats the shape rule's (0,2,0), and it is placed after § chip
    only for company — the account block below is its neighbour, not its rival. */
-.titlebar .candy-btn[data-shape="circle"] { border-radius: var(--radius-md); }
+.titlebar .candy-btn[data-shape="circle"] { --corner-max: 16px; }
 
 /* The two titlebar chips — the account button (avatar + display name) on the
    right and the brand button (logo + wordmark + version) on the left. One skin
@@ -1787,7 +1800,7 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
    shape itself pins the small depth now, so the hand-pin was deleted as dead
    weight — every chip in the app matches its neighbours, not just these two. */
 .candy-btn:is(.titlebar-account, .titlebar-brand) {
-  border-radius: var(--radius-md);
+  --corner-max: 16px;
 }
 .candy-btn:is(.titlebar-account, .titlebar-brand) > .candy-face {
   height: 100%;
@@ -1818,7 +1831,7 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
    silently to a 30px close button and 23px task icons). One variable also keeps
    the two axes tied, so pinning a height can no longer leave the width behind and
    render a circle as an oval. Callers still pass a number; it lands on the var. */
-.candy-btn[data-shape="icon"] { width: var(--cbtn-size, 36px); height: var(--cbtn-size, 36px); border-radius: 10px; --cbtn-depth: var(--candy-depth-small); }
+.candy-btn[data-shape="icon"] { width: var(--cbtn-size, 36px); height: var(--cbtn-size, 36px); --corner-max: calc(var(--cbtn-size, 36px) / 2); --cbtn-depth: var(--candy-depth-small); }
 .candy-btn[data-shape="icon"] > .candy-face {
   padding: 0; width: 100%; height: 100%;
   font-family: var(--font-body); font-size: 15px; font-weight: 400;
@@ -1844,7 +1857,7 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
    set inline (IconBtn 28, transport 28, tool 24, primary 38, planner 26). */
 /* Sizes vary per caller and arrive on --cbtn-size (see the icon shape above for
    why it is a variable and not a written width/height pair). */
-.candy-btn[data-shape="circle"] { width: var(--cbtn-size, 28px); height: var(--cbtn-size, 28px); border-radius: 999px; --cbtn-depth: var(--candy-depth-small); }
+.candy-btn[data-shape="circle"] { width: var(--cbtn-size, 28px); height: var(--cbtn-size, 28px); --corner-max: calc(var(--cbtn-size, 28px) / 2); --cbtn-depth: var(--candy-depth-small); }
 .candy-btn[data-shape="circle"] > .candy-face {
   padding: 0; width: 100%; height: 100%;
   font-family: var(--font-body); font-size: 13px; font-weight: 400;
@@ -1872,7 +1885,7 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
 .candy-btn[data-shape="select"] {
   --cbtn-depth: var(--candy-depth-small);
   height: 27px;
-  border-radius: 8px;
+  --corner-max: 13px;
 }
 .candy-btn[data-shape="select"] > .candy-face {
   justify-content: flex-start;
@@ -1891,7 +1904,7 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
   color: var(--text-muted);
   transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
 }
-.candy-btn[data-shape="select"].is-compact { width: 100%; height: 28px; border-radius: 7px; }
+.candy-btn[data-shape="select"].is-compact { width: 100%; height: 28px; --corner-max: 14px; }
 .candy-btn[data-shape="select"].is-compact > .candy-face { padding: 0 8px; font-size: 11px; }
 /* Inactive hover brightens the caret only — band + face stay neutral (no accent flip). */
 .candy-btn[data-shape="select"]:hover { --cbtn-band: var(--surface); }
@@ -1906,7 +1919,7 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
   --cbtn-depth: var(--candy-depth-small);
   width: 16px;
   height: 16px;
-  border-radius: 999px;
+  --corner-max: 8px;
 }
 .candy-btn[data-shape="dot"] > .candy-face {
   padding: 0;
@@ -1928,7 +1941,7 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
    keyboard look, display-only inside a role=button row — not a candy button). */
 .candy-btn[data-shape="keycap"] {
   --cbtn-depth: var(--candy-depth-small);
-  border-radius: 6px;
+  --corner-max: 12px;
 }
 .candy-btn[data-shape="keycap"] > .candy-face {
   min-width: 26px;
@@ -1954,7 +1967,7 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
    on hover: the whole card lights accent and the icon badge inverts to white —
    apt for a call-to-action. Doc-only shape (legacy button-misc-cta / DocsCTA was
    never wired up). */
-.candy-btn[data-shape="cta"] { border-radius: 12px; }
+.candy-btn[data-shape="cta"] { --corner-max: 24px; }  /* 44px tall */
 .candy-btn[data-shape="cta"] > .candy-face {
   justify-content: flex-start;
   gap: 12px;
@@ -1971,7 +1984,7 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
   justify-content: center;
   width: 34px;
   height: 34px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   flex-shrink: 0;
   font-size: 18px;
   background: color-mix(in oklch, var(--accent), transparent 75%);
@@ -1987,7 +2000,7 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
    not a hover flip (apt for an accordion header; matches the intended
    button-misc-card, whose hover only lifted). .is-expanded rotates the chevron.
    Doc-only shape (legacy button-misc-card / "Releases-style" never shipped). */
-.candy-btn[data-shape="card"] { width: 100%; border-radius: 10px; }
+.candy-btn[data-shape="card"] { width: 100%; --corner-max: 20px; }  /* tall surface — capped, not half-height */
 .candy-btn[data-shape="card"] > .candy-face {
   justify-content: space-between;
   gap: 12px;
@@ -2261,7 +2274,7 @@ body[data-anim-button-depth="off"] .candy-btn:is(:active, .is-pressed, [data-can
   --cbtn-band: #141310;
   --cbtn-frame: 3px;
   --cbtn-depth: var(--candy-depth);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   cursor: inherit;
 }
 .planner-ring-button > .candy-face {
@@ -2283,12 +2296,12 @@ body[data-anim-button-depth="off"] .candy-btn:is(:active, .is-pressed, [data-can
    The generic candy hover flips both the band and the face to accent; flipping
    this face would erase the accent-coloured ring arcs drawn on it (the whole
    reason the dial is near-black), and the band reads as a red bar under a black
-   dial. Pin both to the dial's own near-black and lift the face a few percent
-   for feedback instead. */
+   dial. The face does not lighten on hover either (user-directed 2026-08-13):
+   the dial is a readout, and a surface that brightens under the pointer read as
+   the whole watchface switching on. Band AND face stay pinned to the dial's own
+   near-black in every state; the press depression is the only feedback. */
 .planner-ring-button:is(:hover, :active) { --cbtn-band: #141310; }
-.planner-ring-button:is(:hover, :active) > .candy-face {
-  background: color-mix(in oklch, #141310, white 6%);
-}
+.planner-ring-button:is(:hover, :active) > .candy-face { background: #141310; }
 /* An inner control (Reset / START / Skip) owns its own press — the dial must not
    sink under it. Mirrors the music-tile press-exclusion one level down. */
 .planner-ring-button:active:has(button:active) > .candy-face { transform: none; }
@@ -2312,6 +2325,11 @@ body[data-anim-button-depth="off"] .candy-btn:is(:active, .is-pressed, [data-can
 .planner-ring-inner-controls > * {
   pointer-events: auto;
 }
+
+/* Transport-pill digits. The pill shows the live MM:SS instead of a
+ * START/PAUSE/RESUME word. No paused-state treatment at all (user-directed
+ * 2026-08-13 — a blink was tried and cut): the digits simply stop advancing,
+ * which is the state cue. Class kept as the styling hook for the digits. */
 
 /* ── Music tile prototype button ────────────────────────────────────────── *
  * Blank candy 3D button at music-tile dimensions for press-feel testing in
@@ -2888,7 +2906,7 @@ button.status-candy {
   color: var(--text);
   background: var(--surface-3);
   border: 2px solid color-mix(in oklch, var(--surface), black 22%);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   box-shadow:
     0 var(--candy-depth) 0 -2px color-mix(in oklch, var(--surface), black 10%),
     0 var(--candy-depth) 0 0 color-mix(in oklch, var(--surface), black 22%);
@@ -2924,7 +2942,7 @@ button.status-candy:disabled {
   pointer-events: none;
   background: var(--surface-3);
   border: 1px solid color-mix(in oklch, var(--surface), black 22%);
-  border-radius: 10px;
+  border-radius: calc(var(--corner) * 20px);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.40);
   transition:
     max-height 180ms cubic-bezier(0.16, 1, 0.3, 1),
@@ -2942,7 +2960,7 @@ button.status-candy-option {
   cursor: pointer;
   outline: none;
   border: none;
-  border-radius: 7px;
+  border-radius: calc(var(--corner) * 14px);
   background: transparent;
   color: var(--text-muted);
   font-size: 11px;
@@ -2988,7 +3006,7 @@ button.candy-select {
   color: var(--text);
   background: var(--surface-3);
   border: 2px solid color-mix(in oklch, var(--surface), black 22%);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   box-shadow:
     0 var(--candy-depth) 0 -2px color-mix(in oklch, var(--surface), black 10%),
     0 var(--candy-depth) 0 0 color-mix(in oklch, var(--surface), black 22%);
@@ -3017,7 +3035,7 @@ button.candy-select.is-compact {
   width: 100%;
   height: 28px;
   padding: 0 8px;
-  border-radius: 7px;
+  border-radius: calc(var(--corner) * 14px);
 }
 
 .candy-select-label {
@@ -3045,7 +3063,7 @@ button.candy-select.is-compact .candy-select-label { font-size: 11px; }
   pointer-events: none;
   background: var(--surface-3);
   border: 1px solid color-mix(in oklch, var(--surface), black 22%);
-  border-radius: 10px;
+  border-radius: calc(var(--corner) * 20px);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.40);
   transition:
     max-height 180ms cubic-bezier(0.16, 1, 0.3, 1),
@@ -3064,7 +3082,7 @@ button.candy-select-option {
   cursor: pointer;
   outline: none;
   border: none;
-  border-radius: 7px;
+  border-radius: calc(var(--corner) * 14px);
   background: transparent;
   color: var(--text-muted);
   font-size: 12px;
@@ -3085,7 +3103,7 @@ button.rating-dot {
   width: 16px;
   height: 16px;
   padding: 0;
-  border-radius: 999px;
+  border-radius: calc(var(--corner) * 8px);
   cursor: pointer;
   outline: none;
   background: var(--surface-3);
@@ -4476,7 +4494,7 @@ button.cal-customdays__step:hover {
   font-size: 10px;
   color: var(--text-muted);
   border: 1px solid var(--border-2);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   padding: 3px 8px;
   letter-spacing: 0.04em;
   display: inline-flex;
@@ -4509,7 +4527,7 @@ button.cal-customdays__step:hover {
   color: var(--text-2);
   margin: 1em 0;
   background: color-mix(in oklch, var(--surface-2) 50%, transparent);
-  border-radius: 0 4px 4px 0;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 }
 
 .docs-prev-next {
@@ -4531,7 +4549,7 @@ button.cal-customdays__step:hover {
   gap: 4px;
   padding: 14px 18px;
   border: 2px solid color-mix(in oklch, var(--surface), black 22%);
-  border-radius: 10px;
+  border-radius: calc(var(--corner) * 20px);
   background: var(--surface-3);
   color: var(--text);
   cursor: pointer;

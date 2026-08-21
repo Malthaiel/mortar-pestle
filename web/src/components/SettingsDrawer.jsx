@@ -27,7 +27,7 @@ import { useModuleEnabledMap } from '../hooks/useModuleEnabled.js';
 import { candyGap } from '../util/candy.js';
 import ModulesTab from './settings/ModulesTab.jsx';
 import { AnimationField } from './settings/AnimationRows.jsx';
-import { ANIMATION_KEYS, ANIMATION_PRESETS, ANIMATION_KEY_CONFIG, SETTINGS_DEFAULTS, SANS_OPTIONS, MONO_OPTIONS } from '../hooks/useSettings.js';
+import { ANIMATION_KEYS, ANIMATION_PRESETS, ANIMATION_KEY_CONFIG, SETTINGS_DEFAULTS, cornerPercent, SANS_OPTIONS, MONO_OPTIONS } from '../hooks/useSettings.js';
 import SoundsTab from './settings/SoundsTab.jsx';
 import NavigationTab from './settings/NavigationTab.jsx';
 import AgentsTab from './settings/AgentsTab.jsx';
@@ -705,15 +705,12 @@ function AppearanceTab({ settings, setSetting, setPreviewAccent, accent, resolve
             accent={accent}
           />
         </Row>
-        <Row label="Radius" anchor="set-radiusScale">
-          <Seg
-            value={settings.radiusScale}
-            options={[
-              { value: 'sharp',   label: 'Sharp' },
-              { value: 'default', label: 'Default' },
-              { value: 'rounded', label: 'Round' },
-              { value: 'pill',    label: 'Pill' },
-            ]}
+        {/* Corners — one app-wide roundness knob. 0 = square, 100 = every shape
+            as round as it goes. Live: the range input fires on drag, so the whole
+            app (this drawer included) reshapes under the finger. */}
+        <Row label="Corners" anchor="set-radiusScale">
+          <Slider
+            value={cornerPercent(settings.radiusScale)} min={0} max={100} step={1} unit="%"
             onChange={v => setSetting('radiusScale', v)}
             accent={accent}
           />

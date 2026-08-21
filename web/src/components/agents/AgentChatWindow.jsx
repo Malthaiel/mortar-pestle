@@ -115,7 +115,7 @@ function AgentChatHeader({ avatar, title, subtitle, onClose, closeTitle, dragHan
           className="candy-btn"
           data-shape="icon"
           onMouseDown={(e) => e.stopPropagation()}
-          style={{ width: 24, height: 24, borderRadius: 7, flexShrink: 0 }}
+          style={{ width: 24, height: 24, '--corner-max': '12px', flexShrink: 0 }}
         >
           <span className="candy-face" style={{ padding: 0 }}>
             <IconX size={13} />

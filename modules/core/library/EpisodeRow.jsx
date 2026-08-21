@@ -33,7 +33,7 @@ export default function EpisodeRow({ ep, idx, accent, seriesPath, watched, playi
       {/* Number tile */}
       <div style={{
         width: 28, height: 28, flexShrink: 0,
-        borderRadius: 7,
+        borderRadius: 'calc(var(--corner) * 14px)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         background: playing ? '#fff' : (filled ? accent : 'var(--surface-2)'),
         border: filled ? 'none' : '1px solid var(--border)',

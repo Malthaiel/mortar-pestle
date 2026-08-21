@@ -220,7 +220,7 @@
 
 .bcast-audio-card {
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: calc(var(--corner) * 20px);
   padding: 10px 14px;
   margin-bottom: 10px;
 }
@@ -288,7 +288,7 @@
   width: 28px;
   height: 26px;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: calc(var(--corner) * 14px);
   background: transparent;
   color: var(--text-faint);
   font-size: 11px;
@@ -366,7 +366,7 @@
   width: 22px;
   height: 18px;
   line-height: 1;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   border: 1px solid var(--border);
   background: transparent;
@@ -431,7 +431,7 @@
   gap: 8px;
   padding: 7px 9px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: calc(var(--corner) * 12px);
   background: var(--bg-secondary, transparent);
   cursor: pointer;
   min-width: 0;

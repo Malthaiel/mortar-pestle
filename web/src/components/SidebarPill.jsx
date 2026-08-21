@@ -25,7 +25,7 @@ export default function SidebarPill({ Icon, label, expanded, accent, active, onC
         margin: '0 auto',
         width: expanded ? 'auto' : 32,
         height: expanded ? 34 : 32,
-        borderRadius: expanded ? 999 : 8,
+        '--corner-max': expanded ? '17px' : '16px',
         flexShrink: 0,
       }}
     >
