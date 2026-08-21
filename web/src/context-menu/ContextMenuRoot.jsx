@@ -46,6 +46,8 @@ const ROW_H = 28;       // the menu row height the flat panel already had
 // One fold, TAKEN from FoldMenu rather than retyped. The fly-out folds for
 // exactly as long as a row folds, and the rows start unfolding as it lands.
 const SWING = FOLD_DUR;
+// How far behind its open child a level starts its own suck.
+const SUCK_STAGGER = 60;
 // The angle a folded panel rests at. 180 = folded flat back onto the thing it is
 // hinged to, which is the whole of what makes this read as paper: at 180 the
 // card lies ON the parent row, full size and fully visible, and the unfold is
@@ -448,6 +450,15 @@ function Level({ anchor, items, title, accent, open, onDismiss, onClosed, depth,
           up={up}
           open={unfolded}
           onRequestClose={onDismiss}
+          // This menu belongs to the pointer — it was opened AT it — so it gets
+          // inhaled back into it, tracking the cursor if it moves mid-close.
+          suckToCursor
+          // Levels are SIBLINGS (each portals to document.body), so the root's
+          // transform does not carry its fly-out — every level sucks itself and
+          // they all converge on the same live point. A level holding an open
+          // child waits for it: deepest first, root last. Only two levels ever
+          // exist in the real tree, so "has an open child" IS depth-from-bottom.
+          suckDelay={flyout && flyout.open !== false ? SUCK_STAGGER : 0}
           // A fly-out owns the second half of its own close: the rows fold up on
           // the fold's clock, and this is the instant they finish — the panel
           // folds back from here, so the two beats cannot drift. The host is

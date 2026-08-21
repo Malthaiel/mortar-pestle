@@ -24,6 +24,7 @@
 // wrapper j carries every row below it as one piece. n rows means n-1 hinges.
 import { Children, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import FoldPaper, { FOLD_PAD, paperT } from './FoldPaper.jsx';
+import useSuckToCursor, { SUCK_DUR, SUCK_LEAD } from '../../hooks/useSuckToCursor.js';
 
 export { FOLD_PAD };
 
@@ -217,6 +218,17 @@ export default function FoldMenu({
   // Unset by default, and a noTrigger fold has NOTHING else — its stub is not a
   // floor (see the group's minWidth), so it shrink-wraps its longest row.
   minWidth = 0,
+  // On close, get INHALED INTO THE LIVE CURSOR on top of the fold — for a menu
+  // that belongs to the pointer (the right-click menu, the seam's width
+  // chooser). Off by default: a button-anchored fold (the titlebar account
+  // menu, the subtitle picker) belongs to its trigger, not to the mouse.
+  //
+  // The suck rides the TAIL of the existing fold rather than following it, so
+  // the close does not get one millisecond longer at any row count.
+  suckToCursor = false,
+  // Stagger for a tree of folds that shut together — the deepest goes first and
+  // the root last, so it reads as a drain pulling the far end in.
+  suckDelay = 0,
   style,
   ...rest
 }) {
@@ -360,6 +372,13 @@ export default function FoldMenu({
   // the real candy button takes back over. EVERY close timing derives from it,
   // so they cannot drift apart.
   const SHUT = closeAt(0) + DUR;
+  // Anchored on the END, not the start, then pulled SUCK_LEAD earlier still: a
+  // start-anchored overlap would run out early on the eight-row context menu
+  // and late on the three-row width chooser. The lead is what makes it bite
+  // into the fold rather than only ride its tail, so the suck now finishes
+  // after SHUT and the unmount gate below moves with it.
+  const suckStart = suckToCursor ? Math.max(0, SHUT - SUCK_DUR * (1 + SUCK_LEAD)) + suckDelay : 0;
+  const suckEnd = suckToCursor ? Math.max(SHUT, suckStart + SUCK_DUR) : SHUT;
 
   // Backing panel geometry. `depth` is a CSS length string off the live trigger
   // ('5px' on a chip), or the raw var() fallback before the first measure —
@@ -480,9 +499,16 @@ export default function FoldMenu({
     if (open) { wasOpen.current = true; setShown(true); return undefined; }
     const played = wasOpen.current;
     wasOpen.current = false;
-    const t = setTimeout(() => { setShown(false); if (played) closedRef.current?.(); }, SHUT);
+    const t = setTimeout(() => { setShown(false); if (played) closedRef.current?.(); }, suckEnd);
     return () => clearTimeout(t);
-  }, [open, SHUT]);
+  }, [open, suckEnd]);
+
+  // The suck lands ON the fold's own clock: it ENDS at SHUT, so at the four-row
+  // reference (SHUT 740) it owns the last 30% and the total close is unchanged.
+  // Only a fold shorter than the suck itself (or one carrying a stagger) runs
+  // past SHUT, and then the unmount gate above moves with it — this file has
+  // been burned twice by an unmount arriving before its close had played.
+  // (the call itself lives below rootRef's declaration — see there.)
 
   // Held in a ref so an inline arrow from the host (a new function identity
   // every render) cannot make this fire on every render — it fires only when
@@ -499,6 +525,7 @@ export default function FoldMenu({
   // outside the parent's root and this listener would read it as "dismiss me".
   // One owner for the whole tree instead — the host's.
   const rootRef = useRef(null);
+  useSuckToCursor(rootRef, { active: suckToCursor && shown && !open, startAt: suckStart });
   useEffect(() => {
     if (!open || isCtl) return undefined;
     const onKey = (e) => { if (e.key === 'Escape') requestClose(); };
@@ -936,6 +963,7 @@ export default function FoldMenu({
           rowsRef={rowsRef}
           lip={dpx}
           shutMs={SHUT}
+          frameRef={rootRef}
         />
         {stack(0)}
       </div>

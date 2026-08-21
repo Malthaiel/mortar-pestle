@@ -88,8 +88,11 @@ export const paperT = (open, shutMs) => (open
  * @param {object}  rowsRef  ref to an ARRAY of the row buttons
  * @param {number}  lip      the row's depth lip in px, measured off the trigger
  * @param {number}  shutMs   when the fold's handover happens
+ * @param {object}  frameRef ref to the ancestor a HOST may be transforming (the
+ *   suck-to-cursor close scales FoldMenu's root). Its transform is switched off
+ *   for the length of each measurement; see the note in the loop.
  */
-export default function FoldPaper({ open, shown, up, groupRef, rowsRef, lip, shutMs }) {
+export default function FoldPaper({ open, shown, up, groupRef, rowsRef, lip, shutMs, frameRef }) {
   const ref = useRef(null);
 
   // Layout, not plain, effect: it runs in the same commit as the click, so the
@@ -128,6 +131,32 @@ export default function FoldPaper({ open, shown, up, groupRef, rowsRef, lip, shu
         : 1 - easeIn(Math.min(1, Math.max(0, (t - (land - RAMP)) / RAMP)));
       const h = FOLD_PAD * p;
 
+      // MEASURE WITH THE ANCESTOR'S TRANSFORM OFF.
+      //
+      // Every number below is a screen rect converted into the group's own
+      // LOCAL px, and that conversion is only valid while nothing above the
+      // group is transformed. The suck-to-cursor close breaks exactly that: it
+      // scales FoldMenu's root, so the rects shrink while the insets written at
+      // the bottom stay local, and past a point the scale term overtakes the
+      // fold term and the paper REVERSES — probed 2026-08-21, bottom inset
+      // climbed 36 -> 145px and then walked back to 96px while the rows were
+      // still folding. Reported as "the background of the fold menu stops
+      // compacting".
+      //
+      // Dividing by a measured scale was tried first and is NOT enough: it can
+      // only undo a uniform scale (a rect is the axis-aligned bounding box of
+      // the transformed box, so a rotated non-uniform scale is unrecoverable),
+      // and it still left `g.height` below in polluted units. Clearing the
+      // transform for the length of the measurement is exact for ANY transform,
+      // which is what lets the suck keep its directional squash.
+      //
+      // Invisible: this runs inside one rAF callback, so the style is back
+      // before the frame is painted. Costs a second forced layout on a subtree
+      // that is already being measured 4-6 times a frame.
+      const frame = frameRef && frameRef.current;
+      const savedT = frame ? frame.style.transform : '';
+      if (savedT) frame.style.transform = 'none';
+      try {
       // Measure. `g` is the group's own border box — its layout height, which
       // does not change as the rows fold, so it is a stable frame to measure in.
       const g = group.getBoundingClientRect();
@@ -237,6 +266,11 @@ export default function FoldPaper({ open, shown, up, groupRef, rowsRef, lip, shu
           tuck: +tuck.toFixed(2),
           wide: +wide.toFixed(2),
         });
+      }
+      } finally {
+        // Always, including the early return above: leaving the transform off
+        // would freeze the suck on whatever frame threw.
+        if (savedT) frame.style.transform = savedT;
       }
       // Keeps running for as long as the menu is shown, not just while it moves.
       // ponytail: 4-6 rect reads a frame while a dropdown sits open. Deliberate

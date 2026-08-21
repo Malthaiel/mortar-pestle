@@ -664,6 +664,10 @@ function SeamFold({ wanted, cursorY, anchorX, mirror, presets, value, onPick, on
           // meant to stay up and trail. The seam owns every close (cursor gone,
           // Escape, outside press, second click, row picked), and all five run
           // through `wanted`, so there is nothing left for this to do.
+          // Cursor-owned menu: it already trails the pointer while it is up, so
+          // it goes back into it on the way out. All five of the seam's closes
+          // run through `wanted` -> `open`, so this one prop covers every one.
+          suckToCursor
           onClosed={() => { setMounted(false); setHalf(null); setStackW(null); }}
           items={items}
           selected={selected}
