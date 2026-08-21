@@ -53,6 +53,10 @@ use super::client::SttClient;
 /// tight loop).
 const RESPAWN_MIN: Duration = Duration::from_millis(500);
 const RESPAWN_MAX: Duration = Duration::from_secs(5);
+/// How often an ADOPTED engine is re-probed. An adopted daemon is usually the
+/// PREVIOUS app instance's child, and that instance's job object reaps it a few
+/// seconds after we adopt it — see [`watch_adopted`].
+const ADOPT_WATCH: Duration = Duration::from_secs(5);
 /// An exit within this window of spawn counts as an "immediate" / crash-loop
 /// death; a child that ran longer than this resets the crash counter.
 const CRASH_WINDOW: Duration = Duration::from_secs(5);
@@ -215,6 +219,28 @@ async fn socket_alive() -> bool {
     }
 }
 
+/// Poll an ADOPTED engine until it stops answering. `true` ⇒ it went away and the
+/// caller must take over with its own spawn; `false` ⇒ shutdown latched while we
+/// watched. The cheap check is the shared client (already connected); a fresh
+/// [`socket_alive`] probe confirms before we take over, so a single reconnect blip
+/// can't spawn a duplicate.
+/// ponytail: a 5 s poll, not an event — the client exposes no disconnect signal.
+async fn watch_adopted(sup: &'static Supervisor) -> bool {
+    loop {
+        tokio::time::sleep(ADOPT_WATCH).await;
+        if lock(&sup.inner).terminal {
+            return false;
+        }
+        let alive = matches!(
+            tokio::time::timeout(Duration::from_millis(750), sup.client.get_state()).await,
+            Ok(Ok(_))
+        );
+        if !alive && !socket_alive().await {
+            return true;
+        }
+    }
+}
+
 /// The long-lived supervise loop: adopt-or-spawn, then respawn-on-exit with
 /// crash-loop backoff until either the engine settles `up`/`adopted` or the
 /// supervisor latches `failed`.
@@ -239,7 +265,14 @@ async fn supervise(sup: &'static Supervisor, app: AppHandle) {
             }
             log::info!("stt supervisor: adopted live engine (socket answered get_state)");
             emit_status(sup, &app, "adopted", "Adopted the running STT engine");
-            return; // adopted engines self-supervise; nothing to wait on
+            // See capture's twin: an adopted engine is usually the previous app
+            // instance's child and dies with it seconds later. Watch, then take over.
+            if !watch_adopted(sup).await {
+                return; // shutdown latched while watching
+            }
+            log::info!("stt supervisor: adopted engine went away — spawning our own");
+            emit_status(sup, &app, "down", "Adopted STT engine exited");
+            continue;
         }
 
         // No live socket — resolve the binary and spawn. A missing binary is the

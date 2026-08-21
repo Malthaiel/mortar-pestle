@@ -62,12 +62,16 @@ export default function CaptureHotkeyBridge({ api }) {
   }, [resolved.vk, binding?.key]);
 
   // Push on mount + on every engine (re)start. A failed push is fine — the engine is
-  // down, and the next `capture-engine-status` running event re-sends.
+  // down, and the next `capture-engine-status` up/adopted event re-sends.
   useEffect(() => {
     const push = () => api.invoke('capture_set_overlay_key', { vk, mods }).catch(() => {});
     push();
     const sub = listen('capture-engine-status', (e) => {
-      if (e.payload?.state === 'running') push();
+      // The supervisor emits adopting|adopted|spawning|up|down|failed — never
+      // "running", which is what this used to test, so the re-push never once fired
+      // and a respawned engine silently reverted to the built-in Shift+C.
+      const st = e.payload?.state;
+      if (st === 'up' || st === 'adopted') push();
     });
     return () => { sub.then((un) => un()).catch(() => {}); };
   }, [vk, mods, api]);
