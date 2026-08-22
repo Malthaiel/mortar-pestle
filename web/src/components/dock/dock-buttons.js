@@ -8,20 +8,17 @@
 
 import {
   IconCommand, IconKeyboard, IconPlus,
-  IconCalendar, IconBookOpen, IconSparkles, IconLayoutGrid, IconDownload, IconDatabase,
+  IconCalendar, IconBookOpen, IconSparkles, IconLayoutGrid, IconDownload,
 } from '../icons.jsx';
 
 export const DOCK_BUTTONS = [
   // Tools
-  {
-    // Rendered by Dock.jsx's renderBtn special-case → <DockVaultSwitcher/>, which
-    // owns its own popover + onClick (so no onClick here).
-    id: 'vault-switcher', group: 'tools', Icon: IconDatabase, label: 'Switch vault',
-  },
   // Settings / Notifications / Recycling bin used to live here. The Titlebar
   // Overhaul moved all three into the titlebar's left cluster (TitleBar.jsx) —
-  // one home per button. Saved dock orders holding the old ids are dropped
-  // automatically by effectiveOrder() in Dock.jsx, so no migration is needed.
+  // one home per button. The vault switcher left the same way: it now lives in the
+  // file-tree toolbar as <TreeVaultSwitcher/>. Saved dock orders holding any of
+  // those old ids are dropped automatically by effectiveOrder() in Dock.jsx, so no
+  // migration is needed.
   {
     id: 'downloads', group: 'tools', Icon: IconDownload, label: 'Downloads',
     onClick: (ctx) => ctx.setDownloadsOpen?.(o => !o),

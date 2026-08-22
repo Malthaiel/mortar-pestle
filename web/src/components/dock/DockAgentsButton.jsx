@@ -1,6 +1,6 @@
 // Dock "Agents" launcher — a dock icon whose popover opens UPWARD from the bar
-// (mirrors DockVaultSwitcher) and lists the agents from the registry; each opens
-// its own chat window. Rendered by Dock.jsx's renderBtn special-case for id
+// (mirrors TreeVaultSwitcher, the file-tree toolbar one) and lists the agents from
+// the registry; each opens its own chat window. Rendered by Dock.jsx's renderBtn special-case for id
 // 'design-mode' — that id is kept to avoid a dock.order migration, and no longer
 // refers to a Design Mode.
 

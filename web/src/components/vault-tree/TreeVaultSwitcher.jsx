@@ -1,21 +1,24 @@
-// Dock vault switcher — the in-sidebar VaultSwitcher relocated to the dock.
-// Mounted by Dock.jsx's renderBtn special-case (mirrors the NotificationBell
-// special-case): a dock icon button whose popover opens UPWARD from the bar
-// (position:fixed, anchored to the button rect, since the dock sits flush at the
-// screen bottom). List + switch logic lifted verbatim from VaultSwitcher.jsx —
-// useVaults / useConfirmableSwitch, the vault listbox, and the unsaved-changes
-// ConfirmModal. Switching is the hard-reload path (vaultEpoch bump → MainApp
-// remount), guarded by useConfirmableSwitch.
+// Tree-toolbar vault switcher — the vault quick-switch relocated OUT of the dock
+// (it left dock-buttons.js entirely; one home per button) into the file-tree
+// toolbar, where it reads as the 7th canonical candy icon button. Mounted by
+// VaultTree through TreeToolbar's `children` slot so it can own its own popover
+// while still rendering the shared <ToolBtn/>.
+//
+// The popover opens DOWNWARD (the toolbar is pinned at the TOP of the sidebar,
+// unlike the dock which sat flush at the screen bottom). List + switch logic is
+// unchanged from the dock version — useVaults / useConfirmableSwitch, the vault
+// listbox, and the unsaved-changes ConfirmModal. Switching is the hard-reload
+// path (vaultEpoch bump -> MainApp remount), guarded by useConfirmableSwitch.
 
 import { useEffect, useRef, useState } from 'react';
 import { sharedEvents } from '../../module-sdk/index.js';
 import { useVaults, useConfirmableSwitch } from '../../hooks/useVaults.jsx';
 import { Popover } from '../ui';
 import ConfirmModal from '../ui/ConfirmModal.jsx';
-import DockButton from './DockButton.jsx';
+import { ToolBtn } from './TreeToolbar.jsx';
 import { IconDatabase, IconCheck, IconPlus } from '../icons.jsx';
 
-export default function DockVaultSwitcher({ label, isActive, accent, onContextMenu }) {
+export default function TreeVaultSwitcher({ accent }) {
   const { vaults, activeId, activeVault } = useVaults();
   const { request, pending, confirm, cancel } = useConfirmableSwitch();
   const [open, setOpen] = useState(false);
@@ -43,18 +46,16 @@ export default function DockVaultSwitcher({ label, isActive, accent, onContextMe
   };
   const pick = (id) => { setOpen(false); if (id !== activeId) request(id); };
   const openManage = () => { setOpen(false); sharedEvents.emit('host:open-settings', { tab: 'vaults' }); };
-  const name = activeVault?.name || 'Citadel';
+  // A vault's `name` is frequently its full path (that is what the picker stores),
+  // and a whole path in a hover tooltip is unreadable. Take the last segment — a
+  // name that is already friendly has no separator and survives untouched.
+  const name = (activeVault?.name || 'Citadel').split(/[\\/]/).filter(Boolean).pop();
 
   return (
     <span ref={wrapRef} style={{ display: 'inline-flex', position: 'relative' }}>
-      <DockButton
-        Icon={IconDatabase}
-        label={open ? `Vault: ${name}` : label}
-        onClick={toggle}
-        isActive={open || isActive}
-        accent={accent}
-        onContextMenu={onContextMenu}
-      />
+      <ToolBtn title={`Vault: ${name}`} accent={accent} onClick={toggle} active={open}>
+        <IconDatabase/>
+      </ToolBtn>
 
       {open && rect && (
         <Popover
@@ -66,7 +67,7 @@ export default function DockVaultSwitcher({ label, isActive, accent, onContextMe
           role="listbox"
           style={{
             position: 'fixed', zIndex: 200,
-            bottom: window.innerHeight - rect.top + 8,
+            top: rect.bottom + 8,
             left: Math.max(8, Math.min(rect.left + rect.width / 2 - 115, window.innerWidth - 238)),
             width: 230, maxHeight: 'min(60vh, 360px)',
           }}

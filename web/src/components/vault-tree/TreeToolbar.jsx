@@ -20,7 +20,11 @@ import {
 // header band is transparent, so they ride the sidebar's circuit texture.
 const ROW_H = 26; // = treeKit NAV_H
 
-function ToolBtn({ title, accent, onClick, disabled, dataAttr, active, activeAccent, children }) {
+// Exported so a surface can mount its OWN toolbar control (one that carries its
+// own popover/state, e.g. TreeVaultSwitcher) through the `children` slot and still
+// render the identical square candy icon button. `title` is optional — omit it for
+// a button that should show no tooltip at all.
+export function ToolBtn({ title, accent, onClick, disabled, dataAttr, active, activeAccent, children }) {
   return (
     <button
       type="button" data-own-press title={title} onClick={onClick} disabled={disabled}
@@ -58,7 +62,9 @@ function ToolBtn({ title, accent, onClick, disabled, dataAttr, active, activeAcc
 // extra = [{ title, icon, onClick, disabled?, dataAttr?, active?, activeAccent? }]
 //   surface-specific icon buttons appended after the row; active holds the .is-active
 //   fill (activeAccent re-tints it, e.g. red for a "live on" toggle)
-export default function TreeToolbar({ buttons, controller, accent, extra }) {
+// children = surface-owned toolbar controls (each rendering its own <ToolBtn/>),
+//   appended after `extra` — for a control that needs its own popover/state.
+export default function TreeToolbar({ buttons, controller, accent, extra, children }) {
   const { openContextMenu } = useContextMenu();
   const b = buttons || {};
   const c = controller || {};
@@ -117,6 +123,7 @@ export default function TreeToolbar({ buttons, controller, accent, extra }) {
           {x.icon}
         </ToolBtn>
       ))}
+      {children}
     </div>
   );
 }

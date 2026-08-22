@@ -143,14 +143,17 @@ const FACE = {
 // own stopPropagation target firing onToggle (nested-clickable span rule). Absent
 // → byte-identical to before. `activeFill` forces the solid is-active fill
 // independently of `open` (a program scene reads active even collapsed).
-export function CandyHeader({ label, open, onToggle, accent, onContextMenu, leadIcon, trailing, suffix, onActivate, activeFill, onDoubleClick, onMouseEnter, onMouseLeave }) {
+// `dropPath` tags the row as a drag-to-move DROP TARGET (useTreeDrag hit-tests for
+// [data-drop-path]); `onPointerDown` is where that hook's drag-start handler goes.
+// Both default undefined, so a surface that wants no dragging renders as before.
+export function CandyHeader({ label, open, onToggle, accent, onContextMenu, leadIcon, trailing, suffix, onActivate, activeFill, onDoubleClick, onMouseEnter, onMouseLeave, dropPath, onPointerDown }) {
   const showSuffix = useContext(SuffixCtx);
   const sfx = suffix != null ? suffix : (showSuffix ? '/' : '');
   const filled = activeFill != null ? activeFill : open;
   return (
     <button
       type="button" data-own-press onClick={onActivate || onToggle} onContextMenu={onContextMenu}
-      onDoubleClick={onDoubleClick}
+      onDoubleClick={onDoubleClick} onPointerDown={onPointerDown} data-drop-path={dropPath}
       onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}
       className={`candy-btn${filled ? ' is-active' : ''}`}
       data-shape="row"
@@ -188,14 +191,16 @@ export function CandyHeader({ label, open, onToggle, accent, onContextMenu, lead
 // row data-current-file for the Reveal-current scroll. `leadIcon` (favicon),
 // `trailing` (count / running-dot), and `suffix` are optional; all default
 // undefined so the vault renders exactly as before.
-export function TreeRow({ node, label, selected, accent, onClick, onContextMenu, noSuffix, suffix, leadIcon, trailing, onDoubleClick, onMouseEnter, onMouseLeave }) {
+// `onPointerDown` carries useTreeDrag's drag-start handler. A leaf is cargo only —
+// it never takes a `dropPath`, since you cannot move a note INTO another note.
+export function TreeRow({ node, label, selected, accent, onClick, onContextMenu, noSuffix, suffix, leadIcon, trailing, onDoubleClick, onMouseEnter, onMouseLeave, onPointerDown }) {
   const showSuffix = useContext(SuffixCtx);
   const text = label != null ? label : (node?.title || node?.name);
   const sfx = suffix != null ? suffix : ((showSuffix && !noSuffix) ? '.md' : '');
   return (
     <button
       type="button" data-own-press onClick={onClick} onContextMenu={onContextMenu}
-      onDoubleClick={onDoubleClick}
+      onDoubleClick={onDoubleClick} onPointerDown={onPointerDown}
       onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}
       data-current-file={selected ? 'true' : undefined}
       className={`candy-btn${selected ? ' is-active' : ''}`}

@@ -10,10 +10,16 @@
 import { useEffect, useState } from 'react';
 import { api, subscribeEvents } from '../api.js';
 import VaultTree from './vault-tree/VaultTree.jsx';
+import { ROOTS_CHANGED } from './vault-tree/useVaultTree.js';
 
+// `fixed: true` marks a STRUCTURAL section the drag-to-move tree must refuse to
+// pick up: routing, section memory and the manifest all hardcode the Knowledge/ and
+// Infrastructure/ prefixes, so relocating one would break those paths. Every other
+// root folder — user-made in a Citadel vault, or any top folder of a foreign vault —
+// is an ordinary folder and drags like one.
 const CITADEL_SECTIONS = [
-  { key: 'knowledge', label: 'Knowledge', section: 'Knowledge', accentAlways: true, chipDomains: true, gearDomains: true, add: 'domain' },
-  { key: 'infrastructure', label: 'Infrastructure', section: 'Infrastructure', accentAlways: true, chipDomains: true,
+  { key: 'knowledge', label: 'Knowledge', section: 'Knowledge', fixed: true, accentAlways: true, chipDomains: true, gearDomains: true, add: 'domain' },
+  { key: 'infrastructure', label: 'Infrastructure', section: 'Infrastructure', fixed: true, accentAlways: true, chipDomains: true,
     // Pinned virtual leaf: the interactive Update Queue view has no .md file, so
     // it's surfaced here as a fixed entry that routes to /vault/infrastructure/update-queue.
     pins: [{ label: 'Update Queue', hash: '/vault/infrastructure/update-queue' }] },
@@ -33,7 +39,9 @@ export default function VaultSidebar({ route, accent }) {
     };
     load();
     const unsub = subscribeEvents((name) => { if (name === 'manifest') load(); });
-    return () => { cancelled = true; unsub(); };
+    // A foreign vault never emits `manifest`, so the tree announces root changes itself.
+    window.addEventListener(ROOTS_CHANGED, load);
+    return () => { cancelled = true; unsub(); window.removeEventListener(ROOTS_CHANGED, load); };
   }, []);
 
   // Foreign (non-Citadel, unmapped) vault → its real top folders as sections.
@@ -42,7 +50,7 @@ export default function VaultSidebar({ route, accent }) {
   // (e.g. one just created at root), rendered as plain collapsible sections.
   const extraRoots = rootFolders
     .filter((f) => f.name !== 'Knowledge' && f.name !== 'Infrastructure')
-    .map((f) => ({ key: 'root:' + f.name, label: f.name, section: f.name, deletable: true }));
+    .map((f) => ({ key: 'root:' + f.name, label: f.name, section: f.name }));
   const sections = foreign
     ? (shape.topFolders || []).map((f) => ({ key: f.name, label: f.name, section: f.name }))
     : [...CITADEL_SECTIONS, ...extraRoots];

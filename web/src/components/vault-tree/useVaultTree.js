@@ -11,6 +11,10 @@ import { api, subscribeEvents } from '../../api.js';
 import { encodePagePath } from '../SidebarBrowser.jsx';
 import { navigate } from '../../router.js';
 
+// Fired after any op that can change the vault's TOP level, for listeners that
+// cannot rely on the manifest watcher event (see regenManifest below).
+export const ROOTS_CHANGED = 'vault:roots-changed';
+
 const LS_KEY = 'vault:tree:expanded';
 const LS_SORT = 'vault:tree:sort';
 
@@ -221,6 +225,12 @@ export function useVaultTree(route) {
       const out = await api.vaults.list();
       if (out?.activeId) await api.vaults.generateManifest(out.activeId);
     } catch {}
+    // The `manifest` watcher event fires only when Infrastructure/.cache/vault_manifest.json
+    // changes (watcher.rs matches that literal path), so in a NON-Citadel-shaped vault
+    // nothing ever announces that the vault ROOT changed — a folder created, deleted,
+    // renamed or dragged to the top level stayed invisible until a reload. Announce it
+    // directly; the Citadel case now just gets a harmless second refresh.
+    try { window.dispatchEvent(new CustomEvent(ROOTS_CHANGED)); } catch {}
   }, []);
 
   const createNote = useCallback(async (parentVp, name) => {
@@ -251,6 +261,39 @@ export function useVaultTree(route) {
     const cur = subRef.current;
     if (cur && (cur === node.vaultPath || cur.startsWith(node.vaultPath + '/'))) {
       navigate('/page/' + encodePagePath(cur.replace(node.vaultPath, to)));
+    }
+  }, [refresh, regenManifest]);
+
+  // Drag-to-move: relocate a node INTO another folder, keeping its own basename.
+  // Same backend primitive as renameNode — vault_rename_path is rename-OR-move — so
+  // the only difference is which half of the path changes. `destVp` '' = vault root.
+  // Returns nothing; the caller surfaces a failed move (name collision) as a toast.
+  const movePath = useCallback(async (node, destVp) => {
+    const vp = node.vaultPath;
+    const parent = vp.split('/').slice(0, -1).join('/');
+    if (destVp === parent) return;                             // already lives there
+    if (destVp === vp || destVp.startsWith(vp + '/')) return;  // into itself / a child
+    const to = destVp ? `${destVp}/${vp.split('/').pop()}` : vp.split('/').pop();
+    await api.renamePath(vp, to, undefined);
+    // Prune the moved subtree from expand state + cache — it re-materializes under
+    // its new parent on the refresh below. (The drag collapses a grabbed folder, so
+    // there is nothing open to preserve.)
+    setExpanded((prev) => {
+      const next = new Set([...prev].filter((k) => k !== vp && !k.startsWith(vp + '/')));
+      persist(next); return next;
+    });
+    setCache((c) => {
+      const next = {};
+      for (const k of Object.keys(c)) if (k !== vp && !k.startsWith(vp + '/')) next[k] = c[k];
+      return next;
+    });
+    if (parent) refresh(parent);
+    if (destVp) refresh(destVp);
+    regenManifest();
+    // Follow the open page if it (or a folder containing it) moved.
+    const cur = subRef.current;
+    if (cur && (cur === vp || cur.startsWith(vp + '/'))) {
+      navigate('/page/' + encodePagePath(cur.replace(vp, to)));
     }
   }, [refresh, regenManifest]);
 
@@ -298,7 +341,8 @@ export function useVaultTree(route) {
     }).catch(() => {});
     load();
     const unsub = subscribeEvents((name) => { if (name === 'manifest') load(); });
-    return () => { cancelled = true; unsub(); };
+    window.addEventListener(ROOTS_CHANGED, load);
+    return () => { cancelled = true; unsub(); window.removeEventListener(ROOTS_CHANGED, load); };
   }, []);
 
   // Auto-expand the ancestor chain of the currently-open page (recursive
@@ -341,7 +385,7 @@ export function useVaultTree(route) {
 
   return {
     isOpen, toggle, childrenOf, fetchChildren, refresh, rootFiles,
-    createNote, createFolder, renameNode, removeNode,
+    createNote, createFolder, renameNode, removeNode, movePath,
     sortMode, setSortMode, expandAll, collapseAll, revealPath,
     anyExpanded: expanded.size > 0,
   };

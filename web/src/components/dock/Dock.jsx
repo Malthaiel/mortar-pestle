@@ -10,7 +10,6 @@ import { useHashRoute, navigate } from '../../router.js';
 import DockButton from './DockButton.jsx';
 import ModuleDockButton from './ModuleDockButton.jsx';
 import DownloadsDockButton from '../../downloads/DownloadsDockButton.jsx';
-import DockVaultSwitcher from './DockVaultSwitcher.jsx';
 import DockAgentsButton from './DockAgentsButton.jsx';
 import DraggableSidebarList from '../DraggableSidebarList.jsx';
 import { DOCK_BUTTONS } from './dock-buttons.js';
@@ -141,15 +140,6 @@ export default function Dock({
         onClick={() => b.onClick?.(ctx)}
         isActive={b.isActive ? !!b.isActive(ctx) : false}
         accent="var(--text-muted)"
-        onContextMenu={(e) => onItemContext(e, b.id)}
-      />
-    );
-    if (b.id === 'vault-switcher') return (
-      <DockVaultSwitcher
-        key={b.id}
-        label={b.label}
-        isActive={b.isActive ? !!b.isActive(ctx) : false}
-        accent={accent}
         onContextMenu={(e) => onItemContext(e, b.id)}
       />
     );
