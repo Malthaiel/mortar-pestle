@@ -162,7 +162,12 @@ export function CandyHeader({ label, open, onToggle, accent, onContextMenu, lead
         ...(accent ? { '--accent': accent } : {}),
         // Hug content: each pill is only as wide as its text + caret, capped at the
         // sidebar width (override data-shape="row"'s width:100%).
-        alignSelf: 'flex-start', width: 'fit-content', maxWidth: '100%',
+        // minWidth:0 defeats the flex item's automatic minimum (min-content = the
+        // whole name), so a pill sharing its row with a trailing control yields
+        // width and truncates instead of shoving that control out of the sidebar.
+        // Measured: a long scrim name pushed its gear to right:298 in a pane
+        // ending at 280 — unclickable. With this, 266.
+        alignSelf: 'flex-start', width: 'fit-content', maxWidth: '100%', minWidth: 0,
       }}
     >
       <span className="candy-face" style={FACE}>

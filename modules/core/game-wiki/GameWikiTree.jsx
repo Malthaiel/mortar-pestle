@@ -99,7 +99,10 @@ function TreeNode({ node, tree, accent, currentPath, openMenu, nav, onGear }) {
             CandyHeader is a <button>, and a button nested in a button is invalid
             and never receives its own click. The row is already
             width:fit-content, so it sits flush beside it. */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        {/* minWidth:0 so the name pill (which caps at maxWidth:100%) yields width
+            instead of pushing the gear past the sidebar's overflow-x:hidden edge —
+            a long scrim name made its own gear unclickable. */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
           <CandyHeader label={node.name} open={open} accent={accent}
             onToggle={() => tree.toggle(node.vaultPath)}
             onContextMenu={hasMenu ? (e) => openMenu(e, node) : undefined}/>
@@ -107,7 +110,7 @@ function TreeNode({ node, tree, accent, currentPath, openMenu, nav, onGear }) {
               row pill uses, so the two buttons side by side are exactly the same
               height. Buttons in a row match each other's size. */}
           {gear && (
-            <CircleChip size={NAV_H} title="Coaching notes" onClick={() => onGear?.(gear)}>
+            <CircleChip size={NAV_H} title="Coaching notes" style={{ flexShrink: 0 }} onClick={() => onGear?.(gear)}>
               <IconSettings size={13}/>
             </CircleChip>
           )}
