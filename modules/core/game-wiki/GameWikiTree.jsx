@@ -60,6 +60,8 @@ function gearOf(vp) {
   return m ? { kind: 'match', ...m } : null;
 }
 
+const matchFolder = (scrim, n) => `${SCRIM_BASE}/${scrim}/Match ${n}`;
+
 function TreeBody({ node, tree, accent, currentPath, open, openMenu, nav, onGear, animateOnMount = true }) {
   const [entered, setEntered] = useState(!animateOnMount);
   useEffect(() => {
@@ -91,7 +93,7 @@ function TreeNode({ node, tree, accent, currentPath, openMenu, nav, onGear }) {
     const entry = tree.childrenOf(node.vaultPath);
     const mounted = open || !!entry;
     const count = entry?.nodes?.length || 0;
-    const hasMenu = node.vaultPath === SCRIM_BASE || !!scrimBaseOf(node.vaultPath);
+    const hasMenu = node.vaultPath === SCRIM_BASE || !!gearOf(node.vaultPath);
     const gear = gearOf(node.vaultPath);
     return (
       <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -158,9 +160,24 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
       ], { accent });
       return;
     }
+    // A Match folder: its own menu, because the scrim's Delete would take the whole
+    // folder with every other match in it — the same word meaning two very different
+    // amounts of destruction is exactly the trap worth avoiding here.
+    const m = matchOf(node.vaultPath);
+    if (m) {
+      openContextMenu(e, [
+        { label: 'New Match', icon: IconPlus, onClick: () => setCoach({ kind: 'scrim', scrim: m.scrim }) },
+        { label: 'Delete Match', icon: IconX, danger: true, onClick: () => setModal({ kind: 'delete-match', ...m }) },
+        { divider: true },
+        { label: 'Reveal in Files', icon: IconFolder, onClick: () => { invoke('coaching_reveal_path', { path: node.vaultPath }).catch(() => {}); } },
+        { label: 'Copy path', icon: IconLink, onClick: () => { try { navigator.clipboard.writeText(node.vaultPath); } catch {} } },
+      ], { accent });
+      return;
+    }
     const base = scrimBaseOf(node.vaultPath);
     if (!base) return;
     openContextMenu(e, [
+      { label: 'New Match', icon: IconPlus, onClick: () => setCoach({ kind: 'scrim', scrim: base }) },
       { label: 'Rename…', icon: IconFile, onClick: () => setModal({ kind: 'rename', base }) },
       { label: 'Delete', icon: IconX, danger: true, onClick: () => setModal({ kind: 'delete', base }) },
       { divider: true },
@@ -185,6 +202,18 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
       }
     } catch (e) {
       setModal({ kind: 'rename', base: oldBase, err: String(e?.message || e) });
+    }
+  };
+
+  const doDeleteMatch = async (scrim, match) => {
+    const folder = matchFolder(scrim, match);
+    try {
+      await api.deleteFolder(folder, 'gamewiki');
+      await tree.refresh(`${SCRIM_BASE}/${scrim}`);
+      setModal(null);
+      if (currentPath === folder || currentPath.startsWith(folder + '/')) nav('/game-wiki');
+    } catch (e) {
+      setModal({ kind: 'delete-match', scrim, match, err: String(e?.message || e) });
     }
   };
 
@@ -235,13 +264,25 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
           {coach && (
             <CoachPopup target={coach} accent={accent}
               onClose={() => setCoach(null)}
-              onFolderChange={() => tree.refresh(`${SCRIM_BASE}/${coach.scrim}`)}
+              // Both levels: a new/deleted Match changes the scrim's listing, a deleted
+              // scrim changes the root's. Refreshing a folder that no longer exists is a
+              // no-op, so one call covers both without branching on what happened.
+              onFolderChange={() => { tree.refresh(SCRIM_BASE); tree.refresh(`${SCRIM_BASE}/${coach.scrim}`); }}
               onOpenNotes={openNotes}/>
           )}
           {modal?.kind === 'rename' && (
             <NameInputModal open title={`Rename ${modal.base}`} label="New name" confirmLabel="Rename" initialValue={modal.base}
               onCancel={() => setModal(null)}
               onSubmit={(name) => doRename(modal.base, name)}/>
+          )}
+          {modal?.kind === 'delete-match' && (
+            <ConfirmModal open title={`Delete Match ${modal.match}?`}
+              message={modal.err
+                ? `Last attempt failed: ${modal.err}`
+                : `Sends this match's folder — the written-out talk and any notes in it — to the Recycle Bin. The rest of ${modal.scrim} is untouched.`}
+              confirmLabel="Delete" cancelLabel="Cancel"
+              onCancel={() => setModal(null)}
+              onConfirm={() => doDeleteMatch(modal.scrim, modal.match)}/>
           )}
           {modal?.kind === 'delete' && (
             <ConfirmModal open title={`Delete ${modal.base}?`}

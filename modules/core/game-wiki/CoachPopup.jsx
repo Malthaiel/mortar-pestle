@@ -198,6 +198,10 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
   // exists, so the whole chain (spawn, stream, parse, done) is exercised for a
   // fraction of a full run.
   const [confirmRun, setConfirmRun] = useState(null);
+  // Deleting the thing this window is about. Same Recycle-Bin route the tree's own
+  // Delete uses (vault_delete_folder -> trash_folder), so there is one kind of delete
+  // in the app rather than two with different consequences.
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const [newMatch, setNewMatch] = useState('1');
@@ -301,6 +305,21 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
   }, [newMatch, target, onFolderChange, onClose]);
 
   const reveal = () => invoke('coaching_reveal_path', { path: folder }).catch(() => {});
+
+  // The scrim gear deletes the whole scrim; a match gear deletes only its own folder.
+  const deleteTarget = isMatch ? folder : `${SCRIM_BASE}/${target.scrim}`;
+  const doDelete = useCallback(async () => {
+    setErr(null);
+    try {
+      await api.deleteFolder(deleteTarget, 'gamewiki');
+      setConfirmDelete(false);
+      onFolderChange?.();
+      onClose();
+    } catch (e) {
+      setConfirmDelete(false);
+      setErr(String(e?.message || e));
+    }
+  }, [deleteTarget, onFolderChange, onClose]);
 
   // ── Recording (Job 4) ────────────────────────────────────────────────────────────────
   // The app makes the recording, so the sound-track layout is decided here rather than
@@ -452,6 +471,9 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
           <span>Match number</span>
           <TextInput value={newMatch} onChange={setNewMatch} accent={accent} style={{ width: 90 }} autoFocus />
           <PrimaryBtn onClick={createMatch} disabled={busy} accent={accent}>Make the folder</PrimaryBtn>
+        </Row>
+        <Row>
+          <DangerOutlinedBtn onClick={() => setConfirmDelete(true)}>Delete this scrim</DangerOutlinedBtn>
         </Row>
       </>
     );
@@ -621,6 +643,9 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
           <OutlinedBtn onClick={() => chooseVideo()}>Write it out from a recording</OutlinedBtn>
           <OutlinedBtn onClick={reveal}>Open the folder</OutlinedBtn>
         </Row>
+        <Row>
+          <DangerOutlinedBtn onClick={() => setConfirmDelete(true)}>Delete this match</DangerOutlinedBtn>
+        </Row>
       </>
     );
   } else if (transcript === 'checking') {
@@ -639,6 +664,12 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
           <OutlinedBtn disabled={busy} onClick={() => setConfirmRun({ only: 3 })}>Cheap test</OutlinedBtn>
           <OutlinedBtn onClick={reveal}>Open the folder</OutlinedBtn>
         </Row>
+        <Row>
+          {/* Once a transcript exists this window had no way back to the write-out, so a
+              bad one (wrong file, wrong trim) was a dead end short of deleting the match. */}
+          <OutlinedBtn disabled={busy} onClick={() => chooseVideo()}>Write it out again</OutlinedBtn>
+          <DangerOutlinedBtn disabled={busy} onClick={() => setConfirmDelete(true)}>Delete this match</DangerOutlinedBtn>
+        </Row>
       </>
     );
   }
@@ -651,6 +682,18 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
           {err && <p style={{ color: 'var(--error)', marginTop: 14 }}>{err}</p>}
         </div>
       </AppWindow>
+      <ConfirmModal
+        open={confirmDelete}
+        title={isMatch ? `Delete Match ${target.match}?` : `Delete ${target?.scrim}?`}
+        message={isMatch
+          ? 'Sends this match’s folder — the written-out talk and any notes in it — to the '
+            + 'Recycle Bin. The rest of the scrim is untouched.'
+          : 'Sends the whole scrim folder and every match inside it to the Recycle Bin as one item.'}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={doDelete}
+      />
       <ConfirmModal
         open={!!confirmRun}
         title="This spends real money"
