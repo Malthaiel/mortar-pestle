@@ -74,6 +74,7 @@ fn main() {
         "coaching_reveal_path",
         "coaching_extract_audio",
         "coaching_audio_track_count",
+        "coaching_media_duration",
         "deadlock_fetch_match",
         "coaching_classify_match",
         "coaching_cancel",

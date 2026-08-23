@@ -349,7 +349,7 @@ async fn drive(app: &AppHandle, p: &JobParams) -> Result<CommsJobResult, String>
     let diarize_mode = p.comms_track.is_some();
     let mic_wav = if diarize_mode && p.mic_track.is_some() {
         Some(
-            crate::commands::coaching::coaching_extract_audio(p.video.clone(), p.mic_track)
+            crate::commands::coaching::coaching_extract_audio(p.video.clone(), p.mic_track, None, None)
                 .await
                 .map_err(vault_err)?,
         )
@@ -357,7 +357,7 @@ async fn drive(app: &AppHandle, p: &JobParams) -> Result<CommsJobResult, String>
         None
     };
     let comms_wav =
-        crate::commands::coaching::coaching_extract_audio(p.video.clone(), if diarize_mode { p.comms_track } else { None })
+        crate::commands::coaching::coaching_extract_audio(p.video.clone(), if diarize_mode { p.comms_track } else { None }, None, None)
             .await
             .map_err(vault_err)?;
     bail()?;

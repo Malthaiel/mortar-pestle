@@ -69,6 +69,7 @@
     "allow-coaching-reveal-path",
     "allow-coaching-extract-audio",
     "allow-coaching-audio-track-count",
+    "allow-coaching-media-duration",
     "allow-deadlock-fetch-match",
     "allow-coaching-classify-match",
     "allow-coaching-cancel",

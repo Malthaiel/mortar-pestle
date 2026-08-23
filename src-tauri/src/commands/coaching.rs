@@ -14,10 +14,9 @@ use std::path::PathBuf;
 use tauri::Emitter;
 use tauri_plugin_opener::OpenerExt;
 use tokio::io::AsyncBufReadExt;
-use tokio::process::Command as TokioCommand;
 
 use crate::commands::vault::VaultError;
-use crate::parsers::video_transcode::{compute_hash, mtime_ms_for};
+use crate::parsers::video_transcode::{compute_hash_with_recipe, mtime_ms_for};
 
 /// Highlight a GameWiki-vault file in the OS file manager (the "open in folder"
 /// button on the VOD Review Report). `reveal_in_files` (media.rs) can't be reused:
@@ -99,7 +98,7 @@ fn prune_comms_cache(dir: &Path) {
 /// nothing yields 0, which makes any explicit track request fail loudly (correct:
 /// we could not prove the requested track exists).
 async fn audio_stream_count(path: &Path) -> Result<usize, VaultError> {
-    let out = TokioCommand::new(crate::tool_path::resolve("ffprobe"))
+    let out = crate::commands::proc_util::tokio_cmd(crate::tool_path::resolve("ffprobe"))
         .args(["-v", "error", "-select_streams", "a", "-show_entries", "stream=index", "-of", "csv=p=0"])
         // `\\?\`-strip: ffprobe rejects the Windows verbatim path canonicalize() returns.
         .arg(crate::tool_path::native_str(&path.to_string_lossy()))
@@ -125,12 +124,50 @@ pub async fn coaching_audio_track_count(video: String) -> Result<usize, VaultErr
     audio_stream_count(&canonical).await
 }
 
+/// How long a recording is, in seconds — the span the trim handles run over. `video_probe`
+/// is the wrong tool for this: it is fenced to the configured media roots, and a coaching
+/// capture lives wherever the broadcast engine put it.
+#[tauri::command]
+pub async fn coaching_media_duration(video: String) -> Result<f64, VaultError> {
+    if video.is_empty() {
+        return Err(VaultError::Invalid("path required".into()));
+    }
+    let canonical = std::fs::canonicalize(PathBuf::from(&video))
+        .map_err(|_| VaultError::NotFound(format!("Recording not found: {video}")))?;
+    let out = crate::commands::proc_util::tokio_cmd(crate::tool_path::resolve("ffprobe"))
+        .args(["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0"])
+        // `\?\`-strip: ffprobe rejects the Windows verbatim path canonicalize() returns.
+        .arg(crate::tool_path::native_str(&canonical.to_string_lossy()))
+        .stdin(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .await
+        .map_err(|e| VaultError::Io(format!("ffprobe spawn: {e}")))?;
+    String::from_utf8_lossy(&out.stdout)
+        .trim()
+        .parse::<f64>()
+        .map_err(|_| VaultError::Io("ffprobe reported no duration for this recording".into()))
+}
+
+/// `start_secs` / `end_secs` optionally clip the pull to one window of the recording
+/// (`-ss` before `-i` for a fast seek, `-t` for the length) — a two-hour VOD where only
+/// the first ninety minutes are worth transcribing costs ninety minutes of STT, not two
+/// hours. Both are positions in the ORIGINAL file; the caller offsets the returned
+/// timestamps by `start_secs` so the transcript still points at the untrimmed recording.
+/// Omitted / zero-length = the whole file, and the cache key is then byte-identical to
+/// the pre-trim one.
+///
 /// `track` (sub-plan 6 SF2) optionally selects a single 0-based audio stream via
 /// `-map 0:a:<track>` — the OBS isolated-track layout carries mic / Discord comms on
 /// separate streams. Omitted / negative = the previous whole-audio downmix (sub-plan 4
 /// callers are byte-identical: `track: None` folds into the cache key exactly as before).
 #[tauri::command]
-pub async fn coaching_extract_audio(video: String, track: Option<i32>) -> Result<String, VaultError> {
+pub async fn coaching_extract_audio(
+    video: String,
+    track: Option<i32>,
+    start_secs: Option<f64>,
+    end_secs: Option<f64>,
+) -> Result<String, VaultError> {
     if video.is_empty() {
         return Err(VaultError::Invalid("path required".into()));
     }
@@ -146,7 +183,21 @@ pub async fn coaching_extract_audio(video: String, track: Option<i32>) -> Result
     // Fold the selected track into the cache key (compute_hash's `audio` slot) so
     // different tracks of one file don't collide. `None` → the pre-SF2 key verbatim.
     let sel = track.filter(|t| *t >= 0);
-    let hash = compute_hash(&canonical.to_string_lossy(), sel.map(|t| t as i64), mtime_ms_for(&canonical));
+    // Clip window, normalised: a start beyond the end is a no-op rather than a negative -t.
+    let start = start_secs.filter(|v| v.is_finite() && *v > 0.0).unwrap_or(0.0);
+    let end = end_secs.filter(|v| v.is_finite() && *v > start);
+    // A trimmed pull must not be served from (or overwrite) the whole-file wav, so the
+    // window joins the cache key. No window = empty recipe = the legacy key verbatim.
+    let recipe = match (start > 0.0, end) {
+        (false, None) => String::new(),
+        (_, e) => format!("clip{start:.3}-{}", e.map(|v| format!("{v:.3}")).unwrap_or_else(|| "end".into())),
+    };
+    let hash = compute_hash_with_recipe(
+        &canonical.to_string_lossy(),
+        sel.map(|t| t as i64),
+        mtime_ms_for(&canonical),
+        &recipe,
+    );
     let out_path = dir.join(format!("{hash}.wav"));
     if out_path.exists() {
         return Ok(out_path.to_string_lossy().into_owned());
@@ -182,11 +233,25 @@ pub async fn coaching_extract_audio(video: String, track: Option<i32>) -> Result
         "-hide_banner".into(),
         "-loglevel".into(),
         "error".into(),
+    ];
+    // Input-side seek: ffmpeg jumps to the keyframe rather than decoding and throwing away
+    // everything before it. Must precede `-i`.
+    if start > 0.0 {
+        args.push("-ss".into());
+        args.push(format!("{start:.3}"));
+    }
+    args.extend([
         "-i".into(),
         // `\\?\`-strip: canonicalize() hands ffmpeg a Windows verbatim path it
         // rejects as "Invalid argument". Mirrors video_transcode.rs:206/410.
         crate::tool_path::native_str(&canonical.to_string_lossy()),
-    ];
+    ]);
+    // Length, counted from the seek point — `-to` shifts meaning depending on which side
+    // of `-i` the `-ss` sits on, `-t` does not.
+    if let Some(e) = end {
+        args.push("-t".into());
+        args.push(format!("{:.3}", e - start));
+    }
     // Optional single-track select — must precede the output options.
     if let Some(t) = sel {
         args.push("-map".into());
@@ -204,7 +269,7 @@ pub async fn coaching_extract_audio(video: String, track: Option<i32>) -> Result
         partial.display().to_string(),
     ]);
 
-    let output = TokioCommand::new(crate::tool_path::resolve("ffmpeg"))
+    let output = crate::commands::proc_util::tokio_cmd(crate::tool_path::resolve("ffmpeg"))
         .args(&args)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
@@ -512,7 +577,7 @@ async fn run_claude_cli(
     // --output-format stream-json (mirrors design.rs's agent_chat): the answer arrives as
     // text_delta events instead of one lump at the end, so a kill at the wall keeps whatever
     // streamed in — the old `json` mode discarded a fully-billed 20-minute generation.
-    let mut cmd = TokioCommand::new(&resolved);
+    let mut cmd = crate::commands::proc_util::tokio_cmd(&resolved);
     cmd.arg("--print")
         .arg("--output-format")
         .arg("stream-json")

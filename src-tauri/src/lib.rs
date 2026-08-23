@@ -823,6 +823,7 @@ pub fn run() {
             commands::media::open_path,
             commands::coaching::coaching_reveal_path,
             commands::coaching::coaching_extract_audio,
+            commands::coaching::coaching_media_duration,
             commands::coaching::coaching_audio_track_count,
             commands::coaching::deadlock_fetch_match,
             commands::coaching::coaching_classify_match,

@@ -22,6 +22,7 @@ import AppWindow from '@host/components/ui/AppWindow.jsx';
 import ConfirmModal from '@host/components/ui/ConfirmModal.jsx';
 import { PrimaryBtn, OutlinedBtn, DangerOutlinedBtn } from '@host/components/ui/Button.jsx';
 import { TextInput } from '@host/components/ui/Input.jsx';
+import { Slider } from '@host/components/ui/Slider.jsx';
 import useBroadcastState from '@modules/studio/broadcast/useBroadcastState.js';
 import { SCRIM_BASE } from './scrimSchema.js';
 import { mergeTranscripts } from './diarize.js';
@@ -113,6 +114,28 @@ function elapsedLabel(startedMs) {
 
 const money = (n) => `$${(Number(n) || 0).toFixed(2)}`;
 
+// `h:mm:ss` / `m:ss` / bare seconds -> seconds, or null when it is not a time at all.
+// Every part must be a number: "1:41:08" is 6068, "abc" and "1:oo" are null, and null
+// snaps the field back to the handle's real position rather than silently meaning
+// "use all of it" — the exact failure typed minutes had on its first real use.
+const parseHms = (text) => {
+  const parts = String(text ?? '').trim().split(':');
+  if (!parts.length || parts.some((p) => !/^\d+$/.test(p.trim()))) return null;
+  return parts.reduce((acc, p) => acc * 60 + Number(p), 0);
+};
+
+// Seconds -> `h:mm:ss` (or `m:ss` under an hour) — the readout under both trim handles.
+// Typed entry was tried first and failed on the first real use: "01:41:08" in a box
+// labelled minutes parsed as NaN and silently meant "use all of it". Dragging a handle
+// cannot be mistyped, so there is nothing left to misread.
+const hms = (secs) => {
+  const t = Math.max(0, Math.round(Number(secs) || 0));
+  const h = Math.floor(t / 3600);
+  const m = Math.floor((t % 3600) / 60);
+  const sec = String(t % 60).padStart(2, '0');
+  return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
+};
+
 const baseName = (p) => String(p || '').split(/[\\/]/).pop();
 /// Letters and digits only — the engine sanitises the filename it is handed, and this
 /// survives whatever it stripped.
@@ -120,6 +143,35 @@ const plain = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
 function Row({ children }) {
   return <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>{children}</div>;
+}
+
+// The handle's position, typeable. Shows the live value except while being edited, so
+// dragging updates it and typing is never fought over. Commits on Enter or on leaving the
+// field; anything unparseable simply reverts, which is visible rather than silent.
+function TimeField({ value, onCommit, accent }) {
+  const [draft, setDraft] = useState(null);
+  const commit = () => {
+    const secs = draft == null ? null : parseHms(draft);
+    if (secs != null) onCommit(secs);
+    setDraft(null);
+  };
+  return (
+    <TextInput
+      value={draft ?? hms(value)}
+      onChange={setDraft}
+      onBlur={commit}
+      accent={accent}
+      onKeyDown={(e) => {
+        // Commit outright rather than leaning on the blur that follows — one path, not two.
+        if (e.key === 'Enter') { e.preventDefault(); commit(); e.currentTarget.blur(); }
+        if (e.key === 'Escape') { setDraft(null); e.currentTarget.blur(); }
+      }}
+      style={{
+        width: 76, textAlign: 'right', fontFamily: 'var(--font-mono)',
+        fontVariantNumeric: 'tabular-nums',
+      }}
+    />
+  );
 }
 
 function Note({ children }) {
@@ -156,6 +208,12 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
   // the file picker is the fallback, and re-picking is one click.
   const [recorded, setRecorded] = useState(null);
   const [recBusy, setRecBusy] = useState(false);
+  // A chosen recording waiting on its trim: { path, duration }. Picking a file no longer
+  // starts the work — it measures the file and hands over two handles first. Deliberately
+  // NOT remembered between matches: a remembered window silently truncating a later match
+  // is a wrong transcript, not a failed run.
+  const [pending, setPending] = useState(null);
+  const [clip, setClip] = useState({ start: 0, end: 0 });
   // Re-render once a minute so the elapsed line advances during a run.
   const [, tick] = useState(0);
 
@@ -279,14 +337,45 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
   // that track out on its own, and the engine hears nothing but it — so every word it returns
   // belongs to whoever that track records. The WAV is cached by file+track, so a second run
   // over the same recording skips the pulling-apart.
-  const trackSegments = useCallback(async (video, obsTrack, stage) => {
-    const wav = await invoke('coaching_extract_audio', { video, track: obsTrack - 1 });
+  //
+  // `clip` narrows the pull to one window of the recording. ffmpeg hands back a wav that
+  // starts at zero, so every stamp is shifted by the window's start — the transcript then
+  // points at the ORIGINAL recording, which is the file anyone scrubs to check a line.
+  const trackSegments = useCallback(async (video, obsTrack, stage, clip) => {
+    const wav = await invoke('coaching_extract_audio', {
+      video,
+      track: obsTrack - 1,
+      startSecs: clip?.start ?? null,
+      endSecs: clip?.end ?? null,
+    });
+    const offsetMs = (clip?.start || 0) * 1000;
     const segments = [];
     await runStt('stt_transcribe_file', { path: wav }, (ev) => {
       if (ev.kind === 'progress') setStt({ stage, pct: ev.pct });
-      else if (ev.kind === 'segment' && ev.text) segments.push({ t0Ms: ev.t0Ms, t1Ms: ev.t1Ms, text: ev.text });
+      else if (ev.kind === 'segment' && ev.text) {
+        segments.push({ t0Ms: ev.t0Ms + offsetMs, t1Ms: ev.t1Ms + offsetMs, text: ev.text });
+      }
     });
     return segments;
+  }, []);
+
+  // Step one of two: choose the recording and MEASURE it. The duration comes from the file
+  // itself (`video_probe`) rather than being typed, so the handles below can only ever land
+  // inside the recording. `known` is the path a just-stopped recording handed back.
+  const chooseVideo = useCallback(async (known) => {
+    const picked = known || await open({
+      multiple: false,
+      filters: [{ name: 'Recording', extensions: ['mp4', 'mkv', 'mov'] }],
+    });
+    if (!picked) return;
+    setErr(null);
+    try {
+      const duration = Math.max(1, Math.round(await invoke('coaching_media_duration', { video: picked })));
+      setPending({ path: picked, duration });
+      setClip({ start: 0, end: duration });
+    } catch (e) {
+      setErr(String(e?.message || e));
+    }
   }, []);
 
   // Pick a recording and turn it into `00-transcript.md`. Two listening passes — your own
@@ -296,12 +385,14 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
   // The `stt_*` commands are invoked directly rather than through `useStt`: SttProvider
   // mounts only in the overlay window, and this popup is in the main one.
   // `known` is the path a just-stopped recording handed back — given one, nothing is asked for.
-  const transcribeVideo = useCallback(async (known) => {
-    const picked = known || await open({
-      multiple: false,
-      filters: [{ name: 'Recording', extensions: ['mp4', 'mkv', 'mov'] }],
-    });
+  const transcribeVideo = useCallback(async (picked, window) => {
     if (!picked) return;
+    // Untouched handles mean the whole file, and the whole file must keep the pre-trim
+    // cache key — otherwise every existing extracted wav is orphaned on first run.
+    const win = {
+      start: window?.start > 0 ? window.start : null,
+      end: window?.end != null && window.end < window.duration ? window.end : null,
+    };
     setErr(null);
     try {
       setStt({ stage: 0, pct: null });
@@ -312,9 +403,9 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
         (ev) => { if (ev.kind === 'progress') setStt({ stage: 1, pct: ev.pct }); });
 
       setStt({ stage: 2, pct: null });
-      const micSegments = await trackSegments(picked, MIC_TRACK, 2);
+      const micSegments = await trackSegments(picked, MIC_TRACK, 2, win);
       setStt({ stage: 3, pct: null });
-      const commsSegments = await trackSegments(picked, COMMS_TRACK, 3);
+      const commsSegments = await trackSegments(picked, COMMS_TRACK, 3, win);
 
       // A track that exists but holds the wrong thing yields silence, and silence would save a
       // half-empty transcript that reads as a real one. Stop and say which track was empty.
@@ -334,6 +425,7 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
         nameMap: { 0: STUDENT },
       }));
       await api.savePage(`${folder}/${TRANSCRIPT}`, body, null, 'gamewiki');
+      setPending(null);
       setTranscript('present');
     } catch (e) {
       setErr(String(e?.message || e));
@@ -461,6 +553,42 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
         </Row>
       </>
     );
+  } else if (pending) {
+    // ── Trim ─────────────────────────────────────────────────────────────────
+    // Two handles over the recording's real length. Each is clamped against the other
+    // (a one-second floor), so a backwards window cannot be expressed and there is no
+    // error case to word. Both untouched = the whole file, on the pre-trim cache key.
+    const span = Math.max(1, clip.end - clip.start);
+    body = (
+      <>
+        <Note>
+          <code>{baseName(pending.path)}</code> is {hms(pending.duration)} long. Drag the handles to
+          leave out anything at either end — the quiet before you started, or whatever ran on after
+          you finished, or type an exact time into either box. It only listens to the part between
+          them, so a shorter part is a faster job.
+        </Note>
+        <div style={{ marginBottom: 6 }}>
+          <div style={{ opacity: 0.7, marginBottom: 2 }}>Start at</div>
+          <Slider value={clip.start} min={0} max={pending.duration} step={1} accent={accent}
+            readout={<TimeField value={clip.start} accent={accent}
+              onCommit={(v) => setClip((c) => ({ ...c, start: Math.min(Math.max(0, v), c.end - 1) }))} />}
+            onChange={(v) => setClip((c) => ({ ...c, start: Math.min(v, c.end - 1) }))} />
+          <div style={{ opacity: 0.7, margin: '8px 0 2px' }}>Stop at</div>
+          <Slider value={clip.end} min={0} max={pending.duration} step={1} accent={accent}
+            readout={<TimeField value={clip.end} accent={accent}
+              onCommit={(v) => setClip((c) => ({ ...c, end: Math.max(Math.min(pending.duration, v), c.start + 1) }))} />}
+            onChange={(v) => setClip((c) => ({ ...c, end: Math.max(v, c.start + 1) }))} />
+        </div>
+        <Note>Using {hms(span)} of {hms(pending.duration)}.</Note>
+        <Row>
+          <PrimaryBtn accent={accent}
+            onClick={() => transcribeVideo(pending.path, { ...clip, duration: pending.duration })}>
+            Write it out
+          </PrimaryBtn>
+          <OutlinedBtn onClick={() => setPending(null)}>Pick a different one</OutlinedBtn>
+        </Row>
+      </>
+    );
   } else if (transcript === 'missing') {
     // ── Nothing to work from ─────────────────────────────────────────────────
     // Two ways in: record the session here and now, or point at a recording already made.
@@ -482,7 +610,7 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
         {!bcast && <Note>The Live studio is not running, so recording is not possible right now.</Note>}
         <Row>
           {recorded ? (
-            <PrimaryBtn accent={accent} onClick={() => transcribeVideo(recorded)}>
+            <PrimaryBtn accent={accent} onClick={() => chooseVideo(recorded)}>
               Write out what was just recorded
             </PrimaryBtn>
           ) : (
@@ -490,7 +618,7 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
               Record the session
             </PrimaryBtn>
           )}
-          <OutlinedBtn onClick={() => transcribeVideo()}>Write it out from a recording</OutlinedBtn>
+          <OutlinedBtn onClick={() => chooseVideo()}>Write it out from a recording</OutlinedBtn>
           <OutlinedBtn onClick={reveal}>Open the folder</OutlinedBtn>
         </Row>
       </>
