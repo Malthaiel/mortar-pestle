@@ -26,7 +26,6 @@ import DocsPage from './pages/docs/DocsPage.jsx';
 import Dock from './components/dock/Dock.jsx';
 import MarkupOverlay from './components/markup/MarkupOverlay.jsx';
 import { useMarkupMode } from './components/markup/useMarkupMode.js';
-import PlannerModal from './components/PlannerModal.jsx';
 import RecyclingBinModal from './components/RecyclingBinModal.jsx';
 import { ActiveModuleProvider } from './hooks/useActiveModule.jsx';
 import { NotificationProvider } from './notifications/NotificationProvider.jsx';
@@ -39,6 +38,7 @@ import DownloadsManager from './downloads/DownloadsManager.jsx';
 import { VaultProvider, useVaults } from './hooks/useVaults.jsx';
 import OverlayHostView from './overlays/OverlayHostView.jsx';
 import OverlayToastView from './overlays/OverlayToastView.jsx';
+import PlayerControlsView from './overlays/PlayerControlsView.jsx';
 
 // Compose every module-registered provider around the app tree. Order is
 // registration order (topological if modules declare `requires`).
@@ -65,6 +65,9 @@ export default function App() {
   // name are set in every window (the /player popout is a separate webview).
   // Overlay windows render standalone (no app chrome, no vault context) — keyed
   // off their URL hash, the same self-identifying pattern as the /player popout.
+  // The player's controls layer is its own transparent child webview stacked
+  // above the mpv picture — standalone like the overlays, no vault context.
+  if (hash.startsWith('#/player/controls')) return <PlayerControlsView/>;
   if (hash.startsWith('#/overlay/host')) return <OverlayHostView/>;
   if (hash.startsWith('#/overlay/toast')) return <OverlayToastView/>;
   return (
@@ -131,7 +134,6 @@ function MainApp() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteQuery, setPaletteQuery] = useState('');
   const [hintsOpen, setHintsOpen] = useState(false);
-  const [plannerOpen, setPlannerOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [downloadsOpen, setDownloadsOpen] = useState(false);
   const [downloadsManagerOpen, setDownloadsManagerOpen] = useState(false);
@@ -289,11 +291,6 @@ function MainApp() {
         accent={accent}
         keybinds={settings.keybinds}
       />
-      <PlannerModal
-        open={plannerOpen}
-        onClose={() => setPlannerOpen(false)}
-        accent={accent}
-      />
       <RecyclingBinModal
         open={recycleBinOpen}
         onClose={() => setRecycleBinOpen(false)}
@@ -308,8 +305,6 @@ function MainApp() {
         paletteOpen={paletteOpen}
         setHintsOpen={setHintsOpen}
         hintsOpen={hintsOpen}
-        setPlannerOpen={setPlannerOpen}
-        plannerOpen={plannerOpen}
         setDownloadsOpen={setDownloadsOpen}
         downloadsOpen={downloadsOpen}
         accent={accent}
@@ -362,6 +357,6 @@ function deriveVisitLabel(route) {
     const parts = [route.sub, route.folderPath].filter(Boolean).join('/').split('/');
     return parts[parts.length - 1] || route.label;
   }
-  if (route.page === 'pulse' && route.sub) return `Pulse · ${route.sub}`;
+  if (route.page === 'planner' && route.sub) return `Planner · ${route.sub}`;
   return route.label || route.path;
 }

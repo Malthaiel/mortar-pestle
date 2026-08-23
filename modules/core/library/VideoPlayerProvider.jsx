@@ -20,7 +20,12 @@ import VideoControls from './VideoControls.jsx';
 import SubtitleOverlay from './SubtitleOverlay.jsx';
 import { candyGap } from '@host/util/candy.js';
 
-const Ctx = createContext(null);
+// Exported so a NON-<video> backend can supply the same shape: the mpv
+// controls layer is its own webview with no <video> element in it, and it
+// renders VideoControls verbatim by providing this context itself rather than
+// forking a parallel control bar.
+export const VideoPlayerContext = createContext(null);
+const Ctx = VideoPlayerContext;
 
 const LS = {
   volume:   'video:volume',

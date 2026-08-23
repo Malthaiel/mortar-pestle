@@ -328,6 +328,12 @@ fn main() {
         "broadcast_display_create",
         "broadcast_display_bounds",
         "broadcast_display_destroy",
+        // Native Video Player (mpv child-HWND lane)
+        "player_open",
+        "player_bounds",
+        "player_close",
+        "player_command",
+        "player_controls_attach",
         "broadcast_restart_engine",
         "broadcast_open_log",
         "broadcast_paths",

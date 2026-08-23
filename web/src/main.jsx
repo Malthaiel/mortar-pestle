@@ -27,7 +27,11 @@ loadAll().then(() => {
   // dragAudit: drives one synthetic reorder on a DraggableSidebarList and
   // measures the drop invariants (settle position, accent bridge, press-
   // release ease) numerically.
-  if (import.meta.env.DEV) {
+  // The player's controls layer is a bare see-through strip over the video, not
+  // an app surface — and every extra webview running the remote bridge fights
+  // the main window for the single `main.json` result slot, so a probe aimed at
+  // the app comes back describing a 800x44 bar instead.
+  if (import.meta.env.DEV && !window.location.hash.startsWith('#/player/controls')) {
     import('./util/candyCenterAudit.js').then((m) => m.startCandyCenterAudit());
     import('./util/spacingAudit.js').then((m) => m.startSpacingAudit());
     import('./util/dragAudit.js').then((m) => m.startDragAudit());

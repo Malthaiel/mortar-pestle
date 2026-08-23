@@ -2,10 +2,17 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "core:default plus each app command's allow-<command> permission. build.rs (AppManifest) DEFINES the per-command permissions; this array must explicitly REFERENCE each one — adding a command to build.rs alone does NOT enable it (it stays ACL-blocked until listed here).",
+  "windows": [
+    "main",
+    "overlay-host",
+    "overlay-toast",
+    "player-controls-*"
+  ],
   "webviews": [
     "main",
     "overlay-host",
-    "overlay-toast"
+    "overlay-toast",
+    "player-controls-*"
   ],
   "local": true,
   "permissions": [
@@ -21,6 +28,11 @@
     "core:window:allow-start-dragging",
     "updater:default",
     "allow-ping",
+    "allow-player-open",
+    "allow-player-bounds",
+    "allow-player-close",
+    "allow-player-command",
+    "allow-player-controls-attach",
     "allow-media-server-port",
     "allow-hide-overlay-host",
     "allow-vedit-project-list",

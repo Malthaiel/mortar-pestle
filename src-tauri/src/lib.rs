@@ -11,6 +11,10 @@ pub mod commands;
 pub mod media_server;
 pub mod overlay;
 pub mod parsers;
+// SPIKE (Native Video Player): child-HWND picture surface for mpv, parked
+// BEHIND the webview so the existing controls composite over it.
+#[cfg(target_os = "windows")]
+pub mod player_host;
 // Loopback-refusing forward proxy = the browser's network boundary. Pure Rust
 // (std::net + tokio); ported to Windows alongside the WebView2 content views.
 pub mod proxy;
@@ -1004,6 +1008,11 @@ pub fn run() {
             #[cfg(target_os = "windows")] commands::broadcast::broadcast_display_create,
             #[cfg(target_os = "windows")] commands::broadcast::broadcast_display_bounds,
             #[cfg(target_os = "windows")] commands::broadcast::broadcast_display_destroy,
+            #[cfg(target_os = "windows")] player_host::player_open,
+            #[cfg(target_os = "windows")] player_host::player_bounds,
+            #[cfg(target_os = "windows")] player_host::player_close,
+            #[cfg(target_os = "windows")] player_host::player_command,
+            #[cfg(target_os = "windows")] player_host::player_controls_attach,
             commands::broadcast::broadcast_restart_engine,
             commands::broadcast::broadcast_open_log,
             commands::broadcast::broadcast_paths,
