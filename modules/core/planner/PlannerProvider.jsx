@@ -9,6 +9,9 @@ import { registerCommandAction } from '@host/command-actions.js';
 import { useKeybindAction } from '@host/keybinds/useKeybind.js';
 import { useModuleSettings } from '@host/hooks/useSettings.js';
 import { useFrameEditing } from '@host/hooks/useFrameEditing.js';
+import { useDailyFrame } from '@host/hooks/useDailyFrame.js';
+import { weekdayForKey } from '@host/util/events.js';
+import { makeUniqueId } from '@host/util/frames.js';
 import { smartTitleCase } from '@host/util/titlecase.js';
 import { useVault } from './useVault.js';
 import { plannerApi } from './api.js';
@@ -171,6 +174,8 @@ export function PlannerProvider({ children }) {
   const [activeSessionId, setActiveSessionId] = useState(null);
   const [activeNote, setActiveNote] = useState('');
   const [taskDrag, setTaskDrag] = useState(null);
+  // The weekly Routine template — read here so a calendar drop can time an item.
+  const { frames: routineFrames, writeFrames: writeRoutineFrames } = useDailyFrame();
 
   // ── Dock collapse ───────────────────────────────────────────────────────
   const [dockCollapsed, setDockCollapsed] = useState(() => {
@@ -723,8 +728,49 @@ export function PlannerProvider({ children }) {
     startPaneDrag('task', { taskName }, taskName, e);
   }, [startPaneDrag]);
 
+  // Drop a Routine item on the calendar -> give it a TIME on that weekday, i.e.
+  // write start/end into Pulse/Schedule.md's frames map. This is NOT a session
+  // append: a routine item is a recurring template row, so timing it must edit
+  // the template, not create a one-off on this date. An item that already had a
+  // time keeps its own duration; a previously-untimed one takes the routine
+  // default. Dropping an item not yet on that weekday adds it there.
+  const handleRoutineDrop = useCallback(async (ds, startTime) => {
+    const name = taskDrag?.taskName;
+    if (!name) return;
+    const dayKey = weekdayForKey(ds).toLowerCase();
+    const day = routineFrames?.[dayKey] || [];
+    const idx = day.findIndex(b => b.id === taskDrag.payload?.routineId || b.name === name);
+    const existing = idx >= 0 ? day[idx] : null;
+
+    // Preserve an already-timed item's span; otherwise use the routine default.
+    let mins = DRAG_DURATIONS.routine;
+    if (existing?.start && existing?.end) {
+      const [ph, pm] = existing.start.split(':').map(Number);
+      const endM = existing.end === '24:00' ? 1440 : (() => {
+        const [eh, em] = existing.end.split(':').map(Number); return eh * 60 + em;
+      })();
+      mins = Math.max(15, endM - (ph * 60 + pm));
+    }
+    const [sh, sm] = startTime.split(':').map(Number);
+    const endTotal = Math.min(1440, sh * 60 + sm + mins);
+    const endTime = endTotal === 1440
+      ? '24:00'
+      : `${pad(Math.floor(endTotal / 60))}:${pad(endTotal % 60)}`;
+
+    const row = existing
+      ? { ...existing, start: startTime, end: endTime }
+      : { id: makeUniqueId(day, name), name, start: startTime, end: endTime };
+    const nextDay = existing ? day.map((b, i) => (i === idx ? row : b)) : [...day, row];
+
+    try { await writeRoutineFrames({ ...routineFrames, [dayKey]: nextDay }); }
+    catch (e) { console.error('routine drop failed', e); }
+    setTaskDrag(null);
+  }, [taskDrag, routineFrames, writeRoutineFrames]);
+
   const handleTaskDrop = useCallback((ds, startTime) => {
     if (!taskDrag) return;
+    // A routine drag edits the weekly template instead of appending a session.
+    if (taskDrag.kind === 'routine') { handleRoutineDrop(ds, startTime); return; }
     const taskName = taskDrag.taskName;
     const [sh, sm] = startTime.split(':').map(Number);
     const endDate = new Date(0, 0, 0, sh, sm + DRAG_DURATIONS.task);
@@ -732,7 +778,7 @@ export function PlannerProvider({ children }) {
     api.appendSession(ds, { task: taskName, start: startTime, end: endTime, notes: '' })
       .then(() => loadVault()).catch(console.warn);
     setTaskDrag(null);
-  }, [taskDrag, loadVault]);
+  }, [taskDrag, loadVault, handleRoutineDrop]);
 
   const selectVaultTask = useCallback((raw) => {
     setActiveVaultRaw(raw); setActivePlanKey(null); setActiveSessionId(null);

@@ -1,17 +1,24 @@
-//! Routine parser — ports `parseRecurring`, `parseRoutineSection`,
-//! `readRoutineForToday`, `ensureRoutineSection`, and `toggleRoutineTask`
-//! from the Node side.
+//! Routine parser — the per-day TICK STATE of the `## Routine` section in a
+//! daily log.
+//!
+//! It no longer owns the CONFIG (which repeating items exist, and on which
+//! weekdays). Planner Consolidation merged Frame and Recurring into one Routine
+//! item stored in `Pulse/Schedule.md`'s `frames:` map, which is parsed and
+//! written entirely in JS (`parseDailyFrame` / `buildScheduleFrontmatter` in
+//! web/src/api.js). Duplicating that YAML parser here would be a second source
+//! of truth for the format, so Rust deliberately reads none of it: the frontend
+//! owns the item list and joins it against the tick state this returns.
+//!
+//! `Pulse/Recurring Tasks.md` is no longer read by anything.
 
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
 use std::sync::OnceLock;
 
-use chrono::{Datelike, Local, Weekday};
 use regex::Regex;
 use serde::Serialize;
 
-use crate::commands::vault::{atomic_write, check_mtime, mtime_ms, pulse_vault_root, VaultError};
+use crate::commands::vault::{atomic_write, check_mtime, mtime_ms, VaultError};
 use crate::parsers::daily::{daily_path, today_str};
 
 #[derive(Serialize, Debug)]
@@ -21,77 +28,9 @@ pub struct RoutineItem {
 }
 
 #[derive(Debug, Clone)]
-pub struct RecurringEntry {
-    pub day: u32,
-    pub task: String,
-}
-
-#[derive(Debug, Clone)]
 pub struct RoutineState {
     pub checked: bool,
     pub raw: String,
-}
-
-fn routine_path() -> PathBuf {
-    PathBuf::from(format!("{}/Pulse/Recurring Tasks.md", pulse_vault_root()))
-}
-
-fn day_code(s: &str) -> Option<u32> {
-    match s.to_ascii_lowercase().as_str() {
-        "sun" | "sunday" => Some(0),
-        "mon" | "monday" => Some(1),
-        "tue" | "tues" | "tuesday" => Some(2),
-        "wed" | "weds" | "wednesday" => Some(3),
-        "thu" | "thur" | "thurs" | "thursday" => Some(4),
-        "fri" | "friday" => Some(5),
-        "sat" | "saturday" => Some(6),
-        _ => None,
-    }
-}
-
-pub fn parse_recurring(content: &str) -> Vec<RecurringEntry> {
-    static DAY_RE: OnceLock<Regex> = OnceLock::new();
-    static TASK_RE: OnceLock<Regex> = OnceLock::new();
-    static SEP: OnceLock<Regex> = OnceLock::new();
-    let day_re = DAY_RE.get_or_init(|| Regex::new(r"(?i)\|\s*Day\s*\|").unwrap());
-    let task_re = TASK_RE.get_or_init(|| Regex::new(r"(?i)\|\s*Task\s*\|").unwrap());
-    let sep = SEP.get_or_init(|| Regex::new(r"^\|[\s\-:]+\|[\s\-:]+\|$").unwrap());
-
-    let mut items = Vec::new();
-    let mut in_table = false;
-    for line in content.split('\n') {
-        let trimmed = line.trim();
-        if !in_table {
-            if trimmed.starts_with('|') && day_re.is_match(trimmed) && task_re.is_match(trimmed) {
-                in_table = true;
-            }
-            continue;
-        }
-        if !trimmed.starts_with('|') {
-            in_table = false;
-            continue;
-        }
-        if sep.is_match(trimmed) {
-            continue;
-        }
-        let parts: Vec<&str> = trimmed.split('|').collect();
-        if parts.len() < 4 {
-            continue;
-        }
-        let day_cell = parts[1].trim();
-        let task_cell = parts[2].trim();
-        if day_cell.is_empty() || task_cell.is_empty() {
-            continue;
-        }
-        let Some(day) = day_code(day_cell) else {
-            continue;
-        };
-        items.push(RecurringEntry {
-            day,
-            task: task_cell.to_string(),
-        });
-    }
-    items
 }
 
 pub fn parse_routine_section(content: &str) -> HashMap<String, RoutineState> {
@@ -126,38 +65,28 @@ pub fn parse_routine_section(content: &str) -> HashMap<String, RoutineState> {
     map
 }
 
-fn weekday_num(w: Weekday) -> u32 {
-    // chrono: Mon=0..Sun=6; Node: Sun=0..Sat=6. Convert.
-    match w {
-        Weekday::Sun => 0,
-        Weekday::Mon => 1,
-        Weekday::Tue => 2,
-        Weekday::Wed => 3,
-        Weekday::Thu => 4,
-        Weekday::Fri => 5,
-        Weekday::Sat => 6,
-    }
-}
 
+/// Every entry currently recorded in today's `## Routine` section, as
+/// `{task, checked}`.
+///
+/// This is TICK STATE ONLY — it does not know which repeating items are
+/// supposed to exist today. That list lives in `Pulse/Schedule.md`'s frames map
+/// and is resolved by the frontend, which joins it against these ticks by task
+/// name. An item the user has never ticked simply has no row here and reads as
+/// unchecked, which is exactly right.
+///
+/// Order is not meaningful (the section is read into a map); the frontend
+/// orders by the frames list.
 pub fn read_routine_for_today() -> Vec<RoutineItem> {
-    let config_text = fs::read_to_string(routine_path()).unwrap_or_default();
-    let config = parse_recurring(&config_text);
-    let dow = weekday_num(Local::now().weekday());
     let ds = today_str();
-    let note_text = fs::read_to_string(daily_path(&ds)).ok();
-    let state_map = match &note_text {
-        Some(s) => parse_routine_section(s),
-        None => HashMap::new(),
+    let Ok(note_text) = fs::read_to_string(daily_path(&ds)) else {
+        return Vec::new();
     };
-    config
+    parse_routine_section(&note_text)
         .into_iter()
-        .filter(|it| it.day == dow)
-        .map(|it| {
-            let checked = state_map.get(&it.task).map(|s| s.checked).unwrap_or(false);
-            RoutineItem {
-                task: it.task,
-                checked,
-            }
+        .map(|(task, st)| RoutineItem {
+            task,
+            checked: st.checked,
         })
         .collect()
 }

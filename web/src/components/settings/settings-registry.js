@@ -106,7 +106,6 @@ export const LEGACY_TAB_ALIASES = {
   'planner':         { tab: 'modules', page: 'planner',        section: null },
   'video-settings':  { tab: 'modules', page: 'library',        section: null },
   'skills-browser':  { tab: 'modules', page: 'skills-browser', section: null },
-  'pulse':           { tab: 'modules', page: 'pulse',          section: null },
   'design':          { tab: 'agents',  page: null,             section: null },
 };
 

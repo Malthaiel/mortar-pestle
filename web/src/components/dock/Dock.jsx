@@ -59,7 +59,6 @@ export default function Dock({
   setSetting,
   setPaletteOpen, paletteOpen,
   setHintsOpen, hintsOpen,
-  setPlannerOpen, plannerOpen,
   setDownloadsOpen, downloadsOpen,
   accent,
   resolvedTheme,
@@ -97,7 +96,6 @@ export default function Dock({
     settings, setSetting, route, navigate, accent,
     setPaletteOpen, paletteOpen,
     setHintsOpen, hintsOpen,
-    setPlannerOpen, plannerOpen,
     setDownloadsOpen, downloadsOpen,
     setQuickCaptureOpen, quickCaptureOpen,
     plannerTimer: null, // sub-feature 5 wires this

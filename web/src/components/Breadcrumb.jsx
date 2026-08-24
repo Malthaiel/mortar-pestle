@@ -25,14 +25,6 @@
 
 function buildTrail(route) {
   if (!route || !route.page) return [];
-  if (route.page === 'pulse') {
-    const trail = [{ label: 'Pulse', href: '#/pulse', isLeaf: !route.sub }];
-    if (route.sub) {
-      trail.push({ label: prettifySlug(route.sub), href: null, isLeaf: true });
-    }
-    return trail;
-  }
-
   if (route.page === 'tools') {
     // Tools routes (e.g. the Anime player) own their in-pane chrome —
     // no global breadcrumb crumb.
@@ -50,12 +42,12 @@ function prettifySlug(slug) {
 }
 
 export default function Breadcrumb({ route, accent }) {
-  // The Knowledge / Infrastructure / Pulse sections and the page reader
+  // The Knowledge / Infrastructure / Planner sections and the page reader
   // (/page/*) intentionally show no path-trail breadcrumb — it was removed as
   // visual clutter. Docs (incl. the folded-in Releases tab) renders its own
   // in-pane header, so it builds no trail either.
   if (route?.page === 'page' || route?.page === 'vault'
-      || route?.page === 'pulse') return null;
+      || route?.page === 'planner') return null;
   const trail = buildTrail(route);
   if (trail.length === 0) return null;
   const accentColor = accent || 'var(--text)';

@@ -19,19 +19,37 @@ export function slugify(s) {
     .replace(/-+/g, '-');
 }
 
+// True when a routine item carries a time range (and therefore paints on the
+// calendar). An item with NEITHER start nor end is untimed — a repeating task
+// that only ever appears in the Routine tick list. See isUntimed below.
+export function isTimed(b) {
+  return !!(b && b.start && b.end);
+}
+// An item is untimed only when BOTH ends are blank. One-of-two is a half-filled
+// row, which validateDay rejects rather than silently dropping to untimed.
+export function isUntimed(b) {
+  return !!b && !b.start && !b.end;
+}
+
 // Per-day row validation → { [rowIdx]: [msgs] } (clean days → {}). Empty days
 // are allowed; ids must be unique WITHIN a day (the same id across days is
-// expected). Mirrors the rules the deleted FrameEditorModal enforced on Save.
+// expected).
+//
+// Times are OPTIONAL (Planner Consolidation — Frame and Recurring merged into
+// one Routine item). Both blank = an untimed repeating task. Both set = the
+// old frame block, same rules as before. Exactly one set is an error.
 export function validateDay(list) {
   const errors = {};
   const ids = new Set();
   (list || []).forEach((b, i) => {
     const e = [];
     if (!b.name || !b.name.trim()) e.push('Name required');
-    if (!TIME_RE.test(b.start || '')) e.push('Start must be HH:MM (24h)');
-    if (!TIME_RE.test(b.end || '')) e.push('End must be HH:MM (24h)');
-    if (TIME_RE.test(b.start) && TIME_RE.test(b.end) && b.start === b.end) {
-      e.push('Zero-duration not allowed');
+    if (!isUntimed(b)) {
+      if (!TIME_RE.test(b.start || '')) e.push('Start must be HH:MM (24h)');
+      if (!TIME_RE.test(b.end || '')) e.push('End must be HH:MM (24h)');
+      if (TIME_RE.test(b.start) && TIME_RE.test(b.end) && b.start === b.end) {
+        e.push('Zero-duration not allowed');
+      }
     }
     const id = b.id || slugify(b.name || '');
     if (id) {

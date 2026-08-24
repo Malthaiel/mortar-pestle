@@ -1812,7 +1812,9 @@ function _maybePulse() {
 
 // Vault invalidation stream. Sync return — unsub closes over the
 // Promise<UnlistenFn> returned by each listen() call.
-const VAULT_EVENT_NAMES = ['today', 'day', 'schedule', 'routine', 'skills', 'log', 'queue', 'manifest', 'file'];
+// 'routine' retired with the Planner Consolidation — the Routine config lives
+// in Pulse/Schedule.md now, so its changes arrive as 'schedule'.
+const VAULT_EVENT_NAMES = ['today', 'day', 'schedule', 'skills', 'log', 'queue', 'manifest', 'file'];
 
 export function subscribeEvents(handler) {
   function route(name, payload) {

@@ -7,12 +7,12 @@
 //! `subscribeEvents` swap is transport-only.
 //!
 //! It watches all three because `match_event`'s paths live in different vaults
-//! post Multi-Mount: `Pulse/Schedule.md`, `Pulse/Daily Logs/` and
-//! `Pulse/Recurring Tasks.md` are in the Pulse vault, while
+//! post Multi-Mount: `Pulse/Schedule.md` and `Pulse/Daily Logs/` are in the
+//! Pulse vault, while
 //! `Infrastructure/Vault State/` is in the content vault. Watching only
 //! `vault_root()` meant that whenever the active vault was the content vault —
 //! the normal case, and one with no `Pulse/` directory at all since the
-//! 2026-06-30 retirement — `schedule`, `day`, `today` and `routine` could never
+//! 2026-06-30 retirement — `schedule`, `day` and `today` could never
 //! fire, and the generic `file` event never reached the Live Preview editor for
 //! an externally-edited Pulse or App page. That silently disabled the
 //! availability push's republish-on-edit for its whole life.
@@ -174,7 +174,6 @@ pub fn match_event(rel: &Path, today_ds: &str) -> Vec<(&'static str, Option<Stri
 
     match normalized.as_str() {
         "Pulse/Schedule.md" => return vec![("schedule", None)],
-        "Pulse/Recurring Tasks.md" => return vec![("routine", None)],
         "Infrastructure/Vault State/Log.md" => return vec![("log", None)],
         "Infrastructure/Vault State/Update Queue.md" => return vec![("queue", None)],
         "Infrastructure/.cache/vault_manifest.json" => return vec![("manifest", None)],
@@ -288,14 +287,6 @@ mod tests {
         assert_eq!(
             match_event(&rel("Pulse/schedule.md"), TODAY),
             vec![("file", Some("Pulse/schedule.md".into()))],
-        );
-    }
-
-    #[test]
-    fn routine_exact_match() {
-        assert_eq!(
-            match_event(&rel("Pulse/Recurring Tasks.md"), TODAY),
-            vec![("routine", None)],
         );
     }
 

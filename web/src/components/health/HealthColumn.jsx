@@ -14,7 +14,10 @@ import { useHealthHistory } from '../../hooks/useHealthHistory.js';
 import NutritionSection from './NutritionSection.jsx';
 import FitnessSection from './FitnessSection.jsx';
 
-export default function HealthColumn({ accent = 'var(--accent)', pivotDs }) {
+// `only` narrows the column to one section for the standalone /planner/nutrition
+// and /planner/fitness routes (Planner Consolidation). Unset renders both, so
+// the Dashboard's third column is unchanged.
+export default function HealthColumn({ accent = 'var(--accent)', pivotDs, only = null }) {
   // Real-today tick (60s) — isToday greys the off-today adders in place.
   const [todayDs, setTodayDs] = useState(todayLocalStr);
   useEffect(() => {
@@ -48,9 +51,13 @@ export default function HealthColumn({ accent = 'var(--accent)', pivotDs }) {
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       <div style={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto', padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <NutritionSection accent={accent} isToday={isToday} pivotDs={pivotDs} refreshTick={tick} history={history.days} />
-        <div style={{ height: 1, background: 'var(--border-soft)', flexShrink: 0 }}/>
-        <FitnessSection accent={accent} isToday={isToday} pivotDs={pivotDs} refreshTick={tick} history={history.days} />
+        {only !== 'fitness' && (
+          <NutritionSection accent={accent} isToday={isToday} pivotDs={pivotDs} refreshTick={tick} history={history.days} />
+        )}
+        {only == null && <div style={{ height: 1, background: 'var(--border-soft)', flexShrink: 0 }}/>}
+        {only !== 'nutrition' && (
+          <FitnessSection accent={accent} isToday={isToday} pivotDs={pivotDs} refreshTick={tick} history={history.days} />
+        )}
       </div>
     </div>
   );

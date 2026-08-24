@@ -1,14 +1,28 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import DualRingRect from './watchfaces/DualRingRect.jsx';
 import CalendarPanel from './CalendarPanel.jsx';
-import { CircleChip, Dot } from '@host/components/ui/index.js';
+import { CircleChip } from '@host/components/ui/index.js';
 import {
   IconReset, IconSkip, IconChevronRight, IconX, IconCheck, IconStop,
 } from '@host/components/icons.jsx';
 
-// IconStop defaults to 15px in the pack, matching IconReset/IconSkip for the
-// 44px circle buttons. The TimerPrimary pill is text-only (no play/pause icon
-// per user request), so IconPlay/IconPause are not needed here.
+// Icon sizes in the control row are set PER CALL SITE, not left at the pack
+// default, because the default lies: `size` sets the SVG box, not the mark in
+// it. IconSkip is a Boxicons glyph on a 24 viewBox whose path only spans 7..17,
+// so it inks ~42% of its box; IconReset and IconStop are Font Awesome paths on
+// a 384/448 viewBox that fill it edge to edge. At a shared size=15 the two FA
+// marks painted ~2.4x larger than the skip arrow — which is exactly what
+// "the icons are way too large" looked like. Sizes below are tuned so all
+// three paint at matching visual weight (a solid square reads heavier than an
+// outline at equal ink, so IconStop sits smallest). Pack defaults are shared
+// app-wide and must NOT be changed for this.
+// The TimerPrimary pill is text-only (no play/pause icon per user request), so
+// IconPlay/IconPause are not needed here.
+// Measured in the live row: IconSkip at the pack default inks 6.3px. Reset is
+// matched to it; Stop sits a touch under because a solid square reads heavier
+// than an outline at equal ink.
+const ICON_RESET_PX = 7;
+const ICON_STOP_PX = 6;
 
 import { useModuleSettings } from '@host/hooks/useSettings.js';
 import { usePlanner } from './PlannerProvider.jsx';
@@ -18,6 +32,15 @@ import { BlockPopover, PullConfirmBar } from './BlockTimerUI.jsx';
 import { descFromSession, descFromPlan, resolveDesc } from './blockPull.js';
 
 function pad(n) { return String(n).padStart(2, '0'); }
+
+// Single source for the MM:SS string. While the dial is being dragged to set a
+// new duration the readout previews the drag value (MM:00) instead of secsLeft.
+// Lives at module scope because both the transport pill (built in PlannerDock)
+// and TimerWidget's PAUSED line need the identical string.
+function mmss(secsLeft, dragMins) {
+  const s = dragMins != null ? dragMins * 60 : secsLeft;
+  return `${pad(Math.floor(Math.max(0, s) / 60))}:${pad(Math.max(0, s) % 60)}`;
+}
 
 const DEFAULT_APP_ACCENT = '#c0392b';
 
@@ -55,8 +78,8 @@ export default function PlannerDock() {
   const now = new Date();
   // All Planner accents (controls, dial stroke, tab pills, active-task) draw
   // from the global appAccent now — the focus/break green distinction was
-  // dropped per user request.
-  const phaseColor = accent;
+  // dropped per user request. (The old `phaseColor` alias died with the
+  // START/PAUSE label, its only consumer.)
 
   const { settings: moduleSettings, setSetting: setModuleSetting } = useModuleSettings('planner');
   const calendarCollapsed = moduleSettings.calendarCollapsed === true;
@@ -204,29 +227,30 @@ export default function PlannerDock() {
     const elapsedMin = Math.max(1, Math.round(elapsedMs / 60000));
     return (
       <CircleChip size={ctrlCircleSize} onClick={endSessionEarly}
-        title={`End session early · logs ${elapsedMin}m`}><IconStop/></CircleChip>
+        title={`End session early · logs ${elapsedMin}m`}><IconStop size={ICON_STOP_PX}/></CircleChip>
     );
   })() : (
     <CircleChip size={ctrlCircleSize} onClick={skipPhase}
       title={phase === 'focus' ? 'Skip to break' : 'Skip to focus'}><IconSkip/></CircleChip>
   );
+  // The pill IS the readout now — the standalone MM:SS above the row is gone.
+  // dragMins flows through so the pill previews the new duration while the dial
+  // is dragged to set time (the job the deleted readout used to do).
+  const timeStr = mmss(secsLeft, dragMins);
   const controlsJSX = blockRun ? (
     <>
       <CircleChip size={ctrlCircleSize} onClick={stopBlockRun}
         title="Cancel block timer — nothing is logged"><IconX/></CircleChip>
+      {/* Read-only: a block run has no pause (it would drift the finish past the
+          block's calendar end), so the pill is a display only. */}
+      <TimerPrimary readOnly time={timeStr} scale={scale}/>
       <CircleChip size={ctrlCircleSize} onClick={finishBlockEarly}
         title="Finish block early — trims the block to now"><IconCheck/></CircleChip>
     </>
   ) : (
     <>
-      <CircleChip size={ctrlCircleSize} onClick={resetTimer} title="Reset"><IconReset/></CircleChip>
-      <TimerPrimary
-        onClick={toggleTimer}
-        phaseColor={phaseColor}
-        running={running}
-        sessionStart={sessionStart}
-        scale={scale}
-      />
+      <CircleChip size={ctrlCircleSize} onClick={resetTimer} title="Reset"><IconReset size={ICON_RESET_PX}/></CircleChip>
+      <TimerPrimary onClick={toggleTimer} time={timeStr} scale={scale}/>
       {ctrlThird}
     </>
   );
@@ -407,15 +431,9 @@ function TimerWidget({
   scale = 1,
   innerControls = null,
 }) {
-  const paused = !running && !!sessionStart;
-
-  // While dragging the dial to set a new duration, the readout previews the
-  // drag value (MM:00) instead of the live secsLeft. Replaces the in-dial
-  // "X MIN" overlay an earlier watchface used to render in-dial.
-  const displaySecs = dragMins != null ? dragMins * 60 : secsLeft;
-  const mm = pad(Math.floor(Math.max(0, displaySecs) / 60));
-  const ss = pad(Math.max(0, displaySecs) % 60);
-
+  // No digits are rendered at this level any more — MM:SS lives in the transport
+  // pill (see TimerPrimary), and the "PAUSED — MM:SS LEFT" line below the ring
+  // was removed entirely (user-directed 2026-08-13).
   const glowOn    = settings.animations?.['clock-ambient'] !== false;
 
   // Candy-shell depression for the compact rect ring-button stays synced with
@@ -443,21 +461,6 @@ function TimerWidget({
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-
-  // Flat MM:SS readout — no card chrome, no 3D text-shadow, no flip animation.
-  // Just mono digits at hero scale. Per user request to "remove the flip clock
-  // entirely and just keep the 30:00. remove the 3d effect from the 30:00."
-  const TimeReadout = ({ size }) => (
-    <div style={{
-      fontFamily: 'var(--font-mono)',
-      fontWeight: 600,
-      fontVariantNumeric: 'tabular-nums',
-      fontSize: size,
-      lineHeight: 1,
-      letterSpacing: '0.05em',
-      color: 'var(--text)',
-    }}>{mm}:{ss}</div>
-  );
 
   return (
     <div style={{
@@ -520,14 +523,10 @@ function TimerWidget({
                 onPressedChange={setPressed}
               />
               {innerControls && (
-                <div className="planner-ring-inner-controls"
-                  style={{ gap: Math.round(4 * scale) }}>
-                  {/* 30:00 now lives INSIDE the dial, above the 3 buttons.
-                      pointer-events:none so it doesn't block drag-to-set on the
-                      ring surface beneath it. */}
-                  <div style={{ pointerEvents: 'none' }}>
-                    <TimeReadout size={Math.round(34 * scale * 0.42)}/>
-                  </div>
+                <div className="planner-ring-inner-controls">
+                  {/* MM:SS lives inside the transport pill itself now, so this
+                      layer is a single centred row of controls — no separate
+                      readout, no column gap. */}
                   <div style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     gap: Math.round(6 * scale),
@@ -539,47 +538,60 @@ function TimerWidget({
               </div>
             </div>
           </div>
-
-        {/* Paused indicator (no wall-clock pill — removed globally per user
-            request to drop the session time range). */}
-        {paused && (
-          <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            fontSize: 9, color: 'rgba(245,244,241,0.45)',
-            fontFamily: 'var(--font-mono)',
-            fontVariantNumeric: 'tabular-nums',
-            letterSpacing: '0.06em', textTransform: 'uppercase',
-          }}>
-            <Dot color="rgba(245,244,241,0.45)" size={5}/>
-            PAUSED — {mm}:{ss} LEFT
-          </span>
-        )}
       </div>
     </div>
   );
 }
 
-function TimerPrimary({ onClick, phaseColor, running, sessionStart, scale = 1 }) {
-  // START / PAUSE / RESUME share the same filled candy pill — text-only, no
-  // play/pause icon (per user request). The pill inherits the global
-  // `var(--accent)` from :root so the accent picker drives it directly.
-  // Shrinks to match the inner-ring height of the rect ring-button (height
-  // matches sibling CircleChips at 26px).
-  const label = running ? 'PAUSE' : (sessionStart ? 'RESUME' : 'START');
+// The pill HUGS the digits: no fixed width, no fixed height, no letter-spacing.
+// The face carries one padding value on all four sides, so the gap above and
+// below the numbers equals the gap left and right BY CONSTRUCTION — nothing to
+// keep in sync, and it stays true at every dock `scale` and for any digit string.
+// (An earlier pass did the opposite — held the pill at a fixed 80px-wide box and
+// spread the digits with tracking to fill it. Reverted 2026-08-13: user wants the
+// box sized to the numbers, not the numbers stretched to the box.)
+const DIGIT_FONT_PX = 12;      // design px, multiplied by `scale`
+const DIGIT_PAD_PX = 4;        // design px, ALL FOUR sides, multiplied by `scale`
+
+function TimerPrimary({ onClick, time, readOnly = false, scale = 1 }) {
+  // The start/pause control shows the LIVE MM:SS instead of a START/PAUSE/RESUME
+  // word (user request) — text-only, no play/pause icon (also per user request).
+  // Behaviour is unchanged: it still toggles the timer. There is deliberately NO
+  // paused-state treatment (a blink was built and cut, 2026-08-13): the digits
+  // simply stop advancing, and that is the cue.
+  // The pill inherits the global `var(--accent)` from :root so the accent picker
+  // drives it directly. Shrinks to match the inner-ring height of the rect
+  // ring-button (height matches sibling CircleChips at 26px).
   return (
     <button
-      onClick={onClick}
+      onClick={readOnly ? undefined : onClick}
+      tabIndex={readOnly ? -1 : undefined}
       className="candy-btn is-primary"
       data-shape="block"
       style={{
-        minWidth: Math.round(80 * scale),
-        height: Math.round(23 * scale),
-        // #2: nudged +1px (was -1px) so START sits a hair lower than its sibling chips.
+        // No minWidth and no height: the button is sized by the face's padded
+        // content, which is what makes the four gaps equal.
+        minWidth: 0,
+        height: 'auto',
         transform: 'translateY(0px)',
         '--cbtn-depth': '5px',
+        ...(readOnly ? { pointerEvents: 'none' } : null),
       }}
     >
-      <span className="candy-face" style={{ padding: `0 ${Math.round(12 * scale)}px`, fontSize: 11 }}>{label}</span>
+      <span
+        className="candy-face planner-timer-digits"
+        style={{
+          // One value, all four sides — this is the whole trick. lineHeight 1
+          // makes the text box exactly the glyph height, so the top and bottom
+          // gaps are this padding and nothing else.
+          padding: Math.round(DIGIT_PAD_PX * scale),
+          fontSize: Math.round(DIGIT_FONT_PX * scale),
+          // Mono + tabular so the digits don't jitter sideways as they tick.
+          fontFamily: 'var(--font-mono)',
+          fontVariantNumeric: 'tabular-nums',
+          lineHeight: 1,
+        }}
+      >{time}</span>
     </button>
   );
 }

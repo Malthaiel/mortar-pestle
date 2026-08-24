@@ -16,7 +16,7 @@ import { useCallback, useMemo } from 'react';
 import { api } from '../api.js';
 import { weekdayForKey } from '../util/events.js';
 import { minsToHM } from '../util/time.js';
-import { validateDay, makeUniqueId } from '../util/frames.js';
+import { validateDay, makeUniqueId, isTimed } from '../util/frames.js';
 import { useFrameForDates } from './useFrameForDate.js';
 
 export function useFrameEditing(dateKeys, { pushUndo = null } = {}) {
@@ -28,10 +28,13 @@ export function useFrameEditing(dateKeys, { pushUndo = null } = {}) {
   // Flatten each visible day's frame segments into one list, then expose a
   // helper that appends them to a caller's session array so packDaySessions
   // lanes frame + real sessions together.
+  // UNTIMED items are filtered out here (Planner Consolidation): a routine item
+  // with no start/end has no calendar position and would otherwise reach
+  // packDaySessions as a block with undefined times.
   const frameSegments = useMemo(() => {
     const out = [];
     for (const ds of dateKeys) {
-      if (frameByDay[ds]) out.push(...frameByDay[ds]);
+      if (frameByDay[ds]) out.push(...frameByDay[ds].filter(isTimed));
     }
     return out;
   }, [frameByDay, dateKeys]);

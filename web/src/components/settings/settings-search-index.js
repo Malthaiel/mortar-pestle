@@ -25,7 +25,6 @@
 //   components/SettingsDrawer.jsx          — AppearanceTab (Motion + Press & depth)
 //   components/settings/NavigationTab.jsx  — dock/left/right/general sub-tab rows
 //   components/settings/SystemTab.jsx      — build, updates, downloads, recycle rows
-//   components/settings/PulseViewsPage.jsx — pulse module-page rows
 //   components/settings/AgentsTab.jsx      — general/atelier sub-tab rows
 //   components/settings/AnimationRows.jsx  — ROWS (11 toggles), relocated into
 //                                            Appearance / Navigation / Planner
@@ -160,13 +159,13 @@ export const SETTINGS_SEARCH_INDEX = [
     keywords: ['dock', 'rearrange', 'reset', 'reorder'] },
 
   // ── Pulse Views ────────────────────────────────────────────────────────────
-  { id: 'pulse.timeFormat', label: 'Time format', tabId: 'pulse', anchor: 'set-timeFormat24h',
+  { id: 'planner.timeFormat', label: 'Time format', tabId: 'planner', anchor: 'set-timeFormat24h',
     keywords: ['24h', '12h', 'clock', 'am', 'pm'], valueText: (s) => (s?.timeFormat24h ? '24h' : '12h') },
-  { id: 'pulse.hourHeight', label: 'Calendar hour height', tabId: 'pulse', anchor: 'set-calendarHourHeight',
+  { id: 'planner.hourHeight', label: 'Calendar hour height', tabId: 'planner', anchor: 'set-calendarHourHeight',
     keywords: ['calendar', 'zoom', 'row', 'planner'], settingsKey: 'calendarHourHeight' },
-  { id: 'pulse.hourGutter', label: 'Hour gutter', tabId: 'pulse', anchor: 'set-showCalendarHourGutter',
+  { id: 'planner.hourGutter', label: 'Hour gutter', tabId: 'planner', anchor: 'set-showCalendarHourGutter',
     keywords: ['calendar', 'labels', 'times'], valueText: (s) => (s?.showCalendarHourGutter !== false ? 'show' : 'hide') },
-  { id: 'pulse.fitnessStreak', label: 'Workout streak counter', tabId: 'pulse', anchor: 'set-showFitnessStreak',
+  { id: 'planner.fitnessStreak', label: 'Workout streak counter', tabId: 'planner', anchor: 'set-showFitnessStreak',
     keywords: ['health', 'fitness', 'streak', 'workout', 'planner', 'dumbbell'], valueText: (s) => (s?.showFitnessStreak === true ? 'show' : 'hide') },
   // ── Agents ────────────────────────────────────────────────────────────────
   { id: 'agents.backend', label: 'Auth backend', tabId: 'agents', section: 'general', anchor: 'set-agents-authBackend',

@@ -21,7 +21,6 @@ import ModulePage from './settings/ModulePage.jsx';
 import AreaReleasesView from '../pages/docs/AreaReleasesView.jsx';
 import { moduleIdForArea } from '../hooks/useModuleAreas.js';
 import { AREA_PALETTE } from '../hooks/useReleaseQueue.js';
-import PulseViewsPage from './settings/PulseViewsPage.jsx';
 import SystemTab from './settings/SystemTab.jsx';
 import { useModuleEnabledMap } from '../hooks/useModuleEnabled.js';
 import { candyGap } from '../util/candy.js';
@@ -192,11 +191,11 @@ export default function SettingsDrawer({ open, onClose, settings, setSetting, se
 
   // Module settings pages, keyed by module id: each module's registered
   // settings-tab render, plus host-provided pages for modules that register
-  // none (pulse → Pulse Views).
+  // none. (The pulse → Pulse Views fallback retired with the Planner
+  // Consolidation; those rows now live in the Planner module's own tab.)
   const pagesByModuleId = useMemo(() => {
     const map = {};
     for (const pt of moduleTabs) if (!map[pt.moduleId]) map[pt.moduleId] = pt;
-    if (!map.pulse) map.pulse = { id: 'pulse-views', moduleId: 'pulse', label: 'Pulse Views', render: PulseViewsPage };
     return map;
   }, [moduleTabs]);
   const enabledMap = useModuleEnabledMap();
@@ -805,8 +804,9 @@ function AppearanceTab({ settings, setSetting, setPreviewAccent, accent, resolve
 // SystemTab (Build + Updates + Downloads + Recycling Bin) moved to
 // settings/SystemTab.jsx; the Vault status strip moved to settings/VaultsTab.jsx.
 
-// PulseViewsTab moved to settings/PulseViewsPage.jsx — it now renders as the
-// pulse module's settings page under Settings → Modules.
+// PulseViewsTab is gone (Planner Consolidation). Its rows — time format, hour
+// height, hour gutter, workout streak — moved into the Planner module's own
+// SettingsTab, which owns every surface they affect.
 
 // AccentGrid + HexInput now live in ui/AccentPicker.jsx (shared with the
 // Planner Settings tab + planner event modal); imported at the top.

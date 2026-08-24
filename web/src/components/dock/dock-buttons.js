@@ -35,9 +35,11 @@ export const DOCK_BUTTONS = [
     isActive: (ctx) => !!ctx.hintsOpen,
   },
   {
-    id: 'planner', group: 'tools', Icon: IconLayoutGrid, label: 'Open planner',
-    onClick: (ctx) => ctx.setPlannerOpen(true),
-    isActive: (ctx) => !!ctx.plannerOpen,
+    id: 'planner', group: 'tools', Icon: IconLayoutGrid, label: 'Planner',
+    // Navigates now — the pop-up window it used to open is deleted and the
+    // Planner is a route section (Planner Consolidation).
+    onClick: (ctx) => ctx.navigate('/planner'),
+    isActive: (ctx) => ctx.route?.page === 'planner',
   },
   {
     id: 'quick-capture', group: 'tools', Icon: IconPlus, label: 'Quick capture',
@@ -46,11 +48,9 @@ export const DOCK_BUTTONS = [
     visible: () => false, // hidden until sub-feature 5
   },
   // Pages
-  {
-    id: 'today', group: 'pages', Icon: IconCalendar, label: 'Today',
-    onClick: (ctx) => ctx.navigate('/pulse/today'),
-    isActive: (ctx) => ctx.route?.path?.startsWith('/pulse/today'),
-  },
+  // The 'today' button retired with the Planner Consolidation. Saved dock
+  // orders still holding the id are dropped by effectiveOrder() in Dock.jsx,
+  // so no migration is needed.
   {
     id: 'docs', group: 'pages', Icon: IconBookOpen, label: 'Docs',
     onClick: (ctx) => ctx.navigate('/docs'),

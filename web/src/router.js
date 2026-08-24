@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 
 export const ROUTES = [
-  { path: '/pulse',                       page: 'pulse',          label: 'Pulse',           accentKey: 'pulse' },
+  // accentKey stays 'pulse' — it names an accent-palette slot, not the module.
+  { path: '/planner',                     page: 'planner',        label: 'Planner',         accentKey: 'pulse' },
   { path: '/vault',                       page: 'vault',          label: 'Vault View',      accentKey: 'knowledge' },
   { path: '/graph',                       page: 'graph',          label: 'Graph',           accentKey: 'knowledge' },
   { path: '/game-wiki',                   page: 'game-wiki',      label: 'Game Wiki',       accentKey: 'knowledge' },
@@ -18,7 +19,7 @@ const PARAM_ROUTES = [
   // Game Wiki — read-only multi-game reference reader (separate GameWiki vault).
   { pattern: /^\/game-wiki\/(.+)$/,                page: 'game-wiki',      captures: ['rest'] },
   { pattern: /^\/tools\/([^/]+)(?:\/(.*))?$/,          page: 'tools',          captures: ['sub', 'rest'] },
-  { pattern: /^\/pulse\/([^/]+)$/,                 page: 'pulse',          captures: ['sub'] },
+  { pattern: /^\/planner\/([^/]+)$/,               page: 'planner',        captures: ['sub'] },
   { pattern: /^\/docs\/([^/]+)(?:\/(.+))?$/,       page: 'docs',           captures: ['sub', 'rest'] },
   { pattern: /^\/page\/(.+)$/,                     page: 'page',           captures: ['sub'] },
 ];

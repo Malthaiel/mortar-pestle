@@ -2,10 +2,14 @@ import { PlannerProvider } from './PlannerProvider.jsx';
 import PlannerDock from './PlannerDock.jsx';
 import { TaskDragOverlay } from './TaskDragOverlay.jsx';
 import SettingsTab from './SettingsTab.jsx';
-import CalendarSection from './CalendarSection.jsx';
+import PlannerNav from './PlannerNav.jsx';
+import PlannerRail from './PlannerRail.jsx';
+import DashboardPage from './DashboardPage.jsx';
+import { CalendarPage, NutritionPage, FitnessPage } from './leafPages.jsx';
 import { bindPlannerApi } from './api.js';
 import { PLANNER_RAIL_VARIANTS, PlannerMiniRail } from './rails/index.jsx';
 import { registerModuleKeybinds } from '@host/keybinds/registry.js';
+import SidebarPill from '@host/components/SidebarPill.jsx';
 
 // Candy-tile shell around the dock. The shell always fills the sidebar slot
 // (flex-grow:1); the wrapper's align-items:flex-start lets the candy TILE hug
@@ -84,9 +88,46 @@ export default {
       render: SettingsTab,
     });
     api.slots.registerOverlay(TaskDragOverlay);
+
+    // Left-sidebar section (Planner Consolidation) — takes over the slot and
+    // the order:20 position the retired Pulse module held. The tree is the
+    // secondary nav; PlannerRail is the collapsed rail. Note the WIDGET slot
+    // above has its own renderRail (the right sidebar) — separate registration.
+    const { IconLayoutGrid } = api.ui.icons;
+    api.slots.registerLeftSidebar({
+      id: 'planner',
+      render: ({ collapsed, accent, active }) => (
+        <SidebarPill
+          Icon={IconLayoutGrid}
+          label="Planner"
+          expanded={!collapsed}
+          accent={accent}
+          active={active}
+          onClick={() => api.router.navigate('/planner')}
+        />
+      ),
+      isActive: (route) => route.page === 'planner'
+        || (route.page === 'page' && typeof route.sub === 'string' && route.sub.startsWith('Pulse/')),
+      renderSecondary: ({ route, accent }) => <PlannerNav route={route} accent={accent}/>,
+      renderRail: ({ accent }) => <PlannerRail accent={accent}/>,
+      order: 20,
+    });
+
+    // The /planner subtree. Each leaf is its own exact match — no broad
+    // fallback, so an unknown sub falls through to the shell's not-found
+    // rather than silently rendering the dashboard.
+    const PAGES = {
+      '/planner':           DashboardPage,
+      '/planner/calendar':  CalendarPage,
+      '/planner/nutrition': NutritionPage,
+      '/planner/fitness':   FitnessPage,
+    };
     api.slots.registerRoute({
-      match: r => (r === '/pulse/calendar' ? {} : false),
-      render: () => <CalendarSection/>,
+      match: (path) => (PAGES[path] ? { path } : false),
+      render: ({ params, accent }) => {
+        const Page = PAGES[params.path];
+        return <Page accent={accent}/>;
+      },
     });
   },
 };

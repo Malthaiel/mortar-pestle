@@ -13,7 +13,7 @@
 
 import { useModuleSettings } from '@host/hooks/useSettings.js';
 import { AccentGrid, HexInput } from '@host/components/ui/AccentPicker.jsx';
-import { Seg } from '@host/components/ui/index.js';
+import { Seg, Slider } from '@host/components/ui/index.js';
 import { AnimationField } from '@host/components/settings/AnimationRows.jsx';
 
 const inputStyle = {
@@ -100,6 +100,41 @@ export default function SettingsTab({ settings: hostSettings, setSetting: setHos
               { value: false, label: '12h' },
             ]}
             onChange={v => setHostSetting?.('timeFormat24h', v)}
+            accent={accent}
+          />
+        </SettingRow>
+        {/* Moved here from the retired Pulse Views settings page (Planner
+            Consolidation) — the Planner owns every surface these affect. */}
+        <SettingRow stacked anchor="set-calendarHourHeight" label="Hour height">
+          <Slider
+            value={hostSettings?.calendarHourHeight}
+            min={40} max={80} step={2} unit="px"
+            accent={accent}
+            onChange={v => setHostSetting?.('calendarHourHeight', v)}
+          />
+        </SettingRow>
+        <SettingRow anchor="set-showCalendarHourGutter" label="Hour gutter">
+          <Seg
+            value={hostSettings?.showCalendarHourGutter !== false}
+            options={[
+              { value: true,  label: 'Show' },
+              { value: false, label: 'Hide' },
+            ]}
+            onChange={v => setHostSetting?.('showCalendarHourGutter', v)}
+            accent={accent}
+          />
+        </SettingRow>
+      </SectionBand>
+
+      <SectionBand title="Health">
+        <SettingRow anchor="set-showFitnessStreak" label="Workout streak counter">
+          <Seg
+            value={hostSettings?.showFitnessStreak === true}
+            options={[
+              { value: true,  label: 'Show' },
+              { value: false, label: 'Hide' },
+            ]}
+            onChange={v => setHostSetting?.('showFitnessStreak', v)}
             accent={accent}
           />
         </SettingRow>

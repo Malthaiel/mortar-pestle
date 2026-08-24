@@ -30,6 +30,11 @@ import MiniMonthPicker from './MiniMonthPicker.jsx';
 import NewEventModal from './NewEventModal.jsx';
 import PaneHeader from './PaneHeader.jsx';
 import { TaskChip, NoteChip, Group, Subdued, shortDate } from './ItemChips.jsx';
+import RoutineChip from './RoutineChip.jsx';
+import { useRoutineItems } from '../../hooks/useRoutineItems.js';
+import { useDailyFrame } from '../../hooks/useDailyFrame.js';
+import { makeUniqueId } from '../../util/frames.js';
+import { weekdayForKey } from '../../util/events.js';
 import { playCelebrationChime } from '../../hooks/useTactileSound.js';
 import { usePlanner } from '@modules/core/planner/PlannerProvider.jsx';
 
@@ -231,6 +236,25 @@ export default function DayPane({ accent = 'var(--accent)', pivotDs, onPivotChan
 
   const [modalOpen, setModalOpen] = useState(false);
   const [addingTask, setAddingTask] = useState(false);
+  const [addingRoutine, setAddingRoutine] = useState(false);
+
+  // Routine items for the viewed weekday + the writer that creates an UNTIMED
+  // one. A new item is born with no start/end — it lives in the list only until
+  // it's dragged onto the calendar, which is what gives it a time.
+  const routine = useRoutineItems(pivotDs, tick);
+  const { frames, writeFrames } = useDailyFrame();
+  const addRoutineItem = async (text) => {
+    const name = (text || '').trim();
+    if (!name) return;
+    const dayKey = weekdayForKey(pivotDs).toLowerCase();
+    const day = frames?.[dayKey] || [];
+    const next = {
+      ...frames,
+      [dayKey]: [...day, { id: makeUniqueId(day, name), name }],
+    };
+    try { await writeFrames(next); }
+    catch (e) { console.error('routine add failed', e); }
+  };
   const [addingNote, setAddingNote] = useState(false);
 
   // Date-header month popover — the date chip IS the picker button. Positioned
@@ -411,6 +435,40 @@ export default function DayPane({ accent = 'var(--accent)', pivotDs, onPivotChan
                     ))}
                   </ul>
                 </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* ── Routine — repeating items for this weekday (Frame + Recurring
+            merged, Planner Consolidation). Timed ones also paint on the
+            calendar; untimed ones live only here. Sits above Tasks List: the
+            recurring shape of the day comes before its one-offs. ── */}
+        <section style={{ marginBottom: 18 }}>
+          <div className="candy-center-row" style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            marginBottom: 10,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+              <PaneHeader>Routine</PaneHeader>
+              <CountBadge>{routine.done}/{routine.total}</CountBadge>
+            </div>
+            <AddCircle isToday={isToday} label="New routine item" onClick={() => setAddingRoutine(true)}/>
+          </div>
+          {addingRoutine && (
+            <InlineAdd
+              placeholder="New routine item — Enter to add, Esc to cancel"
+              onSubmit={addRoutineItem}
+              onClose={() => setAddingRoutine(false)}
+            />
+          )}
+          {routine.total === 0 && !addingRoutine && (
+            <Subdued>No routine items for this day.</Subdued>
+          )}
+          {routine.total > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {routine.items.map(it => (
+                <RoutineChip key={it.id} item={it} onToggle={routine.toggle}/>
               ))}
             </div>
           )}

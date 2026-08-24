@@ -11,6 +11,7 @@ import RightRailStack from './sidebar/RightRailStack.jsx';
 import ResizeSeam, { DRAG_EASE } from './ui/ResizeSeam.jsx';
 import { useToolkitExpanded } from '../hooks/useToolkitExpanded.js';
 import { useKeybindHold } from '../keybinds/useKeybind.js';
+import { todayLocalStr } from '../util/time.js';
 
 const WIDGET_ORDER_KEY = 'widgets:order';
 
@@ -36,15 +37,25 @@ function readInitialToolkitWidth() {
 
 const ROOT_DEFAULTS = {};
 
+// `/pulse/*` retired with the Planner Consolidation — the Pulse MODULE is gone
+// and the section lives at `/planner/*`. The Pulse VAULT is untouched, so
+// `/page/Pulse/...` links still resolve normally and `/pulse/today` keeps
+// meaning "open today's daily log".
+const todayLogPath = () => '/page/' + encodeURIComponent('Pulse/Daily Logs/' + todayLocalStr());
+
 const LEGACY_REDIRECTS = [
-  { match: /^\/pomodoro\/(timer|analytics|notes)\/?$/, to: () => '/pulse/calendar' },
-  { match: /^\/pomodoro\/?$/,                          to: '/pulse/calendar' },
-  { match: /^\/pulse\/timer\/?$/,                      to: '/pulse/calendar' },
-  { match: /^\/pulse\/analytics\/?$/,                  to: '/pulse/calendar' },
-  { match: /^\/pulse\/notes\/?$/,                      to: '/pulse/calendar' },
+  { match: /^\/pomodoro\/(timer|analytics|notes)\/?$/, to: () => '/planner/calendar' },
+  { match: /^\/pomodoro\/?$/,                          to: '/planner/calendar' },
+  { match: /^\/pulse\/timer\/?$/,                      to: '/planner/calendar' },
+  { match: /^\/pulse\/analytics\/?$/,                  to: '/planner/calendar' },
+  { match: /^\/pulse\/notes\/?$/,                      to: '/planner/calendar' },
+  { match: /^\/pulse\/calendar\/?$/,                   to: '/planner/calendar' },
+  { match: /^\/pulse\/recurring\/?$/,                  to: '/planner' },
+  { match: /^\/pulse\/today\/?$/,                      to: todayLogPath },
+  { match: /^\/pulse\/?$/,                             to: '/planner' },
   { match: /^\/vital-systems\/vault\/?$/,              to: '/infrastructure/update-queue' },
-  { match: /^\/vital-systems\/projects\/?$/,           to: '/pulse/today' },
-  { match: /^\/vital-systems(\/.*)?$/,                 to: (m) => '/pulse' + (m[1] || '/today') },
+  { match: /^\/vital-systems\/projects\/?$/,           to: todayLogPath },
+  { match: /^\/vital-systems(\/.*)?$/,                 to: (m) => (m[1] ? '/planner' + m[1] : todayLogPath()) },
 ];
 
 function applyLegacyRedirect(path) {

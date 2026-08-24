@@ -12,7 +12,7 @@
 import { useEffect, useState } from 'react';
 import { skillsApi } from './api.js';
 import { useSkillsData, findSkillBySlug } from './SkillsProvider.jsx';
-import SectionHeader, { EmptyState } from '@host/pages/pulse/SectionHeader.jsx';
+import { SectionHeader, EmptyState } from '@host/components/ui/Section.jsx';
 import { PrimaryBtn } from '@host/components/ui/index.js';
 import { IconChevronLeft } from '@host/components/icons.jsx';
 import SkillArgsForm from './SkillArgsForm.jsx';

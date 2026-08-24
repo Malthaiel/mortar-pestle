@@ -51,7 +51,7 @@ const CHIP_ROW_STYLE = { display: 'flex', alignItems: 'center', width: '100%' };
 // released in place doesn't re-focus into edit. Pointer listeners are capture-
 // phase + transient (added on mousedown, torn down on the timer / release).
 const HOLD_MS = 180;
-function useHoldDrag({ disabled, onPickup }) {
+export function useHoldDrag({ disabled, onPickup }) {
   const draggingRef = useRef(false);
   const onMouseDown = useCallback((e) => {
     if (e.button !== 0 || disabled) return;
