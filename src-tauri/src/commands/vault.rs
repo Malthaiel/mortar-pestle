@@ -33,10 +33,9 @@ pub fn vault_root() -> String {
         .unwrap_or_else(|| "Citadel".to_string())
 }
 
-/// Path to a vault helper script under `Infrastructure/Scripts/`.
+/// Content-vault root that really holds `Infrastructure/Scripts/`.
 ///
-/// The scripts only exist in the CONTENT vault (Citadel), but `vault_root()`
-/// returns the *active* vault — so opening any other vault (e.g.
+/// `vault_root()` returns the *active* vault, so opening any other vault (e.g.
 /// `Documents\Personal`, which has no `Infrastructure/` at all) resolved every
 /// helper to a path that does not exist. Python then exits 2, which the
 /// qBittorrent probe reported as "cannot reach the Web UI": a missing file
@@ -44,8 +43,11 @@ pub fn vault_root() -> String {
 /// with a message pointing at the wrong program (2026-08-24).
 ///
 /// Measured, not assumed — the active vault is used only when the folder is
-/// really there, otherwise the built-in Citadel fallback.
-pub fn script_path(rel: &str) -> PathBuf {
+/// really there, otherwise the built-in Citadel fallback. Also the value to
+/// hand any Python child as `--vault`: those resolve their own sibling scripts
+/// from it, so passing the active vault reintroduced the same bug one process
+/// deeper (2026-08-24).
+pub fn content_vault_root() -> PathBuf {
     // `dirs::document_dir()` is not one place on Windows: with OneDrive folder
     // backup on it reports `…\OneDrive\Documents` while the vault sits in the
     // un-redirected `…\Documents`. So both are candidates and the one that
@@ -57,14 +59,18 @@ pub fn script_path(rel: &str) -> PathBuf {
     if let Some(h) = dirs::home_dir() {
         roots.push(h.join("Documents").join("Citadel"));
     }
-    let scripts = |r: &PathBuf| r.join("Infrastructure").join("Scripts");
-    roots
+    let found = roots
         .iter()
-        .find(|r| scripts(r).is_dir())
-        .map(|r| scripts(r).join(rel))
-        // Nothing on disk anywhere — hand back the first candidate so the
-        // caller's "missing at {path}" error names something recognisable.
-        .unwrap_or_else(|| scripts(&roots[0]).join(rel))
+        .find(|r| r.join("Infrastructure").join("Scripts").is_dir())
+        .cloned();
+    // Nothing on disk anywhere — hand back the first candidate so the caller's
+    // "missing at {path}" error names something recognisable.
+    found.unwrap_or_else(|| roots.swap_remove(0))
+}
+
+/// Path to a vault helper script under `Infrastructure/Scripts/`.
+pub fn script_path(rel: &str) -> PathBuf {
+    content_vault_root().join("Infrastructure").join("Scripts").join(rel)
 }
 
 /// App Vault root — backs the Docs + Releases surfaces. Precedence:
@@ -675,6 +681,23 @@ pub fn vault_render_reference(
 #[tauri::command]
 pub fn vault_resolve_link(target: String, embed: bool) -> render::ResolveLinkOut {
     render::resolve_link(&target, embed)
+}
+
+#[cfg(test)]
+mod script_path_tests {
+    use super::*;
+
+    /// Guards the 2026-08-24 regression: with a non-Citadel vault active
+    /// (`Documents\Personal`), every helper script resolved under a tree that
+    /// has no `Infrastructure/` at all and Python died with `Errno 2`.
+    /// Env-free on purpose — `AGENTIC_VAULT_ROOT` is shared with the docs tests,
+    /// and the invariant holds whatever it is set to.
+    #[test]
+    fn script_path_lands_in_a_real_scripts_folder() {
+        let p = script_path("qbittorrent_client.py");
+        let dir = p.parent().unwrap();
+        assert!(dir.is_dir(), "script_path resolved to {p:?} — {dir:?} is not a folder");
+    }
 }
 
 #[cfg(test)]

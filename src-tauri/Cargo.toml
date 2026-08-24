@@ -54,6 +54,11 @@ uuid = { version = "1", features = ["v4"] }
 # SF3 of Design Mode — Tauri-side Atelier agent backend.
 reqwest = { version = "0.12", features = ["json", "stream", "rustls-tls"], default-features = false }
 futures-util = "0.3"
+# Built-in BitTorrent engine — replaces the external qBittorrent Web UI for the
+# Anime download pipeline. `default-tls` (schannel on Windows), NOT `rust-tls`:
+# that feature routes both the TLS stack and the sha1 backend through aws-lc-rs,
+# whose build needs NASM and fails on this machine. Measured 2026-08-24.
+librqbit = { version = "9", default-features = false, features = ["default-tls"] }
 eventsource-stream = "0.2"
 # Password Vault — Argon2id KDF deriving a key that seals the credential store
 # with XChaCha20-Poly1305 (AEAD). `zeroize` scrubs the key + decrypted plaintext.

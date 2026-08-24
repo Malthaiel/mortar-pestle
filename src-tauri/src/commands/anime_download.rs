@@ -635,10 +635,12 @@ async fn process_job(app: &AppHandle, job_id: &str) {
         finalize_error(app, job_id, "download script not found (scripts/download_anime.py)");
         return;
     };
-    let vault = vault::vault_root();
     // Card + cover now live in the writable Library vault (Library Migration
-    // Phase 2); --vault stays content so the script finds Infrastructure/Scripts/
-    // (nyaa_search.py, qbittorrent_client.py), --library is the catalog base.
+    // Phase 2); --vault must be the CONTENT vault so the script finds
+    // Infrastructure/Scripts/ (nyaa_search.py, qbittorrent_client.py) — not the
+    // active vault, which is whatever the user has open. --library is the
+    // catalog base.
+    let vault = vault::content_vault_root();
     let library = vault::library_vault_root();
     let save_root = crate::commands::video_config::anime_video_root(app, &library);
 

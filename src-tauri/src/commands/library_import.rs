@@ -715,7 +715,9 @@ async fn spawn_anime_card(
     a: &ParsedAnime,
     save_root: &std::path::Path,
 ) -> Option<bool> {
-    let vault = crate::commands::vault::vault_root();
+    // --vault is download_anime.py's Infrastructure/Scripts/ base, so it must be
+    // the content vault, not whichever vault happens to be active.
+    let vault = crate::commands::vault::content_vault_root();
     let library = crate::commands::vault::library_vault_root();
     let status = if a.status.is_empty() { "Plan-to-Watch" } else { &a.status };
     let mut cmd = crate::commands::proc_util::python_cmd();

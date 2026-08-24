@@ -170,6 +170,10 @@ fn main() {
         "anime_recommendations",
         "character_full",
         "person_full",
+        // Built-in torrent engine (librqbit) — SF1 of Built-in Torrent Engine.
+        "torrent_add",
+        "torrent_state",
+        "torrent_delete",
         "qbit_get_config",
         "qbit_set_config",
         "qbit_status",

@@ -48,6 +48,7 @@ pub mod sidebar;
 pub mod site;
 pub mod skills;
 pub mod stt;
+pub mod torrent;
 pub mod vault;
 pub mod vaults;
 pub mod video_editor;
