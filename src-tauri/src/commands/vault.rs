@@ -33,6 +33,40 @@ pub fn vault_root() -> String {
         .unwrap_or_else(|| "Citadel".to_string())
 }
 
+/// Path to a vault helper script under `Infrastructure/Scripts/`.
+///
+/// The scripts only exist in the CONTENT vault (Citadel), but `vault_root()`
+/// returns the *active* vault — so opening any other vault (e.g.
+/// `Documents\Personal`, which has no `Infrastructure/` at all) resolved every
+/// helper to a path that does not exist. Python then exits 2, which the
+/// qBittorrent probe reported as "cannot reach the Web UI": a missing file
+/// dressed up as a network failure, and the whole anime download pipeline dead
+/// with a message pointing at the wrong program (2026-08-24).
+///
+/// Measured, not assumed — the active vault is used only when the folder is
+/// really there, otherwise the built-in Citadel fallback.
+pub fn script_path(rel: &str) -> PathBuf {
+    // `dirs::document_dir()` is not one place on Windows: with OneDrive folder
+    // backup on it reports `…\OneDrive\Documents` while the vault sits in the
+    // un-redirected `…\Documents`. So both are candidates and the one that
+    // really holds the scripts wins.
+    let mut roots = vec![PathBuf::from(vault_root())];
+    if let Some(d) = dirs::document_dir() {
+        roots.push(d.join("Citadel"));
+    }
+    if let Some(h) = dirs::home_dir() {
+        roots.push(h.join("Documents").join("Citadel"));
+    }
+    let scripts = |r: &PathBuf| r.join("Infrastructure").join("Scripts");
+    roots
+        .iter()
+        .find(|r| scripts(r).is_dir())
+        .map(|r| scripts(r).join(rel))
+        // Nothing on disk anywhere — hand back the first candidate so the
+        // caller's "missing at {path}" error names something recognisable.
+        .unwrap_or_else(|| scripts(&roots[0]).join(rel))
+}
+
 /// App Vault root — backs the Docs + Releases surfaces. Precedence:
 /// `AGENTIC_APP_VAULT_ROOT` env (tests) → the registered `role:app` vault →
 /// the content vault (fallback before SF4 registers the App vault, so the

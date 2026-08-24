@@ -9,7 +9,6 @@ use std::process::Stdio;
 
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
-use tokio::process::Command as TokioCommand;
 
 use crate::commands::vault::{self, VaultError};
 
@@ -82,7 +81,7 @@ fn stored_password() -> String {
 }
 
 fn qbit_script() -> PathBuf {
-    PathBuf::from(vault::vault_root()).join("Infrastructure/Scripts/qbittorrent_client.py")
+    vault::script_path("qbittorrent_client.py")
 }
 
 /// `QBIT_*` env pairs for spawning the vault helper scripts. Public so
@@ -154,7 +153,7 @@ pub fn qbit_set_config(
 
 #[cfg(not(windows))]
 async fn daemon_running() -> bool {
-    TokioCommand::new("pgrep")
+    crate::commands::proc_util::tokio_cmd("pgrep")
         .arg("-x")
         .arg("qbittorrent-nox")
         .stdout(Stdio::null())
@@ -170,7 +169,7 @@ async fn daemon_running() -> bool {
 // qBittorrent settings) is what `qbittorrent_client.py` talks to.
 #[cfg(windows)]
 async fn daemon_running() -> bool {
-    match TokioCommand::new("tasklist")
+    match crate::commands::proc_util::tokio_cmd("tasklist")
         .args(["/FI", "IMAGENAME eq qbittorrent.exe", "/NH"])
         .output()
         .await
@@ -203,35 +202,76 @@ fn qbit_exe_windows() -> String {
 
 #[tauri::command]
 pub async fn qbit_status(app: AppHandle) -> Result<QbitStatus, VaultError> {
+    let host = load_stored(&app).host;
     if !daemon_running().await {
         return Ok(QbitStatus {
             daemon_running: false,
             connected: false,
-            error: Some("qBittorrent daemon is not running.".into()),
+            error: Some("qBittorrent isn’t running. Start it in Settings → Anime, then retry.".into()),
         });
     }
     // Probe the Web UI via a cheap authenticated call. `qbittorrent_client.py`
-    // exits 0 (ok) / 1 (auth) / 2 (network).
+    // exits 0 (ok) / 1 (auth) / 2 (network) — but *python itself* also exits 2
+    // when it cannot open the script file, so exit 2 alone cannot be reported as
+    // a network fault. That conflation is what hid a broken script path behind
+    // "cannot reach the Web UI" for a whole debugging session (2026-08-24), so
+    // stderr is captured and the missing-file case is named outright.
+    let script = qbit_script();
+    let script_missing = !script.is_file();
     let mut cmd = crate::commands::proc_util::python_cmd();
-    cmd.arg(qbit_script())
+    cmd.arg(&script)
         .arg("list-rss")
         .stdout(Stdio::null())
-        .stderr(Stdio::null());
+        .stderr(Stdio::piped());
     for (k, v) in qbit_env(&app) {
         cmd.env(k, v);
     }
-    let code = cmd
-        .status()
+    let out = cmd
+        .output()
         .await
-        .map_err(|e| VaultError::Io(format!("spawn qbittorrent_client.py: {e}")))?
-        .code();
+        .map_err(|e| VaultError::Io(format!("spawn qbittorrent_client.py: {e}")))?;
+    let code = out.status.code();
+    let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
     let (connected, error) = match code {
         Some(0) => (true, None),
         Some(1) => (
             false,
-            Some("Authentication failed — check the qBittorrent username/password.".into()),
+            Some(
+                "Authentication failed — check the qBittorrent username/password in Settings → Anime."
+                    .into(),
+            ),
         ),
-        _ => (false, Some("Cannot reach the qBittorrent Web UI.".into())),
+        // Not the helper's own network code — the helper never ran.
+        _ if script_missing => (
+            false,
+            Some(format!(
+                "Helper script missing at {}. The app looks for it inside the vault you have open; \
+                 open the Citadel vault (or reinstall it) and retry.",
+                script.display()
+            )),
+        ),
+        // The helper ran and blew up on its own terms — say what it said rather
+        // than guessing at the cause.
+        _ if !stderr.is_empty() => (
+            false,
+            Some(format!(
+                "qBittorrent check failed: {}",
+                stderr.lines().last().unwrap_or(&stderr).trim()
+            )),
+        ),
+        // Process is up (we got past `daemon_running`) but nothing answers on the
+        // Web UI port. Two real causes: the Web UI is switched off, or the process
+        // is a corpse stuck mid-shutdown — it still shows in `tasklist` with no
+        // listening socket, so the panel offers "Stop daemon" and the old wording
+        // ("start it") pointed at a button that wasn't there.
+        _ => (
+            false,
+            Some(format!(
+                "qBittorrent is running but its Web UI isn’t answering at {host}. \
+                 In Settings → Anime press Stop daemon, then Start daemon — and check the Web UI \
+                 is switched on in qBittorrent → Tools → Options → Web UI."
+            )),
+        ),
     };
     Ok(QbitStatus {
         daemon_running: true,
@@ -247,7 +287,7 @@ pub async fn qbit_start_daemon() -> Result<(), VaultError> {
     }
     #[cfg(not(windows))]
     {
-        TokioCommand::new("qbittorrent-nox")
+        crate::commands::proc_util::tokio_cmd("qbittorrent-nox")
             .arg("-d")
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -258,7 +298,7 @@ pub async fn qbit_start_daemon() -> Result<(), VaultError> {
     {
         // Launch the GUI (Web UI must be enabled in its settings for control).
         let exe = qbit_exe_windows();
-        TokioCommand::new(&exe)
+        crate::commands::proc_util::tokio_cmd(&exe)
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
@@ -271,7 +311,7 @@ pub async fn qbit_start_daemon() -> Result<(), VaultError> {
 pub async fn qbit_stop_daemon() -> Result<(), VaultError> {
     #[cfg(not(windows))]
     {
-        TokioCommand::new("pkill")
+        crate::commands::proc_util::tokio_cmd("pkill")
             .arg("-x")
             .arg("qbittorrent-nox")
             .stdout(Stdio::null())
@@ -282,7 +322,7 @@ pub async fn qbit_stop_daemon() -> Result<(), VaultError> {
     }
     #[cfg(windows)]
     {
-        TokioCommand::new("taskkill")
+        crate::commands::proc_util::tokio_cmd("taskkill")
             .args(["/IM", "qbittorrent.exe", "/F"])
             .stdout(Stdio::null())
             .stderr(Stdio::null())

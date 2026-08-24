@@ -182,8 +182,10 @@ export default function SeriesDetail({ accent, seriesPath }) {
     if (!series.providerId) return;
     const qbit = await videoApi.qbitStatus().catch(() => null);
     if (!qbit || !qbit.connected) {
-      const why = (qbit && qbit.error) || 'qBittorrent isn’t reachable.';
-      notify({ type: 'anime-download', title: 'Download blocked', message: `${why} Start it in Settings → Anime, then retry.`, accent: 'var(--text)', iconKey: 'alert', duration: 7000 });
+      // qbit.error carries both cause and fix; a bolted-on "start it" tail is
+      // wrong when the real fix is stop-then-start.
+      const why = (qbit && qbit.error) || 'qBittorrent isn’t reachable. Start it in Settings → Anime, then retry.';
+      notify({ type: 'anime-download', title: 'Download blocked', message: why, accent: 'var(--text)', iconKey: 'alert', duration: 7000 });
       return;
     }
     setPickerOpen(true);
@@ -350,7 +352,7 @@ export default function SeriesDetail({ accent, seriesPath }) {
                 items.push({ label: 'Uninstall…', onClick: async () => {
                   const qbit = await videoApi.qbitStatus().catch(() => null);
                   if (!qbit || !qbit.connected) {
-                    notify({ type: 'anime-download', title: 'Uninstall blocked', message: `${(qbit && qbit.error) || 'qBittorrent isn’t reachable.'} Start it in Settings → Anime, then retry.`, accent: 'var(--text)', iconKey: 'alert', duration: 7000 });
+                    notify({ type: 'anime-download', title: 'Uninstall blocked', message: (qbit && qbit.error) || 'qBittorrent isn’t reachable. Start it in Settings → Anime, then retry.', accent: 'var(--text)', iconKey: 'alert', duration: 7000 });
                     return;
                   }
                   setDeleteFiles(true);

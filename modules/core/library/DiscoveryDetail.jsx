@@ -130,8 +130,9 @@ export default function DiscoveryDetail({ malId, accent, onResolveTitle }) {
     setDlError(null);
     const qbit = await videoApi.qbitStatus().catch(() => null);
     if (!qbit || !qbit.connected) {
-      const why = (qbit && qbit.error) || 'qBittorrent isn’t reachable.';
-      const msg = `${why} Start it in Settings → Anime, then retry.`;
+      // qbit.error carries both cause and fix; a bolted-on "start it" tail is
+      // wrong when the real fix is stop-then-start.
+      const msg = (qbit && qbit.error) || 'qBittorrent isn’t reachable. Start it in Settings → Anime, then retry.';
       setDlError(msg);
       notify({ type: 'anime-download', title: 'Download blocked', message: msg, accent: 'var(--text)', iconKey: 'alert', duration: 7000 });
       return;

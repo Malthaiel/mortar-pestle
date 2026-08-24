@@ -268,7 +268,7 @@ pub async fn anime_torrent_search(
     if title.is_empty() {
         return Err("title required".into());
     }
-    let script = PathBuf::from(vault::vault_root()).join("Infrastructure/Scripts/nyaa_search.py");
+    let script = vault::script_path("nyaa_search.py");
     let mut cmd = crate::commands::proc_util::python_cmd();
     cmd.arg(&script)
         .arg("--title").arg(&title)
@@ -310,8 +310,7 @@ pub struct UninstallReport {
 /// stdout JSON; `Err` carries a reachability/auth failure — used to BLOCK uninstall
 /// before anything is deleted so torrents are never stranded.
 async fn qbit_run(app: &AppHandle, args: &[&str]) -> Result<serde_json::Value, String> {
-    let script =
-        PathBuf::from(vault::vault_root()).join("Infrastructure/Scripts/qbittorrent_client.py");
+    let script = vault::script_path("qbittorrent_client.py");
     let mut cmd = crate::commands::proc_util::python_cmd();
     cmd.arg(&script);
     for a in args {
@@ -919,8 +918,7 @@ struct TorrentStat {
 /// speed, eta secs, save_path). `Err` carries a fatal condition (auth / spawn);
 /// an empty `Ok` means "no torrents yet" (magnet still resolving).
 async fn poll_state(app: &AppHandle, tag: &str) -> Result<Vec<TorrentStat>, String> {
-    let script = PathBuf::from(vault::vault_root())
-        .join("Infrastructure/Scripts/qbittorrent_client.py");
+    let script = vault::script_path("qbittorrent_client.py");
     let mut cmd = crate::commands::proc_util::python_cmd();
     cmd.arg(script)
         .arg("state")

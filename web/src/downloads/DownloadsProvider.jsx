@@ -263,10 +263,12 @@ export function DownloadsProvider({ children, settings }) {
         // silently stalls in the Rust poll loop.
         const qbit = await invoke('qbit_status', {}).catch(() => null);
         if (!qbit || !qbit.connected) {
-          const why = (qbit && qbit.error) || 'qBittorrent isn’t reachable.';
+          // qbit.error already names the cause AND the fix — don't bolt on a
+          // generic "start it" tail, it's wrong when the fix is stop-then-start.
+          const why = (qbit && qbit.error) || 'qBittorrent isn’t reachable. Start it in Settings → Anime, then retry.';
           window.dispatchEvent(new CustomEvent('agentic:notify', { detail: {
             type: 'anime-download', title: 'Download blocked',
-            message: `${why} Start it in Settings → Anime, then retry.`,
+            message: why,
             accent: 'var(--text)', iconKey: 'alert', duration: 7000,
           } }));
           return;
