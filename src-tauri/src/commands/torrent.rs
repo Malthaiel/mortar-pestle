@@ -121,13 +121,16 @@ fn watch_until_finished(session: Arc<Session>, handle: Arc<ManagedTorrent>) {
 
 /// Add a magnet (or a `.torrent` URL / local path). `output_dir` overrides the
 /// session default — the anime pipeline passes the per-series folder.
-#[tauri::command]
-pub async fn torrent_add(
-    app: AppHandle,
+///
+/// An explicit `output_dir` also makes the engine write **flat** into it
+/// (`session.rs` picks the folder verbatim instead of appending the torrent's
+/// own root name), which is what the anime pipeline's episode scan expects.
+pub async fn add(
+    app: &AppHandle,
     magnet: String,
     output_dir: Option<String>,
 ) -> Result<TorrentAdded, String> {
-    let session = session(&app).await?;
+    let session = session(app).await?;
     let handle = session
         .add_torrent(
             AddTorrent::from_url(magnet),
@@ -153,12 +156,58 @@ pub async fn torrent_add(
     })
 }
 
-/// Live stats for every torrent the session manages. Callers filter by id or
-/// info-hash — the engine is the single source of truth for progress.
+/// Live stats for every torrent the session manages.
+pub async fn state(app: &AppHandle) -> Result<Vec<TorrentStat>, String> {
+    let session = session(app).await?;
+    Ok(session.with_torrents(|it| it.map(|(_, h)| stat_of(h)).collect()))
+}
+
+/// Live stats for a specific set of ids. An id the session no longer knows is
+/// simply absent — callers treat an empty result as "gone", not as an error.
+pub async fn stats_for(app: &AppHandle, ids: &[usize]) -> Result<Vec<TorrentStat>, String> {
+    let session = session(app).await?;
+    Ok(session.with_torrents(|it| {
+        it.filter(|(id, _)| ids.contains(id)).map(|(_, h)| stat_of(h)).collect()
+    }))
+}
+
+/// Remove every torrent writing into `folder`, optionally deleting the files.
+/// Returns how many were removed.
+///
+/// This is the tag replacement: librqbit has no tags, so a series' torrents are
+/// identified by the folder they were pointed at. Nothing is persisted across
+/// restarts, so after one this finds nothing — which is the truth, since a
+/// finished torrent was already paused and holds no resources.
+pub async fn delete_under(
+    app: &AppHandle,
+    folder: &std::path::Path,
+    delete_files: bool,
+) -> Result<usize, String> {
+    let session = session(app).await?;
+    let ids: Vec<usize> =
+        session.with_torrents(|it| it.filter(|(_, h)| h.output_folder() == folder).map(|(id, _)| id).collect());
+    let mut removed = 0;
+    for id in ids {
+        match session.delete(TorrentIdOrHash::Id(id), delete_files).await {
+            Ok(_) => removed += 1,
+            Err(e) => log::warn!("[torrent] could not remove {id}: {e}"),
+        }
+    }
+    Ok(removed)
+}
+
+#[tauri::command]
+pub async fn torrent_add(
+    app: AppHandle,
+    magnet: String,
+    output_dir: Option<String>,
+) -> Result<TorrentAdded, String> {
+    add(&app, magnet, output_dir).await
+}
+
 #[tauri::command]
 pub async fn torrent_state(app: AppHandle) -> Result<Vec<TorrentStat>, String> {
-    let session = session(&app).await?;
-    Ok(session.with_torrents(|it| it.map(|(_, h)| stat_of(h)).collect()))
+    state(&app).await
 }
 
 /// Remove a torrent, optionally deleting what it wrote.
@@ -169,4 +218,33 @@ pub async fn torrent_delete(app: AppHandle, id: usize, delete_files: bool) -> Re
         .delete(TorrentIdOrHash::Id(id), delete_files)
         .await
         .map_err(|e| format!("could not remove the torrent: {e}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    /// `delete_under` finds a series' torrents by comparing the engine's stored
+    /// output folder against the card's `Local Path` — the replacement for
+    /// qBittorrent's tags. That match is the whole mechanism, so the equality it
+    /// relies on is pinned here: a silent mismatch would make uninstall quietly
+    /// remove nothing at all.
+    #[test]
+    fn output_folder_match_survives_separator_and_trailing_slash() {
+        let stored = Path::new(r"C:\Users\m\Videos\Anime\Show");
+        assert_eq!(stored, Path::new("C:/Users/m/Videos/Anime/Show"));
+        assert_eq!(stored, Path::new(r"C:\Users\m\Videos\Anime\Show\"));
+        assert_eq!(stored, Path::new("C:/Users/m/Videos/Anime/Show/"));
+        // Case still matters on Windows paths in Rust, and a different folder is
+        // still a different folder — uninstall must not over-reach.
+        assert_ne!(stored, Path::new(r"C:\Users\m\Videos\Anime\Show 2"));
+
+        // The trap this actually hit: a card's `Local Path` is RELATIVE to the
+        // library root, the engine's output folder is ABSOLUTE. They must never
+        // compare equal, which is why `anime_uninstall` joins before matching —
+        // without the join uninstall silently strands every torrent.
+        assert_ne!(stored, Path::new(r"Videos\Anime\Show"));
+        let library = Path::new(r"C:\Users\m");
+        assert_eq!(stored, library.join(r"Videos\Anime\Show"));
+    }
 }

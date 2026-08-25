@@ -1,16 +1,16 @@
 //! Anime download engine — sequential, background, survives navigation.
 //!
 //! Mirrors `music_download.rs`'s job-queue scaffolding but the acquisition model
-//! differs: qBittorrent is asynchronous, so each job runs in two phases.
+//! differs: torrents are asynchronous, so each job runs in two phases.
 //!
 //!   Phase 1 (Preparing): spawn `scripts/download_anime.py` ONCE. It enriches via
 //!   Jikan, writes/patches the title card + episode table + cover, resolves a
-//!   magnet via Nyaa, and queues it into qBittorrent tagged `mal-<id>`. It prints
-//!   one terminal JSON object (ok / ambiguous / error) and exits — it never waits
-//!   for the torrent.
+//!   magnet via Nyaa, and RETURNS that magnet. It prints one terminal JSON object
+//!   (ok / ambiguous / error) and exits — it never waits for the torrent. This
+//!   worker then hands the magnet to the built-in engine (`commands/torrent.rs`).
 //!
-//!   Phase 2 (Downloading): the worker polls `qbittorrent_client.py state --tag
-//!   mal-<id>` every few seconds, aggregates progress %, and marks the job Done
+//!   Phase 2 (Downloading): the worker polls the engine for that torrent's id
+//!   every few seconds, aggregates progress %, and marks the job Done
 //!   when every torrent completes — then writes `Download Status: Complete` back
 //!   to the card and emits `anime-download-done`, which the provider re-broadcasts
 //!   as `video-library-changed` so the Downloaded tab re-lists.
@@ -58,7 +58,18 @@ pub struct DownloadJob {
     pub airing: bool,
     pub anime_type: String,
     pub episodes_total: Option<i64>,
+    /// Still the RSS rule name (`mal-<id>`) qBittorrent registers for airing
+    /// series. It is NOT how torrents are found any more — the built-in engine
+    /// has no tags; see `torrent_id`.
     pub tag: String,
+    /// The built-in engine's id for this job's torrent, set once the magnet is
+    /// added. Phase 2 polls on it.
+    ///
+    /// ponytail: one id, because one job resolves exactly one magnet (a batch
+    /// pack counts as one torrent). SF3's RSS poller adds later episodes
+    /// independently, so make this a Vec only when a job really owns several.
+    #[serde(skip)]
+    pub torrent_id: Option<usize>,
     pub local_path: Option<String>,
     pub series_path: Option<String>,
     pub state: JobState,
@@ -172,6 +183,7 @@ pub async fn anime_download_enqueue(
             anime_type: anime_type.unwrap_or_else(|| "TV".into()),
             episodes_total: episodes,
             tag: format!("mal-{mal_id}"),
+            torrent_id: None,
             local_path: None,
             series_path: None,
             state: JobState::Queued,
@@ -307,8 +319,11 @@ pub struct UninstallReport {
 }
 
 /// Run qbittorrent_client.py with the app's QBIT_* env. `Ok(Value)` is the parsed
-/// stdout JSON; `Err` carries a reachability/auth failure — used to BLOCK uninstall
-/// before anything is deleted so torrents are never stranded.
+/// stdout JSON.
+///
+/// ponytail: only `remove-rss` still needs this — airing series keep using
+/// qBittorrent's RSS rule engine until SF3 replaces it with a Rust poller.
+/// Deleting this function is SF4's job, not this one's.
 async fn qbit_run(app: &AppHandle, args: &[&str]) -> Result<serde_json::Value, String> {
     let script = vault::script_path("qbittorrent_client.py");
     let mut cmd = crate::commands::proc_util::python_cmd();
@@ -364,11 +379,11 @@ fn local_path_is_shared(ingested_dir: &Path, this_card: &Path, target: &str) -> 
     false
 }
 
-/// Uninstall a library entry: cancel its job, remove its qBittorrent torrents
-/// (+files when `delete_files`), drop the airing RSS rule, delete the local video
-/// folder (collision- and path-guarded), the cover, and the card last. Keyed on
-/// the CARD (`series_path`) so a multi-id franchise entry removes as one unit.
-/// BLOCKS up front if qBittorrent is unreachable so torrents are never stranded.
+/// Uninstall a library entry: cancel its job, remove its torrents from the
+/// built-in engine (+files when `delete_files`), drop the airing RSS rule,
+/// delete the local video folder (collision- and path-guarded), the cover, and
+/// the card last. Keyed on the CARD (`series_path`) so a multi-id franchise
+/// entry removes as one unit.
 #[tauri::command]
 pub async fn anime_uninstall(
     app: AppHandle,
@@ -412,9 +427,8 @@ pub async fn anime_uninstall(
         warnings: Vec::new(),
     };
 
-    // BLOCK before deleting anything if qBittorrent is down (per the "always clean
-    // up torrents" decision). A bare `state` lists all torrents → cheap probe.
-    qbit_run(&app, &["state"]).await?;
+    // No reachability probe any more: the engine is in-process, so there is no
+    // "is it up" question to answer before deleting anything.
 
     // Stop any in-flight job for these ids before pulling its torrents.
     {
@@ -430,35 +444,23 @@ pub async fn anime_uninstall(
         }
     }
 
-    // Remove torrents (and their files when requested), per id/tag.
-    for id in &ids {
-        let tag = format!("mal-{id}");
-        let arr = match qbit_run(&app, &["state", "--tag", &tag]).await {
-            Ok(v) => v,
-            Err(e) => {
-                report.warnings.push(format!("torrent lookup for {tag} failed: {e}"));
-                continue;
-            }
+    // Remove torrents (and their files when requested). The built-in engine has
+    // no tags, so a series' torrents are the ones writing into its folder.
+    // Nothing is persisted across restarts, so this finds nothing after one —
+    // correct, since a finished torrent was already paused and holds nothing.
+    if let Some(lp) = &local_path {
+        // `Local Path` on the card is stored RELATIVE to the library root, while
+        // the engine records an absolute output folder — comparing them raw finds
+        // nothing and silently strands the torrents. Resolved the same way the
+        // video-folder deletion below does.
+        let lp_abs = if Path::new(lp).is_absolute() {
+            PathBuf::from(lp)
+        } else {
+            PathBuf::from(vault::library_vault_root()).join(lp)
         };
-        let hashes: Vec<String> = arr
-            .as_array()
-            .map(|a| {
-                a.iter()
-                    .filter_map(|t| t.get("hash").and_then(|h| h.as_str()).map(str::to_string))
-                    .collect()
-            })
-            .unwrap_or_default();
-        if hashes.is_empty() {
-            continue;
-        }
-        let joined = hashes.join("|");
-        let mut dargs = vec!["delete", "--hashes", joined.as_str()];
-        if delete_files {
-            dargs.push("--delete-files");
-        }
-        match qbit_run(&app, &dargs).await {
-            Ok(_) => report.removed_torrents += hashes.len(),
-            Err(e) => report.warnings.push(format!("torrent delete for {tag} failed: {e}")),
+        match crate::commands::torrent::delete_under(&app, &lp_abs, delete_files).await {
+            Ok(n) => report.removed_torrents += n,
+            Err(e) => report.warnings.push(format!("torrent removal failed: {e}")),
         }
     }
 
@@ -765,7 +767,6 @@ async fn process_job(app: &AppHandle, job_id: &str) {
     if let Some(code) = result.get("error").and_then(|x| x.as_str()) {
         let detail = result.get("detail").and_then(|x| x.as_str()).unwrap_or("");
         let msg = match code {
-            "auth_failed" => "qBittorrent authentication failed — check Settings.".to_string(),
             "no_results" => format!("No torrent found. {detail}"),
             "jikan_failed" => format!("MyAnimeList lookup failed: {detail}"),
             "jikan_no_data" => format!("MyAnimeList has no entry for {detail}."),
@@ -784,7 +785,7 @@ async fn process_job(app: &AppHandle, job_id: &str) {
     }
 
     // ok — record what the script resolved, transition to Downloading.
-    let (tag, series_path, local_path) = {
+    let (series_path, local_path) = {
         let mut guard = DOWNLOAD_STATE.lock().unwrap();
         let Some(j) = guard.jobs.iter_mut().find(|j| j.id == job_id) else {
             return;
@@ -795,11 +796,34 @@ async fn process_job(app: &AppHandle, job_id: &str) {
         if let Some(fe) = result.get("filesExpected").and_then(|x| x.as_i64()) {
             j.files_total = fe;
         }
-        (j.tag.clone(), j.series_path.clone(), j.local_path.clone())
+        (j.series_path.clone(), j.local_path.clone())
     };
+
+    // The script resolved a magnet; the built-in engine does the add. An explicit
+    // output folder makes it write flat into the series folder, which is what the
+    // episode scan below expects.
+    let Some(magnet) = result.get("magnet").and_then(|x| x.as_str()).map(String::from) else {
+        finalize_error(app, job_id, "the download script resolved no magnet");
+        return;
+    };
+    let added = match crate::commands::torrent::add(app, magnet, local_path.clone()).await {
+        Ok(a) => a,
+        Err(e) => {
+            finalize_error(app, job_id, &e);
+            return;
+        }
+    };
+    {
+        let mut guard = DOWNLOAD_STATE.lock().unwrap();
+        if let Some(j) = guard.jobs.iter_mut().find(|j| j.id == job_id) {
+            j.torrent_id = Some(added.id);
+            j.save_path = local_path.clone();
+        }
+    }
+    let torrent_id = added.id;
     emit_progress(app, job_id);
 
-    // ── Phase 2 — Poll qBittorrent until every tagged torrent completes ──────
+    // ── Phase 2 — Poll the built-in engine until the torrent completes ──────
     let mut empty_polls = 0u32;
     let mut polls = 0u32;
     loop {
@@ -807,36 +831,39 @@ async fn process_job(app: &AppHandle, job_id: &str) {
             finalize_simple(app, job_id, JobState::Cancelled, series_path.clone());
             return;
         }
-        match poll_state(app, &tag).await {
+        match crate::commands::torrent::stats_for(app, &[torrent_id]).await {
             Err(e) => {
                 finalize_error(app, job_id, &e);
                 return;
             }
             Ok(torrents) => {
                 if torrents.is_empty() {
+                    // The engine no longer knows this id — it was removed out from
+                    // under us. Retried a few times before giving up.
                     empty_polls += 1;
                     if empty_polls >= MAX_EMPTY_POLLS {
-                        finalize_error(app, job_id, "no torrents registered for this title in qBittorrent");
+                        finalize_error(app, job_id, "the torrent for this title is no longer in the engine");
                         return;
                     }
                 } else {
                     empty_polls = 0;
-                    let total_size: f64 = torrents.iter().map(|t| t.size).sum();
+                    if let Some(err) = torrents.iter().find_map(|t| t.error.clone()) {
+                        finalize_error(app, job_id, &err);
+                        return;
+                    }
+                    let total_size: f64 = torrents.iter().map(|t| t.size as f64).sum();
                     let pct = if total_size > 0.0 {
-                        torrents.iter().map(|t| t.progress * t.size).sum::<f64>() / total_size * 100.0
+                        torrents.iter().map(|t| t.progress * t.size as f64).sum::<f64>() / total_size * 100.0
                     } else {
-                        torrents.iter().map(|t| t.progress).sum::<f64>() / torrents.len() as f64 * 100.0
+                        // Metadata still resolving: no size to weight by.
+                        0.0
                     };
-                    let done_count = torrents.iter().filter(|t| t.progress >= 0.999).count() as i64;
+                    let done_count = torrents.iter().filter(|t| t.finished).count() as i64;
                     let all_done = done_count as usize == torrents.len();
                     // Aggregate live metrics: total size, summed speed, slowest
-                    // finite ETA (8_640_000 = qBittorrent's ∞ sentinel).
-                    let dl_speed: f64 = torrents.iter().map(|t| t.dlspeed).sum();
-                    let eta_secs = torrents.iter()
-                        .map(|t| t.eta)
-                        .filter(|&e| e >= 0 && e < 8_640_000)
-                        .max();
-                    let save_path = torrents.iter().find_map(|t| t.save_path.clone());
+                    // ETA the engine actually measured (None = stalled, skipped).
+                    let dl_speed: f64 = torrents.iter().map(|t| t.dlspeed as f64).sum();
+                    let eta_secs = torrents.iter().filter_map(|t| t.eta).map(|e| e as i64).max();
                     {
                         let mut guard = DOWNLOAD_STATE.lock().unwrap();
                         if let Some(j) = guard.jobs.iter_mut().find(|j| j.id == job_id) {
@@ -846,9 +873,6 @@ async fn process_job(app: &AppHandle, job_id: &str) {
                             j.size_bytes = Some(total_size as i64);
                             j.dl_speed = Some(dl_speed);
                             j.eta_secs = eta_secs;
-                            if j.save_path.is_none() {
-                                j.save_path = save_path;
-                            }
                         }
                     }
                     emit_progress(app, job_id);
@@ -878,7 +902,7 @@ async fn process_job(app: &AppHandle, job_id: &str) {
 /// samples, previews) left inside a finished download — they waste space and
 /// would otherwise be scanned for episodes. Conservative: only these exact
 /// names, and never Specials/Extras/Bonus (possible real content). Direct
-/// children only — qBittorrent writes flat with contentLayout=NoSubfolder.
+/// children only — an explicit output folder makes the engine write flat.
 fn cleanup_download_extras(local_path: &str) {
     let Ok(entries) = std::fs::read_dir(local_path) else {
         return;
@@ -905,60 +929,6 @@ fn cleanup_download_extras(local_path: &str) {
 fn was_cancelled(job_id: &str) -> bool {
     let g = DOWNLOAD_STATE.lock().unwrap();
     g.jobs.iter().find(|j| j.id == job_id).map(|j| j.cancel_requested).unwrap_or(false)
-}
-
-/// One torrent's live stats from a qBittorrent poll.
-struct TorrentStat {
-    progress: f64,
-    size: f64,
-    dlspeed: f64,
-    eta: i64,
-    save_path: Option<String>,
-}
-
-/// Poll qBittorrent for the tag. Returns per-torrent (progress 0..1, size, dl
-/// speed, eta secs, save_path). `Err` carries a fatal condition (auth / spawn);
-/// an empty `Ok` means "no torrents yet" (magnet still resolving).
-async fn poll_state(app: &AppHandle, tag: &str) -> Result<Vec<TorrentStat>, String> {
-    let script = vault::script_path("qbittorrent_client.py");
-    let mut cmd = crate::commands::proc_util::python_cmd();
-    cmd.arg(script)
-        .arg("state")
-        .arg("--tag")
-        .arg(tag)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null());
-    for (k, v) in qbit_env(app) {
-        cmd.env(k, v);
-    }
-    let out = cmd
-        .output()
-        .await
-        .map_err(|e| format!("poll spawn failed: {e}"))?;
-    let text = String::from_utf8_lossy(&out.stdout);
-    let v: serde_json::Value = match serde_json::from_str(text.trim()) {
-        Ok(v) => v,
-        Err(_) => return Ok(Vec::new()), // transient garbage → treat as no data yet
-    };
-    if let Some(err) = v.get("error").and_then(|x| x.as_str()) {
-        if err == "auth_failed" {
-            return Err("qBittorrent authentication failed — check Settings.".into());
-        }
-        return Ok(Vec::new());
-    }
-    let Some(arr) = v.as_array() else {
-        return Ok(Vec::new());
-    };
-    Ok(arr
-        .iter()
-        .map(|t| TorrentStat {
-            progress: t.get("progress").and_then(|x| x.as_f64()).unwrap_or(0.0),
-            size: t.get("size").and_then(|x| x.as_f64()).unwrap_or(0.0),
-            dlspeed: t.get("dlspeed").and_then(|x| x.as_f64()).unwrap_or(0.0),
-            eta: t.get("eta").and_then(|x| x.as_i64()).unwrap_or(0),
-            save_path: t.get("save_path").and_then(|x| x.as_str()).map(String::from),
-        })
-        .collect())
 }
 
 /// Rewrite the card's `Download Status:` line (field-level; never touches

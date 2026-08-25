@@ -13,18 +13,19 @@ Given a MAL ID it:
      with `## Plot`, the per-kind H2 placeholders, and a `## Episodes` table.
   3. Downloads the cover into `.../Assets/` (the `Image:` field stays the remote
      MAL URL, matching existing cards).
-  4. Searches Nyaa (`nyaa_search.py`, batch-first for finished cours) and queues
-     the magnet into qBittorrent (`qbittorrent_client.py add`) tagged `mal-<id>`;
-     registers an RSS rule when the series is airing.
+  4. Searches Nyaa (`nyaa_search.py`, batch-first for finished cours) and RETURNS
+     the chosen magnet — Rust's built-in engine does the adding; registers an RSS
+     rule when the series is airing (still qBittorrent's, until SF3).
 
 Unlike `download_album.py` (which streams NDJSON because yt-dlp downloads inline),
-qBittorrent is asynchronous — this script does its synchronous work and prints
-exactly ONE terminal JSON object on stdout, then exits. The Rust worker owns all
-progress (polling `qbittorrent_client.py state --tag`). Human diagnostics → stderr.
+torrents are asynchronous — this script does its synchronous work and prints
+exactly ONE terminal JSON object on stdout, then exits. The Rust worker owns the
+add and all progress (`commands/torrent.rs`). Human diagnostics → stderr.
 
 Terminal stdout JSON (exactly one object):
-  ok:        {"ok": true, "tag": "mal-<id>", "savePath": "...",
-              "seriesPath": "Knowledge/Anime/.../<Title>.md", "queued": N,
+  ok:        {"ok": true, "tag": "mal-<id>", "magnet": "magnet:?...",
+              "savePath": "...",
+              "seriesPath": "Knowledge/Anime/.../<Title>.md",
               "filesExpected": M, "airing": bool, "backfill": bool}
   ambiguous: {"ambiguous": true, "candidates": [ ... up to 5 ... ]}
   error:     {"error": "<code>", "detail": "<msg>"}   (exit non-zero)
@@ -577,17 +578,13 @@ def main():
         magnet = data["magnet"]
         group = data.get("group", "")
 
-    # 6. Queue into qBittorrent.
-    rc, data, err = qbit(scripts_dir, "add", "--magnet", magnet,
-                         "--save-path", local_path,
-                         "--tag", f"mal-ingest,Anime,{tag}")
-    if rc == 1:
-        fatal("auth_failed", "qBittorrent authentication failed — check Settings.")
-    if rc != 0:
-        fatal("qbit_add_failed", (data or {}).get("detail") or err or f"exit {rc}")
-    queued = 1
+    # 6. The magnet goes back to Rust, which adds it to the built-in engine.
+    #    (Was: a second Python hop into qbittorrent_client.py add.)
 
     # 7. Airing → RSS rule for new episodes.
+    #    ponytail: still qBittorrent's rule engine — the built-in engine has no
+    #    RSS. Non-fatal on failure, so this no-ops when qBittorrent isn't running.
+    #    SF3 of the Built-in Torrent Engine plan replaces it with a Rust poller.
     if args.airing:
         short = re.sub(r"[^\w ]", "", title).split()[:3]
         feed_q = urllib.parse.quote_plus(f"{title} {group}".strip())
@@ -601,9 +598,9 @@ def main():
     emit({
         "ok": True,
         "tag": tag,
+        "magnet": magnet,
         "savePath": local_path,
         "seriesPath": series_rel,
-        "queued": queued,
         "filesExpected": detail.get("episodes") or 0,
         "airing": bool(args.airing),
         "backfill": backfill,
