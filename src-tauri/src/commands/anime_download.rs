@@ -585,7 +585,7 @@ async fn process_job(app: &AppHandle, job_id: &str) {
     };
     // Card + cover now live in the writable Library vault (Library Migration
     // Phase 2); --vault must be the CONTENT vault so the script finds
-    // Infrastructure/Scripts/ (nyaa_search.py, qbittorrent_client.py) — not the
+    // Infrastructure/Scripts/ (nyaa_search.py) — not the
     // active vault, which is whatever the user has open. --library is the
     // catalog base.
     let vault = vault::content_vault_root();

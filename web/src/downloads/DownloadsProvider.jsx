@@ -259,20 +259,6 @@ export function DownloadsProvider({ children, settings }) {
           trackN: a.trackN ?? null, watchUrl: a.watchUrl ?? null,
         });
       } else {
-        // Mirror AnimeDownloadProvider's qBittorrent pre-flight so a retry never
-        // silently stalls in the Rust poll loop.
-        const qbit = await invoke('qbit_status', {}).catch(() => null);
-        if (!qbit || !qbit.connected) {
-          // qbit.error already names the cause AND the fix — don't bolt on a
-          // generic "start it" tail, it's wrong when the fix is stop-then-start.
-          const why = (qbit && qbit.error) || 'qBittorrent isn’t reachable. Start it in Settings → Anime, then retry.';
-          window.dispatchEvent(new CustomEvent('agentic:notify', { detail: {
-            type: 'anime-download', title: 'Download blocked',
-            message: why,
-            accent: 'var(--text)', iconKey: 'alert', duration: 7000,
-          } }));
-          return;
-        }
         await invoke('anime_download_enqueue', {
           malId: a.malId, title: a.title ?? row.title, audio: a.audio || 'sub',
           image: a.image ?? row.cover ?? null, airing: !!a.airing,

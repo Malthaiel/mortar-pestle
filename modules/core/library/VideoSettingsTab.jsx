@@ -1,8 +1,7 @@
 // Video Player settings — a tab in the host Settings drawer, registered by the
-// Video module. Two groups:
-//   • qBittorrent — Web UI host / username / password (password → OS keyring,
-//     host+user → qbit.json), a live connection-status dot, and Start/Stop daemon
-//     controls. Backs the Anime download engine (SF4).
+// Video module. The qBittorrent group (host / user / password / daemon controls)
+// was deleted in SF4 of the Built-in Torrent Engine — the engine is compiled in,
+// so there is nothing left to configure. What remains:
 //   • Subtitles — global subtitle appearance (size, style, position, font, …),
 //     the same VideoPlayerProvider state the in-player ⚙ popover edits, so the two
 //     surfaces stay in lockstep. Per-episode Sync stays in the player popover — it
@@ -35,7 +34,6 @@ export default function VideoSettingsTab({ accent }) {
   return (
     <div style={{ color: 'var(--text)', fontSize: 12 }}>
       <DownloadsSection accent={accent}/>
-      <QbitSection/>
       <MalImportSection accent={accent}/>
       <SubtitleSection accent={accent}/>
     </div>
@@ -222,94 +220,6 @@ function DownloadsSection({ accent }) {
         </div>
       )}
       {err && <div style={{ fontSize: 11, color: 'var(--error, var(--text))' }}>{err}</div>}
-    </SectionBand>
-  );
-}
-
-// ── qBittorrent ─────────────────────────────────────────────────────────────
-
-function QbitSection() {
-  const [host, setHost] = useState('http://localhost:8080');
-  const [user, setUser] = useState('admin');
-  const [hasPass, setHasPass] = useState(false);
-  const [pass, setPass] = useState('');
-  const [status, setStatus] = useState(null); // { daemonRunning, connected, error }
-  const [saving, setSaving] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState(null);
-
-  const refreshStatus = useCallback(() => {
-    return videoApi.qbitStatus()
-      .then(setStatus)
-      .catch(e => setStatus({ daemonRunning: false, connected: false, error: errText(e, 'status failed') }));
-  }, []);
-
-  useEffect(() => {
-    let alive = true;
-    videoApi.qbitGetConfig()
-      .then(c => { if (alive && c) { setHost(c.host); setUser(c.user); setHasPass(!!c.hasPass); } })
-      .catch(() => {});
-    refreshStatus();
-    return () => { alive = false; };
-  }, [refreshStatus]);
-
-  const save = async () => {
-    setSaving(true); setMsg(null);
-    try {
-      await videoApi.qbitSetConfig(host, user, pass);
-      if (pass) { setHasPass(true); setPass(''); }
-      setMsg('Saved.');
-      await refreshStatus();
-    } catch (e) { setMsg(errText(e, 'Save failed.')); }
-    finally { setSaving(false); }
-  };
-
-  const startStop = async (which) => {
-    setBusy(true); setMsg(null);
-    try {
-      await (which === 'start' ? videoApi.qbitStartDaemon() : videoApi.qbitStopDaemon());
-    } catch (e) {
-      setMsg(errText(e, which === 'start' ? 'Start failed.' : 'Stop failed.'));
-    } finally {
-      await refreshStatus();
-      setBusy(false);
-    }
-  };
-
-  const dot = (() => {
-    if (!status) return { c: 'var(--text-faint)', label: 'Checking…' };
-    if (status.connected) return { c: 'var(--text-muted)', label: 'Connected' };
-    if (status.daemonRunning) return { c: '#d8a657', label: status.error || 'Daemon up, not authenticated' };
-    return { c: 'var(--text)', label: status.error || 'Daemon not running' };
-  })();
-
-  return (
-    <SectionBand title="qBittorrent">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ width: 9, height: 9, borderRadius: '50%', background: dot.c, boxShadow: `0 0 6px ${dot.c}`, flexShrink: 0 }}/>
-        <span style={{ fontSize: 12, color: 'var(--text)' }}>{dot.label}</span>
-      </div>
-      <div data-search-anchor="set-video-qbitWebUiHelp" style={{ fontSize: 11, color: 'var(--text-faint)', lineHeight: 1.5 }}>
-        Requires qBittorrent’s <strong>Web UI</strong> enabled (qBittorrent → Tools → Options → Web UI) — Mortar & Pestle drives downloads through it. On Windows qBittorrent runs GUI-only (no headless mode), so install it and switch its Web UI on.
-      </div>
-      <Field label="Host" anchor="set-video-qbitHost">
-        <input className="candy-input" value={host} onChange={e => setHost(e.target.value)} placeholder="http://localhost:8080" style={inputStyle}/>
-      </Field>
-      <Field label="Username">
-        <input className="candy-input" value={user} onChange={e => setUser(e.target.value)} placeholder="admin" style={inputStyle}/>
-      </Field>
-      <Field label="Password">
-        <input className="candy-input" type="password" value={pass} onChange={e => setPass(e.target.value)}
-               placeholder={hasPass ? '•••••• (set — blank keeps it)' : 'set password'} style={inputStyle}/>
-      </Field>
-      {msg && <div style={{ fontSize: 11, color: msg === 'Saved.' ? 'var(--text-muted)' : 'var(--text)' }}>{msg}</div>}
-      <div style={{ display: 'flex', gap: 8 }}>
-        <button onClick={save} disabled={saving} className="candy-btn"><span className="candy-face">{saving ? 'Saving…' : 'Save'}</span></button>
-        {status && status.daemonRunning
-          ? <button onClick={() => startStop('stop')} disabled={busy} className="candy-btn"><span className="candy-face">Stop daemon</span></button>
-          : <button onClick={() => startStop('start')} disabled={busy} className="candy-btn"><span className="candy-face">Start daemon</span></button>}
-        <button onClick={refreshStatus} disabled={busy} className="candy-btn" style={{ marginLeft: 'auto' }}><span className="candy-face">Recheck</span></button>
-      </div>
     </SectionBand>
   );
 }

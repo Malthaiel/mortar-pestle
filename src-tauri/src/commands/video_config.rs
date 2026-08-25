@@ -1,5 +1,5 @@
 //! Where downloaded anime **video files** are saved. Persists `{ videoRoot }`
-//! in `video.json` under the app config dir (mirrors `qbit.rs`). Empty /
+//! in `video.json` under the app config dir. Empty /
 //! unset = the default `<library>/Anime/Videos`. Cards, covers and episode
 //! metadata are unaffected — only the big video folders relocate.
 

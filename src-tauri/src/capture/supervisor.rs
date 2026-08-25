@@ -6,7 +6,7 @@
 //! It feeds the `capture-engine-status` Tauri event and holds the single
 //! [`CaptureClient`] every Tauri command talks through.
 //!
-//! ## Adopt-first (Risk #6 / qbit precedent)
+//! ## Adopt-first (Risk #6; the pattern came from the old qbit daemon supervisor, deleted in SF4)
 //! An app relaunch (HMR, restart, crash-recovery) must never spawn a second
 //! daemon. Before spawning, the supervisor **socket-probes** the live control
 //! socket: it connects a throwaway [`CaptureClient`] and asks `get_state`. A

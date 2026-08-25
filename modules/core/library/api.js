@@ -34,16 +34,10 @@ export const videoApi = {
   animeRecommendations:(malId) => _api.invoke('anime_recommendations', { malId }),
   characterFull:     (malId) => _api.invoke('character_full', { malId }),
   personFull:        (malId) => _api.invoke('person_full', { malId }),
-  // qBittorrent connection settings + daemon control (Anime download engine).
-  qbitGetConfig:     () => _api.invoke('qbit_get_config', {}),
-  qbitSetConfig:     (host, user, pass) => _api.invoke('qbit_set_config', { host, user, pass: pass || null }),
-  qbitStatus:        () => _api.invoke('qbit_status', {}),
-  qbitStartDaemon:   () => _api.invoke('qbit_start_daemon', {}),
-  qbitStopDaemon:    () => _api.invoke('qbit_stop_daemon', {}),
   animeMoveVideos:   () => _api.invoke('anime_move_videos', {}),
   videoGetConfig:    () => _api.invoke('video_get_config', {}),
   videoSetConfig:    (videoRoot) => _api.invoke('video_set_config', { videoRoot }),
-  // Anime download engine (qBittorrent-backed, poll-driven). `type` → Rust `anime_type`.
+  // Anime download engine (built-in librqbit, poll-driven). `type` → Rust `anime_type`.
   animeDownloadEnqueue: (malId, title, audio, image, airing, type, episodes, downloadSource, metadataOnly, initialStatus) =>
     _api.invoke('anime_download_enqueue', {
       malId, title, audio, image: image || null, airing: !!airing,

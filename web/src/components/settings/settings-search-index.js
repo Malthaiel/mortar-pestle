@@ -226,8 +226,6 @@ export const SETTINGS_SEARCH_INDEX = [
   })),
 
   // ── Module: Video / Anime (text-only match; live values live elsewhere) ────
-  { id: 'video.qbitHost', label: 'qBittorrent host', tabId: 'video-settings', anchor: 'set-video-qbitHost',
-    keywords: ['anime', 'video', 'torrent', 'download', 'webui'] },
   { id: 'video.subSize', label: 'Subtitle size', tabId: 'video-settings', anchor: 'set-video-subSize',
     keywords: ['anime', 'video', 'caption', 'font'] },
   { id: 'video.subStyle', label: 'Subtitle style', tabId: 'video-settings', anchor: 'set-video-subStyle',

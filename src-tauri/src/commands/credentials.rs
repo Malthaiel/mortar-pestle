@@ -48,7 +48,7 @@ const ARGON_M_COST: u32 = 65_536; // KiB = 64 MiB
 const ARGON_T_COST: u32 = 3;
 const ARGON_P_COST: u32 = 1;
 
-// Keyring (libsecret on Linux) — same service as design.rs/qbit.rs, new account.
+// Keyring (libsecret on Linux) — same service as design.rs, new account.
 const KR_SERVICE: &str = "mortar-pestle";
 const KR_ACCOUNT: &str = "credentials";
 

@@ -37,7 +37,6 @@ pub mod music_playlist;
 pub mod music_search;
 pub mod proc_util;
 pub mod pty;
-pub mod qbit;
 pub mod video_config;
 pub mod recycle_bin;
 pub mod reference;

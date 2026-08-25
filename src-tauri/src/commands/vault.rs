@@ -694,7 +694,7 @@ mod script_path_tests {
     /// and the invariant holds whatever it is set to.
     #[test]
     fn script_path_lands_in_a_real_scripts_folder() {
-        let p = script_path("qbittorrent_client.py");
+        let p = script_path("nyaa_search.py");
         let dir = p.parent().unwrap();
         assert!(dir.is_dir(), "script_path resolved to {p:?} — {dir:?} is not a folder");
     }
