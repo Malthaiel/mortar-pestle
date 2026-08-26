@@ -4,7 +4,7 @@
 //! differs: torrents are asynchronous, so each job runs in two phases.
 //!
 //!   Phase 1 (Preparing): spawn `scripts/download_anime.py` ONCE. It enriches via
-//!   Jikan, writes/patches the title card + episode table + cover, resolves a
+//!   AniList, writes/patches the title card + episode table + cover, resolves a
 //!   magnet via Nyaa, and RETURNS that magnet. It prints one terminal JSON object
 //!   (ok / ambiguous / error) and exits — it never waits for the torrent. This
 //!   worker then hands the magnet to the built-in engine (`commands/torrent.rs`).

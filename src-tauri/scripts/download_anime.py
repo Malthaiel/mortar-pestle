@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""download_anime.py — app-native MAL/Jikan anime downloader.
+"""download_anime.py — app-native MAL/AniList anime downloader.
 
 Ports the download half of `Infrastructure/Skills/Ingest/ingest-mal.md`
 (Phase 4 metadata enrich + title card + episode table + cover + Phase 4.5 Nyaa
@@ -7,7 +7,9 @@ torrent queue), minus the Claude-driven entity graph (characters / voice actors
 / studios / staff), which stays a `/ingest mal` job.
 
 Given a MAL ID it:
-  1. Enriches via Jikan (/anime/{id} + /anime/{id}/episodes).
+  1. Enriches via AniList (queried by MAL id), with a best-effort Jikan
+     side-fetch for opening/ending songs, age rating, background and episode
+     titles — the only fields AniList does not carry.
   2. Writes (fresh) or minimally patches (backfill) an `/ingest mal`-compatible
      `Type: Media-Entry` title card under `Anime/Catalog/` in the Library vault
      with `## Plot`, the per-kind H2 placeholders, and a `## Episodes` table.
@@ -56,12 +58,13 @@ import urllib.parse
 import urllib.request
 from datetime import date
 
+ANILIST_URL = "https://graphql.anilist.co"
 JIKAN_BASE = "https://api.jikan.moe/v4"
-JIKAN_UA = "Citadel/1.0 (agentic-os)"
+UA = "Citadel/1.0 (mortar-pestle)"
 CATALOG_REL = "Anime/Catalog"
 ASSETS_REL = "Anime/Assets"
 
-_last_jikan = [0.0]
+_last_call = [0.0]
 
 
 # ── output ────────────────────────────────────────────────────────────────
@@ -89,89 +92,306 @@ def fatal(code, detail=""):
     sys.exit(1)
 
 
-# ── Jikan ───────────────────────────────────────────────────────────────────
-# Transient statuses worth retrying: rate-limit (429) + gateway/5xx blips.
-JIKAN_RETRY_CODES = frozenset({429, 500, 502, 503, 504})
-
-# Backoff between attempts (4 waits → 5 attempts, ~67s total). Jikan enforces
-# BOTH 3 req/s and 60 req/min; a per-second trip clears in ~1s, so the first
-# retry is quick, while the later waits are long enough to outlast the minute
-# bucket. The old 1s/2s schedule gave up after ~4s and could never survive a
-# minute-window 429 — see the 2026-08-12 Hyouka investigation.
-JIKAN_BACKOFF = (2, 5, 15, 45)
-JIKAN_RETRY_AFTER_CAP = 60
-
-
-def _retry_wait(err, attempt):
-    """Seconds to wait before the next attempt. A 429 carrying Retry-After
-    is authoritative (capped) — the server knows when its bucket refills;
-    everything else falls back to the fixed schedule."""
-    fallback = JIKAN_BACKOFF[min(attempt, len(JIKAN_BACKOFF) - 1)]
-    if not isinstance(err, urllib.error.HTTPError) or err.code != 429:
-        return fallback
-    raw = (err.headers or {}).get("Retry-After")
-    try:
-        # Jikan sends delay-seconds; an HTTP-date variant is not worth parsing.
-        return min(max(int(str(raw).strip()), 0), JIKAN_RETRY_AFTER_CAP)
-    except (TypeError, ValueError):
-        return fallback
+# ── AniList ─────────────────────────────────────────────────────────────────
+# AniList replaced Jikan as the metadata source on 2026-08-25: Jikan's origin is
+# dead (every 200 it still serves carries `X-Cache-Status: STALE` with a
+# last-modified no newer than 2026-07-30; anything not already in its nginx
+# cache 504s in ~0.4 s from every network and under every Accept-Encoding).
+# See Knowledge/Mortar & Pestle/Plans/AniList Migration.md.
+#
+# AniList is queried BY MAL ID (`Media(idMal:)`) and its payload is adapted into
+# the Jikan-shaped dict `build_card` already consumes, so the card format is
+# byte-for-byte unchanged.
+ANILIST_BACKOFF = (2, 5, 15)
 
 
-def jikan_get(path):
-    """Throttled (>=0.4s) Jikan GET. Retries transient failures — 429
-    (honoring Retry-After), 5xx (500/502/503/504), timeouts and connection
-    errors — up to 5 attempts, backing off per JIKAN_BACKOFF."""
+def anilist_gql(query, variables):
+    """AniList GraphQL POST. Retries 429 / 5xx / timeouts on ANILIST_BACKOFF
+    (4 attempts, ~22 s). A GraphQL-level error with no data is fatal — retrying
+    a malformed query never helps."""
+    body = json.dumps({"query": query, "variables": variables}).encode("utf-8")
     last_err = None
-    for attempt in range(len(JIKAN_BACKOFF) + 1):
-        elapsed = time.monotonic() - _last_jikan[0]
-        if elapsed < 0.4:
-            time.sleep(0.4 - elapsed)
+    for attempt in range(len(ANILIST_BACKOFF) + 1):
+        # AniList allows 30 req/min; one card costs 1-2 calls.
+        elapsed = time.monotonic() - _last_call[0]
+        if elapsed < 0.7:
+            time.sleep(0.7 - elapsed)
         req = urllib.request.Request(
-            f"{JIKAN_BASE}/{path}",
-            # Ask for gzip explicitly. Jikan's edge cache keys on
-            # Accept-Encoding, and only the gzip bucket is warm — the empty
-            # and `identity` variants are served an INSTANT (~0.4s) cached
-            # 504, which is not an origin timeout despite the status. A/B on
-            # mal-12189, alternating, 2026-08-12: empty [504,504,504,504] vs
-            # gzip [200,200,200,200]. This inverts the 2026-06-17 Hibike!
-            # Euphonium (mal-27989) finding — the warm bucket moved. Re-A/B
-            # before touching this; urllib does NOT auto-decompress, so the
-            # gzip branch below is required.
+            ANILIST_URL,
+            data=body,
             headers={
-                "User-Agent": JIKAN_UA,
+                "User-Agent": UA,
                 "Accept": "application/json",
+                "Content-Type": "application/json",
                 "Accept-Encoding": "gzip",
             },
         )
         try:
             with urllib.request.urlopen(req, timeout=20) as r:
-                _last_jikan[0] = time.monotonic()
-                body = r.read()
+                _last_call[0] = time.monotonic()
+                raw = r.read()
                 if r.headers.get("Content-Encoding") == "gzip":
-                    body = gzip.decompress(body)
-                return json.loads(body)
+                    raw = gzip.decompress(raw)
+            payload = json.loads(raw)
+            data = payload.get("data")
+            if data:
+                return data
+            msg = (payload.get("errors") or [{}])[0].get("message") or "no data"
+            raise RuntimeError(f"AniList error: {msg}")
         except urllib.error.HTTPError as e:
-            _last_jikan[0] = time.monotonic()
+            _last_call[0] = time.monotonic()
             last_err = e
-            if e.code not in JIKAN_RETRY_CODES:
-                raise  # 4xx (e.g. 404 bad MAL id) — retrying won't help.
+            if e.code not in (429, 500, 502, 503, 504):
+                raise
         except (urllib.error.URLError, TimeoutError) as e:
-            _last_jikan[0] = time.monotonic()
+            _last_call[0] = time.monotonic()
             last_err = e
-        if attempt < len(JIKAN_BACKOFF):
-            time.sleep(_retry_wait(last_err, attempt))
+        if attempt < len(ANILIST_BACKOFF):
+            time.sleep(ANILIST_BACKOFF[attempt])
     raise RuntimeError(
-        f"Jikan API unavailable after {len(JIKAN_BACKOFF) + 1} attempts "
+        f"AniList unavailable after {len(ANILIST_BACKOFF) + 1} attempts "
         f"(last: {last_err}). Please retry shortly."
     )
 
 
+def jikan_side(path):
+    """Best-effort Jikan GET for the handful of fields AniList does not carry
+    (opening/ending songs, age rating, background blurb, episode titles).
+
+    ONE attempt, short timeout, `None` on any failure — a dead Jikan must leave
+    those fields empty and never slow down or fail a download. `Accept-Encoding:
+    gzip` is the bucket their cache still answers from, and urllib does not
+    auto-decompress it."""
+    req = urllib.request.Request(
+        f"{JIKAN_BASE}/{path}",
+        headers={
+            "User-Agent": UA,
+            "Accept": "application/json",
+            "Accept-Encoding": "gzip",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=8) as r:
+            raw = r.read()
+            if r.headers.get("Content-Encoding") == "gzip":
+                raw = gzip.decompress(raw)
+        return json.loads(raw)
+    except Exception as e:  # noqa: BLE001 — every failure is non-fatal here
+        log(f"jikan side-fetch {path} unavailable ({e})")
+        return None
+
+
+DETAIL_QUERY = """
+query($idMal:Int){
+  Media(idMal:$idMal, type:ANIME){
+    id idMal
+    title { romaji english native }
+    synonyms format episodes duration status season seasonYear source
+    startDate { year month day } endDate { year month day }
+    averageScore popularity
+    rankings { rank type allTime }
+    genres
+    tags { name rank isGeneralSpoiler isMediaSpoiler }
+    studios { edges { isMain node { name } } }
+    description
+    coverImage { extraLarge large }
+    trailer { id site }
+    stats { scoreDistribution { amount } }
+  }
+}
+"""
+
+EPISODES_QUERY = """
+query($idMal:Int){ Media(idMal:$idMal, type:ANIME){ streamingEpisodes { title } } }
+"""
+
+MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun",
+          "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+FORMAT_LABELS = {
+    "TV": "TV", "TV_SHORT": "TV Short", "MOVIE": "Movie", "SPECIAL": "Special",
+    "OVA": "OVA", "ONA": "ONA", "MUSIC": "Music",
+}
+
+# AniList files these as tags; MAL gives them their own card field.
+DEMOGRAPHIC_TAGS = ("Shounen", "Shoujo", "Seinen", "Josei", "Kids")
+
+
+def humanize_enum(raw):
+    """`LIGHT_NOVEL` → `Light novel`. Sentence case, matching MAL's labels;
+    runs of 3 characters or fewer (TV, OVA, ONA) keep their case."""
+    words = []
+    for i, w in enumerate(str(raw).split("_")):
+        if not w:
+            continue
+        words.append(w if len(w) <= 3 else (w.capitalize() if i == 0 else w.lower()))
+    return " ".join(words)
+
+
+def strip_html(raw):
+    """AniList descriptions are HTML fragments; cards want plain text."""
+    if not raw:
+        return ""
+    text = re.sub(r"<\s*br\s*/?\s*>", "\n", raw, flags=re.I)
+    text = re.sub(r"<\s*/?\s*p[^>]*>", "\n", text, flags=re.I)
+    text = re.sub(r"<[^>]+>", "", text)
+    for ent, ch in (("&quot;", '"'), ("&#039;", "'"), ("&apos;", "'"),
+                    ("&lt;", "<"), ("&gt;", ">"), ("&nbsp;", " "), ("&amp;", "&")):
+        text = text.replace(ent, ch)
+    return re.sub(r"\n{3,}", "\n\n", text).strip()
+
+
+def _fuzzy(d, human=False):
+    """AniList `{year,month,day}` → `2013-04-07`, or `Apr 7, 2013` when human.
+    Month/day can be null; the string degrades to the precision available."""
+    d = d or {}
+    y, m, day = d.get("year"), d.get("month"), d.get("day")
+    if not y:
+        return ""
+    if not m:
+        return str(y)
+    if human:
+        return f"{MONTHS[m - 1]} {day}, {y}" if day else f"{MONTHS[m - 1]} {y}"
+    return f"{y:04d}-{m:02d}-{day:02d}" if day else f"{y:04d}-{m:02d}"
+
+
+def _ranking(media, kind):
+    """All-time rank of the given kind, falling back to the seasonal figure."""
+    rows = media.get("rankings") or []
+    for all_time in (True, False):
+        for r in rows:
+            if r.get("type") == kind and bool(r.get("allTime")) == all_time:
+                return r.get("rank")
+    return None
+
+
+def _named(values):
+    """Plain strings → the `[{name}]` shape `build_card` reads."""
+    return [{"name": v} for v in values if v]
+
+
+def fetch_detail(mal_id):
+    """AniList detail for a MAL id, adapted into the Jikan-shaped dict that
+    `build_card` consumes. Opening/ending songs, the age rating and the
+    background blurb come from a best-effort Jikan side-fetch — absent when
+    Jikan is down, never fatal."""
+    m = (anilist_gql(DETAIL_QUERY, {"idMal": int(mal_id)}) or {}).get("Media")
+    if not m:
+        return None
+
+    tags = m.get("tags") or []
+    themes = [
+        t["name"] for t in tags
+        if t.get("name")
+        and not t.get("isGeneralSpoiler") and not t.get("isMediaSpoiler")
+        and (t.get("rank") or 0) >= 60
+        and t["name"] not in DEMOGRAPHIC_TAGS
+    ]
+    demographics = [t["name"] for t in tags if t.get("name") in DEMOGRAPHIC_TAGS]
+    studio_edges = ((m.get("studios") or {}).get("edges")) or []
+    studios = [e["node"]["name"] for e in studio_edges if e.get("isMain") and e.get("node")]
+    producers = [e["node"]["name"] for e in studio_edges if not e.get("isMain") and e.get("node")]
+
+    episodes = m.get("episodes")
+    minutes = m.get("duration")
+    duration = ""
+    if minutes:
+        duration = f"{minutes} min per ep" if (episodes or 1) > 1 else f"{minutes} min"
+
+    scored_by = sum(
+        b.get("amount") or 0
+        for b in (((m.get("stats") or {}).get("scoreDistribution")) or [])
+    )
+    score = m.get("averageScore")
+    aired_from, aired_to = _fuzzy(m.get("startDate")), _fuzzy(m.get("endDate"))
+    human_from, human_to = _fuzzy(m.get("startDate"), True), _fuzzy(m.get("endDate"), True)
+    aired_string = f"{human_from} to {human_to}" if human_to and human_to != human_from else human_from
+
+    trailer = m.get("trailer") or {}
+    trailer_url = ""
+    if trailer.get("site") == "youtube" and trailer.get("id"):
+        trailer_url = f"https://www.youtube.com/watch?v={trailer['id']}"
+
+    # Jikan-only fields. A None here just leaves them out of the card.
+    # `/full` is the ONLY endpoint carrying the opening/ending song lists — the
+    # plain `/anime/{id}` returns `theme: null`, which is why Openings/Endings
+    # were empty on every card written before 2026-08-25. Fall back to the plain
+    # endpoint when `/full` is cold, since it still has rating + background.
+    side = (jikan_side(f"anime/{mal_id}/full") or jikan_side(f"anime/{mal_id}") or {})
+    side = side.get("data") or {}
+    theme = side.get("theme") or {}
+
+    return {
+        "mal_id": m.get("idMal") or int(mal_id),
+        "title": (m.get("title") or {}).get("romaji") or (m.get("title") or {}).get("english") or "",
+        "title_english": (m.get("title") or {}).get("english") or "",
+        "title_japanese": (m.get("title") or {}).get("native") or "",
+        "title_synonyms": m.get("synonyms") or [],
+        "year": m.get("seasonYear") or (m.get("startDate") or {}).get("year"),
+        "season": humanize_enum(m["season"]) if m.get("season") else "",
+        "type": FORMAT_LABELS.get(m.get("format"), humanize_enum(m.get("format") or "")),
+        "source": humanize_enum(m["source"]) if m.get("source") else "",
+        "episodes": episodes,
+        "duration": duration,
+        "score": round(score / 10.0, 2) if score is not None else None,
+        "scored_by": scored_by or None,
+        "rank": _ranking(m, "RATED"),
+        "popularity": _ranking(m, "POPULAR"),
+        "members": m.get("popularity"),
+        "airing": m.get("status") == "RELEASING",
+        "aired": {"from": aired_from, "to": aired_to, "string": aired_string},
+        "genres": _named(m.get("genres") or []),
+        "studios": _named(studios),
+        "producers": _named(producers),
+        "themes": _named(themes),
+        "demographics": _named(demographics),
+        "synopsis": strip_html(m.get("description")),
+        "url": f"https://myanimelist.net/anime/{m.get('idMal') or mal_id}",
+        "trailer": {"url": trailer_url} if trailer_url else {},
+        "images": {"jpg": {"image_url": (m.get("coverImage") or {}).get("extraLarge")
+                           or (m.get("coverImage") or {}).get("large") or ""}},
+        # Jikan-only, best-effort:
+        "rating": side.get("rating") or "",
+        "background": side.get("background") or "",
+        "broadcast": side.get("broadcast") or {},
+        "theme": {"openings": theme.get("openings") or [],
+                  "endings": theme.get("endings") or []},
+    }
+
+
+def _streaming_episodes(mal_id):
+    """AniList fallback episode list. `streamingEpisodes` titles read
+    `Episode 3 - A Dim Light`; no air dates are available. Complete for a
+    normal-length licensed series, a recent-window subset for 1000-episode
+    runners, empty for unlicensed titles."""
+    m = (anilist_gql(EPISODES_QUERY, {"idMal": int(mal_id)}) or {}).get("Media") or {}
+    out = []
+    for e in m.get("streamingEpisodes") or []:
+        raw = (e.get("title") or "").strip()
+        if not raw.startswith("Episode "):
+            continue
+        rest = raw[len("Episode "):]
+        num, _, title = rest.partition(" - ")
+        try:
+            n = int(num.strip())
+        except ValueError:
+            continue
+        out.append({"n": n, "title": title.strip(), "aired": ""})
+    out.sort(key=lambda e: e["n"])
+    return out
+
+
 def get_episodes(mal_id):
-    """Paginated episode list → [{n, title, aired}]. Capped at 25 pages."""
+    """Paginated episode list → [{n, title, aired}], capped at 25 pages.
+
+    Jikan first — it is the only source with real per-episode titles AND air
+    dates — falling back to AniList's streaming titles the moment it fails."""
     out = []
     page = 1
     while page <= 25:
-        resp = jikan_get(f"anime/{mal_id}/episodes?page={page}")
+        resp = jikan_side(f"anime/{mal_id}/episodes?page={page}")
+        if not resp:
+            break
         for e in resp.get("data", []) or []:
             n = e.get("mal_id")
             if n is None:
@@ -186,7 +406,9 @@ def get_episodes(mal_id):
             break
         page += 1
         time.sleep(1.0)
-    return out
+    if out:
+        return out
+    return _streaming_episodes(mal_id)
 
 
 # ── filesystem-safe names (matches ingest-mal Phase 3: strip / \ : ? * ") ────
@@ -458,8 +680,8 @@ def main():
 
     # 1. Enrich.
     try:
-        detail = jikan_get(f"anime/{args.mal_id}").get("data")
-    except Exception as e:  # noqa: BLE001 — surface any Jikan failure to the worker
+        detail = fetch_detail(args.mal_id)
+    except Exception as e:  # noqa: BLE001 — surface any lookup failure to the worker
         fatal("jikan_failed", e)
     if not detail:
         fatal("jikan_no_data", f"MAL {args.mal_id}")
@@ -531,7 +753,7 @@ def main():
         if img:
             try:
                 os.makedirs(assets_dir, exist_ok=True)
-                req = urllib.request.Request(img, headers={"User-Agent": JIKAN_UA})
+                req = urllib.request.Request(img, headers={"User-Agent": UA})
                 with urllib.request.urlopen(req, timeout=20) as r:
                     data = r.read()
                 with open(os.path.join(assets_dir, f"{safe_filename(title)}.jpg"), "wb") as f:

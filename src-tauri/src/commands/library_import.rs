@@ -678,7 +678,7 @@ async fn process_mal_job(app: &AppHandle, job_id: &str) {
         }
         with_job(job_id, |j| j.index = (i + 1) as i64);
         emit_progress(app, job_id);
-        // Polite to Jikan (download_anime.py fetches metadata per id).
+        // Polite to AniList (download_anime.py fetches metadata per id).
         tokio::time::sleep(Duration::from_millis(MB_THROTTLE_MS)).await;
     }
 

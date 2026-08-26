@@ -2,8 +2,9 @@
 """backfill_anime_metadata.py — one-time enrich of existing anime cards.
 
 Walks every `Type: Media-Entry` card under `<library>/Anime/Catalog/`, reads its
-`Provider ID`, fetches Jikan `/anime/{id}`, and patches in the MAL metadata the
-earlier card writer never captured:
+`Provider ID`, fetches the metadata from AniList (via `download_anime.fetch_detail`,
+the one adapter both scripts share), and patches in what the earlier card writer
+never captured:
 
   Studio (when `[]`), Themes, Demographics, Producers, Premiered, Format,
   Rank, Popularity, Members, Scored By.
@@ -24,16 +25,16 @@ import json
 import os
 import re
 import sys
-import time
-import urllib.error
-import urllib.request
 
-JIKAN_BASE = "https://api.jikan.moe/v4"
-JIKAN_UA = "Citadel/1.0 (agentic-os)"
 CATALOG_REL = "Anime/Catalog"
 DEFAULT_LIBRARY = os.path.expanduser("~/.local/share/dev.judeau.agentic-os/Library")
 
-# List fields (YAML block lists) and scalar fields, with their Jikan source.
+# The metadata adapter lives in download_anime.py (same folder) — one mapping
+# from AniList's payload to the card's field shape, shared by both scripts.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from download_anime import fetch_detail  # noqa: E402
+
+# List fields (YAML block lists) and scalar fields, with their source key.
 LIST_FIELDS = [
     ("Studio", "studios"),
     ("Themes", "themes"),
@@ -47,35 +48,9 @@ SCALAR_FIELDS = [
     ("Scored By", "scored_by"),
 ]
 
-_last_jikan = [0.0]
-
-
 def log(msg):
     sys.stderr.write(str(msg) + "\n")
     sys.stderr.flush()
-
-
-def jikan_get(path):
-    """Throttled (>=0.5s) Jikan GET; one retry on HTTP 429."""
-    for attempt in range(2):
-        elapsed = time.monotonic() - _last_jikan[0]
-        if elapsed < 0.5:
-            time.sleep(0.5 - elapsed)
-        req = urllib.request.Request(
-            f"{JIKAN_BASE}/{path}",
-            headers={"User-Agent": JIKAN_UA, "Accept": "application/json"},
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=20) as r:
-                _last_jikan[0] = time.monotonic()
-                return json.load(r)
-        except urllib.error.HTTPError as e:
-            _last_jikan[0] = time.monotonic()
-            if e.code == 429 and attempt == 0:
-                time.sleep(1.5)
-                continue
-            raise
-    raise RuntimeError("Jikan rate-limited after retry")
 
 
 def yaml_scalar(v):
@@ -230,13 +205,13 @@ def main():
 
         processed += 1
         try:
-            detail = jikan_get(f"anime/{pid}").get("data")
+            detail = fetch_detail(pid)
         except Exception as e:  # noqa: BLE001
-            log(f"jikan failed {name} (mal {pid}): {e}")
+            log(f"lookup failed {name} (mal {pid}): {e}")
             errors += 1
             continue
         if not detail:
-            log(f"no jikan data {name} (mal {pid})")
+            log(f"no data for {name} (mal {pid})")
             errors += 1
             continue
 

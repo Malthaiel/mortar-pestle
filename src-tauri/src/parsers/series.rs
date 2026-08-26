@@ -186,7 +186,7 @@ pub struct Series {
     pub franchise: bool,
     pub related_ids: Option<Vec<i64>>,
     /// MAL id from `Provider ID` frontmatter — lets the detail page fetch live
-    /// Jikan credits (characters/staff/relations) for an owned entry.
+    /// AniList credits (characters/staff/relations) for an owned entry.
     pub provider_id: Option<i64>,
     pub seasons: Option<Vec<Season>>,
     pub episodes: Vec<Episode>,
@@ -305,12 +305,12 @@ fn meta_bool(meta: &Map<String, Value>, key: &str) -> bool {
 
 /// `Airing`, self-corrected against `Aired To`.
 ///
-/// `Airing` is a snapshot: `download_anime.py` writes it once from the Jikan
+/// `Airing` is a snapshot: `download_anime.py` writes it once from the AniList
 /// detail at ingest and nothing ever revisits it, so every show that finishes
 /// its run after being downloaded keeps claiming to be airing — which keeps a
 /// qBittorrent RSS rule armed and keeps SeriesDetail offering "grab more".
 ///
-/// No network call is needed to fix that. Jikan only fills `aired.to` once a
+/// No network call is needed to fix that. The source only fills an end date once a
 /// run has ended (a currently-airing show carries no end date at all), so a
 /// recorded `Aired To` in the past is conclusive on its own. Reading the flag
 /// through here means the correction happens wherever a series is read, rather
