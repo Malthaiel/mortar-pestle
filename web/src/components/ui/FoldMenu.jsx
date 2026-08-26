@@ -24,7 +24,7 @@
 // wrapper j carries every row below it as one piece. n rows means n-1 hinges.
 import { Children, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import FoldPaper, { FOLD_PAD, paperT } from './FoldPaper.jsx';
-import useSuckToCursor, { SUCK_DUR, SUCK_LEAD } from '../../hooks/useSuckToCursor.js';
+import useSuckToCursor, { SUCK_DUR } from '../../hooks/useSuckToCursor.js';
 
 export { FOLD_PAD };
 
@@ -327,10 +327,33 @@ export default function FoldMenu({
     transformOrigin: `50% ${box.h / 2}px`,
   } : null;
 
+  // ONE CLOCK. The rotation used to be a CSS transform transition, which runs
+  // on the compositor and keeps advancing while the main thread is busy —
+  // while FoldPaper resizes the paper from a main-thread measurement once a
+  // frame. Under load the two came apart and the rows walked out of the bottom
+  // of their own paper: photographed 2026-08-24 with the paper painted solid,
+  // 9px in an ordinary capture and 28px with the main thread stalled 40ms a
+  // frame, the paper's painted edge sitting still for frames while the row
+  // moved every one. User-reported as "the Reload button unfolds outside of the
+  // background". No amount of better measuring can close that: a per-frame JS
+  // follower cannot catch an animation that does not need it.
+  //
+  // So the rows come onto the paper's clock. `--hinge` publishes this row's
+  // target angle and its delay; FoldPaper reads it and writes the rotation
+  // itself, in the SAME rAF callback it measures in, off the same t0. A slow
+  // frame now moves both together — which reads as a slow frame, not a defect.
+  //
+  // The `transform` below stays as the RESTING value on purpose. React writes
+  // it during commit, before any layout effect, so FoldPaper's synchronous
+  // first tick overwrites it with the true start angle before anything paints;
+  // and because the string only changes when `open` does, React never touches
+  // it again mid-fold, which is what lets the per-frame value survive the
+  // re-renders the lip/flip milestones fire.
   const hinge = (deg, delay) => ({
+    '--hinge': `${deg} ${delay}`,
     transform: `rotateX(${deg}deg) translateZ(-1px)`,
     transformOrigin: `center ${HINGE_Y}`,
-    transition: `transform ${DUR}ms ease-in-out ${delay}ms, ${BAND_T}`,
+    transition: BAND_T,
     willChange: 'transform',
   });
 
@@ -372,12 +395,12 @@ export default function FoldMenu({
   // the real candy button takes back over. EVERY close timing derives from it,
   // so they cannot drift apart.
   const SHUT = closeAt(0) + DUR;
-  // Anchored on the END, not the start, then pulled SUCK_LEAD earlier still: a
-  // start-anchored overlap would run out early on the eight-row context menu
-  // and late on the three-row width chooser. The lead is what makes it bite
-  // into the fold rather than only ride its tail, so the suck now finishes
-  // after SHUT and the unmount gate below moves with it.
-  const suckStart = suckToCursor ? Math.max(0, SHUT - SUCK_DUR * (1 + SUCK_LEAD)) + suckDelay : 0;
+  // Starts WITH the close, not on its tail. It was end-anchored (SHUT - DUR *
+  // 1.25) so the fold played first and the pull only bit near the end; that
+  // read as the menu collapsing and THEN being taken. User-directed 2026-08-24,
+  // "i want the suck to happen instantly rather than waiting until its folded a
+  // certain way up". Only the fly-out stagger delays it now.
+  const suckStart = suckToCursor ? suckDelay : 0;
   const suckEnd = suckToCursor ? Math.max(SHUT, suckStart + SUCK_DUR) : SHUT;
 
   // Backing panel geometry. `depth` is a CSS length string off the live trigger
@@ -503,10 +526,9 @@ export default function FoldMenu({
     return () => clearTimeout(t);
   }, [open, suckEnd]);
 
-  // The suck lands ON the fold's own clock: it ENDS at SHUT, so at the four-row
-  // reference (SHUT 740) it owns the last 30% and the total close is unchanged.
-  // Only a fold shorter than the suck itself (or one carrying a stagger) runs
-  // past SHUT, and then the unmount gate above moves with it — this file has
+  // The suck runs alongside the fold from frame one and ends at suckStart +
+  // SUCK_DUR, which on a long fold is BEFORE SHUT; the unmount gate above takes
+  // whichever of the two is later, so the fold is never cut off — this file has
   // been burned twice by an unmount arriving before its close had played.
   // (the call itself lives below rootRef's declaration — see there.)
 
@@ -963,6 +985,7 @@ export default function FoldMenu({
           rowsRef={rowsRef}
           lip={dpx}
           shutMs={SHUT}
+          hingeDur={DUR}
           frameRef={rootRef}
         />
         {stack(0)}

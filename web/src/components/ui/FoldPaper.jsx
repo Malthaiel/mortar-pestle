@@ -50,6 +50,27 @@ const FRAME = 1000 / 60;
 const easeOut = (p) => 1 - (1 - p) ** 3;
 const easeIn = (p) => p ** 3;
 
+// The rows' own curve: cubic-bezier(0.42, 0, 0.58, 1), i.e. the `ease-in-out`
+// keyword their CSS transition used to name. SOLVED, not approximated — the
+// obvious quad ease is visibly different through the middle of a fold and this
+// fold's feel is signed off. y(t) collapses to smoothstep for these control
+// points; only x(t) needs inverting, and 20 bisections is exact to well under a
+// pixel of rotation.
+const easeInOut = (p) => {
+  if (p <= 0) return 0;
+  if (p >= 1) return 1;
+  let lo = 0;
+  let hi = 1;
+  let t = p;
+  for (let i = 0; i < 20; i += 1) {
+    t = (lo + hi) / 2;
+    const u = 1 - t;
+    const x = 3 * u * u * t * 0.42 + 3 * u * t * t * 0.58 + t * t * t;
+    if (x < p) lo = t; else hi = t;
+  }
+  return t * t * (3 - 2 * t);
+};
+
 // A row's depth lip as it is painted RIGHT NOW, in px, foreshortened by however
 // far the row has rotated. `.candy-btn`'s lip is `box-shadow: 0 <depth> 0`, and
 // getComputedStyle reports the live interpolated shadow mid-transition, so this
@@ -92,8 +113,13 @@ export const paperT = (open, shutMs) => (open
  *   suck-to-cursor close scales FoldMenu's root). Its transform is switched off
  *   for the length of each measurement; see the note in the loop.
  */
-export default function FoldPaper({ open, shown, up, groupRef, rowsRef, lip, shutMs, frameRef }) {
+export default function FoldPaper({ open, shown, up, groupRef, rowsRef, lip, shutMs, hingeDur, frameRef }) {
   const ref = useRef(null);
+  // The fold's own t0, reset ONLY by `open`. The measuring effect below restarts
+  // on `lip` and `shutMs` too, and a restart mid-fold would rewind every row to
+  // the top of its swing — the halo can afford that, the rotation cannot.
+  const foldT0 = useRef(0);
+  useLayoutEffect(() => { foldT0.current = performance.now(); }, [open]);
 
   // Layout, not plain, effect: it runs in the same commit as the click, so the
   // first frame of an open is already measured rather than one frame stale.
@@ -120,6 +146,26 @@ export default function FoldPaper({ open, shown, up, groupRef, rowsRef, lip, shu
       const group = groupRef.current;
       if (!el || !group) return;
       const t = performance.now() - t0;
+
+      // THE ROWS, ON THIS LOOP'S CLOCK. Each hinge publishes `--hinge: <target
+      // angle> <delay>` (see FoldMenu's hinge()); the start is the other side of
+      // the same flip. Written here, before anything is measured, so the rect
+      // read a few lines down is of a row this callback just placed — the paper
+      // and the rows cannot come apart, at any frame rate, by construction.
+      // They used to: the rotation was a compositor transition that kept
+      // advancing while this loop was starved. See hinge() for the photographs.
+      if (hingeDur) {
+        const ft = performance.now() - foldT0.current;
+        for (const el of group.querySelectorAll('*')) {
+          const spec = el.style.getPropertyValue('--hinge');
+          if (!spec) continue;
+          const [target, delay] = spec.trim().split(/\s+/).map(Number);
+          const from = 180 - target;
+          const p2 = Math.min(1, Math.max(0, (ft - delay) / hingeDur));
+          const deg = from + (target - from) * easeInOut(p2);
+          el.style.transform = `rotateX(${deg}deg) translateZ(-1px)`;
+        }
+      }
 
       // The halo. Grows from the click on an open; on a close it runs its RAMP
       // so as to LAND on `shutMs - LAND_EARLY frames` — written as its own end
@@ -287,7 +333,7 @@ export default function FoldPaper({ open, shown, up, groupRef, rowsRef, lip, shu
           { open, lip, shutMs, samples });
       }
     };
-  }, [open, shown, up, lip, shutMs, groupRef, rowsRef]);
+  }, [open, shown, up, lip, shutMs, hingeDur, groupRef, rowsRef]);
 
   return (
     <div

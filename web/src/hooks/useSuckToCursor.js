@@ -17,10 +17,6 @@
 import { useEffect } from 'react';
 
 export const SUCK_DUR = 440;
-// How far AHEAD of its end-anchored slot the suck starts, so it bites into the
-// fold earlier. A fraction of the duration, not a fixed number of ms, so the
-// two stay in proportion if the duration is retuned. User-directed 2026-08-21.
-export const SUCK_LEAD = 0.25;
 
 // One live pointer for the whole app: a module-level listener, not one per
 // fold. Capture phase so a surface that stops propagation cannot blind it.
