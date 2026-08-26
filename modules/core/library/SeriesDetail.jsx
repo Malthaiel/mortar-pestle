@@ -177,17 +177,9 @@ export default function SeriesDetail({ accent, seriesPath }) {
   // (nothing to grab), so offer a re-download path in the ⋯ menu for re-grabbing a
   // corrupt or better rip.
   const canRedownload = flatStartIdx >= 0 && !dlActive && !canGrabMore && !!series.providerId;
-  // Pre-flight qBittorrent, then open the torrent picker (owned re-download path).
-  const onDownload = async () => {
+  // The engine is in-process, so the picker opens straight away (no pre-flight).
+  const onDownload = () => {
     if (!series.providerId) return;
-    const qbit = await videoApi.qbitStatus().catch(() => null);
-    if (!qbit || !qbit.connected) {
-      // qbit.error carries both cause and fix; a bolted-on "start it" tail is
-      // wrong when the real fix is stop-then-start.
-      const why = (qbit && qbit.error) || 'qBittorrent isn’t reachable. Start it in Settings → Anime, then retry.';
-      notify({ type: 'anime-download', title: 'Download blocked', message: why, accent: 'var(--text)', iconKey: 'alert', duration: 7000 });
-      return;
-    }
     setPickerOpen(true);
   };
   const onPickTorrent = async (magnet, audioUsed) => {
@@ -203,8 +195,8 @@ export default function SeriesDetail({ accent, seriesPath }) {
   };
 
   // Uninstall: hand the card path to the Rust command (it cancels the job, clears
-  // torrents [+files], drops the RSS rule, deletes folder/cover/card). Blocks if
-  // qBittorrent is down — surfaced as a thrown error here.
+  // torrents [+files], deletes folder/cover/card). Removing the card also drops
+  // the series from the airing poll set, so new episodes stop arriving.
   const handleUninstall = async () => {
     if (uninstalling) return;
     setUninstalling(true);
@@ -349,12 +341,7 @@ export default function SeriesDetail({ accent, seriesPath }) {
                 const r = e.currentTarget.getBoundingClientRect();
                 const items = [];
                 if (canRedownload) items.push({ label: 'Re-download…', onClick: onDownload });
-                items.push({ label: 'Uninstall…', onClick: async () => {
-                  const qbit = await videoApi.qbitStatus().catch(() => null);
-                  if (!qbit || !qbit.connected) {
-                    notify({ type: 'anime-download', title: 'Uninstall blocked', message: (qbit && qbit.error) || 'qBittorrent isn’t reachable. Start it in Settings → Anime, then retry.', accent: 'var(--text)', iconKey: 'alert', duration: 7000 });
-                    return;
-                  }
+                items.push({ label: 'Uninstall…', onClick: () => {
                   setDeleteFiles(true);
                   setConfirmOpen(true);
                 } });
@@ -481,14 +468,14 @@ export default function SeriesDetail({ accent, seriesPath }) {
             <li>The downloaded video → <b>recycling bin</b> (restorable)</li>
           )}
           <li style={{ color: '#d9a55a' }}>
-            Its qBittorrent torrent{(series.relatedIds && series.relatedIds.length > 1) ? 's' : ''}{series.airing ? ' + RSS rule' : ''} — removed, <b>not</b> restorable
+            Its torrent{(series.relatedIds && series.relatedIds.length > 1) ? 's' : ''} — removed, <b>not</b> restorable{series.airing ? '. New episodes stop arriving.' : ''}
           </li>
         </ul>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text)' }}>
           <input type="checkbox" checked={deleteFiles} onChange={(e) => setDeleteFiles(e.target.checked)} />
           Also send the downloaded video to the recycling bin
         </label>
-        <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>Card, cover &amp; video go to the recycling bin; torrents &amp; RSS rules are removed from qBittorrent and can't be restored. qBittorrent must be running.</div>
+        <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>Card, cover &amp; video go to the recycling bin; the torrents themselves are removed and can't be restored.</div>
       </ConfirmModal>
       </div>
     </div>

@@ -123,7 +123,7 @@ pub enum Payload {
     },
     /// An anime series: the `.md` card (blob `card`), local cover sidecar (blob
     /// `sidecars/<filename>`), and the video folder (blob `tracks/`). Restorable;
-    /// the removed qBittorrent torrents + RSS rule are NOT (see the tombstone's
+    /// the removed torrents are NOT (see the tombstone's
     /// `external_irreversible`).
     #[serde(rename_all = "camelCase")]
     Anime {
@@ -607,7 +607,7 @@ pub fn trash_album(
 /// Soft-delete an anime series as ONE bin item: the `.md` card, its local cover
 /// sidecar, and (when supplied) the video folder move into the blob together and
 /// restore together. `external` records side effects the bin can't undo (removed
-/// qBittorrent torrents / RSS rule) — surfaced on the item.
+/// torrents) — surfaced on the item.
 pub fn trash_anime(
     app: &AppHandle,
     root: Option<String>,

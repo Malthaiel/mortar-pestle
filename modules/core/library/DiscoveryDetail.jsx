@@ -123,20 +123,11 @@ export default function DiscoveryDetail({ malId, accent, onResolveTitle }) {
   const coverSrcs = [detail && detail.image].filter(Boolean);
 
   const dlBusy = job && (job.state === 'queued' || job.state === 'preparing' || job.state === 'downloading');
-  // Pre-flight qBittorrent, then open the torrent picker so a down daemon is
-  // caught before the user bothers choosing a release.
-  const startDownload = async () => {
+  // No engine pre-flight: the torrent engine is built into the app, so there is
+  // nothing to be down. (Was a qBittorrent reachability check.)
+  const startDownload = () => {
     if (!detail || dlBusy) return;
     setDlError(null);
-    const qbit = await videoApi.qbitStatus().catch(() => null);
-    if (!qbit || !qbit.connected) {
-      // qbit.error carries both cause and fix; a bolted-on "start it" tail is
-      // wrong when the real fix is stop-then-start.
-      const msg = (qbit && qbit.error) || 'qBittorrent isn’t reachable. Start it in Settings → Anime, then retry.';
-      setDlError(msg);
-      notify({ type: 'anime-download', title: 'Download blocked', message: msg, accent: 'var(--text)', iconKey: 'alert', duration: 7000 });
-      return;
-    }
     setPickerOpen(true);
   };
   // The picker hands back the chosen magnet + audio; enqueue with that explicit

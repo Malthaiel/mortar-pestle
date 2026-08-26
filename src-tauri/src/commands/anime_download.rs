@@ -29,7 +29,6 @@ use tauri::{AppHandle, Emitter};
 use tokio::io::AsyncReadExt;
 
 use crate::commands::job_queue;
-use crate::commands::qbit::qbit_env;
 use crate::commands::vault::{self, atomic_write};
 
 const POLL_INTERVAL_SECS: u64 = 5;
@@ -58,9 +57,9 @@ pub struct DownloadJob {
     pub airing: bool,
     pub anime_type: String,
     pub episodes_total: Option<i64>,
-    /// Still the RSS rule name (`mal-<id>`) qBittorrent registers for airing
-    /// series. It is NOT how torrents are found any more — the built-in engine
-    /// has no tags; see `torrent_id`.
+    /// `mal-<id>`, kept as the job's stable label for logs and the UI. It is NOT
+    /// how torrents are found — the built-in engine has no tags; see
+    /// `torrent_id`, and `delete_under` for the folder-based lookup.
     pub tag: String,
     /// The built-in engine's id for this job's torrent, set once the magnet is
     /// added. Phase 2 polls on it.
@@ -91,7 +90,7 @@ pub struct DownloadJob {
     #[serde(skip)]
     pub download_source: Option<String>,
     /// Add-to-Library / import mode: the script writes the card + cover and
-    /// skips Nyaa/qBittorrent; the job finalizes Done at the terminal JSON (no
+    /// skips Nyaa and the torrent engine; the job finalizes Done at the terminal JSON (no
     /// Phase 2). Serialized so the UI can label these jobs "Adding to library".
     pub metadata_only: bool,
     /// Initial frontmatter Status for metadata-only cards (quick-status menu).
@@ -313,45 +312,8 @@ pub struct UninstallReport {
     pub ok: bool,
     pub removed_torrents: usize,
     pub deleted_files: bool,
-    pub removed_rss: bool,
     pub card_deleted: bool,
     pub warnings: Vec<String>,
-}
-
-/// Run qbittorrent_client.py with the app's QBIT_* env. `Ok(Value)` is the parsed
-/// stdout JSON.
-///
-/// ponytail: only `remove-rss` still needs this — airing series keep using
-/// qBittorrent's RSS rule engine until SF3 replaces it with a Rust poller.
-/// Deleting this function is SF4's job, not this one's.
-async fn qbit_run(app: &AppHandle, args: &[&str]) -> Result<serde_json::Value, String> {
-    let script = vault::script_path("qbittorrent_client.py");
-    let mut cmd = crate::commands::proc_util::python_cmd();
-    cmd.arg(&script);
-    for a in args {
-        cmd.arg(a);
-    }
-    for (k, v) in qbit_env(app) {
-        cmd.env(k, v);
-    }
-    cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null());
-    let out = cmd
-        .output()
-        .await
-        .map_err(|e| format!("failed to spawn qbittorrent_client.py: {e}"))?;
-    let text = String::from_utf8_lossy(&out.stdout);
-    let line = text.lines().rev().find(|l| !l.trim().is_empty()).unwrap_or("").trim();
-    let v: serde_json::Value =
-        serde_json::from_str(line).map_err(|_| "qBittorrent helper returned no JSON".to_string())?;
-    if let Some(err) = v.get("error").and_then(|x| x.as_str()) {
-        return Err(match err {
-            "auth_failed" | "network_error" => {
-                "qBittorrent isn’t reachable — start it in Settings → Anime, then retry.".to_string()
-            }
-            other => format!("qBittorrent error: {other}"),
-        });
-    }
-    Ok(v)
 }
 
 /// Scan sibling cards for a shared `Local Path` so uninstall never deletes a
@@ -380,7 +342,8 @@ fn local_path_is_shared(ingested_dir: &Path, this_card: &Path, target: &str) -> 
 }
 
 /// Uninstall a library entry: cancel its job, remove its torrents from the
-/// built-in engine (+files when `delete_files`), drop the airing RSS rule,
+/// built-in engine (+files when `delete_files`), stop its airing poll (the card
+/// is gone, so it drops out of the poll set on its own),
 /// delete the local video folder (collision- and path-guarded), the cover, and
 /// the card last. Keyed on the CARD (`series_path`) so a multi-id franchise
 /// entry removes as one unit.
@@ -400,7 +363,6 @@ pub async fn anime_uninstall(
         .and_then(|v| v.as_str())
         .map(str::to_string)
         .filter(|s| !s.is_empty());
-    let airing = meta.get("Airing").and_then(|v| v.as_bool()).unwrap_or(false);
     let title = meta.get("Title").and_then(|v| v.as_str()).unwrap_or("").to_string();
 
     // id-set = Provider ID ∪ Related IDs (franchise cards carry several).
@@ -422,7 +384,6 @@ pub async fn anime_uninstall(
         ok: false,
         removed_torrents: 0,
         deleted_files: false,
-        removed_rss: false,
         card_deleted: false,
         warnings: Vec::new(),
     };
@@ -464,19 +425,8 @@ pub async fn anime_uninstall(
         }
     }
 
-    // Airing RSS rule(s).
-    if airing {
-        for id in &ids {
-            let tag = format!("mal-{id}");
-            match qbit_run(&app, &["remove-rss", "--rule-name", &tag]).await {
-                Ok(_) => report.removed_rss = true,
-                Err(e) => report.warnings.push(format!("RSS rule {tag} removal failed: {e}")),
-            }
-        }
-    }
-
     // ── Card + cover + (optional) video → recycling bin, one restorable item ──
-    // The torrents + RSS rule removed above CAN'T be restored; that's recorded as
+    // The torrents removed above CAN'T be restored; that's recorded as
     // the bin item's irreversible-warning. Replaces the former hard-deletes.
     let library = PathBuf::from(vault::library_vault_root());
 
@@ -537,17 +487,14 @@ pub async fn anime_uninstall(
     let mut ext_parts: Vec<String> = Vec::new();
     if report.removed_torrents > 0 {
         ext_parts.push(format!(
-            "{} qBittorrent torrent{}",
+            "{} torrent{}",
             report.removed_torrents,
             if report.removed_torrents == 1 { "" } else { "s" }
         ));
     }
-    if report.removed_rss {
-        ext_parts.push("the airing RSS rule".to_string());
-    }
     let external = (!ext_parts.is_empty()).then(|| {
         format!(
-            "Removed {} from qBittorrent — not restorable (re-downloading needs a new torrent search).",
+            "Removed {} from the download engine — not restorable (re-downloading needs a new torrent search).",
             ext_parts.join(" and ")
         )
     });
@@ -574,11 +521,10 @@ pub async fn anime_uninstall(
     }
     report.ok = report.card_deleted;
     log::info!(
-        "[anime_uninstall] {title:?} ({} ids) torrents={} files={} rss={} card={} warns={}",
+        "[anime_uninstall] {title:?} ({} ids) torrents={} files={} card={} warns={}",
         ids.len(),
         report.removed_torrents,
         report.deleted_files,
-        report.removed_rss,
         report.card_deleted,
         report.warnings.len()
     );
@@ -682,9 +628,6 @@ async fn process_job(app: &AppHandle, job_id: &str) {
     // Picker-chosen magnet → download_anime.py skips its Nyaa auto-search.
     if let Some(src) = download_source.as_deref().filter(|s| s.starts_with("magnet:")) {
         cmd.arg("--download-source").arg(src);
-    }
-    for (k, v) in qbit_env(app) {
-        cmd.env(k, v);
     }
     cmd.stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -1091,9 +1034,9 @@ fn card_local_path(abs: &Path, library: &Path) -> String {
 /// run skips as "already there". Still-downloading series are left alone, as are
 /// folders shared by two cards and any destination that already exists.
 ///
-/// Completion is read from the card's `Download Status`, not from qBittorrent —
-/// the same source the download engine writes at `progress >= 0.999`, and it
-/// works with qBittorrent closed.
+/// Completion is read from the card's `Download Status`, not from the engine —
+/// the same source the download worker writes when a torrent finishes, so a
+/// move works even after a restart wiped the session.
 #[tauri::command]
 pub async fn anime_move_videos(app: AppHandle) -> Result<MoveReport, String> {
     let library = PathBuf::from(vault::library_vault_root());
@@ -1210,10 +1153,214 @@ fn video_bin_key(lp_abs: &Path, video_root: &Path, library: &Path) -> Option<Str
     })
 }
 
+// ─── Airing poller ──────────────────────────────────────────────────────────
+//
+// Replaces qBittorrent's RSS auto-download rule (SF3 of the Built-in Torrent
+// Engine plan). Every tick it asks `nyaa_search.py --backlog` for the
+// single-episode releases of each airing series already downloaded, and adds
+// whatever is not on disk yet.
+//
+// No poll registry and no persistence, deliberately: the airing set IS the
+// library's cards, so uninstalling a series stops its polling for free, and
+// librqbit creates a torrent's file the moment it is added — so "on disk"
+// already means "downloaded OR downloading", which is the whole dedupe.
+
+use std::collections::HashSet;
+use std::sync::atomic::AtomicBool;
+
+const AIRING_POLL_INTERVAL: Duration = Duration::from_secs(30 * 60);
+/// Grace before the first sweep so it isn't competing with app start.
+const AIRING_POLL_FIRST_DELAY: Duration = Duration::from_secs(60);
+/// Politeness to Nyaa between series within one sweep.
+const AIRING_POLL_GAP: Duration = Duration::from_secs(3);
+/// Per-series, per-tick add ceiling — a title that matches too loosely would
+/// otherwise queue a whole franchise in one sweep.
+const AIRING_POLL_MAX_ADDS: usize = 5;
+
+static AIRING_POLL_ARMED: AtomicBool = AtomicBool::new(false);
+
+/// Start the airing sweep, once per app run.
+///
+/// ponytail: armed from the first library listing rather than from `lib.rs`'s
+/// setup, where it belongs next to the other pollers — that file is carrying
+/// another feature's in-flight work and this must not ride along in its commit.
+/// Move it there once lib.rs is clean.
+pub fn arm_airing_poll(app: AppHandle) {
+    if AIRING_POLL_ARMED.swap(true, Ordering::Relaxed) {
+        return;
+    }
+    log::info!("[airing] poller armed ({}s interval)", AIRING_POLL_INTERVAL.as_secs());
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(AIRING_POLL_FIRST_DELAY).await;
+        loop {
+            poll_airing_once(&app).await;
+            tokio::time::sleep(AIRING_POLL_INTERVAL).await;
+        }
+    });
+}
+
+/// One sweep over every airing series that already has files on disk. A series
+/// with no local files is skipped on purpose: a metadata-only card (added to
+/// the library but never downloaded) must not start downloading on its own.
+async fn poll_airing_once(app: &AppHandle) {
+    let series = match crate::parsers::series::list_series() {
+        Ok(s) => s,
+        Err(e) => {
+            log::warn!("[airing] could not list the library: {e:?}");
+            return;
+        }
+    };
+    let watched: Vec<_> = series.into_iter().filter(|s| s.airing && s.has_local_files).collect();
+    // Logged even when it is 0/0: a silent sweep and a sweep that never ran look
+    // identical in the log, and only one of those is a bug.
+    let (mut swept, mut queued) = (0, 0);
+    for s in watched {
+        let Some(folder) = s.local_path.clone() else { continue };
+        swept += 1;
+        let have = crate::parsers::series::episode_numbers_on_disk(Path::new(&folder));
+        let offered = match nyaa_backlog(&s.title, english_title(&s.path).as_deref()).await {
+            Ok(v) => v,
+            Err(e) => {
+                log::warn!("[airing] {}: {e}", s.title);
+                continue;
+            }
+        };
+        for (n, magnet) in episodes_to_fetch(&have, &offered, s.episodes_total, AIRING_POLL_MAX_ADDS) {
+            match crate::commands::torrent::add(app, magnet, Some(folder.clone())).await {
+                Ok(t) => {
+                    queued += 1;
+                    log::info!("[airing] {} ep {n} queued ({})", s.title, t.info_hash);
+                }
+                Err(e) => log::warn!("[airing] {} ep {n} could not be added: {e}", s.title),
+            }
+        }
+        tokio::time::sleep(AIRING_POLL_GAP).await;
+    }
+    log::info!("[airing] sweep done — {swept} series checked, {queued} episode(s) queued");
+}
+
+/// The card's `Title English`, when it has one — Nyaa releases are as often
+/// named in English as in Romaji, and `nyaa_search.py` searches both and merges.
+fn english_title(series_path: &str) -> Option<String> {
+    let abs = PathBuf::from(vault::library_vault_root()).join(series_path);
+    crate::parsers::frontmatter_cache::get_frontmatter(&abs)
+        .get("Title English")
+        .and_then(|v| v.as_str())
+        .map(str::to_string)
+        .filter(|s| !s.is_empty())
+}
+
+/// `nyaa_search.py --backlog`: every single-episode release for a title, as
+/// `(episode number, magnet)`, already sorted ascending by the script.
+async fn nyaa_backlog(title: &str, english: Option<&str>) -> Result<Vec<(i64, String)>, String> {
+    let script = vault::script_path("nyaa_search.py");
+    let mut cmd = crate::commands::proc_util::python_cmd();
+    cmd.arg(&script)
+        .arg("--title")
+        .arg(title)
+        .arg("--english-title")
+        .arg(english.unwrap_or(""))
+        .arg("--backlog")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+    let out = tokio::time::timeout(Duration::from_secs(120), cmd.output())
+        .await
+        .map_err(|_| "nyaa_search.py timed out".to_string())?
+        .map_err(|e| format!("failed to spawn nyaa_search.py: {e}"))?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    let line = text.lines().rev().find(|l| !l.trim().is_empty()).unwrap_or("").trim();
+    let v: serde_json::Value =
+        serde_json::from_str(line).map_err(|_| "nyaa_search.py returned no JSON".to_string())?;
+    let Some(arr) = v.get("episodes").and_then(|x| x.as_array()) else {
+        return Ok(Vec::new()); // {"error": "no_results"} — nothing new, not a fault.
+    };
+    Ok(arr
+        .iter()
+        .filter_map(|e| {
+            Some((
+                e.get("episode")?.as_i64()?,
+                e.get("magnet")?.as_str()?.to_string(),
+            ))
+        })
+        .collect())
+}
+
+/// What a sweep should actually add: offered episodes minus what's on disk,
+/// first-listed release per number, capped.
+fn episodes_to_fetch(
+    have: &HashSet<i64>,
+    offered: &[(i64, String)],
+    episodes_total: Option<i64>,
+    cap: usize,
+) -> Vec<(i64, String)> {
+    let mut seen: HashSet<i64> = HashSet::new();
+    let mut out = Vec::new();
+    for (n, magnet) in offered {
+        if *n <= 0 || have.contains(n) || !seen.insert(*n) {
+            continue;
+        }
+        // A known episode count is a hard ceiling. Nyaa numbers later seasons
+        // continuously, so without it a 12-episode show cheerfully queues the
+        // sequel's episode 25 into the first season's folder.
+        if matches!(episodes_total, Some(t) if t > 0 && *n > t) {
+            continue;
+        }
+        out.push((*n, magnet.clone()));
+        if out.len() >= cap {
+            break;
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{card_local_path, video_bin_key};
+    use super::{card_local_path, episodes_to_fetch, video_bin_key};
+    use std::collections::HashSet;
     use std::path::Path;
+
+    /// The airing poller's whole decision. Its dedupe is the disk, so the set
+    /// maths is the only place a bug can hide — and both failure directions are
+    /// expensive: too strict and new episodes never arrive, too loose and it
+    /// re-downloads a season or drags a sequel's episodes into the wrong folder.
+    #[test]
+    fn a_sweep_adds_only_what_is_missing() {
+        let offer = |ns: &[i64]| -> Vec<(i64, String)> {
+            ns.iter().map(|n| (*n, format!("magnet:{n}"))).collect()
+        };
+        let have: HashSet<i64> = [1, 2, 3].into_iter().collect();
+
+        // The everyday case: three on disk, four offered, one is new.
+        let got = episodes_to_fetch(&have, &offer(&[1, 2, 3, 4]), Some(12), 5);
+        assert_eq!(got, vec![(4, "magnet:4".into())]);
+
+        // Nothing new is not an error, it is the normal answer between airings.
+        assert!(episodes_to_fetch(&have, &offer(&[1, 2, 3]), Some(12), 5).is_empty());
+
+        // A gap mid-run is filled, not skipped (episode 4 never landed).
+        let sparse: HashSet<i64> = [1, 2, 3, 5].into_iter().collect();
+        assert_eq!(
+            episodes_to_fetch(&sparse, &offer(&[4, 5, 6]), Some(12), 5),
+            vec![(4, "magnet:4".into()), (6, "magnet:6".into())],
+        );
+
+        // The sequel trap: Nyaa numbers later seasons continuously, so a
+        // 12-episode card must refuse episode 25.
+        assert!(episodes_to_fetch(&have, &offer(&[25]), Some(12), 5).is_empty());
+        // Unknown count (a still-airing card often has none) → no ceiling.
+        assert_eq!(episodes_to_fetch(&have, &offer(&[25]), None, 5).len(), 1);
+
+        // Runaway guard: a loose title match cannot queue a whole franchise.
+        assert_eq!(episodes_to_fetch(&HashSet::new(), &offer(&[1, 2, 3, 4, 5, 6, 7]), None, 5).len(), 5);
+
+        // Two releases of the same episode → the first (best-ranked) one only.
+        let dupes = vec![(4, "magnet:a".to_string()), (4, "magnet:b".to_string())];
+        assert_eq!(episodes_to_fetch(&have, &dupes, None, 5), vec![(4, "magnet:a".into())]);
+
+        // Junk numbering from a title parse is dropped, never added as ep 0.
+        assert!(episodes_to_fetch(&have, &offer(&[0, -1]), None, 5).is_empty());
+    }
 
     #[test]
     fn card_local_path_matches_the_download_script_convention() {

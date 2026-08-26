@@ -595,6 +595,13 @@ fn has_any_video_file(root: &Path) -> bool {
     root.is_dir() && walk(root, 0, 3)
 }
 
+/// Episode numbers already sitting in a series folder. The airing poller's
+/// whole dedupe: librqbit creates a torrent's file the moment it is added, so
+/// "on disk" covers finished AND in-flight episodes with no bookkeeping.
+pub fn episode_numbers_on_disk(root: &Path) -> HashSet<i64> {
+    index_files_by_episode(Some(root)).into_keys().collect()
+}
+
 fn index_files_by_episode(root: Option<&Path>) -> HashMap<i64, PathBuf> {
     let mut map = HashMap::new();
     let Some(root) = root else { return map };

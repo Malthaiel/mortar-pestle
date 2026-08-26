@@ -58,7 +58,7 @@ export const videoApi = {
     _api.invoke('anime_torrent_search', {
       title, englishTitle: englishTitle || '', animeType: type || 'TV', audio: audio || 'sub',
     }),
-  // Uninstall a library entry: card + cover + qBittorrent torrents [+ files] + RSS rule.
+  // Uninstall a library entry: card + cover + its torrents [+ files].
   animeUninstall: (seriesPath, deleteFiles) =>
     _api.invoke('anime_uninstall', { seriesPath, deleteFiles: !!deleteFiles }),
   revealInFiles:     (path) => _api.invoke('reveal_in_files', { path }),

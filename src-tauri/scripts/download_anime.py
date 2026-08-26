@@ -14,8 +14,9 @@ Given a MAL ID it:
   3. Downloads the cover into `.../Assets/` (the `Image:` field stays the remote
      MAL URL, matching existing cards).
   4. Searches Nyaa (`nyaa_search.py`, batch-first for finished cours) and RETURNS
-     the chosen magnet — Rust's built-in engine does the adding; registers an RSS
-     rule when the series is airing (still qBittorrent's, until SF3).
+     the chosen magnet — Rust's built-in engine does the adding. New episodes of
+     an airing series are picked up by Rust's airing poller (`anime_download.rs`),
+     not by a qBittorrent RSS rule.
 
 Unlike `download_album.py` (which streams NDJSON because yt-dlp downloads inline),
 torrents are asynchronous — this script does its synchronous work and prints
@@ -38,7 +39,7 @@ Terminal stdout JSON (exactly one object):
 
 Metadata-only mode (Add to Library / MAL import): writes the title card + cover
 with `Download Status: Not-Downloaded`, an empty Local Path, and the given
-status/progress overrides; skips Nyaa + qBittorrent entirely and emits
+status/progress overrides; skips Nyaa and the torrent engine entirely and emits
   {"ok": true, "metadataOnly": true, "seriesPath": ..., "skipped": bool}
 skipped=true (and nothing written) when a card with this MAL ID already exists.
 """
@@ -398,7 +399,7 @@ def patch_backfill(path, local_path):
     return True, None
 
 
-# ── nyaa + qBittorrent ──────────────────────────────────────────────────────
+# ── nyaa ────────────────────────────────────────────────────────────────────
 def run_script(script_abs, args):
     """Run a vault helper script, capture JSON stdout + return code."""
     proc = subprocess.run(
@@ -426,11 +427,6 @@ def nyaa_search(scripts_dir, title, english, ctype, audio, batch=False, group=""
     return run_script(os.path.join(scripts_dir, "nyaa_search.py"), args)
 
 
-def qbit(scripts_dir, *args):
-    return run_script(os.path.join(scripts_dir, "qbittorrent_client.py"), list(args))
-
-
-# ── main ────────────────────────────────────────────────────────────────────
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--mal-id", type=int, required=True)
@@ -558,7 +554,7 @@ def main():
     tag = f"mal-{args.mal_id}"
 
     # 5. Resolve a magnet — explicit source, else Nyaa (batch-first when finished).
-    magnet, group = "", ""
+    magnet = ""
     if args.download_source.startswith("magnet:"):
         magnet = args.download_source
     else:
@@ -576,24 +572,8 @@ def main():
         if rc == 2 or not isinstance(data, dict) or not data.get("magnet"):
             fatal("no_results", f"Nyaa found no torrent for {title!r}")
         magnet = data["magnet"]
-        group = data.get("group", "")
 
     # 6. The magnet goes back to Rust, which adds it to the built-in engine.
-    #    (Was: a second Python hop into qbittorrent_client.py add.)
-
-    # 7. Airing → RSS rule for new episodes.
-    #    ponytail: still qBittorrent's rule engine — the built-in engine has no
-    #    RSS. Non-fatal on failure, so this no-ops when qBittorrent isn't running.
-    #    SF3 of the Built-in Torrent Engine plan replaces it with a Rust poller.
-    if args.airing:
-        short = re.sub(r"[^\w ]", "", title).split()[:3]
-        feed_q = urllib.parse.quote_plus(f"{title} {group}".strip())
-        feed = f"https://nyaa.si/?page=rss&q={feed_q}&c=1_2&f=0"
-        rc, _, err = qbit(scripts_dir, "add-rss", "--feed", feed,
-                         "--rule-name", tag, "--save-path", local_path,
-                         "--must-contain", " ".join(short))
-        if rc != 0:
-            log(f"RSS rule registration failed (non-fatal): {err}")
 
     emit({
         "ok": True,

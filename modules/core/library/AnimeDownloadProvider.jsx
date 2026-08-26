@@ -4,7 +4,7 @@
 // is re-broadcast as a `video-library-changed` window event so the Downloaded tab
 // (and Browse's in-library map) re-list the moment a download lands.
 //
-// Polling lives in the Rust worker (qBittorrent is async); this provider is
+// Polling lives in the Rust worker (torrents are async); this provider is
 // purely event-driven. Registered via index.jsx so it wraps the whole app.
 
 import { createContext, useContext, useCallback, useEffect, useRef } from 'react';
@@ -53,25 +53,13 @@ export function AnimeDownloadProvider({ children }) {
     });
   }, [jobs]);
 
-  // Centralized pre-flight: a torrent can't queue if the qBittorrent daemon is
-  // down or unauthenticated. Guard every caller here (Discovery + Series retry)
-  // so a download never silently stalls in the Rust poll loop. Throws after
-  // firing a blocking toast; callers catch it to also show inline detail.
+  // No pre-flight any more: the engine lives inside the app, so there is no
+  // daemon to be down or unauthenticated. (Was a qBittorrent reachability check
+  // that blocked every download even though the built-in engine was perfectly
+  // able to run.) A real failure now surfaces where it happens — the Rust add
+  // returns an error and the job goes to Error with its message.
   const enqueue = useCallback(
     async ({ malId, title, audio, image, airing, type, episodes, downloadSource, metadataOnly, initialStatus }) => {
-      // Metadata-only adds never touch qBittorrent — skip the daemon pre-flight.
-      if (!metadataOnly) {
-        const qbit = await videoApi.qbitStatus().catch(() => null);
-        if (!qbit || !qbit.connected) {
-          const why = (qbit && qbit.error) || 'qBittorrent isn’t reachable.';
-          const msg = `${why} Start it (with its Web UI enabled) in Settings → Anime, then retry.`;
-          window.dispatchEvent(new CustomEvent('agentic:notify', { detail: {
-            type: 'anime-download', title: 'Download blocked', message: msg,
-            accent: 'var(--text)', iconKey: 'alert', duration: 7000,
-          } }));
-          throw new Error(msg);
-        }
-      }
       return videoApi.animeDownloadEnqueue(malId, title, audio || 'sub', image || null, !!airing, type || 'TV', episodes ?? null, downloadSource || null, !!metadataOnly, initialStatus || null);
     },
     [],

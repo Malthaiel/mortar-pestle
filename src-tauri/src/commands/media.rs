@@ -116,8 +116,12 @@ pub fn music_delete_album(app: AppHandle, path: String) -> Result<(), VaultError
 
 // ─── Video ──────────────────────────────────────────────────────────────────
 
+/// Also arms the airing-episode poller (once per app run) — the first time the
+/// library is listed is the first moment anime matters in a session, and it
+/// keeps the arming out of the currently foreign-dirty `lib.rs`.
 #[tauri::command]
-pub fn video_list_series() -> Result<Vec<series::SeriesSummary>, VaultError> {
+pub fn video_list_series(app: tauri::AppHandle) -> Result<Vec<series::SeriesSummary>, VaultError> {
+    crate::commands::anime_download::arm_airing_poll(app);
     series::list_series()
 }
 
