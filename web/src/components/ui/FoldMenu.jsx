@@ -24,7 +24,6 @@
 // wrapper j carries every row below it as one piece. n rows means n-1 hinges.
 import { Children, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import FoldPaper, { FOLD_PAD, paperT } from './FoldPaper.jsx';
-import useSuckToCursor, { SUCK_DUR } from '../../hooks/useSuckToCursor.js';
 
 export { FOLD_PAD };
 
@@ -218,17 +217,11 @@ export default function FoldMenu({
   // Unset by default, and a noTrigger fold has NOTHING else — its stub is not a
   // floor (see the group's minWidth), so it shrink-wraps its longest row.
   minWidth = 0,
-  // On close, get INHALED INTO THE LIVE CURSOR on top of the fold — for a menu
-  // that belongs to the pointer (the right-click menu, the seam's width
-  // chooser). Off by default: a button-anchored fold (the titlebar account
-  // menu, the subtitle picker) belongs to its trigger, not to the mouse.
-  //
-  // The suck rides the TAIL of the existing fold rather than following it, so
-  // the close does not get one millisecond longer at any row count.
-  suckToCursor = false,
-  // Stagger for a tree of folds that shut together — the deepest goes first and
-  // the root last, so it reads as a drain pulling the far end in.
-  suckDelay = 0,
+  // Close with NO animation at all — unmount on the close request instead of
+  // playing the fold. For a menu that should behave like an ordinary OS context
+  // menu: gone the instant you click away. Off by default; every button-anchored
+  // fold keeps folding.
+  instantClose = false,
   style,
   ...rest
 }) {
@@ -395,13 +388,6 @@ export default function FoldMenu({
   // the real candy button takes back over. EVERY close timing derives from it,
   // so they cannot drift apart.
   const SHUT = closeAt(0) + DUR;
-  // Starts WITH the close, not on its tail. It was end-anchored (SHUT - DUR *
-  // 1.25) so the fold played first and the pull only bit near the end; that
-  // read as the menu collapsing and THEN being taken. User-directed 2026-08-24,
-  // "i want the suck to happen instantly rather than waiting until its folded a
-  // certain way up". Only the fly-out stagger delays it now.
-  const suckStart = suckToCursor ? suckDelay : 0;
-  const suckEnd = suckToCursor ? Math.max(SHUT, suckStart + SUCK_DUR) : SHUT;
 
   // Backing panel geometry. `depth` is a CSS length string off the live trigger
   // ('5px' on a chip), or the raw var() fallback before the first measure —
@@ -522,15 +508,12 @@ export default function FoldMenu({
     if (open) { wasOpen.current = true; setShown(true); return undefined; }
     const played = wasOpen.current;
     wasOpen.current = false;
-    const t = setTimeout(() => { setShown(false); if (played) closedRef.current?.(); }, suckEnd);
+    // No fold to wait for: drop it this frame.
+    if (instantClose) { setShown(false); if (played) closedRef.current?.(); return undefined; }
+    const t = setTimeout(() => { setShown(false); if (played) closedRef.current?.(); }, SHUT);
     return () => clearTimeout(t);
-  }, [open, suckEnd]);
+  }, [open, SHUT, instantClose]);
 
-  // The suck runs alongside the fold from frame one and ends at suckStart +
-  // SUCK_DUR, which on a long fold is BEFORE SHUT; the unmount gate above takes
-  // whichever of the two is later, so the fold is never cut off — this file has
-  // been burned twice by an unmount arriving before its close had played.
-  // (the call itself lives below rootRef's declaration — see there.)
 
   // Held in a ref so an inline arrow from the host (a new function identity
   // every render) cannot make this fire on every render — it fires only when
@@ -547,7 +530,6 @@ export default function FoldMenu({
   // outside the parent's root and this listener would read it as "dismiss me".
   // One owner for the whole tree instead — the host's.
   const rootRef = useRef(null);
-  useSuckToCursor(rootRef, { active: suckToCursor && shown && !open, startAt: suckStart });
   useEffect(() => {
     if (!open || isCtl) return undefined;
     const onKey = (e) => { if (e.key === 'Escape') requestClose(); };
