@@ -189,7 +189,21 @@ export default function MpvHost() {
     const un = listen('player-control', (e) => {
       const a = e.payload && e.payload.action;
       if (a === 'next') v.next();
-      else if (a === 'prev') v.prev();
+      else if (a === 'prev') {
+        // Restart the current episode when we are more than 3 s in, else step
+        // back one. The provider's own prev() branches on effectiveTime, which
+        // is permanently 0 under mpv (nothing writes videoTime any more), so it
+        // can only ever step back. Decide here instead, against mpv's real
+        // position — this is the only place that owns the live clock.
+        invoke('player_command', { surface: SURFACE, args: ['get_property', 'time-pos'] })
+          .then((t) => {
+            if (Number.isFinite(t) && t > 3) {
+              return invoke('player_command', { surface: SURFACE, args: ['seek', 0, 'absolute'] });
+            }
+            return v.prev();
+          })
+          .catch(() => v.prev());   // no answer from mpv — step back, as before
+      }
       else if (a === 'refresh') {
         // Ask mpv where it is BEFORE killing it, so the restart lands on the
         // same frame. If it cannot answer, it is already wedged — start over.

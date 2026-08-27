@@ -183,6 +183,12 @@ export function VideoPlayerProvider({ children }) {
   const currentEpisode = series && episodeIdx >= 0 && episodeIdx < series.episodes.length
     ? series.episodes[episodeIdx]
     : null;
+  // DEAD UNDER USE_MPV — permanently 0, because the <video> element that used to
+  // write videoTime is never rendered and MpvHost owns the only live clock. Every
+  // reader below (seek, skip, prev, refresh, setAudioTrack) is therefore reachable
+  // only from the old lane. Anything under mpv that needs the position must ask
+  // mpv for time-pos; MpvHost's prev handler is the worked example. Do not build
+  // a new branch on this value — it will silently take the zero path.
   const effectiveTime = videoTime;
   const playerOpen = !!currentEpisode;
 
