@@ -60,6 +60,25 @@ static ACTIVE: Mutex<Option<String>> = Mutex::new(None);
 /// blocking reparent on purpose).
 static OVERLAY_ATTACHED: Mutex<Option<String>> = Mutex::new(None);
 
+/// The WebView2 tab profile dir. Honors `MORTAR_PESTLE_BROWSER_PROFILE` (set per-worktree
+/// by `mortar-pestle_wt.py dev`) so concurrent dev instances don't contend for one
+/// `browser-profile` folder — the WebView2 leg of "never again" for concurrent
+/// browser/overlay dev. A DEDICATED var, NOT `WEBVIEW2_USER_DATA_FOLDER`: the native var
+/// is honored process-wide and would relocate the MAIN webview too, nesting this profile
+/// inside the main user-data-folder — which WebView2 rejects (0x8007139F ERROR_INVALID_STATE
+/// on `add_child`). This keeps the tab profile a SIBLING of the main folder, never a subdir.
+/// Absent (installed app / plain `tauri dev`) → the identifier app-data dir, unchanged.
+fn browser_profile_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
+    if let Some(p) = std::env::var_os("MORTAR_PESTLE_BROWSER_PROFILE") {
+        return Ok(std::path::PathBuf::from(p));
+    }
+    Ok(app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("app_data_dir: {e}"))?
+        .join("browser-profile"))
+}
+
 // ── shared allow-list helpers ────────────────────────────────────────────────
 // SECURITY-CRITICAL nav/host gate — now shared with the Linux WebKitGTK driver
 // (`browser.rs`) via the `browser_common` module, so the two can't drift.
@@ -157,11 +176,7 @@ pub async fn browser_new_tab(app: AppHandle, id: String, url: Option<String>) ->
     // get_webview_window("main") returns None — the "no main window" bug that broke
     // every tab after the first. get_window resolves the container regardless.
     let main = app.get_window("main").ok_or("no main window")?;
-    let profile_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("app_data_dir: {e}"))?
-        .join("browser-profile");
+    let profile_dir = browser_profile_dir(&app)?;
     let _ = std::fs::create_dir_all(&profile_dir);
 
     let proxy = Url::parse(&format!("http://127.0.0.1:{port}")).map_err(|e| e.to_string())?;
@@ -627,11 +642,7 @@ pub fn browser_clear_cookies() -> Result<(), String> {
 /// `EBWebView/` cache). Honest readout; pure filesystem walk off-thread.
 #[tauri::command]
 pub async fn browser_cache_size(app: AppHandle) -> Result<u64, String> {
-    let dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("app_data_dir: {e}"))?
-        .join("browser-profile");
+    let dir = browser_profile_dir(&app)?;
     tauri::async_runtime::spawn_blocking(move || {
         let mut total: u64 = 0;
         for entry in walkdir::WalkDir::new(&dir).into_iter().flatten() {

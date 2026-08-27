@@ -128,7 +128,12 @@ export default function BrowserPage({ api, accent, rest, inOverlay = false, sync
       }
       await api.invoke('browser_navigate', { id, url });
       syncBounds(); // pre-set bounds while hidden; the visibility effect reveals on commit
-    })().catch((e) => console.error('[browser] navigate', e));
+    })().catch((e) => {
+      // A failed create/nav leaves the tab url-set with no webview; mark it crashed so
+      // the crash card shows (its reload re-spawns) instead of an infinite LoadingScreen.
+      store.setTabMeta(id, { crashed: String(e?.message || e || 'load failed'), loading: false });
+      console.error('[browser] navigate', e);
+    });
   }, [active, api, syncBounds]);
 
   // Recreate persisted tabs in the Rust backend once per app session.
