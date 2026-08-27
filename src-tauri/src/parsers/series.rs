@@ -599,20 +599,45 @@ fn has_any_video_file(root: &Path) -> bool {
 /// whole dedupe: librqbit creates a torrent's file the moment it is added, so
 /// "on disk" covers finished AND in-flight episodes with no bookkeeping.
 pub fn episode_numbers_on_disk(root: &Path) -> HashSet<i64> {
-    index_files_by_episode(Some(root)).into_keys().collect()
+    // `None`: the poller must never infer episode 1 from a numberless file, or
+    // a title whose first release doesn't parse would read as already-have.
+    index_files_by_episode(Some(root), None).into_keys().collect()
 }
 
-fn index_files_by_episode(root: Option<&Path>) -> HashMap<i64, PathBuf> {
+/// `episodes_total` is the card's `Episodes:` count, and enables the single-file
+/// fallback below. Pass `None` from any caller that must only see genuinely
+/// numbered files.
+fn index_files_by_episode(root: Option<&Path>, episodes_total: Option<i64>) -> HashMap<i64, PathBuf> {
     let mut map = HashMap::new();
     let Some(root) = root else { return map };
     if !root.exists() {
         return map;
     }
     let files = walk_video_files(root, 3);
-    for f in files {
+    for f in &files {
         let name = f.file_name().and_then(|s| s.to_str()).unwrap_or("");
         if let Some(n) = parse_episode_number(name) {
-            map.entry(n).or_insert(f);
+            map.entry(n).or_insert_with(|| f.clone());
+        }
+    }
+
+    // A movie / one-shot carries no episode number in its release filename
+    // ("[Commie] Gurren Lagann The Movie - … [BFC3EBA1].mkv"), so every pattern
+    // above misses and the card reads as nothing-to-play while a finished file
+    // sits in the folder — no Play button, and the action button still offers
+    // "Download". When the card says ONE episode and the folder holds exactly
+    // ONE video file there is nothing to guess: that file is episode 1.
+    // ponytail: single-file only. A name-sorted fallback for numberless
+    // MULTI-file folders can silently mis-order a real series; add it only if a
+    // release actually turns up that needs it.
+    if map.is_empty() && episodes_total == Some(1) {
+        let mut vids = files.iter().filter(|p| {
+            p.file_name()
+                .and_then(|s| s.to_str())
+                .is_some_and(|n| RE_VIDEO_EXT.is_match(n))
+        });
+        if let (Some(only), None) = (vids.next(), vids.next()) {
+            map.insert(1, only.clone());
         }
     }
     map
@@ -859,7 +884,7 @@ pub fn read_series(series_path: &str) -> Result<Series, VaultError> {
             let section_dir = local_path
                 .as_deref()
                 .map(|lp| PathBuf::from(lp).join(suffix));
-            let files_by_num = index_files_by_episode(section_dir.as_deref());
+            let files_by_num = index_files_by_episode(section_dir.as_deref(), None);
             let section_eps = build_episodes(&table_eps, files_by_num, Some(suffix));
             let watched = as_finite_numbers(meta.get(&format!("Watched Episodes {suffix}")));
             seasons.push(Season {
@@ -881,7 +906,8 @@ pub fn read_series(series_path: &str) -> Result<Series, VaultError> {
         episodes_out = flat;
     } else {
         let table_eps = parse_episode_table(&body);
-        let files_by_num = index_files_by_episode(local_path.as_deref().map(Path::new));
+        let files_by_num =
+            index_files_by_episode(local_path.as_deref().map(Path::new), meta_i64(&meta, "Episodes"));
         episodes_out = build_episodes(&table_eps, files_by_num, None);
     }
 
@@ -1192,6 +1218,40 @@ mod tests {
         assert_eq!(parse_episode_number("12 - Title.mkv"), Some(12));
         assert_eq!(parse_episode_number("Title E12.mkv"), Some(12));
         assert_eq!(parse_episode_number("foo.txt"), None);
+    }
+
+    /// A movie's release filename carries no episode number, so every pattern
+    /// misses and the folder indexes to nothing — the card then reads as
+    /// nothing-to-play while a finished file sits in it. The real filename that
+    /// exposed this (Lagann-hen, 2026-08-26) is the fixture.
+    #[test]
+    fn single_file_movie_falls_back_to_episode_one() {
+        const MOVIE: &str =
+            "[Commie] Gurren Lagann The Movie - The Lights In The Sky Are Stars \
+             [BD 1080p FLAC] [BFC3EBA1].mkv";
+        // Precondition: the name genuinely parses to nothing.
+        assert_eq!(parse_episode_number(MOVIE), None);
+
+        let dir = std::env::temp_dir().join("mp_single_file_movie_test");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join(MOVIE), b"x").unwrap();
+
+        // Card says one episode + exactly one video file → that file is ep 1.
+        let hit = index_files_by_episode(Some(&dir), Some(1));
+        assert_eq!(hit.len(), 1);
+        assert!(hit.contains_key(&1));
+
+        // No count, a different count, or the poller's `None` → no guessing.
+        assert!(index_files_by_episode(Some(&dir), None).is_empty());
+        assert!(index_files_by_episode(Some(&dir), Some(12)).is_empty());
+        assert!(episode_numbers_on_disk(&dir).is_empty());
+
+        // A second video file makes the pick ambiguous → fall back to nothing.
+        fs::write(dir.join("[Commie] Some Other Thing [ABCD1234].mkv"), b"x").unwrap();
+        assert!(index_files_by_episode(Some(&dir), Some(1)).is_empty());
+
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
