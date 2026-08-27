@@ -16,24 +16,32 @@
 //!
 //! Z-ORDER: the host sits at HWND_TOP, ABOVE the web layer. This is not a
 //! choice — the two-way spike showed the webview surface is opaque, so mpv at
-//! HWND_BOTTOM is simply invisible. The controls therefore cannot stay in the
-//! main web layer; they get their own see-through child webview above the
-//! picture, the same `Window::add_child` the in-app browser uses for tabs.
+//! HWND_BOTTOM is simply invisible. The controls therefore cannot live in the
+//! main web layer.
 //!
-//! THE SIZE OF THAT LAYER IS LOAD-BEARING. A transparent webview occludes the
-//! mpv child EVERYWHERE IT EXTENDS, including the parts where the page paints
-//! nothing — the webview's DirectComposition surface hides a plain sibling
-//! window behind it, and what shows through instead is the MAIN web layer.
-//! Measured 2026-08-23: a controls layer covering the whole 800x450 picture
-//! made the video vanish entirely (z-order verified correct by enumeration —
-//! controls, then mpv, then the main webview); shrunk to the 800x44 bar, the
-//! video came back with the bar compositing over it. So the layer must be
-//! sized to the CONTROLS, never to the picture.
+//! THE CONTROLS ARE A BORDERLESS TRANSPARENT TOP-LEVEL WINDOW, the shape
+//! `overlay-toast` and `overlay-host` already use. A CHILD WEBVIEW WAS TRIED
+//! FIRST AND CANNOT WORK: a transparent child webview occludes the mpv child
+//! EVERYWHERE IT EXTENDS, transparent pixels included — its DirectComposition
+//! surface hides a plain sibling window and shows the MAIN web layer through
+//! instead. Measured 2026-08-23: over a 450px picture, a 44px bar cost 410px of
+//! video and an 82px bar cost 368px.
 //!
-//! Consequence worth keeping: click-to-pause on the picture is NOT this
-//! layer's job. The host carries WS_EX_TRANSPARENT, so a click on the video
-//! falls through to the main web layer underneath, where the existing modal's
-//! handlers already live and keep working untouched.
+//! A top-level window has no such cost, so it is sized to the WHOLE PICTURE
+//! rather than to the bar it draws. Measured 2026-08-23: with a full 1440x900
+//! overlay stacked on top, mpv still reported `osd-dimensions 1440x900` — the
+//! complete rect. That is what lets ONE overlay hold both bars and also own
+//! click-to-pause and double-click-fullscreen across the picture, talking to
+//! mpv directly. No click-through trickery is involved; the host's
+//! `WS_EX_TRANSPARENT` is left over from the child-webview attempt and is now
+//! dead weight.
+//!
+//! Why the app cannot instead draw what mpv draws: mpv's own OSC is a Lua
+//! script emitting ASS that mpv's OSD layer paints INTO the frame, and that
+//! path draws only ASS. The apps that composite mpv with an HTML UI in ONE
+//! window (Jellyfin Media Player, Plex Desktop) link libmpv and render into
+//! their own graphics context — unreachable here, because WebView2 owns its
+//! composited surface.
 //!
 //! Do NOT test this window with a flat colour. A GDI `FillRect` on it never
 //! reaches the screen at EITHER z-order — the webview's DirectComposition
@@ -60,7 +68,9 @@ use windows::Win32::System::Threading::{OpenProcess, TerminateProcess, PROCESS_T
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, IsWindow, RegisterClassExW, SetWindowPos,
     HWND_TOP, SWP_NOACTIVATE, SWP_NOZORDER, SWP_SHOWWINDOW, WNDCLASSEXW, WS_CHILD,
-    WS_CLIPSIBLINGS, WS_EX_NOPARENTNOTIFY, WS_EX_TRANSPARENT, WS_VISIBLE,
+    GetForegroundWindow, GetWindowLongPtrW, GetWindowThreadProcessId, SetWindowLongPtrW,
+    GWL_EXSTYLE, WS_CLIPSIBLINGS, WS_EX_NOACTIVATE,
+    WS_EX_NOPARENTNOTIFY, WS_EX_TRANSPARENT, WS_VISIBLE,
 };
 
 /// surface id → child HWND (as isize). The `display_host` HOSTS idiom.
@@ -93,6 +103,19 @@ static CONTROLS: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
 /// than re-derived because only the caller knows where the picture is.
 static RECTS: Mutex<Option<HashMap<String, (f64, f64, f64, f64)>>> = Mutex::new(None);
 
+/// Opening and closing are serialised against each other.
+///
+/// `player_open` kills the surface's previous mpv, THEN spawns, THEN records the
+/// new pid — so two concurrent opens both find nothing to kill and both spawn,
+/// leaving an orphan decoding a 2 GB file with no window. Measured 2026-08-23:
+/// React's StrictMode double-invokes the effect that opens the player, and two
+/// mpv processes appeared in the same second.
+///
+/// One global lock rather than one per surface: opening a player happens at
+/// human speed and there are three surfaces, so the contention this could ever
+/// cause is smaller than the bookkeeping to avoid it.
+static OPEN_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 /// What `player_open` hands back. The pipe name is the control channel.
 #[derive(serde::Serialize)]
 pub struct PlayerHandle {
@@ -101,9 +124,27 @@ pub struct PlayerHandle {
     pub pipe: String,
 }
 
-/// One IPC pipe per surface — a shared pipe would route a PiP seek to the modal.
+/// One IPC pipe per OPEN — not per surface. (Still one per surface at any
+/// moment, so a PiP seek can never reach the modal.)
+///
+/// A name fixed per surface cannot be reused fast enough. Changing episode kills
+/// the old mpv and spawns the next about five milliseconds later, and Windows
+/// has not torn down the dead process's pipe server by then, so the new mpv
+/// starts with no control channel at all:
+///
+///   [ipc] Couldn't create first pipe instance: Access is denied. (0x80070005)
+///
+/// It plays perfectly and answers nothing — every command comes back "the video
+/// player is no longer running" while the picture is on screen, which reads
+/// exactly like a crash and is not one. Measured 2026-08-23: three of six
+/// episode changes. A sequence number sidesteps the wait entirely; nothing
+/// guesses this name, it is handed back in `PlayerHandle` and the live one is
+/// held per surface in `CONNS`.
+static PIPE_SEQ: AtomicU64 = AtomicU64::new(1);
+
 fn pipe_name(surface: &str) -> String {
-    format!(r"\\.\pipe\mortar-pestle-mpv-{surface}")
+    let n = PIPE_SEQ.fetch_add(1, Ordering::Relaxed);
+    format!(r"\\.\pipe\mortar-pestle-mpv-{surface}-{n}")
 }
 
 /// mpv's stdout/stderr sink: `%LOCALAPPDATA%\mortar-pestle\logs\mortar-pestle-mpv.log`.
@@ -301,6 +342,28 @@ pub async fn destroy(app: &AppHandle, surface: String) -> Result<(), String> {
     rx.await.map_err(|_| "player_host::destroy task dropped".to_string())
 }
 
+/// One line in the mpv log for every lifecycle event, into the SAME file mpv's
+/// own output goes to so the order of "we opened" against "mpv said" is readable
+/// without correlating two clocks. A player that vanishes with no error on
+/// screen is otherwise invisible: an mpv we killed ourselves reports no exit by
+/// design, so without this the only evidence of a wrong-order teardown is a
+/// black rectangle.
+pub fn trace(what: &str) {
+    use std::io::Write;
+    let ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    if let Some(path) = log_path() {
+        let _ = std::fs::create_dir_all(path.parent().unwrap_or(&path));
+        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
+            let _ = writeln!(f, "[host {ms}] {what}");
+            return;
+        }
+    }
+    log::info!("[player_host] {what}");
+}
+
 /// Drain one child pipe into the mpv log. Byte-oriented + lossy on purpose:
 /// `lines()` aborts the whole reader on the first non-UTF-8 byte and takes the
 /// rest of the output with it, silently.
@@ -350,6 +413,11 @@ pub async fn player_open(
     h: f64,
     start: Option<String>,
 ) -> Result<PlayerHandle, String> {
+    trace(&format!("open  request surface={surface} path={path}"));
+    // Held for the whole open: kill → spawn → record must not interleave with
+    // another open or a close on any surface.
+    let _guard = OPEN_LOCK.lock().await;
+    trace(&format!("open  lock     surface={surface}"));
     let mpv = crate::tool_path::resolve("mpv");
     // Any previous mpv on this surface dies BEFORE its window does — mpv losing
     // its render target out from under it is not a state worth exploring.
@@ -391,6 +459,7 @@ pub async fn player_open(
     if let Ok(mut g) = PIDS.lock() {
         g.get_or_insert_with(HashMap::new).insert(surface.clone(), pid);
     }
+    trace(&format!("open  spawned  surface={surface} pid={pid}"));
 
     // Supervision, deliberately thin: no respawn. A player that died has a
     // reason the user needs to see (decision 8 — plain-English panel + retry,
@@ -629,15 +698,28 @@ fn set_controls_visible(app: &AppHandle, visible: bool) {
         .ok()
         .and_then(|g| g.as_ref().map(|m| m.values().cloned().collect()))
         .unwrap_or_default();
+    trace(&format!("vis   set      visible={visible} windows={}", labels.len()));
     for label in labels {
-        if let Some(win) = app.get_webview_window(&label) {
-            let _ = if visible { win.show() } else { win.hide() };
+        match app.get_webview_window(&label) {
+            Some(win) => {
+                let r = if visible { win.show() } else { win.hide() };
+                trace(&format!("vis   {label} ok={}", r.is_ok()));
+            }
+            None => trace(&format!("vis   {label} NO SUCH WINDOW")),
         }
     }
 }
 
 /// Wire the controls windows to the app window, once. Window events arrive on
 /// the main thread, which is where every placement call has to happen anyway.
+///
+/// Move and resize only. FOCUS IS NOT HANDLED HERE — see `on_focus_change`,
+/// which `lib.rs`'s builder-level handler drives instead. This one is registered
+/// lazily behind a `Once` whose body starts with `let Some(main) = … else
+/// { return }`: one missed lookup spends the `Once` for the life of the process
+/// and the handler is then never registered at all. Measured 2026-08-23: the
+/// controls window stayed hidden through every focus change, while
+/// `player_bounds` proved the CONTROLS map was intact the whole time.
 fn ensure_follow(app: &AppHandle) {
     static ONCE: std::sync::Once = std::sync::Once::new();
     ONCE.call_once(|| {
@@ -645,13 +727,58 @@ fn ensure_follow(app: &AppHandle) {
         let app = app.clone();
         main.on_window_event(move |ev| match ev {
             tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_) => reflow_controls(&app),
-            // Covers minimise too: a minimised window loses focus first.
-            tauri::WindowEvent::Focused(on) => set_controls_visible(&app, *on),
             tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed => {
                 set_controls_visible(&app, false)
             }
             _ => {}
         });
+    });
+}
+
+/// Show or hide the controls with the app, driven from `lib.rs`'s window-event
+/// handler — the one that is known to fire for every window.
+///
+/// Only the MAIN window matters here, because the controls window carries
+/// WS_EX_NOACTIVATE and can never take focus (see player_controls_attach). That
+/// is what makes this a one-liner: main blurred means a real app-switch, so the
+/// controls hide with it, and minimise is covered for free because a minimised
+/// window loses focus first. An earlier version tried to arbitrate by asking
+/// each window whether it held focus, 180 ms after the fact — the window flags
+/// and the focus events disagreed and it hid the controls the instant they
+/// appeared.
+pub fn on_focus_change(app: &AppHandle, label: &str, focused: bool) {
+    trace(&format!("focus event    label={label} focused={focused}"));
+    // MAIN ONLY. Letting the controls window drive this makes it hide itself the
+    // moment it loses focus — measured 2026-08-23, it fired focused=true then
+    // focused=false 11 ms later, and the second one put it away.
+    if label != "main" {
+        return;
+    }
+    if focused {
+        set_controls_visible(app, true);
+        return;
+    }
+    // A blur on main is NOT proof the app went away. Clicking the controls (or
+    // anything else of ours) moves focus WITHIN the process, and no single
+    // window's focus state describes that: measured 2026-08-23, main went
+    // false, the controls went true then false 1 ms later, so at the end NOTHING
+    // reported focus while the user was actively clicking. Ask the only question
+    // that separates "using the player" from "switched to another app": does the
+    // foreground window still belong to this process? Deferred, because the new
+    // foreground window is not set yet at the instant the old one blurs.
+    let app = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        let ours = unsafe {
+            let fg = GetForegroundWindow();
+            let mut pid = 0u32;
+            GetWindowThreadProcessId(fg, Some(&mut pid));
+            pid == std::process::id()
+        };
+        trace(&format!("focus settled  foreground_is_ours={ours}"));
+        if !ours {
+            set_controls_visible(&app, false);
+        }
     });
 }
 
@@ -689,6 +816,10 @@ pub async fn player_controls_attach(
                 &label,
                 WebviewUrl::App(format!("index.html#/player/controls?surface={surface}").into()),
             )
+            // Named so window enumeration can tell it apart. Left at the default
+            // it reports as "Tauri App", and any script picking the app by
+            // window name grabs the controls layer instead of the app.
+            .title(format!("Mortar & Pestle Player Controls ({surface})"))
             // The whole point: everything the page does not paint shows the
             // picture behind it, not a background colour.
             .transparent(true)
@@ -698,10 +829,32 @@ pub async fn player_controls_attach(
             .skip_taskbar(true)
             // Above the picture, which itself sits above the main web layer.
             .always_on_top(true)
+            // Never steal activation at creation. Without this the new window
+            // takes focus, the MAIN window blurs, and the blur handler hides the
+            // controls the instant they were built — the app is then focused
+            // with no controls and nothing to bring them back. WS_EX_NOACTIVATE
+            // is applied below as well, but only takes effect after build().
+            .focused(false)
             // Placed before it is shown, so it never flashes at the origin.
             .visible(false)
             .build()
             .map_err(|e| format!("build(controls): {e}"))?;
+            // NEVER take focus. A normal window steals activation the moment it
+            // is created or clicked, which blurs the main window — and the
+            // controls hide with the app, so using a control hid the controls.
+            // Worse, the two events disagree: measured 2026-08-23, the controls
+            // window reported `focused=true` in its event while `is_focused()`
+            // said false 176 ms later, so nothing that ASKS about focus can
+            // arbitrate this. WS_EX_NOACTIVATE removes the question — the window
+            // still receives every mouse message, it just never becomes active.
+            // Keyboard input keeps going to the app, which is where the player's
+            // shortcuts already live.
+            if let Ok(hwnd) = win.hwnd() {
+                unsafe {
+                    let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+                    SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex | WS_EX_NOACTIVATE.0 as isize);
+                }
+            }
             win.set_position(pos).map_err(|e| format!("controls position: {e}"))?;
             win.set_size(size).map_err(|e| format!("controls size: {e}"))?;
             let _ = win.show();
@@ -751,6 +904,11 @@ pub async fn player_bounds(app: AppHandle, surface: String, x: f64, y: f64, w: f
 
 #[tauri::command]
 pub async fn player_close(app: AppHandle, surface: String) -> Result<(), String> {
+    trace(&format!("close request surface={surface}"));
+    let _guard = OPEN_LOCK.lock().await;
+    trace(&format!("close lock     surface={surface}"));
     controls_detach(&app, &surface);
-    destroy(&app, surface).await
+    let r = destroy(&app, surface.clone()).await;
+    trace(&format!("close done     surface={surface} ok={}", r.is_ok()));
+    r
 }

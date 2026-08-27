@@ -9,6 +9,35 @@ import './pages/docs/register.jsx';   // side effect: registerPageSidebar('docs'
 import './fonts.css';
 import './styles.css';
 
+// DEV: a boot failure that beats the error boundary leaves a WHITE WINDOW and
+// nothing on disk — no console to read from a terminal-driven session, no audit
+// payload, because the bridge that writes them never started. Trap it at the
+// window level and post it through the same sink every audit uses, so the real
+// error string is readable instead of guessable.
+if (import.meta.env.DEV) {
+  const post = (kind, err) => {
+    try {
+      fetch('/__audit', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          kind: 'boot',
+          // The sink overwrites these top-level fields from every POST, so a
+          // trap that omitted them would blank the page identity the other
+          // audits depend on.
+          nonce: 'boot-' + performance.now().toFixed(0),
+          ts: Date.now(),
+          label: location.hash.includes('overlay') ? 'overlay-host' : 'main',
+          route: location.hash,
+          data: { kind, ts: Date.now(), err: String((err && err.stack) || err).slice(0, 2000) },
+        }),
+      });
+    } catch { /* the sink is dev-only and best-effort */ }
+  };
+  window.addEventListener('error', (e) => post('error', e.error || e.message));
+  window.addEventListener('unhandledrejection', (e) => post('rejection', e.reason));
+}
+
 loadAll().then(() => {
   initSmoothWheel();
   // Every scroll box in the app remembers where it was left. Delegated, so no

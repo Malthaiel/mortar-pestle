@@ -6,6 +6,7 @@
 
 import './library.css';
 import { VideoPlayerProvider } from './VideoPlayerProvider.jsx';
+import MpvHost from './MpvHost.jsx';
 import { AnimeDownloadProvider } from './AnimeDownloadProvider.jsx';
 import { ImportProvider } from './ImportProvider.jsx';
 import AnimePage from './AnimePage.jsx';
@@ -109,6 +110,12 @@ function MusicKeybinds() {
 function LibraryRoot({ children }) {
   return (
     <VideoPlayerProvider>
+      {/* The mpv picture host. Mounted HERE rather than inside the provider so
+          the provider never has to import it back — that cycle broke the app
+          under HMR (two context objects, every consumer throwing). It still
+          lives inside the provider, so it survives route changes exactly as the
+          old <video> host did. */}
+      <MpvHost/>
       <AnimeDownloadProvider>
         <MusicPlayerProvider>
           <DownloadProvider>

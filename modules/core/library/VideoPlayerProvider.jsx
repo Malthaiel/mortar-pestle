@@ -20,6 +20,17 @@ import VideoControls from './VideoControls.jsx';
 import SubtitleOverlay from './SubtitleOverlay.jsx';
 import { candyGap } from '@host/util/candy.js';
 
+// Which engine draws the picture.
+//
+// true  — mpv. Opens any file in ~150 ms at any timestamp, no conversion.
+// false — the <video> lane below: a whole-episode ffmpeg remux (a ~90 s
+//         re-encode for HEVC sources) before the first frame.
+//
+// Deliberately a constant and not a setting: nobody is meant to choose. It is
+// the one-word fallback while mpv is being lived with, and it dies together
+// with the <video> lane once that soak is done (Native Video Player, Phase 6).
+const USE_MPV = true;
+
 // Exported so a NON-<video> backend can supply the same shape: the mpv
 // controls layer is its own webview with no <video> element in it, and it
 // renders VideoControls verbatim by providing this context itself rather than
@@ -27,7 +38,9 @@ import { candyGap } from '@host/util/candy.js';
 export const VideoPlayerContext = createContext(null);
 const Ctx = VideoPlayerContext;
 
-const LS = {
+// Exported so the mpv lane persists to the SAME keys rather than a parallel
+// set — volume, speed and resume position must survive a switch of engine.
+export const LS = {
   volume:   'video:volume',
   speed:    'video:speed',
   subPref:  'video:subPref',   // language code, or 'off'
@@ -50,14 +63,14 @@ export const DEFAULT_SUB_SETTINGS = {
   lineHeight: 1.3,
 };
 
-function loadJSON(key, fallback) {
+export function loadJSON(key, fallback) {
   try {
     const raw = localStorage.getItem(key);
     if (raw == null) return fallback;
     return JSON.parse(raw);
   } catch { return fallback; }
 }
-function saveJSON(key, val) {
+export function saveJSON(key, val) {
   try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
 }
 
@@ -211,7 +224,10 @@ export function VideoPlayerProvider({ children }) {
   }, []);
 
   // Periodically persist position (every 5s) and mark-watched at 90 %.
+  // Under mpv this is MpvHost's job — it has the only live clock, and running
+  // both would write a stale <video> position over a real mpv one.
   useEffect(() => {
+    if (USE_MPV) return;
     if (!currentEpisode || !currentEpisode.fileAbs) return;
     progressIntervalRef.current = setInterval(() => {
       // Don't persist (or clobber the saved resume pos) until metadata has
@@ -295,6 +311,9 @@ export function VideoPlayerProvider({ children }) {
   // then. The cancelled flag drops a stale resolve when the user switches fast;
   // the Rust side also SIGTERMs the prior ffmpeg on every new request.
   useEffect(() => {
+    // THE GATE. Under mpv there is no <video> and no remux at all — this whole
+    // effect is the ~90 s wait the native lane exists to delete.
+    if (USE_MPV) return;
     const v = videoRef.current;
     if (!v) return;
     if (!currentEpisode || !currentEpisode.fileAbs) {
@@ -365,6 +384,9 @@ export function VideoPlayerProvider({ children }) {
   // provider level so the <track> below renders only when the URL is ready.
   const [subsUrl, setSubsUrl] = useState(null);
   useEffect(() => {
+    // mpv renders subtitles itself, with real ASS styling — extracting a VTT to
+    // redraw in the DOM would be a downgrade as well as wasted work.
+    if (USE_MPV) { setSubsUrl(null); return; }
     if (!probe || subIdx < 0 || !currentEpisode?.fileAbs) {
       setSubsUrl(null);
       return;
@@ -453,6 +475,11 @@ export function VideoPlayerProvider({ children }) {
     resumePosRef.current = start;
     setIsPlaying(true);
     setVideoTime(0);
+    // Bumped even when the episode is unchanged: pressing play on the episode
+    // already loaded must restart it. Under mpv that is the only recovery from
+    // a player that died or was closed from outside the app — the file has not
+    // changed, so nothing else would ever reopen it.
+    setReloadNonce(n => n + 1);
     // Re-probe so audio/sub track lists are accurate.
     videoApi.probeVideo(ep.fileAbs).then(p => {
       setProbe(p);
@@ -637,11 +664,15 @@ export function VideoPlayerProvider({ children }) {
     updateSubSetting, resetSubSettings, nudgeSubSync, resetSubSync,
     // refs (consumed by host)
     videoRef, fullscreenHostRef,
+    // mpv lane — the host owns the picture, so it owns the two flags the modal
+    // used to set for itself, and reads the resume target straight off the ref
+    // (a memoised copy would be a frame behind the episode that set it).
+    useMpv: USE_MPV, setPreparing, setStreamError, resumePosRef, reloadNonce,
   }), [
     series, currentEpisode, episodeIdx, probe,
     videoTime, effectiveTime, duration,
     isPlaying, volume, speed, audioIdx, subIdx, mode, playerOpen,
-    subSettings, subSync, cues, subsUrl, streamError, preparing, refreshing, prepPct,
+    subSettings, subSync, cues, subsUrl, streamError, preparing, refreshing, prepPct, reloadNonce,
     playSeries, playEpisodeAt, toggle, seek, skip, next, prev,
     setVolume, setSpeed, setAudioTrack, setSubtitleTrack, refresh,
     requestFullscreen, closePlayer,
@@ -668,6 +699,15 @@ export function useVideoPlayer() {
 function VideoPlayerHost() {
   const v = useVideoPlayer();
   if (!v.playerOpen) return null;
+
+  // Under mpv this host draws nothing: the picture is an OS window, and
+  // `MpvHost` (mounted as a child of this provider by the module's LibraryRoot)
+  // owns it. MpvHost is NOT imported here on purpose — it needs
+  // `useVideoPlayer`, and importing it back would make a cycle. That cycle was
+  // built once and cost a boot: HMR re-evaluated the pair into two different
+  // context objects and every consumer threw "must be used inside
+  // <VideoPlayerProvider>" while the provider was plainly mounted.
+  if (USE_MPV) return null;
 
   const onExpand = () => {
     // Navigate back to /tools/library/anime/<seriesPath>
@@ -924,7 +964,9 @@ function PiPHost({ expand }) {
   );
 }
 
-function HeaderBtn({ children, onClick, title }) {
+// Exported for the controls layer: under mpv the window buttons move into the
+// overlay, and they must be the SAME button, not a lookalike rebuilt there.
+export function HeaderBtn({ children, onClick, title }) {
   return (
     <button
       onClick={onClick} title={title}
@@ -935,7 +977,9 @@ function HeaderBtn({ children, onClick, title }) {
   );
 }
 
-function PiPBtn({ children, onClick }) {
+// Exported alongside HeaderBtn: the mpv controls layer renders the PiP chrome
+// too, and it must be this button, not a copy of it.
+export function PiPBtn({ children, onClick }) {
   return (
     <button
       onClick={onClick}

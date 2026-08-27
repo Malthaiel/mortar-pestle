@@ -262,7 +262,7 @@ pub fn run() {
             // Feedback Board — 60s in-app notification poll (signed-in + focused only).
             commands::feedback::spawn_poll(app.handle().clone());
 
-            // Anime Browse — capture the per-app cache dir for the Jikan
+            // Anime Browse — capture the per-app cache dir for the AniList
             // response cache (in-memory LRU + on-disk JSON). Best-effort.
             commands::anime_search::init_cache_dir(app.handle());
 
@@ -1022,6 +1022,13 @@ pub fn run() {
             if let WindowEvent::Focused(focused) = event {
                 commands::self_update::record_focus_change(*focused);
                 commands::feedback::record_focus_change(*focused);
+                // The video player's controls ride the app: always-on-top
+                // windows that keep floating over other apps are a bug. Driven
+                // from here rather than from a handler player_host registers
+                // itself, because that one is behind a Once that a single
+                // missed window lookup spends for good.
+                #[cfg(target_os = "windows")]
+                player_host::on_focus_change(window.app_handle(), window.label(), *focused);
                 // Lock-on-blur: toplevel focus loss = real app-switch (does NOT
                 // fire when focus moves to a child native web view).
                 if !*focused {

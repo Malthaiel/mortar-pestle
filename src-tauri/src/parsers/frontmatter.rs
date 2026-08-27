@@ -31,14 +31,50 @@ static RE_NESTED_ITEM: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r#"^\s+("[^"]*"|'[^']*'|[A-Za-z0-9][\w \-]*):\s*(.*)$"#).unwrap());
 
 /// Strip one matching pair of surrounding quotes, if present.
-fn unquote(s: &str) -> &str {
+///
+/// A DOUBLE-quoted scalar also has its backslash escapes resolved, because YAML
+/// says `"a\\b"` is the four characters `a\b`. Without this a Windows path in
+/// frontmatter comes back with both slashes: `Local Path: "Anime\\Videos\\Hyouka"`
+/// reached mpv as `...\Library\Anime\\Videos\\Hyouka\...`. Windows collapses the
+/// run so playback worked, but every log line was misleading and any exact path
+/// comparison against the same path built by other means would have failed.
+///
+/// Only `\\` and `\"` are resolved — the two a writer here actually emits.
+/// Anything else is left exactly as written rather than guessed at, so a lone
+/// backslash (invalid YAML, but present in hand-edited files) survives intact.
+/// Single quotes are left alone: YAML gives them no escapes at all.
+fn unquote(s: &str) -> std::borrow::Cow<'_, str> {
+    use std::borrow::Cow;
     let b = s.as_bytes();
-    if b.len() >= 2
-        && ((b[0] == b'"' && b[b.len() - 1] == b'"') || (b[0] == b'\'' && b[b.len() - 1] == b'\''))
-    {
-        return &s[1..s.len() - 1];
+    if b.len() >= 2 && b[0] == b'"' && b[b.len() - 1] == b'"' {
+        let inner = &s[1..s.len() - 1];
+        if !inner.contains('\\') {
+            return Cow::Borrowed(inner);
+        }
+        let mut out = String::with_capacity(inner.len());
+        let mut it = inner.chars();
+        while let Some(c) = it.next() {
+            if c != '\\' {
+                out.push(c);
+                continue;
+            }
+            match it.next() {
+                Some('\\') => out.push('\\'),
+                Some('"') => out.push('"'),
+                // not an escape this parser claims to understand — keep both
+                Some(other) => {
+                    out.push('\\');
+                    out.push(other);
+                }
+                None => out.push('\\'),
+            }
+        }
+        return Cow::Owned(out);
     }
-    s
+    if b.len() >= 2 && b[0] == b'\'' && b[b.len() - 1] == b'\'' {
+        return Cow::Borrowed(&s[1..s.len() - 1]);
+    }
+    Cow::Borrowed(s)
 }
 
 /// Parse a scalar YAML value into a JSON Value. Mirrors Node's `parseScalar`:
@@ -290,6 +326,26 @@ mod tests {
         assert_eq!(meta["Count"], json!(42));
         assert_eq!(meta["Draft"], json!(true));
         assert_eq!(body, "body\n");
+    }
+
+    #[test]
+    fn double_quoted_backslash_escapes() {
+        let txt = concat!(
+            "---\n",
+            "Local Path: \"Anime\\\\Videos\\\\Hyouka\"\n",
+            "Quoted: \"say \\\"hi\\\"\"\n",
+            "Lone: \"C:\\Users\\malth\"\n",
+            "Single: 'Anime\\\\Videos'\n",
+            "---\n",
+        );
+        let (meta, _) = parse_frontmatter(txt);
+        // the escape a writer here emits, resolved
+        assert_eq!(meta["Local Path"], json!(r"Anime\Videos\Hyouka"));
+        assert_eq!(meta["Quoted"], json!("say \"hi\""));
+        // not an escape this parser claims to understand — left exactly as written
+        assert_eq!(meta["Lone"], json!(r"C:\Users\malth"));
+        // single quotes have no escapes in YAML
+        assert_eq!(meta["Single"], json!(r"Anime\\Videos"));
     }
 
     #[test]
