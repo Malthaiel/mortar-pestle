@@ -91,10 +91,21 @@ export const DRAG_EASE = GLIDE;
 // icons: those are Font Awesome's angles-up / angles-down, i.e. two chevrons
 // pointing the SAME way (collapse-all / expand-all), which turned on their side
 // read as two arrows both pointing left. There is no in/out pair in the pack.
+//
+// The three rows are NOT drawn at one size, because `size` is a viewBox scale
+// and these two glyphs fill wildly different fractions of it. Measured off the
+// Boxicons paths: at 9px the filled circle lays down 44.2 px2 of ink and a
+// chevron PAIR only 14.3 — the dot read 3.1x heavier than its neighbours, which
+// is exactly the "the chevrons look lighter" report. Equal ink would want 15.8px
+// chevrons, wider than the 14px icon slot, so the gap is closed from both ends:
+// chevrons up to 11 (21.4 px2 a pair), dot down to 7 (26.7). 1.25x apart now,
+// which the eye reads as the same weight.
+const CHEV = 11;
+const DOT  = 7;
 const PRESET_ICON = {
-  Compact: <><IconChevronRight size={9} /><IconChevronLeft size={9} /></>,
-  Default: <IconDot size={9} />,
-  Wide:    <><IconChevronLeft size={9} /><IconChevronRight size={9} /></>,
+  Compact: <><IconChevronRight size={CHEV} /><IconChevronLeft size={CHEV} /></>,
+  Default: <IconDot size={DOT} />,
+  Wide:    <><IconChevronLeft size={CHEV} /><IconChevronRight size={CHEV} /></>,
 };
 
 // Same block-level flex wrapper the context menu's rows use, for the same
@@ -107,7 +118,7 @@ function rowFace(label) {
         width: 14, flexShrink: 0, display: 'inline-flex',
         alignItems: 'center', justifyContent: 'center',
       }}>
-        {PRESET_ICON[label] || <IconDot size={9} />}
+        {PRESET_ICON[label] || <IconDot size={DOT} />}
       </span>
       <span style={{ whiteSpace: 'nowrap' }}>{label}</span>
     </span>
@@ -595,6 +606,17 @@ function SeamFold({ wanted, cursorY, anchorX, mirror, presets, value, onPick, on
   // rail it was resizing. Photographed 2026-08-13; never seen before because no
   // mirrored seam had ever been opened on screen.
   const [stackW, setStackW] = useState(null);
+  // How far the stack sits BELOW this wrapper's origin, read live every frame.
+  //
+  // FoldPaper ramps `--fold-settle` from 0 to FOLD_PAD as the paper grows, and
+  // FoldMenu's stack carries it as its own `top` — the group giving the halo
+  // back so the paper's near edge stays pinned in a titlebar. There is no
+  // titlebar here, so the whole menu simply came to rest FOLD_PAD below the
+  // cursor it is supposed to be centred on. Reported round 1, unfixed until
+  // 2026-08-27. Read off the real box (`offsetTop`, a layout value the fold's
+  // transforms cannot poison) rather than adding an imported FOLD_PAD back:
+  // the settle is ANIMATED, so a constant would only be right once it landed.
+  const [settle, setSettle] = useState(0);
 
   // Mount on demand; unmount only once the close has actually PLAYED (onClosed
   // below). No grace period here — the seam owns the whole close decision now,
@@ -610,6 +632,20 @@ function SeamFold({ wanted, cursorY, anchorX, mirror, presets, value, onPick, on
     const stack = wrapRef.current?.querySelector('[role="menu"]');
     if (stack) { setHalf(stack.offsetHeight / 2); setStackW(stack.offsetWidth); }
   }, [mounted, presets.length]);
+
+  // The settle moves under its own clock, so it is read per frame rather than
+  // once — the same reason the seam's own line runs a rAF loop.
+  useEffect(() => {
+    if (!mounted) return undefined;
+    let raf = 0;
+    const tick = () => {
+      const stack = wrapRef.current?.querySelector('[role="menu"]');
+      if (stack) setSettle(stack.offsetTop);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [mounted]);
 
   // Unfold on the frame AFTER the stack has been measured and placed, so it is
   // never seen folding at the wrong spot — the same order the context menu uses.
@@ -643,7 +679,7 @@ function SeamFold({ wanted, cursorY, anchorX, mirror, presets, value, onPick, on
         zIndex: 1300,
         // Vertical only, and the x above is a frozen click point rather than a
         // live cursor, so nothing can walk the menu sideways across the pane.
-        transform: `translate3d(${mirror ? -(stackW || 0) : 0}px, ${cursorY - (half || 0)}px, 0)`,
+        transform: `translate3d(${mirror ? -(stackW || 0) : 0}px, ${cursorY - (half || 0) - settle}px, 0)`,
         transition: `transform ${DRAG_EASE}`,
         // Hidden for the one frame between mounting and being measured — the
         // stack has to be laid out to be measured, and an unplaced stack would
@@ -664,7 +700,7 @@ function SeamFold({ wanted, cursorY, anchorX, mirror, presets, value, onPick, on
           // meant to stay up and trail. The seam owns every close (cursor gone,
           // Escape, outside press, second click, row picked), and all five run
           // through `wanted`, so there is nothing left for this to do.
-          onClosed={() => { setMounted(false); setHalf(null); setStackW(null); }}
+          onClosed={() => { setMounted(false); setHalf(null); setStackW(null); setSettle(0); }}
           items={items}
           selected={selected}
           rowH={ROW_H}
