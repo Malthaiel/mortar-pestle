@@ -315,6 +315,13 @@ h1, h2, h3, h4, h5, h6 { font-family: var(--font-heading); }
    hovered, slightly darker while dragged — mirrors the candy buttons' solid-fill
    grey→accent treatment. The 6px gutter with a 1px transparent padding-box
    border insets the thumb to ~4px. Applies to every scrollbar (editor/terminal
+
+/* The planner calendar hides its bar outright. A classic Chromium scrollbar
+   always takes layout width (measured: offsetWidth 479 / clientWidth 473), and
+   there is no CSS way to float one over the content — so the 6px went back to
+   the hour grid and the bar went away. Wheel/drag scrolling is unchanged. */
+.cal-noscrollbar { scrollbar-width: none; }
+.cal-noscrollbar::-webkit-scrollbar { width: 0; height: 0; }
    included; smooth-wheel excludes those, see util/smoothWheel.js). */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track,
@@ -1639,11 +1646,17 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
   font-family: var(--font-body);  /* prose notes — override field's mono */
   font-size: 13px;
   font-weight: 600;
+/* Hover mirrors the focus recipe below — the row shape's "neutral at rest,
+   flips to the accent face on hover" (TreeRow), which chip-field missed: its
+   own `color` on the <input> outranked the face's white-flip, so the text sat
+   white at rest and never moved. Rest colour is --text-muted now (the base
+   .candy-face colour every other candy button rests at). */
+.candy-btn[data-shape="chip-field"]:hover:not(:focus-within) > .candy-face > .chip-field-input { color: #fff; }
   letter-spacing: 0;
   text-transform: none;
   text-align: left;
   line-height: 1.4;
-  color: var(--text);
+  color: var(--text-muted);
   cursor: text;
 }
 .candy-btn[data-shape="chip-field"] > .candy-face > .chip-field-input::placeholder { color: var(--text-faint); }
@@ -1768,9 +1781,12 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
    brighten-only rules above suppress (the titlebar account button; same recipe
    as the icon and circle shapes' copies). Must sit AFTER the neutral hover
    block: equal specificity, so source order decides. */
-.candy-btn[data-shape="chip"].is-hover-accent:is(:hover, :active):not(.is-active) { --cbtn-band: var(--accent); }
-.candy-btn[data-shape="chip"].is-hover-accent:is(:hover, :active):not(.is-active) > .candy-face { color: #fff; background: var(--accent); }
-.candy-btn[data-shape="chip"].is-hover-accent:is(:hover, :active):not(.is-active) .candy-face :where(div, span) { color: #fff; }
+.candy-btn[data-shape="chip"].is-hover-accent:is(:hover, :active):not(.is-active),
+.planner-uniform-btns .candy-btn[data-shape="chip"]:is(:hover, :active):not(.is-active) { --cbtn-band: var(--accent); }
+.candy-btn[data-shape="chip"].is-hover-accent:is(:hover, :active):not(.is-active) > .candy-face,
+.planner-uniform-btns .candy-btn[data-shape="chip"]:is(:hover, :active):not(.is-active) > .candy-face { color: #fff; background: var(--accent); }
+.candy-btn[data-shape="chip"].is-hover-accent:is(:hover, :active):not(.is-active) .candy-face :where(div, span),
+.planner-uniform-btns .candy-btn[data-shape="chip"]:is(:hover, :active):not(.is-active) .candy-face :where(div, span) { color: #fff; }
 
 /* The six titlebar tool/window controls are `circle`-shaped CircleChips, but on
    this strip they wear the account button's soft square corner instead of the
@@ -1846,9 +1862,12 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
    modifier flips the face to accent on hover/press. Gated :not(.is-active)
    so the checked ✓ keeps its held-accent state (1978-1981). Specificity (0,6,0)
    beats the icon override (0,5,0). */
-.candy-btn[data-shape="icon"].is-hover-accent:is(:hover, :active):not(.is-active) { --cbtn-band: var(--accent); }
-.candy-btn[data-shape="icon"].is-hover-accent:is(:hover, :active):not(.is-active) > .candy-face { color: #fff; background: var(--accent); }
-.candy-btn[data-shape="icon"].is-hover-accent:is(:hover, :active):not(.is-active) .candy-face :where(div, span) { color: #fff; }
+.candy-btn[data-shape="icon"].is-hover-accent:is(:hover, :active):not(.is-active),
+.planner-uniform-btns .candy-btn[data-shape="icon"]:is(:hover, :active):not(.is-active) { --cbtn-band: var(--accent); }
+.candy-btn[data-shape="icon"].is-hover-accent:is(:hover, :active):not(.is-active) > .candy-face,
+.planner-uniform-btns .candy-btn[data-shape="icon"]:is(:hover, :active):not(.is-active) > .candy-face { color: #fff; background: var(--accent); }
+.candy-btn[data-shape="icon"].is-hover-accent:is(:hover, :active):not(.is-active) .candy-face :where(div, span),
+.planner-uniform-btns .candy-btn[data-shape="icon"]:is(:hover, :active):not(.is-active) .candy-face :where(div, span) { color: #fff; }
 
 /* circle — round icon-only button: music controls (button-music-transport/tool/
    primary) + Planner reset/skip (button-planner-circle). Round; same brighten-
@@ -1870,9 +1889,12 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
    rules above suppress (the titlebar controls; same recipe as the icon shape's
    copy at § icon). Must sit AFTER the neutral hover block: equal specificity, so
    source order decides. */
-.candy-btn[data-shape="circle"].is-hover-accent:is(:hover, :active):not(.is-active) { --cbtn-band: var(--accent); }
-.candy-btn[data-shape="circle"].is-hover-accent:is(:hover, :active):not(.is-active) > .candy-face { color: #fff; background: var(--accent); }
-.candy-btn[data-shape="circle"].is-hover-accent:is(:hover, :active):not(.is-active) .candy-face :where(div, span) { color: #fff; }
+.candy-btn[data-shape="circle"].is-hover-accent:is(:hover, :active):not(.is-active),
+.planner-uniform-btns .candy-btn[data-shape="circle"]:is(:hover, :active):not(.is-active) { --cbtn-band: var(--accent); }
+.candy-btn[data-shape="circle"].is-hover-accent:is(:hover, :active):not(.is-active) > .candy-face,
+.planner-uniform-btns .candy-btn[data-shape="circle"]:is(:hover, :active):not(.is-active) > .candy-face { color: #fff; background: var(--accent); }
+.candy-btn[data-shape="circle"].is-hover-accent:is(:hover, :active):not(.is-active) .candy-face :where(div, span),
+.planner-uniform-btns .candy-btn[data-shape="circle"]:is(:hover, :active):not(.is-active) .candy-face :where(div, span) { color: #fff; }
 
 /* select — dropdown trigger (CandySelect.jsx). Neutral candy control like
    chip/icon: no accent flip (a dropdown trigger turning accent-red reads wrong,
@@ -4864,6 +4886,14 @@ button.cal-customdays__step:hover {
    buttons, so pinning the buttons alone left the shell taller than every
    neighbour. Pin the SHELL to the row height and let its options fill it.
    The tray also carries the FULL --candy-depth (7px) while every chip and circle
+
+/* Calendar header row — all seven controls share ONE corner. Measured
+   2026-08-27: the chips came out 7px and the two round arrows 6px, because a
+   circle's ceiling is half its own height (24 / 2 = 12) while a chip's is a
+   flat 14, and the inherited --corner knob (0.5) halves both. User-reported,
+   "some look sharper than others". Only the CEILING is set here — --corner
+   itself stays inherited, so the app-wide corner knob still drives this row. */
+.planner-cal-header .candy-btn[data-shape="circle"] { --corner-max: 14px; }
    beside it carries --candy-depth-small (5px). That lip is a box-shadow outside
    layout, so at an identical 24px height the tray still painted 2px lower than
    its neighbours AND the shared centering lift raised it 1px further — a
