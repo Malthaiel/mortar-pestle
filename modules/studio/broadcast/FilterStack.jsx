@@ -61,15 +61,25 @@ export default function FilterStack({ api, source, filters = [], kind = 'audio',
     [types],
   );
 
+  // Names we have asked the engine for but not yet seen come back in `filters`.
+  // The chain is snapshot-driven, so two adds of the same type inside one
+  // round-trip both derive the SAME name off a stale `names` and the second is
+  // rejected ("filter already exists: Limiter", observed 2026-08-28).
+  const pendingRef = useRef(new Set());
+  useEffect(() => {
+    for (const n of pendingRef.current) if (names.includes(n)) pendingRef.current.delete(n);
+  }, [names]);
+
   // libobs addresses a filter BY NAME, so it must be unique on this source (the
   // engine rejects a duplicate). Derive one from the display name instead of
   // prompting — OBS asks, but a dialog buys nothing when a sensible unique name
   // always exists and the row is renameable later.
   const uniqueName = useCallback((base) => {
-    if (!names.includes(base)) return base;
+    const taken = (n) => names.includes(n) || pendingRef.current.has(n);
+    if (!taken(base)) return base;
     for (let i = 2; ; i += 1) {
       const candidate = `${base} ${i}`;
-      if (!names.includes(candidate)) return candidate;
+      if (!taken(candidate)) return candidate;
     }
   }, [names]);
 
@@ -77,9 +87,13 @@ export default function FilterStack({ api, source, filters = [], kind = 'audio',
     if (!id) return;
     const type = types.find((t) => t.id === id);
     const name = uniqueName(type?.display_name || id);
+    pendingRef.current.add(name);
     verb(api, 'add_filter', { source, id, name })
       .then(() => setSelected(name))
-      .catch((e) => console.warn('[broadcast] add_filter', e));
+      .catch((e) => {
+        pendingRef.current.delete(name);
+        console.warn('[broadcast] add_filter', e);
+      });
   }, [api, source, types, uniqueName]);
 
   const remove = useCallback((name) => {

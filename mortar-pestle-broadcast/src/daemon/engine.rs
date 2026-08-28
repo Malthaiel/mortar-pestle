@@ -2195,7 +2195,12 @@ impl Engine {
             window: ffi::gs_window { hwnd: hwnd as *mut std::ffi::c_void },
             cx: width.max(1),
             cy: height.max(1),
-            num_backbuffers: 0,
+            // 1, not 0, and matching OBS's own frontend: with 0 the FIRST display
+            // of a process creates fine and every one after a destroy fails with
+            // "swapchain on hwnd" — any id, any fresh HWND — until the daemon
+            // restarts (measured 2026-08-28). Destroy is the app's only
+            // visibility lever, so 0 made the preview one-shot per process.
+            num_backbuffers: 1,
             format: ffi::gs_color_format_GS_BGRA,
             zsformat: ffi::gs_zstencil_format_GS_ZS_NONE,
             adapter: 0,
