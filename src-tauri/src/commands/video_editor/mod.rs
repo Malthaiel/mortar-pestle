@@ -1295,7 +1295,7 @@ async fn measure_loudnorm(spec: &ExportSpec, lut_paths: &LutPaths, title_paths: 
         "null".into(),
         "-".into(),
     ]);
-    let out = tokio::process::Command::new(crate::tool_path::resolve("ffmpeg")).args(&argv).output().await.ok();
+    let out = crate::commands::proc_util::tokio_cmd(crate::tool_path::resolve("ffmpeg")).args(&argv).output().await.ok();
     let _ = fs::remove_file(&path);
     parse_loudnorm_json(&String::from_utf8_lossy(&out?.stderr))
 }

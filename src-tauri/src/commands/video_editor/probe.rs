@@ -43,7 +43,7 @@ pub struct EncoderCaps {
 
 /// First line of `ffmpeg -version` (an SF2 cache-key component); "" on failure.
 async fn ffmpeg_version_line(ffmpeg: &str) -> String {
-    match tokio::process::Command::new(ffmpeg)
+    match crate::commands::proc_util::tokio_cmd(ffmpeg)
         .args(["-hide_banner", "-version"])
         .output()
         .await
@@ -60,7 +60,7 @@ async fn ffmpeg_version_line(ffmpeg: &str) -> String {
 
 /// Run one ffmpeg invocation to a null muxer, time-boxed. true = clean exit 0.
 async fn probe_test_encode(ffmpeg: &str, args: &[&str]) -> bool {
-    let child = tokio::process::Command::new(ffmpeg)
+    let child = crate::commands::proc_util::tokio_cmd(ffmpeg)
         .args(args)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())

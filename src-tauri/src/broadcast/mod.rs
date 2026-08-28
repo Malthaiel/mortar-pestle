@@ -36,7 +36,6 @@ use std::process::Stdio;
 
 use tauri::async_runtime::JoinHandle;
 use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::Command as TokioCommand;
 
 /// The env-var name carrying the recordings root — the SAME name + value the
 /// capture engine gets (`captures_dir()`), so Broadcast recordings land in the
@@ -69,7 +68,7 @@ pub fn spawn_engine_child(bin: &PathBuf) -> std::io::Result<(u32, JoinHandle<Opt
         }
     }
 
-    let mut cmd = TokioCommand::new(bin);
+    let mut cmd = crate::commands::proc_util::tokio_cmd(bin);
     cmd.arg("daemon")
         .env(CAPTURES_DIR_ENV, &captures_dir)
         .stdin(Stdio::null())

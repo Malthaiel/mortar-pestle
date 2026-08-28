@@ -29,7 +29,7 @@ use std::time::Instant;
 
 use sha1::{Digest, Sha1};
 use tauri::Emitter;
-use tokio::process::{Child as TokioChild, Command as TokioCommand};
+use tokio::process::Child as TokioChild;
 
 use crate::commands::vault::VaultError;
 
@@ -469,7 +469,7 @@ pub(crate) fn spawn_ffmpeg_to_file(
     proxy: Option<&ProxyScale>,
 ) -> Result<TokioChild, VaultError> {
     let args = build_transcode_argv(abs, audio, out_path, copy_audio, proxy);
-    let child = TokioCommand::new(crate::tool_path::resolve("ffmpeg"))
+    let child = crate::commands::proc_util::tokio_cmd(crate::tool_path::resolve("ffmpeg"))
         .args(&args)
         .stdin(std::process::Stdio::null())
         // Piped only for the re-encode lane, which emits `-progress` lines there.
@@ -696,7 +696,7 @@ pub async fn extract_subs_sync(
     ]);
     args.push(partial.display().to_string());
 
-    let output = TokioCommand::new(crate::tool_path::resolve("ffmpeg"))
+    let output = crate::commands::proc_util::tokio_cmd(crate::tool_path::resolve("ffmpeg"))
         .args(&args)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())

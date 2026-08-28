@@ -21,7 +21,6 @@ use serde::{Serialize, Serializer};
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::process::Command as TokioCommand;
 
 const SERVICE: &str = "mortar-pestle";
 const ACCOUNT: &str = "anthropic";
@@ -346,7 +345,7 @@ pub struct CliAuthStatus {
 #[tauri::command]
 pub async fn design_cli_auth_status(cli_path: String) -> CliAuthStatus {
     let resolved = resolve_cli_path(&cli_path);
-    let output = TokioCommand::new(&resolved)
+    let output = crate::commands::proc_util::tokio_cmd(&resolved)
         .arg("auth")
         .arg("status")
         .output()
@@ -417,7 +416,7 @@ pub async fn agent_chat_cli(
     // machine, so skip setting cwd there (the source tree isn't on disk in
     // prod anyway) rather than fail the spawn.
     let root = project_root();
-    let mut cmd = TokioCommand::new(&resolved);
+    let mut cmd = crate::commands::proc_util::tokio_cmd(&resolved);
     cmd.arg("--print")
         .arg("--output-format")
         .arg("stream-json")

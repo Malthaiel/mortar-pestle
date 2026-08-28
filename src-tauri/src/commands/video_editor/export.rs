@@ -177,7 +177,7 @@ pub async fn vedit_export_start(app: tauri::AppHandle, spec: ExportSpec) -> Resu
         resolved_encoder.as_deref(),
     );
 
-    let mut child = tokio::process::Command::new(crate::tool_path::resolve("ffmpeg"))
+    let mut child = crate::commands::proc_util::tokio_cmd(crate::tool_path::resolve("ffmpeg"))
         .args(&argv)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())

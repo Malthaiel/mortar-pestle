@@ -14,7 +14,6 @@ use std::path::{Path, PathBuf};
 
 use regex::Regex;
 use serde::Serialize;
-use tokio::process::Command as TokioCommand;
 
 use crate::commands::vault::{atomic_write, check_mtime, mtime_ms, resolve_in, RootKind, VaultError};
 
@@ -112,7 +111,7 @@ fn cargo_lock_version_bytes(path: &Path, version: &str) -> Result<Option<Vec<u8>
 /// True if `root` is inside a git work tree. Guard for end-user installs (no
 /// repo, possibly no `git` on PATH) — returns false on any failure.
 async fn in_git_repo(root: &Path) -> bool {
-    TokioCommand::new("git")
+    crate::commands::proc_util::tokio_cmd("git")
         .arg("-C")
         .arg(root)
         .args(["rev-parse", "--is-inside-work-tree"])
@@ -151,7 +150,7 @@ async fn git_release(
     // 1. Commit ONLY the version files — the pathspec scopes the commit and
     //    ignores any other staged WIP (matters under the worktree/concurrent
     //    session model; cf. closeout-commit-cant-target / concurrent-sweep).
-    let commit = TokioCommand::new("git")
+    let commit = crate::commands::proc_util::tokio_cmd("git")
         .arg("-C")
         .arg(root)
         .args(["commit", "-m", &format!("chore(release): {tag}"), "--"])
@@ -165,7 +164,7 @@ async fn git_release(
             return Err(git_err("commit", &commit));
         }
     }
-    let sha = TokioCommand::new("git")
+    let sha = crate::commands::proc_util::tokio_cmd("git")
         .arg("-C")
         .arg(root)
         .args(["rev-parse", "HEAD"])
@@ -176,7 +175,7 @@ async fn git_release(
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
 
     // 2. Annotated tag (matches the existing `v0.8.2` convention).
-    let tagged = TokioCommand::new("git")
+    let tagged = crate::commands::proc_util::tokio_cmd("git")
         .arg("-C")
         .arg(root)
         .args(["tag", "-a", &tag, "-m", &format!("Mortar & Pestle {tag}")])
@@ -194,7 +193,7 @@ async fn git_release(
     //    the release CI. Hard error on failure: the vault + version bump + local
     //    commit + tag are already done, so the message tells the user to push
     //    manually rather than silently leaving the release unpublished.
-    let push = TokioCommand::new("git")
+    let push = crate::commands::proc_util::tokio_cmd("git")
         .arg("-C")
         .arg(root)
         .args(["push", "origin", &tag])
@@ -213,7 +212,7 @@ async fn git_release(
     // 4. If on `main`, also push `main` so the version-bump commit lands on the
     //    remote default branch (best-effort — the tag already carries the commit,
     //    so CI works regardless). Skipped in a worktree branch.
-    let branch = TokioCommand::new("git")
+    let branch = crate::commands::proc_util::tokio_cmd("git")
         .arg("-C")
         .arg(root)
         .args(["rev-parse", "--abbrev-ref", "HEAD"])
@@ -222,7 +221,7 @@ async fn git_release(
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
         .unwrap_or_default();
     if branch == "main" {
-        let _ = TokioCommand::new("git")
+        let _ = crate::commands::proc_util::tokio_cmd("git")
             .arg("-C")
             .arg(root)
             .args(["push", "origin", "main"])

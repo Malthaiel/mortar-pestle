@@ -14,7 +14,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::Command as TokioCommand;
 
 const REPO_RELATIVE: &str = "Code/mortar-pestle";
 const OUTPUT_TAIL_CAP: usize = 200;
@@ -249,7 +248,7 @@ pub async fn build_app_start(app: AppHandle, mode: BuildMode) -> Result<(), Stri
     }
 
     let (program, args) = command_for(mode);
-    let spawn_result = TokioCommand::new(&program)
+    let spawn_result = crate::commands::proc_util::tokio_cmd(&program)
         .args(&args)
         .current_dir(&repo)
         .stdin(Stdio::null())

@@ -30,7 +30,6 @@ use std::process::Stdio;
 use serde_json::Value;
 use tauri::async_runtime::JoinHandle;
 use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::Command as TokioCommand;
 
 /// The resolved env-var name carrying the captures output root (plan Risk #10):
 /// `captures_dir()` (`%USERPROFILE%\Videos\Mortar & Pestle` on Windows — decision #11).
@@ -76,7 +75,7 @@ pub fn spawn_engine_child(bin: &PathBuf) -> std::io::Result<(u32, JoinHandle<Opt
         }
     }
 
-    let mut cmd = TokioCommand::new(bin);
+    let mut cmd = crate::commands::proc_util::tokio_cmd(bin);
     cmd.arg("daemon")
         .env(CAPTURES_DIR_ENV, &captures_dir)
         .stdin(Stdio::null())

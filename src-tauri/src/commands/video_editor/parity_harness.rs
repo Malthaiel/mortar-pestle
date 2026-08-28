@@ -65,7 +65,7 @@ pub async fn vedit_encode_smoke(app: tauri::AppHandle) -> Result<Vec<SmokeResult
             argv.extend(["-movflags".into(), "+faststart".into(), "-f".into(), "mp4".into()]);
         }
         argv.push(tmp.to_string_lossy().to_string());
-        let status = tokio::process::Command::new(&ffmpeg)
+        let status = crate::commands::proc_util::tokio_cmd(&ffmpeg)
             .args(&argv)
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
@@ -74,7 +74,7 @@ pub async fn vedit_encode_smoke(app: tauri::AppHandle) -> Result<Vec<SmokeResult
             .await;
         let (ok, detail) = match status {
             Ok(s) if s.success() => {
-                let probe = tokio::process::Command::new(&ffprobe)
+                let probe = crate::commands::proc_util::tokio_cmd(&ffprobe)
                     .args(["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_name", "-of", "csv=p=0"])
                     .arg(&tmp)
                     .output()
@@ -140,7 +140,7 @@ pub async fn vedit_parity_render(
             r = color_range
         ),
     };
-    let result = tokio::process::Command::new(crate::tool_path::resolve("ffmpeg"))
+    let result = crate::commands::proc_util::tokio_cmd(crate::tool_path::resolve("ffmpeg"))
         .args([
             "-y",
             "-hide_banner",
@@ -273,7 +273,7 @@ pub async fn vedit_composite_parity(
         "null".into(),
         "-".into(),
     ]);
-    let result = tokio::process::Command::new(crate::tool_path::resolve("ffmpeg"))
+    let result = crate::commands::proc_util::tokio_cmd(crate::tool_path::resolve("ffmpeg"))
         .args(&argv)
         .output()
         .await
@@ -437,7 +437,7 @@ async fn render_parity_wav(graph: &str, label: &str) -> Result<(Vec<u8>, PathBuf
     fs::write(&script, graph).map_err(|e| VaultError::Io(format!("aparity script: {e}")))?;
     let script_s = script.to_string_lossy().to_string();
     let out_s = out.to_string_lossy().to_string();
-    let res = tokio::process::Command::new(crate::tool_path::resolve("ffmpeg"))
+    let res = crate::commands::proc_util::tokio_cmd(crate::tool_path::resolve("ffmpeg"))
         .args([
             "-y", "-hide_banner", "-loglevel", "error", "-nostats",
             "-filter_complex_script", script_s.as_str(),
@@ -465,7 +465,7 @@ async fn parity_measure_graph(graph: &str) -> Option<LoudnormMeasured> {
     let script = parity_temp("meas", "txt");
     fs::write(&script, graph).ok()?;
     let script_s = script.to_string_lossy().to_string();
-    let o = tokio::process::Command::new(crate::tool_path::resolve("ffmpeg"))
+    let o = crate::commands::proc_util::tokio_cmd(crate::tool_path::resolve("ffmpeg"))
         .args([
             "-hide_banner", "-nostats", "-filter_complex_script", script_s.as_str(),
             "-map", "[outa]", "-f", "null", "-",
@@ -479,7 +479,7 @@ async fn parity_measure_graph(graph: &str) -> Option<LoudnormMeasured> {
 
 /// Integrated loudness of a rendered WAV file (loudnorm json → input_i).
 async fn parity_measure_file(path: &str) -> Option<f64> {
-    let o = tokio::process::Command::new(crate::tool_path::resolve("ffmpeg"))
+    let o = crate::commands::proc_util::tokio_cmd(crate::tool_path::resolve("ffmpeg"))
         .args([
             "-hide_banner", "-nostats", "-i", path,
             "-filter_complex", "[0:a]loudnorm=print_format=json[outa]",

@@ -379,7 +379,7 @@ pub fn capture_open_kde_settings() -> Result<(), VaultError> {
         ("kcmshell5", &["kcm_keys"]),
     ];
     for (bin, args) in CANDIDATES {
-        match std::process::Command::new(bin).args(*args).spawn() {
+        match crate::commands::proc_util::std_cmd(bin).args(*args).spawn() {
             Ok(_) => return Ok(()),
             Err(_) => continue, // not installed under this name — try the next
         }

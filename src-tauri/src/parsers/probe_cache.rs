@@ -6,7 +6,6 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -263,7 +262,7 @@ pub fn summarize(data: &Value) -> ProbeResult {
 }
 
 fn run_ffprobe(abs: &Path) -> Result<Value, VaultError> {
-    let output = Command::new(crate::tool_path::resolve("ffprobe"))
+    let output = crate::commands::proc_util::std_cmd(crate::tool_path::resolve("ffprobe"))
         .args([
             "-v",
             "error",

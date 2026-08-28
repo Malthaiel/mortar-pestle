@@ -202,7 +202,7 @@ pub async fn broadcast_paths(app: AppHandle) -> Result<BroadcastPaths, VaultErro
 /// clip just lists without a thumbnail until the next Captures scan.
 async fn extract_poster(path: &str) {
     let jpg = std::path::PathBuf::from(path).with_extension("jpg");
-    let out = tokio::process::Command::new(crate::tool_path::resolve("ffmpeg"))
+    let out = crate::commands::proc_util::tokio_cmd(crate::tool_path::resolve("ffmpeg"))
         .args(["-y", "-hide_banner", "-loglevel", "error", "-nostats", "-i"])
         .arg(crate::tool_path::native_str(path))
         .args(["-frames:v", "1", "-q:v", "4", "-f", "image2", "-update", "1"])
@@ -260,7 +260,7 @@ pub async fn on_saved(app: AppHandle, data: Value) {
 async fn remux_to_partial(input: &str, out_mp4: &std::path::Path) -> Result<(), String> {
     let partial = out_mp4.with_extension("mp4.partial");
     let args = crate::parsers::video_transcode::build_remux_argv(input, &partial);
-    let out = tokio::process::Command::new(crate::tool_path::resolve("ffmpeg"))
+    let out = crate::commands::proc_util::tokio_cmd(crate::tool_path::resolve("ffmpeg"))
         .args(&args)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())

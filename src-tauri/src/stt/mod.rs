@@ -34,7 +34,6 @@ use std::process::Stdio;
 
 use tauri::async_runtime::JoinHandle;
 use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::Command as TokioCommand;
 
 /// The env-var name carrying the STT output/work root: `library_vault_root() +
 /// "/STT"`. The engine writes transcription artifacts here.
@@ -78,7 +77,7 @@ pub fn spawn_engine_child(bin: &PathBuf) -> std::io::Result<(u32, JoinHandle<Opt
         }
     }
 
-    let mut cmd = TokioCommand::new(bin);
+    let mut cmd = crate::commands::proc_util::tokio_cmd(bin);
     cmd.arg("daemon")
         .env(STT_OUTPUT_DIR_ENV, &output_dir)
         .stdin(Stdio::null())
