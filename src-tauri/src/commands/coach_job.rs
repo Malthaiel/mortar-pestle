@@ -282,12 +282,28 @@ fn emit_progress(app: &AppHandle) {
 // ── Commands ─────────────────────────────────────────────────────────────────
 
 /// Absolute path to `coach.py` in the content vault.
-fn script_path() -> std::path::PathBuf {
-    std::path::PathBuf::from(crate::commands::vault::vault_root())
-        .join("Infrastructure")
-        .join("Scripts")
-        .join("coaching")
-        .join("coach.py")
+const COACH_REL: [&str; 4] = ["Infrastructure", "Scripts", "coaching", "coach.py"];
+
+fn coach_in(root: &str) -> std::path::PathBuf {
+    COACH_REL.iter().fold(std::path::PathBuf::from(root), |p, seg| p.join(seg))
+}
+
+/// Where coach.py actually is. NOT simply `vault_root()/Infrastructure/...`: the
+/// coaching scripts live in one specific vault (Citadel) while the ACTIVE content
+/// vault is whichever the user is working in. Once a second content vault exists
+/// (Documents\Personal, 2026-08-23) the active-root assumption resolves to a tree
+/// that has never held the script, and the run dies before it starts with a path
+/// the user has no reason to recognise.
+///
+/// So: take the first REGISTERED vault that actually holds the file, active first
+/// (which keeps the single-vault case byte-identical), and only fall back to the
+/// active root so the not-found message still names somewhere real.
+fn script_path(app: &AppHandle) -> std::path::PathBuf {
+    crate::commands::vaults::registered_paths(app)
+        .into_iter()
+        .map(|root| coach_in(&root))
+        .find(|p| p.is_file())
+        .unwrap_or_else(|| coach_in(&crate::commands::vault::vault_root()))
 }
 
 /// Start a coaching run. `from_phase` resumes (the review-gate continue is
@@ -306,9 +322,16 @@ pub async fn coach_job_start(
     if scrim.trim().is_empty() {
         return Err("scrim name required".into());
     }
-    let script = script_path();
+    let script = script_path(&app);
     if !script.is_file() {
-        return Err(format!("coach.py not found at {}", script.display()));
+        // Name every place looked, not just the last one: with several vaults
+        // registered, one path in the message reads as "the file moved" when the
+        // real story is "no registered vault holds it".
+        let looked = crate::commands::vaults::registered_paths(&app).join(", ");
+        return Err(format!(
+            "coach.py not found at {} (looked in every registered vault: {looked})",
+            script.display()
+        ));
     }
     {
         let mut g = lock();

@@ -112,6 +112,27 @@ fn gamewiki_cell() -> &'static RwLock<Option<String>> {
 }
 
 /// Registered App Vault path, or `None` before it's registered.
+/// Every registered vault path, active first. The coaching pipeline needs this:
+/// its scripts live in ONE specific vault (Citadel) while the ACTIVE content vault
+/// is whichever the user is working in, so resolving a script against `vault_root()`
+/// silently points at the wrong tree the moment a second content vault is added.
+/// Probing the registry and taking the vault that actually holds the file is
+/// self-healing — it survives a rename, a move, and a switch of active vault.
+pub fn registered_paths(app: &AppHandle) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    if let Some(active) = active_vault_path() {
+        out.push(active);
+    }
+    if let Ok(file) = registry_file(app) {
+        for v in load_registry(&file).vaults {
+            if !out.iter().any(|p| p == &v.path) {
+                out.push(v.path);
+            }
+        }
+    }
+    out
+}
+
 pub fn app_vault_path() -> Option<String> {
     app_cell().read().ok().and_then(|g| g.clone())
 }
