@@ -13,16 +13,20 @@
 
 import { useState, useEffect } from 'react';
 import { useSettings } from '../../hooks/useSettings.js';
+import { useContextMenu } from '../../context-menu/useContextMenu.js';
+import { IconBrush } from '../icons.jsx';
 import {
   AnimCtx, SuffixCtx, REVEAL, MUTED, GAP,
   CandyHeader, TreeRow, TreeChildren, Collapsible, StaggerChild,
 } from './treeKit.jsx';
 import TreeToolbar from './TreeToolbar.jsx';
+import { useTreeIcons } from './treeIcons.jsx';
+import TreeIconPicker from './TreeIconPicker.jsx';
 
 // A folder's children, staggered in once the group has "entered" (a deferred rAF
 // flag so the first frame is hidden → it transitions instead of snapping). Top-level
 // folders pass animateOnMount=false so a page load doesn't cascade every group.
-function NodeBody({ node, controller, accent, open, animateOnMount = true }) {
+function NodeBody({ node, controller, accent, icons, open, animateOnMount = true }) {
   const [entered, setEntered] = useState(!animateOnMount);
   useEffect(() => {
     const r = requestAnimationFrame(() => setEntered(true));
@@ -35,13 +39,17 @@ function NodeBody({ node, controller, accent, open, animateOnMount = true }) {
   if (n === 0) inner = <div style={MUTED}>empty</div>;
   else inner = kids.map((child, i) => (
     <StaggerChild key={child.id} index={i} count={n} open={shown}>
-      <TreeNode node={child} controller={controller} accent={accent}/>
+      <TreeNode node={child} controller={controller} accent={accent} icons={icons}/>
     </StaggerChild>
   ));
   return <TreeChildren>{inner}</TreeChildren>;
 }
 
-function TreeNode({ node, controller, accent, topLevel = false }) {
+function TreeNode({ node, controller, accent, icons, topLevel = false }) {
+  // A surface's own right-click wins; with none, the row's icon picker takes it.
+  const onContextMenu = node.onContextMenu || (icons ? (e) => icons.open(e, node.id) : undefined);
+  // A node that ships its own leadIcon (a favicon, a count dot) keeps it.
+  const leadIcon = node.leadIcon ?? icons?.leadIcon(node.id);
   // In-place rename swap (SP3 Broadcast inline-rename primitive): a node in
   // rename mode renders its own pill instead of the row/header. Absent for
   // every existing surface.
@@ -55,13 +63,13 @@ function TreeNode({ node, controller, accent, topLevel = false }) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         <CandyHeader label={node.label} open={open} onToggle={() => controller.toggle(node)}
-          accent={accent} onContextMenu={node.onContextMenu}
-          leadIcon={node.leadIcon} trailing={node.trailing}
+          accent={accent} onContextMenu={onContextMenu}
+          leadIcon={leadIcon} trailing={node.trailing}
           onActivate={node.onActivate} activeFill={node.activeFill}
           onDoubleClick={node.onDoubleClick}
           onMouseEnter={node.onMouseEnter} onMouseLeave={node.onMouseLeave}/>
         <Collapsible open={open} count={count}>
-          {mounted && <NodeBody node={node} controller={controller} accent={accent}
+          {mounted && <NodeBody node={node} controller={controller} accent={accent} icons={icons}
             open={open} animateOnMount={!topLevel}/>}
         </Collapsible>
       </div>
@@ -69,15 +77,29 @@ function TreeNode({ node, controller, accent, topLevel = false }) {
   }
   return (
     <TreeRow label={node.label} selected={!!node.active} accent={accent}
-      onClick={node.onActivate} onContextMenu={node.onContextMenu}
-      suffix={node.suffix} leadIcon={node.leadIcon} trailing={node.trailing}
+      onClick={node.onActivate} onContextMenu={onContextMenu}
+      suffix={node.suffix} leadIcon={leadIcon} trailing={node.trailing}
       onDoubleClick={node.onDoubleClick}
       onMouseEnter={node.onMouseEnter} onMouseLeave={node.onMouseLeave}/>
   );
 }
 
-export default function TreeSidebar({ nodes, controller, buttons, accent, showSuffix = false, toolbarExtra }) {
+export default function TreeSidebar({ nodes, controller, buttons, accent, showSuffix = false, toolbarExtra, iconScope }) {
   const { settings } = useSettings();
+  // Right-click icons. `iconScope` (e.g. 'docs:tree') namespaces the store and
+  // turns the feature on; omitted → nothing changes for that surface.
+  const store = useTreeIcons(iconScope);
+  const { openContextMenu } = useContextMenu();
+  const [picker, setPicker] = useState(null);
+  const icons = iconScope ? {
+    leadIcon: store.leadIcon,
+    // A one-item menu, not the picker straight away: right-click has to read the
+    // same everywhere, and openContextMenu is also what marks the event handled —
+    // opening the picker off the raw event let the app's global right-click fire
+    // its own menu on top of it.
+    open: (e, id) => openContextMenu(e, [{ label: 'Change Icon', icon: IconBrush,
+      onClick: () => setPicker({ at: { x: e.clientX, y: e.clientY }, key: id }) }], { accent }),
+  } : null;
   // Reuse the vault tree's cascade-timing preset so every sidebar animates alike.
   const anim = REVEAL[settings.vaultTreeReveal] || REVEAL.normal;
   // Scroll position is remembered app-wide by util/scrollMemory.js — delegated,
@@ -103,12 +125,17 @@ export default function TreeSidebar({ nodes, controller, buttons, accent, showSu
           display: 'flex', flexDirection: 'column', gap: GAP, padding: '0 8px',
         }}>
           {(nodes || []).map((node) => (
-            <TreeNode key={node.id} node={node} controller={controller} accent={accent} topLevel/>
+            <TreeNode key={node.id} node={node} controller={controller} accent={accent} icons={icons} topLevel/>
           ))}
           {/* Bottom dock clearance — an in-flow spacer that rides the scroll so the
               last row always clears the flush bottom dock. */}
           <div aria-hidden style={{ flexShrink: 0, height: 9 }}/>
         </div>
+        {picker && (
+          <TreeIconPicker at={picker.at} current={store.nameOf(picker.key)} accent={accent}
+            onPick={(name) => { store.set(picker.key, name); setPicker(null); }}
+            onClose={() => setPicker(null)}/>
+        )}
       </div>
     </SuffixCtx.Provider>
     </AnimCtx.Provider>

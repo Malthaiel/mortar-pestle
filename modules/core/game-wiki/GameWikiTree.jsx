@@ -21,13 +21,15 @@ import { encodePagePath } from '@host/components/SidebarBrowser.jsx';
 import { useContextMenu } from '@host/context-menu/useContextMenu.js';
 import NameInputModal from '@host/components/vault-tree/NameInputModal.jsx';
 import ConfirmModal from '@host/components/ui/ConfirmModal.jsx';
-import { IconPlus, IconFolder, IconLink, IconFile, IconX, IconSettings } from '@host/components/icons.jsx';
+import { IconPlus, IconFolder, IconLink, IconFile, IconX, IconSettings, IconBrush } from '@host/components/icons.jsx';
 import { CircleChip } from '@host/components/ui/Button.jsx';
 import CoachPopup from './CoachPopup.jsx';
 import {
   AnimCtx, SuffixCtx, REVEAL, GAP, MUTED, NAV_H,
   CandyHeader, TreeRow, TreeChildren, Collapsible, StaggerChild,
 } from '@host/components/vault-tree/treeKit.jsx';
+import { useTreeIcons } from '@host/components/vault-tree/treeIcons.jsx';
+import TreeIconPicker from '@host/components/vault-tree/TreeIconPicker.jsx';
 
 // Re-exported (it now lives in scrimSchema.js, which CoachPopup can import
 // without cycling back through this file) so existing importers are unchanged.
@@ -62,7 +64,7 @@ function gearOf(vp) {
 
 const matchFolder = (scrim, n) => `${SCRIM_BASE}/${scrim}/Match ${n}`;
 
-function TreeBody({ node, tree, accent, currentPath, open, openMenu, nav, onGear, animateOnMount = true }) {
+function TreeBody({ node, tree, accent, currentPath, open, openMenu, nav, onGear, icons, animateOnMount = true }) {
   const [entered, setEntered] = useState(!animateOnMount);
   useEffect(() => {
     const r = requestAnimationFrame(() => setEntered(true));
@@ -74,20 +76,20 @@ function TreeBody({ node, tree, accent, currentPath, open, openMenu, nav, onGear
   const loading = !entry || entry.loading;
   const n = nodes.length;
   let inner;
-  if (loading && n === 0) inner = <div style={MUTED}>…</div>;
+  if (loading && n === 0) inner = <div style={MUTED}>loading</div>;
   else if (n === 0) inner = <div style={MUTED}>empty</div>;
   else {
     inner = nodes.map((c, i) => (
       <StaggerChild key={c.vaultPath} index={i} count={n} open={shown}>
         <TreeNode node={c} tree={tree} accent={accent}
-          currentPath={currentPath} openMenu={openMenu} nav={nav} onGear={onGear}/>
+          currentPath={currentPath} openMenu={openMenu} nav={nav} onGear={onGear} icons={icons}/>
       </StaggerChild>
     ));
   }
   return <TreeChildren>{inner}</TreeChildren>;
 }
 
-function TreeNode({ node, tree, accent, currentPath, openMenu, nav, onGear }) {
+function TreeNode({ node, tree, accent, currentPath, openMenu, nav, onGear, icons }) {
   if (node.isFolder) {
     const open = tree.isOpen(node.vaultPath);
     const entry = tree.childrenOf(node.vaultPath);
@@ -106,8 +108,8 @@ function TreeNode({ node, tree, accent, currentPath, openMenu, nav, onGear }) {
             a long scrim name made its own gear unclickable. */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
           <CandyHeader label={node.name} open={open} accent={accent}
-            onToggle={() => tree.toggle(node.vaultPath)}
-            onContextMenu={hasMenu ? (e) => openMenu(e, node) : undefined}/>
+            onToggle={() => tree.toggle(node.vaultPath)} leadIcon={icons.leadIcon(node.vaultPath)}
+            onContextMenu={(e) => openMenu(e, node, hasMenu)}/>
           {/* size=NAV_H, not a hand-picked number: it is the same min-height the
               row pill uses, so the two buttons side by side are exactly the same
               height. Buttons in a row match each other's size. */}
@@ -119,7 +121,7 @@ function TreeNode({ node, tree, accent, currentPath, openMenu, nav, onGear }) {
         </div>
         <Collapsible open={open} count={count}>
           {mounted && <TreeBody open={open} node={node} tree={tree} accent={accent}
-            currentPath={currentPath} openMenu={openMenu} nav={nav} onGear={onGear}/>}
+            currentPath={currentPath} openMenu={openMenu} nav={nav} onGear={onGear} icons={icons}/>}
         </Collapsible>
       </div>
     );
@@ -127,6 +129,8 @@ function TreeNode({ node, tree, accent, currentPath, openMenu, nav, onGear }) {
   const selected = currentPath === node.vaultPath;
   return (
     <TreeRow label={node.name} selected={selected} accent={accent}
+      leadIcon={icons.leadIcon(node.vaultPath)}
+      onContextMenu={(e) => openMenu(e, node, false)}
       onClick={() => nav('/game-wiki/' + encodePagePath(node.vaultPath))}/>
   );
 }
@@ -139,6 +143,9 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
   const [modal, setModal] = useState(null);
   // Which gear was clicked ({ kind:'scrim'|'match', scrim, match }), or null.
   const [coach, setCoach] = useState(null);
+  // Right-click row icons (shared store + picker with the vault tree).
+  const icons = useTreeIcons('gamewiki:tree');
+  const [picker, setPicker] = useState(null);
 
   // Open a finished match's notes. The filename is coach.py's deliverable
   // convention; navigating to the folder would land on an empty-folder blurb.
@@ -148,7 +155,16 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
     ),
   );
 
-  const openMenu = (e, node) => {
+  const openMenu = (e, node, hasMenu = true) => {
+    // Every row can take an icon; only some rows have a menu of their own. With
+    // no menu, right-click IS the picker.
+    const iconItem = { label: 'Change Icon', icon: IconBrush,
+      onClick: () => setPicker({ at: { x: e.clientX, y: e.clientY }, key: node.vaultPath }) };
+    // Route even the one-item case through openContextMenu: it marks the event
+    // handled and preventDefaults it. Opening the picker straight from the raw
+    // event left the app's global right-click free to fire its own menu too, so
+    // BOTH appeared at once.
+    if (!hasMenu) { openContextMenu(e, [iconItem], { accent }); return; }
     if (node.vaultPath === SCRIM_BASE) {
       openContextMenu(e, [
         { label: 'New Scrim', icon: IconPlus, onClick: () => onNewScrim?.() },
@@ -157,6 +173,7 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
         // gamewiki-rooted arm (also below, for scrim folders).
         { label: 'Reveal in Files', icon: IconFolder, onClick: () => { invoke('coaching_reveal_path', { path: SCRIM_BASE }).catch(() => {}); } },
         { label: 'Copy path', icon: IconLink, onClick: () => { try { navigator.clipboard.writeText(SCRIM_BASE); } catch {} } },
+        iconItem,
       ], { accent });
       return;
     }
@@ -167,22 +184,28 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
     if (m) {
       openContextMenu(e, [
         { label: 'New Match', icon: IconPlus, onClick: () => setCoach({ kind: 'scrim', scrim: m.scrim }) },
+        // Renumber, not free rename: `Match N` is what matchOf parses and what coach.py
+        // names its deliverable after, so a free-text name would quietly cut the folder
+        // off from its own gear and from the notes pipeline.
+        { label: 'Change number', icon: IconFile, onClick: () => setModal({ kind: 'renumber', ...m }) },
         { label: 'Delete Match', icon: IconX, danger: true, onClick: () => setModal({ kind: 'delete-match', ...m }) },
         { divider: true },
         { label: 'Reveal in Files', icon: IconFolder, onClick: () => { invoke('coaching_reveal_path', { path: node.vaultPath }).catch(() => {}); } },
         { label: 'Copy path', icon: IconLink, onClick: () => { try { navigator.clipboard.writeText(node.vaultPath); } catch {} } },
+        iconItem,
       ], { accent });
       return;
     }
     const base = scrimBaseOf(node.vaultPath);
-    if (!base) return;
+    if (!base) { iconItem.onClick(); return; }
     openContextMenu(e, [
       { label: 'New Match', icon: IconPlus, onClick: () => setCoach({ kind: 'scrim', scrim: base }) },
-      { label: 'Rename…', icon: IconFile, onClick: () => setModal({ kind: 'rename', base }) },
+      { label: 'Rename', icon: IconFile, onClick: () => setModal({ kind: 'rename', base }) },
       { label: 'Delete', icon: IconX, danger: true, onClick: () => setModal({ kind: 'delete', base }) },
       { divider: true },
       { label: 'Reveal in Files', icon: IconFolder, onClick: () => { invoke('coaching_reveal_path', { path: node.vaultPath }).catch(() => {}); } },
       { label: 'Copy path', icon: IconLink, onClick: () => { try { navigator.clipboard.writeText(node.vaultPath); } catch {} } },
+      iconItem,
     ], { accent });
   };
 
@@ -202,6 +225,37 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
       }
     } catch (e) {
       setModal({ kind: 'rename', base: oldBase, err: String(e?.message || e) });
+    }
+  };
+
+  // Move `Match <old>` to `Match <new>` inside the same scrim. Refuses a non-number and
+  // refuses to land on a match that already exists — renamePath would otherwise merge or
+  // clobber a folder holding someone's written-out talk.
+  const doRenumber = async (scrim, match, raw) => {
+    const want = String(raw ?? '').trim();
+    if (!/^\d+$/.test(want)) {
+      setModal({ kind: 'renumber', scrim, match, err: 'A match is numbered, so this has to be a number — 1, 2, 3' });
+      return;
+    }
+    const n = parseInt(want, 10);
+    if (n === match) { setModal(null); return; }
+    const taken = (tree.childrenOf(`${SCRIM_BASE}/${scrim}`)?.nodes || [])
+      .some((c) => c.name === `Match ${n}`);
+    if (taken) {
+      setModal({ kind: 'renumber', scrim, match, err: `Match ${n} already exists in this scrim.` });
+      return;
+    }
+    const oldFolder = matchFolder(scrim, match);
+    const newFolder = matchFolder(scrim, n);
+    try {
+      await api.renamePath(oldFolder, newFolder, 'gamewiki');
+      await tree.refresh(`${SCRIM_BASE}/${scrim}`);
+      setModal(null);
+      if (currentPath === oldFolder || currentPath.startsWith(oldFolder + '/')) {
+        nav('/game-wiki/' + encodePagePath(newFolder + currentPath.slice(oldFolder.length)));
+      }
+    } catch (e) {
+      setModal({ kind: 'renumber', scrim, match, err: String(e?.message || e) });
     }
   };
 
@@ -240,7 +294,7 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
             flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden',
             display: 'flex', flexDirection: 'column', gap: GAP, padding: '0 8px',
           }}>
-            {tree.games == null && <div style={MUTED}>…</div>}
+            {tree.games == null && <div style={MUTED}>loading</div>}
             {tree.games != null && tree.games.length === 0 && <div style={MUTED}>no games</div>}
             {(tree.games || []).map((g) => {
               const open = tree.isOpen(g.vaultPath);
@@ -249,17 +303,24 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
               const count = entry?.nodes?.length || 0;
               return (
                 <div key={g.vaultPath} style={{ display: 'flex', flexDirection: 'column' }}>
-                  <CandyHeader label={g.name} open={open} onToggle={() => tree.toggle(g.vaultPath)} accent={accent}/>
+                  <CandyHeader label={g.name} open={open} onToggle={() => tree.toggle(g.vaultPath)} accent={accent}
+                    leadIcon={icons.leadIcon(g.vaultPath)} onContextMenu={(e) => openMenu(e, g, false)}/>
                   <Collapsible open={open} count={count}>
                     {mounted && <TreeBody open={open} animateOnMount={false} node={g}
                       tree={tree} accent={accent} currentPath={currentPath}
-                      openMenu={openMenu} nav={nav} onGear={setCoach}/>}
+                      openMenu={openMenu} nav={nav} onGear={setCoach} icons={icons}/>}
                   </Collapsible>
                 </div>
               );
             })}
             <div aria-hidden style={{ flexShrink: 0, height: 9 }}/>
           </div>
+
+          {picker && (
+            <TreeIconPicker at={picker.at} current={icons.nameOf(picker.key)} accent={accent}
+              onPick={(name) => { icons.set(picker.key, name); setPicker(null); }}
+              onClose={() => setPicker(null)}/>
+          )}
 
           {coach && (
             <CoachPopup target={coach} accent={accent}
@@ -274,6 +335,12 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
             <NameInputModal open title={`Rename ${modal.base}`} label="New name" confirmLabel="Rename" initialValue={modal.base}
               onCancel={() => setModal(null)}
               onSubmit={(name) => doRename(modal.base, name)}/>
+          )}
+          {modal?.kind === 'renumber' && (
+            <NameInputModal open title={`Match ${modal.match} — change number`}
+              label={modal.err || 'New number'} confirmLabel="Change" initialValue={String(modal.match)}
+              onCancel={() => setModal(null)}
+              onSubmit={(name) => doRenumber(modal.scrim, modal.match, name)}/>
           )}
           {modal?.kind === 'delete-match' && (
             <ConfirmModal open title={`Delete Match ${modal.match}?`}

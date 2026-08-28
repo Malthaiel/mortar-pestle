@@ -19,6 +19,7 @@ import { sharedEvents } from '../../module-sdk/index.js';
 import { useContextMenu } from '../../context-menu/useContextMenu.js';
 import { buildFileItemMenu } from '../../context-menu/defaultMenus.js';
 import { useSettings } from '../../hooks/useSettings.js';
+import { useVaults } from '../../hooks/useVaults.jsx';
 import { writeSectionPage } from '../../hooks/useSectionMemory.js';
 import { useVaultTree, sortNodes, VAULT_SORT_MODES } from './useVaultTree.js';
 import {
@@ -29,6 +30,8 @@ import TreeToolbar from './TreeToolbar.jsx';
 import TreeVaultSwitcher from './TreeVaultSwitcher.jsx';
 import { useTreeDrag } from './useTreeDrag.js';
 import { openInFiles } from './revealInFiles.js';
+import { useTreeIcons } from './treeIcons.jsx';
+import TreeIconPicker from './TreeIconPicker.jsx';
 import NameInputModal from './NameInputModal.jsx';
 import ConfirmModal from '../ui/ConfirmModal.jsx';
 
@@ -40,7 +43,7 @@ function baseName(vp) { return (vp || '').split('/').pop().replace(/\.md$/, '');
 
 // Renders a folder's children (loading / empty / staggered list), wrapped in the
 // indent guide. `open` (gated on a deferred `entered` flag) drives the cascade.
-function TreeBody({ node, tree, sectionMeta, accent, currentPage, openMenu, drag, open, animateOnMount = true }) {
+function TreeBody({ node, tree, sectionMeta, accent, currentPage, openMenu, drag, icons, open, animateOnMount = true }) {
   const [entered, setEntered] = useState(!animateOnMount);
   useEffect(() => {
     const r = requestAnimationFrame(() => setEntered(true));
@@ -64,20 +67,20 @@ function TreeBody({ node, tree, sectionMeta, accent, currentPage, openMenu, drag
   const n = items.length;
 
   let inner;
-  if (loading && pins.length === 0) inner = <div style={MUTED}>…</div>;
+  if (loading && pins.length === 0) inner = <div style={MUTED}>loading</div>;
   else if (n === 0) inner = <div style={MUTED}>empty</div>;
   else inner = items.map((it, i) => (
     <StaggerChild key={it.key} index={i} count={n} open={shown}>
       {it.kind === 'pin'
         ? <TreeRow node={{ title: it.pin.label }} selected={pinActive(it.pin)} accent={accent} noSuffix onClick={() => navigate(it.pin.hash)}/>
         : <TreeNode node={it.node} tree={tree} sectionMeta={sectionMeta}
-            accent={accent} currentPage={currentPage} openMenu={openMenu} drag={drag}/>}
+            accent={accent} currentPage={currentPage} openMenu={openMenu} drag={drag} icons={icons}/>}
     </StaggerChild>
   ));
   return <TreeChildren>{inner}</TreeChildren>;
 }
 
-function TreeNode({ node, tree, sectionMeta, accent, currentPage, openMenu, drag }) {
+function TreeNode({ node, tree, sectionMeta, accent, currentPage, openMenu, drag, icons }) {
   const onContextMenu = (e) => openMenu(e, node, sectionMeta);
 
   // Every node is a pill chip; folders recurse when open. Header actions all live
@@ -90,12 +93,12 @@ function TreeNode({ node, tree, sectionMeta, accent, currentPage, openMenu, drag
     return (
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         <CandyHeader label={node.name} open={open} onToggle={drag.guard(() => tree.toggle(node))}
-          accent={accent} onContextMenu={onContextMenu}
+          accent={accent} onContextMenu={onContextMenu} leadIcon={icons.leadIcon(node.vaultPath)}
           dropPath={node.vaultPath} activeFill={open || drag.over === node.vaultPath}
           onPointerDown={drag.start(node)}/>
         <Collapsible open={open} count={count}>
           {mounted && <TreeBody open={open} node={node} tree={tree} sectionMeta={sectionMeta}
-            accent={accent} currentPage={currentPage} openMenu={openMenu} drag={drag}/>}
+            accent={accent} currentPage={currentPage} openMenu={openMenu} drag={drag} icons={icons}/>}
         </Collapsible>
       </div>
     );
@@ -105,7 +108,7 @@ function TreeNode({ node, tree, sectionMeta, accent, currentPage, openMenu, drag
   const selected = !!currentPage && norm(currentPage) === norm(node.vaultPath);
   return <TreeRow node={node} selected={selected} accent={accent}
     onClick={drag.guard(() => navigate(node.href))} onContextMenu={onContextMenu}
-    onPointerDown={drag.start(node)}/>;
+    leadIcon={icons.leadIcon(node.vaultPath)} onPointerDown={drag.start(node)}/>;
 }
 
 export default function VaultTree({ sections, route, accent }) {
@@ -116,6 +119,11 @@ export default function VaultTree({ sections, route, accent }) {
   const showSuffix = !!settings.vaultTreeSuffix;
   const currentPage = route?.page === 'page' ? route.sub : null;
   const [modal, setModal] = useState(null);
+  // Row icons are per-VAULT: the same relative path in two mounted vaults is two
+  // different rows, so the active vault id namespaces the store.
+  const { activeId } = useVaults();
+  const icons = useTreeIcons(activeId ? 'vault:' + activeId : null);
+  const [picker, setPicker] = useState(null);
 
   // Record the open vault note so bare /vault (VaultLanding) can restore it.
   useEffect(() => {
@@ -139,6 +147,8 @@ export default function VaultTree({ sections, route, accent }) {
   const drag = useTreeDrag({ isOpen: tree.isOpen, collapse: tree.toggle, onDrop });
 
   const openMenu = (e, node, sectionMeta) => {
+    // Capture the click point now — the picker opens later, from the menu item.
+    const at = { x: e.clientX, y: e.clientY };
     const isRoot = node.isFolder && node.depth < 0; // a section root
     // Only the two STRUCTURAL sections are protected (the app hardcodes their path
     // prefixes). Every other root folder — user-made, or a foreign vault's top
@@ -154,6 +164,7 @@ export default function VaultTree({ sections, route, accent }) {
       onReconfigure: isDomain ? () => sharedEvents.emit('domain-builder:open', { reopen: { name: node.name } }) : undefined,
       onRename:      isProtectedRoot ? undefined : () => setModal({ kind: 'rename', node }),
       onDelete:      isProtectedRoot ? undefined : () => setModal({ kind: 'delete', node }),
+      onSetIcon:     () => setPicker({ at, key: node.vaultPath }),
     };
     openContextMenu(e, buildFileItemMenu({
       vaultPath: node.vaultPath,
@@ -232,12 +243,12 @@ export default function VaultTree({ sections, route, accent }) {
           return (
             <div key={s.key} style={{ display: 'flex', flexDirection: 'column' }}>
               <CandyHeader label={s.label} open={open} onToggle={drag.guard(() => tree.toggle(sectionNode))}
-                accent={accent} onContextMenu={(e) => openMenu(e, sectionNode, s)}
+                accent={accent} onContextMenu={(e) => openMenu(e, sectionNode, s)} leadIcon={icons.leadIcon(s.section)}
                 dropPath={s.section} activeFill={open || drag.over === s.section}
                 onPointerDown={s.fixed ? undefined : drag.start(sectionNode)}/>
               <Collapsible open={open} count={count}>
                 {mounted && <TreeBody open={open} animateOnMount={false} node={sectionNode} tree={tree}
-                  sectionMeta={s} accent={accent} currentPage={currentPage} openMenu={openMenu} drag={drag}/>}
+                  sectionMeta={s} accent={accent} currentPage={currentPage} openMenu={openMenu} drag={drag} icons={icons}/>}
               </Collapsible>
             </div>
           );
@@ -248,7 +259,7 @@ export default function VaultTree({ sections, route, accent }) {
           <TreeRow key={f.vaultPath} node={f}
             selected={!!currentPage && norm(currentPage) === norm(f.vaultPath)}
             accent={accent} onClick={drag.guard(() => navigate(f.href))}
-            onContextMenu={(e) => openMenu(e, f, null)}
+            onContextMenu={(e) => openMenu(e, f, null)} leadIcon={icons.leadIcon(f.vaultPath)}
             onPointerDown={drag.start(f)}/>
         ))}
 
@@ -268,10 +279,16 @@ export default function VaultTree({ sections, route, accent }) {
             '--candy-depth-nav': 'calc(var(--candy-depth) * 0.85)',
           }}>
             {drag.node.isFolder
-              ? <CandyHeader label={drag.node.name} open={false} accent={accent}/>
-              : <TreeRow node={drag.node} accent={accent}/>}
+              ? <CandyHeader label={drag.node.name} open={false} accent={accent} leadIcon={icons.leadIcon(drag.node.vaultPath)}/>
+              : <TreeRow node={drag.node} accent={accent} leadIcon={icons.leadIcon(drag.node.vaultPath)}/>}
           </div>,
           document.body,
+        )}
+
+        {picker && (
+          <TreeIconPicker at={picker.at} current={icons.nameOf(picker.key)} accent={accent}
+            onPick={(name) => { icons.set(picker.key, name); setPicker(null); }}
+            onClose={() => setPicker(null)}/>
         )}
 
         {modal && modal.kind === 'new-note' && (

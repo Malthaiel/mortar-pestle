@@ -9,7 +9,7 @@
 // Richer file actions (sidebar files/folders) arrive in SF9; SF1 added icons +
 // danger, SF7 fleshed out the link menu.
 
-import { IconCommand, IconSettings, IconRotateCw, IconExternal, IconFolder, IconLink, IconFileText, IconFile, IconPlus, IconX, IconSearch, IconSparkles } from '../components/icons.jsx';
+import { IconCommand, IconSettings, IconRotateCw, IconExternal, IconFolder, IconLink, IconFileText, IconFile, IconPlus, IconX, IconSearch, IconSparkles, IconBrush } from '../components/icons.jsx';
 import { invoke, api } from '../api.js';
 import { navigate } from '../router.js';
 import { obsidianHref } from '../util/obsidian.js';
@@ -232,8 +232,9 @@ export function buildFileItemMenu({ vaultPath, isFolder, href, ops }) {
     if (ops.onNewNote)     fileOps.push({ label: 'New note',     icon: IconFileText, onClick: ops.onNewNote });
     if (ops.onNewFolder)   fileOps.push({ label: 'New folder',   icon: IconFolder,   onClick: ops.onNewFolder });
     if (ops.onNewDomain)   fileOps.push({ label: 'New domain',   icon: IconPlus,     onClick: ops.onNewDomain });
-    if (ops.onReconfigure) fileOps.push({ label: 'Reconfigure…', icon: IconSettings, onClick: ops.onReconfigure });
-    if (ops.onRename)      fileOps.push({ label: 'Rename…',      icon: IconFile,     onClick: ops.onRename });
+    if (ops.onReconfigure) fileOps.push({ label: 'Reconfigure', icon: IconSettings, onClick: ops.onReconfigure });
+    if (ops.onRename)      fileOps.push({ label: 'Rename',      icon: IconFile,     onClick: ops.onRename });
+    if (ops.onSetIcon)     fileOps.push({ label: 'Change Icon',   icon: IconBrush,    onClick: ops.onSetIcon });
     if (ops.onDelete)      fileOps.push({ label: 'Delete',       icon: IconX, danger: true, onClick: ops.onDelete });
     if (fileOps.length) { items.push({ divider: true }); items.push(...fileOps); }
   }
@@ -245,7 +246,7 @@ export function buildGenericMenu(ctx) {
   return [
     { header: 'Navigate' },
     { label: 'Command Palette', icon: IconCommand, shortcut: '⌘K', onClick: () => ctx && ctx.openCommandPalette && ctx.openCommandPalette() },
-    { label: 'Settings…', icon: IconSettings, onClick: () => ctx && ctx.openSettings && ctx.openSettings() },
+    { label: 'Settings', icon: IconSettings, onClick: () => ctx && ctx.openSettings && ctx.openSettings() },
     { header: 'Window' },
     { label: 'Reload', icon: IconRotateCw, onClick: () => { try { window.location.reload(); } catch (e) {} } },
     // SF4 demo: a nested submenu (3 levels deep) so the fly-out / hover-intent /
@@ -255,7 +256,7 @@ export function buildGenericMenu(ctx) {
     { header: 'Submenu demo' },
     { label: 'Quick actions', icon: IconCommand, children: [
       { label: 'Command Palette', icon: IconCommand, shortcut: '⌘K', onClick: () => ctx && ctx.openCommandPalette && ctx.openCommandPalette() },
-      { label: 'Settings…', icon: IconSettings, onClick: () => ctx && ctx.openSettings && ctx.openSettings() },
+      { label: 'Settings', icon: IconSettings, onClick: () => ctx && ctx.openSettings && ctx.openSettings() },
       { label: 'Window', children: [
         { label: 'Reload', icon: IconRotateCw, onClick: () => { try { window.location.reload(); } catch (e) {} } },
       ] },
