@@ -17,9 +17,12 @@
 // Otherwise every window reload would re-fire the last command — a stray click on
 // each HMR reload, from a file the user never touched this session.
 //
-// BOTH webviews poll (main + overlay host). Each runs the command against its own
-// DOM and reports to its own label file, so a selector that only exists in one
-// window simply errors in the other. That is information, not a bug.
+// EVERY webview polls — main, overlay host, and the player controls layer. Each
+// runs the command against its own DOM and reports to its own label file
+// (main.json / overlay-host.json / player-controls.json), so a selector that only
+// exists in one window simply errors in the others. That is information, not a
+// bug — but a MUTATING command fires once per window, so scope it by checking
+// `location.hash` inside the command when that matters.
 //
 // Limits worth knowing before trusting a reading: :hover and :focus-visible cannot
 // be synthesised (see dragAudit.js), animations need an explicit `await sleep(ms)`

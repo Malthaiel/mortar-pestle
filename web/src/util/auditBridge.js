@@ -24,6 +24,7 @@ const NONCE = (typeof crypto !== 'undefined' && crypto.randomUUID)
 // file gets clobbered when both webviews write (verified failure mode).
 function auditLabel() {
   const h = typeof location !== 'undefined' ? location.hash : '';
+  if (h.startsWith('#/player/controls')) return 'player-controls';
   return h.includes('overlay') ? 'overlay-host' : 'main';
 }
 

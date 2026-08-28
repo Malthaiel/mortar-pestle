@@ -1,6 +1,12 @@
 // Popover panel anchored above the ⚙ button in VideoControls. Lets the user
-// tweak subtitle rendering (size, font, weight, background, position, sync)
+// tweak subtitle rendering (size, weight, background, position, sync)
 // — all settings except sync persist globally; sync persists per-episode.
+//
+// Every row drives an mpv property; `subProps` in PlayerControlsView.jsx is the
+// single translation point. Most of them only bite when Override is on, because
+// mpv's default `sub-ass-override=scale` protects a release's own ASS
+// typesetting (signs, karaoke) from our styling. Those rows dim rather than
+// disappear, so the panel's shape does not jump when the switch is thrown.
 
 import { useState } from 'react';
 import { useVideoPlayer } from './VideoPlayerProvider.jsx';
@@ -11,6 +17,8 @@ export default function SubtitleSettingsPanel() {
   const v = useVideoPlayer();
   const s = v.subSettings;
   const sync = v.subSync;
+  // Rows mpv ignores while it is rendering the release's own ASS styling.
+  const styled = !!s.assOverride;
 
   return (
     <div
@@ -45,13 +53,28 @@ export default function SubtitleSettingsPanel() {
         ><span className="candy-face">Reset</span></button>
       </div>
 
+      {/* The gate. Off keeps the release's own signs and karaoke; on hands the
+          look below to mpv's sub-* properties. */}
+      <Row label="Override">
+        <CandySelect value={styled ? 'on' : 'off'} compact direction="down" options={[
+          { value: 'off', label: 'Keep release style' },
+          { value: 'on',  label: 'Use my style' },
+        ]} onChange={(x) => v.updateSubSetting('assOverride', x === 'on')}/>
+      </Row>
+
       <Row label="Size">
         <Slider min={12} max={64} step={1} value={s.size}
                 onChange={(x) => v.updateSubSetting('size', x)}/>
         <Readout>{s.size}px</Readout>
       </Row>
 
-      <Row label="Style">
+      <Row label="Position">
+        <Slider min={0} max={1} step={0.01} value={s.position}
+                onChange={(x) => v.updateSubSetting('position', x)}/>
+        <Readout>{Math.round(s.position * 100)}%</Readout>
+      </Row>
+
+      <Row label="Style" dim={!styled}>
         <CandySelect value={s.bgStyle} compact direction="down" options={[
           { value: 'box',     label: 'Box' },
           { value: 'shadow',  label: 'Shadow' },
@@ -61,7 +84,7 @@ export default function SubtitleSettingsPanel() {
       </Row>
 
       {s.bgStyle === 'box' && (
-        <Row label="BG opacity">
+        <Row label="BG opacity" dim={!styled}>
           <Slider min={0} max={1} step={0.05} value={s.bgOpacity}
                   onChange={(x) => v.updateSubSetting('bgOpacity', x)}/>
           <Readout>{Math.round(s.bgOpacity * 100)}%</Readout>
@@ -69,7 +92,7 @@ export default function SubtitleSettingsPanel() {
       )}
 
       {s.bgStyle === 'shadow' && (
-        <Row label="Shadow size">
+        <Row label="Shadow size" dim={!styled}>
           <Slider min={0} max={20} step={1} value={s.shadowSize}
                   onChange={(x) => v.updateSubSetting('shadowSize', x)}/>
           <Readout>{s.shadowSize}px</Readout>
@@ -77,44 +100,25 @@ export default function SubtitleSettingsPanel() {
       )}
 
       {s.bgStyle === 'outline' && (
-        <Row label="Outline size">
+        <Row label="Outline size" dim={!styled}>
           <Slider min={0} max={10} step={0.5} value={s.outlineSize}
                   onChange={(x) => v.updateSubSetting('outlineSize', x)}/>
           <Readout>{s.outlineSize}px</Readout>
         </Row>
       )}
 
-      <Row label="Position">
-        <Slider min={0} max={1} step={0.01} value={s.position}
-                onChange={(x) => v.updateSubSetting('position', x)}/>
-        <Readout>{Math.round(s.position * 100)}%</Readout>
-      </Row>
-
-      <Row label="Font">
-        <CandySelect value={s.fontFamily} compact direction="down" options={[
-          { value: 'sans', label: 'Sans' },
-          { value: 'mono', label: 'Mono' },
-        ]} onChange={(x) => v.updateSubSetting('fontFamily', x)}/>
-      </Row>
-
-      <Row label="Weight">
+      {/* mpv's sub-bold is a flag, so there is no middle weight to offer. */}
+      <Row label="Weight" dim={!styled}>
         <CandySelect value={String(s.fontWeight)} compact direction="down" options={[
           { value: '400', label: 'Normal' },
-          { value: '500', label: 'Medium' },
           { value: '700', label: 'Bold' },
         ]} onChange={(x) => v.updateSubSetting('fontWeight', Number(x))}/>
       </Row>
 
-      <Row label="Letter sp">
+      <Row label="Letter sp" dim={!styled}>
         <Slider min={-2} max={8} step={0.5} value={s.letterSpacing}
                 onChange={(x) => v.updateSubSetting('letterSpacing', x)}/>
         <Readout>{s.letterSpacing}</Readout>
-      </Row>
-
-      <Row label="Line ht">
-        <Slider min={0.9} max={2.0} step={0.05} value={s.lineHeight}
-                onChange={(x) => v.updateSubSetting('lineHeight', x)}/>
-        <Readout>{s.lineHeight.toFixed(2)}</Readout>
       </Row>
 
       <Row label="Sync">
@@ -135,10 +139,13 @@ export default function SubtitleSettingsPanel() {
   );
 }
 
-function Row({ label, children }) {
+function Row({ label, children, dim = false }) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 10,
+      opacity: dim ? 0.35 : 1,
+      pointerEvents: dim ? 'none' : 'auto',
+      transition: 'opacity 0.15s ease',
     }}>
       <label style={{
         width: 78, flexShrink: 0,

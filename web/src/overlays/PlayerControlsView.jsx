@@ -23,6 +23,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { emit, listen } from '@tauri-apps/api/event';
 import {
   VideoPlayerContext, HeaderBtn, PiPBtn, LS, loadJSON, saveJSON,
+  DEFAULT_SUB_SETTINGS,
 } from '@modules/core/library/VideoPlayerProvider.jsx';
 import VideoControls from '@modules/core/library/VideoControls.jsx';
 import { candyGap } from '@host/util/candy.js';
@@ -55,6 +56,37 @@ function toProbe(tracks, chapters) {
   };
 }
 
+/// The subtitle panel's units → mpv's, the same boundary the volume (0..1 vs
+/// 0..100) and track-id translations already live at. Verified against
+/// `mpv --list-options` on the bundled v0.41 build, not from memory.
+///
+/// `sub-ass-override` is the gate everything else hangs off: at its default
+/// `scale` mpv deliberately ignores our styling so ASS signs and karaoke render
+/// as the release typeset them, and only sub-scale / sub-pos / sub-delay bite.
+/// `force` makes the rest apply and flattens the signs, so it is the user's
+/// explicit choice, off by default.
+function subProps(s) {
+  const hex2 = (n) => Math.round(Math.min(1, Math.max(0, n)) * 255)
+    .toString(16).padStart(2, '0').toUpperCase();
+  // mpv colours are #AARRGGBB. In outline-and-shadow, sub-back-color IS the
+  // shadow colour (sub-shadow-color is an alias for it), so 'shadow' needs an
+  // opaque one or the shadow it draws is invisible.
+  const back = s.bgStyle === 'box' ? `#${hex2(s.bgOpacity)}000000`
+    : s.bgStyle === 'shadow' ? '#FF000000'
+    : '#00000000';
+  return {
+    'sub-ass-override': s.assOverride ? 'force' : 'scale',
+    'sub-scale': s.size / DEFAULT_SUB_SETTINGS.size,
+    'sub-pos': Math.round(s.position * 100),
+    'sub-border-style': s.bgStyle === 'box' ? 'background-box' : 'outline-and-shadow',
+    'sub-back-color': back,
+    'sub-outline-size': s.bgStyle === 'outline' ? s.outlineSize : 0,
+    'sub-shadow-offset': s.bgStyle === 'shadow' ? s.shadowSize : 0,
+    'sub-bold': s.fontWeight >= 700,
+    'sub-spacing': Math.min(10, Math.max(-10, s.letterSpacing)),
+  };
+}
+
 export default function PlayerControlsView() {
   const surface = useRef(surfaceOf()).current;
   const [live, setLive] = useState({
@@ -64,6 +96,14 @@ export default function PlayerControlsView() {
   const [meta, setMeta] = useState(null);
   const [idle, setIdle] = useState(false);
   const [narrow, setNarrow] = useState(() => window.innerWidth <= PIP_MAX_W);
+  // Subtitle appearance. Same localStorage keys the app writes, so a change made
+  // here is the one the next open reads — this window and the main one share an
+  // origin, exactly as volume and speed already rely on.
+  const [subSettings, setSubSettings] = useState(() => ({
+    ...DEFAULT_SUB_SETTINGS,
+    ...(loadJSON(LS.subSettings, {}) || {}),
+  }));
+  const [subSyncMap, setSubSyncMap] = useState(() => loadJSON(LS.subSync, {}) || {});
   const idleTimer = useRef(null);
   const clickTimer = useRef(null);
 
@@ -126,6 +166,20 @@ export default function PlayerControlsView() {
     return () => { alive = false; };
   }, [cmd, meta]);
 
+  // Subtitle appearance and the per-episode sync offset, pushed into mpv. The
+  // same effect covers the first open and every later edit, so there is one path
+  // and no launch-argument copy of these values to drift against.
+  // ponytail: mpv paints its default look for the ~200 ms before this lands on a
+  // fresh open; add launch arguments only if that flash is ever actually seen.
+  const fileAbs = (meta && meta.fileAbs) || '';
+  const subSync = Number(subSyncMap[fileAbs] || 0);
+  useEffect(() => {
+    const props = { ...subProps(subSettings), 'sub-delay': subSync };
+    for (const [p, val] of Object.entries(props)) {
+      cmd(['set_property', p, val]).catch(() => {});
+    }
+  }, [cmd, meta, subSettings, subSync]);
+
   useEffect(() => {
     let alive = true;
     const props = ['time-pos', 'duration', 'pause', 'volume', 'speed', 'aid', 'sid'];
@@ -171,8 +225,35 @@ export default function PlayerControlsView() {
   // The context VideoControls consumes. mpv track ids are 1-based and the bar
   // indexes into `probe.audio`, so the two are translated at this boundary.
   // Volume is the other translation: the bar works in 0..1, mpv in 0..100.
+  // The panel's own writers. Deliberately local rather than shared with the
+  // provider's identically-named copies: those belong to the old <video> lane
+  // and go with it in Phase 6, so a shared hook would outlive its second caller
+  // by one phase.
+  const updateSubSetting = useCallback((key, val) => {
+    setSubSettings((prev) => {
+      const next = { ...prev, [key]: val };
+      saveJSON(LS.subSettings, next);
+      return next;
+    });
+  }, []);
+  const resetSubSettings = useCallback(() => {
+    setSubSettings(DEFAULT_SUB_SETTINGS);
+    saveJSON(LS.subSettings, DEFAULT_SUB_SETTINGS);
+  }, []);
+  const writeSync = useCallback((next) => {
+    if (!fileAbs) return;
+    setSubSyncMap((prev) => {
+      const map = { ...prev };
+      if (next === null) delete map[fileAbs];
+      else map[fileAbs] = next;
+      saveJSON(LS.subSync, map);
+      return map;
+    });
+  }, [fileAbs]);
+
   const value = useMemo(() => {
     const audio = (probe && probe.audio) || [];
+    const subs = (probe && probe.subtitles) || [];
     const dur = Number.isFinite(live.duration) ? live.duration : 0;
     const time = Number.isFinite(live.time) ? live.time : 0;
     const vol = Number.isFinite(live.volume) ? live.volume : 100;
@@ -184,12 +265,21 @@ export default function PlayerControlsView() {
       speed: Number.isFinite(live.speed) ? live.speed : 1,
       probe,
       audioIdx: Math.max(0, audio.findIndex((t) => t.id === live.aid)),
-      // Held at -1 on purpose: the only control keyed off it is the subtitle
-      // settings gear, and that panel still edits the DOM-overlay renderer the
-      // mpv lane replaced. Phase 5 rewires it to mpv's own subtitle properties
-      // and this becomes the real sid index. A gear that opens a panel wired to
-      // nothing would be worse than no gear.
-      subIdx: -1,
+      // The real track, read from mpv. `sid` is `false` when subtitles are off,
+      // which matches no track id, so the -1 the bar means by "off" falls out on
+      // its own.
+      subIdx: subs.findIndex((t) => t.id === live.sid),
+      subSettings,
+      subSync,
+      updateSubSetting,
+      resetSubSettings,
+      nudgeSubSync: (delta) => writeSync(Math.round((subSync + delta) * 100) / 100),
+      resetSubSync: () => writeSync(null),
+      setSubtitleTrack: (i) => {
+        const t = subs[i];
+        saveJSON(LS.subPref, t ? (t.language || 'und') : 'off');
+        return cmd(['set_property', 'sid', t ? t.id : 'no']);
+      },
       toggle: () => cmd(['set_property', 'pause', !live.paused]),
       seek: (sec) => cmd(['seek', sec, 'absolute']),
       skip: (delta) => cmd(['seek', delta, 'relative']),
@@ -217,7 +307,10 @@ export default function PlayerControlsView() {
       refresh: () => send('refresh'),
       requestFullscreen: () => send('fullscreen'),
     };
-  }, [cmd, send, live, probe]);
+  }, [
+    cmd, send, live, probe,
+    subSettings, subSync, updateSubSetting, resetSubSettings, writeSync,
+  ]);
 
   // ── PiP: the thumbnail in the corner, not the modal ──────────────────────
   // Two buttons and a click-to-expand body, exactly what the old PiP host had.

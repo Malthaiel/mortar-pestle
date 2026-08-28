@@ -1071,6 +1071,13 @@ pub fn run() {
                 // and a forceful kill is recoverable — collections autosave on
                 // every mutation).
                 broadcast::supervisor::shutdown();
+                // No mpv reap here on purpose. One was written and measured on
+                // 2026-08-28 and always found `surfaces=0`: the close path has
+                // already run `kill_proc`, and mpv quits itself the moment the
+                // `--wid` HWND dies (it logs `Exiting... (Quit)`). The only path
+                // that could orphan a player — a Task-Manager kill — reaches
+                // neither this arm nor `CloseRequested`, and `winjob`'s
+                // KILL_ON_JOB_CLOSE job covers it instead.
             }
         });
 }

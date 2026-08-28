@@ -167,6 +167,9 @@ export default function MpvHost() {
     season: v.currentEpisode.seasonName || '',
     n: v.currentEpisode.n,
     episodeTitle: v.currentEpisode.title || '',
+    // The subtitle sync offset is saved per episode under this key, and the
+    // controls window has no other way to learn which file is playing.
+    fileAbs: v.currentEpisode.fileAbs || '',
   };
   const metaRef = useRef(null);
   metaRef.current = meta;

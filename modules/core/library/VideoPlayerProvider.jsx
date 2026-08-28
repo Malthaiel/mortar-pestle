@@ -50,17 +50,24 @@ export const LS = {
   subSync:  'video:subSync',   // { [fileAbs]: offsetSeconds }
 };
 
+// Every key here drives a real mpv property — see `subProps` in
+// PlayerControlsView.jsx, which is the only translation point. `fontFamily` and
+// `lineHeight` were dropped in Phase 5: mpv has no line-height property at all,
+// and the app's DM Sans / DM Mono are bundled web fonts that mpv (DirectWrite)
+// cannot resolve, so both rows were controls wired to nothing.
 export const DEFAULT_SUB_SETTINGS = {
-  size: 28,            // px
+  // false → mpv's own ASS rendering, signs and karaoke intact, and only size /
+  // position / sync apply. true → sub-ass-override=force, every row below
+  // applies, at the cost of flattening typeset signs.
+  assOverride: false,
+  size: 28,            // px at the default; drives sub-scale = size / 28
   bgStyle: 'box',      // 'box' | 'shadow' | 'outline' | 'none'
   bgOpacity: 0.7,      // 0..1, only when bgStyle === 'box'
-  shadowSize: 4,       // px blur radius, only when bgStyle === 'shadow'
+  shadowSize: 4,       // px offset, only when bgStyle === 'shadow'
   outlineSize: 2,      // px stroke width, only when bgStyle === 'outline'
   position: 0.9,       // 0..1 from top
-  fontFamily: 'sans',  // 'sans' | 'mono' — see FAMILY_MAP in SubtitleOverlay
-  fontWeight: 700,     // 400 | 500 | 700
-  letterSpacing: 0,    // px
-  lineHeight: 1.3,
+  fontWeight: 700,     // 400 | 700 — mpv's sub-bold is a flag, not a scale
+  letterSpacing: 0,    // px → sub-spacing
 };
 
 export function loadJSON(key, fallback) {

@@ -177,6 +177,25 @@ export default function VideoControls() {
         {/* Gear + Chapters — the block on the subtitle fold's RIGHT, same rule
             mirrored. Refresh onward is far enough not to be part of it. */}
         <FoldStandOff dir={1} open={subFoldOpen} t={subFoldT} gap={16}>
+          {/* Subtitle track — same CandySelect shape as the audio picker
+              opposite. Restored 2026-08-28: the original picker stood where the
+              fold chip is now, so it moved here rather than displacing it. */}
+          {v.probe && v.probe.subtitles && v.probe.subtitles.length > 0 && (
+            <CandySelect
+              value={String(v.subIdx)}
+              options={[
+                { value: '-1', label: 'Subs off' },
+                ...v.probe.subtitles.map((t, i) => ({
+                  value: String(i),
+                  label: `${(t.language || 'und').toUpperCase()}${t.title ? ' · ' + t.title.slice(0, 18) : ''}`,
+                })),
+              ]}
+              onChange={(val) => v.setSubtitleTrack(Number(val))}
+              title="Subtitle track"
+              direction="up"
+            />
+          )}
+
           {/* Subtitle settings gear */}
           {v.probe && v.probe.subtitles && v.probe.subtitles.length > 0 && v.subIdx >= 0 && (
             <div ref={subAnchorRef} style={{ position: 'relative' }}>

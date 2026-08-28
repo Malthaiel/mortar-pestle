@@ -57,10 +57,19 @@ loadAll().then(() => {
   // measures the drop invariants (settle position, accent bridge, press-
   // release ease) numerically.
   // The player's controls layer is a bare see-through strip over the video, not
-  // an app surface — and every extra webview running the remote bridge fights
-  // the main window for the single `main.json` result slot, so a probe aimed at
-  // the app comes back describing a 800x44 bar instead.
-  if (import.meta.env.DEV && !window.location.hash.startsWith('#/player/controls')) {
+  // an app surface, so the LAYOUT verifiers below stay off there — they would
+  // report on a control bar nobody asked about.
+  //
+  // The remote bridge is the exception and runs there too (see below): it writes
+  // to its own `player-controls.json`, so it no longer fights the main window
+  // for one result slot, which is the whole reason this window used to be shut
+  // out entirely. Without it that window could only be driven by moving the
+  // user's real mouse pointer — which is what Phase 5 had to do.
+  const isPlayerControls = window.location.hash.startsWith('#/player/controls');
+  if (import.meta.env.DEV && isPlayerControls) {
+    import('./util/remote.js').then((m) => m.startRemote());
+  }
+  if (import.meta.env.DEV && !isPlayerControls) {
     import('./util/candyCenterAudit.js').then((m) => m.startCandyCenterAudit());
     import('./util/spacingAudit.js').then((m) => m.startSpacingAudit());
     import('./util/dragAudit.js').then((m) => m.startDragAudit());
