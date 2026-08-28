@@ -34,6 +34,7 @@ use crate::commands::vault::{self, atomic_write};
 const POLL_INTERVAL_SECS: u64 = 5;
 const MAX_EMPTY_POLLS: u32 = 12; // ~60s for torrents to register before giving up
 const MAX_POLLS: u32 = 5000; // runaway guard (~7h at 5s)
+const MAX_DEAD_POLLS: u32 = 36; // ~3min of zero bytes AND zero speed = seederless
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -768,6 +769,7 @@ async fn process_job(app: &AppHandle, job_id: &str) {
 
     // ── Phase 2 — Poll the built-in engine until the torrent completes ──────
     let mut empty_polls = 0u32;
+    let mut dead_polls = 0u32;
     let mut polls = 0u32;
     loop {
         if was_cancelled(job_id) {
@@ -819,6 +821,26 @@ async fn process_job(app: &AppHandle, job_id: &str) {
                         }
                     }
                     emit_progress(app, job_id);
+                    // A seederless torrent never resolves its metadata, so size
+                    // and progress both stay 0 and every other guard here reads
+                    // it as healthy — it would sit on "Downloading 0%" until
+                    // MAX_POLLS (~7h). Only fires while NOTHING has ever
+                    // arrived, so a partly-downloaded torrent keeps its data.
+                    // ponytail: no mid-download stall detection, add when a thin
+                    // swarm actually strands one.
+                    if pct <= 0.0 && dl_speed <= 0.0 {
+                        dead_polls += 1;
+                        if dead_polls >= MAX_DEAD_POLLS {
+                            finalize_error(
+                                app,
+                                job_id,
+                                "No one is sharing this torrent right now — press Retry and pick a different source.",
+                            );
+                            return;
+                        }
+                    } else {
+                        dead_polls = 0;
+                    }
                     if all_done {
                         if let Some(lp) = &local_path {
                             cleanup_download_extras(lp);
