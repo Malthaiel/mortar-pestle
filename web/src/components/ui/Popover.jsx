@@ -78,7 +78,7 @@ export default function Popover({
       style={{
         ...(accent ? { '--accent': accent } : {}),
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
-        color: 'var(--text)', fontFamily: 'var(--font-sans)',
+        color: 'var(--text)', fontFamily: 'var(--font-body)',
         ...style,
       }}
     >

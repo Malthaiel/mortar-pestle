@@ -9,6 +9,7 @@
 import { IconChevronLeft } from '../icons.jsx';
 import { areaForModule } from '../../hooks/useModuleAreas.js';
 import AreaReleasesView from '../../pages/docs/AreaReleasesView.jsx';
+import { eyebrowStyle } from '../ui/Eyebrow.jsx';
 
 export default function ModulePage({
   manifest, pageEntry, enabled,
@@ -64,10 +65,7 @@ export default function ModulePage({
             <IconChevronLeft/>
           </span>
         </button>
-        <span style={{
-          fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em',
-          textTransform: 'uppercase', fontWeight: 600, color: 'var(--text-faint)',
-        }}>
+        <span style={{ ...eyebrowStyle }}>
           Modules <span style={{ opacity: 0.6 }}>›</span>{' '}
           <span style={{ color: 'var(--text-muted)' }}>{name}</span>
         </span>

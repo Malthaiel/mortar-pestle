@@ -11,6 +11,7 @@ import { listen } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
 import { openInFiles } from '@host/components/vault-tree/revealInFiles.js';
 import EnableToggle from '@host/components/ui/EnableToggle.jsx';
+import { ModuleSectionBand as SectionBand } from '@host/components/settings/section-primitives.jsx';
 
 // Snapshot-only live state (the clip list is CapturePage's concern, not Settings).
 // Mirrors useCaptureState's discriminate-by-`state` idiom; null ⇒ engine down.
@@ -34,18 +35,6 @@ function useCaptureSnapshot() {
   return { snapshot, engine };
 }
 
-function SectionBand({ title, anchor, children }) {
-  return (
-    <div {...(anchor ? { 'data-search-anchor': anchor } : {})} style={{ marginBottom: 24 }}>
-      <div style={{
-        fontSize: 9, fontFamily: 'var(--font-mono)',
-        letterSpacing: '0.08em', textTransform: 'uppercase',
-        color: 'var(--text-faint)', fontWeight: 600, marginBottom: 8,
-      }}>{title}</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>{children}</div>
-    </div>
-  );
-}
 
 function SettingRow({ label, hint, children, stacked }) {
   if (stacked) {
@@ -150,7 +139,7 @@ function HotkeyRows({ snapshot }) {
       ))}
       {!IS_WINDOWS && (
         <div style={{ display: 'flex', gap: 8, paddingTop: 8, flexWrap: 'wrap' }}>
-          {hk?.can_configure && <button type="button" onClick={rebind} style={actionBtn}>Rebind…</button>}
+          {hk?.can_configure && <button type="button" onClick={rebind} style={actionBtn}>Rebind</button>}
           <button type="button" onClick={openKde} style={actionBtn}>Open KDE Shortcuts</button>
         </div>
       )}
@@ -251,7 +240,7 @@ function RecordingsSection({ snapshot }) {
           border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '6px 8px',
         }}>{dir || '—'}</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button type="button" onClick={change} disabled={busy || locked} style={actionBtn}>Change folder…</button>
+          <button type="button" onClick={change} disabled={busy || locked} style={actionBtn}>Change folder</button>
           <button type="button" onClick={openFolder} disabled={!dir} style={actionBtn}>Open folder</button>
           <button type="button" onClick={reset} disabled={busy || locked} style={actionBtn}>Reset to default</button>
         </div>

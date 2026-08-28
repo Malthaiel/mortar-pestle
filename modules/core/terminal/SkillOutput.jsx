@@ -19,6 +19,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+import { toHex, TERMINAL_FONT_FAMILY } from './themes.js';
 import '@xterm/xterm/css/xterm.css';
 import { skillsApi } from './api.js';
 import { Dot, OutlinedBtn, DangerOutlinedBtn } from '@host/components/ui/index.js';
@@ -45,7 +46,7 @@ export default function SkillOutput({ jobId, onCleared, accent }) {
       cursorBlink: false,
       disableStdin: true,             // read-only view; no keyboard input is fed back
       scrollback: 5000,
-      fontFamily: 'var(--font-mono), "DM Mono", "JetBrains Mono", ui-monospace, monospace',
+      fontFamily: TERMINAL_FONT_FAMILY,
       fontSize: 12,
       lineHeight: 1.2,
       theme: {
@@ -193,7 +194,7 @@ export default function SkillOutput({ jobId, onCleared, accent }) {
         }}>job {jobId.slice(0, 8)}</span>
         {status === 'running' && (
           <DangerOutlinedBtn onClick={onCancel} disabled={cancelling} small>
-            {cancelling ? 'Cancelling…' : 'Cancel'}
+            {cancelling ? 'Cancelling' : 'Cancel'}
           </DangerOutlinedBtn>
         )}
         {status !== 'running' && onCleared && (
@@ -216,9 +217,11 @@ export default function SkillOutput({ jobId, onCleared, accent }) {
 }
 
 
+// Returns the token as '#rrggbb'. The raw value is oklch(), which xterm cannot
+// parse — toHex measures it through a 1x1 canvas (see themes.js).
 function getCssVar(name) {
   try {
-    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return toHex(getComputedStyle(document.documentElement).getPropertyValue(name).trim()) || '';
   } catch {
     return '';
   }

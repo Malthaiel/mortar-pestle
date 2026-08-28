@@ -233,7 +233,7 @@ export const SETTINGS_SEARCH_INDEX = [
   { id: 'video.subPosition', label: 'Subtitle position', tabId: 'video-settings', anchor: 'set-video-subPosition',
     keywords: ['anime', 'video', 'caption', 'vertical'] },
   { id: 'video.subFont', label: 'Subtitle font', tabId: 'video-settings', anchor: 'set-video-subFont',
-    keywords: ['anime', 'video', 'caption', 'serif', 'sans', 'mono'] },
+    keywords: ['anime', 'video', 'caption', 'sans', 'mono'] },
 
   // ── Module: Library / Music sub-tab. Explicit page+section shape — the
   // 'video-settings' alias substitution would drop section, landing on Anime. ──

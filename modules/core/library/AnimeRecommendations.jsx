@@ -6,6 +6,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { videoApi } from './api.js';
+import { EyebrowHeading } from '@host/components/ui/Eyebrow.jsx';
 
 function initials(text) {
   const w = (text || '').trim().split(/\s+/).filter(Boolean);
@@ -13,15 +14,6 @@ function initials(text) {
   return w.slice(0, 2).map(s => s[0].toUpperCase()).join('');
 }
 
-function SectionHeader({ children }) {
-  return (
-    <div style={{
-      fontSize: 11, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)',
-      letterSpacing: '0.08em', textTransform: 'uppercase',
-      padding: '0 0 6px', borderBottom: '1px solid var(--border)', marginBottom: 12,
-    }}>{children}</div>
-  );
-}
 
 // Fetch one Jikan endpoint for `id`; null = loading, [] = empty/failed.
 function useJikan(fn, id) {
@@ -49,7 +41,7 @@ export default function AnimeRecommendations({ malId, accent }) {
 
   return (
     <section style={{ '--accent': accent || 'var(--accent)' }}>
-      <SectionHeader>Recommendations</SectionHeader>
+      <EyebrowHeading>Recommendations</EyebrowHeading>
       {recs === null
         ? <RecsSkeleton />
         : (

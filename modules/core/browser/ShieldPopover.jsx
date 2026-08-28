@@ -9,6 +9,7 @@ import { useModuleSettings } from '@host/hooks/useSettings.js';
 import { applyEnabled, applySiteAllowed, isHostAllowed, reloadShieldTabs } from './blocker.js';
 import { candyGap } from '@host/util/candy.js';
 import BrowserPopover from './BrowserPopover.jsx';
+import { eyebrowStyle } from '@host/components/ui/Eyebrow.jsx';
 
 function ToggleButton({ on, accent, disabled, onToggle }) {
   const accentColor = accent || 'var(--text)';
@@ -123,10 +124,7 @@ export default function ShieldPopover({ api, accent, host, onClose }) {
   );
 }
 
-const sectionLabel = {
-  fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', textTransform: 'uppercase',
-  color: 'var(--text-faint)', fontWeight: 600, marginBottom: 8,
-};
+const sectionLabel = { ...eyebrowStyle, marginBottom: 8 };
 const statRow = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 0' };
 const statKey = { fontSize: 12, color: 'var(--text-muted)' };
 const statVal = { fontSize: 12.5, fontFamily: 'var(--font-mono)', color: 'var(--text)', fontWeight: 600 };

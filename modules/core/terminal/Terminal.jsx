@@ -3,20 +3,21 @@
 // this component does NOT kill the shell — output keeps flowing into the
 // provider's ring buffer until the user explicitly closes the tab.
 //
-// Appearance is a single fixed look: Zed's terminal — Gruvbox Dark palette
-// (themes.js, with a user-chosen darker #151411 bg + softened red), Lilex Nerd
-// Font Mono at 15px / weight 500 / 1.0 line-height, block cursor (hollow when
-// unfocused). Uses xterm's DOM renderer (the WebGL addon deferred the final
-// paint on WebKitGTK → typed input lagged one char behind). Authored truecolor
-// is left untouched (minimumContrastRatio 1).
+// Appearance: Zed's terminal geometry (15px / weight 500 / 1.0 line-height,
+// block cursor, hollow when unfocused) in DM Mono — one of the app's two fonts.
+// Colours are NOT fixed: background + foreground track the app's --bg / --text
+// tokens, measured live off this component's own container, and the ANSI set
+// (Gruvbox Dark or Light) follows from that measured background. See themes.js.
+// Uses xterm's DOM renderer (the WebGL addon deferred the final paint on
+// WebKitGTK → typed input lagged one char behind). Authored truecolor is left
+// untouched (minimumContrastRatio 1).
 
 import { useEffect, useRef } from 'react';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
-import { useModuleSettings } from '@host/hooks/useSettings.js';
 import { useTerminal } from './TerminalProvider.jsx';
-import { GRUVBOX_THEME, fontFamilyFor, DEFAULT_TERMINAL_FONT } from './themes.js';
+import { terminalTheme, TERMINAL_FONT_FAMILY } from './themes.js';
 
 export default function Terminal({ tabId, visible }) {
   const containerRef = useRef(null);
@@ -24,19 +25,18 @@ export default function Terminal({ tabId, visible }) {
   const fitRef = useRef(null);
   const subRef = useRef(null);
   const { subscribe } = useTerminal();
-  const { settings } = useModuleSettings('terminal');
-  const font = settings.font ?? DEFAULT_TERMINAL_FONT;
-  const fontRef = useRef(font);
-  fontRef.current = font;
 
   useEffect(() => {
     const containerEl = containerRef.current;
     if (!containerEl) return undefined;
 
     const term = new XTerm({
-      fontFamily: fontFamilyFor(fontRef.current),
+      fontFamily: TERMINAL_FONT_FAMILY,
       fontSize: 15,            // Zed buffer_font_size (terminal inherits it)
-      fontWeight: 500,         // measured: WebKitGTK rasterizes Lilex lighter than Zed's GPUI renderer — bump one step to match
+      fontWeight: 500,         // measured: the webview rasterizes lighter than Zed's GPUI renderer — bump one step to match
+      // fontWeightBold left at xterm's default ON PURPOSE. No 700 DM Mono face
+      // is bundled, so bold is SMEARED by the browser — that fake-bold look is
+      // wanted (Malthaiel, 2026-08-27), not a compromise. Do not "fix" it.
       lineHeight: 1.0,         // measured: matches Zed's ~19px row pitch (xterm's 1.3 rendered ~25px, much looser than Zed's "1.3")
       cursorBlink: false,      // Zed default — terminal-controlled, off unless the program asks
       cursorStyle: 'block',
@@ -46,7 +46,7 @@ export default function Terminal({ tabId, visible }) {
       convertEol: false,
       scrollback: 5000,
       allowProposedApi: false,
-      theme: GRUVBOX_THEME,
+      theme: terminalTheme(containerEl),
     });
 
     const fit = new FitAddon();
@@ -96,20 +96,30 @@ export default function Terminal({ tabId, visible }) {
     };
   }, [tabId, subscribe]);
 
-  // Live font swap when the setting changes. xterm 6 accepts a new fontFamily
-  // without a remount, so the PTY session keeps running.
+  // Re-measure the app's colours whenever the theme could have moved. xterm
+  // accepts a new theme object without a remount, so the PTY keeps running.
+  // Two signals, because a theme change can arrive either way: the <html>
+  // data-theme / data-theme-preset attributes, and useSettings' global settings
+  // broadcast (an accent or preset commit that repaints tokens in place).
   useEffect(() => {
-    const term = termRef.current;
-    const fit = fitRef.current;
-    if (!term) return;
-    term.options.fontFamily = fontFamilyFor(font);
-    requestAnimationFrame(() => {
-      try {
-        fit?.fit();
-        subRef.current?.resize(term.cols, term.rows);
-      } catch {}
+    const containerEl = containerRef.current;
+    if (!containerEl) return undefined;
+    const repaint = () => {
+      const term = termRef.current;
+      if (!term) return;
+      try { term.options.theme = terminalTheme(containerEl); } catch {}
+    };
+    const mo = new MutationObserver(repaint);
+    mo.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme', 'data-theme-preset'],
     });
-  }, [font]);
+    window.addEventListener('focus-global-settings-changed', repaint);
+    return () => {
+      mo.disconnect();
+      window.removeEventListener('focus-global-settings-changed', repaint);
+    };
+  }, []);
 
   // When a hidden tab becomes visible, xterm hasn't been measuring layout, so
   // refit + resend dimensions to the PTY.

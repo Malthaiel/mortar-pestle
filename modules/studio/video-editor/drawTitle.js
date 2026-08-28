@@ -19,7 +19,7 @@ const fontString = (m, scale) => {
   if (m.italic) parts.push('italic');
   if (m.bold) parts.push('bold');
   parts.push(`${Math.max(1, (m.size || 96) * scale)}px`);
-  parts.push(`"${m.font || 'Segoe UI'}"`);
+  parts.push(`"${m.font || 'DM Sans'}"`);
   return parts.join(' ');
 };
 

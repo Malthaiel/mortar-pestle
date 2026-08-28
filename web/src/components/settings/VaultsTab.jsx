@@ -14,6 +14,7 @@ import EnableToggle from '../ui/EnableToggle.jsx';
 import ConfirmModal from '../ui/ConfirmModal.jsx';
 import { IconCheck, IconDatabase, IconPlus, IconX, IconRepeat, IconLock } from '../icons.jsx';
 import { useVaultStatus } from '../../hooks/useVaultStatus.js';
+import { eyebrowStyle } from '../ui/Eyebrow.jsx';
 
 // Active-vault status strip — connection dot + vault name + Reload, moved
 // from the System tab. Reload re-reads vault content into the running app;
@@ -342,12 +343,7 @@ function VaultRow({ v, isActive, accent, readOnly, onSwitch, onRegen, onRemove, 
 
 function SectionLabel({ children }) {
   return (
-    <div style={{
-      fontSize: 9, fontFamily: 'var(--font-mono)',
-      letterSpacing: '0.08em', textTransform: 'uppercase',
-      color: 'var(--text-faint)', fontWeight: 600,
-      marginBottom: 12,
-    }}>{children}</div>
+    <div style={{ ...eyebrowStyle, marginBottom: 12 }}>{children}</div>
   );
 }
 

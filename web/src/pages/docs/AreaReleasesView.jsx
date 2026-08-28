@@ -7,6 +7,7 @@
 
 import { useReleases } from '../../hooks/useReleases.js';
 import { AreaGroup } from './DocsReleasesTab.jsx';
+import { eyebrowStyle } from '../../components/ui/Eyebrow.jsx';
 
 export default function AreaReleasesView({ area, accent }) {
   const { releases, loading } = useReleases();
@@ -24,10 +25,7 @@ export default function AreaReleasesView({ area, accent }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{
-        fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em',
-        textTransform: 'uppercase', color: 'var(--text-faint)', fontWeight: 600,
-      }}>
+      <div style={{ ...eyebrowStyle }}>
         {area} · {rows.length} {rows.length === 1 ? 'release' : 'releases'}
       </div>
       {rows.map(({ release, areaObj }) => (

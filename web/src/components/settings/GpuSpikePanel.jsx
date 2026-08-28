@@ -14,6 +14,7 @@ import {
   createBenchPipeline, createFenceTracker,
   webCodecsSupport, webCodecsDecodeBench, MAX_LAYERS,
 } from './gpuSpikeLib.js';
+import { eyebrowStyle } from '../ui/Eyebrow.jsx';
 
 const FIXTURES = {
   '1080p30': {
@@ -43,11 +44,7 @@ const COMPOSITE_RESULTS_PATH = 'Infrastructure/.cache/gpu_composite_spike_result
 
 function SectionLabel({ children, style }) {
   return (
-    <div style={{
-      fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em',
-      textTransform: 'uppercase', color: 'var(--text-faint)', fontWeight: 600,
-      margin: '20px 0 10px', ...style,
-    }}>{children}</div>
+    <div style={{ ...eyebrowStyle, margin: '20px 0 10px' }}>{children}</div>
   );
 }
 

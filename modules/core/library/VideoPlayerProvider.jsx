@@ -57,7 +57,7 @@ export const DEFAULT_SUB_SETTINGS = {
   shadowSize: 4,       // px blur radius, only when bgStyle === 'shadow'
   outlineSize: 2,      // px stroke width, only when bgStyle === 'outline'
   position: 0.9,       // 0..1 from top
-  fontFamily: 'sans',  // 'sans' | 'serif' | 'mono'
+  fontFamily: 'sans',  // 'sans' | 'mono' — see FAMILY_MAP in SubtitleOverlay
   fontWeight: 700,     // 400 | 500 | 700
   letterSpacing: 0,    // px
   lineHeight: 1.3,
@@ -854,13 +854,13 @@ function ModalHost() {
           zIndex: 1700,
           pointerEvents: 'none',
         }}>{v.refreshing
-          ? 'Refreshing…'
+          ? 'Refreshing'
           : v.prepPct != null
             // Only a re-encode reports progress, and only that case is slow
             // enough to need explaining — say why the wait exists and that it
             // is a one-off, not a stall.
             ? `Converting this episode so it will play here — ${v.prepPct}%`
-            : 'Preparing episode…'}</div>
+            : 'Preparing episode'}</div>
       )}
 
       {/* Top gradient + title + window buttons (overlay, fades on idle). */}

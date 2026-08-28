@@ -16,9 +16,13 @@ import Terminal from './Terminal.jsx';
 import { IconBtn } from '@host/components/ui/index.js';
 import { IconX } from '@host/components/icons.jsx';
 
-// Pane chrome tones (match GRUVBOX_THEME in themes.js; bg is the user's #151411).
-const GRUVBOX_BG = '#151411';
-const GRUVBOX_BORDER = '#3c3836';
+// Pane chrome. The xterm surface itself now tracks the app's --bg / --text
+// (themes.js terminalTheme), so the chrome around it has to track the same
+// tokens or the pane splits into two different-coloured halves in light mode.
+// GRUVBOX_ACCENT stays a literal — it is the terminal's own accent mark, not a
+// surface colour, and it reads on both the dark and light Gruvbox palettes.
+const PANE_BG = 'var(--bg)';
+const PANE_BORDER = 'var(--border)';
 const GRUVBOX_ACCENT = '#83a598';
 
 function TabChip({ tab, active, accent, onActivate, onClose }) {
@@ -26,13 +30,13 @@ function TabChip({ tab, active, accent, onActivate, onClose }) {
     ? `color-mix(in oklch, ${accent} 14%, transparent)`
     : 'transparent';
   const borderColor = active
-    ? `color-mix(in oklch, ${accent} 38%, ${GRUVBOX_BORDER})`
+    ? `color-mix(in oklch, ${accent} 38%, ${PANE_BORDER})`
     : 'transparent';
-  const color = active ? accent : '#a89984';
+  const color = active ? accent : 'var(--text-muted)';
   const dotColor = tab.status === 'open'
     ? accent
     : tab.status === 'closed' || tab.status === 'error'
-      ? '#928374'
+      ? 'var(--text-muted)'
       : '#7c6f64';
 
   return (
@@ -71,12 +75,12 @@ function TabChip({ tab, active, accent, onActivate, onClose }) {
           border: 'none',
           borderRadius: '50%',
           background: 'transparent',
-          color: '#928374',
+          color: 'var(--text-muted)',
           cursor: 'pointer',
           transition: 'background 120ms ease, color 120ms ease',
         }}
-        onMouseEnter={(e) => { e.currentTarget.style.background = '#3c3836'; e.currentTarget.style.color = '#ebdbb2'; }}
-        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#928374'; }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-2)'; e.currentTarget.style.color = 'var(--text)'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}
       >
         <IconX/>
       </button>
@@ -99,7 +103,7 @@ export default function TerminalPage() {
       style={{
         flex: 1, minWidth: 0, minHeight: 0,
         display: 'flex', flexDirection: 'column',
-        background: GRUVBOX_BG,
+        background: PANE_BG,
       }}
     >
       <div style={{
@@ -107,9 +111,9 @@ export default function TerminalPage() {
         alignItems: 'center',
         gap: 6,
         padding: '8px 12px',
-        borderBottom: `1px solid ${GRUVBOX_BORDER}`,
+        borderBottom: `1px solid ${PANE_BORDER}`,
         flexShrink: 0,
-        background: GRUVBOX_BG,
+        background: PANE_BG,
       }}>
         <div style={{
           display: 'flex',

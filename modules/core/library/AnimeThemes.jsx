@@ -3,21 +3,14 @@
 // detail). Two stacked sections, each a list of .anime-themes__item rows.
 // Renders nothing when both lists are empty.
 
-function SectionHeader({ children }) {
-  return (
-    <div style={{
-      fontSize: 11, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)',
-      letterSpacing: '0.08em', textTransform: 'uppercase',
-      padding: '0 0 6px', borderBottom: '1px solid var(--border)', marginBottom: 12,
-    }}>{children}</div>
-  );
-}
 
+
+import { EyebrowHeading } from '@host/components/ui/Eyebrow.jsx';
 function ThemeList({ title, items, accent }) {
   if (!items || !items.length) return null;
   return (
     <section style={{ '--accent': accent || 'var(--accent)' }}>
-      <SectionHeader>{title}</SectionHeader>
+      <EyebrowHeading>{title}</EyebrowHeading>
       <div className="anime-themes">
         {items.map((t, i) => (
           <div key={i} className="anime-themes__item">{t}</div>

@@ -14,6 +14,7 @@ import { Seg, OutlinedBtn } from '@host/components/ui/index.js';
 import { videoApi } from './api.js';
 import { useVideoPlayer } from './VideoPlayerProvider.jsx';
 import { useImportJobs } from './ImportProvider.jsx';
+import { ModuleSectionBand as SectionBand } from '@host/components/settings/section-primitives.jsx';
 
 function basename(p) {
   if (!p) return '';
@@ -75,7 +76,7 @@ function MalImportSection({ accent }) {
     ? Math.round((active.index / active.total) * 100) : null;
 
   return (
-    <SectionBand title="Import from MyAnimeList">
+    <SectionBand gap={12} title="Import from MyAnimeList">
       <div data-search-anchor="set-video-malImport" style={{ fontSize: 11, color: 'var(--text-2)', lineHeight: 1.5 }}>
         Import your MAL export (<b>.xml</b> or <b>.xml.gz</b>, from MyAnimeList → List → Export).
         Adds each anime as a not-downloaded entry with your status, score, episode progress, rewatches, and dates.
@@ -85,12 +86,12 @@ function MalImportSection({ accent }) {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <input className="candy-input" value={basename(file)} readOnly placeholder="No file chosen"
                  style={{ ...inputStyle, flex: 1 }}/>
-          <button onClick={pick} className="candy-btn"><span className="candy-face">Choose…</span></button>
+          <button onClick={pick} className="candy-btn"><span className="candy-face">Choose</span></button>
         </div>
       </Field>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         <button onClick={start} disabled={!file || busy || !!active} className="candy-btn">
-          <span className="candy-face">{busy ? 'Starting…' : 'Import'}</span>
+          <span className="candy-face">{busy ? 'Starting' : 'Import'}</span>
         </button>
         {active && (
           <button onClick={() => cancel(active.id)} className="candy-btn"><span className="candy-face">Cancel</span></button>
@@ -99,8 +100,8 @@ function MalImportSection({ accent }) {
       {err && <div style={{ fontSize: 11, color: 'var(--error, var(--text))' }}>{err}</div>}
       {active && (
         <div style={{ fontSize: 11, color: 'var(--text-2)', display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <span>{active.state === 'parsing' ? `Parsing ${active.source}…`
-            : active.state === 'queued' ? 'Queued…'
+          <span>{active.state === 'parsing' ? `Parsing ${active.source}`
+            : active.state === 'queued' ? 'Queued'
             : `Importing… ${active.index}/${active.total}${active.currentTitle ? ` · ${active.currentTitle}` : ''}`}</span>
           <div style={{ height: 4, borderRadius: 2, background: 'var(--surface-2)', overflow: 'hidden' }}>
             <div style={{ height: '100%', width: pct == null ? '40%' : `${pct}%`, background: accent || 'var(--accent)', borderRadius: 2, transition: 'width 200ms ease' }}/>
@@ -174,7 +175,7 @@ function DownloadsSection({ accent }) {
   };
 
   return (
-    <SectionBand title="Downloads">
+    <SectionBand gap={12} title="Downloads">
       <div data-search-anchor="set-video-videoFolder" style={{ fontSize: 11, color: 'var(--text-2)', lineHeight: 1.5 }}>
         Where downloaded anime <b>video files</b> are saved. Each series gets its own folder inside.
         Covers and episode details always stay with your library — only the videos move, so you can keep them on a bigger drive.
@@ -185,7 +186,7 @@ function DownloadsSection({ accent }) {
           <input className="candy-input" value={cfg ? cfg.effectiveRoot : ''} readOnly
                  title={cfg ? cfg.effectiveRoot : ''} placeholder="Loading"
                  style={{ ...inputStyle, flex: 1 }}/>
-          <button onClick={pick} disabled={busy} className="candy-btn"><span className="candy-face">Choose…</span></button>
+          <button onClick={pick} disabled={busy} className="candy-btn"><span className="candy-face">Choose</span></button>
         </div>
       </Field>
       {cfg && cfg.isDefault && (
@@ -198,7 +199,7 @@ function DownloadsSection({ accent }) {
           </button>
         )}
         <button onClick={moveAll} disabled={busy || !!moving} className="candy-btn">
-          <span className="candy-face">{moving ? 'Moving…' : 'Move all here'}</span>
+          <span className="candy-face">{moving ? 'Moving' : 'Move all here'}</span>
         </button>
       </div>
       <div style={{ fontSize: 11, color: 'var(--text-faint)', lineHeight: 1.5 }}>
@@ -207,7 +208,7 @@ function DownloadsSection({ accent }) {
       </div>
       {moving && (
         <div style={{ fontSize: 11, color: 'var(--text-2)', display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <span>{moving.total ? `${moving.index}/${moving.total}${moving.currentTitle ? ` · ${moving.currentTitle}` : ''}` : 'Starting…'}</span>
+          <span>{moving.total ? `${moving.index}/${moving.total}${moving.currentTitle ? ` · ${moving.currentTitle}` : ''}` : 'Starting'}</span>
           <div style={{ height: 4, borderRadius: 2, background: 'var(--surface-2)', overflow: 'hidden' }}>
             <div style={{ height: '100%', width: moving.total ? `${Math.round((moving.index / moving.total) * 100)}%` : '40%', background: accent || 'var(--accent)', borderRadius: 2, transition: 'width 200ms ease' }}/>
           </div>
@@ -235,7 +236,7 @@ function SubtitleSection({ accent }) {
   if (!s || !set) return null;
 
   return (
-    <SectionBand title="Subtitles">
+    <SectionBand gap={12} title="Subtitles">
       <RangeRow label="Size" anchor="set-video-subSize" value={s.size} min={12} max={64} step={1}
                 onChange={x => set('size', x)} format={x => `${x}px`} accent={accent}/>
       <CtrlRow label="Style" anchor="set-video-subStyle">
@@ -269,9 +270,8 @@ function SubtitleSection({ accent }) {
         <Seg
           value={s.fontFamily}
           options={[
-            { value: 'sans',  label: 'Sans' },
-            { value: 'serif', label: 'Serif' },
-            { value: 'mono',  label: 'Mono' },
+            { value: 'sans', label: 'Sans' },
+            { value: 'mono', label: 'Mono' },
           ]}
           onChange={x => set('fontFamily', x)}
           accent={accent}
@@ -304,21 +304,6 @@ function SubtitleSection({ accent }) {
 // ── primitives ──────────────────────────────────────────────────────────────
 
 // Bare section header matching the module-tab convention (see planner's SettingsTab).
-function SectionBand({ title, children }) {
-  return (
-    <div style={{ marginBottom: 24 }}>
-      <div style={{
-        fontSize: 9, fontFamily: 'var(--font-mono)',
-        letterSpacing: '0.08em', textTransform: 'uppercase',
-        color: 'var(--text-faint)', fontWeight: 600,
-        marginBottom: 8,
-      }}>{title}</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {children}
-      </div>
-    </div>
-  );
-}
 
 function Field({ label, anchor, children }) {
   return (

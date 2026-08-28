@@ -15,6 +15,7 @@ import { useModuleSettings } from '@host/hooks/useSettings.js';
 import { AccentGrid, HexInput } from '@host/components/ui/AccentPicker.jsx';
 import { Seg, Slider } from '@host/components/ui/index.js';
 import { AnimationField } from '@host/components/settings/AnimationRows.jsx';
+import { ModuleSectionBand as SectionBand } from '@host/components/settings/section-primitives.jsx';
 
 const inputStyle = {
   width: 64, padding: '4px 8px', fontSize: 12,
@@ -46,21 +47,6 @@ function SettingRow({ label, hint, children, stacked, anchor }) {
   );
 }
 
-function SectionBand({ title, children }) {
-  return (
-    <div style={{ marginBottom: 24 }}>
-      <div style={{
-        fontSize: 9, fontFamily: 'var(--font-mono)',
-        letterSpacing: '0.08em', textTransform: 'uppercase',
-        color: 'var(--text-faint)', fontWeight: 600,
-        marginBottom: 8,
-      }}>{title}</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        {children}
-      </div>
-    </div>
-  );
-}
 
 export default function SettingsTab({ settings: hostSettings, setSetting: setHostSetting, accent }) {
   const { settings, setSetting } = useModuleSettings('planner');

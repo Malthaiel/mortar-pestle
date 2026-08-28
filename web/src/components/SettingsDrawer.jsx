@@ -26,7 +26,7 @@ import { useModuleEnabledMap } from '../hooks/useModuleEnabled.js';
 import { candyGap } from '../util/candy.js';
 import ModulesTab from './settings/ModulesTab.jsx';
 import { AnimationField } from './settings/AnimationRows.jsx';
-import { ANIMATION_KEYS, ANIMATION_PRESETS, ANIMATION_KEY_CONFIG, SETTINGS_DEFAULTS, cornerPercent, SANS_OPTIONS, MONO_OPTIONS } from '../hooks/useSettings.js';
+import { ANIMATION_KEYS, ANIMATION_PRESETS, ANIMATION_KEY_CONFIG, SETTINGS_DEFAULTS, cornerPercent } from '../hooks/useSettings.js';
 import SoundsTab from './settings/SoundsTab.jsx';
 import NavigationTab from './settings/NavigationTab.jsx';
 import AgentsTab from './settings/AgentsTab.jsx';
@@ -52,6 +52,7 @@ import { Seg, OutlinedBtn, Slider, AppWindow, Topbar } from './ui/index.js';
 import { AccentGrid, HexInput } from './ui/AccentPicker.jsx';
 import EnableToggle from './ui/EnableToggle.jsx';
 import PatternSwatchPicker from './ui/PatternSwatchPicker.jsx';
+import { eyebrowStyle } from './ui/Eyebrow.jsx';
 
 const TABS = [
   { id: 'appearance', label: 'Appearance',  icon: IconSparkles },
@@ -566,7 +567,7 @@ function SettingsSearchPill({ inputRef, value, onChange, resultCount, onArrow, o
         type="text"
         className="candy-input"
         value={value}
-        placeholder="Search settings…"
+        placeholder="Search settings"
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === 'ArrowDown') { e.preventDefault(); onArrow('down'); }
@@ -608,11 +609,7 @@ function SearchResultsView({ results, selected, breadcrumbFor, accent, onHover, 
   }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <div style={{
-        fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em',
-        textTransform: 'uppercase', color: 'var(--text-faint)', fontWeight: 600,
-        marginBottom: 8,
-      }}>Search results · {results.length}</div>
+      <div style={{ ...eyebrowStyle, marginBottom: 8 }}>Search results · {results.length}</div>
       {results.map((e, i) => {
         const sel = i === selected;
         return (
@@ -711,40 +708,6 @@ function AppearanceTab({ settings, setSetting, setPreviewAccent, accent, resolve
           <Slider
             value={cornerPercent(settings.radiusScale)} min={0} max={100} step={1} unit="%"
             onChange={v => setSetting('radiusScale', v)}
-            accent={accent}
-          />
-        </Row>
-      </SectionBand>
-      <SectionBand title="Fonts">
-        <Row label="Body" anchor="set-fontBody">
-          <Seg
-            value={settings.fontBody}
-            options={SANS_OPTIONS}
-            onChange={v => setSetting('fontBody', v)}
-            accent={accent}
-          />
-        </Row>
-        <Row label="Headings" anchor="set-fontHeading">
-          <Seg
-            value={settings.fontHeading}
-            options={SANS_OPTIONS}
-            onChange={v => setSetting('fontHeading', v)}
-            accent={accent}
-          />
-        </Row>
-        <Row label="Mono" anchor="set-fontMono">
-          <Seg
-            value={settings.fontMono}
-            options={MONO_OPTIONS}
-            onChange={v => setSetting('fontMono', v)}
-            accent={accent}
-          />
-        </Row>
-        <Row label="Candy" anchor="set-fontCandy">
-          <Seg
-            value={settings.fontCandy}
-            options={SANS_OPTIONS}
-            onChange={v => setSetting('fontCandy', v)}
             accent={accent}
           />
         </Row>

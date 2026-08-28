@@ -14,6 +14,7 @@ import { api } from '../../api.js';
 import { sharedEvents } from '../../module-sdk/index.js';
 import { useManifests } from '../../module-sdk/useModuleRegistry.js';
 import { moduleIdForArea } from '../../hooks/useModuleAreas.js';
+import { eyebrowStyle } from '../../components/ui/Eyebrow.jsx';
 
 const BUMP_LEVELS = ['patch', 'minor', 'major'];
 // 0.0.x pre-beta scheme: patch is the default ship, minor (0.1.0) is the
@@ -711,10 +712,7 @@ function ShipReleaseModal({ accent, queue, latestVersion, tag, onClose, onShippe
             minHeight: 0, borderRight: '1px solid var(--border-soft)',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 18px 8px' }}>
-              <span style={{
-                fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em',
-                textTransform: 'uppercase', color: 'var(--text-faint)', fontWeight: 600,
-              }}>
+              <span style={{ ...eyebrowStyle }}>
                 Include
               </span>
               <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
@@ -859,10 +857,7 @@ function ShipReleaseModal({ accent, queue, latestVersion, tag, onClose, onShippe
               padding: '12px 18px', display: 'flex', alignItems: 'center', gap: 10,
               borderTop: '1px solid var(--border-soft)', flexWrap: 'wrap',
             }}>
-              <span style={{
-                fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em',
-                textTransform: 'uppercase', color: 'var(--text-faint)', fontWeight: 600,
-              }}>
+              <span style={{ ...eyebrowStyle }}>
                 Bump
               </span>
               <Seg
@@ -878,11 +873,7 @@ function ShipReleaseModal({ accent, queue, latestVersion, tag, onClose, onShippe
           {/* RIGHT — Summary over the .md preview (scrolls) */}
           <div style={{ flex: '1 1 52%', minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
             <div style={{ padding: '12px 18px 0' }}>
-              <div style={{
-                fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em',
-                textTransform: 'uppercase', color: 'var(--text-faint)', fontWeight: 600,
-                marginBottom: 6,
-              }}>
+              <div style={{ ...eyebrowStyle, marginBottom: 6 }}>
                 Summary
               </div>
               <textarea
@@ -1155,11 +1146,7 @@ function ReleasesResultsView({ results, selected, accent, onHover, onPick }) {
   }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <div style={{
-        fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em',
-        textTransform: 'uppercase', color: 'var(--text-faint)', fontWeight: 600,
-        marginBottom: 8,
-      }}>Search results · {results.length}</div>
+      <div style={{ ...eyebrowStyle, marginBottom: 8 }}>Search results · {results.length}</div>
       {results.map((row, i) => {
         const sel = i === selected;
         return (

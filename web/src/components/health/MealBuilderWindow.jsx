@@ -14,6 +14,7 @@ import { useFoodSearch } from '../../hooks/useFoodSearch.js';
 import AppWindow from '../ui/AppWindow.jsx';
 import DraggableSidebarList from '../DraggableSidebarList.jsx';
 import { IconSearch, IconTrash, IconCheck } from '../icons.jsx';
+import { labelStyle } from './healthStyles.js';
 
 function newId(prefix) {
   const rnd = (globalThis.crypto?.randomUUID?.() || Math.random().toString(36).slice(2, 10));
@@ -101,7 +102,6 @@ export default function MealBuilderWindow({ open, onClose, accent = 'var(--accen
     }
   };
 
-  const labelStyle = { fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' };
   const inputStyle = { background: 'var(--bg-elev)', border: '1px solid var(--border-soft)', borderRadius: 8, color: 'var(--text)', padding: '8px 10px', font: 'inherit', width: '100%' };
 
   return (
@@ -118,7 +118,7 @@ export default function MealBuilderWindow({ open, onClose, accent = 'var(--accen
             <span className="candy-face">Cancel</span>
           </button>
           <button type="button" className="candy-btn" data-shape="chip" disabled={!canSave || saving} onClick={save} style={!canSave ? { opacity: 0.5 } : undefined}>
-            <span className="candy-face"><IconCheck size={13} /> {saving ? 'Saving…' : 'Save meal'}</span>
+            <span className="candy-face"><IconCheck size={13} /> {saving ? 'Saving' : 'Save meal'}</span>
           </button>
         </div>
       )}
@@ -134,11 +134,11 @@ export default function MealBuilderWindow({ open, onClose, accent = 'var(--accen
           <span style={labelStyle}>Add ingredient (USDA)</span>
           <div style={{ position: 'relative' }}>
             <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }}><IconSearch size={14} /></span>
-            <input style={{ ...inputStyle, paddingLeft: 30 }} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search foods…" />
+            <input style={{ ...inputStyle, paddingLeft: 30 }} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search foods" />
           </div>
           {query.trim() && (
             <div style={{ maxHeight: 180, overflowY: 'auto', border: '1px solid var(--border-soft)', borderRadius: 8, background: 'var(--bg-elev)' }}>
-              {loading && <div style={{ padding: 10, ...labelStyle }}>Searching…</div>}
+              {loading && <div style={{ padding: 10, ...labelStyle }}>Searching</div>}
               {!loading && results.length === 0 && <div style={{ padding: 10, ...labelStyle }}>No matches</div>}
               {results.map((hit) => (
                 <button key={hit.fdc_id} type="button" onClick={() => addIngredient(hit)}

@@ -10,6 +10,7 @@
 import { useEffect, useMemo } from 'react';
 import { getFullRegistry } from '../keybinds/registry.js';
 import { formatBinding } from '../keybinds/format.js';
+import { eyebrowStyle } from './ui/Eyebrow.jsx';
 
 const STATIC_GROUPS = [
   {
@@ -90,12 +91,7 @@ export default function KeyboardHintsOverlay({ open, onClose, accent, keybinds }
         <div style={{ overflowY: 'auto', padding: '10px 18px 14px' }}>
           {groups.map(g => (
             <div key={g.label} style={{ marginTop: 12 }}>
-              <div style={{
-                fontSize: 9, fontFamily: 'var(--font-mono)',
-                letterSpacing: '0.08em', textTransform: 'uppercase',
-                color: 'var(--text-faint)', fontWeight: 600,
-                marginBottom: 6,
-              }}>{g.label}</div>
+              <div style={{ ...eyebrowStyle, marginBottom: 6 }}>{g.label}</div>
               {g.items.map((it, i) => (
                 <div key={i} style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',

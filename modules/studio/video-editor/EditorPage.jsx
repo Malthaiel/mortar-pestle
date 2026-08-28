@@ -243,7 +243,7 @@ function TitleControls({ clip, laneIdx, accent, applyOp, projectRef }) {
       <textarea value={t.text ?? ''} onChange={e => set({ text: e.target.value })} rows={1} spellCheck={false}
         placeholder="Title text" style={{ ...TITLE_INPUT, width: '100%', resize: 'vertical', fontFamily: 'inherit' }} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <select value={t.font || 'Segoe UI'} onChange={e => set({ font: e.target.value })} style={TITLE_INPUT}>
+        <select value={t.font || 'DM Sans'} onChange={e => set({ font: e.target.value })} style={TITLE_INPUT}>
           {TITLE_FONTS.map(f => <option key={f} value={f}>{f}</option>)}
         </select>
         <NumField label="Size" value={t.size ?? 96} min={1} max={2000} width={66} onCommit={v => set({ size: v })} />
@@ -478,7 +478,7 @@ export default function EditorPage({ api, accent, rest }) {
         api,
         existingHashes: existing,
         onProgress: ({ name, state }) =>
-          setImportStatusText(state === 'done' ? '' : `${state} ${name}…`),
+          setImportStatusText(state === 'done' ? '' : `${state} ${name}`),
       });
       if (added.length) {
         setMediaUrls(prev => {
@@ -977,7 +977,7 @@ export default function EditorPage({ api, accent, rest }) {
 
   const saveLabel = {
     saved: 'saved',
-    dirty: 'unsaved…',
+    dirty: 'unsaved',
     conflict: 'conflict — changed on disk',
     error: 'save failed',
   }[saveState];

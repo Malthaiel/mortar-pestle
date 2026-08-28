@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from 'react';
 import { videoApi } from './api.js';
 import LoadingScreen from './LoadingScreen.jsx';
 import ImageLightbox, { useLightbox } from './ImageLightbox.jsx';
+import { EyebrowHeading } from '@host/components/ui/Eyebrow.jsx';
 
 function initials(text) {
   const w = (text || '').trim().split(/\s+/).filter(Boolean);
@@ -37,15 +38,6 @@ function Portrait({ src, alt, accent, width = 180, height, ratio = '3 / 4', radi
   );
 }
 
-function SectionHeader({ children }) {
-  return (
-    <div style={{
-      fontSize: 11, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)',
-      letterSpacing: '0.08em', textTransform: 'uppercase',
-      padding: '0 0 6px', borderBottom: '1px solid var(--border)', marginBottom: 12,
-    }}>{children}</div>
-  );
-}
 
 export default function AnimeCharacterPage({ malId, accent }) {
   const id = Number(malId) || 0;
@@ -116,7 +108,7 @@ export default function AnimeCharacterPage({ malId, accent }) {
 
       {/* Voice actors */}
       <div style={{ padding: '0 24px 22px' }}>
-        <SectionHeader>Voice Actors</SectionHeader>
+        <EyebrowHeading>Voice Actors</EyebrowHeading>
         {vas.length === 0
           ? <div style={{ color: 'var(--text-faint)', fontSize: 12 }}>No voice actors listed.</div>
           : (
@@ -157,7 +149,7 @@ export default function AnimeCharacterPage({ malId, accent }) {
       {/* Appears in */}
       {appearances.length > 0 && (
         <div style={{ padding: '0 24px 28px' }}>
-          <SectionHeader>Appears In</SectionHeader>
+          <EyebrowHeading>Appears In</EyebrowHeading>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             {appearances.map(a => (
               <button key={a.malId} type="button"

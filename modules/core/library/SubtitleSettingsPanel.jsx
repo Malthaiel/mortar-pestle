@@ -23,7 +23,7 @@ export default function SubtitleSettingsPanel() {
         padding: '14px 14px 12px',
         width: 300,
         color: 'var(--text)',
-        fontFamily: 'system-ui, -apple-system, sans-serif',
+        fontFamily: 'var(--font-body)',
         fontSize: 12,
         display: 'flex', flexDirection: 'column', gap: 10,
         zIndex: 20,
@@ -34,7 +34,7 @@ export default function SubtitleSettingsPanel() {
         gap: 10, marginBottom: 2,
       }}>
         <span style={{
-          fontSize: 13, fontFamily: 'monospace', letterSpacing: '0.08em',
+          fontSize: 13, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em',
           textTransform: 'uppercase', color: 'white', fontWeight: 700,
         }}>Subtitles</span>
         <button
@@ -92,9 +92,8 @@ export default function SubtitleSettingsPanel() {
 
       <Row label="Font">
         <CandySelect value={s.fontFamily} compact direction="down" options={[
-          { value: 'sans',  label: 'Sans' },
-          { value: 'serif', label: 'Serif' },
-          { value: 'mono',  label: 'Mono' },
+          { value: 'sans', label: 'Sans' },
+          { value: 'mono', label: 'Mono' },
         ]} onChange={(x) => v.updateSubSetting('fontFamily', x)}/>
       </Row>
 
@@ -122,7 +121,7 @@ export default function SubtitleSettingsPanel() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>
           <NudgeBtn onClick={() => v.nudgeSubSync(-0.1)}>−</NudgeBtn>
           <span style={{
-            flex: 1, textAlign: 'center', fontFamily: 'monospace',
+            flex: 1, textAlign: 'center', fontFamily: 'var(--font-mono)',
             fontSize: 11, color: sync === 0 ? 'var(--text-faint)' : 'var(--text)',
           }}>
             {sync > 0 ? '+' : ''}{sync.toFixed(1)}s
@@ -156,7 +155,7 @@ function Readout({ children }) {
   return (
     <span style={{
       width: 44, textAlign: 'right',
-      fontSize: 10, fontFamily: 'monospace',
+      fontSize: 10, fontFamily: 'var(--font-mono)',
       color: 'var(--text-muted)',
     }}>{children}</span>
   );

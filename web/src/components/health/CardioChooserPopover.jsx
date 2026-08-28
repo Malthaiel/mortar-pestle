@@ -10,8 +10,8 @@ import { api } from '../../api.js';
 import { useContextMenu } from '../../context-menu/useContextMenu.js';
 import Popover from '../ui/Popover.jsx';
 import { IconPlus } from '../icons.jsx';
+import { labelStyle } from './healthStyles.js';
 
-const labelStyle = { fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' };
 const inputStyle = { background: 'var(--bg-elev)', border: '1px solid var(--border-soft)', borderRadius: 8, color: 'var(--text)', padding: '7px 9px', font: 'inherit', width: '100%' };
 
 export default function CardioChooserPopover({ open, onClose, style, accent = 'var(--accent)', presets = [], pivotDs, onLogged, onEdit, onDelete, onNew }) {
@@ -49,7 +49,7 @@ export default function CardioChooserPopover({ open, onClose, style, accent = 'v
     }
   };
   const presetMenu = (e, p) => openContextMenu(e, [
-    { label: 'Edit…', onClick: () => { onEdit(p); close(); } },
+    { label: 'Edit', onClick: () => { onEdit(p); close(); } },
     { label: 'Delete', danger: true, onClick: () => onDelete(p.file) },
   ], { accent });
 

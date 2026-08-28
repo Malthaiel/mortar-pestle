@@ -16,6 +16,7 @@ import { useCredsStore } from './useCredsStore.js';
 import { applyEnabled, applySiteAllowed, reloadShieldTabs } from './blocker.js';
 import * as store from './tabStore.js';
 import { ExportImport, SettingsPanel, ChangeMaster } from './VaultSettingsSections.jsx';
+import { ModuleSectionBand as SectionBand } from '@host/components/settings/section-primitives.jsx';
 
 const SECTIONS = [
   { id: 'adblock', label: 'AD Blocker' },
@@ -24,18 +25,6 @@ const SECTIONS = [
   { id: 'sidebar', label: 'Browser Sidebar' },
 ];
 
-function SectionBand({ title, anchor, children }) {
-  return (
-    <div {...(anchor ? { 'data-search-anchor': anchor } : {})} style={{ marginBottom: 24 }}>
-      <div style={{
-        fontSize: 9, fontFamily: 'var(--font-mono)',
-        letterSpacing: '0.08em', textTransform: 'uppercase',
-        color: 'var(--text-faint)', fontWeight: 600, marginBottom: 8,
-      }}>{title}</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>{children}</div>
-    </div>
-  );
-}
 
 function SettingRow({ label, hint, children, stacked }) {
   if (stacked) {
@@ -181,7 +170,7 @@ function AdBlockPanel({ accent }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 6 }}>
           <button type="button" onClick={refreshLists} disabled={busy}
             style={{ ...removeBtn, opacity: busy ? 0.6 : 1, cursor: busy ? 'default' : 'pointer' }}>
-            {busy ? 'Updating…' : 'Update now'}
+            {busy ? 'Updating' : 'Update now'}
           </button>
           {err && <span style={{ fontSize: 11, color: 'var(--danger, var(--text))' }}>{err}</span>}
         </div>
@@ -257,13 +246,13 @@ function BrowsingDataPanel({ accent }) {
     <div>
       <SectionBand title="Browsing data" anchor="set-browser-clearData">
         <SettingRow label="Cache">
-          <span style={statNum}>{dataBusy && dataInfo.cacheBytes == null ? '…' : fmtBytes(dataInfo.cacheBytes)}</span>
+          <span style={statNum}>{dataBusy && dataInfo.cacheBytes == null ? 'reading' : fmtBytes(dataInfo.cacheBytes)}</span>
         </SettingRow>
         <SettingRow label="Cookies">
           <span style={statNum}>
             {dataInfo.cookies
               ? `${dataInfo.cookies.count.toLocaleString()} cookie${dataInfo.cookies.count === 1 ? '' : 's'} · ${dataInfo.cookies.sites.length} site${dataInfo.cookies.sites.length === 1 ? '' : 's'}`
-              : (dataBusy ? '…' : 'unavailable')}
+              : (dataBusy ? 'reading' : 'unavailable')}
           </span>
         </SettingRow>
         {dataInfo.cookies && dataInfo.cookies.sites.length > 0 && (
@@ -301,7 +290,7 @@ function VaultPanel({ accent }) {
   const { status } = useCredsStore();
   useEffect(() => { creds.refresh(); }, []);
 
-  if (!status) return <div style={hintText}>Loading…</div>;
+  if (!status) return <div style={hintText}>Loading</div>;
   if (!status.unlocked) return <InlineUnlock initialized={!!status.initialized} accent={accent}/>;
 
   return (
@@ -366,7 +355,7 @@ function InlineUnlock({ initialized, accent, }) {
         {err && <span style={{ fontSize: 12, color: 'var(--danger,var(--text))' }}>{err}</span>}
         <button type="button" disabled={busy} onClick={submit}
           style={{ padding: '7px 12px', borderRadius: 'var(--radius-md)', border: `1px solid ${accent}`, background: accent, color: '#fff', fontWeight: 600, cursor: 'pointer', font: 'inherit' }}>
-          {busy ? '…' : (initialized ? 'Unlock' : 'Create vault')}
+          {busy ? 'Working' : (initialized ? 'Unlock' : 'Create vault')}
         </button>
       </div>
     </SectionBand>

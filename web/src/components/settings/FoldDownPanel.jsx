@@ -13,6 +13,7 @@ import { candyCenterOffset } from '../../util/candy.js';
 import { makeFeedbackApi } from '@modules/core/feedback/feedbackApi.js';
 import { useSession } from '@modules/core/feedback/useSession.js';
 import UserAvatar from '@modules/core/feedback/UserAvatar.jsx';
+import { eyebrowStyle } from '../ui/Eyebrow.jsx';
 
 // TitleBar's own BTN and MARK, so this is the same rectangle holding the same
 // avatar — not a lookalike sized by eye.
@@ -55,11 +56,7 @@ export default function FoldDownPanel() {
 
   return (
     <div>
-      <div style={{
-        fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em',
-        textTransform: 'uppercase', color: 'var(--text-faint)', fontWeight: 600,
-        margin: '20px 0 10px',
-      }}>Fold</div>
+      <div style={{ ...eyebrowStyle, margin: '20px 0 10px' }}>Fold</div>
 
       {/* Derived from the row count, not a constant — a four-row stack is two
           rows taller than a two-row one. ROW_STEP is FoldMenu's own row + GAP

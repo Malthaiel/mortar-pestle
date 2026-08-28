@@ -18,6 +18,7 @@ import { useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { Seg } from '@host/components/ui/index.js';
 import { useImportJobs } from '../ImportProvider.jsx';
+import { ModuleSectionBand as SectionBand } from '@host/components/settings/section-primitives.jsx';
 
 const inputStyle = { color: 'var(--text)', padding: '5px 8px', fontSize: 12, outline: 'none', width: '100%' };
 
@@ -67,7 +68,7 @@ function ImportSection({ accent }) {
   };
 
   return (
-    <SectionBand title="Import playlist / album file">
+    <SectionBand gap={12} title="Import playlist / album file">
       <div data-search-anchor="set-music-importFile" style={{ fontSize: 11, color: 'var(--text-2)', lineHeight: 1.5 }}>
         Import a <b>.csv</b> or <b>.txt</b> playlist/album export (e.g. from chosic, Exportify, or any
         “Artist - Title” list). Creates a playlist of not-downloaded tracks; you can download them later.
@@ -77,7 +78,7 @@ function ImportSection({ accent }) {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <input className="candy-input" value={basename(file)} readOnly placeholder="No file chosen"
                  style={{ ...inputStyle, flex: 1 }}/>
-          <button onClick={pick} className="candy-btn"><span className="candy-face">Choose…</span></button>
+          <button onClick={pick} className="candy-btn"><span className="candy-face">Choose</span></button>
         </div>
       </Field>
 
@@ -98,7 +99,7 @@ function ImportSection({ accent }) {
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         <button onClick={startImport} disabled={!file || busy || !!active} className="candy-btn">
-          <span className="candy-face">{busy ? 'Starting…' : 'Import'}</span>
+          <span className="candy-face">{busy ? 'Starting' : 'Import'}</span>
         </button>
         {active && (
           <button onClick={() => cancel(active.id)} className="candy-btn"><span className="candy-face">Cancel</span></button>
@@ -115,8 +116,8 @@ function ImportSection({ accent }) {
 
 function ProgressLine({ job }) {
   let label;
-  if (job.state === 'queued') label = 'Queued…';
-  else if (job.state === 'parsing') label = `Parsing ${job.source}…`;
+  if (job.state === 'queued') label = 'Queued';
+  else if (job.state === 'parsing') label = `Parsing ${job.source}`;
   else label = `Resolving albums… ${job.index}/${job.total}${job.currentTitle ? ` · ${job.currentTitle}` : ''}`;
   const pct = job.state === 'importing' && job.total > 0 ? Math.round((job.index / job.total) * 100) : null;
   return (
@@ -163,7 +164,7 @@ const mono = {
 
 function ExportSection() {
   return (
-    <SectionBand title="Export from Spotify">
+    <SectionBand gap={12} title="Export from Spotify">
       <div
         data-search-anchor="set-music-spotifyExport"
         style={{ fontSize: 11, color: 'var(--text-2)', lineHeight: 1.6 }}
@@ -187,21 +188,6 @@ function ExportSection() {
 
 // ── primitives ──────────────────────────────────────────────────────────────
 
-function SectionBand({ title, children }) {
-  return (
-    <div style={{ marginBottom: 24 }}>
-      <div style={{
-        fontSize: 9, fontFamily: 'var(--font-mono)',
-        letterSpacing: '0.08em', textTransform: 'uppercase',
-        color: 'var(--text-faint)', fontWeight: 600,
-        marginBottom: 8,
-      }}>{title}</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {children}
-      </div>
-    </div>
-  );
-}
 
 function Field({ label, anchor, children }) {
   return (

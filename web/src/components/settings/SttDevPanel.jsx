@@ -24,17 +24,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Channel } from '@tauri-apps/api/core';
 import { PrimaryBtn, OutlinedBtn, TextInput } from '../ui/index.js';
 import { invoke } from '../../api.js';
+import { eyebrowStyle } from '../ui/Eyebrow.jsx';
 
 const mono = { fontFamily: 'var(--font-mono)', fontSize: 11 };
 const EVENT_LOG_CAP = 20;
 
 function SectionLabel({ children, style }) {
   return (
-    <div style={{
-      fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em',
-      textTransform: 'uppercase', color: 'var(--text-faint)', fontWeight: 600,
-      margin: '20px 0 10px', ...style,
-    }}>{children}</div>
+    <div style={{ ...eyebrowStyle, margin: '20px 0 10px' }}>{children}</div>
   );
 }
 

@@ -18,19 +18,11 @@ import CoverArtCard from './CoverArtCard.jsx';
 import PosterRow from '@modules/core/library/PosterRow.jsx';
 import { encodePath } from '../paths.js';
 import { navigate as go } from '@host/router.js';
+import { EyebrowHeading } from '@host/components/ui/Eyebrow.jsx';
 
 const toAlbum = (path) => go('/tools/library/music/downloaded/' + encodePath(path));
 const toBrowse = (q) => go('/tools/library/music/browse/q/' + encodeURIComponent(q));
 
-function SectionHeader({ children }) {
-  return (
-    <div style={{
-      fontSize: 11, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)',
-      letterSpacing: '0.08em', textTransform: 'uppercase',
-      padding: '0 0 6px', borderBottom: '1px solid var(--border)', marginBottom: 12,
-    }}>{children}</div>
-  );
-}
 
 export default function MusicCredits({ album, accent }) {
   const artist = album?.artist || '';
@@ -138,7 +130,7 @@ export default function MusicCredits({ album, accent }) {
       {/* Performers & personnel — release-level credits (MusicBrainz). */}
       {(performers.length > 0 || artist) && (
         <section>
-          <SectionHeader>Performers &amp; personnel</SectionHeader>
+          <EyebrowHeading>Performers &amp; personnel</EyebrowHeading>
           {personnel === null ? (
             <div style={{ fontSize: 11, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)' }}>
               Loading credits…
@@ -173,7 +165,7 @@ export default function MusicCredits({ album, accent }) {
 
       {/* Release details */}
       <section>
-        <SectionHeader>Release details</SectionHeader>
+        <EyebrowHeading>Release details</EyebrowHeading>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {[
             { label: 'Type', value: album.releaseType || 'Album' },

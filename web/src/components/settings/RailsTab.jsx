@@ -6,6 +6,7 @@
 import { useWidgetSlots, useManifests } from '../../module-sdk/useModuleRegistry.js';
 import { useRailVariant } from '../../hooks/useRailVariant.js';
 import { Seg } from '../ui/index.js';
+import { eyebrowStyle } from '../ui/Eyebrow.jsx';
 
 export default function RailsTab({ accent }) {
   const slots = useWidgetSlots();
@@ -58,12 +59,7 @@ function ModuleSection({ slot, manifest, accent }) {
   );
   return (
     <div style={{ marginBottom: 24 }}>
-      <div style={{
-        fontSize: 9, fontFamily: 'var(--font-mono)',
-        letterSpacing: '0.08em', textTransform: 'uppercase',
-        color: 'var(--text-faint)', fontWeight: 600,
-        marginBottom: 12,
-      }}>{title}</div>
+      <div style={{ ...eyebrowStyle, marginBottom: 12 }}>{title}</div>
       {hasTile && (
         <>
           <SubLabel>Expanded tile</SubLabel>

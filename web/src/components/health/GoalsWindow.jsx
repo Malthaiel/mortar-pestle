@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { deriveTargets, STANDARD_DV } from '../../util/nutritionTotals.js';
 import AppWindow from '../ui/AppWindow.jsx';
 import { IconPlus, IconTrash, IconCheck } from '../icons.jsx';
+import { labelStyle } from './healthStyles.js';
 
 const MICRO_KEYS = Object.keys(STANDARD_DV);
 
@@ -57,7 +58,6 @@ export default function GoalsWindow({ open, onClose, accent = 'var(--accent)', i
     }
   };
 
-  const labelStyle = { fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' };
   const inputStyle = { background: 'var(--bg-elev)', border: '1px solid var(--border-soft)', borderRadius: 8, color: 'var(--text)', padding: '8px 10px', font: 'inherit' };
   const PctField = ({ label, value, set, grams }) => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
@@ -82,7 +82,7 @@ export default function GoalsWindow({ open, onClose, accent = 'var(--accent)', i
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <button type="button" className="candy-btn" data-shape="chip" onClick={onClose}><span className="candy-face">Cancel</span></button>
           <button type="button" className="candy-btn" data-shape="chip" disabled={saving} onClick={save}>
-            <span className="candy-face"><IconCheck size={13} /> {saving ? 'Saving…' : 'Save goals'}</span>
+            <span className="candy-face"><IconCheck size={13} /> {saving ? 'Saving' : 'Save goals'}</span>
           </button>
         </div>
       )}

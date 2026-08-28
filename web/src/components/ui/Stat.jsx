@@ -6,6 +6,8 @@
 // Status palette: Plan = --text-muted, Current = accent, Completed = var(--text-muted),
 // On-Hold = #d9a55a, Dropped/Failed = var(--text).
 
+
+import { eyebrowStyle } from './Eyebrow.jsx';
 export function Dot({ color, glow, size = 6 }) {
   return (
     <span style={{
@@ -58,11 +60,7 @@ export function StatChip({ label, value, sub, dot }) {
         }}/>
       )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-        <span style={{
-          fontSize: 9, fontFamily: 'var(--font-mono)',
-          letterSpacing: '0.08em', textTransform: 'uppercase',
-          color: 'var(--text-faint)', fontWeight: 600,
-        }}>{label}</span>
+        <span style={{ ...eyebrowStyle }}>{label}</span>
         <span style={{
           fontSize: 13, fontFamily: 'var(--font-body)',
           color: 'var(--text)', fontWeight: 600,
@@ -96,11 +94,7 @@ export function FrontmatterChip({ field, value }) {
       maxWidth: 320,
       overflow: 'hidden',
     }}>
-      <span style={{
-        fontSize: 9, fontFamily: 'var(--font-mono)',
-        letterSpacing: '0.08em', textTransform: 'uppercase',
-        color: 'var(--text-faint)', fontWeight: 600,
-      }}>{field}</span>
+      <span style={{ ...eyebrowStyle }}>{field}</span>
       <span style={{
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
       }}>{value}</span>

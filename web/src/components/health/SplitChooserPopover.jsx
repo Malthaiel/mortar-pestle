@@ -10,8 +10,8 @@ import { todayLocalStr } from '../../util/time.js';
 import { useContextMenu } from '../../context-menu/useContextMenu.js';
 import Popover from '../ui/Popover.jsx';
 import { IconPlus, IconCheck } from '../icons.jsx';
+import { labelStyle } from './healthStyles.js';
 
-const labelStyle = { fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' };
 
 export default function SplitChooserPopover({ open, onClose, style, accent = 'var(--accent)', splits = [], onActivate, onEdit, onDelete, onNew }) {
   const { openContextMenu } = useContextMenu();
@@ -19,7 +19,7 @@ export default function SplitChooserPopover({ open, onClose, style, accent = 'va
 
   const close = () => { setPickFor(null); onClose(); };
   const rowMenu = (e, s) => openContextMenu(e, [
-    { label: 'Edit…', onClick: () => { onEdit(s); close(); } },
+    { label: 'Edit', onClick: () => { onEdit(s); close(); } },
     { label: 'Delete', danger: true, onClick: () => onDelete(s.file) },
   ], { accent });
   const activate = (s, idx) => { onActivate(s.id, { anchorDate: todayLocalStr(), anchorIndex: idx }); close(); };

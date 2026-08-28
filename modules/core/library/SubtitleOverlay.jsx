@@ -5,10 +5,12 @@
 import { useMemo } from 'react';
 import { useVideoPlayer } from './VideoPlayerProvider.jsx';
 
+// The app's two fonts, nothing else (Two Fonts, 2026-08-27). Serif (Georgia)
+// was dropped; a persisted 'serif' falls through the || below onto sans, so no
+// migration is needed.
 const FAMILY_MAP = {
-  sans:  'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
-  serif: 'Georgia, "Times New Roman", serif',
-  mono:  'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+  sans: 'var(--font-body)',
+  mono: 'var(--font-mono)',
 };
 
 // Strip non-style VTT tags, keep <b>/<i>/<u>, convert newlines to <br>.

@@ -40,7 +40,7 @@ function makePattern() {
   x.strokeStyle = '#e8e8e8'; x.lineWidth = 10;
   x.beginPath(); x.moveTo(0, 0); x.lineTo(W, H); x.stroke();
   x.fillStyle = '#ffffff'; x.fillRect(40, 40, 160, 90); // TL marker (breaks symmetry)
-  x.fillStyle = '#000000'; x.font = 'bold 160px "Segoe UI"';
+  x.fillStyle = '#000000'; x.font = 'bold 160px "DM Sans"';
   x.fillText('Pq', 90, 520);
   return c;
 }
@@ -51,7 +51,7 @@ function buildCells() {
   const pat = makePattern();
   const src = { canvas: pat, b64: toB64(pat), w: pat.width, h: pat.height };
   const title = drawTitle({
-    text: 'TITLE', font: 'Segoe UI', size: 120, color: '#ffffff', align: 'center',
+    text: 'TITLE', font: 'DM Sans', size: 120, color: '#ffffff', align: 'center',
     bold: true, italic: false, stroke: { color: '#000000', width: 6 },
     shadow: { color: '#000000', blur: 0, dx: 0, dy: 0 }, background: null,
   }, 1);
@@ -191,7 +191,7 @@ export default function CompositeParityPanel({ onClose, api, accent }) {
       for (const cell of battery) {
         if (cancelRef.current) return;
         const key = mis ? `DEMO ${cell.key} (mis-pinned)` : cell.key;
-        setStatus(`rendering ${key}…`);
+        setStatus(`rendering ${key}`);
         try {
           const r = await runCell(cell, mis);
           lines.push(fmtLine(key, r));

@@ -13,6 +13,7 @@ import { sumMealTotals } from '../../util/nutritionTotals.js';
 import { useFoodSearch } from '../../hooks/useFoodSearch.js';
 import Popover from '../ui/Popover.jsx';
 import { IconSearch } from '../icons.jsx';
+import { labelStyle } from './healthStyles.js';
 
 function nowHHMM() {
   const d = new Date();
@@ -74,7 +75,6 @@ export default function LogMealPopover({ open, onClose, style, accent = 'var(--a
   };
   const logSupp = (su) => doLog({ time: nowHHMM(), name: su.name, kcal: 0, protein: 0, carb: 0, fat: 0, sugar: { total: null, added: null }, micros: su.micros || [], supplements: [] });
 
-  const labelStyle = { fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' };
   const inputStyle = { background: 'var(--bg-elev)', border: '1px solid var(--border-soft)', borderRadius: 8, color: 'var(--text)', padding: '7px 9px', font: 'inherit', width: '100%' };
   const rowBtn = (sel) => ({ display: 'block', width: '100%', textAlign: 'left', background: sel ? `color-mix(in oklch, ${accent} 16%, transparent)` : 'none', border: 'none', borderBottom: '1px solid var(--border-soft)', color: 'var(--text)', padding: '8px 10px', cursor: 'pointer', font: 'inherit', fontSize: 12.5 });
 
@@ -119,11 +119,11 @@ export default function LogMealPopover({ open, onClose, style, accent = 'var(--a
           <>
             <div style={{ position: 'relative' }}>
               <span style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }}><IconSearch size={13} /></span>
-              <input style={{ ...inputStyle, paddingLeft: 28 }} value={query} onChange={(e) => { setQuery(e.target.value); setPicked(null); }} placeholder="Search foods…" />
+              <input style={{ ...inputStyle, paddingLeft: 28 }} value={query} onChange={(e) => { setQuery(e.target.value); setPicked(null); }} placeholder="Search foods" />
             </div>
             {!picked && query.trim() && (
               <div style={{ maxHeight: 170, overflowY: 'auto', border: '1px solid var(--border-soft)', borderRadius: 8 }}>
-                {loading && <div style={{ padding: 10, ...labelStyle }}>Searching…</div>}
+                {loading && <div style={{ padding: 10, ...labelStyle }}>Searching</div>}
                 {!loading && results.length === 0 && <div style={{ padding: 10, ...labelStyle }}>No matches</div>}
                 {results.map((hit) => (
                   <button key={hit.fdc_id} type="button" style={rowBtn(false)} onClick={() => pickFood(hit)}>{hit.description}</button>

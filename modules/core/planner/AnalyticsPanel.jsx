@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { StatTile } from '@host/components/ui/index.js';
+import { eyebrowStyle } from '@host/components/ui/Eyebrow.jsx';
 
 function pad(n) { return String(n).padStart(2, '0'); }
 function dateKey(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
@@ -122,13 +123,7 @@ export default function AnalyticsPanel({ sessions, accent }) {
 
 function SectionLabel({ children }) {
   return (
-    <div style={{
-      fontSize: 9, fontWeight: 600,
-      fontFamily: 'var(--font-mono)',
-      color: 'var(--text-faint)',
-      marginBottom: 8,
-      letterSpacing: '0.08em', textTransform: 'uppercase',
-    }}>{children}</div>
+    <div style={{ ...eyebrowStyle, marginBottom: 8 }}>{children}</div>
   );
 }
 

@@ -222,14 +222,14 @@ export function isIdentityKf(kf, keys) {
 // aspect-fit-fill like video. A project with no title clips still serializes
 // byte-identical: normalizeProject passes clips through verbatim and newProject
 // never seeds title/kind.
-export const TITLE_FONTS = Object.freeze([
-  'Segoe UI', 'Arial', 'Georgia', 'Impact', 'Consolas',
-  'Times New Roman', 'Verdana', 'Trebuchet MS', 'Courier New', 'Tahoma',
-]);
+// The app's two fonts, same as everywhere else (Two Fonts, 2026-08-27). Was ten
+// system families; a saved project naming one of those is clamped to DM Sans by
+// normalizeProject below, so an old title card re-renders in DM Sans.
+export const TITLE_FONTS = Object.freeze(['DM Sans', 'DM Mono']);
 
 export function defaultTitle() {
   return {
-    text: 'Title', font: 'Segoe UI', size: 96, color: '#ffffff', align: 'center',
+    text: 'Title', font: 'DM Sans', size: 96, color: '#ffffff', align: 'center',
     bold: false, italic: false,
     stroke: { color: '#000000', width: 0 },
     shadow: { color: '#000000', blur: 0, dx: 0, dy: 0 },
@@ -246,7 +246,7 @@ export function normalizeTitle(t) {
   const sh = t.shadow || {};
   const out = {
     text: typeof t.text === 'string' ? t.text : 'Title',
-    font: TITLE_FONTS.includes(t.font) ? t.font : 'Segoe UI',
+    font: TITLE_FONTS.includes(t.font) ? t.font : 'DM Sans',
     size: Math.max(1, r3(+t.size || 96)),
     color: typeof t.color === 'string' ? t.color : '#ffffff',
     align: ['left', 'center', 'right'].includes(t.align) ? t.align : 'center',

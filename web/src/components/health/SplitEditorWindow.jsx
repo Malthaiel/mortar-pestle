@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react';
 import AppWindow from '../ui/AppWindow.jsx';
 import DraggableSidebarList from '../DraggableSidebarList.jsx';
 import { IconPlus, IconTrash, IconCheck, IconGrip } from '../icons.jsx';
+import { labelStyle } from './healthStyles.js';
 
 function newId(prefix) {
   const rnd = (globalThis.crypto?.randomUUID?.() || Math.random().toString(36).slice(2, 10));
@@ -23,7 +24,6 @@ const moved = (rows, from, to) => {
   return next;
 };
 
-const labelStyle = { fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' };
 const inputStyle = { background: 'var(--bg-elev)', border: '1px solid var(--border-soft)', borderRadius: 8, color: 'var(--text)', padding: '7px 9px', font: 'inherit', width: '100%' };
 const gripStyle = { display: 'inline-flex', alignItems: 'center', color: 'var(--text-faint)', cursor: 'grab', flexShrink: 0 };
 
@@ -124,7 +124,7 @@ export default function SplitEditorWindow({ open, onClose, accent = 'var(--accen
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <button type="button" className="candy-btn" data-shape="chip" onClick={onClose}><span className="candy-face">Cancel</span></button>
           <button type="button" className="candy-btn" data-shape="chip" disabled={!canSave || saving} onClick={save} style={!canSave ? { opacity: 0.5 } : undefined}>
-            <span className="candy-face"><IconCheck size={13} /> {saving ? 'Saving…' : 'Save split'}</span>
+            <span className="candy-face"><IconCheck size={13} /> {saving ? 'Saving' : 'Save split'}</span>
           </button>
         </div>
       )}

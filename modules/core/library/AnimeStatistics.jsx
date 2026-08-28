@@ -3,22 +3,14 @@
 // Completed / On-Hold / Dropped / Plan to Watch). Sized for the 260px detail
 // rail, mounted between Information and the controls on both the owned
 // (SeriesDetail) and discovery (DiscoveryDetail) pages. Fetched live from Jikan;
-// nothing is persisted. Mirrors AnimeCredits.jsx (useJikan hook + SectionHeader +
+// nothing is persisted. Mirrors AnimeCredits.jsx (useJikan hook + EyebrowHeading +
 // loading/empty handling). The bar tracks reuse .candy-groove / .candy-groove__fill,
 // with the fill width set inline from each percentage.
 
 import { useEffect, useRef, useState } from 'react';
 import { videoApi } from './api.js';
+import { EyebrowHeading } from '@host/components/ui/Eyebrow.jsx';
 
-function SectionHeader({ children }) {
-  return (
-    <div style={{
-      fontSize: 11, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)',
-      letterSpacing: '0.08em', textTransform: 'uppercase',
-      padding: '0 0 6px', borderBottom: '1px solid var(--border)', marginBottom: 12,
-    }}>{children}</div>
-  );
-}
 
 // Fetch one Jikan endpoint for `id`; null = loading, {} = empty/failed.
 function useJikan(fn, id) {
@@ -80,7 +72,7 @@ export default function AnimeStatistics({ malId, accent }) {
 
   return (
     <section>
-      <SectionHeader>Statistics</SectionHeader>
+      <EyebrowHeading>Statistics</EyebrowHeading>
 
       {loading
         ? <StatsSkeleton />

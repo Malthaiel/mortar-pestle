@@ -11,6 +11,7 @@ import { useEffect, useRef, useState } from 'react';
 import { videoApi } from './api.js';
 import PosterRow from './PosterRow.jsx';
 import useInView from './useInView.js';
+import { EyebrowHeading } from '@host/components/ui/Eyebrow.jsx';
 
 function initials(text) {
   const w = (text || '').trim().split(/\s+/).filter(Boolean);
@@ -18,15 +19,6 @@ function initials(text) {
   return w.slice(0, 2).map(s => s[0].toUpperCase()).join('');
 }
 
-function SectionHeader({ children }) {
-  return (
-    <div style={{
-      fontSize: 11, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)',
-      letterSpacing: '0.08em', textTransform: 'uppercase',
-      padding: '0 0 6px', borderBottom: '1px solid var(--border)', marginBottom: 12,
-    }}>{children}</div>
-  );
-}
 
 // Fetch one Jikan endpoint for `id`; null = loading, [] = empty/failed.
 function useJikan(fn, id) {
@@ -81,7 +73,7 @@ export default function AnimeCredits({ malId, accent }) {
       {/* Related — leads the main column (MAL order); candy tile rails per type. */}
       {relations && relations.length > 0 && (
         <section>
-          <SectionHeader>Related</SectionHeader>
+          <EyebrowHeading>Related</EyebrowHeading>
           {/* Type blocks sit side by side (header + its poster row) and wrap. */}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24, alignItems: 'flex-start' }}>
             {relations.map(r => (
@@ -328,7 +320,7 @@ function CreditsSkeleton({ title }) {
   const blocks = Array.from({ length: 6 });
   return (
     <section>
-      <SectionHeader>{title}</SectionHeader>
+      <EyebrowHeading>{title}</EyebrowHeading>
       <div style={{ display: 'flex', gap: 14, overflow: 'hidden' }}>
         {blocks.map((_, i) => (
           <div key={i} style={{ width: 112, flexShrink: 0 }}>

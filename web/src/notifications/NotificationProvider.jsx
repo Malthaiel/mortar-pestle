@@ -304,7 +304,7 @@ function FlyClone({ fly, onDone }) {
       boxSizing: 'border-box', background: 'var(--bg-elev, #1a1a1a)',
       border: '1px solid var(--border)',
       borderRadius: 10, boxShadow: '0 12px 32px rgba(0,0,0,0.28)', color: 'var(--text)',
-      fontFamily: 'var(--font-sans)', fontSize: 13, overflow: 'hidden',
+      fontFamily: 'var(--font-body)', fontSize: 13, overflow: 'hidden',
       transformOrigin: 'center', willChange: 'transform, opacity',
     }}>
       <span style={{

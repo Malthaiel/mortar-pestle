@@ -33,7 +33,7 @@ export default function Toast({
         pointerEvents: 'auto',
         display: 'flex', alignItems: message ? 'flex-start' : 'center', gap: 14,
         padding: '12px 16px', maxWidth: 380,
-        color: 'var(--text)', fontFamily: 'var(--font-sans)', fontSize: 13,
+        color: 'var(--text)', fontFamily: 'var(--font-body)', fontSize: 13,
         cursor: clickable ? 'pointer' : 'default',
         ...(animateIn ? { animation: 'notif-toast-spring-in 280ms cubic-bezier(0.34, 1.56, 0.64, 1) both' } : {}),
       }}
