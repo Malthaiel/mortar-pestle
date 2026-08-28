@@ -549,7 +549,18 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
     // ── Writing the talk out ─────────────────────────────────────────────────
     body = (
       <>
-        <div style={{ fontSize: 15, marginBottom: 8 }}>{STT_STAGES[stt.stage]}</div>
+        {/* The number, not just the bar: on an hour-plus pass the bar barely moves between
+            glances, and "is it stuck?" is the question it has to answer. Stages that report
+            no progress (loading, saving) show the stage alone rather than a made-up 0%. */}
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
+          <div style={{ fontSize: 15 }}>{STT_STAGES[stt.stage]}</div>
+          {stt.pct != null && (
+            <div style={{
+              fontSize: 15, opacity: 0.7,
+              fontVariantNumeric: 'tabular-nums',
+            }}>{Math.round(stt.pct)}%</div>
+          )}
+        </div>
         <div className="candy-groove" style={{ marginBottom: 10 }}>
           <div className="candy-groove__fill"
             style={{ '--accent': accent || 'var(--accent)', width: `${stt.pct == null ? 8 : Math.round(stt.pct)}%` }} />
@@ -679,7 +690,7 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
       <AppWindow open onClose={onClose} title={title} accent={accent} width={620} height="auto">
         <div style={{ padding: '18px 22px 22px' }}>
           {body}
-          {err && <p style={{ color: 'var(--error)', marginTop: 14 }}>{err}</p>}
+          {err && <p style={{ color: 'var(--text)', marginTop: 14 }}>{err}</p>}
         </div>
       </AppWindow>
       <ConfirmModal
