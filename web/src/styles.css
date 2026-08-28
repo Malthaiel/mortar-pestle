@@ -1321,7 +1321,8 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
 
 /* tile.music-tile — the LIVE music player + planner widgets (the bespoke
    MusicTile + its planner twin) riding the two-layer tile shape; a 1:1 rename
-   of legacy .button-music-tile / .button-planner-tile. Every dimension scales
+   of the legacy button-music-tile / button-planner-tile family, deleted
+   2026-08-28 once nothing referenced it. Every dimension scales
    via --tile-px (1 design-px = 1px at >=480cqw, shrinking toward the 240px
    sidebar min); --candy-depth is redefined locally so the tile's band AND the
    inner candy controls inherit the same scaled press depth. Hover = colour-only
@@ -2343,263 +2344,6 @@ body[data-anim-button-depth="off"] .candy-btn:is(:active, .is-pressed, [data-can
  * 2026-08-13 — a blink was tried and cut): the digits simply stop advancing,
  * which is the state cue. Class kept as the styling hook for the digits. */
 
-/* ── Music tile prototype button ────────────────────────────────────────── *
- * Blank candy 3D button at music-tile dimensions for press-feel testing in
- * Settings → Appearance. Mirrors `.button-settings-tab` (grey/inactive
- * variant): --surface-3 face, dark-surface frame, dark-surface under-fill,
- * radius-md, muted text → full text on hover. Scaled up to 100% × 200px to
- * stand in for the right-sidebar music player widget. Depth toggle via
- * body[data-music-tile-depth="small"] (Settings → Animations → Music tile
- * depth). */
-
-.button-music-tile {
-  /* --tile-px is "1 design pixel": equals 1px when the surrounding container
-   * is 480px wide, scales linearly down to 0.5px at 240px (sidebar minimum),
-   * and caps at 1px when the container is wider (e.g. the 960px Settings
-   * drawer that holds the Appearance prototype copy). Children + this rule
-   * consume the var inline via `calc(N * var(--tile-px))`. The required
-   * `container-type: inline-size` lives on the parent wrapper emitted by
-   * MusicTile.jsx — not here — because cqw resolves against an ancestor
-   * container, never the element itself. */
-  --tile-px: min(1px, calc(100cqw / 480));
-  /* Press-depth space below the tile. Scaled so the gap between the tile
-   * and the next sidebar slot shrinks evenly with the rest. */
-  --candy-depth: calc(18 * var(--tile-px));
-  appearance: none;
-  touch-action: manipulation;
-  user-select: none;
-  -webkit-user-select: none;
-  position: relative;
-  display: block;
-  width: 100%;
-  height: calc(200 * var(--tile-px));
-  padding: 0;
-  margin: 0 0 var(--candy-depth);
-  cursor: pointer;
-  outline: none;
-  background: var(--surface-3);
-  border: calc(8 * var(--tile-px)) solid color-mix(in oklch, var(--surface), black 22%);
-  border-radius: var(--radius-md);
-  color: var(--text-muted);
-  box-shadow:
-    0 var(--candy-depth) 0 -2px color-mix(in oklch, var(--surface), black 10%),
-    0 var(--candy-depth) 0 0 color-mix(in oklch, var(--surface), black 22%);
-  transition:
-    transform var(--cbtn-press-dur, 150ms) cubic-bezier(0, 0, 0.58, 1),
-    color 150ms cubic-bezier(0, 0, 0.58, 1),
-    background 150ms cubic-bezier(0, 0, 0.58, 1),
-    border-color 150ms cubic-bezier(0, 0, 0.58, 1),
-    box-shadow 150ms cubic-bezier(0, 0, 0.58, 1);
-}
-
-/* Planner reuses the music candy tile chrome verbatim (.button-music-tile);
- * only the sizing differs — it fills its sidebar slot (flexWeight 2) instead of
- * the music tile's fixed height, and clips inner content to the rounded frame.
- * Placed after .button-music-tile so the height override wins on source order;
- * overflow:hidden clips corners only (box-shadow / candy depth is unaffected). */
-.button-planner-tile {
-  height: auto;
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-/* Scoped overrides for the three music button tiers when they sit inside
- * the candy tile. Sizes scale with --tile-px. Outside the tile (e.g. modals
- * using IconBtn) the global rules at .button-music-* still apply unchanged. */
-.button-music-tile button.button-music-primary {
-  width: calc(40 * var(--tile-px));
-  height: calc(40 * var(--tile-px));
-  font-size: calc(16 * var(--tile-px));
-  border-width: calc(2.8125 * var(--tile-px));
-}
-.button-music-tile button.button-music-transport,
-.button-music-tile button.button-music-tool {
-  border-width: calc(2.8125 * var(--tile-px));
-  font-size: calc(11 * var(--tile-px));
-  /* Scoped recolor: inside the tile, transport + tool buttons take the
-   * accent (red) palette so the full 7-control row reads as one red unit
-   * by default. Outside the tile (modals using IconBtn etc.) the global
-   * rules at button.button-music-* still apply unchanged. */
-  color: white;
-  background: var(--accent);
-  border-color: color-mix(in oklch, var(--accent), black 22%);
-  box-shadow:
-    0 var(--candy-depth) 0 -2px color-mix(in oklch, var(--accent), black 10%),
-    0 var(--candy-depth) 0 0 color-mix(in oklch, var(--accent), black 22%);
-}
-.button-music-tile button.button-music-transport:hover,
-.button-music-tile button.button-music-tool:hover {
-  color: white;
-  box-shadow:
-    0 var(--candy-depth-hover-shadow) 0 -2px color-mix(in oklch, var(--accent), black 10%),
-    0 var(--candy-depth-hover-shadow) 0 0 color-mix(in oklch, var(--accent), black 22%);
-}
-.button-music-tile button.button-music-primary:active,
-.button-music-tile button.button-music-transport:active,
-.button-music-tile button.button-music-tool:active {
-  transform: translate(0, var(--candy-depth)) !important;
-  box-shadow:
-    0 0 0 -2px color-mix(in oklch, var(--accent), black 10%),
-    0 0 0 0 color-mix(in oklch, var(--accent), black 22%);
-}
-
-/* INVERSION — when the tile chrome itself goes red (hover, press, or
- * picked-up clone), every inner control flips to the surface (grey) palette
- * so the buttons + waveform stay legible against the red tile bg. The
- * :active branch uses the same :not(:has(...)) exclusion as the tile's own
- * :active rule above so clicking a child control doesn't accidentally trip
- * the inversion when the tile chrome itself isn't pressed. */
-.button-music-tile:hover button.button-music-primary,
-.button-music-tile:hover button.button-music-transport,
-.button-music-tile:hover button.button-music-tool,
-.button-music-tile:active:not(:has(button:active, .music-tile-cover:active, .music-tile-scrub:active)) button.button-music-primary,
-.button-music-tile:active:not(:has(button:active, .music-tile-cover:active, .music-tile-scrub:active)) button.button-music-transport,
-.button-music-tile:active:not(:has(button:active, .music-tile-cover:active, .music-tile-scrub:active)) button.button-music-tool,
-.is-dragging .button-music-tile button.button-music-primary,
-.is-dragging .button-music-tile button.button-music-transport,
-.is-dragging .button-music-tile button.button-music-tool {
-  color: var(--text);
-  /* surface-3 + ~12% white. Dock buttons render against the app bg, so their
-   * literal surface-3 reads lighter than the same fill against the music
-   * tile's red chrome (simultaneous contrast). Mixing a bit of white in
-   * pulls the perceived lightness up to match the dock visually. */
-  background: color-mix(in oklch, var(--surface-3), white 6%);
-  border-color: color-mix(in oklch, var(--surface), black 22%);
-  box-shadow:
-    0 var(--candy-depth) 0 -2px color-mix(in oklch, var(--surface), black 10%),
-    0 var(--candy-depth) 0 0 color-mix(in oklch, var(--surface), black 22%);
-}
-
-/* Press state for inverted buttons. The inversion block above wins
- * specificity over `button.button-music-*:active` rules, so it silently
- * restores the full elevated shadow on press AND blocks the resting-state
- * translate. Re-emit both transform + collapsed shadow here at higher
- * specificity than the inversion block. */
-.button-music-tile:hover button.button-music-primary:active,
-.button-music-tile:hover button.button-music-transport:active,
-.button-music-tile:hover button.button-music-tool:active,
-.is-dragging .button-music-tile button.button-music-primary:active,
-.is-dragging .button-music-tile button.button-music-transport:active,
-.is-dragging .button-music-tile button.button-music-tool:active {
-  transform: translate(0, var(--candy-depth)) !important;
-  box-shadow:
-    0 0 0 -2px color-mix(in oklch, var(--surface), black 10%),
-    0 0 0 0 color-mix(in oklch, var(--surface), black 22%);
-}
-
-/* Waveform inversion. Played bars (full accent) → white; unplayed (dim
- * accent at 30% opacity) → dim white. Without this, the played playhead
- * trail disappears into the red tile bg. */
-.button-music-tile:hover .music-tile-pulse-bar,
-.button-music-tile:active:not(:has(button:active, .music-tile-cover:active, .music-tile-scrub:active)) .music-tile-pulse-bar,
-.is-dragging .button-music-tile .music-tile-pulse-bar {
-  background: color-mix(in oklch, white, transparent 65%);
-}
-.button-music-tile:hover .music-tile-pulse-bar[data-played="true"],
-.button-music-tile:active:not(:has(button:active, .music-tile-cover:active, .music-tile-scrub:active)) .music-tile-pulse-bar[data-played="true"],
-.is-dragging .button-music-tile .music-tile-pulse-bar[data-played="true"] {
-  background: white;
-}
-
-/* Tile hover fires whenever the pointer is anywhere on the tile (chrome OR
- * interactive children) — the subtle settle is the unified hover feedback.
- * The FULL press (:active), however, only fires when the user clicks the
- * tile chrome itself; clicks on inner buttons / cover / scrub bar shouldn't
- * propagate the candy press to the tile. Browser :active normally walks the
- * ancestor chain — the :has() exclusion stops that. */
-/* Hover lifts AND tints the tile chrome to match the brand pill's resting
- * accent palette (bg, border, shadow). Inner controls / cover / waveform
- * keep their own backgrounds; only the candy frame turns red. */
-.button-music-tile:hover {
-  color: white;
-  background: var(--accent);
-  border-color: color-mix(in oklch, var(--accent), black 22%);
-  transform: translate(0, var(--candy-depth-hover-transform));
-  box-shadow:
-    0 var(--candy-depth-hover-shadow) 0 -2px color-mix(in oklch, var(--accent), black 10%),
-    0 var(--candy-depth-hover-shadow) 0 0 color-mix(in oklch, var(--accent), black 22%);
-}
-
-/* Press state is also accent-tinted — same red palette as hover, just with
- * the candy depth collapsed for the pushed-down look. Matches brand-pill's
- * resting → active flow so the tile never visually "loses red" mid-gesture.
- * NB the exclusion lists BOTH .planner-ring-button:active AND .is-pressed: the
- * ring's drag-to-set pointer-captures the SVG, and :has(:active) does not re-
- * evaluate reliably under pointer capture (WebKitGTK), so without the JS-driven
- * .is-pressed class the tile would press in lock-step with the ring mid-drag. */
-.button-music-tile:active:not(:has(button:active, .music-tile-cover:active, .music-tile-scrub:active, .planner-ring-button:active, .planner-ring-button.is-pressed)) {
-  background: var(--accent);
-  border-color: color-mix(in oklch, var(--accent), black 22%);
-  color: white;
-  transform: translate(0, var(--candy-depth)) !important;
-  box-shadow:
-    0 0 0 -2px color-mix(in oklch, var(--accent), black 10%),
-    0 0 0 0 color-mix(in oklch, var(--accent), black 22%);
-}
-
-/* #4 — When a MUSIC inner control (a button, the cover, or the scrub rail) is
- * the press target, the tile is :hover but not :active (excluded above). Cancel
- * the hover LIFT so the tile stays grounded while only the child presses; the
- * red tint is kept. (The planner dial is handled separately — see the inert-
- * dial rule below, which pins the tile to full REST on hover AND press.) */
-.button-music-tile:hover:has(button:active, .music-tile-cover:active, .music-tile-scrub:active) {
-  transform: none;
-  box-shadow:
-    0 var(--candy-depth) 0 -2px color-mix(in oklch, var(--accent), black 10%),
-    0 var(--candy-depth) 0 0 color-mix(in oklch, var(--accent), black 22%);
-}
-
-/* Inner-hover frame — the dial AND the CALENDAR are buttons-inside-the-button.
- * The surrounding planner tile KEEPS its red hover highlight while the pointer
- * is on either inner control, but stays GROUNDED (no lift, FULL slab) so the
- * inner element owns all the motion — no double-lift, no shadow growth, no
- * "picked up" feel. Only the tile FRAME turns red; the ring/calendar themselves
- * are untouched by this rule and never tint red.
- *   • ring     — :hover (also covers the inner Reset/START/Skip buttons, which
- *     live inside it) + the JS .is-pressed class (pointer capture on the SVG
- *     makes :has(:active) unreliable for the drag-to-set, so the tile would
- *     otherwise flash grey mid-drag).
- *   • calendar — :hover covers both hovering the frame and pressing the header
- *     (a plain button, no capture, so :hover holds through the click).
- * Double-class .button-music-tile.button-planner-tile = specificity (0,4,0):
- * scopes to the planner tile only AND outranks both the bare :hover rule (red
- * + lift) and the music press-cancel above, so the GROUNDED red wins on source
- * order regardless of which inner press fires. */
-.button-music-tile.button-planner-tile:has(.planner-ring-button:hover),
-.button-music-tile.button-planner-tile:has(.planner-ring-button.is-pressed),
-.button-music-tile.button-planner-tile:has(.button-planner-calendar:hover) {
-  background: var(--accent);
-  border-color: color-mix(in oklch, var(--accent), black 22%);
-  color: white;
-  transform: none;
-  box-shadow:
-    0 var(--candy-depth) 0 -2px color-mix(in oklch, var(--accent), black 10%),
-    0 var(--candy-depth) 0 0 color-mix(in oklch, var(--accent), black 22%);
-}
-
-/* Dragging clone keeps the "pressed-down" look. The :active state ends the
- * moment DraggableSidebarList lifts the clone (pointer events redirect to
- * the floating clone, which is position:fixed and doesn't propagate :active
- * to the original). DraggableSidebarList adds `is-dragging` to the cloned
- * outer per-item wrapper, so the selector uses a descendant combinator to
- * reach `.button-music-tile` two levels deeper. The transform translates
- * the INNER tile down by --candy-depth (NOT the outer clone — its transform
- * is JS-controlled for cursor tracking and a wrapper-level translate would
- * clobber position). The translate + shadow-collapse together reproduce the
- * full `:active` press visual. */
-.is-dragging .button-music-tile {
-  background: var(--accent) !important;
-  border-color: color-mix(in oklch, var(--accent), black 22%) !important;
-  color: white !important;
-  transform: translate(0, var(--candy-depth)) !important;
-  box-shadow:
-    0 0 0 -2px color-mix(in oklch, var(--accent), black 10%),
-    0 0 0 0 color-mix(in oklch, var(--accent), black 22%) !important;
-}
-
 /* Floating agent chat window (Atelier / Concierge) rendered as ONE candy
  * button, styled after the Planner chip-field candy chip (Tasks / Quick Notes):
  * a surface-3 face on a 2px frame, on a 5px (--candy-depth-small) band, with
@@ -2611,9 +2355,8 @@ body[data-anim-button-depth="off"] .candy-btn:is(:active, .is-pressed, [data-can
  * release — "holding it down → pressed down; let go → released." On press the
  * face slides down and the top strip reveals app content behind the transparent
  * base, exactly like a chip-field chip pressing onto its band. The translate
- * goes on the INNER face, never the outer base, for the same reason as
- * .is-dragging .button-music-tile above: a wrapper-level translate would
- * clobber the JS drag-position transform.
+ * goes on the INNER face, never the outer base: a wrapper-level translate
+ * would clobber the JS drag-position transform.
  *
  * Candy accent behavior (mirrors the chip-field candy chip, 2029-2032 / 1561):
  * the band + 2px frame + face bg flip to --accent on .is-pressed (held by
@@ -2689,10 +2432,6 @@ body[data-anim-button-depth="off"] .aos-chat-window.is-pressed .aos-chat-face { 
 [data-dragsrc-collapsing="true"] {
   animation: drag-source-collapse 160ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
   overflow: hidden;
-}
-
-body[data-music-tile-depth="small"] .button-music-tile {
-  --candy-depth: var(--candy-depth-small);
 }
 
 /* Decorative equalizer bars inside the music-tile waveform row. Pulse on
