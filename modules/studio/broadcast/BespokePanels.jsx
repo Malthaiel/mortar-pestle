@@ -236,7 +236,7 @@ function BrowserPanel({ api, sceneName, node, accent }) {
       <input
         className="candy-input"
         value={url}
-        placeholder="https://…"
+        placeholder="https://"
         onChange={(e) => setUrl(e.target.value)}
         onBlur={commitUrl}
         onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); e.stopPropagation(); }}
@@ -271,7 +271,7 @@ function TextPanel({ api, sceneName, node, accent }) {
         className="candy-input"
         value={text}
         rows={3}
-        placeholder="text…"
+        placeholder="text"
         onChange={(e) => setText(e.target.value)}
         onBlur={(e) => commitText(e.target.value)}
         onKeyDown={(e) => e.stopPropagation()}

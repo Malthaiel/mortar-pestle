@@ -117,7 +117,7 @@ export default function SeriesBrowser({ accent, onSelect, selectedPath, initialS
 
       {/* Grid */}
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 18 }}>
-        {series === null && <div style={{ color: 'var(--text-faint)', fontSize: 12 }}>Loading…</div>}
+        {series === null && <div style={{ color: 'var(--text-faint)', fontSize: 12 }}>Loading</div>}
         {series && filtered.length === 0 && (
           <div style={{ color: 'var(--text-faint)', fontSize: 12, textAlign: 'center', padding: 24 }}>
             No series match.

@@ -233,24 +233,24 @@ export default function PlannerDock() {
     <CircleChip size={ctrlCircleSize} onClick={skipPhase}
       title={phase === 'focus' ? 'Skip to break' : 'Skip to focus'}><IconSkip/></CircleChip>
   );
-  // The pill IS the readout now — the standalone MM:SS above the row is gone.
-  // dragMins flows through so the pill previews the new duration while the dial
-  // is dragged to set time (the job the deleted readout used to do).
-  const timeStr = mmss(secsLeft, dragMins);
+  // MM:SS is a plain line ABOVE this row again (TimerWidget renders it) — the
+  // transport button carries a WORD, not the digits (user-directed 2026-08-27).
+  // A block run has no pause (it would drift the finish past the block's
+  // calendar end), so its row is cancel + finish only; the readout above covers
+  // the digits that used to sit between them.
   const controlsJSX = blockRun ? (
     <>
       <CircleChip size={ctrlCircleSize} onClick={stopBlockRun}
         title="Cancel block timer — nothing is logged"><IconX/></CircleChip>
-      {/* Read-only: a block run has no pause (it would drift the finish past the
-          block's calendar end), so the pill is a display only. */}
-      <TimerPrimary readOnly time={timeStr} scale={scale}/>
       <CircleChip size={ctrlCircleSize} onClick={finishBlockEarly}
         title="Finish block early — trims the block to now"><IconCheck/></CircleChip>
     </>
   ) : (
     <>
       <CircleChip size={ctrlCircleSize} onClick={resetTimer} title="Reset"><IconReset size={ICON_RESET_PX}/></CircleChip>
-      <TimerPrimary onClick={toggleTimer} time={timeStr} scale={scale}/>
+      <TimerPrimary onClick={toggleTimer} running={running}
+        label={running ? 'Pause' : (idle ? 'Start' : 'Resume')}
+        size={ctrlCircleSize} scale={scale}/>
       {ctrlThird}
     </>
   );
@@ -318,7 +318,7 @@ export default function PlannerDock() {
             style={{ margin: 'calc(18 * var(--tile-px) + 12px) 14px var(--candy-depth)', flexShrink: 0 }}
           >
             <span className="candy-face button-planner-calendar-header">
-              <span>CALENDAR</span>
+              <span>Calendar</span>
               <span
                 className="planner-calendar-toggle-chevron"
                 style={{ transform: `rotate(${calendarCollapsed ? 0 : 90}deg)` }}
@@ -431,9 +431,9 @@ function TimerWidget({
   scale = 1,
   innerControls = null,
 }) {
-  // No digits are rendered at this level any more — MM:SS lives in the transport
-  // pill (see TimerPrimary), and the "PAUSED — MM:SS LEFT" line below the ring
-  // was removed entirely (user-directed 2026-08-13).
+  // MM:SS renders here again as a plain line above the control row — the
+  // transport button carries a word instead (user-directed 2026-08-27). The
+  // "PAUSED — MM:SS LEFT" line below the ring stays gone.
   const glowOn    = settings.animations?.['clock-ambient'] !== false;
 
   // Candy-shell depression for the compact rect ring-button stays synced with
@@ -524,9 +524,14 @@ function TimerWidget({
               />
               {innerControls && (
                 <div className="planner-ring-inner-controls">
-                  {/* MM:SS lives inside the transport pill itself now, so this
-                      layer is a single centred row of controls — no separate
-                      readout, no column gap. */}
+                  {/* MM:SS is plain text ABOVE the control row (user-directed
+                      2026-08-27) — not inside a button. dragMins flows through
+                      mmss() so it previews the new duration while the dial is
+                      dragged to set time. */}
+                  <div className="planner-timer-digits" style={{
+                    
+                    lineHeight: 1,
+                  }}>{mmss(secsLeft, dragMins)}</div>
                   <div style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     gap: Math.round(6 * scale),
@@ -543,55 +548,50 @@ function TimerWidget({
   );
 }
 
-// The pill HUGS the digits: no fixed width, no fixed height, no letter-spacing.
-// The face carries one padding value on all four sides, so the gap above and
-// below the numbers equals the gap left and right BY CONSTRUCTION — nothing to
-// keep in sync, and it stays true at every dock `scale` and for any digit string.
-// (An earlier pass did the opposite — held the pill at a fixed 80px-wide box and
-// spread the digits with tracking to fill it. Reverted 2026-08-13: user wants the
-// box sized to the numbers, not the numbers stretched to the box.)
-const DIGIT_FONT_PX = 12;      // design px, multiplied by `scale`
-const DIGIT_PAD_PX = 4;        // design px, ALL FOUR sides, multiplied by `scale`
+// The transport button carries a WORD (Start / Pause / Resume), not the digits —
+// MM:SS is a plain line above the row (user-directed 2026-08-27). Its HEIGHT is
+// handed in from the caller as the same value the sibling CircleChips get, so
+// all three controls in the row share one height by construction rather than by
+// two constants kept in sync. Width still hugs the label.
+const READOUT_FONT_PX = 15;   // the standalone MM:SS above the row, design px
+// The pill takes .candy-face's body-text size like every other label — no local
+// font-size at all, so it can never drift from the rest again.
+const LABEL_PAD_X_PX = 10;     // design px, left/right only — height comes from `size`
 
-function TimerPrimary({ onClick, time, readOnly = false, scale = 1 }) {
-  // The start/pause control shows the LIVE MM:SS instead of a START/PAUSE/RESUME
-  // word (user request) — text-only, no play/pause icon (also per user request).
-  // Behaviour is unchanged: it still toggles the timer. There is deliberately NO
-  // paused-state treatment (a blink was built and cut, 2026-08-13): the digits
-  // simply stop advancing, and that is the cue.
-  // The pill inherits the global `var(--accent)` from :root so the accent picker
-  // drives it directly. Shrinks to match the inner-ring height of the rect
-  // ring-button (height matches sibling CircleChips at 26px).
+function TimerPrimary({ onClick, label, running = false, size, scale = 1 }) {
+  // Accent ONLY while the timer is actually ticking; paused and idle read the
+  // same neutral face as the Reset/Skip circles beside it, so the accent is a
+  // running indicator rather than permanent chrome.
   return (
     <button
-      onClick={readOnly ? undefined : onClick}
-      tabIndex={readOnly ? -1 : undefined}
-      className="candy-btn is-primary"
+      onClick={onClick}
+      className={`candy-btn${running ? ' is-primary' : ''}`}
       data-shape="block"
       style={{
-        // No minWidth and no height: the button is sized by the face's padded
-        // content, which is what makes the four gaps equal.
         minWidth: 0,
-        height: 'auto',
-        transform: 'translateY(0px)',
-        '--cbtn-depth': '5px',
-        ...(readOnly ? { pointerEvents: 'none' } : null),
+        height: size,
+        // The block shape declares --corner-max: 18px because it assumes a 33px
+        // tall button. This one is `size` tall (26), so it inherited a rounder
+        // corner than the circles beside it at the same global --corner. Half the
+        // real height is the shape system's own definition of fully-round, which
+        // is exactly what the circle shape computes — same formula, same source.
+        '--corner-max': `${size / 2}px`,
+        // No transform here: the parent overlay is promoted to its own layer for
+        // grey-edged text (styles.css § .planner-ring-inner-controls), and a
+        // transform on this button would hand it a separate OPAQUE layer that
+        // switches sub-pixel fringing back on for its label alone.
+        // Same lip as the circles beside it, and it tracks the user's depth setting.
+        '--cbtn-depth': 'var(--candy-depth-small)',
       }}
     >
       <span
-        className="candy-face planner-timer-digits"
+        className="candy-face"
         style={{
-          // One value, all four sides — this is the whole trick. lineHeight 1
-          // makes the text box exactly the glyph height, so the top and bottom
-          // gaps are this padding and nothing else.
-          padding: Math.round(DIGIT_PAD_PX * scale),
-          fontSize: Math.round(DIGIT_FONT_PX * scale),
-          // Mono + tabular so the digits don't jitter sideways as they tick.
-          fontFamily: 'var(--font-mono)',
-          fontVariantNumeric: 'tabular-nums',
+          height: '100%',
+          padding: `0 ${Math.round(LABEL_PAD_X_PX * scale)}px`,
           lineHeight: 1,
         }}
-      >{time}</span>
+      >{label}</span>
     </button>
   );
 }

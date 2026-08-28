@@ -3,7 +3,7 @@
 // so navigation always lands on a clean spinner, then the whole page appears at
 // once. Uses the shared `ftvSpin` keyframe (styles.css).
 
-export default function LoadingScreen({ accent, label = 'Loading…' }) {
+export default function LoadingScreen({ accent, label = 'Loading' }) {
   const a = accent || 'var(--accent)';
   return (
     <div style={{

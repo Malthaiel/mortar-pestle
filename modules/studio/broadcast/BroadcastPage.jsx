@@ -294,7 +294,7 @@ export default function BroadcastPage({ api, accent }) {
               accent={accent}
             />
           ) : !alive ? (
-            <EmptyState message={starting ? 'Broadcast engine is starting…' : 'Broadcast engine is down.'} />
+            <EmptyState message={starting ? 'Broadcast engine is starting' : 'Broadcast engine is down.'} />
           ) : (
             /* The preview is a real child HWND, so it paints ON TOP of the
                whole webview — no web-drawn panel can ever cover it, and

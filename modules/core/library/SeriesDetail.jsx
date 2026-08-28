@@ -163,9 +163,9 @@ export default function SeriesDetail({ accent, seriesPath }) {
   const dlLabel = (() => {
     if (!dlJob) return null;
     switch (dlJob.state) {
-      case 'queued': return dlJob.queuePosition > 0 ? `Queued — #${dlJob.queuePosition}` : 'Queued…';
-      case 'preparing': return 'Preparing…';
-      case 'downloading': return `Downloading ${Math.round(dlJob.progressPct || 0)}%…`;
+      case 'queued': return dlJob.queuePosition > 0 ? `Queued — #${dlJob.queuePosition}` : 'Queued';
+      case 'preparing': return 'Preparing';
+      case 'downloading': return `Downloading ${Math.round(dlJob.progressPct || 0)}%`;
       default: return null;
     }
   })();
@@ -288,7 +288,7 @@ export default function SeriesDetail({ accent, seriesPath }) {
               value={statusValue}
               accent={accent}
               title={statusTitle}
-              placeholder={isFranchise ? `${seasonName} status…` : 'Status…'}
+              placeholder={isFranchise ? `${seasonName} status` : 'Status'}
               statuses={STATUSES}
               dotFor={(s) => resolveDot(STATUS_DOT_COLOR, s, accent)}
               onChange={(s) => {
@@ -336,12 +336,12 @@ export default function SeriesDetail({ accent, seriesPath }) {
                 <span className="candy-face"><IconFolder size={16}/></span>
               </button>
             )}
-            <button type="button" data-own-press title="More…" className="candy-btn" data-shape="icon"
+            <button type="button" data-own-press title="More" className="candy-btn" data-shape="icon"
               onClick={(e) => {
                 const r = e.currentTarget.getBoundingClientRect();
                 const items = [];
-                if (canRedownload) items.push({ label: 'Re-download…', onClick: onDownload });
-                items.push({ label: 'Uninstall…', onClick: () => {
+                if (canRedownload) items.push({ label: 'Re-download', onClick: onDownload });
+                items.push({ label: 'Uninstall', onClick: () => {
                   setDeleteFiles(true);
                   setConfirmOpen(true);
                 } });
@@ -457,7 +457,7 @@ export default function SeriesDetail({ accent, seriesPath }) {
         message={isFranchise
           ? `Removes the entire ${series.title} entry — all ${series.seasons.length} parts.`
           : `Removes ${series.title} from your library.`}
-        confirmLabel={uninstalling ? 'Working…' : (deleteFiles ? 'Delete everything' : 'Remove from library')}
+        confirmLabel={uninstalling ? 'Working' : (deleteFiles ? 'Delete everything' : 'Remove from library')}
         cancelLabel="Cancel"
         onCancel={() => { if (!uninstalling) setConfirmOpen(false); }}
         onConfirm={handleUninstall}

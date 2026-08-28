@@ -252,7 +252,7 @@ export function NoteChip({ text, sourceDate, index, showDate = true }) {
   const isOwnToday = ds === todayLocalStr();
   const menuItems = [
     { section: true, label: 'Standard' },
-    { label: 'Move to an Idea…', onClick: () => setPickerOpen(true) },
+    { label: 'Move to an Idea', onClick: () => setPickerOpen(true) },
     ...(lastIdeaPath
       ? [{ label: `Re-file to ${lastIdeaName || 'last Idea'}`, onClick: () => doMove({ path: lastIdeaPath, title: lastIdeaName }) }]
       : []),
@@ -262,7 +262,7 @@ export function NoteChip({ text, sourceDate, index, showDate = true }) {
     { section: true, label: 'Creative' },
     ...(isOwnToday ? [] : [{ label: 'Carry forward to today', onClick: () => api.noteActions.carryForward({ ds, index, text }) }]),
     { label: 'Convert to a task', onClick: () => api.noteActions.convertToTask({ ds, index, text }) },
-    { label: 'New stub Idea…', onClick: () => setNewIdeaOpen(true) },
+    { label: 'New stub Idea', onClick: () => setNewIdeaOpen(true) },
   ];
 
   return (
@@ -311,7 +311,7 @@ export function NoteChip({ text, sourceDate, index, showDate = true }) {
 
       {/* ROUTE + × moved out of the chip face; icon shape hovers to accent. */}
       <ChipIconBtn
-        title="Route this note…"
+        title="Route this note"
         onClick={(e) => {
           // Anchor below the ROUTE button (a left-click trigger, not a right-click);
           // openContextMenu accepts a {x,y} point for non-event callers like this.

@@ -501,8 +501,8 @@ function UpdatesSection({ settings, setSetting, accent }) {
     net.phase === 'uptodate'    ? `Up to date · v${appVersion}` :
     net.phase === 'available'   ? `New version available — v${net.info?.version}` :
     net.phase === 'downloading' ? `Downloading · ${Math.round((net.progress || 0) * 100)}%` :
-    net.phase === 'installing'  ? 'Installing — the app will restart…' :
-    net.phase === 'checking'    ? 'Checking GitHub…' :
+    net.phase === 'installing'  ? 'Installing — the app will restart' :
+    net.phase === 'checking'    ? 'Checking GitHub' :
     `You're on v${appVersion}`;
 
   return (
@@ -538,7 +538,7 @@ function UpdatesSection({ settings, setSetting, accent }) {
           </div>
         ) : (
           <OutlinedBtn small onClick={() => net.check({ silent: false })} disabled={netBusy}>
-            {net.phase === 'checking' ? 'Checking…' : 'Check for updates'}
+            {net.phase === 'checking' ? 'Checking' : 'Check for updates'}
           </OutlinedBtn>
         )}
       </StackedRow>
@@ -562,16 +562,16 @@ function UpdatesSection({ settings, setSetting, accent }) {
         </Row>
       )}
       {status.available && autoCheck && (
-        <StackedRow label="Local build ready" hint={builtAt ? `Built ${builtAt} · ${status.diskSha256Prefix?.slice(0, 8)}…` : 'A fresh local build is ready'}>
+        <StackedRow label="Local build ready" hint={builtAt ? `Built ${builtAt} · ${status.diskSha256Prefix?.slice(0, 8)}` : 'A fresh local build is ready'}>
           <OutlinedBtn small onClick={handleRestart} disabled={!!busy}>
-            {busy === 'restart' ? '…' : 'Restart'}
+            {busy === 'restart' ? 'Working' : 'Restart'}
           </OutlinedBtn>
         </StackedRow>
       )}
       {status.prevExists && (
         <Row label="Previous build">
           <OutlinedBtn small onClick={handleRevert} disabled={!!busy}>
-            {busy === 'revert' ? '…' : 'Revert to previous'}
+            {busy === 'revert' ? 'Working' : 'Revert to previous'}
           </OutlinedBtn>
         </Row>
       )}

@@ -49,9 +49,9 @@ function AnimeRail({ accent }) {
   })();
   return (
     <>
-      <RailStat label="WATCHED"  value={counts.watched}  accent={accent}/>
-      <RailStat label="PLAN"     value={counts.plan}     accent={accent}/>
-      <RailStat label="WATCHING" value={counts.watching} accent={accent}/>
+      <RailStat label="Watched"  value={counts.watched}  accent={accent}/>
+      <RailStat label="Plan"     value={counts.plan}     accent={accent}/>
+      <RailStat label="Watching" value={counts.watching} accent={accent}/>
     </>
   );
 }
@@ -76,9 +76,9 @@ function MusicRail({ accent }) {
   })();
   return (
     <>
-      <RailStat label="ALBUMS" value={counts.albums} accent={accent}/>
-      <RailStat label="TRACKS" value={counts.tracks} accent={accent}/>
-      <RailStat label="HOURS"  value={hours}         accent={accent}/>
+      <RailStat label="Albums" value={counts.albums} accent={accent}/>
+      <RailStat label="Tracks" value={counts.tracks} accent={accent}/>
+      <RailStat label="Hours"  value={hours}         accent={accent}/>
     </>
   );
 }

@@ -50,7 +50,7 @@ export default function RemuxWindow({ api, accent, onClose }) {
   return (
     <AppWindow
       open title="Remux to MP4" accent={accent} onClose={onClose} width={560}
-      footer={<PrimaryBtn onClick={run} accent={accent} disabled={!input || state === 'running'}>{state === 'running' ? 'Remuxing…' : 'Remux'}</PrimaryBtn>}
+      footer={<PrimaryBtn onClick={run} accent={accent} disabled={!input || state === 'running'}>{state === 'running' ? 'Remuxing' : 'Remux'}</PrimaryBtn>}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '4px 2px' }}>
         <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
@@ -58,9 +58,9 @@ export default function RemuxWindow({ api, accent, onClose }) {
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <CandySelect value={input} options={clipOpts} onChange={setInput} placeholder={clipOpts.length ? 'Recent recordings…' : 'No recordings yet'} title="Recent recordings" />
+            <CandySelect value={input} options={clipOpts} onChange={setInput} placeholder={clipOpts.length ? 'Recent recordings' : 'No recordings yet'} title="Recent recordings" />
           </div>
-          <OutlinedBtn small onClick={browse} title="Pick any video file">Browse…</OutlinedBtn>
+          <OutlinedBtn small onClick={browse} title="Pick any video file">Browse</OutlinedBtn>
         </div>
         {input && (
           <div style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', wordBreak: 'break-all' }}>→ {baseName(output)}</div>

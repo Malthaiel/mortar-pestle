@@ -237,7 +237,7 @@ export default function ExportDialog({ open, onClose, api, accent, project, regi
       value: p.id,
       label: caps && !presetAvailable(p, caps) ? `${p.name} — no encoder` : p.name,
     })),
-    { value: 'custom', label: 'Custom…' },
+    { value: 'custom', label: 'Custom' },
   ];
   const codecMeta = CODECS.find(c => c.value === custom.codec) || CODECS[0];
   const containerOpts = codecMeta.containers.map(c => ({ value: c, label: CONTAINER_LABELS[c] }));
@@ -361,7 +361,7 @@ export default function ExportDialog({ open, onClose, api, accent, project, regi
               <span style={{ ...mono, fontSize: 11, color: 'var(--text-faint)' }}>kbps</span>
             </div>
             <div>
-              <OutlinedBtn small onClick={saveCurrentAsPreset} disabled={running}>Save as preset…</OutlinedBtn>
+              <OutlinedBtn small onClick={saveCurrentAsPreset} disabled={running}>Save as preset</OutlinedBtn>
             </div>
           </div>
         )}
@@ -370,7 +370,7 @@ export default function ExportDialog({ open, onClose, api, accent, project, regi
           <div style={{ ...mono, flex: 1, minWidth: 0, fontSize: 12, color: outPath ? 'var(--text)' : 'var(--text-faint)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={finalPath}>
             {finalPath || 'No destination chosen'}
           </div>
-          <OutlinedBtn small onClick={pick} disabled={running}>Choose…</OutlinedBtn>
+          <OutlinedBtn small onClick={pick} disabled={running}>Choose</OutlinedBtn>
         </div>
 
         {offline.length > 0 && (

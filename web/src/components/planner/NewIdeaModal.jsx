@@ -64,7 +64,7 @@ export default function NewIdeaModal({ open, noteText, onClose, onCreate }) {
               if (e.key === 'Enter') { e.preventDefault(); submit(); }
               else if (e.key === 'Escape') onClose?.();
             }}
-            placeholder="Idea title…"
+            placeholder="Idea title"
             style={field}
           />
         </label>

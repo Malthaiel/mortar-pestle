@@ -80,7 +80,7 @@ export default function TorrentPickerModal({ open, title, englishTitle, type, ac
             autoFocus
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); runSearch(); } }}
-            placeholder="Search Nyaa…"
+            placeholder="Search Nyaa"
             className="candy-input"
             style={{ flex: 1, minWidth: 0, padding: '7px 10px', fontSize: 12, color: 'var(--text)' }}
           />
@@ -94,7 +94,7 @@ export default function TorrentPickerModal({ open, title, englishTitle, type, ac
 
         {/* Results */}
         <div style={S.list}>
-          {loading && <div style={S.muted}>Searching…</div>}
+          {loading && <div style={S.muted}>Searching</div>}
           {!loading && error && <div style={S.muted}>{error} Try editing the search above.</div>}
           {!loading && cands && cands.map((c, i) => {
             const active = i === sel;

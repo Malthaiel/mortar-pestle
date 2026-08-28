@@ -15,7 +15,7 @@ export default {
 
     registerCommandAction({
       id: 'domain-builder.new',
-      label: 'New Domain…',
+      label: 'New Domain',
       hint: 'Scaffold a Knowledge domain + /transcript pipeline',
       keywords: ['domain', 'knowledge', 'scaffold', 'pipeline', 'create'],
       run: () => sharedEvents.emit(OPEN_EVENT, {}),

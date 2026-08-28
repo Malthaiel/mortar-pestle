@@ -40,7 +40,7 @@ export default function SignInModal({ open, onClose, fb, accent, onSignedIn }) {
             autoFocus style={{ width: '100%' }}
             onKeyDown={(e) => e.key === 'Enter' && email.trim() && sendCode()} />
           {error && <div style={errStyle}>{error}</div>}
-          <PrimaryBtn onClick={sendCode} disabled={busy || !email.trim()}>{busy ? 'Sending…' : 'Send code'}</PrimaryBtn>
+          <PrimaryBtn onClick={sendCode} disabled={busy || !email.trim()}>{busy ? 'Sending' : 'Send code'}</PrimaryBtn>
         </div>
       ) : (
         <div style={col}>
@@ -50,7 +50,7 @@ export default function SignInModal({ open, onClose, fb, accent, onSignedIn }) {
             onKeyDown={(e) => e.key === 'Enter' && code.trim() && verify()} />
           {error && <div style={errStyle}>{error}</div>}
           <div style={{ display: 'flex', gap: 8 }}>
-            <PrimaryBtn onClick={verify} disabled={busy || !code.trim()}>{busy ? 'Verifying…' : 'Verify'}</PrimaryBtn>
+            <PrimaryBtn onClick={verify} disabled={busy || !code.trim()}>{busy ? 'Verifying' : 'Verify'}</PrimaryBtn>
             <OutlinedBtn onClick={() => { setStep('email'); setError(''); }} disabled={busy}>Back</OutlinedBtn>
           </div>
         </div>

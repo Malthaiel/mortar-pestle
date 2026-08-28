@@ -66,7 +66,7 @@ export function EmptyState({ message, ctaLabel, ctaHref, ctaOnClick, accent }) {
   );
 }
 
-export function LoadingState({ label = 'Loading…' }) {
+export function LoadingState({ label = 'Loading' }) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 10,

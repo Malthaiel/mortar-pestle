@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { IconSend } from '../icons.jsx';
-export default function ChatInput({ onSend, streaming, accent, mentions = [], onClearMention, seedText, seedNonce = 0, onSeedConsumed, placeholder = 'Ask', busyPlaceholder = 'Thinking…' }) {
+export default function ChatInput({ onSend, streaming, accent, mentions = [], onClearMention, seedText, seedNonce = 0, onSeedConsumed, placeholder = 'Ask', busyPlaceholder = 'Thinking' }) {
   const [text, setText] = useState('');
   const ref = useRef(null);
 

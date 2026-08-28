@@ -145,7 +145,7 @@ export default function PlaylistModal({
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <OutlinedBtn onClick={onClose} disabled={busy}>Cancel</OutlinedBtn>
           <PrimaryBtn onClick={submit} disabled={!canSubmit} accent={a}>
-            {busy ? 'Saving…' : mode === 'create' ? 'Create' : 'Save'}
+            {busy ? 'Saving' : mode === 'create' ? 'Create' : 'Save'}
           </PrimaryBtn>
         </div>
       </div>

@@ -113,7 +113,7 @@ function RecentlyAdded({ albums, accent, onPlay }) {
   const items = useMemo(() => [...(albums || [])]
     .sort((a, b) => (b.mtime || 0) - (a.mtime || 0))
     .slice(0, 18), [albums]);
-  if (albums === null) return <Muted>Loading your library…</Muted>;
+  if (albums === null) return <Muted>Loading your library</Muted>;
   if (items.length === 0) return null;
   return (
     <PosterRow title="Recently Added" accent={accent} colWidth={160}
@@ -304,7 +304,7 @@ export function SearchResults({ query, tab, source = 'both', accent, albums, own
       {showSongs && !isUrl && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <GroupHeading>Songs in your library</GroupHeading>
-          {localSongs === null && <Muted>Searching…</Muted>}
+          {localSongs === null && <Muted>Searching</Muted>}
           {localSongs && (localSongs.length === 0
             ? <Muted>No songs in your library match.</Muted>
             : <RowList>{localSongs.map(t => (
@@ -319,7 +319,7 @@ export function SearchResults({ query, tab, source = 'both', accent, albums, own
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <GroupHeading>Songs · YouTube</GroupHeading>
           {ytError && <div style={{ color: 'var(--text)', fontSize: 12 }}>{ytError}</div>}
-          {!ytError && ytSongs === null && <Muted>Searching…</Muted>}
+          {!ytError && ytSongs === null && <Muted>Searching</Muted>}
           {!ytError && ytSongs && (ytSongs.length === 0
             ? <Muted>No songs.</Muted>
             : <RowList>{ytSongs.map(h => (
@@ -333,7 +333,7 @@ export function SearchResults({ query, tab, source = 'both', accent, albums, own
       {wantMb && showSongs && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <GroupHeading>Songs · MusicBrainz</GroupHeading>
-          {!error && mbSongs === null && <Muted>Searching…</Muted>}
+          {!error && mbSongs === null && <Muted>Searching</Muted>}
           {!error && mbSongs && (mbSongs.length === 0
             ? <Muted>No songs.</Muted>
             : <RowList>{mbSongs.map(r => (
@@ -360,7 +360,7 @@ export function SearchResults({ query, tab, source = 'both', accent, albums, own
             )}
           </div>
           {error && <div style={{ color: 'var(--text)', fontSize: 12 }}>{error}</div>}
-          {!error && mbAlbums === null && <Muted>Searching…</Muted>}
+          {!error && mbAlbums === null && <Muted>Searching</Muted>}
           {!error && mbAlbums && (mbAlbums.length === 0
             ? <Muted>No albums.</Muted>
             : <div style={GRID}>{mbAlbums.map(r => (
@@ -374,7 +374,7 @@ export function SearchResults({ query, tab, source = 'both', accent, albums, own
       {wantMb && showArtists && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <GroupHeading>Artists · MusicBrainz</GroupHeading>
-          {!error && mbArtists === null && <Muted>Searching…</Muted>}
+          {!error && mbArtists === null && <Muted>Searching</Muted>}
           {!error && mbArtists && (mbArtists.length === 0
             ? <Muted>No artists.</Muted>
             : <RowList>{mbArtists.slice(0, tab === 'artists' ? 25 : 8).map(a => (

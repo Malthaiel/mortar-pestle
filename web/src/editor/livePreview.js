@@ -295,7 +295,7 @@ class TransclusionWidget extends WidgetType {
     });
     const body = document.createElement('div');
     body.className = 'reference-render cm-lp-embed-note-body';
-    body.textContent = 'Loading…';
+    body.textContent = 'Loading';
     wrap.appendChild(head);
     wrap.appendChild(body);
     Promise.resolve(this.resolve?.(this.target))

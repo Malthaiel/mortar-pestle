@@ -45,7 +45,7 @@ export default function SitePopover({ api, accent, host, clipboardClearSecs = 30
   return (
     <BrowserPopover title="Password Vault" host={host} onClose={onClose}>
       <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {!status && <span style={note}>Loading…</span>}
+        {!status && <span style={note}>Loading</span>}
         {status && !initialized && <SetupForm accent={accent} onDone={onClose} />}
         {status && initialized && !unlocked && <UnlockForm accent={accent} />}
         {status && unlocked && (
@@ -103,7 +103,7 @@ function SetupForm({ accent, onDone }) {
       </label>
       {err && <span style={errStyle}>{err}</span>}
       <button type="button" style={primaryBtn(accent)} disabled={busy} onClick={submit}>
-        {busy ? 'Creating…' : 'Create vault'}
+        {busy ? 'Creating' : 'Create vault'}
       </button>
     </>
   );
@@ -139,7 +139,7 @@ function UnlockForm({ accent }) {
       </label>
       {err && <span style={errStyle}>{err}</span>}
       <button type="button" style={primaryBtn(accent)} disabled={busy} onClick={submit}>
-        {busy ? 'Unlocking…' : 'Unlock'}
+        {busy ? 'Unlocking' : 'Unlock'}
       </button>
     </>
   );
@@ -156,7 +156,7 @@ function MatchesView({ accent, host, clipboardClearSecs, revealRemaskSecs, onOpe
 
   return (
     <>
-      {matches === null && <span style={note}>Searching…</span>}
+      {matches === null && <span style={note}>Searching</span>}
       {matches && matches.length === 0 && !adding && (
         <span style={note}>No saved logins for {host || 'this site'}.</span>
       )}
@@ -274,7 +274,7 @@ function AddForm({ accent, host, onSaved, onCancel }) {
         <input style={input} value={origin} onChange={e => setOrigin(e.target.value)} placeholder="https://example.com" /></div>
       {err && <span style={errStyle}>{err}</span>}
       <div style={{ display: 'flex', gap: 8 }}>
-        <button type="button" style={primaryBtn(accent)} disabled={busy} onClick={save}>{busy ? 'Saving…' : 'Save'}</button>
+        <button type="button" style={primaryBtn(accent)} disabled={busy} onClick={save}>{busy ? 'Saving' : 'Save'}</button>
         <button type="button" style={ghostBtn} onClick={onCancel}>Cancel</button>
       </div>
     </div>

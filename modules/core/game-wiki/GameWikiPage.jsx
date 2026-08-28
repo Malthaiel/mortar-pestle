@@ -145,7 +145,7 @@ export default function GameWikiPage({ rest, accent, nav = navigate, overlay = f
     );
   }
   if (err) return <Shell accent={accent}><p style={{ color: 'var(--error)' }}>Couldn’t open this page: {err}</p></Shell>;
-  if (raw == null) return <Shell accent={accent}><p style={{ opacity: 0.6 }}>Loading…</p></Shell>;
+  if (raw == null) return <Shell accent={accent}><p style={{ opacity: 0.6 }}>Loading</p></Shell>;
 
   // Read-only title header (Game Wiki is read-only for end users — no rename).
   const pageTitle = rest.split('/').pop() || rest;

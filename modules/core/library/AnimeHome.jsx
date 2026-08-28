@@ -71,7 +71,7 @@ export default function AnimeHome({ accent }) {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search your library and MyAnimeList…"
+          placeholder="Search your library and MyAnimeList"
           className="candy-input"
           style={{ padding: '11px 14px', fontSize: 14, color: 'var(--text)', outline: 'none', width: '100%' }}
         />
@@ -232,7 +232,7 @@ function SearchResults({ query, accent, series, inLib }) {
             ><span className="candy-face" style={{ fontSize: 11 }}>See all →</span></button>
           )}
         </div>
-        {loading && <Muted>Searching…</Muted>}
+        {loading && <Muted>Searching</Muted>}
         {!loading && error && <div style={{ color: 'var(--text)', fontSize: 12 }}>{error}</div>}
         {!loading && !error && mal && (
           mal.length === 0

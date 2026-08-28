@@ -235,7 +235,7 @@ export default function BroadcastSidebar({ api, accent }) {
       { label: 'Rename', onClick: () => updateBroadcastUi({ renameTarget: { scene: scene.name, itemId: null } }) },
       { label: 'Duplicate', onClick: () => doDuplicateScene(scene.name) },
       { sep: true },
-      { label: 'Add source…', onClick: () => addSourceAt(at, scene.name) },
+      { label: 'Add source', onClick: () => addSourceAt(at, scene.name) },
       { label: 'Add group', onClick: () => doAddGroup(scene) },
       { sep: true },
       { label: 'Move up', disabled: i <= 0, onClick: () => doMoveScene(scene.name, 'up') },

@@ -220,7 +220,7 @@ export default function DocsReleasesTab({ accent }) {
       )}
 
       {loading ? (
-        <div style={{ color: 'var(--text-faint)', fontSize: 13 }}>Loading release history…</div>
+        <div style={{ color: 'var(--text-faint)', fontSize: 13 }}>Loading release history</div>
       ) : !releases.length ? (
         <div style={{ color: 'var(--text-faint)', fontSize: 13 }}>No releases found.</div>
       ) : (
@@ -465,7 +465,7 @@ function ReleaseQueuePanel({ accent, queue, latestVersion, tag, onShipped }) {
             Release Queue
           </div>
           <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
-            {loading ? 'Loading queue…'
+            {loading ? 'Loading queue'
               : error ? 'Could not read the queue.'
               : isEmpty ? 'Nothing staged — entries land here as features close out.'
               : <>
@@ -829,7 +829,7 @@ function ShipReleaseModal({ accent, queue, latestVersion, tag, onClose, onShippe
                               <input
                                 type="text"
                                 className="candy-input"
-                                placeholder="Custom…"
+                                placeholder="Custom"
                                 defaultValue={AREA_PALETTE.includes(effArea) ? '' : effArea}
                                 disabled={busy}
                                 onKeyDown={(ev) => {
@@ -953,7 +953,7 @@ function ShipReleaseModal({ accent, queue, latestVersion, tag, onClose, onShippe
           )}
           <OutlinedBtn onClick={() => !busy && onClose()} disabled={busy} small>Cancel</OutlinedBtn>
           <PrimaryBtn accent={accent} onClick={confirm} disabled={busy || !selKeys.size || !summary.trim()} small>
-            {busy ? 'Shipping…' : 'Confirm & Ship'}
+            {busy ? 'Shipping' : 'Confirm & Ship'}
           </PrimaryBtn>
         </div>
       </div>
@@ -1106,7 +1106,7 @@ function ReleasesSearchPill({ inputRef, value, onChange, resultCount, onArrow, o
         type="text"
         className="candy-input"
         value={value}
-        placeholder="Search releases…"
+        placeholder="Search releases"
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === 'ArrowDown') { e.preventDefault(); onArrow('down'); }

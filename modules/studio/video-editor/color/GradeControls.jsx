@@ -131,7 +131,7 @@ export function SatLutColumn({
 
       <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
         {!lut ? (
-          <OutlinedBtn small onClick={loadLut}>Load LUT…</OutlinedBtn>
+          <OutlinedBtn small onClick={loadLut}>Load LUT</OutlinedBtn>
         ) : (
           <>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>

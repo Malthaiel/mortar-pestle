@@ -78,7 +78,7 @@ export default function NotesPanel({
         <textarea
           value={activeNote} onChange={e => onNoteChange(e.target.value)}
           disabled={!sessionActive}
-          placeholder={sessionActive ? 'Session notes…' : 'Start a focus session to take notes'}
+          placeholder={sessionActive ? 'Session notes' : 'Start a focus session to take notes'}
           style={{
             width: '100%', minHeight: 76, resize: 'vertical',
             padding: '10px 12px', borderRadius: 'var(--radius-md)',
@@ -127,7 +127,7 @@ export default function NotesPanel({
                 if (e.key === 'Enter') submitFreeform();
                 if (e.key === 'Escape') setShowFreeform(false);
               }}
-              placeholder="Quick note…"
+              placeholder="Quick note"
               autoFocus
               style={{
                 flex: 1, padding: '7px 11px', borderRadius: 'var(--radius-md)',

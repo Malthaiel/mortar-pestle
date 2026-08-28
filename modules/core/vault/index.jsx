@@ -52,9 +52,9 @@ function VaultRail({ accent }) {
   })();
   return (
     <>
-      <RailStat label="PAGES"   value={stats.pages}   accent={accent}/>
-      <RailStat label="TODAY"   value={stats.today}   accent={accent}/>
-      <RailStat label="ORPHANS" value={stats.orphans} accent={accent}/>
+      <RailStat label="Pages"   value={stats.pages}   accent={accent}/>
+      <RailStat label="Today"   value={stats.today}   accent={accent}/>
+      <RailStat label="Orphans" value={stats.orphans} accent={accent}/>
     </>
   );
 }

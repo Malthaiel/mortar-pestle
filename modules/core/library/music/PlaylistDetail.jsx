@@ -110,7 +110,7 @@ export default function PlaylistDetail({ path, accent }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path]);
 
-  if (loading) return <Centered>Loading…</Centered>;
+  if (loading) return <Centered>Loading</Centered>;
   if (error) return <Centered tone="error">Failed to load: {error}</Centered>;
   if (!pl) return <Centered>Not found</Centered>;
 

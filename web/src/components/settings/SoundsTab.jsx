@@ -108,7 +108,7 @@ export default function SoundsTab({ settings, setSetting, accent }) {
       {/* Search */}
       <input
         type="search"
-        placeholder="Search sounds…"
+        placeholder="Search sounds"
         value={query}
         onChange={e => setQuery(e.target.value)}
         style={{

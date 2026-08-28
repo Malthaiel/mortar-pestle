@@ -365,7 +365,7 @@ export default function BroadcastSettingsTab({ accent, initialSection, onNavigat
           <Row label="File name"><NameField value={g('Output', 'FilenameFormatting', '%CCYY-%MM-%DD %hh-%mm-%ss')} accent={accent} onCommit={(v) => set('Output', 'FilenameFormatting', v)} /></Row>
           <div style={muted}>Preview: {expandName(g('Output', 'FilenameFormatting', '%CCYY-%MM-%DD %hh-%mm-%ss'))} — <code>%game</code> fills in at record time.</div>
           <div style={{ paddingTop: 10 }}>
-            <OutlinedBtn small onClick={() => setRemuxOpen(true)} title="Remux an existing recording to MP4 without re-encoding">Remux tool…</OutlinedBtn>
+            <OutlinedBtn small onClick={() => setRemuxOpen(true)} title="Remux an existing recording to MP4 without re-encoding">Remux tool</OutlinedBtn>
           </div>
         </SectionBand>
       )}

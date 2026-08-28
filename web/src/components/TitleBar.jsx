@@ -125,7 +125,7 @@ export default function TitleBar({
         >
           <span className="candy-face">
             <img src="/mortar.png" alt="" width={MARK} height={MARK} style={{ borderRadius: 4, flexShrink: 0 }}/>
-            MORTAR &amp; PESTLE v{VERSION}
+            Mortar &amp; Pestle v{VERSION}
           </span>
         </button>
 

@@ -537,7 +537,7 @@ export default function PageView({ path, accent }) {
             fontSize: 10, fontFamily: 'var(--font-mono)',
             letterSpacing: '0.08em', textTransform: 'uppercase',
             color: 'var(--text-faint)',
-          }}>Saving…</span>
+          }}>Saving</span>
         </div>
       )}
 
@@ -603,7 +603,7 @@ export default function PageView({ path, accent }) {
 
       <div ref={scrollContainerRef} style={{ flex: 1, overflow: 'auto', minHeight: 0, position: 'relative' }}>
         {loading && (
-          <div style={{ padding: 48, color: 'var(--text-muted)', fontSize: 13 }}>Loading…</div>
+          <div style={{ padding: 48, color: 'var(--text-muted)', fontSize: 13 }}>Loading</div>
         )}
         {!loading && notFound && (
           <div style={{ padding: 48, fontSize: 14 }}>

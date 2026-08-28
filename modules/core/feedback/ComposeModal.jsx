@@ -46,7 +46,7 @@ export default function ComposeModal({ open, onClose, fb, accent, onCreated }) {
         <div>
           <label style={label}>Details</label>
           <textarea className="candy-input" value={body} onChange={(e) => setBody(e.target.value)}
-            placeholder="What happened, or what you'd like to see…"
+            placeholder="What happened, or what you'd like to see"
             style={{ width: '100%', minHeight: 120, resize: 'vertical', padding: '8px 10px',
               fontSize: 13, fontFamily: 'var(--font-body)', color: 'var(--text)' }} />
         </div>
@@ -58,7 +58,7 @@ export default function ComposeModal({ open, onClose, fb, accent, onCreated }) {
       </div>
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 18 }}>
         <OutlinedBtn onClick={close} disabled={busy}>Cancel</OutlinedBtn>
-        <PrimaryBtn onClick={submit} disabled={busy || title.trim().length < 3}>{busy ? 'Posting…' : 'Post'}</PrimaryBtn>
+        <PrimaryBtn onClick={submit} disabled={busy || title.trim().length < 3}>{busy ? 'Posting' : 'Post'}</PrimaryBtn>
       </div>
     </AppWindow>
   );

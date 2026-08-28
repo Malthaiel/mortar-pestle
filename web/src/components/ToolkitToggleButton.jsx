@@ -31,7 +31,7 @@ export default function ToolkitToggleButton({ accent, expanded, onToggle, lockMo
             minWidth: 0,
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             textAlign: 'center',
-          }}>{`VERSION ${import.meta.env.PACKAGE_VERSION || '0.0.0'}`}</span>
+          }}>{`Version ${import.meta.env.PACKAGE_VERSION || '0.0.0'}`}</span>
         )}
       </span>
     </button>

@@ -295,13 +295,13 @@ export default function ParityPanel({ onClose, api, accent }) {
     const hashes = [];
     try {
       for (const fx of FIXTURES) {
-        setStatus(`probing ${fx.key}…`);
+        setStatus(`probing ${fx.key}`);
         const ctx = await fixtureCtx(fx);
         hashes.push(ctx.hash);
         for (const g of GRADES) {
           if (cancelRef.current) return;
           const key = `${fx.key} × ${g.key}`;
-          setStatus(`rendering ${key}…`);
+          setStatus(`rendering ${key}`);
           try {
             const r = await runCell(fx, g, ctx, null);
             lines.push(fmtLine(key, r));
@@ -334,7 +334,7 @@ export default function ParityPanel({ onClose, api, accent }) {
     let hash = null;
     try {
       const fx = FIXTURES[1];
-      setStatus('rendering broken demo cell…');
+      setStatus('rendering broken demo cell');
       const ctx = await fixtureCtx(fx);
       hash = ctx.hash;
       const r = await runCell(fx, GRADES[1], ctx, 'bt709');

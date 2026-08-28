@@ -158,7 +158,7 @@ function SkillRow({ skill, installed, busy, onInstall, onUninstall }) {
 
 function ActionButton({ installed, busy, onInstall, onUninstall }) {
   if (busy) {
-    return <Btn disabled>Working…</Btn>;
+    return <Btn disabled>Working</Btn>;
   }
   if (installed) {
     return <Btn variant="ghost" onClick={onUninstall}>Uninstall</Btn>;

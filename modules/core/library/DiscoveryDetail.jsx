@@ -100,7 +100,7 @@ export default function DiscoveryDetail({ malId, accent, onResolveTitle }) {
       .finally(() => { if (myId === reqId.current) setLoading(false); });
   }, [id]);
 
-  const title = (detail && detail.title) || '…';
+  const title = (detail && detail.title) || 'untitled';
   const sub = detail && detail.titleEnglish && detail.titleEnglish !== title ? detail.titleEnglish : null;
   const year = detail && detail.year;
   const type = detail && detail.type;
@@ -164,9 +164,9 @@ export default function DiscoveryDetail({ malId, accent, onResolveTitle }) {
   const btn = (() => {
     if (job) {
       switch (job.state) {
-        case 'queued': return { label: job.queuePosition > 0 ? `Queued — #${job.queuePosition}` : 'Queued…', busy: true };
-        case 'preparing': return { label: 'Preparing…', busy: true };
-        case 'downloading': return { label: `Downloading ${Math.round(job.progressPct || 0)}%…`, busy: true };
+        case 'queued': return { label: job.queuePosition > 0 ? `Queued — #${job.queuePosition}` : 'Queued', busy: true };
+        case 'preparing': return { label: 'Preparing', busy: true };
+        case 'downloading': return { label: `Downloading ${Math.round(job.progressPct || 0)}%`, busy: true };
         case 'done': return { label: 'Downloaded ✓', done: true };
         case 'error': return { label: 'Failed — retry' };
         case 'cancelled': return { label: 'Cancelled — retry' };
@@ -255,7 +255,7 @@ export default function DiscoveryDetail({ malId, accent, onResolveTitle }) {
 
       {/* Episodes */}
       <div style={{ marginTop: 26, padding: '0 24px 24px' }}>
-        {loading && <div style={{ color: 'var(--text-faint)', fontSize: 12 }}>Loading episodes…</div>}
+        {loading && <div style={{ color: 'var(--text-faint)', fontSize: 12 }}>Loading episodes</div>}
         {!loading && error && <div style={{ color: 'var(--text)', fontSize: 12, padding: '12px 0' }}>{error}</div>}
         {!loading && !error && episodes && episodes.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column' }}>

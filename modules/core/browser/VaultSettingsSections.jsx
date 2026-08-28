@@ -76,7 +76,7 @@ export function ExportImport({ accent }) {
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <input type="password" style={{ ...input, flex: 1, minWidth: 160 }} placeholder="Export password" value={exPw} onChange={e => setExPw(e.target.value)} />
         <button type="button" style={primary(accent)} onClick={() => doExport(true)}>Export (encrypted)</button>
-        <button type="button" style={ghost} onClick={() => doExport(false)}>Plaintext…</button>
+        <button type="button" style={ghost} onClick={() => doExport(false)}>Plaintext</button>
       </div>
       {exOut && <textarea readOnly style={{ ...input, minHeight: 70, fontFamily: 'var(--font-mono,monospace)', fontSize: 11 }} value={exOut} onFocus={e => e.target.select()} />}
       <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '4px 0' }} />
@@ -95,7 +95,7 @@ export function ExportImport({ accent }) {
       </div>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         <input style={{ ...input, flex: 1 }} value={imFile ? basename(imFile) : ''} readOnly placeholder="No file chosen" />
-        <button type="button" style={ghost} onClick={pickFile}>Choose file…</button>
+        <button type="button" style={ghost} onClick={pickFile}>Choose file</button>
         <button type="button" style={primary(accent)} disabled={!imFile && !imData.trim()} onClick={doImport}>Import</button>
       </div>
       <textarea style={{ ...input, minHeight: 70, fontFamily: 'var(--font-mono,monospace)', fontSize: 11 }} placeholder="…or paste export data to import" value={imData} onChange={e => setImData(e.target.value)} />
@@ -175,7 +175,7 @@ export function ChangeMaster({ accent }) {
       <input type="password" style={input} placeholder="New master password" value={next} onChange={e => setNext(e.target.value)} />
       <input type="password" style={input} placeholder="Confirm new" value={confirm} onChange={e => setConfirm(e.target.value)} />
       {msg && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{msg}</span>}
-      <button type="button" style={primary(accent)} disabled={busy} onClick={submit}>{busy ? '…' : 'Change master password'}</button>
+      <button type="button" style={primary(accent)} disabled={busy} onClick={submit}>{busy ? 'Working' : 'Change master password'}</button>
     </div>
   );
 }

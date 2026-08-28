@@ -42,7 +42,7 @@ export default function HistoryPopover({ api, accent, onClose, onOpenUrl }) {
       <style>{ROW_CSS}</style>
       <div style={searchWrap}>
         <IconSearch size={15} />
-        <input style={searchInput} placeholder="Search history…" value={query} autoFocus
+        <input style={searchInput} placeholder="Search history" value={query} autoFocus
           onChange={e => setQuery(e.target.value)} spellCheck={false} autoComplete="off" />
       </div>
       <div style={list}>

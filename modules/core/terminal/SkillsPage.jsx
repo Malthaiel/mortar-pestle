@@ -103,7 +103,7 @@ export default function SkillsPage({ accent, selectedSlug, onBack }) {
                     : activeJobId ? 'Skill already running'
                     : !argsValid ? 'Fill in required arguments' : 'Run skill'}
                   onClick={() => triggerRun(selected)}
-                >{loadingRun ? 'Starting…' : (activeJobId ? 'Running' : 'Run')}</PrimaryBtn>
+                >{loadingRun ? 'Starting' : (activeJobId ? 'Running' : 'Run')}</PrimaryBtn>
 
                 {selected.interactive && (
                   <span style={{

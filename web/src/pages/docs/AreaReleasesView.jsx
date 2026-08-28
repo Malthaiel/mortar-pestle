@@ -18,7 +18,7 @@ export default function AreaReleasesView({ area, accent }) {
     .map(r => ({ release: r, areaObj: (r.areas || []).find(a => a.name === area) }))
     .filter(x => x.areaObj);
 
-  if (loading) return <Empty>Loading release history…</Empty>;
+  if (loading) return <Empty>Loading release history</Empty>;
   if (!area) return <Empty>No release area for this module.</Empty>;
   if (!rows.length) return <Empty>No shipped releases for {area} yet.</Empty>;
 

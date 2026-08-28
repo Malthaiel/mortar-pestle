@@ -1,12 +1,16 @@
 // Control bar rendered below the <video> inside the modal. Reads everything
 // from useVideoPlayer() — no props.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { useVideoPlayer } from './VideoPlayerProvider.jsx';
 import { IconVolume, IconPlay, IconPause, IconSkip, IconSkipBack, IconRewind, IconFastForward, IconSettings, IconMaximize, IconRotateCw } from '@host/components/icons.jsx';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
 import FoldMenu, { FoldStandOff } from '@host/components/ui/FoldMenu.jsx';
 import { candyCenterOffset } from '@host/util/candy.js';
+import { makeFeedbackApi } from '@modules/core/feedback/feedbackApi.js';
+import { useSession } from '@modules/core/feedback/useSession.js';
+import UserAvatar from '@modules/core/feedback/UserAvatar.jsx';
 import SubtitleSettingsPanel from './SubtitleSettingsPanel.jsx';
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
@@ -20,6 +24,16 @@ const ROW = 28;
 // centring centres the BOX and leaves the visible ink half a band low. Same
 // correction the titlebar and the Dev tab demo apply.
 const CENTER = candyCenterOffset();
+// FoldDownPanel's MARK and ITEMS, verbatim. The bar's fold chip is that Dev-tab
+// `up` menu copied 1-1 (user-directed 2026-08-07) — dead rows and all. Nothing
+// here is wired to the player; if the demo chip is tuned, re-copy.
+const MARK = 18;
+const ITEMS = [
+  { label: 'Settings', onClick: () => {} },
+  { label: 'Sign out', onClick: () => {} },
+  { label: 'Profile', onClick: () => {} },
+  { label: 'Shortcuts', onClick: () => {} },
+];
 
 function fmt(sec) {
   if (!Number.isFinite(sec) || sec < 0) return '0:00';
@@ -40,6 +54,11 @@ export default function VideoControls() {
   // the panel edge are one movement rather than two that agree.
   const [subFoldOpen, setSubFoldOpen] = useState(false);
   const [subFoldT, setSubFoldT] = useState('');
+  // Same shim TitleBar and FoldDownPanel use: makeFeedbackApi only needs .invoke.
+  const fb = useMemo(() => makeFeedbackApi({ invoke }), []);
+  const { session } = useSession(fb);
+  const profile = session?.profile || null;
+  const accountName = profile?.display_name || profile?.handle || '';
   useEffect(() => {
     if (!subPanelOpen) return;
     const onDown = (e) => {
@@ -98,7 +117,7 @@ export default function VideoControls() {
           <IconBtn onClick={v.next} title="Next episode" size={ROW}><IconSkip size={ICON}/></IconBtn>
         </div>
 
-        <span style={{ marginLeft: 8, color: 'white', minWidth: 140 }}>
+        <span style={{ marginLeft: 8, color: 'var(--text)', minWidth: 140 }}>
           {fmt(v.effectiveTime)} / {fmt(dur)}
         </span>
 
@@ -133,44 +152,27 @@ export default function VideoControls() {
           )}
         </FoldStandOff>
 
-        {/* Subtitle track — the Dev tab's "Fold up / down" chip (FoldUpPanel.jsx)
-            copied in 1-1, user-directed 2026-08-05: same `up`, same ROW, same
-            `titlebar-account is-hover-accent` skin, same centring lift. Only the
-            DATA differs — the rows are the probe's subtitle tracks and their
-            onClick calls setSubtitleTrack. Do not re-derive it from the old call
-            site; if the demo chip is tuned, re-copy.
+        {/* The Dev tab's `up` fold chip (FoldDownPanel.jsx's menu(true)), copied
+            1-1 — it replaced the subtitle-track picker that used to stand here,
+            user-directed 2026-08-07. Nothing is mapped: the rows are the demo's
+            dead ITEMS and the trigger is the live account, exactly as in Dev.
             `up` is right here for its own reason too: this bar sits at the bottom
-            of the player, so a downward stack would unfold off the window. */}
-        {v.probe && v.probe.subtitles && v.probe.subtitles.length > 0 && (() => {
-          const subs = [
-            { value: -1, label: 'Subs: Off' },
-            ...v.probe.subtitles.map((t, i) => ({
-              value: i,
-              label: `Subs: ${(t.language || 'und').toUpperCase()}${t.forced ? ' (F)' : ''}`,
-            })),
-          ];
-          const at = subs.findIndex(o => o.value === v.subIdx);
-          return (
-            <FoldMenu
-              up
-              style={CENTER}
-              rowH={ROW}
-              triggerClassName="titlebar-account is-hover-accent"
-              triggerTitle="Subtitle track"
-              ariaLabel="Subtitle track"
-              onOpenChange={(o, t) => { setSubFoldOpen(o); setSubFoldT(t); }}
-              // The one prop the demo chip has no use for: its rows are commands,
-              // these carry a VALUE, so the active track wears the accent fill.
-              selected={at}
-              items={subs.map(o => ({
-                label: o.label,
-                onClick: () => v.setSubtitleTrack(o.value),
-              }))}
-            >
-              {(subs[at] || subs[0]).label}
-            </FoldMenu>
-          );
-        })()}
+            of the player, so a downward stack would unfold off the window.
+            `onOpenChange` is the one addition — host layout, not a mapping: the
+            blocks either side stand off the open panel. */}
+        <FoldMenu
+          up
+          style={CENTER}
+          rowH={ROW}
+          triggerClassName="titlebar-account is-hover-accent"
+          triggerTitle={accountName || 'Account'}
+          ariaLabel={`Account (${ITEMS.length} rows, folds up)`}
+          onOpenChange={(o, t) => { setSubFoldOpen(o); setSubFoldT(t); }}
+          items={ITEMS}
+        >
+          <UserAvatar src={profile?.avatar_url} name={accountName} size={MARK} />
+          {accountName || 'Account'}
+        </FoldMenu>
 
         {/* Gear + Chapters — the block on the subtitle fold's RIGHT, same rule
             mirrored. Refresh onward is far enough not to be part of it. */}
@@ -208,7 +210,7 @@ export default function VideoControls() {
 
         {/* Volume */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: 150 }}>
-          <span style={{ color: 'rgba(255,255,255,0.7)', display: 'inline-flex', flexShrink: 0 }}>
+          <span style={{ color: 'var(--text)', display: 'inline-flex', flexShrink: 0 }}>
             <IconVolume size={18}/>
           </span>
           <VolumeSlider value={v.volume} onChange={v.setVolume} accent="var(--accent, #c0392b)"/>

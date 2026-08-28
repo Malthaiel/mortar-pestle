@@ -54,7 +54,7 @@ export default function DevControls({ fb, post, accent, onChanged }) {
           className="candy-input"
           value={reply}
           onChange={(e) => setReply(e.target.value)}
-          placeholder="Official reply…"
+          placeholder="Official reply"
           rows={2}
           style={{ width: '100%', resize: 'vertical', padding: '8px 10px', fontSize: 13, fontFamily: 'var(--font-body)', color: 'var(--text)' }}
         />

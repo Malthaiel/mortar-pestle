@@ -66,7 +66,7 @@ function ToastRow({ n, onDismiss, onRemove }) {
       onClick={dismissWithFly}
       actions={n.action ? (
         <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-          <OutlinedBtn small onClick={onAction} disabled={busy}>{busy ? '…' : n.action.label}</OutlinedBtn>
+          <OutlinedBtn small onClick={onAction} disabled={busy}>{busy ? 'Working' : n.action.label}</OutlinedBtn>
           {n.type === 'update' && (
             <OutlinedBtn small onClick={dismissWithFly} disabled={busy}>Later</OutlinedBtn>
           )}

@@ -120,7 +120,7 @@ export default function MusicNotes({ album, accent }) {
       }}>
         <span>Notes</span>
         <span style={{ fontSize: 9, color: 'var(--text-faint)' }}>
-          {saving ? 'Saving…' : (saved ? 'Saved' : '')}
+          {saving ? 'Saving' : (saved ? 'Saved' : '')}
         </span>
       </div>
 
@@ -140,7 +140,7 @@ export default function MusicNotes({ album, accent }) {
         value={text}
         onChange={(e) => { setText(e.target.value); dirty.current = true; setSaved(false); }}
         onBlur={save}
-        placeholder="Add a note — [[wikilinks]] to people, journal entries, other albums…"
+        placeholder="Add a note — [[wikilinks]] to people, journal entries, other albums"
         spellCheck
         style={{
           width: '100%', minHeight: 84, resize: 'vertical',

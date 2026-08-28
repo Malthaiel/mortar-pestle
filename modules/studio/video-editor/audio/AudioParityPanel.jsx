@@ -325,7 +325,7 @@ export default function AudioParityPanel({ onClose, api, accent }) {
     try {
       for (const cell of CELLS) {
         if (cancelRef.current) return;
-        setStatus(`rendering ${cell.key}…`);
+        setStatus(`rendering ${cell.key}`);
         try {
           const r = await runCell(cell);
           lines.push(fmtLine(cell.key, r));
@@ -354,7 +354,7 @@ export default function AudioParityPanel({ onClose, api, accent }) {
     cancelRef.current = false;
     const key = 'DEMO identity (mirror master ×2)';
     try {
-      setStatus('rendering broken demo cell…');
+      setStatus('rendering broken demo cell');
       const r = await runCell(CELLS[0], { broken: true });
       setCells((prev) => ({ ...prev, [key]: r }));
       setStatus(`demo cell ${r.pass ? 'unexpectedly PASSED' : 'FAILED as intended'} — ${fmtCell(r)}`);

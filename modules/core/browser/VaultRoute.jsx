@@ -40,7 +40,7 @@ export default function VaultRoute({ api, accent, onClose }) {
     });
   }, [entries, folderSel, query]);
 
-  if (!status) return <Centered onClose={onClose}>Loading…</Centered>;
+  if (!status) return <Centered onClose={onClose}>Loading</Centered>;
   if (!unlocked) return <LockedView initialized={!!status.initialized} accent={accent} onClose={onClose} />;
 
   const submitName = async (value) => {
@@ -94,7 +94,7 @@ export default function VaultRoute({ api, accent, onClose }) {
 
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', gap: 8, padding: 10, borderBottom: '1px solid var(--border)' }}>
-              <input style={{ ...input, flex: 1 }} placeholder="Search logins…" value={query} onChange={e => setQuery(e.target.value)} />
+              <input style={{ ...input, flex: 1 }} placeholder="Search logins" value={query} onChange={e => setQuery(e.target.value)} />
               <button type="button" style={primary(accent)} onClick={() => setEditing({ new: true })}>＋ New</button>
             </div>
             <div style={{ flex: 1, overflow: 'auto', padding: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -197,7 +197,7 @@ function LockedView({ initialized, accent, onClose }) {
             <input type="checkbox" checked={stay} onChange={e => setStay(e.target.checked)} /> Stay unlocked on this device
           </label>
           {err && <span style={{ fontSize: 12, color: 'var(--danger,var(--text))' }}>{err}</span>}
-          <button type="button" style={primary(accent)} disabled={busy} onClick={submit}>{busy ? '…' : (initialized ? 'Unlock' : 'Create vault')}</button>
+          <button type="button" style={primary(accent)} disabled={busy} onClick={submit}>{busy ? 'Working' : (initialized ? 'Unlock' : 'Create vault')}</button>
         </div>
       </div>
     </div>

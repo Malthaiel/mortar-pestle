@@ -115,7 +115,7 @@ function PushToTalkBand({ accent }) {
         </div>
       ))}
       <div style={{ display: 'flex', gap: 8, paddingTop: 8, flexWrap: 'wrap' }}>
-        {hk?.can_configure && <PickerBtn onClick={rebind} accent={accent} title="Reconfigure in place">Rebind…</PickerBtn>}
+        {hk?.can_configure && <PickerBtn onClick={rebind} accent={accent} title="Reconfigure in place">Rebind</PickerBtn>}
         <PickerBtn onClick={openKde} accent={accent} title="Open KDE global shortcuts">Open KDE Shortcuts</PickerBtn>
       </div>
       <div style={hint}>
@@ -191,7 +191,7 @@ export default function SttSettingsTab({ settings, setSetting, accent }) {
 
   const useNow = useCallback((name) => {
     sttCtx?.useModelNow?.(name);
-    notify({ title: 'Loading model', message: `Switching to ${name}…`, accent: accentColor });
+    notify({ title: 'Loading model', message: `Switching to ${name}`, accent: accentColor });
   }, [sttCtx, accentColor]);
 
   const setVad = useCallback((k, v) => setSetting('stt', { [k]: v }), [setSetting]);
@@ -200,7 +200,7 @@ export default function SttSettingsTab({ settings, setSetting, accent }) {
     <div>
       <SectionBand title="Models" anchor="set-stt-models">
         {loading ? (
-          <div style={hint}>Loading models…</div>
+          <div style={hint}>Loading models</div>
         ) : err ? (
           <div style={{ ...hint, color: 'var(--error)' }}>Couldn’t reach the voice engine: {err}</div>
         ) : models.length === 0 ? (

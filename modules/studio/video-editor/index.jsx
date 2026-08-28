@@ -32,7 +32,7 @@ const EditorPage = React.lazy(() => import('./EditorPage.jsx').catch(lazyChunkEr
 function VeditRail({ accent }) {
   const route = useHashRoute();
   const seg = (route?.rest || '').split('/')[0];
-  return <RailStat label="MODE" value={seg === 'color' ? 'COLOR' : 'EDIT'} accent={accent} />;
+  return <RailStat label="Mode" value={seg === 'color' ? 'COLOR' : 'EDIT'} accent={accent} />;
 }
 
 export default {

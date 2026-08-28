@@ -69,7 +69,7 @@ export default function HistoryRoute({ api, accent, onClose, onOpenUrl }) {
         <strong style={{ fontSize: 14, flexShrink: 0 }}>History</strong>
         <div style={searchWrap}>
           <IconSearch size={15} />
-          <input style={searchInput} placeholder="Search history…" value={query}
+          <input style={searchInput} placeholder="Search history" value={query}
             onChange={e => setQuery(e.target.value)} spellCheck={false} autoComplete="off" />
         </div>
         <button type="button" style={{ ...ghost, ...(paused ? { borderColor: accent, color: accent } : {}) }}

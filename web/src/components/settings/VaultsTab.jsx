@@ -26,7 +26,7 @@ function ActiveVaultStrip() {
       <VaultStatusDisplay status={vaultStatus} name={vaultName}/>
       <div style={{ flex: 1 }}/>
       <OutlinedBtn small onClick={loadVault} disabled={vaultStatus === 'loading'}>
-        {vaultStatus === 'loading' ? 'Loading…' : 'Reload vault'}
+        {vaultStatus === 'loading' ? 'Loading' : 'Reload vault'}
       </OutlinedBtn>
     </div>
   );
@@ -45,7 +45,7 @@ function VaultStatusDisplay({ status, name }) {
   if (status === 'connected') {
     dotColor = 'var(--text-muted)'; dotRing = true; label = name; labelColor = 'var(--text)';
   } else if (status === 'loading') {
-    label = 'Loading…'; labelColor = 'var(--text-faint)';
+    label = 'Loading'; labelColor = 'var(--text-faint)';
   } else if (status === 'no-note') {
     dotColor = '#d9a55a'; label = `${vaultStatusTodayDs()}.md not found`;
   } else if (status === 'error') {
@@ -223,17 +223,17 @@ export default function VaultsTab({ accent }) {
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
             <OutlinedBtn small onClick={() => { setDraft(null); setError(null); }}>Cancel</OutlinedBtn>
             <OutlinedBtn small onClick={submit} disabled={busy}>
-              {draft.mode === 'create' ? (busy ? 'Creating…' : 'Create vault') : (busy ? 'Adding…' : 'Add vault')}
+              {draft.mode === 'create' ? (busy ? 'Creating' : 'Create vault') : (busy ? 'Adding' : 'Add vault')}
             </OutlinedBtn>
           </div>
         </div>
       ) : (
         <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
           <OutlinedBtn small onClick={() => pickFolder('create')}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconPlus size={13} /> Create new…</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconPlus size={13} /> Create new</span>
           </OutlinedBtn>
           <OutlinedBtn small onClick={() => pickFolder('add')}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconDatabase size={13} /> Add existing…</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconDatabase size={13} /> Add existing</span>
           </OutlinedBtn>
         </div>
       )}
@@ -404,7 +404,7 @@ function VaultMappingEditor({ vault, onClose, setVaultMapping, accent }) {
         Treat your own folders as the Knowledge / Infrastructure roots, or hide folders from the tree. Leave a root blank to use auto-discovery.
       </div>
       {folders === null ? (
-        <div style={{ fontSize: 12, color: 'var(--text-faint)' }}>Loading folders…</div>
+        <div style={{ fontSize: 12, color: 'var(--text-faint)' }}>Loading folders</div>
       ) : (
         <>
           <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -438,7 +438,7 @@ function VaultMappingEditor({ vault, onClose, setVaultMapping, accent }) {
       {err && <div style={{ fontSize: 12, color: 'var(--danger, var(--text))' }}>{err}</div>}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
         <OutlinedBtn small onClick={onClose}>Cancel</OutlinedBtn>
-        <OutlinedBtn small onClick={save} disabled={busy || folders === null}>{busy ? 'Saving…' : 'Save mapping'}</OutlinedBtn>
+        <OutlinedBtn small onClick={save} disabled={busy || folders === null}>{busy ? 'Saving' : 'Save mapping'}</OutlinedBtn>
       </div>
     </div>
   );

@@ -54,7 +54,7 @@ export function useAddToPlaylistMenu(accent) {
       : [
           ...playlists.map((p) => ({ label: p.title, onClick: () => onAdd(p, list) })),
           {
-            label: playlists.length ? '＋ New playlist…' : '＋ New playlist with this song…',
+            label: playlists.length ? '＋ New playlist' : '＋ New playlist with this song',
             onClick: () => setModal(true),
           },
         ];

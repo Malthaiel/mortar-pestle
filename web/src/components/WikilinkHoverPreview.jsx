@@ -132,7 +132,7 @@ export default function WikilinkHoverPreview() {
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
       }}>{state.title || titleFromPath(state.target)}</div>
       {state.status === 'loading' && (
-        <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>Loading…</div>
+        <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>Loading</div>
       )}
       {state.status === 'error' && (
         <div style={{ fontSize: 11, color: 'var(--text)' }}>Could not load preview.</div>
@@ -168,7 +168,7 @@ function extractPreview(raw) {
     .replace(/\n{2,}/g, '\n\n')
     .trim();
   return text.length > PREVIEW_PREVIEW_CHARS
-    ? text.slice(0, PREVIEW_PREVIEW_CHARS) + '…'
+    ? text.slice(0, PREVIEW_PREVIEW_CHARS) + ''
     : text;
 }
 

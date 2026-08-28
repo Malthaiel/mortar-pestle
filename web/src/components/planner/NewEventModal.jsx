@@ -249,7 +249,7 @@ export default function NewEventModal({ open, onClose, onCreated, accent = 'var(
 
             <Field label="Notes">
               <textarea className="candy-input" value={note} onChange={e => setNote(e.target.value)}
-                rows={2} placeholder="Optional details…"
+                rows={2} placeholder="Optional details"
                 style={{ ...inputStyle, resize: 'vertical', minHeight: 38, fontFamily: 'inherit' }}/>
             </Field>
 
@@ -296,7 +296,7 @@ export default function NewEventModal({ open, onClose, onCreated, accent = 'var(
               ) : (
                 <div style={{ position: 'relative' }}>
                   <input className="candy-input" value={linkQuery} onChange={e => setLinkQuery(e.target.value)}
-                    placeholder="Search a vault page…" style={inputStyle}/>
+                    placeholder="Search a vault page" style={inputStyle}/>
                   {linkResults.length > 0 && (
                     <div style={{
                       position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 5, marginTop: 4,
@@ -337,7 +337,7 @@ export default function NewEventModal({ open, onClose, onCreated, accent = 'var(
           <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
             <OutlinedBtn small onClick={() => { if (!busy) onClose(); }}>Cancel</OutlinedBtn>
             <PrimaryBtn small onClick={submit} disabled={busy} accent={accent}>
-              {busy ? 'Saving…' : 'Create event'}
+              {busy ? 'Saving' : 'Create event'}
             </PrimaryBtn>
           </div>
         </div>

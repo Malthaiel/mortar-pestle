@@ -74,7 +74,7 @@ export default function BlockLibraryPopover({ open, onClose, anchorRef, accent }
   // and marks the event handled, so the global suppressor skips its default menu.
   const openBlockMenu = (e, block) => {
     openContextMenu(e, [
-      { label: 'Edit…', onClick: () => openEdit(block) },
+      { label: 'Edit', onClick: () => openEdit(block) },
       { label: 'Delete', danger: true, onClick: () => { deleteBlock(block.id); } },
       { label: 'Open in Obsidian', icon: IconExternal, onClick: () => { try { window.location.href = BLOCK_LIBRARY_OBSIDIAN_URI; } catch (err) {} } },
     ], { accent });
@@ -96,7 +96,7 @@ export default function BlockLibraryPopover({ open, onClose, anchorRef, accent }
         bodyStyle={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 12 }}
       >
         {loading ? (
-          <Subdued>Loading…</Subdued>
+          <Subdued>Loading</Subdued>
         ) : error ? (
           <Subdued>Couldn’t read Block Library.</Subdued>
         ) : blocks.length === 0 ? (

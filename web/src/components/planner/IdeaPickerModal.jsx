@@ -79,7 +79,7 @@ export default function IdeaPickerModal({ open, onClose, onPick }) {
             value={query}
             onChange={e => { setQuery(e.target.value); setSelected(0); }}
             onKeyDown={onKeyDown}
-            placeholder="Search Ideas…"
+            placeholder="Search Ideas"
             style={{
               flex: 1, border: 'none', outline: 'none', background: 'transparent',
               color: 'var(--text)', fontSize: 14, fontFamily: 'var(--font-body)',

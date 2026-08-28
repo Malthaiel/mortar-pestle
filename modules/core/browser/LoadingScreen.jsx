@@ -47,7 +47,7 @@ export default function LoadingScreen({ host, accent }) {
             </span>
             <span style={hostText}>{host || 'Loading'}</span>
           </div>
-          <div style={label}>Loading…</div>
+          <div style={label}>Loading</div>
         </div>
       )}
     </div>

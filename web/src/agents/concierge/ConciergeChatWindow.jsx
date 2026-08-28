@@ -148,7 +148,7 @@ export default function ConciergeChatWindow({ settings, setSetting, accent, onCl
         <button
           type="button"
           onClick={pickAndOrganize}
-          title="Organize a note… (pick a file)"
+          title="Organize a note (pick a file)"
           style={{
             width: 24, height: 24,
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -190,7 +190,7 @@ export default function ConciergeChatWindow({ settings, setSetting, accent, onCl
         seedNonce={seedNonce}
         onSeedConsumed={onSeedConsumed}
         placeholder="Ask Concierge"
-        busyPlaceholder="Concierge is thinking…"
+        busyPlaceholder="Concierge is thinking"
       />
     </AgentChatWindow>
   );

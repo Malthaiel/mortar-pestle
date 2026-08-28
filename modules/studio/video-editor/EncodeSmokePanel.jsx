@@ -20,7 +20,7 @@ export default function EncodeSmokePanel({ onClose, api, accent }) {
   const run = async () => {
     setRunning(true);
     setRows([]);
-    setStatus('encoding…');
+    setStatus('encoding');
     try {
       const res = (await api.invoke('vedit_encode_smoke', {})) || [];
       setRows(res);

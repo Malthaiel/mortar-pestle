@@ -92,7 +92,7 @@ export default function LyricsPanel({ open, onClose, accent }) {
       </div>
 
       <div ref={scrollRef} style={{ overflowY: 'auto', flex: 1, padding: '14px 18px' }}>
-        {status === 'loading' && <LyricsState message="Loading…" tone="muted"/>}
+        {status === 'loading' && <LyricsState message="Loading" tone="muted"/>}
         {status === 'missing' && <LyricsState message="No lyrics on this track page." tone="faint"/>}
         {status === 'error' && <LyricsState message="Couldn't load track page." tone="error"/>}
         {status === 'ok' && lines.length === 0 && (

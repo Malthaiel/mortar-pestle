@@ -95,7 +95,7 @@ export function BlockPopover({
         </CandyAction>
         {!desc.wrapSegment && (
           <CandyAction onClick={() => { onClose(); onEnterPullMode(desc); }}>
-            {sw ? 'Switch & pull to now…' : 'Pull to now…'}
+            {sw ? 'Switch & pull to now' : 'Pull to now'}
           </CandyAction>
         )}
       </>

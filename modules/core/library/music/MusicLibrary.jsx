@@ -66,7 +66,7 @@ export default function MusicLibrary({ accent, status = null }) {
       </div>
 
       {albums === null ? (
-        <Muted>Loading your library…</Muted>
+        <Muted>Loading your library</Muted>
       ) : items.length === 0 ? (
         <Muted>{
           status === 'Downloaded' ? 'No downloaded albums yet.'

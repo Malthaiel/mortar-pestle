@@ -256,7 +256,7 @@ function StepPreview() {
   useEffect(() => {
     runPreview();
   }, [runPreview]);
-  if (busy && !plan) return <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Generating preview…</div>;
+  if (busy && !plan) return <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Generating preview</div>;
   if (error) return <div style={{ color: 'var(--text)', fontSize: 13 }}>Error: {error}</div>;
   if (!plan) return <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No preview yet.</div>;
   return (
@@ -399,7 +399,7 @@ export function DomainBuilderOverlay() {
               <OutlinedBtn onClick={close}>Cancel</OutlinedBtn>
               {step > 0 && <OutlinedBtn onClick={() => setStep(step - 1)} disabled={busy}>Back</OutlinedBtn>}
               {isPreview ? (
-                <PrimaryBtn onClick={build} disabled={busy}>{busy ? 'Building…' : 'Build domain'}</PrimaryBtn>
+                <PrimaryBtn onClick={build} disabled={busy}>{busy ? 'Building' : 'Build domain'}</PrimaryBtn>
               ) : (
                 <PrimaryBtn onClick={() => setStep(step + 1)} disabled={!canNext}>Next</PrimaryBtn>
               )}

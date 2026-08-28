@@ -35,7 +35,7 @@ const EXACT = {
   'Select All': IconSelectAll,
   // chrome (buildGenericMenu + the dev row)
   'Command Palette': IconCommand,
-  'Settings…': IconSettings,
+  'Settings': IconSettings,
   Reload: IconRotateCw,
   'Inspect Element': IconTerminal,
   'Search vault': IconSearch,
@@ -49,12 +49,12 @@ const EXACT = {
   'New note': IconFileText,
   'New folder': IconFolder,
   'New domain': IconPlus,
-  'Reconfigure…': IconWrench,
+  'Reconfigure': IconWrench,
   // library / music
   'Add to playlist': IconCards,
   Download: IconDownload,
   // planner / studio / editor
-  'Edit…': IconTypeText,
+  'Edit': IconTypeText,
   Properties: IconSettings,
   Order: IconSort,
   'Send to': IconSend,

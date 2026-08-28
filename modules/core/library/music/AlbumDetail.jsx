@@ -80,7 +80,7 @@ export default function AlbumDetail({ accent, albumPath }) {
   const coverImgSrc = album ? coverSrc(album.image, 400) : null;
   const tint = useCoverTint(coverImgSrc);
 
-  if (loading) return <Centered>Loading…</Centered>;
+  if (loading) return <Centered>Loading</Centered>;
   if (error)   return <Centered tone="error">Failed to load: {error}</Centered>;
   if (!album)  return <Centered>Not found</Centered>;
 
@@ -96,8 +96,8 @@ export default function AlbumDetail({ accent, albumPath }) {
   const dlLabel = (() => {
     if (dlJob) {
       switch (dlJob.state) {
-        case 'queued': return 'Queued…';
-        case 'downloading': return `Downloading ${dlJob.trackIndex || 0}/${dlJob.trackTotal || '?'}…`;
+        case 'queued': return 'Queued';
+        case 'downloading': return `Downloading ${dlJob.trackIndex || 0}/${dlJob.trackTotal || '?'}`;
         case 'done': return 'Downloaded ✓';
         case 'error': return 'Failed — retry';
         case 'cancelled': return 'Cancelled — retry';
@@ -328,7 +328,7 @@ export default function AlbumDetail({ accent, albumPath }) {
               value={album.status || ''}
               accent={accent}
               title="Mark status"
-              placeholder="Status…"
+              placeholder="Status"
               statuses={LISTEN_STATUSES}
               disabled={busy}
               dotFor={(s) => resolveDot(STATUS_DOT_COLOR, s, accent)}

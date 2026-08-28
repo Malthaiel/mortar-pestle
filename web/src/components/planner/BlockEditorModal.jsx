@@ -295,7 +295,7 @@ export default function BlockEditorModal({ open, block, accent, onSave, onCancel
         }}>
           <OutlinedBtn onClick={onCancel}>Cancel</OutlinedBtn>
           <PrimaryBtn onClick={handleSubmit} disabled={!canSave} accent={accent}>
-            {saving ? 'Saving…' : (isEdit ? 'Save' : 'Create')}
+            {saving ? 'Saving' : (isEdit ? 'Save' : 'Create')}
           </PrimaryBtn>
         </div>
       </div>

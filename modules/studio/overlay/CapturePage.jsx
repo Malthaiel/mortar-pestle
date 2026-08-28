@@ -249,26 +249,26 @@ export default function CapturePage({ api, accent }) {
         <div className="candy-center-row" style={{ gap: 8 }}>
           {recording ? (
             <DangerOutlinedBtn small onClick={toggleRecord} disabled={busy}>
-              {busy ? 'Stopping…' : 'Stop'}
+              {busy ? 'Stopping' : 'Stop'}
             </DangerOutlinedBtn>
           ) : (
             <PrimaryBtn small accent={accent} onClick={toggleRecord} disabled={busy || engineDown}>
-              {busy ? 'Starting…' : 'Start'}
+              {busy ? 'Starting' : 'Start'}
             </PrimaryBtn>
           )}
           {armed ? (
             <DangerOutlinedBtn small onClick={toggleArm} disabled={armBusy}>
-              {armBusy ? 'Disarming…' : 'Disarm'}
+              {armBusy ? 'Disarming' : 'Disarm'}
             </DangerOutlinedBtn>
           ) : (
             <OutlinedBtn small onClick={toggleArm} disabled={armBusy || engineDown}>
-              {armBusy ? 'Arming…' : 'Arm replay'}
+              {armBusy ? 'Arming' : 'Arm replay'}
             </OutlinedBtn>
           )}
           {armed && (
             <>
               <PrimaryBtn small accent={accent} onClick={() => saveReplay(null)} disabled={saveBusy}>
-                {saveBusy ? 'Saving…' : 'Save replay'}
+                {saveBusy ? 'Saving' : 'Save replay'}
               </PrimaryBtn>
               <OutlinedBtn small onClick={() => saveReplay(30)} disabled={saveBusy}>
                 Last 30s
@@ -378,7 +378,7 @@ export default function CapturePage({ api, accent }) {
             </div>
           ) : (
             <div style={paneLabel}>
-              {previewBusy ? 'Preparing preview…' : selectedPath ? 'Preview not ready yet.' : 'Preview'}
+              {previewBusy ? 'Preparing preview' : selectedPath ? 'Preview not ready yet.' : 'Preview'}
             </div>
           )}
         </main>
@@ -407,8 +407,8 @@ export default function CapturePage({ api, accent }) {
           {sendToast && (
             <Toast
               accent={accent}
-              glyph={sendToast.error ? '!' : sendToast.done ? '✓' : '…'}
-              title={sendToast.error ? 'Send failed' : sendToast.done ? 'Ready in the editor' : 'Sending…'}
+              glyph={sendToast.error ? '!' : sendToast.done ? '✓' : ''}
+              title={sendToast.error ? 'Send failed' : sendToast.done ? 'Ready in the editor' : 'Sending'}
               message={sendToast.error ? undefined : sendToast.name}
               error={sendToast.error}
               actions={sendToast.done ? (

@@ -96,7 +96,7 @@ export default function BoardPage({ api, fb, accent }) {
         <CandySelect value={sort} options={SORTS} onChange={setSort} title="Sort" compact />
       </div>
 
-      {loading && <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading…</div>}
+      {loading && <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading</div>}
       {error && <div style={{ color: 'var(--error)', fontSize: 13 }}>{error}</div>}
       {!loading && !error && posts.length === 0 && (
         <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '32px 0', textAlign: 'center' }}>

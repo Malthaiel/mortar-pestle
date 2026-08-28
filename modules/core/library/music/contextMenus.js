@@ -21,7 +21,7 @@ function fail(what, err) {
 export function useAlbumMenu(accent) {
   const { openContextMenu } = useContextMenu();
   return (e, album) => openContextMenu(e, [{
-    label: 'Delete album…',
+    label: 'Delete album',
     danger: true,
     onClick: async () => {
       // eslint-disable-next-line no-alert
@@ -106,7 +106,7 @@ export function usePlaylistMenu(accent) {
     label: 'Saved Tracks can’t be deleted',
     disabled: true,
   }] : [{
-    label: 'Delete playlist…',
+    label: 'Delete playlist',
     danger: true,
     onClick: async () => {
       // eslint-disable-next-line no-alert

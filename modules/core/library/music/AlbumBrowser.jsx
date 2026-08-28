@@ -193,7 +193,7 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
         display: 'flex', flexDirection: 'column', gap: 18,
       }}>
         {albums === null && showAlbums && (
-          <div style={{ color: 'var(--text-faint)', fontSize: 12 }}>Loading…</div>
+          <div style={{ color: 'var(--text-faint)', fontSize: 12 }}>Loading</div>
         )}
 
         {showPlaylists && (

@@ -30,7 +30,7 @@ export default function UpdateQueue({ accent }) {
       }}>Update Queue</div>
       <div style={{ flex: 1, overflow: 'auto', padding: '24px 32px' }}>
         {loading
-          ? <div style={{ color: 'var(--text-muted)' }}>Loading…</div>
+          ? <div style={{ color: 'var(--text-muted)' }}>Loading</div>
           : <div
               className="reference-render"
               style={{ fontSize: 14, color: 'var(--text)', lineHeight: 1.6 }}

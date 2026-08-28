@@ -164,7 +164,7 @@ export default function BrowsePage({ accent, initialQuery = '', initialMode = MO
         <TextInput
           value={query}
           onChange={onQueryChange}
-          placeholder={mode === MODE_ALBUMS ? 'Search albums on MusicBrainz…' : 'Search artists on MusicBrainz…'}
+          placeholder={mode === MODE_ALBUMS ? 'Search albums on MusicBrainz' : 'Search artists on MusicBrainz'}
         />
         {selectedArtist && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
@@ -190,7 +190,7 @@ export default function BrowsePage({ accent, initialQuery = '', initialMode = MO
         padding: 18, paddingBottom: 'calc(18px + var(--candy-tile-depth))',
       }}>
         {loading && (
-          <div style={{ color: 'var(--text-faint)', fontSize: 12 }}>Searching…</div>
+          <div style={{ color: 'var(--text-faint)', fontSize: 12 }}>Searching</div>
         )}
         {!loading && error && (
           <div style={{ color: 'var(--text)', fontSize: 12, textAlign: 'center', padding: 24 }}>{error}</div>

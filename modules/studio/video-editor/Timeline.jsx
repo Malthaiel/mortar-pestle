@@ -389,7 +389,7 @@ export default function Timeline({
     const samples = [];
     const t0 = performance.now();
     let last = t0;
-    setHudText('measuring…');
+    setHudText('measuring');
     const tick = (now) => {
       const t = (now - t0) / 1000;
       samples.push({ dt: now - last, phase: t < 5 ? 'A' : 'B' });

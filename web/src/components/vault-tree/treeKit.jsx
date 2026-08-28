@@ -95,7 +95,7 @@ export function Collapsible({ open, count = 0, children }) {
       onTransitionEnd={(e) => { if (e.propertyName === 'grid-template-rows' && open) setSettled(true); }}
     >
       {/* min-width:0 on the grid + its item lets nested rows shrink below their
-          (nowrap) text, so each pill caps at the sidebar width and truncates to "…".
+          (nowrap) text, so each pill caps at the sidebar width and truncates to "".
           Without it the grid item's min-content blows the column past the rail and
           long names hard-clip, no ellipsis. */}
       <div style={{ overflow: open && settled ? 'visible' : 'hidden', minHeight: 0, minWidth: 0 }}>

@@ -419,7 +419,7 @@ export default function PreviewPlayer({
         if (!el || !el.src || !duration) return;
         el.pause();
         setPlaying(false);
-        setBenchText('benching…');
+        setBenchText('benching');
         const samples = [];
         for (let i = 0; i < 30; i++) {
           const t = Math.random() * Math.max(0.5, duration - 0.5);

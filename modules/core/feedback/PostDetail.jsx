@@ -67,7 +67,7 @@ export default function PostDetail({ api, fb, accent, postId }) {
     finally { setBusy(false); }
   };
 
-  if (loading) return <div style={{ padding: 28, color: 'var(--text-muted)' }}>Loading…</div>;
+  if (loading) return <div style={{ padding: 28, color: 'var(--text-muted)' }}>Loading</div>;
   if (error) return <div style={{ padding: 28, color: 'var(--error)' }}>{error}</div>;
   if (!post) return null;
 
@@ -132,13 +132,13 @@ export default function PostDetail({ api, fb, accent, postId }) {
 
         <div style={{ marginTop: 16 }}>
           <textarea className="candy-input" value={draft} onChange={(e) => setDraft(e.target.value)}
-            placeholder={!session?.signedIn ? 'Sign in to comment' : needsHandle ? 'Pick a handle in Settings → Feedback to comment' : 'Add a comment…'}
+            placeholder={!session?.signedIn ? 'Sign in to comment' : needsHandle ? 'Pick a handle in Settings → Feedback to comment' : 'Add a comment'}
             disabled={!session?.signedIn || needsHandle}
             style={{ width: '100%', minHeight: 80, resize: 'vertical', padding: '8px 10px',
               fontSize: 13, fontFamily: 'var(--font-body)', color: 'var(--text)' }} />
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
             {session?.signedIn
-              ? <PrimaryBtn small onClick={submitComment} disabled={busy || !draft.trim()}>{busy ? 'Posting…' : 'Comment'}</PrimaryBtn>
+              ? <PrimaryBtn small onClick={submitComment} disabled={busy || !draft.trim()}>{busy ? 'Posting' : 'Comment'}</PrimaryBtn>
               : <OutlinedBtn small onClick={() => setShowSignIn(true)}>Sign in to comment</OutlinedBtn>}
           </div>
         </div>

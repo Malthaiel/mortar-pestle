@@ -46,7 +46,7 @@ function musicStatus(j) {
 
 function animeStatus(j) {
   if (j.state === 'queued') return j.queuePosition > 0 ? `Queued — #${j.queuePosition} in line` : 'Queued';
-  if (j.state === 'preparing') return 'Preparing…';
+  if (j.state === 'preparing') return 'Preparing';
   if (j.state === 'downloading') {
     const pct = Math.round(j.progressPct || 0);
     return `${pct}%${j.filesTotal ? ` · ${j.filesDone || 0}/${j.filesTotal} files` : ''}`;

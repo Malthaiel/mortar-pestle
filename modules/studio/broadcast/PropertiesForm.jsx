@@ -340,7 +340,7 @@ export default function PropertiesForm({ api, sceneName, node, accent, omit, fet
     );
   });
 
-  if (props == null) return <div style={{ fontSize: 11.5, color: 'var(--text-faint)' }}>loading…</div>;
+  if (props == null) return <div style={{ fontSize: 11.5, color: 'var(--text-faint)' }}>loading</div>;
   const visible = omit?.length ? props.filter((p) => !omit.includes(p.name)) : props;
   if (!visible.length) return omit?.length ? null : <div style={{ fontSize: 11.5, color: 'var(--text-faint)' }}>no properties</div>;
   return <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>{render(visible)}</div>;

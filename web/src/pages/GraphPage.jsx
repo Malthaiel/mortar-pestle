@@ -40,7 +40,7 @@ class CanvasBoundary extends Component {
 function GraphCanvasLazy(props) {
   return (
     <CanvasBoundary>
-      <Suspense fallback={<div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><LoadingState label="Rendering…"/></div>}>
+      <Suspense fallback={<div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><LoadingState label="Rendering"/></div>}>
         <GraphCanvas {...props} />
       </Suspense>
     </CanvasBoundary>
@@ -89,7 +89,7 @@ export default function GraphPage({ accent }) {
   }
 
   if (!manifest) {
-    return <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><LoadingState label="Loading graph…"/></div>;
+    return <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><LoadingState label="Loading graph"/></div>;
   }
   if (!nodes.length) {
     return <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -118,7 +118,7 @@ export default function GraphPage({ accent }) {
           <input
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="Search pages…"
+            placeholder="Search pages"
             style={{
               width: '100%', boxSizing: 'border-box', padding: '7px 10px',
               fontSize: 13, color: 'var(--text)', background: 'var(--surface-2)',

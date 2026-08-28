@@ -79,7 +79,7 @@ export default function TokenDashboard({ accent }) {
   const maxModel = useMemo(() => Math.max(1, ...(stats?.by_model || []).map(total)), [stats]);
 
   if (loading && !stats) {
-    return <Centered>Loading token usage…</Centered>;
+    return <Centered>Loading token usage</Centered>;
   }
   if (error) {
     return <Centered tone="error">Failed to read usage: {error}</Centered>;
@@ -114,7 +114,7 @@ export default function TokenDashboard({ accent }) {
           style={{ '--accent': accentColor, height: 32, '--corner-max': '16px', flexShrink: 0, opacity: loading ? 0.6 : 1 }}
         >
           <span className="candy-face" style={{ padding: '0 12px', gap: 6, fontSize: 12 }}>
-            <IconRotateCw size={14}/> {loading ? '…' : 'Refresh'}
+            <IconRotateCw size={14}/> {loading ? 'Loading' : 'Refresh'}
           </span>
         </button>
       </div>

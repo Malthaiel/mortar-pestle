@@ -116,7 +116,7 @@ export default function TreeVaultSwitcher({ accent }) {
             onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
           >
             <span style={{ width: 16, display: 'inline-flex', justifyContent: 'center', flexShrink: 0 }}><IconPlus size={13} /></span>
-            Manage vaults…
+            Manage vaults
           </button>
         </Popover>
       )}

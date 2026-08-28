@@ -133,7 +133,7 @@ export default function CommandPalette({ open, onClose, accent, onOpenSettings, 
             value={query}
             onChange={e => setQuery(e.target.value)}
             onKeyDown={onKeyDown}
-            placeholder="Jump to a page or run a command…"
+            placeholder="Jump to a page or run a command"
             style={{
               flex: 1,
               border: 'none', outline: 'none',

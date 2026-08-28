@@ -146,7 +146,7 @@ export default function AnalystChatWindow({ settings, setSetting, accent, onClos
         seedNonce={seedNonce}
         onSeedConsumed={onSeedConsumed}
         placeholder="Ask the Analyst"
-        busyPlaceholder="Analyst is thinking…"
+        busyPlaceholder="Analyst is thinking"
       />
     </AgentChatWindow>
   );

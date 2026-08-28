@@ -247,7 +247,7 @@ export default function SttDevPanel({ accent }) {
         <TextInput value={modelName} onChange={setModelName} accent={accent}
           placeholder="base.en" disabled={modelBusy} style={{ width: 160, ...mono }} />
         <PrimaryBtn small accent={accent} onClick={loadModel} disabled={modelBusy}>
-          {modelBusy ? 'Loading…' : 'Load model'}
+          {modelBusy ? 'Loading' : 'Load model'}
         </PrimaryBtn>
       </div>
       <div style={{ ...mono, marginTop: 8, lineHeight: 1.6, color: 'var(--text-muted)', minHeight: 16 }}>
@@ -267,7 +267,7 @@ export default function SttDevPanel({ accent }) {
         <TextInput value={filePath} onChange={setFilePath} accent={accent}
           placeholder="/abs/path/to/audio.wav" disabled={fileBusy} style={{ width: 360, ...mono }} />
         <PrimaryBtn small accent={accent} onClick={transcribeFile} disabled={fileBusy}>
-          {fileBusy ? 'Transcribing…' : 'Transcribe'}
+          {fileBusy ? 'Transcribing' : 'Transcribe'}
         </PrimaryBtn>
       </div>
       <div style={{ ...mono, color: 'var(--text-faint)', marginTop: 6 }}>

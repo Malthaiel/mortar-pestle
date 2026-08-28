@@ -58,7 +58,7 @@ function fmtDur(sec) {
 }
 
 const STATE_BADGE = {
-  remuxing: { text: 'remuxing…', color: 'var(--text-faint)' },
+  remuxing: { text: 'remuxing', color: 'var(--text-faint)' },
   offline: { text: 'offline', color: 'var(--error)' },
   error: { text: 'error', color: 'var(--error)' },
 };
@@ -105,7 +105,7 @@ export default function BinPanel({
           Bin
         </div>
         <PrimaryBtn chip accent={accent} onClick={onImport} disabled={importing}>
-          {importing ? 'Importing…' : 'Import'}
+          {importing ? 'Importing' : 'Import'}
         </PrimaryBtn>
       </div>
       {statusText && (

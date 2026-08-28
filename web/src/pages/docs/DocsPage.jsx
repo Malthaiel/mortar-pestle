@@ -97,7 +97,7 @@ export default function DocsPage({ route, accent }) {
   if (!manifest) {
     return (
       <div className="docs-page">
-        <div style={{ padding: 32, color: 'var(--text-muted)' }}>Loading docs…</div>
+        <div style={{ padding: 32, color: 'var(--text-muted)' }}>Loading docs</div>
       </div>
     );
   }
@@ -119,7 +119,7 @@ export default function DocsPage({ route, accent }) {
         />
         <div className="docs-body-wrap">
           {body == null ? (
-            <div style={{ padding: 32, color: 'var(--text-muted)' }}>Loading…</div>
+            <div style={{ padding: 32, color: 'var(--text-muted)' }}>Loading</div>
           ) : (
             <div
               className="reference-render docs-body"

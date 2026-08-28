@@ -340,7 +340,7 @@ export default function GpuSpikePanel({ accent }) {
       const fx = FIXTURES[k];
       const url = mediaHttpUrl(fx.es, { library: true });
       for (const hw of ['prefer-hardware', 'no-preference']) {
-        if (progressRef.current) progressRef.current.textContent = `WebCodecs ${fx.label} · ${hw}…`;
+        if (progressRef.current) progressRef.current.textContent = `WebCodecs ${fx.label} · ${hw}`;
         const r = await webCodecsDecodeBench({
           url, fx, hardwareAcceleration: hw, maxAUs: 300,
           onFrameSample: hw === 'no-preference' ? sampleFrame : undefined,
@@ -550,8 +550,8 @@ export default function GpuSpikePanel({ accent }) {
       <div style={{ ...mono, lineHeight: 1.7, color: 'var(--text-muted)' }}>
         {Object.keys(FIXTURES).map((k) => (
           <div key={k}>
-            {FIXTURES[k].label}: mp4 <Chip ok={fixStatus[`${k}.rel`] === 200}>{String(fixStatus[`${k}.rel`] ?? '…')}</Chip>{' '}
-            h264 <Chip ok={fixStatus[`${k}.es`] === 200}>{String(fixStatus[`${k}.es`] ?? '…')}</Chip>
+            {FIXTURES[k].label}: mp4 <Chip ok={fixStatus[`${k}.rel`] === 200}>{String(fixStatus[`${k}.rel`] ?? '')}</Chip>{' '}
+            h264 <Chip ok={fixStatus[`${k}.es`] === 200}>{String(fixStatus[`${k}.es`] ?? '')}</Chip>
           </div>
         ))}
         {!fixturesOk && <div style={{ marginTop: 6 }}>missing → run: <b>scripts/spike/make-fixtures.sh</b></div>}

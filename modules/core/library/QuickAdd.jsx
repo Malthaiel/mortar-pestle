@@ -22,7 +22,7 @@ export function AddToLibraryButton({ accent, statuses, defaultStatus, busy, adde
   }, [open]);
 
   const dead = !!(busy || added || disabled);
-  const text = added ? '✓ In library' : busy ? 'Adding…' : '+ Add to Library';
+  const text = added ? '✓ In library' : busy ? 'Adding' : '+ Add to Library';
   const pick = (s) => { setOpen(false); onAdd(s); };
 
   return (
@@ -43,7 +43,7 @@ export function AddToLibraryButton({ accent, statuses, defaultStatus, busy, adde
         data-own-press
         disabled={dead}
         onClick={() => setOpen(o => !o)}
-        title="Add with a different status…"
+        title="Add with a different status"
         aria-label="Add with a different status"
         aria-expanded={open}
         style={{ '--accent': accent, height: 33, opacity: dead ? 0.65 : 1 }}

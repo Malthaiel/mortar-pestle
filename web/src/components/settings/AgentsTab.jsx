@@ -153,12 +153,12 @@ function GeneralPanel({ settings, setSetting, accent }) {
                 type="password"
                 value={keyDraft}
                 onChange={setKeyDraft}
-                placeholder={keyPresent ? '••••••••  (replace)' : 'sk-ant-…'}
+                placeholder={keyPresent ? '••••••••  (replace)' : 'sk-ant-'}
                 accent={accent}
                 style={{ flex: 1, fontFamily: 'var(--font-mono)', fontSize: 12 }}
               />
               <OutlinedBtn small onClick={handleSaveKey} disabled={keyBusy || !keyDraft.trim()}>
-                {keyBusy ? '…' : 'Save'}
+                {keyBusy ? 'Saving' : 'Save'}
               </OutlinedBtn>
             </div>
           </Row>
@@ -415,7 +415,7 @@ function CliStatusBanner({ status, busy, onRefresh, onCopyLogin }) {
       )}
       <div>
         <OutlinedBtn small onClick={onRefresh} disabled={busy}>
-          {busy ? 'checking…' : 'Re-check'}
+          {busy ? 'checking' : 'Re-check'}
         </OutlinedBtn>
       </div>
     </div>

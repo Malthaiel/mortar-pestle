@@ -58,7 +58,7 @@ export default function AccountSettingsTab({ api, accent }) {
     finally { setBusy(false); }
   };
 
-  if (loading) return <div style={muted}>Loading…</div>;
+  if (loading) return <div style={muted}>Loading</div>;
   if (!session?.signedIn) {
     return <div style={muted}>Open the Feedback board and sign in to manage your account.</div>;
   }
@@ -79,14 +79,14 @@ export default function AccountSettingsTab({ api, accent }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <UserAvatar src={avatarUrl} name={handle} size={48} />
           <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={onPickAvatar} style={{ display: 'none' }} />
-          <OutlinedBtn onClick={() => fileRef.current?.click()} disabled={uploading}>{uploading ? 'Uploading…' : 'Change avatar'}</OutlinedBtn>
+          <OutlinedBtn onClick={() => fileRef.current?.click()} disabled={uploading}>{uploading ? 'Uploading' : 'Change avatar'}</OutlinedBtn>
         </div>
         <div style={hint}>PNG, JPEG, or WebP · max 4 MB · cropped to a circle.</div>
       </div>
       {error && <div style={{ color: 'var(--error)', fontSize: 12 }}>{error}</div>}
       {msg && <div style={{ color: 'var(--accent)', fontSize: 12 }}>{msg}</div>}
       <div style={{ display: 'flex', gap: 8 }}>
-        <PrimaryBtn onClick={save} disabled={busy || handle.trim().length < 3}>{busy ? 'Saving…' : 'Save'}</PrimaryBtn>
+        <PrimaryBtn onClick={save} disabled={busy || handle.trim().length < 3}>{busy ? 'Saving' : 'Save'}</PrimaryBtn>
         <OutlinedBtn onClick={signOut} disabled={busy}>Sign out</OutlinedBtn>
       </div>
     </div>

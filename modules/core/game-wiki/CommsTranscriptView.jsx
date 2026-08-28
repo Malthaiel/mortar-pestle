@@ -67,7 +67,7 @@ export default function CommsTranscriptView({ sidecarPath, roster = [], onReassi
   }, [jumpTo, state]);
 
   const { status, vm } = state;
-  if (status === 'loading') return <div style={{ ...muted, marginTop: 4 }}>Loading transcript…</div>;
+  if (status === 'loading') return <div style={{ ...muted, marginTop: 4 }}>Loading transcript</div>;
   if (status === 'missing') return <div style={{ ...muted, marginTop: 4 }}>Transcript file unavailable — re-run Extract Comms.</div>;
   if (status === 'parse-error') return <div style={{ color: 'var(--error)', fontSize: 12, marginTop: 4 }}>Couldn’t parse the stored transcript.</div>;
   const segs = vm?.segments || [];

@@ -147,8 +147,8 @@ export default function BrowsePreview({ result, accent, onBack, libraryEntry }) 
   const btn = (() => {
     if (job) {
       switch (job.state) {
-        case 'queued': return { label: job.queuePosition > 0 ? `Queued — #${job.queuePosition}` : 'Queued…', busy: true };
-        case 'downloading': return { label: `Downloading ${job.trackIndex}/${job.trackTotal}…`, busy: true };
+        case 'queued': return { label: job.queuePosition > 0 ? `Queued — #${job.queuePosition}` : 'Queued', busy: true };
+        case 'downloading': return { label: `Downloading ${job.trackIndex}/${job.trackTotal}`, busy: true };
         case 'done': return { label: (job.failed && job.failed.length) ? `Done · ${job.failed.length} failed` : 'Downloaded ✓', done: true };
         case 'error': return { label: 'Failed — retry' };
         case 'cancelled': return { label: 'Cancelled — retry' };
@@ -231,7 +231,7 @@ export default function BrowsePreview({ result, accent, onBack, libraryEntry }) 
 
         {/* Tracklist */}
         <div style={{ marginTop: 28 }}>
-          {loading && <div style={{ color: 'var(--text-faint)', fontSize: 12 }}>Loading tracklist…</div>}
+          {loading && <div style={{ color: 'var(--text-faint)', fontSize: 12 }}>Loading tracklist</div>}
           {!loading && error && (
             <div style={{ color: 'var(--text)', fontSize: 12, padding: '12px 0' }}>{error}</div>
           )}

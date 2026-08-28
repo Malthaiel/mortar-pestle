@@ -99,7 +99,7 @@ export default function BrowseGrid({ accent, mode, query, kind, name }) {
 
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 18, display: 'flex', flexDirection: 'column', gap: 18 }}>
         {error && <div style={{ color: 'var(--text)', fontSize: 12 }}>{error}</div>}
-        {items === null && loading && <div style={{ color: 'var(--text-faint)', fontSize: 12 }}>Loading…</div>}
+        {items === null && loading && <div style={{ color: 'var(--text-faint)', fontSize: 12 }}>Loading</div>}
         {items && (
           filtered.length === 0
             ? (
@@ -128,7 +128,7 @@ export default function BrowseGrid({ accent, mode, query, kind, name }) {
               disabled={loading}
               className="candy-btn is-primary"
               style={{ cursor: loading ? 'default' : 'pointer', opacity: loading ? 0.6 : 1 }}
-            ><span className="candy-face">{loading ? 'Loading…' : 'Load more'}</span></button>
+            ><span className="candy-face">{loading ? 'Loading' : 'Load more'}</span></button>
           </div>
         )}
       </div>

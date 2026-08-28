@@ -12,7 +12,7 @@ export default function VoteButton({ up = 0, down = 0, myVote = 0, onVote, size 
         title={myVote === 1 ? 'Remove your upvote' : 'Upvote'}
         onClick={() => onVote(1)}
       >
-        <span className="candy-face">UPVOTE<span className="fb-vote-n">{up}</span></span>
+        <span className="candy-face">Upvote<span className="fb-vote-n">{up}</span></span>
       </button>
       <button
         type="button"
@@ -21,7 +21,7 @@ export default function VoteButton({ up = 0, down = 0, myVote = 0, onVote, size 
         title={myVote === -1 ? 'Remove your downvote' : 'Downvote'}
         onClick={() => onVote(-1)}
       >
-        <span className="candy-face">DOWNVOTE<span className="fb-vote-n">{down}</span></span>
+        <span className="candy-face">Downvote<span className="fb-vote-n">{down}</span></span>
       </button>
     </div>
   );

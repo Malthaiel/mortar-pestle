@@ -83,7 +83,7 @@ export default function SkillsLaunchpad({ accent }) {
     <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div style={{ padding: '12px 18px 10px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
         <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
-          <TextInput value={q} onChange={setQ} placeholder="Filter skills…" accent={accentColor} style={{ width: '100%', borderRadius: 'var(--radius-md)', background: 'var(--surface-2)' }} />
+          <TextInput value={q} onChange={setQ} placeholder="Filter skills" accent={accentColor} style={{ width: '100%', borderRadius: 'var(--radius-md)', background: 'var(--surface-2)' }} />
         </div>
         <div style={{ width: 150, flexShrink: 0 }}>
           <Select value={sort} onChange={setSort} options={SORT_OPTIONS} accent={accentColor} style={{ borderRadius: 'var(--radius-md)', background: 'var(--surface-2)' }} />

@@ -335,7 +335,7 @@ function KeybindRow({ entry, binding, listening, isLast, accent, onStart, onCanc
 
   const liveChips = liveChipsFromModifiers(liveMods);
   const chipsToShow = listening
-    ? (liveChips.length > 0 ? liveChips : ['…'])
+    ? (liveChips.length > 0 ? liveChips : [''])
     : formatBinding(effectiveBinding);
   const isPlaceholder = listening && liveChips.length === 0;
 

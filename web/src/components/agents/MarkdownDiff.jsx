@@ -103,7 +103,7 @@ export default function MarkdownDiff({ before, after, onApply, onDiscard, applyi
             fontSize: 11, fontWeight: 700, cursor: (applying || noChange) ? 'default' : 'pointer',
             fontFamily: 'var(--font-mono)',
           }}
-        >{applying ? 'Applying…' : 'Apply'}</button>
+        >{applying ? 'Applying' : 'Apply'}</button>
       </div>
     </div>
   );

@@ -12,7 +12,6 @@ import { TerminalProvider } from './TerminalProvider.jsx';
 import { SkillsProvider } from './SkillsProvider.jsx';
 import { bindSkillsApi } from './api.js';
 import TerminalSidebar from './TerminalSidebar.jsx';
-import SettingsTab from './SettingsTab.jsx';
 import SidebarPill from '@host/components/SidebarPill.jsx';
 import './terminal.css';
 
@@ -67,12 +66,6 @@ export default {
           <TerminalRouter rest={params.rest} legacy={params.legacy} accent={accent} />
         </Suspense>
       ),
-    });
-
-    api.slots.registerSettingsTab({
-      id: 'terminal',
-      label: 'Terminal',
-      render: SettingsTab,
     });
   },
 };

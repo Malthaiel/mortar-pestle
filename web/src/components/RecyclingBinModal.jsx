@@ -240,7 +240,7 @@ export default function RecyclingBinModal({ open, onClose, accent, retentionDays
         escToClose={false}
         headerContent={(
           <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-            {loading ? 'Loading…' : `${items.length} item${items.length === 1 ? '' : 's'}`}
+            {loading ? 'Loading' : `${items.length} item${items.length === 1 ? '' : 's'}`}
           </div>
         )}
         bodyStyle={{ padding: 0, overflowY: 'hidden', display: 'flex', flexDirection: 'column' }}

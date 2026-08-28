@@ -13,7 +13,7 @@ export default function FileDrop({ onPick, disabled }) {
       disabled={disabled}
       title="Transcribe an audio or video file"
     >
-      <span className="candy-face">⁂ Transcribe a file…</span>
+      <span className="candy-face">⁂ Transcribe a file</span>
     </button>
   );
 }

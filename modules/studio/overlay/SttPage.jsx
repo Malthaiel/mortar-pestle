@@ -33,7 +33,7 @@ export default function SttPage({ accent }) {
 
   // Header status dot + label.
   let dotColor = 'var(--text-faint)';
-  let statusLabel = `loading ${modelName}…`;
+  let statusLabel = `loading ${modelName}`;
   if (engineDown) {
     dotColor = 'var(--error)';
     statusLabel = engine?.message || 'engine unavailable';
@@ -58,7 +58,7 @@ export default function SttPage({ accent }) {
   } else if (!modelReady) {
     body = modelLoading ? (
       <div className="stt-statepanel">
-        <div className="stt-statepanel-title">{progress != null ? `Downloading ${modelName}…` : 'Loading speech model…'}</div>
+        <div className="stt-statepanel-title">{progress != null ? `Downloading ${modelName}` : 'Loading speech model'}</div>
         <div className="stt-statepanel-sub">
           {progress != null
             ? `${Math.round(progress)}% — SHA-verified as it downloads.`

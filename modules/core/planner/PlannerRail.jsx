@@ -36,8 +36,8 @@ export default function PlannerRail({ accent }) {
 
   return (
     <>
-      <RailStat label="WORDS"    value={today.words}    accent={accent}/>
-      <RailStat label="SESSIONS" value={today.sessions} accent={accent}/>
+      <RailStat label="Words"    value={today.words}    accent={accent}/>
+      <RailStat label="Sessions" value={today.sessions} accent={accent}/>
     </>
   );
 }

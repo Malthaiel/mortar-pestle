@@ -12,9 +12,9 @@ function basename(p) {
 }
 
 const STATUS = {
-  loading: (f) => `Reading ${basename(f) || 'note'}…`,
-  running: (f) => `Organizing ${basename(f) || 'note'}…`,
-  applying: () => 'Applying…',
+  loading: (f) => `Reading ${basename(f) || 'note'}`,
+  running: (f) => `Organizing ${basename(f) || 'note'}`,
+  applying: () => 'Applying',
   done: (f) => `Done — ${basename(f) || 'note'} reorganized. Original saved to the recycle bin.`,
 };
 
@@ -89,7 +89,7 @@ export default function RecipeTray({ recipeState, def, accent, onApply, onDiscar
           <span style={{
             width: 7, height: 7, borderRadius: '50%', background: accentColor, flexShrink: 0,
           }}/>
-          {(STATUS[phase] ? STATUS[phase](file) : '…')}
+          {(STATUS[phase] ? STATUS[phase](file) : '')}
         </div>
       )}
     </div>
