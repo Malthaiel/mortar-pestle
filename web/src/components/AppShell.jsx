@@ -152,6 +152,15 @@ export default function AppShell({ children, onOpenSettings, settingsOpen, accen
           presets={TOOLKIT_PRESETS}
           storageKey={STORAGE_TOOLKIT_WIDTH}
           ariaLabel="Resize right sidebar"
+          // The in-flow seam div is layout-only and pointerEvents:'none' (the
+          // real grab target is a 24px body portal around the measured
+          // divider), so its 6px is pure spacing. Here it straddled the
+          // AppShell root, painting var(--bg) between two panes that paint
+          // var(--surface) — a black gouge beside the planner's health
+          // column. Collapsed to 0: the rail's own borderLeft is the
+          // divider and dragging is unchanged. Painting it a colour cannot
+          // work — the middle column's background varies per page.
+          style={{ width: 0 }}
           inverted
           onDragStart={() => setIsResizingToolkit(true)}
           onDragEnd={() => setIsResizingToolkit(false)}

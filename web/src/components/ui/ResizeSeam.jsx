@@ -9,7 +9,7 @@
 //      It was pinned at a hardcoded `left: (HOTZONE - SEAM_WIDTH) / 2`, but the
 //      divider is a 1px `border` belonging to a NEIGHBOUR element and sits at a
 //      different offset at every call site. It is measured now — see
-//      dividerX(). Restating it as a constant is what caused the bug.
+//      dividerPos(). Restating it as a constant is what caused the bug.
 //   2. The width chooser was a hand-rolled pill list with its own hover colours.
 //      It is a real FoldMenu now — the app's dropdown, candy rows and all.
 //   3. Each call site declared five `snapTargets` 40px apart, unrelated to its
@@ -156,31 +156,36 @@ function rubberBand(over) {
  * Read every frame the seam is visible, never cached: the seam MOVES while you
  * drag it, and the rail eases into a snap under its own transition.
  */
-function dividerX(el) {
+function dividerPos(el, horizontal) {
   const r = el.getBoundingClientRect();
-  const mid = r.left + r.width / 2;
+  const mid = horizontal ? r.top + r.height / 2 : r.left + r.width / 2;
   const found = [];
   const edge = (x) => { if (Number.isFinite(x)) found.push(x); };
+
+  const before = horizontal ? 'borderBottomWidth' : 'borderRightWidth';
+  const after  = horizontal ? 'borderTopWidth'    : 'borderLeftWidth';
+  const farEdge  = (rect, w) => (horizontal ? rect.bottom : rect.right) - w / 2;
+  const nearEdge = (rect, w) => (horizontal ? rect.top    : rect.left)  + w / 2;
 
   const prev = el.previousElementSibling;
   const next = el.nextElementSibling;
   if (prev) {
-    const w = parseFloat(getComputedStyle(prev).borderRightWidth) || 0;
-    if (w) edge(prev.getBoundingClientRect().right - w / 2);
+    const w = parseFloat(getComputedStyle(prev)[before]) || 0;
+    if (w) edge(farEdge(prev.getBoundingClientRect(), w));
   }
   if (next) {
-    const w = parseFloat(getComputedStyle(next).borderLeftWidth) || 0;
-    if (w) edge(next.getBoundingClientRect().left + w / 2);
+    const w = parseFloat(getComputedStyle(next)[after]) || 0;
+    if (w) edge(nearEdge(next.getBoundingClientRect(), w));
   }
   // Only if no sibling owns one. Nearest ancestor wins and the walk stops there
   // — a modal's own frame is a border too, and it is not this seam's divider.
   for (let a = el.parentElement; a && !found.length; a = a.parentElement) {
     const cs = getComputedStyle(a);
     const ar = a.getBoundingClientRect();
-    const rw = parseFloat(cs.borderRightWidth) || 0;
-    const lw = parseFloat(cs.borderLeftWidth) || 0;
-    if (rw) edge(ar.right - rw / 2);
-    if (lw) edge(ar.left + lw / 2);
+    const rw = parseFloat(cs[before]) || 0;
+    const lw = parseFloat(cs[after]) || 0;
+    if (rw) edge(farEdge(ar, rw));
+    if (lw) edge(nearEdge(ar, lw));
   }
 
   // Closest to the seam's own centre, and only if it is plausibly THIS seam's
@@ -234,6 +239,13 @@ export default function ResizeSeam({
   // the delta sign AND which way the menu unfolds — a menu that opened over the
   // rail it is resizing would cover the thing you are looking at.
   inverted = false,
+  // Sideways mode: the seam is a horizontal bar and the pane it sizes is ABOVE
+  // it (or BELOW, with `inverted`), so the drag reads clientY and `width` is a
+  // HEIGHT. Added 2026-08-27 for the planner's calendar-over-day-list split
+  // rather than forking a second seam component. The preset fold menu is not
+  // ported — it unfolds sideways off a vertical divider — so a horizontal seam
+  // must pass `presets={[]}`, which already skips it (see the render).
+  horizontal = false,
   style: outerStyle,
 }) {
   const [hover, setHover] = useState(false);
@@ -310,8 +322,13 @@ export default function ResizeSeam({
     const el = seamRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    setLine({ top: r.top, height: r.height, x: dividerX(el), z: stackZ(el) });
-  }, []);
+    // `main` is the divider's coordinate on the resize axis; cross0/crossLen
+    // are its extent on the other one. Generic so both orientations share the
+    // rAF loop, the hit strip and the line portal.
+    setLine(horizontal
+      ? { cross0: r.left, crossLen: r.width,  main: dividerPos(el, true),  z: stackZ(el) }
+      : { cross0: r.top,  crossLen: r.height, main: dividerPos(el, false), z: stackZ(el) });
+  }, [horizontal]);
   useEffect(() => {
     if (!visible) return undefined;
     let raf = 0;
@@ -340,7 +357,7 @@ export default function ResizeSeam({
   const onPointerDown = useCallback((e) => {
     if (collapsed) return;
     e.preventDefault();
-    dragStateRef.current = { startX: e.clientX, startWidth: width, moved: false };
+    dragStateRef.current = { startX: horizontal ? e.clientY : e.clientX, startWidth: width, moved: false };
     setDragging(true);
     lastSnappedRef.current = null;
     onDragStart?.();
@@ -349,7 +366,7 @@ export default function ResizeSeam({
       // For a seam whose pane is on its RIGHT (`inverted`), leftward cursor
       // motion GROWS the pane — invert the delta so the snap/rubberband/persist
       // maths below stays direction-agnostic.
-      const rawDx = ev.clientX - dragStateRef.current.startX;
+      const rawDx = (horizontal ? ev.clientY : ev.clientX) - dragStateRef.current.startX;
       const dx = inverted ? -rawDx : rawDx;
       let raw = dragStateRef.current.startWidth + dx;
       setCursor({ x: ev.clientX, y: ev.clientY });
@@ -395,13 +412,13 @@ export default function ResizeSeam({
         // Anchored on the MEASURED divider, not on where the click landed —
         // the hotzone is 12px wide, so anchoring on the click made the menu
         // pop up in a different place every time. User-reported 2026-08-13.
-        anchorXRef.current = seamRef.current ? dividerX(seamRef.current) : ev.clientX;
+        anchorXRef.current = seamRef.current ? dividerPos(seamRef.current, horizontal) : ev.clientX;
         setCursor({ x: ev.clientX, y: ev.clientY });
         setMenuOpen(o => !o);
         return;
       }
 
-      const rawDx = ev.clientX - dragStateRef.current.startX;
+      const rawDx = (horizontal ? ev.clientY : ev.clientX) - dragStateRef.current.startX;
       const dx = inverted ? -rawDx : rawDx;
       const raw = dragStateRef.current.startWidth + dx;
 
@@ -485,7 +502,7 @@ export default function ResizeSeam({
   return (
     <>
       {/* Layout only — it holds the seam's place in the flex row and is what
-          dividerX() walks from. It cannot be the hit target: it sits entirely
+          dividerPos() walks from. It cannot be the hit target: it sits entirely
           on ONE side of the divider (the left sidebar's is 273..279 against a
           divider at 279.5), so every pixel of grab space was on the left and
           none on the right, and it cannot grow rightward either — the rail's
@@ -496,7 +513,7 @@ export default function ResizeSeam({
         ref={seamRef}
         aria-hidden
         style={{
-          width: HOTZONE_PX,
+          ...(horizontal ? { height: HOTZONE_PX } : { width: HOTZONE_PX }),
           alignSelf: 'stretch',
           flexShrink: 0,
           position: 'relative',
@@ -519,16 +536,15 @@ export default function ResizeSeam({
           onPointerDown={onPointerDown}
           onDoubleClick={onDoubleClick}
           role="separator"
-          aria-orientation="vertical"
+          aria-orientation={horizontal ? 'horizontal' : 'vertical'}
           aria-label={ariaLabel}
           title="Drag to resize · double-click to reset"
           style={{
             position: 'fixed',
-            top: line.top,
-            height: line.height,
-            left: line.x - HOTZONE_PX,
-            width: HOTZONE_PX * 2,
-            cursor: 'col-resize',
+            ...(horizontal
+              ? { left: line.cross0, width: line.crossLen, top: line.main - HOTZONE_PX, height: HOTZONE_PX * 2 }
+              : { top: line.cross0, height: line.crossLen, left: line.main - HOTZONE_PX, width: HOTZONE_PX * 2 }),
+            cursor: horizontal ? 'row-resize' : 'col-resize',
             background: 'transparent',
             zIndex: line.z,
           }}
@@ -541,10 +557,9 @@ export default function ResizeSeam({
       {line && createPortal(
         <div aria-hidden style={{
           position: 'fixed',
-          top: line.top,
-          height: line.height,
-          left: line.x - SEAM_WIDTH / 2,
-          width: SEAM_WIDTH,
+          ...(horizontal
+            ? { left: line.cross0, width: line.crossLen, top: line.main - SEAM_WIDTH / 2, height: SEAM_WIDTH }
+            : { top: line.cross0, height: line.crossLen, left: line.main - SEAM_WIDTH / 2, width: SEAM_WIDTH }),
           background: accentColor,
           borderRadius: 1,
           pointerEvents: 'none',

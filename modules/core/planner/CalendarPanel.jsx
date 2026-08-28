@@ -1113,7 +1113,7 @@ export default function CalendarPanel({
         editingActiveRef.current = true;
         setDraft({ ds, startMins: s, endMins: s + 30, phase: 'editing', name: '' });
       } },
-      { label: 'New event…', icon: IconCalendar, onClick: () => {
+      { label: 'New event', icon: IconCalendar, onClick: () => {
         setEventModal({ open: true, ds, start: hm(s) });
       } },
     ], { accent });
@@ -1240,7 +1240,7 @@ export default function CalendarPanel({
       )}
 
       {viewMode !== 'month' && (!hideHeader || showDayStrip) && (
-        <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+        <div style={{ display: 'flex', flexShrink: 0 }}>
           <div style={{ width: 44, flexShrink: 0 }}/>
           {visibleDays.map(d => {
             const isToday = isSameDay(d, today);
@@ -1269,7 +1269,7 @@ export default function CalendarPanel({
           onSelectDay={(d) => { onPivotChange(d); onViewModeChange('day'); }}
         />
       ) : (
-        <div style={{ flex: 1, overflowY: 'auto', position: 'relative' }} ref={containerRef} data-frame-edit={frameEditMode ? 'on' : undefined}>
+        <div className="cal-noscrollbar" style={{ flex: 1, overflowY: 'auto', position: 'relative' }} ref={containerRef} data-frame-edit={frameEditMode ? 'on' : undefined}>
           <div style={{ display: 'flex', minHeight: '100%' }}>
             {showHourGutter && (
             <div style={{ width: 44, flexShrink: 0, position: 'relative' }}>

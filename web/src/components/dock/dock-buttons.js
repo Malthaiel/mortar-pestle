@@ -8,7 +8,7 @@
 
 import {
   IconCommand, IconKeyboard, IconPlus,
-  IconCalendar, IconBookOpen, IconSparkles, IconLayoutGrid, IconDownload,
+  IconCalendar, IconBookOpen, IconSparkles, IconDownload,
 } from '../icons.jsx';
 
 export const DOCK_BUTTONS = [
@@ -34,13 +34,12 @@ export const DOCK_BUTTONS = [
     onClick: (ctx) => ctx.setHintsOpen(true),
     isActive: (ctx) => !!ctx.hintsOpen,
   },
-  {
-    id: 'planner', group: 'tools', Icon: IconLayoutGrid, label: 'Planner',
-    // Navigates now — the pop-up window it used to open is deleted and the
-    // Planner is a route section (Planner Consolidation).
-    onClick: (ctx) => ctx.navigate('/planner'),
-    isActive: (ctx) => ctx.route?.page === 'planner',
-  },
+  // The built-in 'planner' button is GONE (2026-08-27). The planner module
+  // registers a left-sidebar slot, so module-entries.js already synthesizes a
+  // 'module:planner' dock button with the same IconLayoutGrid and the same
+  // label — the two rendered side by side as a duplicate pair. Saved dock
+  // orders still holding the bare 'planner' id are dropped by effectiveOrder()
+  // in Dock.jsx, so no migration is needed.
   {
     id: 'quick-capture', group: 'tools', Icon: IconPlus, label: 'Quick capture',
     // Sub-feature 5 wires the floating capture popover.

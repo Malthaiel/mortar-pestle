@@ -16,7 +16,7 @@
 // browser event feeds all three data hooks, so a single write never
 // multi-flashes the pane.
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { subscribeEvents } from '../../api.js';
 import { api } from '../../api.js';
 import { useUpcomingWindow } from '../../hooks/useUpcomingWindow.js';
@@ -25,8 +25,6 @@ import { useUnorganizedItems } from '../../hooks/useUnorganizedItems.js';
 import { useEventTypes } from '../../hooks/useEventTypes.js';
 import { todayLocalStr } from '../../util/time.js';
 import { IconPlus } from '../icons.jsx';
-import Popover from '../ui/Popover.jsx';
-import MiniMonthPicker from './MiniMonthPicker.jsx';
 import NewEventModal from './NewEventModal.jsx';
 import PaneHeader from './PaneHeader.jsx';
 import { TaskChip, NoteChip, Group, Subdued, shortDate } from './ItemChips.jsx';
@@ -37,11 +35,6 @@ import { makeUniqueId } from '../../util/frames.js';
 import { weekdayForKey } from '../../util/events.js';
 import { playCelebrationChime } from '../../hooks/useTactileSound.js';
 import { usePlanner } from '@modules/core/planner/PlannerProvider.jsx';
-
-function humanDate(ds) {
-  const [y, m, d] = ds.split('-').map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-}
 
 // Day-group label relative to REAL today (not the pivot) — "Today"/"Tomorrow"
 // keep meaning while time-traveling.
@@ -257,35 +250,6 @@ export default function DayPane({ accent = 'var(--accent)', pivotDs, onPivotChan
   };
   const [addingNote, setAddingNote] = useState(false);
 
-  // Date-header month popover — the date chip IS the picker button. Positioned
-  // below the trigger rect (Popover is caller-positioned; useAnchoredRect
-  // anchors above-dock, so the below-anchor math lives here), clamped to the
-  // viewport. Esc closes ONLY the popover: Popover's own Esc is disabled and a
-  // capture-phase handler stops the event before PlannerModal's bubble-phase
-  // close (the NewEventModal pattern).
-  const PICKER_W = 280;
-  const dateBtnRef = useRef(null);
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [pickerPos, setPickerPos] = useState(null);
-  useLayoutEffect(() => {
-    if (!pickerOpen) { setPickerPos(null); return; }
-    const r = dateBtnRef.current?.getBoundingClientRect();
-    if (!r) return;
-    const left = Math.max(8, Math.min(r.left, window.innerWidth - PICKER_W - 8));
-    setPickerPos({ top: r.bottom + 10, left });
-  }, [pickerOpen]);
-  useEffect(() => {
-    if (!pickerOpen) return undefined;
-    const onKey = (e) => {
-      if (e.key !== 'Escape') return;
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      setPickerOpen(false);
-    };
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
-  }, [pickerOpen]);
-
   const colorFor = (typeName) => {
     if (!typeName) return 'var(--text-faint)';
     const t = types.find(x => x.name.toLowerCase() === typeName.toLowerCase());
@@ -343,37 +307,13 @@ export default function DayPane({ accent = 'var(--accent)', pivotDs, onPivotChan
     <div style={{
       flex: 1, minHeight: 0,
       display: 'flex', flexDirection: 'column',
-      borderLeft: '1px solid var(--border)',
+      // No borders — DashboardPage's two wrapper divs own both dividers now
+      // (the stacked layout put a horizontal seam above this pane and moved the
+      // vertical one out to the left column's edge).
     }}>
-      {/* Header — the date itself is the day-picker button (popover in SF4);
-          a Today chip appears whenever the pane is parked off-today. */}
-      <div style={{
-        padding: '12px 16px',
-        borderBottom: '1px solid var(--border-soft)',
-        flexShrink: 0,
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
-      }}>
-        <button
-          type="button"
-          ref={dateBtnRef}
-          className="candy-btn planner-date-chip"
-          data-shape="chip"
-          data-own-press
-          aria-label="Pick a day"
-          aria-expanded={pickerOpen}
-          onClick={() => setPickerOpen(v => !v)}
-        >
-          <span className="candy-face">
-            <PaneHeader variant="date">{humanDate(pivotDs)}</PaneHeader>
-            <span aria-hidden style={{ fontSize: 9, color: 'var(--text-muted)' }}>▾</span>
-          </span>
-        </button>
-        {!isToday && (
-          <button type="button" className="candy-btn" data-shape="chip" data-own-press onClick={() => onPivotChange(todayDs)} aria-label="Jump to today">
-            <span className="candy-face">Today</span>
-          </button>
-        )}
-      </div>
+      {/* No header — the date chip and the Today chip moved into
+          CalendarPane's one centered header row (user-directed 2026-08-27),
+          which sits directly above this pane in the stacked layout. */}
 
       {/* Sections body — one scroll container for all three sections, keyed
           by the pivot so a day switch remounts it (fresh scroll + slide). */}
@@ -400,7 +340,7 @@ export default function DayPane({ accent = 'var(--accent)', pivotDs, onPivotChan
             </AddChip>
           </div>
           {evLoading ? (
-            <Subdued>Loading…</Subdued>
+            <Subdued>Loading</Subdued>
           ) : evError ? (
             <Subdued>Couldn’t read upcoming events.</Subdued>
           ) : groups.length === 0 ? (
@@ -495,7 +435,7 @@ export default function DayPane({ accent = 'var(--accent)', pivotDs, onPivotChan
           )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'calc(6px + var(--candy-depth-small))' }}>
             {day.loading ? (
-              <Subdued>Loading…</Subdued>
+              <Subdued>Loading</Subdued>
             ) : day.error ? (
               <Subdued>Couldn’t read the daily log.</Subdued>
             ) : dayTasks.length === 0 && carryTasks.length === 0 ? (
@@ -548,7 +488,7 @@ export default function DayPane({ accent = 'var(--accent)', pivotDs, onPivotChan
           )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'calc(6px + var(--candy-depth-small))' }}>
             {day.loading ? (
-              <Subdued>Loading…</Subdued>
+              <Subdued>Loading</Subdued>
             ) : day.error ? (
               <Subdued>Couldn’t read the daily log.</Subdued>
             ) : day.notes.length === 0 && carryNotes.length === 0 ? (
@@ -575,23 +515,6 @@ export default function DayPane({ accent = 'var(--accent)', pivotDs, onPivotChan
           </div>
         </section>
       </div>
-
-      <Popover
-        open={pickerOpen && !!pickerPos}
-        onClose={() => setPickerOpen(false)}
-        ariaLabel="Pick a day"
-        accent={accent}
-        escToClose={false}
-        outsideExempt=".planner-date-chip"
-        style={{ position: 'fixed', zIndex: 1100, top: pickerPos?.top, left: pickerPos?.left, width: PICKER_W }}
-        bodyStyle={{ padding: 12 }}
-      >
-        <MiniMonthPicker
-          value={pivotDs}
-          accent={accent}
-          onSelect={(ds) => { onPivotChange(ds); setPickerOpen(false); }}
-        />
-      </Popover>
 
       <NewEventModal
         open={modalOpen}

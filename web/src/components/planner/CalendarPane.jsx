@@ -9,13 +9,15 @@
 // component because Portal preserves the React tree even though the
 // modal is DOM-mounted at document.body.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import CalendarPanel, { getVisibleDays } from '@modules/core/planner/CalendarPanel.jsx';
 import { usePlanner } from '@modules/core/planner/PlannerProvider.jsx';
 import { DRAG_DURATIONS } from '@modules/core/planner/dragDurations.js';
 import { Seg } from '@host/components/ui/index.js';
 import BlockLibraryPopover from './BlockLibraryPopover.jsx';
 import CopyFramePopup from './CopyFramePopup.jsx';
+import Popover from '@host/components/ui/Popover.jsx';
+import MiniMonthPicker from './MiniMonthPicker.jsx';
 import { IconChevronLeft, IconChevronRight, IconRotateCw } from '@host/components/icons.jsx';
 import { weekdayForKey, dateFromKey, keyForDate } from '@host/util/events.js';
 import { minsToHM, todayLocalStr } from '@host/util/time.js';
@@ -27,6 +29,11 @@ function isTypingTarget(el) {
   if (!el) return false;
   const tag = el.tagName;
   return tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable;
+}
+
+function humanDate(ds) {
+  const [y, m, d] = ds.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
 export default function CalendarPane({ accent, pushUndo, pivotDs, onPivotChange }) {
@@ -118,6 +125,33 @@ export default function CalendarPane({ accent, pushUndo, pivotDs, onPivotChange 
   // CalendarPanel can stagger their re-entry (restoreAnim → entranceDelay).
   const hasDeletedOverride = !!(frameOverrides?.[focusedDs] && Object.values(frameOverrides[focusedDs]).some(ov => ov?.deleted));
   const [copyPopupOpen, setCopyPopupOpen] = useState(false);
+
+  // Day-picker popover — the date chip IS the picker button. Lifted verbatim
+  // from DayPane with the chip itself; Popover is caller-positioned, so the
+  // below-anchor math lives here, clamped to the viewport. Esc closes ONLY the
+  // popover (capture-phase, stopped before any ancestor close handler).
+  const PICKER_W = 280;
+  const dateBtnRef = useRef(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerPos, setPickerPos] = useState(null);
+  useLayoutEffect(() => {
+    if (!pickerOpen) { setPickerPos(null); return; }
+    const r = dateBtnRef.current?.getBoundingClientRect();
+    if (!r) return;
+    const left = Math.max(8, Math.min(r.left, window.innerWidth - PICKER_W - 8));
+    setPickerPos({ top: r.bottom + 10, left });
+  }, [pickerOpen]);
+  useEffect(() => {
+    if (!pickerOpen) return undefined;
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      setPickerOpen(false);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [pickerOpen]);
   const [restoreAnim, setRestoreAnim] = useState(null);
   const [resetSpinKey, setResetSpinKey] = useState(0);
   const handleRestoreDeleted = useCallback(async () => {
@@ -186,103 +220,105 @@ export default function CalendarPane({ accent, pushUndo, pivotDs, onPivotChange 
     <div style={{
       flex: 1, minHeight: 0,
       display: 'flex', flexDirection: 'column',
-      borderRight: '1px solid var(--border)',
+      // NO borderRight — DayPane's borderLeft is this seam's only divider. The
+      // pair painted two lines 6px apart (measured x=759 and x=766).
     }}>
-      {/* Header — view toggle + day navigation (left), Edit Frame (right) */}
-      <div style={{
+      {/* Header — ONE centered row (user-directed 2026-08-27). Was two groups
+          pushed to opposite edges by space-between, with the day picker living
+          in DayPane's own header; that header is gone with the stacked layout,
+          so the date chip leads this row. Order: date, view, day nav, tools. */}
+      <div className="planner-cal-header" style={{
         padding: '12px 16px',
         borderBottom: '1px solid var(--border-soft)',
         flexShrink: 0,
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        // space-between alone sets no FLOOR: once the pane narrows, the two
-        // groups slide together until they nearly touch (measured 1.4px between
-        // Today and the library chip, against 8px everywhere else on the line).
-        // The gap is the floor; space-between still spreads whatever is left over.
-        // The floor is not free: it cost 8px of line, which overran the 461px of
-        // usable header by 2.1px and squashed the widest chip 1.7px below its own
-        // text, wrapping the label onto two lines. Hence the short labels below —
-        // "Blocks"/"Frame" leave ~45px of slack, so the floor is affordable at
-        // this pane width. Chip labels can no longer wrap (styles.css § chip), so
-        // the next overrun shows as a squashed pill, not as mangled text.
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
         gap: 'var(--planner-btn-gap)',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Seg
-            options={[
-              { value: 'day',    label: 'Day' },
-              { value: 'custom', label: '3-day' },
-            ]}
-            value={viewMode}
-            onChange={setViewMode}
-            accent={accent}
-          />
+        <button
+          type="button"
+          ref={dateBtnRef}
+          className="candy-btn planner-date-chip"
+          data-shape="chip"
+          data-own-press
+          aria-label="Pick a day"
+          aria-expanded={pickerOpen}
+          onClick={() => setPickerOpen(v => !v)}
+        >
+          <span className="candy-face">{humanDate(pivotDs)}</span>
+        </button>
+        <Seg
+          options={[
+            { value: 'day',    label: 'Day' },
+            { value: 'custom', label: '3-day' },
+          ]}
+          value={viewMode}
+          onChange={setViewMode}
+          accent={accent}
+        />
+        <button
+          type="button"
+          className="candy-btn"
+          data-shape="circle"
+          data-own-press
+          onClick={() => goToDay(-1)}
+          aria-label="Previous day"
+        ><span className="candy-face"><IconChevronLeft/></span></button>
+        <button
+          type="button"
+          className="candy-btn"
+          data-shape="circle"
+          data-own-press
+          onClick={() => goToDay(1)}
+          aria-label="Next day"
+        ><span className="candy-face"><IconChevronRight/></span></button>
+        <button
+          type="button"
+          className="candy-btn"
+          data-shape="chip"
+          data-own-press
+          onClick={goToToday}
+          aria-label="Jump to today"
+        ><span className="candy-face">Today</span></button>
+        {frameEditMode && (
+          <button
+            type="button"
+            className={`candy-btn${copyPopupOpen ? ' is-active' : ''}`}
+            data-shape="chip"
+            data-own-press
+            onClick={() => setCopyPopupOpen(v => !v)}
+            aria-label="Copy day frame"
+          ><span className="candy-face">Copy</span></button>
+        )}
+        {hasDeletedOverride && (
           <button
             type="button"
             className="candy-btn"
             data-shape="circle"
             data-own-press
-            onClick={() => goToDay(-1)}
-            aria-label="Previous day"
-          ><span className="candy-face"><IconChevronLeft/></span></button>
-          <button
-            type="button"
-            className="candy-btn"
-            data-shape="circle"
-            data-own-press
-            onClick={() => goToDay(1)}
-            aria-label="Next day"
-          ><span className="candy-face"><IconChevronRight/></span></button>
-          <button
-            type="button"
-            className="candy-btn"
-            data-shape="chip"
-            data-own-press
-            onClick={goToToday}
-            aria-label="Jump to today"
-          ><span className="candy-face">Today</span></button>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {frameEditMode && (
-            <button
-              type="button"
-              className={`candy-btn${copyPopupOpen ? ' is-active' : ''}`}
-              data-shape="chip"
-              data-own-press
-              onClick={() => setCopyPopupOpen(v => !v)}
-              aria-label="Copy day frame"
-            ><span className="candy-face">Copy</span></button>
-          )}
-          {hasDeletedOverride && (
-            <button
-              type="button"
-              className="candy-btn"
-              data-shape="circle"
-              data-own-press
-              onClick={handleRestoreDeleted}
-              aria-label="Restore today's deleted frames"
-              title="Restore today's deleted frames"
-            ><span className="candy-face" key={resetSpinKey} style={resetSpinKey ? { animation: 'frameResetSpin 0.4s ease' } : undefined}><IconRotateCw/></span></button>
-          )}
-          <button
-            type="button"
-            ref={libBtnRef}
-            className={`candy-btn planner-blocklib-chip${libOpen ? ' is-active' : ''}`}
-            data-shape="chip"
-            data-own-press
-            onClick={() => setLibOpen(v => !v)}
-            aria-expanded={libOpen}
-            aria-label="Block Library"
-          ><span className="candy-face">Blocks</span></button>
-          <button
-            type="button"
-            className={`candy-btn${frameEditMode ? ' is-active' : ''}`}
-            data-shape="chip"
-            data-own-press
-            onClick={() => setFrameEditMode(v => !v)}
-            aria-pressed={frameEditMode}
-            aria-label="Edit Daily Frame"
-          ><span className="candy-face">{frameEditMode ? 'Done' : 'Frame'}</span></button>
-        </div>
+            onClick={handleRestoreDeleted}
+            aria-label="Restore today's deleted frames"
+            title="Restore today's deleted frames"
+          ><span className="candy-face" key={resetSpinKey} style={resetSpinKey ? { animation: 'frameResetSpin 0.4s ease' } : undefined}><IconRotateCw/></span></button>
+        )}
+        <button
+          type="button"
+          ref={libBtnRef}
+          className={`candy-btn planner-blocklib-chip${libOpen ? ' is-active' : ''}`}
+          data-shape="chip"
+          data-own-press
+          onClick={() => setLibOpen(v => !v)}
+          aria-expanded={libOpen}
+          aria-label="Block Library"
+        ><span className="candy-face">Blocks</span></button>
+        <button
+          type="button"
+          className={`candy-btn${frameEditMode ? ' is-active' : ''}`}
+          data-shape="chip"
+          data-own-press
+          onClick={() => setFrameEditMode(v => !v)}
+          aria-pressed={frameEditMode}
+          aria-label="Edit Daily Frame"
+        ><span className="candy-face">{frameEditMode ? 'Done' : 'Frame'}</span></button>
       </div>
 
       <BlockLibraryPopover
@@ -291,6 +327,23 @@ export default function CalendarPane({ accent, pushUndo, pivotDs, onPivotChange 
         anchorRef={libBtnRef}
         accent={accent}
       />
+
+      <Popover
+        open={pickerOpen && !!pickerPos}
+        onClose={() => setPickerOpen(false)}
+        ariaLabel="Pick a day"
+        accent={accent}
+        escToClose={false}
+        outsideExempt=".planner-date-chip"
+        style={{ position: 'fixed', zIndex: 1100, top: pickerPos?.top, left: pickerPos?.left, width: PICKER_W }}
+        bodyStyle={{ padding: 12 }}
+      >
+        <MiniMonthPicker
+          value={pivotDs}
+          accent={accent}
+          onSelect={(ds) => { onPivotChange(ds); setPickerOpen(false); }}
+        />
+      </Popover>
 
       <CopyFramePopup
         open={copyPopupOpen}

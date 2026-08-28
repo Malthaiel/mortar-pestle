@@ -53,6 +53,18 @@ export const HEALTH_CONFIG = {
   ],
 };
 
+// Calendar HEIGHT — the planner dashboard stacked its calendar over the day
+// list (user-directed 2026-08-27), so the two now share a horizontal seam
+// instead of a vertical one. Same shape, same hook, independent key; `def` is
+// the pre-measure fallback and null still means "an equal half". No presets:
+// ResizeSeam's preset fold menu unfolds sideways off a vertical divider and is
+// skipped entirely on an empty list.
+export const CALENDAR_HEIGHT_CONFIG = {
+  key: 'planner:calHeight:v1',
+  def: 420, min: 220, max: 900,
+  presets: [],
+};
+
 // One-time cleanup of the retired layout-era keys (Pivot 2). Idempotent.
 try {
   ['planner.layout', 'planner:calWidth:split:v4', 'planner:calWidth:3col:v4', 'planner:noteWidth:v3']
