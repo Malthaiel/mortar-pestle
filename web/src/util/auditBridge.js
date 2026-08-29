@@ -16,13 +16,27 @@
 // carried different nonces, "the page nonce" would be ambiguous and the check
 // would break.
 
+import { getCurrentWindow } from '@tauri-apps/api/window';
 const NONCE = (typeof crypto !== 'undefined' && crypto.randomUUID)
   ? crypto.randomUUID()
   : 'n' + (typeof performance !== 'undefined' ? performance.now() : 0);
 
-// #/overlay/... → 'overlay-host', else 'main'. Per-label files: a single shared
-// file gets clobbered when both webviews write (verified failure mode).
+// Per-label files: a single shared file gets clobbered when several webviews
+// write (verified failure mode).
+//
+// The label is the TAURI WINDOW LABEL, not the route. It used to be derived from
+// location.hash, and that identity is not stable: a cmd-bridge probe runs in EVERY
+// webview, so one session's `location.hash = '#/planner'` rewrote the Player
+// Controls window's hash too and it reported as 'main' from then on — silently
+// clobbering the real main window's readings with measurements of a 280x158
+// window (2026-08-29, cost a dozen probes). The window label cannot be rewritten
+// by a route change. Hash stays as the fallback for a plain browser dev session,
+// where there is no Tauri window at all.
 function auditLabel() {
+  try {
+    const l = getCurrentWindow()?.label;
+    if (l) return l;
+  } catch { /* not in Tauri — fall through to the route heuristic */ }
   const h = typeof location !== 'undefined' ? location.hash : '';
   if (h.startsWith('#/player/controls')) return 'player-controls';
   return h.includes('overlay') ? 'overlay-host' : 'main';

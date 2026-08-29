@@ -449,6 +449,10 @@ function TimerWidget({
   // the zero-width flash on first render.
   const ringButtonRef = useRef(null);
   const [ringSize, setRingSize] = useState({ w: 0, h: 0 });
+  // ONE height, two consumers: the button's own style and the SVG's pre-measure
+  // fallback. They were separate literals (126 and a stale 113) — a restated
+  // constant that had already gone wrong, painting one frame at the old size.
+  const ringH = Math.round(126 * scale);
   useLayoutEffect(() => {
     const el = ringButtonRef.current;
     if (!el) return;
@@ -511,7 +515,7 @@ function TimerWidget({
                 // (user-directed 2026-08-28: "make the dual ring slightly larger
                 // to accommodate"). Width is untouched — the interior is 186px
                 // wide and the widest readout is nowhere near it.
-                height: Math.round(126 * scale),
+                height: ringH,
               }}
             >
               <div className="candy-face">
@@ -521,7 +525,7 @@ function TimerWidget({
                 running={running}
                 accent="var(--accent)"
                 width={ringSize.w || Math.round(242 * scale)}
-                height={ringSize.h || Math.round(113 * scale)}
+                height={ringSize.h || ringH}
                 interactive={idle}
                 dragMins={dragMins}
                 glow={glowOn}

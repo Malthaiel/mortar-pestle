@@ -2622,7 +2622,13 @@ body[data-anim-button-depth="off"] .aos-chat-window.is-pressed .aos-chat-face { 
   gap: 8px;
   width: 100%;
   flex-shrink: 0;
-  padding: 6px 12px;
+  /* Vertically centred against the VISUAL extent, not the face box. The depth
+     band under the face has no layout height, so a symmetric 6/6 renders 8 above
+     and 13 below (6 + half-leading + the 5px slab). Half the slab moves off the
+     bottom onto the top. Derived from the var, never restated: --candy-depth-small
+     is user-settable (body[data-small-depth] = 3/5/7/9) and a literal 2.5px would
+     silently decentre the moment he changes it. */
+  padding: calc(6px + var(--candy-depth) / 2) 12px calc(6px - var(--candy-depth) / 2);
   font-size: 11px;
   font-weight: 700;
   font-family: var(--font-mono);
@@ -4676,7 +4682,7 @@ button.cal-customdays__step:hover {
 .planner-uniform-btns .candy-seg .candy-btn { height: 100%; }
 /* One gap for every run of adjacent buttons, so no row invents its own. */
 .planner-uniform-btns :where(div, span):has(> .candy-btn + .candy-btn) { gap: var(--planner-btn-gap); }
-.planner-uniform-btns { --planner-btn-gap: 8px; }
+.planner-uniform-btns { --planner-btn-gap: 12px; }   /* one gap for the whole planner: 12, matching the day pane's INSET (user-directed 2026-08-29) */
 
 /* Calendar header row — all seven controls share ONE corner. Measured
    2026-08-27: the chips came out 7px and the two round arrows 6px, because a
