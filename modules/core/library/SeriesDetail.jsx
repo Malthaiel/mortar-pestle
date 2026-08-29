@@ -416,12 +416,16 @@ export default function SeriesDetail({ accent, seriesPath }) {
             player.currentEpisode.n === ep.n &&
             (!isFranchise || player.currentEpisode.seasonName === ep.seasonName)
           );
-          // Live fraction wins for the currently-playing episode in this
-          // same window; otherwise fall back to the saved progress map.
+          // The saved map is the ONLY source, including for the episode playing
+          // right now. There used to be a live branch here reading the
+          // provider's `effectiveTime` — dead under mpv (permanently 0) while
+          // `duration` stayed live, so `duration > 0` passed, frac came out 0,
+          // and the row you were watching was the one row with no sliver.
+          // MpvHost writes real time+duration into this same map every 5 s and
+          // useProgressMap re-reads it every 5 s, so the cost is ~5 s of lag —
+          // already every other row's behaviour.
           let frac = null;
-          if (isPlaying && player.duration > 0) {
-            frac = Math.min(1, player.effectiveTime / player.duration);
-          } else if (ep.fileAbs && progressMap[ep.fileAbs]) {
+          if (ep.fileAbs && progressMap[ep.fileAbs]) {
             const p = progressMap[ep.fileAbs];
             if (p && p.duration > 0) frac = Math.min(1, p.time / p.duration);
           }
