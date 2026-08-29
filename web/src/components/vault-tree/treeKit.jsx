@@ -121,13 +121,21 @@ export function StaggerChild({ index, count, open, children }) {
   );
 }
 
+// The tree row's TYPE, split out from FACE and exported so a surface that has to
+// read as "the same button as the sidebar tree" takes the real values instead of
+// re-typing them (the planner dial's START, user-directed 2026-08-28). Geometry
+// stays in FACE — a borrower wants the lettering, not the pill.
+export const TREE_TEXT = {
+  fontFamily: 'var(--font-mono)',
+  fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+};
+
 // Shared candy-face for both folder headers and leaf rows — the inline overrides
 // (mono / uppercase / 10.5px / radius 999) keep the tree's compact pill geometry.
 const FACE = {
   justifyContent: 'flex-start', gap: 6, minWidth: 0,
   minHeight: NAV_H, boxSizing: 'border-box', padding: '0 11px',
-  fontFamily: 'var(--font-mono)',
-  fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+  ...TREE_TEXT,
 };
 
 // Pill toggle for EVERY folder (section roots + nested folders, identical). Uses

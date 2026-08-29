@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import DualRingRect from './watchfaces/DualRingRect.jsx';
 import CalendarPanel from './CalendarPanel.jsx';
 import { CircleChip } from '@host/components/ui/index.js';
+import { TREE_TEXT } from '@host/components/vault-tree/treeKit.jsx';
 import {
   IconReset, IconSkip, IconChevronRight, IconX, IconCheck, IconStop,
 } from '@host/components/icons.jsx';
@@ -226,11 +227,11 @@ export default function PlannerDock() {
     const elapsedMs = (pauseStartRef.current ?? now) - sessionStart;
     const elapsedMin = Math.max(1, Math.round(elapsedMs / 60000));
     return (
-      <CircleChip size={ctrlCircleSize} onClick={endSessionEarly}
+      <CircleChip className="is-hover-accent" size={ctrlCircleSize} onClick={endSessionEarly}
         title={`End session early · logs ${elapsedMin}m`}><IconStop size={ICON_STOP_PX}/></CircleChip>
     );
   })() : (
-    <CircleChip size={ctrlCircleSize} onClick={skipPhase}
+    <CircleChip className="is-hover-accent" size={ctrlCircleSize} onClick={skipPhase}
       title={phase === 'focus' ? 'Skip to break' : 'Skip to focus'}><IconSkip/></CircleChip>
   );
   // MM:SS is a plain line ABOVE this row again (TimerWidget renders it) — the
@@ -240,14 +241,14 @@ export default function PlannerDock() {
   // the digits that used to sit between them.
   const controlsJSX = blockRun ? (
     <>
-      <CircleChip size={ctrlCircleSize} onClick={stopBlockRun}
+      <CircleChip className="is-hover-accent" size={ctrlCircleSize} onClick={stopBlockRun}
         title="Cancel block timer — nothing is logged"><IconX/></CircleChip>
-      <CircleChip size={ctrlCircleSize} onClick={finishBlockEarly}
+      <CircleChip className="is-hover-accent" size={ctrlCircleSize} onClick={finishBlockEarly}
         title="Finish block early — trims the block to now"><IconCheck/></CircleChip>
     </>
   ) : (
     <>
-      <CircleChip size={ctrlCircleSize} onClick={resetTimer} title="Reset"><IconReset size={ICON_RESET_PX}/></CircleChip>
+      <CircleChip className="is-hover-accent" size={ctrlCircleSize} onClick={resetTimer} title="Reset"><IconReset size={ICON_RESET_PX}/></CircleChip>
       <TimerPrimary onClick={toggleTimer} running={running}
         label={running ? 'Pause' : (idle ? 'Start' : 'Resume')}
         size={ctrlCircleSize} scale={scale}/>
@@ -503,7 +504,14 @@ function TimerWidget({
                 // 14px margin per side (see line ~195), so inset the ring the same
                 // 28px total. The inner SVG auto-tracks via the ResizeObserver above.
                 width: 'calc(100% - 28px)',
-                height: Math.round(121 * scale),
+                // 121 → 126: the readout went from 11px to READOUT_FONT_PX, and
+                // the interior is what the ring's fixed 28.56px inset leaves —
+                // height − 2×28.56. Growing the dial 5px keeps the three inner
+                // gaps at ~4px instead of squeezing them to fit a bigger number
+                // (user-directed 2026-08-28: "make the dual ring slightly larger
+                // to accommodate"). Width is untouched — the interior is 186px
+                // wide and the widest readout is nowhere near it.
+                height: Math.round(126 * scale),
               }}
             >
               <div className="candy-face">
@@ -529,7 +537,13 @@ function TimerWidget({
                       mmss() so it previews the new duration while the dial is
                       dragged to set time. */}
                   <div className="planner-timer-digits" style={{
-                    
+                    // Bigger and wider-tracked than the surrounding candy text
+                    // (user-directed 2026-08-28) — it is the readout, not a label,
+                    // and at the inherited 11px/0.08em it read as one more button.
+                    // READOUT_FONT_PX was left declared-but-unused when the digits
+                    // moved out of the pill; it is the value again.
+                    fontSize: Math.round(READOUT_FONT_PX * scale),
+                    letterSpacing: READOUT_TRACKING,
                     lineHeight: 1,
                   }}>{mmss(secsLeft, dragMins)}</div>
                   <div style={{
@@ -554,8 +568,11 @@ function TimerWidget({
 // all three controls in the row share one height by construction rather than by
 // two constants kept in sync. Width still hugs the label.
 const READOUT_FONT_PX = 15;   // the standalone MM:SS above the row, design px
-// The pill takes .candy-face's body-text size like every other label — no local
-// font-size at all, so it can never drift from the rest again.
+const READOUT_TRACKING = '0.14em';  // wider than any label in the widget — it IS the readout
+// The pill's TYPE is the sidebar tree's, IMPORTED rather than re-typed
+// (user-directed 2026-08-28: "the exact same as the left sidebar treebar
+// buttons"). Deliberately NOT scaled — the tree's rows are a fixed 10.5px, so
+// scaling this would make "the same" true at exactly one dock width.
 const LABEL_PAD_X_PX = 10;     // design px, left/right only — height comes from `size`
 
 function TimerPrimary({ onClick, label, running = false, size, scale = 1 }) {
@@ -589,6 +606,7 @@ function TimerPrimary({ onClick, label, running = false, size, scale = 1 }) {
         style={{
           height: '100%',
           padding: `0 ${Math.round(LABEL_PAD_X_PX * scale)}px`,
+          ...TREE_TEXT,
           lineHeight: 1,
         }}
       >{label}</span>

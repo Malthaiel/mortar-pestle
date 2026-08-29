@@ -179,12 +179,12 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
   --clock-pivot-shadow:  rgba(58,13,13,0.40);
   --clock-hand-shadow:   rgba(0,0,0,0.20);
 
-  /* Calendar · Light. --cal-now is a STRUCTURAL red (the now-marker),
-     deliberately NOT accent-derived so it stays legible over accent-colored
-     session blocks and never collides with a red accent. --on-accent is for
-     text/icons sitting on an accent or --cal-now fill. Both are theme-agnostic
-     (defined here only; dark inherits). */
-  --cal-now:         oklch(0.62 0.21 25);
+  /* Calendar · Light. The now-marker used to own a STRUCTURAL red (--cal-now),
+     deliberately NOT accent-derived; user-directed 2026-08-28 it wears the
+     accent like every other live indicator, so the name is gone and both call
+     sites in CalendarPanel.jsx read var(--accent) directly. --on-accent is for
+     text/icons sitting on an accent fill; theme-agnostic (defined here only,
+     dark inherits). */
   --on-accent:       #ffffff;
   /* Hour gridline (day/week time-grid). Light tracks --border; dark overrides
      brighter so lines read on the dark surface + today tint. */
@@ -273,8 +273,8 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
   --clock-pivot-shadow:  rgba(58,13,13,0.75);
   --clock-hand-shadow:   rgba(0,0,0,0.55);
 
-  /* Calendar · Dark — lighter red so the marker reads over dark surfaces. */
-  --cal-now:  oklch(0.68 0.20 25);
+  /* Calendar · Dark. (The now-marker's own red lived here; it wears the accent
+     now — see the light block.) */
   --cal-hour-line: oklch(0.42 0.005 78);  /* brighter than --border (0.255) so hour lines read on dark */
   --error:    oklch(0.666 0.132 21.2);
   --team-amber:    oklch(0.78 0.15 75);   /* brighter on the dark bg */
@@ -1617,10 +1617,14 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
   cursor: text;
   --cbtn-depth: var(--candy-depth-small);
 }
+/* 4px 1px, not 4px 8px: the <input> below adds its own 1px 4px, so the text sat
+   5px from the top/bottom but 12px from the left. Shrinking the horizontal (over
+   growing the vertical) evens both gaps to 5px and leaves the chip's height
+   untouched — user-directed 2026-08-28. */
 .candy-btn[data-shape="chip-field"] > .candy-face {
   justify-content: flex-start;
   gap: 8px;
-  padding: 4px 8px;
+  padding: 4px 1px;
 }
 .candy-btn[data-shape="chip-field"] > .candy-face > * { pointer-events: auto; }
 .candy-btn[data-shape="chip-field"] > .candy-face > .chip-field-input {
@@ -2283,8 +2287,15 @@ body[data-anim-button-depth="off"] .candy-btn:is(:active, .is-pressed, [data-can
  * an inner control was pressed. The two-layer base never moves, so hover is
  * colour-only and that whole class of drift is gone by construction — the
  * :hover:has(button:active) unlift rule died with it. */
+/* The dial's near-black, declared ONCE for both planner-dock surfaces that wear
+   it — the watchface shell and the CALENDAR strip below it (user-directed
+   2026-08-28: the two are to read as one material). Every rule below and in the
+   calendar block reads this var, so the literal exists in exactly one place. */
+.planner-ring-button,
+.button-planner-calendar { --planner-face: #141310; }
+
 .planner-ring-button {
-  --cbtn-band: #141310;
+  --cbtn-band: var(--planner-face);
   --cbtn-frame: 3px;
   --cbtn-depth: var(--candy-depth);
   border-radius: var(--radius-lg);
@@ -2298,7 +2309,7 @@ body[data-anim-button-depth="off"] .candy-btn:is(:active, .is-pressed, [data-can
   width: 100%;
   height: 100%;
   padding: 0;
-  background: #141310;
+  background: var(--planner-face);
 }
 /* The face is pointer-transparent by default (the immovable base is the sole hit
    target). The dial is a drag-to-SET-time surface, so the SVG alone gets events
@@ -2313,26 +2324,52 @@ body[data-anim-button-depth="off"] .candy-btn:is(:active, .is-pressed, [data-can
    the dial is a readout, and a surface that brightens under the pointer read as
    the whole watchface switching on. Band AND face stay pinned to the dial's own
    near-black in every state; the press depression is the only feedback. */
-.planner-ring-button:is(:hover, :active) { --cbtn-band: #141310; }
-.planner-ring-button:is(:hover, :active) > .candy-face { background: #141310; }
+.planner-ring-button:is(:hover, :active) { --cbtn-band: var(--planner-face); }
+.planner-ring-button:is(:hover, :active) > .candy-face { background: var(--planner-face); }
 /* An inner control (Reset / START / Skip) owns its own press — the dial must not
    sink under it. Mirrors the music-tile press-exclusion one level down. */
 .planner-ring-button:active:has(button:active) > .candy-face { transform: none; }
 
+/* The dial's three transport controls (Reset / START / Skip) do the app's normal
+   grey→white label flip (user-directed 2026-08-28). They could not before: the
+   enclosing tile pins EVERY nested div/span to #fff at 0,4,0 (see .music-tile …
+   :where(div, span) above), and a candy button's own face IS a span nested in the
+   tile's face, so all three labels were permanently white. These re-state the
+   standard pair at a weight that clears it. .is-primary is excluded — START wears
+   it while the timer runs, where the face is already accent-filled and its label
+   has to stay white. The 30:00 readout is NOT a button and keeps its own colour. */
+.candy-btn[data-shape="tile"].music-tile
+  .planner-ring-inner-controls .candy-btn:not(.is-primary) > .candy-face { color: var(--text-muted); }
+.candy-btn[data-shape="tile"].music-tile
+  .planner-ring-inner-controls .candy-btn:not(.is-primary):is(:hover, :active) > .candy-face { color: #fff; }
+
 /* Inner-controls layer sits absolutely inside the rect, bounded just inside
  * the inner ring stroke. pointer-events: none on the container lets the SVG
  * underneath receive drag events on the corner/edge regions; the controls
- * themselves re-enable pointer-events to capture their own clicks. */
+ * themselves re-enable pointer-events to capture their own clicks.
+ *
+ * The box HUGS the inner ring on all four sides — DualRingRect draws that ring
+ * at innerInset 22.99 + innerStrokeW 5.57 = 28.56 from the svg edge, and the svg
+ * spans the button's border box while this layer is positioned against the face's
+ * padding box (3px --cbtn-frame in), so 28.56 − 3 ≈ 26 is the ring's inner edge.
+ * Bottom was 32px (26 + a hand-added 6 for the transport row's band); centring
+ * only ever applied HALF of it, so the row still sat ~1px high and, worse, the
+ * digits landed flush on the buttons with a 0px gap while both outer gaps were ~6.
+ * The band is a box-shadow — invisible to layout — so it is declared as
+ * padding-bottom instead, and space-evenly then splits the leftover into three
+ * IDENTICAL gaps (ring→digits, digits→row, band→ring) with no constant to keep
+ * in sync: measured 51px interior − 34px content − 5px band = 4px each. */
 .planner-ring-inner-controls {
   position: absolute;
   top: 26px;
   left: 29px;
   right: 29px;
-  bottom: 32px;
+  bottom: 26px;
+  padding-bottom: var(--candy-depth-small);
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: space-evenly;
   pointer-events: none;
 }
 .planner-ring-inner-controls > * {
@@ -2549,16 +2586,29 @@ body[data-anim-button-depth="off"] .aos-chat-window.is-pressed .aos-chat-face { 
   display: flex;
   cursor: pointer;
 }
-/* NO accent highlight, in any state (user-directed 2026-08-10). The generic candy
-   hover flips the band AND the face AND nested label text to accent/white. Pin all
-   three neutral and tint the face a few percent instead — the legacy strip never
-   flipped colour either. */
-.button-planner-calendar:is(:hover, :active) { --cbtn-band: var(--surface); }
-.button-planner-calendar > .candy-face { background: var(--surface-3); }
-.button-planner-calendar:is(:hover, :active) > .candy-face {
-  background: color-mix(in oklch, var(--surface-3), white 4%);
-}
-.button-planner-calendar:is(:hover, :active) .candy-face :where(div, span) { color: var(--text); }
+/* The accent suppression that used to live here (pinned band + a 4%-white face
+   tint + var(--text) label, user-directed 2026-08-10) is GONE — user-directed
+   2026-08-28: this strip is to look and behave like every other candy button,
+   so it now inherits the shared § States recipe wholesale (band + face flip to
+   accent on hover/press, label to #fff) and the base .candy-face's surface-3.
+   Only the label's RESTING colour needs saying: the enclosing planner tile
+   forces every nested div/span to #fff (see .music-tile … :where(div, span)
+   above, 0,4,0), which outranks both the base face colour and the shared hover
+   rule — so the strip's label was permanently white and could never flip. These
+   two re-state the standard muted→#fff pair at a specificity that clears it. */
+/* Rest colour = the dial's near-black, so the strip and the watchface above it
+   read as one material (user-directed 2026-08-28). :not(:hover):not(:active) is
+   load-bearing, NOT decoration: the shared accent flood
+   (.candy-btn:is(:hover, :active) > .candy-face) is 0,2,0, identical to what a
+   plain `.button-planner-calendar > .candy-face` would score — and this block
+   sits LATER in the file, so it would win the tie and silently kill the hover. */
+.button-planner-calendar:not(:hover):not(:active) { --cbtn-band: var(--planner-face); }
+.button-planner-calendar:not(:hover):not(:active) > .candy-face { background: var(--planner-face); }
+
+.candy-btn[data-shape="tile"].music-tile
+  .button-planner-calendar > .candy-face :where(div, span) { color: var(--text-muted); }
+.candy-btn[data-shape="tile"].music-tile
+  .button-planner-calendar:is(:hover, :active) > .candy-face :where(div, span) { color: #fff; }
 
 /* The strip's face. Wears .candy-face AND this class on one span, so the base
  * recipe supplies frame + radius + press slide and this supplies the label layout.
@@ -2566,7 +2616,9 @@ body[data-anim-button-depth="off"] .aos-chat-window.is-pressed .aos-chat-face { 
  * the button now, so the element and its appearance/border/background resets are
  * gone. */
 .button-planner-calendar-header {
-  justify-content: space-between;
+  /* Label + chevron read as ONE centred pair (user-directed 2026-08-28) rather
+     than being pushed to opposite edges by space-between. */
+  justify-content: center;
   gap: 8px;
   width: 100%;
   flex-shrink: 0;
