@@ -56,7 +56,10 @@ function AutoPlay() {
       </div>
     );
   }
-  return null; // ModalHost renders itself from inside VideoPlayerProvider
+  // Nothing to draw: mpv paints into its own OS window. Pop-out was dropped in
+  // Phase 4 and the host that used to render here went with Phase 6, so this
+  // route currently shows only the error card above.
+  return null;
 }
 
 export default function PlayerPage() {

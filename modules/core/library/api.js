@@ -1,7 +1,6 @@
 // Module-owned API helpers. Each call routes through the SDK's
 // api.invoke so the module imports nothing from web/src/api.js.
 
-import { rewriteAssetToHttp, awaitMediaBaseUrl } from '@host/api.js';
 
 let _api = null;
 
@@ -56,25 +55,6 @@ export const videoApi = {
   animeUninstall: (seriesPath, deleteFiles) =>
     _api.invoke('anime_uninstall', { seriesPath, deleteFiles: !!deleteFiles }),
   revealInFiles:     (path) => _api.invoke('reveal_in_files', { path }),
-  // SF12 (2026-05-24): video_start_transcode returns an `mortar-pestle-asset://`
-  // URL but WebKitGTK rejects custom URI schemes for HTMLMediaElement. Wait
-  // for the loopback media server's port, then rewrite the URL to
-  // `http://127.0.0.1:<port>/transcode/<hash>.mp4` which WebKit accepts.
-  videoStreamURL:    async (abs, audio = 0) => {
-    await awaitMediaBaseUrl();
-    const r = await _api.invoke('video_start_transcode', { abs, audio });
-    const url = rewriteAssetToHttp(r.url);
-    // rewriteAssetToHttp yields null when the media-server port never resolved.
-    // Assigning that to <video>.src loads the literal string "null" and surfaces
-    // as MEDIA_ERR_SRC_NOT_SUPPORTED — a real cause wearing a codec bug's mask.
-    if (!url) throw new Error('media server URL unavailable (port not resolved) for ' + r.url);
-    return { ...r, url };
-  },
-  videoSubsURL:      async (abs, stream = 0) => {
-    await awaitMediaBaseUrl();
-    const r = await _api.invoke('video_extract_subs', { abs, stream });
-    return { ...r, url: rewriteAssetToHttp(r.url) };
-  },
 };
 
 // Library import engine (background job; CSV/TXT music in SF5, MAL XML in SF6).

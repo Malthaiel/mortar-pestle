@@ -36,11 +36,9 @@ use axum::{
 use serde::Deserialize;
 use tokio::net::TcpListener;
 
-use crate::asset_protocol::{
-    mime_for_path, parse_range_against, serve_file_range, serve_subs, serve_transcode,
-};
+use crate::asset_protocol::{mime_for_path, parse_range_against, serve_file_range};
 use crate::commands::media::is_under_allowed_root;
-use crate::parsers::video_transcode::{snapshot_for_serve, EntryStatus};
+use crate::parsers::video_transcode::EntryStatus;
 
 static SERVER_PORT: OnceLock<u16> = OnceLock::new();
 static SERVER_TOKEN: OnceLock<String> = OnceLock::new();
@@ -58,8 +56,6 @@ pub fn token() -> Option<String> {
 pub async fn run() -> std::io::Result<()> {
     let app = Router::new()
         .route("/media", get(handle_media).options(handle_preflight))
-        .route("/transcode/:hash", get(handle_transcode).options(handle_preflight))
-        .route("/subs/:hash", get(handle_subs).options(handle_preflight))
         .route("/editor-proxy/:hash", get(handle_editor_proxy).options(handle_preflight));
 
     let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
@@ -121,41 +117,6 @@ async fn handle_media(Query(q): Query<MediaQuery>, headers: HeaderMap) -> Respon
     cow_response_to_axum(serve_file_range(&canonical, file_size, range_opt))
 }
 
-async fn handle_transcode(
-    axum::extract::Path(hash_with_ext): axum::extract::Path<String>,
-    headers: HeaderMap,
-) -> Response<Body> {
-    let Some(hash) = hash_with_ext.strip_suffix(".mp4") else {
-        return status(StatusCode::NOT_FOUND, "bad suffix");
-    };
-    // No Range header → stream the whole file as a 200 with the real
-    // Content-Length. WebKitGTK's GStreamer souphttpsrc misreads a 206 returned
-    // for an unconditional GET (it takes the chunk's Content-Length as the whole
-    // resource and stops at ~8 MB → premature EOS / 'ended'). A full 200 plays
-    // straight through; GStreamer issues Range requests (handled below) to seek.
-    if headers.get(header::RANGE).is_none() {
-        return match snapshot_for_serve(hash) {
-            Some((_, EntryStatus::Failed { .. })) => {
-                status(StatusCode::INTERNAL_SERVER_ERROR, "transcode failed")
-            }
-            Some((path, _)) => stream_full_file(&path).await,
-            None => status(StatusCode::NOT_FOUND, "transcode not found"),
-        };
-    }
-    let req = http::Request::builder()
-        .method("GET")
-        .uri("/")
-        .body(Vec::<u8>::new())
-        .map(|mut r| {
-            if let Some(v) = headers.get(header::RANGE) {
-                r.headers_mut().insert(header::RANGE, v.clone());
-            }
-            r
-        })
-        .unwrap();
-    cow_response_to_axum(serve_transcode(hash, &req))
-}
-
 /// Video Editor proxy lane (parsers/editor_proxy.rs registry — NOT the player
 /// lane's). Same WebKitGTK souphttpsrc workaround as handle_transcode: a
 /// no-Range GET streams the whole file as a real 200 (a 206 there reads the
@@ -189,27 +150,6 @@ async fn handle_editor_proxy(
             cow_response_to_axum(serve_file_range(&path, file_size, range_opt))
         }
     }
-}
-
-async fn handle_subs(
-    axum::extract::Path(hash_with_ext): axum::extract::Path<String>,
-    headers: HeaderMap,
-) -> Response<Body> {
-    let Some(hash) = hash_with_ext.strip_suffix(".vtt") else {
-        return status(StatusCode::NOT_FOUND, "bad suffix");
-    };
-    let req = http::Request::builder()
-        .method("GET")
-        .uri("/")
-        .body(Vec::<u8>::new())
-        .map(|mut r| {
-            if let Some(v) = headers.get(header::RANGE) {
-                r.headers_mut().insert(header::RANGE, v.clone());
-            }
-            r
-        })
-        .unwrap();
-    cow_response_to_axum(serve_subs(hash, &req))
 }
 
 /// Stream an entire file as a 200 with the real Content-Length, read from disk

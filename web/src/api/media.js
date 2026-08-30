@@ -119,15 +119,6 @@ export function mediaHttpUrl(p, opts) {
   const abs = absFromInput(p, opts && opts.library ? LIBRARY_ROOT_FOR_MEDIA : undefined);
   return `${_mediaBaseUrl}/media?path=${encodeURIComponent(abs)}&t=${_mediaToken}`;
 }
-// Rewrite an `mortar-pestle-asset://localhost/<rest>` URL (as returned by Rust
-// video_start_transcode / video_extract_subs) into the equivalent loopback
-// HTTP URL for WebKit-compatible media playback.
-export function rewriteAssetToHttp(assetUrl) {
-  if (!assetUrl || !_mediaBaseUrl) return null;
-  const prefix = 'mortar-pestle-asset://localhost';
-  if (!assetUrl.startsWith(prefix)) return assetUrl;
-  return _mediaBaseUrl + assetUrl.slice(prefix.length);
-}
 export async function awaitMediaBaseUrl() {
   return mediaBaseUrl();
 }

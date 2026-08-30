@@ -213,8 +213,6 @@
     "allow-video-mark-episode-watched",
     "allow-video-mark-series-status",
     "allow-video-mark-series-rating",
-    "allow-video-start-transcode",
-    "allow-video-extract-subs",
     "allow-reveal-in-files",
     "opener:allow-reveal-item-in-dir",
     "allow-open-path",

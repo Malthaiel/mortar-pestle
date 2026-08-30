@@ -44,23 +44,6 @@ const steps = [
       '--test', 'recycle_bin',
     ],
   },
-  {
-    // transcode_integration is COMPILE-ONLY on purpose. Every test in it is #[ignore]d (they shell
-    // out to ffmpeg and run multi-second timing-sensitive workloads), so running it never executed
-    // an assertion — its whole contribution here is "does it still compile and link".
-    //
-    // It also cannot be RUN on Windows any more: it is the one test target whose link graph reaches
-    // TaskDialogIndirect (comctl32 v6, via app_lib::asset_protocol → tauri), and a `cargo test` exe
-    // gets no SxS application manifest, so the loader binds it to the legacy comctl32 5.82 in
-    // system32 — which exports SetWindowSubclass but NOT TaskDialogIndirect. The process dies at
-    // LOAD with 0xc0000139 STATUS_ENTRYPOINT_NOT_FOUND before main runs. Proven 2026-07-24 by
-    // dumpbin: the exe imports TaskDialogIndirect; system32 comctl32 is 5.82 and does not export it;
-    // the passing test exes import no comctl32 at all. --no-run keeps every bit of coverage this
-    // step ever had (compile + link) and drops only the load that can never succeed here.
-    name: 'rust compile-only test target (transcode_integration)',
-    cmd: 'cargo',
-    args: ['test', '--manifest-path', 'src-tauri/Cargo.toml', '--test', 'transcode_integration', '--no-run'],
-  },
   { name: 'web: theme contrast (WCAG AA)', cmd: NPM, args: ['--prefix', 'web', 'run', 'check-themes'] },
   { name: 'web: drag math',                cmd: NPM, args: ['--prefix', 'web', 'run', 'check-drag'] },
   { name: 'web: planner time/frame math',  cmd: NPM, args: ['--prefix', 'web', 'run', 'check-time'] },

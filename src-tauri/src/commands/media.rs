@@ -13,10 +13,9 @@
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
-use serde::Serialize;
 
 use crate::commands::vault::{vault_root, VaultError};
-use crate::parsers::{albums, probe_cache, series, video_transcode};
+use crate::parsers::{albums, probe_cache, series};
 use tauri::AppHandle;
 use tauri_plugin_opener::OpenerExt;
 
@@ -146,157 +145,6 @@ pub fn video_probe(path: String) -> Result<probe_cache::ProbeResult, VaultError>
         ));
     }
     probe_cache::probe(&canonical)
-}
-
-#[derive(Debug, Serialize)]
-pub struct StartTranscodeResponse {
-    pub url: String,
-    pub duration: Option<f64>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct ExtractSubsResponse {
-    pub url: String,
-}
-
-#[tauri::command]
-pub async fn video_start_transcode(
-    app: tauri::AppHandle,
-    abs: String,
-    audio: Option<i64>,
-) -> Result<StartTranscodeResponse, VaultError> {
-    let p = PathBuf::from(&abs);
-    if !p.is_absolute() {
-        return Err(VaultError::Invalid(
-            "video_start_transcode expects an absolute path".into(),
-        ));
-    }
-    let canonical = std::fs::canonicalize(&p)
-        .map_err(|_| VaultError::NotFound(abs.clone()))?;
-    if !is_under_allowed_root(&canonical) {
-        return Err(VaultError::Invalid(
-            "Path is not under an allowed media root".into(),
-        ));
-    }
-    let probe = probe_cache::probe(&canonical)?;
-    let canonical_str = canonical.display().to_string();
-    let mtime_ms = video_transcode::mtime_ms_for(&canonical);
-
-    // WebView2 decodes no HEVC and no 10-bit video, so a stream-copy remux of
-    // such a source plays audio and subtitles over a black picture. Re-encode
-    // those into h264 8-bit instead of copying. The recipe suffix keeps every
-    // already-web-safe source on its exact legacy cache key.
-    let v0 = probe.video.first();
-    let needs_reencode = !video_transcode::is_web_safe(
-        v0.and_then(|v| v.codec.as_deref()),
-        v0.and_then(|v| v.pix_fmt.as_deref()),
-    );
-    let recipe = if needs_reencode { "websafe" } else { "" };
-    let hash =
-        video_transcode::compute_hash_with_recipe(&canonical_str, audio, mtime_ms, recipe);
-    let cache_path = video_transcode::transcode_path(&hash)?;
-
-    // Whole-episode re-encodes are worth a hardware encoder: minutes on CPU vs
-    // well under one on GPU. `caps_cached` proves availability with a real
-    // 1-frame test encode (disk-cached, keyed to the ffmpeg build), so an
-    // absent/unusable GPU silently falls back to libx264.
-    let proxy_scale = if needs_reencode {
-        let caps = crate::commands::video_editor::probe::caps_cached(&app, false).await;
-        let encoder = ["h264_nvenc", "h264_qsv", "h264_amf"]
-            .iter()
-            .find(|e| caps.encoders.get(**e).copied().unwrap_or(false))
-            .map(|e| e.to_string());
-        Some(video_transcode::ProxyScale {
-            fps: v0.and_then(|v| v.fps).unwrap_or(30.0),
-            color_space: v0.and_then(|v| v.color_space.clone()),
-            color_primaries: v0.and_then(|v| v.color_primaries.clone()),
-            color_transfer: v0.and_then(|v| v.color_transfer.clone()),
-            color_range: v0.and_then(|v| v.color_range.clone()),
-            encoder,
-            playback: true,
-        })
-    } else {
-        None
-    };
-    // Remux already-AAC-LC audio as-is; re-encode anything else to AAC-LC for
-    // WebKit. Avoids a needless generational re-encode on SubsPlease/AAC sources.
-    let sel = audio.unwrap_or(0).max(0) as usize;
-    let copy_audio = probe
-        .audio
-        .get(sel)
-        .map(|s| s.codec.as_deref() == Some("aac") && s.profile.as_deref() == Some("LC"))
-        .unwrap_or(false);
-    video_transcode::start_or_reuse(
-        hash.clone(),
-        cache_path,
-        canonical_str,
-        audio,
-        probe.duration,
-        copy_audio,
-        proxy_scale,
-        Some(app.clone()),
-    )?;
-
-    // Wait for the whole-file remux to finish before handing out the URL: the
-    // served MP4 must be final (+faststart relocates `moov` on completion, and a
-    // real container duration is what stops WebKitGTK's premature 'ended'). The
-    // remux runs far faster than realtime (copy ≈ thousands× realtime), so this
-    // is a brief wait the frontend covers with a "Preparing…" spinner. A
-    // same-hash cached transcode returns on the first poll tick.
-    // A stream-copy remux runs thousands× realtime, so 120 s is generous. A real
-    // re-encode does not: a 24-minute episode is ~1 min on NVENC and several on
-    // libx264, so the copy-lane deadline would abort every HEVC source.
-    let deadline = std::time::Duration::from_secs(if needs_reencode { 1800 } else { 120 });
-    let started = std::time::Instant::now();
-    loop {
-        match video_transcode::status_of(&hash) {
-            Some(video_transcode::EntryStatus::Done) => break,
-            Some(video_transcode::EntryStatus::Failed { stderr_tail, .. }) => {
-                return Err(VaultError::Io(format!("transcode failed: {stderr_tail}")));
-            }
-            Some(video_transcode::EntryStatus::Running) => {}
-            None => return Err(VaultError::Io("transcode entry vanished".into())),
-        }
-        if started.elapsed() >= deadline {
-            return Err(VaultError::Io("transcode timed out".into()));
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-    }
-
-    Ok(StartTranscodeResponse {
-        url: format!("mortar-pestle-asset://localhost/transcode/{hash}.mp4"),
-        duration: probe.duration,
-    })
-}
-
-#[tauri::command]
-pub async fn video_extract_subs(
-    abs: String,
-    stream: Option<i64>,
-) -> Result<ExtractSubsResponse, VaultError> {
-    let p = PathBuf::from(&abs);
-    if !p.is_absolute() {
-        return Err(VaultError::Invalid(
-            "video_extract_subs expects an absolute path".into(),
-        ));
-    }
-    let canonical = std::fs::canonicalize(&p)
-        .map_err(|_| VaultError::NotFound(abs.clone()))?;
-    if !is_under_allowed_root(&canonical) {
-        return Err(VaultError::Invalid(
-            "Path is not under an allowed media root".into(),
-        ));
-    }
-    let canonical_str = canonical.display().to_string();
-    let mtime_ms = video_transcode::mtime_ms_for(&canonical);
-    let hash = video_transcode::compute_subs_hash(&canonical_str, stream, mtime_ms);
-    let out_path = video_transcode::subs_path(&hash)?;
-    if !out_path.exists() {
-        video_transcode::extract_subs_sync(canonical_str, stream, out_path).await?;
-    }
-    Ok(ExtractSubsResponse {
-        url: format!("mortar-pestle-asset://localhost/subs/{hash}.vtt"),
-    })
 }
 
 #[tauri::command]

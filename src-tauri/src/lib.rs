@@ -289,7 +289,6 @@ pub fn run() {
             // the dir again) and a hard-killed run's `.partial` staging files
             // are removed. A re-encoded episode costs ~80 s of GPU work, which
             // the old wipe-on-startup + wipe-on-exit pair charged every launch.
-            parsers::video_transcode::adopt_cache_from_disk();
 
             // SF12 follow-up — loopback HTTP server for media bytes. WebKitGTK
             // rejects custom URI schemes in HTMLMediaElement, so audio/video
@@ -821,8 +820,6 @@ pub fn run() {
             commands::media::video_mark_episode_watched,
             commands::media::video_mark_series_status,
             commands::media::video_mark_series_rating,
-            commands::media::video_start_transcode,
-            commands::media::video_extract_subs,
             commands::media::reveal_in_files,
             commands::media::open_path,
             commands::coaching::coaching_reveal_path,
@@ -1057,7 +1054,6 @@ pub fn run() {
                 // The transcode cache deliberately survives exit — the next
                 // launch adopts it (see the startup sweep). Killed children
                 // leave only `.partial` staging files, which adoption removes.
-                parsers::video_transcode::shutdown_active();
                 commands::video_editor::shutdown_export();
                 // Game Capture reap (5-SF2d): terminate the spawned engine + (Unix)
                 // unlink the control socket. Ported to Windows (SF7 swaps the libc

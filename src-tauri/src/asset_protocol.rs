@@ -30,9 +30,6 @@ use http::{header, Response, StatusCode};
 use tauri::http::Request;
 
 use crate::commands::media::is_under_allowed_root;
-use crate::parsers::video_transcode::{
-    snapshot_for_serve, subs_path as transcode_subs_path, EntryStatus,
-};
 
 /// 8 MB per-request chunk cap. Browsers Range-request more as needed.
 const MAX_CHUNK: u64 = 8 * 1024 * 1024;
@@ -48,14 +45,6 @@ pub fn handle(
     };
     if decoded.is_empty() || !decoded.starts_with('/') {
         return simple_status(StatusCode::BAD_REQUEST, "absolute path required");
-    }
-
-    // Sub-feature 7.5 virtual paths take priority over native-file lookup.
-    if let Some(hash) = strip_virtual(&decoded, "/transcode/", ".mp4") {
-        return serve_transcode(&hash, &request);
-    }
-    if let Some(hash) = strip_virtual(&decoded, "/subs/", ".vtt") {
-        return serve_subs(&hash, &request);
     }
 
     serve_native_path(&decoded, &request)
@@ -192,63 +181,6 @@ fn jpeg_response(bytes: Vec<u8>) -> Response<Cow<'static, [u8]>> {
         .header(header::CACHE_CONTROL, "private, max-age=31536000")
         .body(Cow::Owned(bytes))
         .expect("jpeg response builds")
-}
-
-/// Accept only `<prefix><16-lowercase-hex><suffix>` — path-injection defense.
-pub fn strip_virtual(p: &str, prefix: &str, suffix: &str) -> Option<String> {
-    let inner = p.strip_prefix(prefix)?.strip_suffix(suffix)?;
-    if inner.len() != 16 {
-        return None;
-    }
-    if !inner.chars().all(|c| c.is_ascii_hexdigit() && !c.is_uppercase()) {
-        return None;
-    }
-    Some(inner.to_string())
-}
-
-pub fn serve_transcode(hash: &str, request: &Request<Vec<u8>>) -> Response<Cow<'static, [u8]>> {
-    let Some((path, status)) = snapshot_for_serve(hash) else {
-        return simple_status(StatusCode::NOT_FOUND, "transcode not found");
-    };
-    if matches!(status, EntryStatus::Failed { .. }) {
-        return simple_status(StatusCode::INTERNAL_SERVER_ERROR, "transcode failed");
-    }
-
-    // `video_start_transcode` only returns the URL once the remux is complete, so
-    // the file is final by the time the element requests it — serve it as a plain
-    // seekable byte range, identical to a native media file.
-    let file_size = match fs::metadata(&path) {
-        Ok(m) => m.len(),
-        Err(_) => return simple_status(StatusCode::NOT_FOUND, "transcode not found"),
-    };
-    if file_size == 0 {
-        return simple_status(StatusCode::INTERNAL_SERVER_ERROR, "empty transcode");
-    }
-    let range = match parse_range_from(request, file_size) {
-        Ok(r) => r,
-        Err(resp) => return resp,
-    };
-    serve_file_range(&path, file_size, range)
-}
-
-pub fn serve_subs(hash: &str, request: &Request<Vec<u8>>) -> Response<Cow<'static, [u8]>> {
-    let path = match transcode_subs_path(hash) {
-        Ok(p) => p,
-        Err(_) => return simple_status(StatusCode::INTERNAL_SERVER_ERROR, "subs path failed"),
-    };
-    let meta = match fs::metadata(&path) {
-        Ok(m) => m,
-        Err(_) => return simple_status(StatusCode::NOT_FOUND, "subs not found"),
-    };
-    if !meta.is_file() {
-        return simple_status(StatusCode::NOT_FOUND, "subs not file");
-    }
-    let file_size = meta.len();
-    let range = match parse_range_from(request, file_size) {
-        Ok(r) => r,
-        Err(resp) => return resp,
-    };
-    serve_file_range(&path, file_size, range)
 }
 
 /// Read + respond with a (possibly partial) slice of `path`.
@@ -480,60 +412,4 @@ mod tests {
         assert_eq!(parse_range("bytes=0-99,200-299", 1000), Some((0, 99)));
     }
 
-    #[test]
-    fn strip_virtual_accepts_16_hex() {
-        assert_eq!(
-            strip_virtual("/transcode/0123456789abcdef.mp4", "/transcode/", ".mp4"),
-            Some("0123456789abcdef".to_string())
-        );
-    }
-
-    #[test]
-    fn strip_virtual_rejects_short_hash() {
-        assert_eq!(
-            strip_virtual("/transcode/0123abc.mp4", "/transcode/", ".mp4"),
-            None
-        );
-    }
-
-    #[test]
-    fn strip_virtual_rejects_uppercase_hex() {
-        assert_eq!(
-            strip_virtual("/transcode/0123456789ABCDEF.mp4", "/transcode/", ".mp4"),
-            None
-        );
-    }
-
-    #[test]
-    fn strip_virtual_rejects_non_hex_char() {
-        assert_eq!(
-            strip_virtual("/transcode/0123456789abcdex.mp4", "/transcode/", ".mp4"),
-            None
-        );
-    }
-
-    #[test]
-    fn strip_virtual_rejects_wrong_suffix() {
-        assert_eq!(
-            strip_virtual("/transcode/0123456789abcdef.webm", "/transcode/", ".mp4"),
-            None
-        );
-    }
-
-    #[test]
-    fn strip_virtual_rejects_wrong_prefix() {
-        assert_eq!(
-            strip_virtual("/foo/0123456789abcdef.mp4", "/transcode/", ".mp4"),
-            None
-        );
-    }
-
-    #[test]
-    fn strip_virtual_rejects_path_injection() {
-        // Slashes break the hex check, so dotdot can't escape.
-        assert_eq!(
-            strip_virtual("/transcode/../etc/passwd.mp4", "/transcode/", ".mp4"),
-            None
-        );
-    }
 }

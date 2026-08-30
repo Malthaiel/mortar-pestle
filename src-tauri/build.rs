@@ -205,8 +205,6 @@ fn main() {
         "video_mark_episode_watched",
         "video_mark_series_status",
         "video_mark_series_rating",
-        "video_start_transcode",
-        "video_extract_subs",
         "reveal_in_files",
         "open_path",
         "skills_list",
