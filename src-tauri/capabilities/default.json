@@ -24,6 +24,8 @@
     "core:window:allow-toggle-maximize",
     "core:window:allow-internal-toggle-maximize",
     "core:window:allow-is-maximized",
+    "core:window:allow-unmaximize",
+    "core:window:allow-maximize",
     "core:window:allow-close",
     "core:window:allow-start-dragging",
     "updater:default",

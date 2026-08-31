@@ -14,6 +14,7 @@
 import {
   createContext, useContext, useEffect, useMemo, useRef, useState, useCallback,
 } from 'react';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 
 // Exported so a NON-<video> backend can supply the same shape: the mpv
 // controls layer is its own webview with no player element in it, and it
@@ -206,13 +207,43 @@ export function VideoPlayerProvider({ children }) {
     }
   }, [series, episodeIdx, playEpisodeAt]);
 
-  const requestFullscreen = useCallback(() => {
+  // Drop WS_MAXIMIZE before going fullscreen, put it back on the way out.
+  //
+  // Windows clamps a MAXIMIZED window's client area to the monitor WORK AREA no
+  // matter how large the frame is, and wry's fullscreen handler stretches the
+  // frame without clearing the flag. Measured 2026-08-31 on a 1920x1080 monitor
+  // with a 48px taskbar: window rect 1920x1080, client rect 1920x1032,
+  // IsZoomed() true — the webview, MPPlayerHost and mpv all stopped at 1032 and
+  // the leftover 48px of frame painted as the window class background, i.e. a
+  // white bar under a picture that never actually reached fullscreen.
+  //
+  // The restore rides `fullscreenchange` rather than the exit branch below, so
+  // Esc leaves the window maximised too — not only the controls-bar button.
+  const wasMaximizedRef = useRef(false);
+
+  const requestFullscreen = useCallback(async () => {
     if (document.fullscreenElement) {
       document.exitFullscreen().catch(e => console.error('exitFullscreen failed:', e));
       return;
     }
     const target = fullscreenHostRef.current;
-    if (target) target.requestFullscreen().catch(e => console.error('requestFullscreen failed:', e));
+    if (!target) return;
+    const win = getCurrentWindow();
+    try {
+      wasMaximizedRef.current = await win.isMaximized();
+      if (wasMaximizedRef.current) await win.unmaximize();
+    } catch { wasMaximizedRef.current = false; }
+    target.requestFullscreen().catch(e => console.error('requestFullscreen failed:', e));
+  }, []);
+
+  useEffect(() => {
+    const onFsChange = () => {
+      if (document.fullscreenElement || !wasMaximizedRef.current) return;
+      wasMaximizedRef.current = false;
+      getCurrentWindow().maximize().catch(() => {});
+    };
+    document.addEventListener('fullscreenchange', onFsChange);
+    return () => document.removeEventListener('fullscreenchange', onFsChange);
   }, []);
 
   const closePlayer = useCallback(() => {
