@@ -6,8 +6,11 @@
 // with the date sublabel: that chip is a plain candy chip now (2026-08-27), so
 // it inherits the face's own colour and size like every other chip in the row.
 
+// No `color` on purpose (2026-09-01) — the label INHERITS, so a host that wants
+// it muted-at-rest / white-on-hover (the .is-panel rail tiles) can say so in CSS
+// instead of losing to an inline colour. Outside a tile the ambient IS --text,
+// so Nutrition / Fitness look exactly as before.
 const BASE = {
-  color: 'var(--text)',
   fontFamily: 'var(--font-mono)',
   fontSize: 12,
   fontWeight: 700,

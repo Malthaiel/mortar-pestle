@@ -13,7 +13,7 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
      it to its row-gap for the shadow to clear (util/candy.js) — the grid reads
      this var rather than restating the number. */
   --candy-tile-depth: 10.5px;
-  /* Un-shadowable mirror of --candy-depth. .music-tile redefines --candy-depth
+  /* Un-shadowable mirror of --candy-depth. .rail-tile redefines --candy-depth
      for its tile-px-scaled controls, which would distort normal candy buttons
      nested in a tile (the Planner pane widgets' header chips); content hosts
      restore the app value via this mirror. Kept in lockstep by the
@@ -1313,51 +1313,64 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
   background: var(--surface);
 }
 /* Cover-card captions sit on the red face when the tile flips (hover / selected);
-   flip their inline text colours to white for legibility. Excludes .music-tile —
+   flip their inline text colours to white for legibility. Excludes .rail-tile —
    the player keeps its own inline colours (SF15). */
-.candy-btn[data-shape="tile"]:not(.music-tile):is(:hover, :active, .is-selected) .candy-face :where(div, span) {
+.candy-btn[data-shape="tile"]:not(.rail-tile):is(:hover, :active, .is-selected) .candy-face :where(div, span) {
   color: #fff !important;
 }
 
-/* tile.music-tile — the LIVE music player + planner widgets (the bespoke
-   MusicTile + its planner twin) riding the two-layer tile shape; a 1:1 rename
-   of the legacy button-music-tile / button-planner-tile family, deleted
-   2026-08-28 once nothing referenced it. Every dimension scales
-   via --tile-px (1 design-px = 1px at >=480cqw, shrinking toward the 240px
-   sidebar min); --candy-depth is redefined locally so the tile's band AND the
-   inner candy controls inherit the same scaled press depth. Hover = colour-only
-   (the two-layer invariant; legacy lifted). */
-.candy-btn[data-shape="tile"].music-tile {
+/* tile.rail-tile — THE rail tile: one self-contained panel in a reorderable
+   stack. Three surfaces ride it (music player, planner dock, day-pane sections)
+   and every one of them is a Rail item. A 1:1 rename of the legacy
+   button-music-tile / button-planner-tile family, deleted 2026-08-28 once
+   nothing referenced it; the name lost its "music" 2026-08-29 when the shape
+   outgrew the player, and `.ov-studio-tile` — a second, independently-grown
+   content-height fork with the same machinery — was folded in as .is-panel at
+   the same time. Hover = colour-only (the two-layer invariant; legacy lifted).
+
+   THIS BLOCK IS THE MACHINERY ONLY — pointer arbitration, press exclusion,
+   accent flood, drag states, content colour. It declares NO size, because the
+   three flavours below disagree about size and nothing else:
+     .is-music    fixed 200·tile-px, container-query scaled  (the player)
+     .is-planner  fills its slot                             (the timer dock)
+     .is-panel    hugs its content                           (overlay studio,
+                                                              day-pane sections)
+   A flavour is REQUIRED. A bare .rail-tile has no height and paints nothing. */
+.candy-btn[data-shape="tile"].rail-tile {
+  width: 100%;
+  margin: 0 0 var(--cbtn-depth);                /* reserve the press-depth slab below */
+}
+/* Container-query scaling — the two flavours that live in the right sidebar,
+   where the tile must shrink with the rail (1 design-px = 1px at >=480cqw,
+   shrinking toward the 240px sidebar min). --candy-depth is redefined locally
+   so the tile's band AND the inner candy controls inherit one scaled press
+   depth. .is-panel deliberately opts OUT: the overlay host has no container
+   context, and the day rail wants the app's own depth for its nested buttons. */
+.candy-btn[data-shape="tile"].rail-tile:is(.is-music, .is-planner) {
   --tile-px: min(1px, calc(100cqw / 480));
   --candy-depth: calc(18 * var(--tile-px));   /* inner controls inherit this */
   --cbtn-depth: var(--candy-depth);             /* override the tile shape's 10.5px */
   --cbtn-frame: calc(8 * var(--tile-px));
-  width: 100%;
-  height: calc(200 * var(--tile-px));
-  margin: 0 0 var(--cbtn-depth);                /* reserve the press-depth slab below */
 }
-.candy-btn[data-shape="tile"].music-tile > .candy-face {
+.candy-btn[data-shape="tile"].rail-tile.is-music {
+  height: calc(200 * var(--tile-px));
+}
+.candy-btn[data-shape="tile"].rail-tile:is(.is-music, .is-planner) > .candy-face {
   height: 100%;
   padding: 0;                                 /* the inner flex column owns padding */
   background: var(--surface-3);               /* chrome grey at rest */
 }
-/* Re-assert the accent flip on hover/press over the resting surface-3 above
-   (which would otherwise outrank the generic flip on specificity). */
-.candy-btn[data-shape="tile"].music-tile:is(:hover, :active) > .candy-face,
-.is-drop-accent .candy-btn[data-shape="tile"].music-tile > .candy-face {
-  background: var(--accent);
-}
 /* Band accent for the post-drop bridge (the still cursor can't trigger the base
    .candy-btn:hover flip at ~2039). */
-.is-drop-accent .candy-btn[data-shape="tile"].music-tile { --cbtn-band: var(--accent); }
+.is-drop-accent .candy-btn[data-shape="tile"].rail-tile { --cbtn-band: var(--accent); }
 /* Face is pointer-transparent (base default) so the immovable base is the sole
    drag + press target. Re-enable pointer events on the interactive children;
    the chrome (title / artist / waveform gaps) keeps falling through to the base
    so the whole tile stays grabbable + pressable. */
-.candy-btn[data-shape="tile"].music-tile
+.candy-btn[data-shape="tile"].rail-tile
   :where(.music-tile-cover, .music-tile-scrub, .candy-btn,
          .planner-ring-button, .button-planner-calendar, button, a, input,
-         [data-no-drag]) {
+         textarea, [data-no-drag]) {
   pointer-events: auto;
 }
 /* Press-exclusion — the face slides only when the press lands on the tile
@@ -1365,15 +1378,15 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
    (Cancel the generic any-:active slide, then re-enable it gated. .is-pressed
    covers the ring's drag-to-set, where pointer-capture makes :has(:active)
    unreliable under WebKitGTK.) */
-.candy-btn[data-shape="tile"].music-tile:active > .candy-face { transform: none; }
-.candy-btn[data-shape="tile"].music-tile:active:not(:has(button:active, .music-tile-cover:active, .music-tile-scrub:active, .planner-ring-button:active, .planner-ring-button.is-pressed, [data-no-drag]:active)) > .candy-face {
+.candy-btn[data-shape="tile"].rail-tile:active > .candy-face { transform: none; }
+.candy-btn[data-shape="tile"].rail-tile:active:not(:has(button:active, .music-tile-cover:active, .music-tile-scrub:active, .planner-ring-button:active, .planner-ring-button.is-pressed, textarea:active, input:active, [data-no-drag]:active)) > .candy-face {
   transform: translateY(var(--cbtn-depth));
 }
 /* Dragging clone — DraggableSidebarList clones the slot + adds .is-dragging to
    the outer wrapper; reproduce the pressed-red look (band + face accent, face
    slid down). */
-.is-dragging .candy-btn[data-shape="tile"].music-tile { --cbtn-band: var(--accent); }
-.is-dragging .candy-btn[data-shape="tile"].music-tile > .candy-face {
+.is-dragging .candy-btn[data-shape="tile"].rail-tile { --cbtn-band: var(--accent); }
+.is-dragging .candy-btn[data-shape="tile"].rail-tile > .candy-face {
   color: #fff;
   background: var(--accent);
   transform: translateY(var(--cbtn-depth));
@@ -1382,32 +1395,32 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
    the overlay tile so the player + planner text (incl. nested candy-button labels)
    never flickers grey→white→grey on press. Non-!important so the player's designed
    INLINE colours (SF15) still win over it. */
-.candy-btn[data-shape="tile"].music-tile .candy-face :where(div, span) { color: #fff; }
+.candy-btn[data-shape="tile"].rail-tile .candy-face :where(div, span) { color: #fff; }
 /* Waveform inversion — when the chrome goes red (hover / active / drag) the
    dim-accent bars would vanish into it; flip played -> white, unplayed -> dim
    white. :hover covers the child-press case (pointer stays on the tile). */
-.candy-btn[data-shape="tile"].music-tile:is(:hover, :active) .music-tile-pulse-bar,
-.is-dragging .candy-btn[data-shape="tile"].music-tile .music-tile-pulse-bar,
-.is-drop-accent .candy-btn[data-shape="tile"].music-tile .music-tile-pulse-bar {
+.candy-btn[data-shape="tile"].rail-tile:is(:hover, :active) .music-tile-pulse-bar,
+.is-dragging .candy-btn[data-shape="tile"].rail-tile .music-tile-pulse-bar,
+.is-drop-accent .candy-btn[data-shape="tile"].rail-tile .music-tile-pulse-bar {
   background: color-mix(in oklch, white, transparent 65%);
 }
-.candy-btn[data-shape="tile"].music-tile:is(:hover, :active) .music-tile-pulse-bar[data-played="true"],
-.is-dragging .candy-btn[data-shape="tile"].music-tile .music-tile-pulse-bar[data-played="true"],
-.is-drop-accent .candy-btn[data-shape="tile"].music-tile .music-tile-pulse-bar[data-played="true"] {
+.candy-btn[data-shape="tile"].rail-tile:is(:hover, :active) .music-tile-pulse-bar[data-played="true"],
+.is-dragging .candy-btn[data-shape="tile"].rail-tile .music-tile-pulse-bar[data-played="true"],
+.is-drop-accent .candy-btn[data-shape="tile"].rail-tile .music-tile-pulse-bar[data-played="true"] {
   background: white;
 }
 /* Music-tile depth setting (Settings -> Animations) — "small" pins the fixed
    small depth instead of the tile-px-scaled slab; --cbtn-depth + inner controls
    follow via var(--candy-depth). */
-body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
+body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.is-music, .is-planner) {
   --candy-depth: var(--candy-depth-small);
 }
 /* VOD report rendition (user-directed 2026-07-14) — inside the VOD Review Report the
-   music-tile shell renders its outer frame at HALF spec (4·tile-px, not 8): the report
+   rail-tile shell renders its outer frame at HALF spec (4·tile-px, not 8): the report
    pane is wide enough that --tile-px caps at 1px, so the full frame reads oversized
    there vs the narrow sidebar (where tile-px scaling already halves it visually).
    Scoped to the .vod-half-frame wrapper; the sidebar widget is untouched. */
-.vod-half-frame .candy-btn[data-shape="tile"].music-tile {
+.vod-half-frame .candy-btn[data-shape="tile"].rail-tile:is(.is-music, .is-planner) {
   --cbtn-frame: calc(4 * var(--tile-px));
   --candy-depth: calc(13.5 * var(--tile-px));  /* 18 − 25% (user-directed); --cbtn-depth + inner controls follow */
 }
@@ -1415,12 +1428,12 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
    height; clips the dock's square corners to the rounded frame (box-shadow /
    band unaffected). Dial + calendar press behaviours fall out of the
    press-exclusion + generic colour-flip above — no per-control rules needed. */
-.candy-btn[data-shape="tile"].music-tile.is-planner {
+.candy-btn[data-shape="tile"].rail-tile.is-planner {
   height: auto;
   flex: 1;
   min-height: 0;
 }
-.candy-btn[data-shape="tile"].music-tile.is-planner > .candy-face {
+.candy-btn[data-shape="tile"].rail-tile.is-planner > .candy-face {
   display: flex;
   flex-direction: column;
   /* Corner clip lives on the FACE, not the tile. On the tile it also clipped the
@@ -1431,7 +1444,39 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
      corners identically and moves with the press. */
   overflow: hidden;
 }
-/* Planner Pack pane widgets ride the plain .music-tile shape one-to-one (same
+/* .is-panel — the content-height flavour: a titled section of controls that is
+   exactly as tall as what it holds. Was `.ov-studio-tile`, an independently
+   grown fork that re-derived the whole machinery above; folded in 2026-08-29,
+   so a drag or press fault is now fixed once for all three flavours. Two
+   surfaces: the in-game Overlay Studio panel's Voice / Video / Screenshots
+   sections, and the Planner day pane's Events / Routine / Tasks / Notes.
+   No --tile-px: the overlay host has no container context to query, and the
+   day rail wants the app's own candy depth for the buttons nested inside. */
+.candy-btn[data-shape="tile"].rail-tile.is-panel {
+  height: auto;
+}
+.candy-btn[data-shape="tile"].rail-tile.is-panel > .candy-face {
+  height: auto;
+  padding: 12px;
+  background: var(--surface-2);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  text-align: left;
+}
+/* Accent flood on hover / press — the tile IS a button, so pointing at it turns
+   its whole face accent, same as the music player. Must sit AFTER every flavour
+   block: .is-music/.is-planner (surface-3) and .is-panel (surface-2) each write
+   a resting face background at the SAME (0,5,0) specificity, so whichever comes
+   last wins. It lived above them until 2026-08-29 and .is-panel silently ate it
+   — the day rail simply never lit up. */
+.candy-btn[data-shape="tile"].rail-tile:is(:hover, :active) > .candy-face,
+.is-drop-accent .candy-btn[data-shape="tile"].rail-tile > .candy-face {
+  background: var(--accent);
+  color: #fff;
+}
+/* Planner Pack pane widgets ride the plain .rail-tile shape one-to-one (same
    fixed 200·tile-px height, same face chrome) — see PaneWidgetShell in
    modules/core/planner/index.jsx. Their scroll bodies are tagged data-no-drag:
    blocks DraggableSidebarList pickup, re-enables pointer events through the
@@ -1891,6 +1936,40 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].music-tile {
 .candy-btn[data-shape="circle"].is-hover-accent:is(:hover, :active):not(.is-active) .candy-face :where(div, span),
 .planner-uniform-btns .candy-btn[data-shape="circle"]:is(:hover, :active):not(.is-active) .candy-face :where(div, span) { color: #fff; }
 
+/* Nested controls inside a rail tile hover NEUTRAL, never accent. The TILE owns
+   the accent flood (it is the button); a red control on a red face vanishes, and
+   two accents at once reads as two hovers. This is the music player's transport
+   row generalised to all three rails — user-directed 2026-08-29 after the day
+   rail's chips/icons/circles were auto-opted-in by the .planner-uniform-btns
+   scope and the Overlay Studio panel's plain buttons took the base flood.
+   Held states (.is-active / .is-primary) keep their standing accent — that is
+   selection, not hover. Placed AFTER every shape block on purpose: it ties with
+   the .is-hover-accent and .planner-uniform-btns opt-ins at (0,6,0), so source
+   order is what decides. */
+.rail-tile .candy-btn:is(:hover, :active):not(.is-active):not(.is-primary) { --cbtn-band: var(--surface); }
+.rail-tile .candy-btn:is(:hover, :active):not(.is-active):not(.is-primary) > .candy-face {
+  background: var(--surface-3);
+  color: var(--text);
+}
+.rail-tile .candy-btn:is(:hover, :active):not(.is-active):not(.is-primary) .candy-face :where(div, span) { color: var(--text); }
+
+/* Panel tiles rest MUTED, light as ONE unit. Inside .is-panel (the Planner day
+   sections and the Overlay Studio panels) every nested label and icon sits at
+   --text-muted like any other candy button, and goes white only when the TILE
+   is hovered — pointing at one control lights the whole section, never just
+   that control. Overrides the blanket #fff at § rail-tile (which exists so the
+   music tile never flickers grey->white->grey on press) and is placed after the
+   neutral-hover block so the (0,6,0) ties fall this way. User-directed
+   2026-09-01. */
+.candy-btn[data-shape="tile"].rail-tile.is-panel .candy-face :where(div, span) { color: var(--text-muted); }
+.candy-btn[data-shape="tile"].rail-tile.is-panel:is(:hover, :active) .candy-face :where(div, span) { color: #fff; }
+.candy-btn[data-shape="tile"].rail-tile.is-panel:is(:hover, :active) .chip-field-input { color: #fff; }
+/* chip-meta — a chip's secondary label (the routine row's time range). Muted at
+   the LOWEST specificity on purpose, so the two .is-panel rules above own it
+   inside a panel tile and it follows the tile's hover like the rest of the row.
+   It used to carry an INLINE colour, which no stylesheet can outrank. */
+.chip-meta { color: var(--text-muted); }
+
 /* select — dropdown trigger (CandySelect.jsx). Neutral candy control like
    chip/icon: no accent flip (a dropdown trigger turning accent-red reads wrong,
    and legacy .candy-select never colour-shifted on hover — it only lifted, which
@@ -2327,20 +2406,20 @@ body[data-anim-button-depth="off"] .candy-btn:is(:active, .is-pressed, [data-can
 .planner-ring-button:is(:hover, :active) { --cbtn-band: var(--planner-face); }
 .planner-ring-button:is(:hover, :active) > .candy-face { background: var(--planner-face); }
 /* An inner control (Reset / START / Skip) owns its own press — the dial must not
-   sink under it. Mirrors the music-tile press-exclusion one level down. */
+   sink under it. Mirrors the rail-tile press-exclusion one level down. */
 .planner-ring-button:active:has(button:active) > .candy-face { transform: none; }
 
 /* The dial's three transport controls (Reset / START / Skip) do the app's normal
    grey→white label flip (user-directed 2026-08-28). They could not before: the
-   enclosing tile pins EVERY nested div/span to #fff at 0,4,0 (see .music-tile …
+   enclosing tile pins EVERY nested div/span to #fff at 0,4,0 (see .rail-tile …
    :where(div, span) above), and a candy button's own face IS a span nested in the
    tile's face, so all three labels were permanently white. These re-state the
    standard pair at a weight that clears it. .is-primary is excluded — START wears
    it while the timer runs, where the face is already accent-filled and its label
    has to stay white. The 30:00 readout is NOT a button and keeps its own colour. */
-.candy-btn[data-shape="tile"].music-tile
+.candy-btn[data-shape="tile"].rail-tile
   .planner-ring-inner-controls .candy-btn:not(.is-primary) > .candy-face { color: var(--text-muted); }
-.candy-btn[data-shape="tile"].music-tile
+.candy-btn[data-shape="tile"].rail-tile
   .planner-ring-inner-controls .candy-btn:not(.is-primary):is(:hover, :active) > .candy-face { color: #fff; }
 
 /* Inner-controls layer sits absolutely inside the rect, bounded just inside
@@ -2471,7 +2550,7 @@ body[data-anim-button-depth="off"] .aos-chat-window.is-pressed .aos-chat-face { 
   overflow: hidden;
 }
 
-/* Decorative equalizer bars inside the music-tile waveform row. Pulse on
+/* Decorative equalizer bars inside the rail-tile waveform row. Pulse on
  * playback via animation-play-state; each bar's animation-delay is set
  * inline so adjacent bars stay out of phase. Not audio-synced. */
 @keyframes music-tile-pulse {
@@ -2592,7 +2671,7 @@ body[data-anim-button-depth="off"] .aos-chat-window.is-pressed .aos-chat-face { 
    so it now inherits the shared § States recipe wholesale (band + face flip to
    accent on hover/press, label to #fff) and the base .candy-face's surface-3.
    Only the label's RESTING colour needs saying: the enclosing planner tile
-   forces every nested div/span to #fff (see .music-tile … :where(div, span)
+   forces every nested div/span to #fff (see .rail-tile … :where(div, span)
    above, 0,4,0), which outranks both the base face colour and the shared hover
    rule — so the strip's label was permanently white and could never flip. These
    two re-state the standard muted→#fff pair at a specificity that clears it. */
@@ -2605,9 +2684,9 @@ body[data-anim-button-depth="off"] .aos-chat-window.is-pressed .aos-chat-face { 
 .button-planner-calendar:not(:hover):not(:active) { --cbtn-band: var(--planner-face); }
 .button-planner-calendar:not(:hover):not(:active) > .candy-face { background: var(--planner-face); }
 
-.candy-btn[data-shape="tile"].music-tile
+.candy-btn[data-shape="tile"].rail-tile
   .button-planner-calendar > .candy-face :where(div, span) { color: var(--text-muted); }
-.candy-btn[data-shape="tile"].music-tile
+.candy-btn[data-shape="tile"].rail-tile
   .button-planner-calendar:is(:hover, :active) > .candy-face :where(div, span) { color: #fff; }
 
 /* The strip's face. Wears .candy-face AND this class on one span, so the base
@@ -3613,7 +3692,7 @@ button.button-misc-card.is-expanded .card-chevron {
 /* Planner: same lift, applied to the whole window instead of row by row — its
    headers never opted into .candy-center-row, so every button read low. The
    Seg shell carries its own depth, so it lifts and its options do not. */
-:where(.planner-uniform-btns) :is(.candy-seg, .candy-btn:not([data-shape="seg-option"])),
+:where(.planner-uniform-btns) :is(.candy-seg, .candy-btn:not([data-shape="seg-option"], [data-shape="tile"])),
 .candy-btn:is([data-shape="chip-field"], [data-shape="track"]) > .candy-face > .candy-btn {
   position: relative;
   top: calc(var(--cbtn-depth, var(--candy-depth)) / -2 * var(--candy-center-on, 1));
@@ -4434,7 +4513,7 @@ button.cal-customdays__step:hover {
 
 /* === Overlay-host capture HUD (Overlay epic) ===
    Promoted from the "Capture HUD (Overlay A)" prototype. The slab IS a candy
-   button; the 3 nested action buttons take pointer priority (the .music-tile
+   button; the 3 nested action buttons take pointer priority (the .rail-tile
    :has() pattern). Renders in the transparent overlay-host webview. */
 .capture-hud { cursor: move; }
 .capture-hud > .candy-face { padding: calc(16px + var(--candy-depth-small) / 2) 16px; }
@@ -4503,61 +4582,12 @@ button.cal-customdays__step:hover {
 .ov-studio-title { text-transform: uppercase; letter-spacing: .06em; }
 .ov-studio-sec-head { justify-content: space-between; }
 
-/* Content-height candy tile (rides data-shape="tile"). Mirrors the .music-tile
-   machinery — pointer-transparent face so the immovable base is the drag+press
-   target, interactive children re-enabled, the face slides only on a chrome press
-   — but sized to content, with no --tile-px container-query dependency (the
-   overlay host has no container context). */
-.candy-btn[data-shape="tile"].ov-studio-tile {
-  width: 100%;
-  height: auto;
-  margin: 0 0 var(--cbtn-depth);   /* reserve the base tile's 10.5px press-depth band below */
-}
-.candy-btn[data-shape="tile"].ov-studio-tile > .candy-face {
-  height: auto;
-  padding: 12px;
-  background: var(--surface-2);
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 12px;
-  text-align: left;
-}
-/* Hover floods the whole tile face with accent — matches the .music-tile sidebar
-   widget (styles.css ~1238). Must restate accent explicitly: the resting rule
-   above out-ranks the base .candy-btn:hover fill by specificity, so without this
-   the face would keep surface-2 on hover (only the frame/border would go red). */
-.candy-btn[data-shape="tile"].ov-studio-tile:is(:hover, :active) > .candy-face { background: var(--accent); color: #fff; }
-/* Post-drop bridge — DraggableSidebarList tags the just-dropped tile's wrapper
-   with .is-drop-accent so the accent doesn't blink off between the drag clone
-   vanishing and the source being re-:hover-ed (browsers don't recompute :hover on
-   a still cursor). Mirrors the :hover flood above at rest depth; cleared on the
-   next pointermove. Band (box-shadow + border) accents too — matching the base
-   .candy-btn:hover flip (styles.css ~2039), which the still cursor can't trigger. */
-.is-drop-accent .candy-btn[data-shape="tile"].ov-studio-tile { --cbtn-band: var(--accent); }
-.is-drop-accent .candy-btn[data-shape="tile"].ov-studio-tile > .candy-face { background: var(--accent); color: #fff; }
-.candy-btn[data-shape="tile"].ov-studio-tile :where(.candy-btn, button, a, input, textarea, [data-no-drag]) { pointer-events: auto; }
-.candy-btn[data-shape="tile"].ov-studio-tile:active > .candy-face { transform: none; }
-.candy-btn[data-shape="tile"].ov-studio-tile:active:not(:has(button:active, textarea:active, [data-no-drag]:active)) > .candy-face {
-  transform: translateY(var(--cbtn-depth));
-}
-/* Dragging clone (DraggableSidebarList clones the slot + adds .is-dragging). The
-   clone is appended to <body>, outside .video-cinema, but --accent is painted on
-   the document root by OverlayHostView, so the picked-up tile still reads red. */
-.is-dragging .candy-btn[data-shape="tile"].ov-studio-tile { --cbtn-band: var(--accent); }
-.is-dragging .candy-btn[data-shape="tile"].ov-studio-tile > .candy-face {
-  background: var(--accent); color: #fff; transform: translateY(var(--cbtn-depth));
-}
-/* Content colour is CONSTANT across EVERY state (rest, hover, press, drag) — the
-   tile's nested text is always white, never the dim resting grey (--text-2 /
-   --text-faint). Gating the flip on :hover/:active gave a grey→white→grey flicker as
-   you hovered then pressed (the press state dropped the flip). One unconditional rule
-   kills all three states (DESIGN.md § Anti-patterns: never recolour content on press).
-   Nested candy-button labels (span.candy-face) are INCLUDED — they had the same
-   grey→white→grey flip; the rule outranks the base .candy-face grey so they stay
-   white in every state (their accent-flood background on hover is unchanged, only the
-   text is pinned). Inline colours (e.g. the accent "● live" pip) still win over this. */
-.candy-btn[data-shape="tile"].ov-studio-tile .candy-face :where(div, span) { color: #fff; }
+/* The Voice / Video / Screenshots tiles are `.rail-tile.is-panel` — the shared
+   content-height rail tile (styles.css § tile.rail-tile). This block used to be
+   `.ov-studio-tile`, a fork that re-derived the same pointer arbitration, press
+   exclusion, accent flood, drop bridge and drag-clone rules; folded in
+   2026-08-29 so the machinery has one home. Nothing overlay-specific was lost —
+   the whitelists it needed (textarea, input) now live on the base. */
 
 /* Recent-history thumbnails + empty states */
 .ov-studio-thumbs { display: flex; gap: 8px; }
@@ -4658,13 +4688,17 @@ button.cal-customdays__step:hover {
  * rule, which is exactly how the first attempt at this lost in silence.
  *
  * daycell is exempt: a month-grid square is not a control in a row, and forcing
- * its height deforms the calendar. */
+ * its height deforms the calendar. tile is exempt for the same reason one step
+ * up: a .rail-tile is a whole PANEL in a rail, sized by what it holds, and the
+ * shared half-depth centering lift below is likewise skipped for it — a panel
+ * is not centred against flat text, and its own lip is the gap the day pane
+ * measures from. */
 .planner-uniform-btns { --planner-btn-h: 24px; }
-.planner-uniform-btns .candy-btn:not([data-shape="daycell"]) {
+.planner-uniform-btns .candy-btn:not([data-shape="daycell"], [data-shape="tile"]) {
   height: var(--planner-btn-h);
   --cbtn-size: var(--planner-btn-h) !important;
 }
-.planner-uniform-btns .candy-btn:not([data-shape="daycell"]) > .candy-face {
+.planner-uniform-btns .candy-btn:not([data-shape="daycell"], [data-shape="tile"]) > .candy-face {
   height: 100%;
   padding-top: 0;
   padding-bottom: 0;
@@ -4682,7 +4716,25 @@ button.cal-customdays__step:hover {
 .planner-uniform-btns .candy-seg .candy-btn { height: 100%; }
 /* One gap for every run of adjacent buttons, so no row invents its own. */
 .planner-uniform-btns :where(div, span):has(> .candy-btn + .candy-btn) { gap: var(--planner-btn-gap); }
+/* A Rail's tiles are the same run of adjacent candy buttons, but DraggableSidebarList
+   wraps each item in a positioning div, so the :has(> .candy-btn + .candy-btn) test
+   above cannot see them. Same number, same owner — measured 2026-08-29 as rowGap
+   "normal" on the day rail, which left the tiles separated by their 10.5px lip alone
+   and a PAINTED gap of zero. */
+.planner-uniform-btns [data-drag-list] { gap: var(--planner-btn-gap); }
 .planner-uniform-btns { --planner-btn-gap: 12px; }   /* one gap for the whole planner: 12, matching the day pane's INSET (user-directed 2026-08-29) */
+
+/* Day-rail tiles carry the pane's own rhythm. The generic .is-panel face pads a
+   flat 12; here every gap must be the PAINTED one, so the vertical padding adds
+   half a small depth (a candy button paints half its depth above its row via the
+   centering lift, and a whole depth below as the lip) and the row gap adds a
+   whole one. Both derive from --planner-btn-gap so the pane still runs on ONE
+   number — see DayPane.jsx's INSET note. Horizontal padding adds nothing: the
+   lip points down, not sideways. */
+.planner-uniform-btns .candy-btn[data-shape="tile"].rail-tile.is-panel > .candy-face {
+  padding: calc(var(--planner-btn-gap) + var(--candy-depth-small) / 2) var(--planner-btn-gap);
+  gap: calc(var(--planner-btn-gap) + var(--candy-depth-small));
+}
 
 /* Calendar header row — all seven controls share ONE corner. Measured
    2026-08-27: the chips came out 7px and the two round arrows 6px, because a

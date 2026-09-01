@@ -1,22 +1,26 @@
-// Unified day pane — the Planner's right column (Planner Overhaul Pivot 2).
-// One daily-log-structured pane replacing the old Events / Unorganized / Block
-// Library rails and the DailyNotePane editor: a date-button header (month
-// popover arrives in a later sub-feature) above three sections — Events
-// (forward agenda from the viewed day), Tasks List, and Quick Notes — all
-// anchored to the modal's shared `pivotDs` pivot.
+// Unified day pane — the Planner dashboard's MIDDLE column (Planner Overhaul
+// Pivot 2). One daily-log-structured pane replacing the old Events /
+// Unorganized / Block Library rails and the DailyNotePane editor: four sections
+// — Events (forward agenda from the viewed day), Routine, Tasks List and Quick
+// Notes — separated by hairlines and anchored to the dashboard's shared
+// `pivotDs` pivot. Each section is ONE header row — its title plus a bare "+"
+// circle in the slot the count badge used to hold — and then its list. The four
+// "No upcoming events." / "No tasks." lines are gone (2026-08-28), so an empty
+// section is just its header row; the whole pane runs on one 10px rhythm (GAP).
 //
-// Viewing TODAY, the Tasks/Notes sections show today's own items first, then
-// an "Unorganized" divider grouping carryover from previous days by source
-// date (the old Unorganized pane's data). Any other day shows that day's own
-// items only — still fully interactive (toggle / ROUTE / drag), but every "+"
-// adder is disabled off-today.
+// EVERY day — today included — shows that day's own items and nothing else
+// (2026-09-01). Carryover from other days moved entirely into the section's
+// "show all" popover, where it is still grouped by source date. Fully
+// interactive (toggle / ROUTE / drag), and every adder writes to the VIEWED day
+// (2026-09-01): the four "+" circles are live on any date, and api.js's
+// appendToDaySection creates that day's log from the skeleton if it is missing.
 //
 // Refresh is consolidated here: ONE debounced tick from the vault watcher
 // ('today' / 'day' / 'manifest') + the `agentic:yesterday-notes-changed`
 // browser event feeds all three data hooks, so a single write never
 // multi-flashes the pane.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { subscribeEvents } from '../../api.js';
 import { api } from '../../api.js';
 import { useUpcomingWindow } from '../../hooks/useUpcomingWindow.js';
@@ -27,14 +31,16 @@ import { todayLocalStr } from '../../util/time.js';
 import { IconPlus } from '../icons.jsx';
 import NewEventModal from './NewEventModal.jsx';
 import PaneHeader from './PaneHeader.jsx';
+import Popover from '../ui/Popover.jsx';
+import Rail, { useRailOrder } from '../ui/Rail.jsx';
 import { TaskChip, NoteChip, Group, Subdued, shortDate } from './ItemChips.jsx';
 import RoutineChip from './RoutineChip.jsx';
 import { useRoutineItems } from '../../hooks/useRoutineItems.js';
 import { useDailyFrame } from '../../hooks/useDailyFrame.js';
 import { makeUniqueId } from '../../util/frames.js';
-import { weekdayForKey } from '../../util/events.js';
+import { weekdayForKey, colorForType } from '../../util/events.js';
+import { candyGap } from '../../util/candy.js';
 import { playCelebrationChime } from '../../hooks/useTactileSound.js';
-import { usePlanner } from '@modules/core/planner/PlannerProvider.jsx';
 
 // Day-group label relative to REAL today (not the pivot) — "Today"/"Tomorrow"
 // keep meaning while time-traveling.
@@ -47,40 +53,50 @@ function dayLabel(ds) {
   return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
-// Section "+" — candy circle, greyed and inert when the pane is parked on a
-// non-today day (creation is today-only by design; viewing stays interactive).
-function AddCircle({ isToday, onClick, label }) {
+// One vertical rhythm for the whole pane (user-directed 2026-08-28: "even
+// vertical spacing between every singular button, separator line, header";
+// 2026-08-29: "perfectly centered both vertically and horizontally — same gap
+// in 4 directions", and the same number between the buttons inside a box).
+//
+// INSET is that number, and it is always the PAINTED gap. A candy button paints
+// half a depth ABOVE its row (candyCenterOffset lifts it so the face+lip unit
+// centres beside plain text) and a whole depth BELOW it (the lip), so a layout
+// gap has to add back half a depth for EACH candy neighbour it sits between.
+// Horizontal gaps add nothing — the lip points down, not sideways. Every value
+// is derived from the depth var, never typed, because depth is a user setting.
+const INSET = 12;
+const GAP = INSET;                                                    // no candy either side
+const GAP_HALF = `calc(${INSET}px + var(--candy-depth-small) / 2)`;   // candy on one side
+const GAP_UNDER_BTN = candyGap(INSET, true);                          // candy on both sides
+
+// A flex child with NO rows is zero-tall but still eats the section's gap on
+// both sides — an empty Tasks List sat 30px off its divider while every other
+// gap in the pane was 10. display:none takes it out of the layout entirely.
+const chipList = (empty) => ({
+  display: empty ? 'none' : 'flex', flexDirection: 'column', gap: GAP_UNDER_BTN,
+});
+// No gap here: the planner scope owns every run of adjacent candy buttons
+// (--planner-btn-gap, styles.css § Planner — one button height), and a gap
+// written on the tag would outrank it and fork the number.
+const HEAD_ROW_STYLE = { display: 'flex', alignItems: 'center' };
+
+// Every section's adder: a bare "+" circle on the section's HEADER row, in the
+// slot the count badge used to occupy (user-directed 2026-08-28 — the counters
+// and the "New ..." wording are both gone). Live on every day — each
+// section's onSubmit already carries `pivotDs`, so the item lands on whichever
+// date the pane is parked on.
+function AddCircle({ onClick, label }) {
   return (
     <button
       type="button"
       data-own-press
       className="candy-btn"
       data-shape="circle"
-      disabled={!isToday}
-      title={isToday ? label : 'Switch to today to add'}
+      title={label}
       aria-label={label}
-      style={isToday ? undefined : { opacity: 0.45 }}
       onClick={onClick}
     >
       <span className="candy-face"><IconPlus size={14}/></span>
-    </button>
-  );
-}
-
-// The "+ New Event" chip keeps its labeled-chip form from the old Events pane.
-function AddChip({ isToday, onClick, children }) {
-  return (
-    <button
-      type="button"
-      data-own-press
-      className="candy-btn"
-      data-shape="chip"
-      disabled={!isToday}
-      title={isToday ? undefined : 'Switch to today to add'}
-      style={isToday ? undefined : { opacity: 0.45 }}
-      onClick={onClick}
-    >
-      <span className="candy-face">{children}</span>
     </button>
   );
 }
@@ -100,8 +116,11 @@ function InlineAdd({ placeholder, onSubmit, onClose }) {
     setBusy(false);
     if (r?.ok) onClose();
   };
+  // ponytail: no margin — the section's gap spaces this. It carries
+  // --candy-surface-depth, not --candy-depth-small, so its trailing gap is a
+  // couple of px off the rest; it's a transient row, not worth a third constant.
   return (
-    <div style={{ marginBottom: 8 }}>
+    <div>
       <input
         ref={inputRef}
         className="candy-input"
@@ -119,20 +138,7 @@ function InlineAdd({ placeholder, onSubmit, onClose }) {
   );
 }
 
-// Hairline divider labeling the carryover block inside Tasks/Quick Notes.
-function UnorgDivider() {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0 2px' }}>
-      <div style={{ flex: 1, height: 1, background: 'var(--border)' }}/>
-      <span style={{
-        fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
-        textTransform: 'uppercase', color: 'var(--text-faint)',
-      }}>Unorganized</span>
-      <div style={{ flex: 1, height: 1, background: 'var(--border)' }}/>
-    </div>
-  );
-}
-
+// Hairline between two sections. This IS the old UNORGANIZED divider with its
 // Carryover arrives newest-source-first and flat; group consecutive items by
 // source date for the divider block (insertion order preserves newest-first).
 function groupBySource(items) {
@@ -144,6 +150,161 @@ function groupBySource(items) {
   return [...m.entries()];
 }
 
+// The agenda list, shared by the Events column and its "show all" popover so
+// the two can never drift apart. `hideDayLabel` is the COLUMN, which shows the
+// viewed day and nothing else (user-directed 2026-08-29) — the day headings only
+// mean something in the popover, which spans many days. With the labels gone the
+// first painted thing is a candy face, not text, so the half-depth correction the
+// text needed goes with them.
+function EventGroups({ groups, colorFor, onEdit, hideDayLabel = false }) {
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column', gap: hideDayLabel ? GAP_UNDER_BTN : GAP_HALF,
+      ...(hideDayLabel ? null : { marginTop: 'calc(var(--candy-depth-small) / -2)' }),
+    }}>
+      {groups.map(({ ds, events }) => (
+        <div key={ds}>
+          {/* text-box trims the font's half-leading so this label's box IS its
+              ink — cap height down to the descender — and the 12 above and
+              below it read as 12 rather than 12-plus-slack. The browser does
+              the measuring; nothing here restates a font metric. */}
+          {!hideDayLabel && (
+            <div style={{
+              fontSize: 10, fontWeight: 600, color: 'var(--text-muted)',
+              letterSpacing: '0.02em', marginBottom: GAP_HALF,
+              textBox: 'trim-both cap text',
+            }}>{dayLabel(ds)}</div>
+          )}
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: GAP_UNDER_BTN }}>
+            {events.map((ev, i) => (
+              <li key={`${ds}-${i}`}>
+                {/* The whole event IS the button — clicking it opens the same
+                    modal that created it, in edit mode (with Delete). Muted
+                    text is `inherit` + opacity, not a token, so it stays
+                    readable when the row floods accent on hover.
+                    The row shape inherits the FULL depth, but every other list
+                    row in this pane (tasks, notes, routine) is a small shape;
+                    pinning the small lip here keeps the rows matched and lets
+                    one INSET sit evenly under all of them. */}
+                <button
+                  type="button"
+                  data-own-press
+                  className="candy-btn"
+                  data-shape="row"
+                  style={{ '--cbtn-depth': 'var(--candy-depth-small)' }}
+                  title="Edit this event"
+                  onClick={() => onEdit?.(ds, ev)}
+                >
+                  <span className="candy-face">
+                    <span style={{
+                      width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                      background: colorFor(ev.typeName),
+                    }}/>
+                    <span style={{ minWidth: 0, flex: 1 }}>
+                      <span style={{ display: 'block', fontSize: 12, lineHeight: 1.35 }}>
+                        {ev.time12 && (
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, opacity: 0.7, marginRight: 6 }}>{ev.time12}</span>
+                        )}
+                        <span>{ev.title}</span>
+                      </span>
+                      {ev.note && (
+                        <span style={{ display: 'block', fontSize: 11, opacity: 0.7, lineHeight: 1.3 }}>{ev.note}</span>
+                      )}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// A section's title IS the button that opens its "show all" popover
+// (user-directed 2026-08-28). Same candy chip as every other control in the
+// pane; PaneHeader keeps the heading's own type inside the face, so the four
+// titles still read as headings rather than as toolbar buttons.
+function SectionHead({ title, btnRef, open, onToggle, children }) {
+  return (
+    <div style={HEAD_ROW_STYLE}>
+      <button
+        type="button"
+        ref={btnRef}
+        data-own-press
+        className={`candy-btn planner-section-head${open ? ' is-active' : ''}`}
+        data-shape="chip"
+        aria-expanded={open}
+        title={`Show all ${title.toLowerCase()}`}
+        onClick={onToggle}
+      >
+        <span className="candy-face"><PaneHeader>{title}</PaneHeader></span>
+      </button>
+      {children}
+    </div>
+  );
+}
+
+// Anchored "show all" panel - the BlockLibraryPopover recipe (caller-positioned
+// Popover, clamped to the viewport, capture-phase Esc so only this closes)
+// pointed at a section header instead of the Blocks chip. Its body reuses the
+// pane's own chips, so everything inside stays as interactive as the column.
+const WEEKDAYS = [
+  ['mon', 'Monday'], ['tue', 'Tuesday'], ['wed', 'Wednesday'], ['thu', 'Thursday'],
+  ['fri', 'Friday'], ['sat', 'Saturday'], ['sun', 'Sunday'],
+];
+
+const POPOVER_W = 340;
+function SectionPopover({ open, onClose, anchorRef, accent, title, children }) {
+  const [pos, setPos] = useState(null);
+  useLayoutEffect(() => {
+    if (!open) { setPos(null); return; }
+    const r = anchorRef?.current?.getBoundingClientRect();
+    if (!r) return;
+    setPos({ top: r.bottom + 10, left: Math.max(8, Math.min(r.left, window.innerWidth - POPOVER_W - 8)) });
+  }, [open, anchorRef]);
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      onClose?.();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [open, onClose]);
+  return (
+    <Popover
+      open={open && !!pos}
+      onClose={onClose}
+      ariaLabel={title}
+      accent={accent}
+      escToClose={false}
+      outsideExempt=".planner-section-head"
+      panelClassName="candy-modal planner-uniform-btns"
+      panelProps={{ 'data-uniform-height': '--planner-btn-h' }}
+      style={{ position: 'fixed', zIndex: 1100, top: pos?.top, left: pos?.left, width: POPOVER_W, maxHeight: 460 }}
+      bodyStyle={{ padding: 12, display: 'flex', flexDirection: 'column', gap: GAP_UNDER_BTN }}
+    >
+      {children}
+    </Popover>
+  );
+}
+
+// The Events popover's own, WIDER read. Mounted only while the popover is open:
+// the window costs one vault read per day, so a 90-day sweep is fine on demand
+// and would be wasteful standing.
+const ALL_EVENTS_DAYS = 90;
+function AllEventsBody({ pivotDs, colorFor, onEdit }) {
+  const { groups, loading, error } = useUpcomingWindow(ALL_EVENTS_DAYS, pivotDs, 0);
+  if (loading) return <Subdued>Loading</Subdued>;
+  if (error) return <Subdued>Couldn't read upcoming events.</Subdued>;
+  if (!groups.length) return <Subdued>Nothing scheduled in the next {ALL_EVENTS_DAYS} days.</Subdued>;
+  return <EventGroups groups={groups} colorFor={colorFor} onEdit={onEdit}/>;
+}
+
 // Carryover age tint — group date labels warm from muted grey toward amber as
 // the items get staler (~7 days to full warmth). Static color, not motion, so
 // it carries no Animations toggle.
@@ -151,42 +312,6 @@ function ageColor(ds) {
   const age = Math.max(0, Math.round((Date.now() - new Date(`${ds}T00:00:00`).getTime()) / 86400000));
   const p = Math.min(age * 15, 100);
   return `color-mix(in oklch, var(--text-muted) ${100 - p}%, #d9a05b ${p}%)`;
-}
-
-// Mono counter beside a section title (EVENTS 3 · TASKS 2/5 · NOTES 4).
-function CountBadge({ children }) {
-  return (
-    <span style={{
-      fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700,
-      letterSpacing: '0.04em', color: 'var(--text-muted)',
-    }}>{children}</span>
-  );
-}
-
-// rAF count-up toward a changed value (~280ms, cubic ease-out). Disabled →
-// snaps instantly (the counter-tick Animations toggle; JS-driven animations
-// read the settings bag per the useSettings convention).
-function useCountUp(value, enabled) {
-  const [disp, setDisp] = useState(value);
-  const fromRef = useRef(value);
-  useEffect(() => {
-    if (!enabled) { fromRef.current = value; setDisp(value); return undefined; }
-    const from = fromRef.current;
-    if (from === value) return undefined;
-    const t0 = performance.now();
-    const dur = 280;
-    let raf;
-    const step = (now) => {
-      const p = Math.min(1, (now - t0) / dur);
-      const eased = 1 - Math.pow(1 - p, 3);
-      setDisp(Math.round(from + (value - from) * eased));
-      if (p < 1) raf = requestAnimationFrame(step);
-      else fromRef.current = value;
-    };
-    raf = requestAnimationFrame(step);
-    return () => { cancelAnimationFrame(raf); fromRef.current = value; };
-  }, [value, enabled]);
-  return disp;
 }
 
 export default function DayPane({ accent = 'var(--accent)', pivotDs, onPivotChange }) {
@@ -222,12 +347,25 @@ export default function DayPane({ accent = 'var(--accent)', pivotDs, onPivotChan
     };
   }, []);
 
-  const { groups, loading: evLoading, error: evError, reload: reloadEvents } = useUpcomingWindow(14, pivotDs, tick);
+  // The column is the viewed day only; other days live behind the section
+  // header's "show all" popover, which sweeps its own window.
+  const { groups, loading: evLoading, error: evError, reload: reloadEvents } = useUpcomingWindow(0, pivotDs, tick);
   const day = useDaySections(pivotDs, tick);
   const unorg = useUnorganizedItems(tick);
   const { types } = useEventTypes();
 
+  // "Show all" popovers — ONE open key, so opening a second closes the first.
+  const [allOpen, setAllOpen] = useState(null);   // 'events' | 'routine' | 'tasks' | 'notes'
+  const evHeadRef = useRef(null);
+  const roHeadRef = useRef(null);
+  const tkHeadRef = useRef(null);
+  const ntHeadRef = useRef(null);
+  const toggleAll = (key) => setAllOpen(v => (v === key ? null : key));
+
   const [modalOpen, setModalOpen] = useState(false);
+  // The event the modal is editing, as { ds, ev } — null means "new event".
+  const [editingEvent, setEditingEvent] = useState(null);
+  const openEventEditor = (ds, ev) => { setEditingEvent({ ds, ev }); setModalOpen(true); };
   const [addingTask, setAddingTask] = useState(false);
   const [addingRoutine, setAddingRoutine] = useState(false);
 
@@ -250,11 +388,7 @@ export default function DayPane({ accent = 'var(--accent)', pivotDs, onPivotChan
   };
   const [addingNote, setAddingNote] = useState(false);
 
-  const colorFor = (typeName) => {
-    if (!typeName) return 'var(--text-faint)';
-    const t = types.find(x => x.name.toLowerCase() === typeName.toLowerCase());
-    return t?.color || 'var(--text-faint)';
-  };
+  const colorFor = (typeName) => colorForType(types, typeName);
 
   // Day-slide direction — recomputed render-side ONLY when the pivot actually
   // moves, then held in a ref. It must stay applied across re-renders: the
@@ -273,14 +407,6 @@ export default function DayPane({ accent = 'var(--accent)', pivotDs, onPivotChan
   }
   const slideName = slideNameRef.current;
 
-  // Live section counters (count-up honors its Animations toggle).
-  const { settings: appSettings } = usePlanner();
-  const tickOn = appSettings?.animations?.['counter-tick'] !== false;
-  const evDisp = useCountUp(groups.reduce((n, g) => n + g.events.length, 0), tickOn);
-  const taskDoneDisp = useCountUp(day.tasks.filter(t => t.checked).length, tickOn);
-  const taskTotalDisp = useCountUp(day.tasks.length, tickOn);
-  const noteDisp = useCountUp(day.notes.length, tickOn);
-
   const dayPath = `Pulse/Daily Logs/${pivotDs}.md`;
   // Unchecked first, checked muted below (stable sort keeps file order within
   // each group).
@@ -296,12 +422,135 @@ export default function DayPane({ accent = 'var(--accent)', pivotDs, onPivotChan
     window.dispatchEvent(new CustomEvent('app:confetti'));
     playCelebrationChime();
   };
-  // Carryover renders only under today — own-vs-carryover stays deduped by
-  // construction (daily_get_unorganized excludes today; see also the midnight
-  // guard: isToday flips before the next watcher tick regroups).
-  const showCarryover = isToday && !unorg.loading;
-  const carryTasks = showCarryover ? groupBySource(unorg.tasks) : [];
-  const carryNotes = showCarryover ? groupBySource(unorg.notes) : [];
+  // Carryover is POPOVER-ONLY (user-directed 2026-09-01). The column shows the
+  // viewed day and nothing else — seeing Sep 2's tasks while parked on Sep 1 is
+  // exactly what it must not do. Everything from every other day is one click
+  // away in the section's "show all" popover; that is the whole point of it.
+  const allCarryTasks = unorg.loading ? [] : groupBySource(unorg.tasks);
+  const allCarryNotes = unorg.loading ? [] : groupBySource(unorg.notes);
+
+  // The day rail's items. Adding a fifth section is one entry here — it
+  // inherits the tile chrome, the drag-to-reorder and the saved order.
+  const sections = [
+        /* ── Events — forward agenda anchored at the viewed day ── */
+    { id: 'events', render: () => (<>
+          <SectionHead
+            title="Events"
+            btnRef={evHeadRef}
+            open={allOpen === 'events'}
+            onToggle={() => toggleAll('events')}
+          >
+            <AddCircle label="New event" onClick={() => { setEditingEvent(null); setModalOpen(true); }}/>
+          </SectionHead>
+          {evLoading ? (
+            <Subdued>Loading</Subdued>
+          ) : evError ? (
+            <Subdued>Couldn’t read upcoming events.</Subdued>
+          ) : groups.length === 0 ? null : (
+            <EventGroups groups={groups} colorFor={colorFor} onEdit={openEventEditor} hideDayLabel/>
+          )}
+    </>) },
+
+        /* ── Routine — repeating items for this weekday (Frame + Recurring
+            merged, Planner Consolidation). Timed ones also paint on the
+            calendar; untimed ones live only here. Sits above Tasks List: the
+            recurring shape of the day comes before its one-offs. ── */
+    { id: 'routine', render: () => (<>
+          <SectionHead
+            title="Routine"
+            btnRef={roHeadRef}
+            open={allOpen === 'routine'}
+            onToggle={() => toggleAll('routine')}
+          >
+            <AddCircle label="New routine item" onClick={() => setAddingRoutine(true)}/>
+          </SectionHead>
+          {addingRoutine && (
+            <InlineAdd
+              placeholder="New routine item — Enter to add, Esc to cancel"
+              onSubmit={addRoutineItem}
+              onClose={() => setAddingRoutine(false)}
+            />
+          )}
+          {routine.total > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: GAP_UNDER_BTN }}>
+              {routine.items.map(it => (
+                <RoutineChip key={it.id} item={it} onToggle={routine.toggle}/>
+              ))}
+            </div>
+          )}
+    </>) },
+
+        /* ── Tasks List — the viewed day's ## Tasks + today's carryover ── */
+    { id: 'tasks', render: () => (<>
+          <SectionHead
+            title="Tasks List"
+            btnRef={tkHeadRef}
+            open={allOpen === 'tasks'}
+            onToggle={() => toggleAll('tasks')}
+          >
+            <AddCircle label="New task" onClick={() => setAddingTask(true)}/>
+          </SectionHead>
+          {addingTask && (
+            <InlineAdd
+              placeholder="New task — Enter to add, Esc to cancel"
+              onSubmit={(text) => api.daySections.addTask(pivotDs, text)}
+              onClose={() => setAddingTask(false)}
+            />
+          )}
+          <div style={chipList(!day.loading && !day.error && !dayTasks.length)}>
+            {day.loading ? (
+              <Subdued>Loading</Subdued>
+            ) : day.error ? (
+              <Subdued>Couldn’t read the daily log.</Subdued>
+            ) : (
+              <>
+                {dayTasks.map(t => (
+                  <TaskChip
+                    key={`${pivotDs}:${t.line}:${t.text}`}
+                    path={dayPath} line={t.line} text={t.text}
+                    sourceDate={pivotDs} checked={t.checked} showDate={false}
+                    onToggled={onOwnTaskToggled(t.line)}
+                  />
+                ))}
+              </>
+            )}
+          </div>
+    </>) },
+
+        /* ── Quick Notes — the viewed day's bullets + today's carryover ── */
+    { id: 'notes', render: () => (<>
+          <SectionHead
+            title="Quick Notes"
+            btnRef={ntHeadRef}
+            open={allOpen === 'notes'}
+            onToggle={() => toggleAll('notes')}
+          >
+            <AddCircle label="New quick note" onClick={() => setAddingNote(true)}/>
+          </SectionHead>
+          {addingNote && (
+            <InlineAdd
+              placeholder="New quick note — Enter to add, Esc to cancel"
+              onSubmit={(text) => api.daySections.addNote(pivotDs, text)}
+              onClose={() => setAddingNote(false)}
+            />
+          )}
+          <div style={chipList(!day.loading && !day.error && !day.notes.length)}>
+            {day.loading ? (
+              <Subdued>Loading</Subdued>
+            ) : day.error ? (
+              <Subdued>Couldn’t read the daily log.</Subdued>
+            ) : (
+              <>
+                {day.notes.map(n => (
+                  <NoteChip key={`${pivotDs}-${n.index}-${n.text}`} text={n.text} sourceDate={pivotDs} index={n.index} showDate={false}/>
+                ))}
+              </>
+            )}
+          </div>
+    </>) },
+  ];
+  const { ordered: orderedSections, onReorder: reorderSections } =
+    useRailOrder(sections, 'planner:day-sections:order');
 
   return (
     <div style={{
@@ -322,206 +571,131 @@ export default function DayPane({ accent = 'var(--accent)', pivotDs, onPivotChan
         style={{
           flex: 1, minHeight: 0, overflowY: 'auto',
           padding: '14px 18px',
-          display: 'flex', flexDirection: 'column', gap: 20,
+          display: 'flex', flexDirection: 'column',
           ...(slideName ? { animation: `${slideName} 400ms cubic-bezier(0.16, 1, 0.3, 1)` } : {}),
         }}>
-        {/* ── Events — forward agenda anchored at the viewed day ── */}
-        <section>
-          <div className="candy-center-row" style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            marginBottom: 10,
-          }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-              <PaneHeader>Events</PaneHeader>
-              <CountBadge>{evDisp}</CountBadge>
-            </div>
-            <AddChip isToday={isToday} onClick={() => setModalOpen(true)}>
-              <IconPlus size={12}/> New Event
-            </AddChip>
-          </div>
-          {evLoading ? (
-            <Subdued>Loading</Subdued>
-          ) : evError ? (
-            <Subdued>Couldn’t read upcoming events.</Subdued>
-          ) : groups.length === 0 ? (
-            <Subdued>No upcoming events.</Subdued>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {groups.map(({ ds, events }) => (
-                <div key={ds}>
-                  <div style={{
-                    fontSize: 10, fontWeight: 600, color: 'var(--text-muted)',
-                    letterSpacing: '0.02em', marginBottom: 5,
-                  }}>{dayLabel(ds)}</div>
-                  <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    {events.map((ev, i) => (
-                      <li key={`${ds}-${i}`} style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                        <span style={{
-                          width: 8, height: 8, borderRadius: '50%', marginTop: 4, flexShrink: 0,
-                          background: colorFor(ev.typeName),
-                        }}/>
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                          <div style={{ fontSize: 12, color: 'var(--text)', lineHeight: 1.35 }}>
-                            {ev.time12 && (
-                              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', marginRight: 6 }}>{ev.time12}</span>
-                            )}
-                            <span>{ev.title}</span>
-                          </div>
-                          {ev.note && (
-                            <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.3 }}>{ev.note}</div>
-                          )}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
+        <Rail
+          items={orderedSections}
+          onReorder={reorderSections}
+          keyOf={(s) => s.id}
+          renderItem={(s) => (
+            // data-spacing-intent: rowAudit's uniform-height scope check would
+            // otherwise flag a panel for not being --planner-btn-h tall.
+            <div className="candy-btn rail-tile is-panel" data-shape="tile" data-spacing-intent="">
+              <div className="candy-face">{s.render()}</div>
             </div>
           )}
-        </section>
-
-        {/* ── Routine — repeating items for this weekday (Frame + Recurring
-            merged, Planner Consolidation). Timed ones also paint on the
-            calendar; untimed ones live only here. Sits above Tasks List: the
-            recurring shape of the day comes before its one-offs. ── */}
-        <section style={{ marginBottom: 18 }}>
-          <div className="candy-center-row" style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            marginBottom: 10,
-          }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-              <PaneHeader>Routine</PaneHeader>
-              <CountBadge>{routine.done}/{routine.total}</CountBadge>
-            </div>
-            <AddCircle isToday={isToday} label="New routine item" onClick={() => setAddingRoutine(true)}/>
-          </div>
-          {addingRoutine && (
-            <InlineAdd
-              placeholder="New routine item — Enter to add, Esc to cancel"
-              onSubmit={addRoutineItem}
-              onClose={() => setAddingRoutine(false)}
-            />
-          )}
-          {routine.total === 0 && !addingRoutine && (
-            <Subdued>No routine items for this day.</Subdued>
-          )}
-          {routine.total > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {routine.items.map(it => (
-                <RoutineChip key={it.id} item={it} onToggle={routine.toggle}/>
-              ))}
-            </div>
-          )}
-        </section>
-
-        {/* ── Tasks List — the viewed day's ## Tasks + today's carryover ── */}
-        <section>
-          <div className="candy-center-row" style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            marginBottom: 10,
-          }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-              <PaneHeader>Tasks List</PaneHeader>
-              <CountBadge>{taskDoneDisp}/{taskTotalDisp}</CountBadge>
-            </div>
-            <AddCircle isToday={isToday} label="New task" onClick={() => setAddingTask(true)}/>
-          </div>
-          {addingTask && (
-            <InlineAdd
-              placeholder="New task — Enter to add, Esc to cancel"
-              onSubmit={(text) => api.daySections.addTask(pivotDs, text)}
-              onClose={() => setAddingTask(false)}
-            />
-          )}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'calc(6px + var(--candy-depth-small))' }}>
-            {day.loading ? (
-              <Subdued>Loading</Subdued>
-            ) : day.error ? (
-              <Subdued>Couldn’t read the daily log.</Subdued>
-            ) : dayTasks.length === 0 && carryTasks.length === 0 ? (
-              <Subdued>No tasks.</Subdued>
-            ) : (
-              <>
-                {dayTasks.map(t => (
-                  <TaskChip
-                    key={`${pivotDs}:${t.line}:${t.text}`}
-                    path={dayPath} line={t.line} text={t.text}
-                    sourceDate={pivotDs} checked={t.checked} showDate={false}
-                    onToggled={onOwnTaskToggled(t.line)}
-                  />
-                ))}
-                {carryTasks.length > 0 && (
-                  <>
-                    <UnorgDivider/>
-                    {carryTasks.map(([ds, items]) => (
-                      <Group key={ds} label={shortDate(ds)} labelColor={ageColor(ds)}>
-                        {items.map(t => (
-                          <TaskChip key={`${t.path}:${t.line}`} path={t.path} line={t.line} text={t.text} sourceDate={t.sourceDate} showDate={false}/>
-                        ))}
-                      </Group>
-                    ))}
-                  </>
-                )}
-              </>
-            )}
-          </div>
-        </section>
-
-        {/* ── Quick Notes — the viewed day's bullets + today's carryover ── */}
-        <section>
-          <div className="candy-center-row" style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            marginBottom: 10,
-          }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-              <PaneHeader>Quick Notes</PaneHeader>
-              <CountBadge>{noteDisp}</CountBadge>
-            </div>
-            <AddCircle isToday={isToday} label="New quick note" onClick={() => setAddingNote(true)}/>
-          </div>
-          {addingNote && (
-            <InlineAdd
-              placeholder="New quick note — Enter to add, Esc to cancel"
-              onSubmit={(text) => api.daySections.addNote(pivotDs, text)}
-              onClose={() => setAddingNote(false)}
-            />
-          )}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'calc(6px + var(--candy-depth-small))' }}>
-            {day.loading ? (
-              <Subdued>Loading</Subdued>
-            ) : day.error ? (
-              <Subdued>Couldn’t read the daily log.</Subdued>
-            ) : day.notes.length === 0 && carryNotes.length === 0 ? (
-              <Subdued>No quick notes.</Subdued>
-            ) : (
-              <>
-                {day.notes.map(n => (
-                  <NoteChip key={`${pivotDs}-${n.index}-${n.text}`} text={n.text} sourceDate={pivotDs} index={n.index} showDate={false}/>
-                ))}
-                {carryNotes.length > 0 && (
-                  <>
-                    <UnorgDivider/>
-                    {carryNotes.map(([ds, items]) => (
-                      <Group key={ds} label={shortDate(ds)} labelColor={ageColor(ds)}>
-                        {items.map(n => (
-                          <NoteChip key={`${n.sourceDate}-${n.index}`} text={n.text} sourceDate={n.sourceDate} index={n.index} showDate={false}/>
-                        ))}
-                      </Group>
-                    ))}
-                  </>
-                )}
-              </>
-            )}
-          </div>
-        </section>
+          // No gap written here on purpose: the planner scope owns every run of
+          // adjacent candy buttons via --planner-btn-gap, and an inline gap would
+          // outrank it and fork the number. The tile reserves its own lip in
+          // layout (margin-bottom), so that gap paints as the real INSET.
+          style={{ flex: 1, minHeight: 0 }}
+        />
       </div>
+
+      {/* "Show all" popovers. Each body is mounted only while its popover is
+          open, so the Events sweep's 90 day-reads never fire at rest. Tasks and
+          Quick Notes reuse the data the pane already holds — the viewed day's
+          own items plus every other day's open carryover — and Routine reads
+          the whole week straight out of the frames it already fetched. */}
+      <SectionPopover
+        open={allOpen === 'events'}
+        onClose={() => setAllOpen(null)}
+        anchorRef={evHeadRef}
+        accent={accent}
+        title="All events"
+      >
+        {allOpen === 'events' && <AllEventsBody pivotDs={pivotDs} colorFor={colorFor} onEdit={openEventEditor}/>}
+      </SectionPopover>
+
+      <SectionPopover
+        open={allOpen === 'routine'}
+        onClose={() => setAllOpen(null)}
+        anchorRef={roHeadRef}
+        accent={accent}
+        title="All routine"
+      >
+        {!WEEKDAYS.some(([key]) => (frames?.[key] || []).length > 0) && (
+          <Subdued>No routine items on any day.</Subdued>
+        )}
+        {WEEKDAYS.map(([key, label]) => {
+          const items = frames?.[key] || [];
+          if (!items.length) return null;
+          const isViewed = key === weekdayForKey(pivotDs).toLowerCase();
+          return (
+            <div key={key} style={{ display: 'flex', flexDirection: 'column', gap: GAP_UNDER_BTN }}>
+              <div style={{
+                fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
+                textTransform: 'uppercase', color: isViewed ? 'var(--text)' : 'var(--text-muted)',
+              }}>{label}</div>
+              {/* Only the VIEWED weekday's items carry live tick state — a
+                  routine item is checked per DAY, and the other six weekdays
+                  have no day to check against, so they list as plain rows. */}
+              {isViewed
+                ? routine.items.map(it => <RoutineChip key={it.id} item={it} onToggle={routine.toggle}/>)
+                : items.map(it => (
+                    <div key={it.id} style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.35 }}>
+                      {it.name}
+                    </div>
+                  ))}
+            </div>
+          );
+        })}
+      </SectionPopover>
+
+      <SectionPopover
+        open={allOpen === 'tasks'}
+        onClose={() => setAllOpen(null)}
+        anchorRef={tkHeadRef}
+        accent={accent}
+        title="All tasks"
+      >
+        {dayTasks.map(t => (
+          <TaskChip
+            key={`all:${pivotDs}:${t.line}:${t.text}`}
+            path={dayPath} line={t.line} text={t.text}
+            sourceDate={pivotDs} checked={t.checked} showDate={false}
+          />
+        ))}
+        {allCarryTasks.map(([ds, items]) => (
+          <Group key={`all:${ds}`} label={shortDate(ds)} labelColor={ageColor(ds)}>
+            {items.map(t => (
+              <TaskChip key={`all:${t.path}:${t.line}`} path={t.path} line={t.line} text={t.text} sourceDate={t.sourceDate} showDate={false}/>
+            ))}
+          </Group>
+        ))}
+        {unorg.loading && <Subdued>Loading</Subdued>}
+        {!unorg.loading && !dayTasks.length && !allCarryTasks.length && <Subdued>No open tasks anywhere.</Subdued>}
+      </SectionPopover>
+
+      <SectionPopover
+        open={allOpen === 'notes'}
+        onClose={() => setAllOpen(null)}
+        anchorRef={ntHeadRef}
+        accent={accent}
+        title="All quick notes"
+      >
+        {day.notes.map(n => (
+          <NoteChip key={`all:${pivotDs}-${n.index}-${n.text}`} text={n.text} sourceDate={pivotDs} index={n.index} showDate={false}/>
+        ))}
+        {allCarryNotes.map(([ds, items]) => (
+          <Group key={`all:${ds}`} label={shortDate(ds)} labelColor={ageColor(ds)}>
+            {items.map(n => (
+              <NoteChip key={`all:${n.sourceDate}-${n.index}`} text={n.text} sourceDate={n.sourceDate} index={n.index} showDate={false}/>
+            ))}
+          </Group>
+        ))}
+        {unorg.loading && <Subdued>Loading</Subdued>}
+        {!unorg.loading && !day.notes.length && !allCarryNotes.length && <Subdued>No quick notes anywhere.</Subdued>}
+      </SectionPopover>
 
       <NewEventModal
         open={modalOpen}
-        onClose={() => setModalOpen(false)}
+        onClose={() => { setModalOpen(false); setEditingEvent(null); }}
         onCreated={reloadEvents}
         accent={accent}
         initialDs={pivotDs}
+        editing={editingEvent}
       />
     </div>
   );

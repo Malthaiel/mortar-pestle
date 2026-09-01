@@ -53,8 +53,8 @@ export default function RoutineChip({ item, onToggle }) {
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>{item.name}</span>
           {item.timed && (
-            <span style={{
-              fontSize: 10, color: 'var(--text-muted)',
+            <span className="chip-meta" style={{
+              fontSize: 10,
               flexShrink: 0, fontFamily: 'var(--font-mono)',
             }}>{range(item.start, item.end)}</span>
           )}
