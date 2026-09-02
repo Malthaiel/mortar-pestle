@@ -167,8 +167,8 @@ export function useSeriesMenu(accent) {
     }
   };
   return (e, series) => openContextMenu(e, [
-    { label: 'Remove from library', danger: true, onClick: () => uninstall(series, false) },
-    { label: 'Remove + delete video files', danger: true, onClick: () => uninstall(series, true) },
+    { label: 'Remove from Library', danger: true, onClick: () => uninstall(series, false) },
+    { label: 'Remove + Delete Files', danger: true, onClick: () => uninstall(series, true) },
   ], { accent, header: series.title });
 }
 

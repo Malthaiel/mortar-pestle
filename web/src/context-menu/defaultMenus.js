@@ -102,7 +102,7 @@ export function buildEditableMenu(target, ctx) {
     { label: 'Cut', disabled: !sel, onClick: () => focusRun(() => { try { document.execCommand('cut'); } catch (e) {} }) },
     { label: 'Copy', disabled: !sel, onClick: () => focusRun(() => { try { document.execCommand('copy'); } catch (e) {} }) },
     { label: 'Paste', onClick: () => pasteInto(host, false) },
-    { label: 'Paste as plain text', onClick: () => pasteInto(host, true) },
+    { label: 'Paste as Plain Text', onClick: () => pasteInto(host, true) },
     { label: 'Delete', danger: true, disabled: !sel, onClick: () => focusRun(() => { try { document.execCommand('delete'); } catch (e) {} }) },
     { label: 'Select All', onClick: () => focusRun(() => { try { document.execCommand('selectAll'); } catch (e) {} }) },
   ];
@@ -112,7 +112,7 @@ export function buildEditableMenu(target, ctx) {
     items.push({ divider: true });
     items.push({ label: 'Ask Concierge', icon: IconSparkles, onClick: () => openConcierge({ prefill: toBlockquote(selText) }) });
     if (ctx && ctx.openCommandPalette) {
-      items.push({ label: 'Search vault', icon: IconSearch, onClick: () => ctx.openCommandPalette(selText.trim()) });
+      items.push({ label: 'Search Vault', icon: IconSearch, onClick: () => ctx.openCommandPalette(selText.trim()) });
     }
   }
   return items;
@@ -128,7 +128,7 @@ export function buildSelectionMenu(text, ctx) {
   items.push({ divider: true });
   items.push({ label: 'Ask Concierge', icon: IconSparkles, onClick: () => openConcierge({ prefill: toBlockquote(t) }) });
   if (ctx && ctx.openCommandPalette) {
-    items.push({ label: 'Search vault', icon: IconSearch, onClick: () => ctx.openCommandPalette(t) });
+    items.push({ label: 'Search Vault', icon: IconSearch, onClick: () => ctx.openCommandPalette(t) });
   }
   return items;
 }
@@ -179,9 +179,9 @@ export function buildWikilinkMenu({ target, display, path, hashHref }) {
     { label: 'Open', icon: IconFileText, onClick: () => { if (hashHref) { try { navigate(hashHref.replace(/^#/, '')); } catch (e) {} } else navigateWikilink(target); } },
     { label: 'Open in Obsidian', icon: IconExternal, onClick: () => { try { window.location.href = obsidianHref(path || target); } catch (e) {} } },
     { label: 'Reveal in Files', icon: IconFolder, onClick: async () => { const p = await resolvePath(); try { invoke('reveal_in_files', { path: p }); } catch (e) {} } },
-    { label: 'Copy link', icon: IconLink, onClick: async () => copyText(await resolvePath()) },
+    { label: 'Copy Link', icon: IconLink, onClick: async () => copyText(await resolvePath()) },
   ];
-  if (display) items.push({ label: 'Copy link text', onClick: () => copyText(display) });
+  if (display) items.push({ label: 'Copy Link Text', onClick: () => copyText(display) });
   return items;
 }
 
@@ -189,11 +189,11 @@ export function buildExternalLinkMenu({ url, text }) {
   const items = [];
   if (url) {
     items.push({ label: 'Open', icon: IconExternal, onClick: () => openExternalUrl(url) });
-    items.push({ label: 'Copy link', icon: IconLink, onClick: () => copyText(url) });
+    items.push({ label: 'Copy Link', icon: IconLink, onClick: () => copyText(url) });
   }
   const t = (text || '').trim();
-  if (t) items.push({ label: 'Copy link text', onClick: () => copyText(t) });
-  if (!items.length) items.push({ label: 'No link actions', disabled: true });
+  if (t) items.push({ label: 'Copy Link Text', onClick: () => copyText(t) });
+  if (!items.length) items.push({ label: 'No Link Actions', disabled: true });
   return items;
 }
 
@@ -226,19 +226,19 @@ export function buildFileItemMenu({ vaultPath, isFolder, href, ops }) {
   if (href) items.push({ label: 'Open', icon: isFolder ? IconFolder : IconFileText, onClick: () => { try { navigate(href); } catch (e) {} } });
   if (!isFolder && vaultPath) items.push({ label: 'Open in Obsidian', icon: IconExternal, onClick: () => { try { window.location.href = obsidianHref(vaultPath); } catch (e) {} } });
   if (vaultPath) items.push({ label: 'Reveal in Files', icon: IconFolder, onClick: () => { try { invoke('reveal_in_files', { path: vaultPath }); } catch (e) {} } });
-  if (vaultPath) items.push({ label: 'Copy path', icon: IconLink, onClick: () => copyText(vaultPath) });
+  if (vaultPath) items.push({ label: 'Copy Path', icon: IconLink, onClick: () => copyText(vaultPath) });
   if (ops) {
     const fileOps = [];
-    if (ops.onNewNote)     fileOps.push({ label: 'New note',     icon: IconFileText, onClick: ops.onNewNote });
-    if (ops.onNewFolder)   fileOps.push({ label: 'New folder',   icon: IconFolder,   onClick: ops.onNewFolder });
-    if (ops.onNewDomain)   fileOps.push({ label: 'New domain',   icon: IconPlus,     onClick: ops.onNewDomain });
+    if (ops.onNewNote)     fileOps.push({ label: 'New Note',     icon: IconFileText, onClick: ops.onNewNote });
+    if (ops.onNewFolder)   fileOps.push({ label: 'New Folder',   icon: IconFolder,   onClick: ops.onNewFolder });
+    if (ops.onNewDomain)   fileOps.push({ label: 'New Domain',   icon: IconPlus,     onClick: ops.onNewDomain });
     if (ops.onReconfigure) fileOps.push({ label: 'Reconfigure', icon: IconSettings, onClick: ops.onReconfigure });
     if (ops.onRename)      fileOps.push({ label: 'Rename',      icon: IconFile,     onClick: ops.onRename });
     if (ops.onSetIcon)     fileOps.push({ label: 'Change Icon',   icon: IconBrush,    onClick: ops.onSetIcon });
     if (ops.onDelete)      fileOps.push({ label: 'Delete',       icon: IconX, danger: true, onClick: ops.onDelete });
     if (fileOps.length) { items.push({ divider: true }); items.push(...fileOps); }
   }
-  if (!items.length) items.push({ label: 'No actions', disabled: true });
+  if (!items.length) items.push({ label: 'No Actions', disabled: true });
   return items;
 }
 
@@ -253,8 +253,8 @@ export function buildGenericMenu(ctx) {
     // keyboard Right-Left / edge-flip is testable before the real submenu surface
     // (calendar colour picker, SF10) lands. Mirrors existing chrome actions; safe
     // to drop once a genuine submenu ships.
-    { header: 'Submenu demo' },
-    { label: 'Quick actions', icon: IconCommand, children: [
+    { header: 'Submenu Demo' },
+    { label: 'Quick Actions', icon: IconCommand, children: [
       { label: 'Command Palette', icon: IconCommand, shortcut: '⌘K', onClick: () => ctx && ctx.openCommandPalette && ctx.openCommandPalette() },
       { label: 'Settings', icon: IconSettings, onClick: () => ctx && ctx.openSettings && ctx.openSettings() },
       { label: 'Window', children: [

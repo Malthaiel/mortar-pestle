@@ -23,7 +23,7 @@ import { useVaults } from '../../hooks/useVaults.jsx';
 import { writeSectionPage } from '../../hooks/useSectionMemory.js';
 import { useVaultTree, sortNodes, VAULT_SORT_MODES } from './useVaultTree.js';
 import {
-  AnimCtx, SuffixCtx, REVEAL, GAP, MUTED,
+  AnimCtx, SuffixCtx, REVEAL, GAP, MUTED, TOOLBAR_BAND,
   CandyHeader, TreeRow, TreeChildren, Collapsible, StaggerChild,
 } from './treeKit.jsx';
 import TreeToolbar from './TreeToolbar.jsx';
@@ -218,8 +218,8 @@ export default function VaultTree({ sections, route, accent }) {
       }}>
         {/* Pinned file-tree toolbar in the NON-scrolling header band ABOVE the
             scroll body — rides the sidebar's circuit texture; rows scroll below.
-            Bottom pad = GAP so the buttons' candy slab clears the first section. */}
-        <div style={{ flexShrink: 0, padding: `8px 8px ${GAP}` }}>
+            TOOLBAR_BAND pads it so the toolbar's painted gap above == below. */}
+        <div style={{ flexShrink: 0, padding: TOOLBAR_BAND }}>
           <TreeToolbar buttons={buttons} controller={controller} accent={accent}>
             <TreeVaultSwitcher accent={accent}/>
           </TreeToolbar>

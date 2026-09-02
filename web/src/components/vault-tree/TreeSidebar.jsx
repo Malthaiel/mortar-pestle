@@ -16,7 +16,7 @@ import { useSettings } from '../../hooks/useSettings.js';
 import { useContextMenu } from '../../context-menu/useContextMenu.js';
 import { IconBrush } from '../icons.jsx';
 import {
-  AnimCtx, SuffixCtx, REVEAL, MUTED, GAP,
+  AnimCtx, SuffixCtx, REVEAL, MUTED, GAP, TOOLBAR_BAND,
   CandyHeader, TreeRow, TreeChildren, Collapsible, StaggerChild,
 } from './treeKit.jsx';
 import TreeToolbar from './TreeToolbar.jsx';
@@ -113,9 +113,9 @@ export default function TreeSidebar({ nodes, controller, buttons, accent, showSu
         '--candy-depth-nav': 'calc(var(--candy-depth) * 0.85)',
       }}>
         {/* Pinned toolbar in the NON-scrolling header band — rides the sidebar's
-            circuit texture; rows scroll in the box below. Bottom pad = GAP so the
-            buttons' candy slab clears the first row. */}
-        <div style={{ flexShrink: 0, padding: `8px 8px ${GAP}` }}>
+            circuit texture; rows scroll in the box below. TOOLBAR_BAND pads it so the
+            toolbar's painted gap above == its gap below == the tree row gap. */}
+        <div style={{ flexShrink: 0, padding: TOOLBAR_BAND }}>
           <TreeToolbar buttons={buttons} controller={controller} accent={accent} extra={toolbarExtra}/>
         </div>
         {/* Scrolling tree body — the only scroller. overflowX hidden keeps long

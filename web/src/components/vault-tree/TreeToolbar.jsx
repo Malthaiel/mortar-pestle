@@ -74,7 +74,7 @@ export default function TreeToolbar({ buttons, controller, accent, extra, childr
   const onSort = (e) => {
     const r = e.currentTarget.getBoundingClientRect();
     openContextMenu({ x: r.left, y: r.bottom + 4 }, [
-      { header: 'Sort order' },
+      { header: 'Sort Order' },
       ...(c.sortModes || []).map(([mode, label]) => ({
         label,
         icon: c.sortMode === mode ? IconCheck : undefined,

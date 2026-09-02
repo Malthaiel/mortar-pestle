@@ -50,7 +50,7 @@ export function useAddToPlaylistMenu(accent) {
     // a dead row rather than a swallowed click — the player tile right-clicks
     // whatever is playing. Same shape defaultMenus uses for "No link actions".
     return list.length === 0
-      ? [{ label: 'Nothing here to add', disabled: true }]
+      ? [{ label: 'Nothing to Add', disabled: true }]
       : [
           ...playlists.map((p) => ({ label: p.title, onClick: () => onAdd(p, list) })),
           {

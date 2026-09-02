@@ -38,7 +38,7 @@ export default function RightRailStack({ rightSlots, accent }) {
             checked: v.id === current,
             onClick: () => setRailVariant(slot.moduleId, v.id),
           }));
-          openContextMenu(e, items, { header: 'Mini variant', accent });
+          openContextMenu(e, items, { header: 'Mini Variant', accent });
         };
         return (
           <div

@@ -21,7 +21,7 @@ function fail(what, err) {
 export function useAlbumMenu(accent) {
   const { openContextMenu } = useContextMenu();
   return (e, album) => openContextMenu(e, [{
-    label: 'Delete album',
+    label: 'Delete Album',
     danger: true,
     onClick: async () => {
       // eslint-disable-next-line no-alert
@@ -84,7 +84,7 @@ export function useSongMenu(accent) {
         label: saved ? `Remove from ${SAVED_TITLE}` : `Save to ${SAVED_TITLE}`,
         onClick: () => toggleSaved(ref).catch((err) => fail('Save', err)),
       },
-      { label: 'Add to playlist', children: buildItems([ref]) },
+      { label: 'Add to Playlist', children: buildItems([ref]) },
     ];
     // A song already on disk gets no Download row at all — not greyed, not
     // "Re-download".
@@ -103,10 +103,10 @@ export function usePlaylistMenu(accent) {
   // Saved Tracks is app-owned: no Delete row at all, just a dead row so the
   // right-click isn't swallowed (the same shape defaultMenus uses).
   return (e, playlist) => openContextMenu(e, isSavedTracks(playlist) ? [{
-    label: 'Saved Tracks can’t be deleted',
+    label: 'Can’t Delete Saved Tracks',
     disabled: true,
   }] : [{
-    label: 'Delete playlist',
+    label: 'Delete Playlist',
     danger: true,
     onClick: async () => {
       // eslint-disable-next-line no-alert

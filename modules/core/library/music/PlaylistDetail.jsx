@@ -144,7 +144,7 @@ export default function PlaylistDetail({ path, accent }) {
   // Right-click a row → the shared song menu, plus this surface's own removal
   // (playlist entry only, never the underlying track).
   const rowMenu = (e, i) => songMenu.openMenu(e, items[i], [
-    { label: 'Remove from playlist', danger: true, onClick: () => removeAt(i) },
+    { label: 'Remove from Playlist', danger: true, onClick: () => removeAt(i) },
   ]);
   const drop = (to) => {
     if (dragIdx == null || dragIdx === to) return;

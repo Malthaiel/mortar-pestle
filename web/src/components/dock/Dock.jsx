@@ -260,13 +260,13 @@ export default function Dock({
   };
 
   const insertItems = (at) => [
-    { label: 'Add separator', icon: IconLayers,   onClick: () => addSpecial('sep', at) },
-    { label: 'Add spacer',    icon: IconMaximize, onClick: () => addSpecial('spacer', at) },
+    { label: 'Add Separator', icon: IconLayers,   onClick: () => addSpecial('sep', at) },
+    { label: 'Add Spacer',    icon: IconMaximize, onClick: () => addSpecial('spacer', at) },
   ];
   const presetItems = [
-    { label: 'Apply 3-zone layout', icon: IconLayoutGrid, onClick: applyThreeZone },
-    { label: 'Group by type',       icon: IconLayers,     onClick: groupByType },
-    { label: 'Reset order',         icon: IconReset,      onClick: resetOrder },
+    { label: '3-Zone Layout', icon: IconLayoutGrid, onClick: applyThreeZone },
+    { label: 'Group by Type',       icon: IconLayers,     onClick: groupByType },
+    { label: 'Reset Order',         icon: IconReset,      onClick: resetOrder },
   ];
 
   // Menu A — bare dock bar (the right-click missed an icon/divider).
@@ -284,7 +284,7 @@ export default function Dock({
     if (isSpecial(id)) {
       items.push({ label: 'Remove', icon: IconX, danger: true, onClick: () => removeSpecial(id) });
     } else {
-      items.push({ label: 'Hide from dock', icon: IconX, onClick: () => hideButton(id) });
+      items.push({ label: 'Hide from Dock', icon: IconX, onClick: () => hideButton(id) });
       items.push({ label: 'Send to', icon: IconMove, children: [
         { label: 'Left',   icon: IconChevronLeft,  onClick: () => sendToZone(id, 'left') },
         { label: 'Center', icon: IconLayoutGrid,   onClick: () => sendToZone(id, 'center') },
@@ -292,7 +292,7 @@ export default function Dock({
       ] });
     }
     items.push({ sep: true }, ...insertItems(at), ...presetItems);
-    openContextMenu(e, items, { accent, header: 'Dock icon' });
+    openContextMenu(e, items, { accent, header: 'Dock Icon' });
   };
 
   return (

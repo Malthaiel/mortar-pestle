@@ -255,17 +255,17 @@ export function NoteChip({ text, sourceDate, index, showDate = true }) {
   const isOwnToday = ds === todayLocalStr();
   const menuItems = [
     { section: true, label: 'Standard' },
-    { label: 'Move to an Idea', onClick: () => setPickerOpen(true) },
+    { label: 'Move to Idea', onClick: () => setPickerOpen(true) },
     ...(lastIdeaPath
       ? [{ label: `Re-file to ${lastIdeaName || 'last Idea'}`, onClick: () => doMove({ path: lastIdeaPath, title: lastIdeaName }) }]
       : []),
-    { label: 'Copy text', onClick: copyText },
-    { label: 'Open source log', onClick: openSourceLog },
+    { label: 'Copy Text', onClick: copyText },
+    { label: 'Open Log', onClick: openSourceLog },
     { divider: true },
     { section: true, label: 'Creative' },
-    ...(isOwnToday ? [] : [{ label: 'Carry forward to today', onClick: () => api.noteActions.carryForward({ ds, index, text }) }]),
-    { label: 'Convert to a task', onClick: () => api.noteActions.convertToTask({ ds, index, text }) },
-    { label: 'New stub Idea', onClick: () => setNewIdeaOpen(true) },
+    ...(isOwnToday ? [] : [{ label: 'Carry Forward', onClick: () => api.noteActions.carryForward({ ds, index, text }) }]),
+    { label: 'Convert to Task', onClick: () => api.noteActions.convertToTask({ ds, index, text }) },
+    { label: 'New Idea', onClick: () => setNewIdeaOpen(true) },
   ];
 
   return (

@@ -16,8 +16,8 @@ import { writeSectionPage } from '../../hooks/useSectionMemory.js';
 const SORT_MODES = [
   ['name-asc', 'Name (A → Z)'],
   ['name-desc', 'Name (Z → A)'],
-  ['mtime-desc', 'Modified (new → old)'],
-  ['mtime-asc', 'Modified (old → new)'],
+  ['mtime-desc', 'Modified (New → Old)'],
+  ['mtime-asc', 'Modified (Old → New)'],
 ];
 
 function sortEntries(entries, mode) {

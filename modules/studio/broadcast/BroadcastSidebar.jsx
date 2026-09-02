@@ -195,7 +195,7 @@ export default function BroadcastSidebar({ api, accent }) {
     verb(api, 'create_group', { scene: scene.name, name: 'Group' })
       .then((r) => {
         pushUndo({
-          label: 'Add group',
+          label: 'Add Group',
           undo: [{ op: 'remove_item', args: { scene: scene.name, item: r.item } }],
           redo: [{ op: 'create_group', args: { scene: scene.name, name: r.name }, remap: r.item }],
         });
@@ -231,15 +231,15 @@ export default function BroadcastSidebar({ api, accent }) {
     const i = scenes.findIndex((s) => s.name === scene.name);
     const at = { x: e.clientX, y: e.clientY };
     openContextMenu(e, [
-      { label: 'Set as program', onClick: () => call('set_current_scene', { name: scene.name }) },
+      { label: 'Set Program', onClick: () => call('set_current_scene', { name: scene.name }) },
       { label: 'Rename', onClick: () => updateBroadcastUi({ renameTarget: { scene: scene.name, itemId: null } }) },
       { label: 'Duplicate', onClick: () => doDuplicateScene(scene.name) },
       { sep: true },
-      { label: 'Add source', onClick: () => addSourceAt(at, scene.name) },
-      { label: 'Add group', onClick: () => doAddGroup(scene) },
+      { label: 'Add Source', onClick: () => addSourceAt(at, scene.name) },
+      { label: 'Add Group', onClick: () => doAddGroup(scene) },
       { sep: true },
-      { label: 'Move up', disabled: i <= 0, onClick: () => doMoveScene(scene.name, 'up') },
-      { label: 'Move down', disabled: i >= scenes.length - 1, onClick: () => doMoveScene(scene.name, 'down') },
+      { label: 'Move Up', disabled: i <= 0, onClick: () => doMoveScene(scene.name, 'up') },
+      { label: 'Move Down', disabled: i >= scenes.length - 1, onClick: () => doMoveScene(scene.name, 'down') },
       { sep: true },
       { label: 'Remove', danger: true, onClick: () => doRemoveScene(scene) },
     ], { accent, header: scene.name });
@@ -258,7 +258,7 @@ export default function BroadcastSidebar({ api, accent }) {
       }
     }
     if (parentGroupId != null) {
-      moveTo.push({ label: '(top level)', onClick: () => doReorder(scene, orderAfterMembership(scene, node.item_id, null), `Move ${node.name} out`) });
+      moveTo.push({ label: '(Top Level)', onClick: () => doReorder(scene, orderAfterMembership(scene, node.item_id, null), `Move ${node.name} out`) });
     }
     openContextMenu(e, [
       { label: 'Rename', onClick: () => updateBroadcastUi({ renameTarget: { scene: scene.name, itemId: node.item_id } }) },
@@ -267,10 +267,10 @@ export default function BroadcastSidebar({ api, accent }) {
       {
         label: 'Order',
         children: [
-          { label: 'Move up', onClick: () => doReorder(scene, orderAfterMove(scene, node.item_id, 'up'), `Move ${node.name} up`) },
-          { label: 'Move down', onClick: () => doReorder(scene, orderAfterMove(scene, node.item_id, 'down'), `Move ${node.name} down`) },
-          { label: 'Move to top', onClick: () => doReorder(scene, orderAfterMove(scene, node.item_id, 'top'), `Move ${node.name} to top`) },
-          { label: 'Move to bottom', onClick: () => doReorder(scene, orderAfterMove(scene, node.item_id, 'bottom'), `Move ${node.name} to bottom`) },
+          { label: 'Move Up', onClick: () => doReorder(scene, orderAfterMove(scene, node.item_id, 'up'), `Move ${node.name} up`) },
+          { label: 'Move Down', onClick: () => doReorder(scene, orderAfterMove(scene, node.item_id, 'down'), `Move ${node.name} down`) },
+          { label: 'Move to Top', onClick: () => doReorder(scene, orderAfterMove(scene, node.item_id, 'top'), `Move ${node.name} to top`) },
+          { label: 'Move to Bottom', onClick: () => doReorder(scene, orderAfterMove(scene, node.item_id, 'bottom'), `Move ${node.name} to bottom`) },
         ],
       },
       ...(moveTo.length ? [{ label: 'Move to', children: moveTo }] : []),

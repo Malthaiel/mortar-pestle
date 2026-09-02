@@ -105,7 +105,7 @@ export default function QueuePanel({ open, onClose, accent }) {
               onMouseLeave={() => setHoverIdx(o => (o === i ? null : o))}
               onClick={() => (t.available || t.streamable) && jumpToQueueIndex(i)}
               onContextMenu={(e) => songMenu.openMenu(e, t, [
-                { label: 'Remove from queue', danger: true, onClick: () => removeFromQueue(i) },
+                { label: 'Remove from Queue', danger: true, onClick: () => removeFromQueue(i) },
               ])}
               className={'candy-btn' + (active ? ' is-playing' : '') + (!(t.available || t.streamable) ? ' is-unavailable' : '')}
               data-shape="track"

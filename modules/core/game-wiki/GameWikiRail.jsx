@@ -13,7 +13,7 @@ import { useState } from 'react';
 import { navigate } from '@host/router.js';
 import { api, invoke } from '@host/api.js';
 import TreeToolbar from '@host/components/vault-tree/TreeToolbar.jsx';
-import { GAP } from '@host/components/vault-tree/treeKit.jsx';
+import { TOOLBAR_BAND } from '@host/components/vault-tree/treeKit.jsx';
 import { IconChevronRight } from '@host/components/icons.jsx';
 import { VAULT_SORT_MODES } from '@host/components/vault-tree/useVaultTree.js';
 import GameWikiTree, { SCRIM_BASE } from './GameWikiTree.jsx';
@@ -102,7 +102,7 @@ export default function GameWikiRail({ route, accent, nav = navigate, header }) 
 
   return (
     // --candy-depth-nav must exist HERE, not just inside GameWikiTree: the
-    // toolbar band's padding is `8px 8px ${GAP}` and GAP = calc(4px +
+    // toolbar band's padding is TOOLBAR_BAND, whose bottom pad is calc(4px +
     // var(--candy-depth-nav)) — an unresolvable var() voids the whole padding
     // shorthand (measured: toolbar rode 7px high, tree started 10px early vs
     // the vault sidebar). Same declaration as VaultTree's root.
@@ -111,7 +111,7 @@ export default function GameWikiRail({ route, accent, nav = navigate, header }) 
       '--candy-depth-nav': 'calc(var(--candy-depth) * 0.85)',
     }}>
       {h && <RailHeaderPill label={h.label} title={h.title} accent={accent} onClick={h.onClick} expanded={h.expanded !== false}/>}
-      <div style={{ flexShrink: 0, padding: `8px 8px ${GAP}` }}>
+      <div style={{ flexShrink: 0, padding: TOOLBAR_BAND }}>
         <TreeToolbar buttons={buttons} controller={controller} accent={accent}/>
       </div>
       <GameWikiTree route={route} accent={accent} tree={tree} nav={nav}

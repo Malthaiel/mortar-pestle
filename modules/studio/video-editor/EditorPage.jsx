@@ -765,9 +765,9 @@ export default function EditorPage({ api, accent, rest }) {
     const inside = ph > clip.start && ph < clip.start + clip.dur;
     const name = p.media.find(m => m.id === clip.mediaId)?.src.split('/').pop() || 'Clip';
     openContextMenu(e, [
-      { label: 'Blade here', onClick: () => splitClip(laneIdx, clipId, frame) },
-      { label: 'Trim start to playhead', disabled: !inside, onClick: () => trimClip(laneIdx, clipId, 'in', ph) },
-      { label: 'Trim end to playhead', disabled: !inside, onClick: () => trimClip(laneIdx, clipId, 'out', ph) },
+      { label: 'Blade', onClick: () => splitClip(laneIdx, clipId, frame) },
+      { label: 'Trim Start', disabled: !inside, onClick: () => trimClip(laneIdx, clipId, 'in', ph) },
+      { label: 'Trim End', disabled: !inside, onClick: () => trimClip(laneIdx, clipId, 'out', ph) },
       { sep: true },
       {
         label: clip.mute ? 'Unmute' : 'Mute',
@@ -781,15 +781,15 @@ export default function EditorPage({ api, accent, rest }) {
         })),
       },
       { sep: true },
-      { label: 'Copy grade', shortcut: 'Ctrl+Shift+C', onClick: () => copyGradeFrom(laneIdx, clipId) },
+      { label: 'Copy Grade', shortcut: 'Ctrl+Shift+C', onClick: () => copyGradeFrom(laneIdx, clipId) },
       {
-        label: targets.length > 1 ? `Paste grade (${targets.length})` : 'Paste grade',
+        label: targets.length > 1 ? `Paste Grade (${targets.length})` : 'Paste Grade',
         shortcut: 'Ctrl+Shift+V',
         disabled: gradeClipboard.current === undefined,
         onClick: () => pasteGradeTo(targets),
       },
       { sep: true },
-      { label: 'Ripple delete', shortcut: 'Shift+Del', onClick: () => deleteClips(targets, true) },
+      { label: 'Ripple Delete', shortcut: 'Shift+Del', onClick: () => deleteClips(targets, true) },
       { label: 'Delete', danger: true, shortcut: 'Del', onClick: () => deleteClips(targets, false) },
     ], { accent, header: name });
   }, [selection, openContextMenu, accent, splitClip, trimClip, deleteClips, applyOp, copyGradeFrom, pasteGradeTo]);

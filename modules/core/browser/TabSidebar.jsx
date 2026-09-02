@@ -20,16 +20,16 @@ import TreeToolbar from '@host/components/vault-tree/TreeToolbar.jsx';
 import NameInputModal from '@host/components/vault-tree/NameInputModal.jsx';
 import { usePersistedState } from '@host/components/vault-tree/useTreeExpansion.js';
 import {
-  AnimCtx, SuffixCtx, REVEAL, GAP, NAV_H,
+  AnimCtx, SuffixCtx, REVEAL, GAP, NAV_H, TOOLBAR_BAND,
   CandyHeader, Collapsible, StaggerChild, TreeChildren,
 } from '@host/components/vault-tree/treeKit.jsx';
 
 const SORT_MODES = [
-  ['order',     'Manual order'],
+  ['order',     'Manual Order'],
   ['name-asc',  'Title (A → Z)'],
   ['name-desc', 'Title (Z → A)'],
-  ['domain',    'By domain'],
-  ['recency',   'Recently used'],
+  ['domain',    'By Domain'],
+  ['recency',   'Recently Used'],
 ];
 
 const titleOf = (t) => t.title || hostOf(t.url) || 'New tab';
@@ -89,19 +89,19 @@ export default function TabSidebar({ api, accent }) {
 
   const tabMenu = (e, tab) => {
     const items = [
-      { label: 'Close tab', onClick: () => closeTab(tab.id) },
+      { label: 'Close Tab', onClick: () => closeTab(tab.id) },
       { divider: true },
       ...folders.filter((f) => f.id !== tab.folderId)
         .map((f) => ({ label: `Move to ${f.name}`, onClick: () => store.moveTab(tab.id, f.id) })),
-      ...(tab.folderId ? [{ label: 'Move to top level', onClick: () => store.moveTab(tab.id, null) }] : []),
-      { label: 'New group with tab', onClick: () => { const id = store.createFolder(); store.moveTab(tab.id, id); } },
+      ...(tab.folderId ? [{ label: 'Move to Top Level', onClick: () => store.moveTab(tab.id, null) }] : []),
+      { label: 'New Group', onClick: () => { const id = store.createFolder(); store.moveTab(tab.id, id); } },
     ];
     openContextMenu(e, items, { accent });
   };
   const folderMenu = (e, folder) => {
     openContextMenu(e, [
-      { label: 'Rename group', onClick: () => setModal({ kind: 'rename-folder', folder }) },
-      { label: 'Delete group', onClick: () => store.deleteFolder(folder.id) },
+      { label: 'Rename Group', onClick: () => setModal({ kind: 'rename-folder', folder }) },
+      { label: 'Delete Group', onClick: () => store.deleteFolder(folder.id) },
     ], { accent });
   };
 
@@ -120,7 +120,7 @@ export default function TabSidebar({ api, accent }) {
     <SuffixCtx.Provider value={false}>
       <div style={shell}>
         <style>{TAB_CSS}</style>
-        <div style={{ flexShrink: 0, padding: `8px 8px ${GAP}` }}>
+        <div style={{ flexShrink: 0, padding: TOOLBAR_BAND }}>
           <TreeToolbar buttons={buttons} controller={controller} accent={accent}/>
         </div>
         <div data-top-level-drop style={list}>

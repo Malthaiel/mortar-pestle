@@ -45,12 +45,12 @@ function persistSort(mode) {
 // Lives beside sortNodes so non-vault trees (GameWiki) can reuse the pair
 // without importing the VaultTree component.
 export const VAULT_SORT_MODES = [
-  ['name-asc', 'File name (A → Z)'],
-  ['name-desc', 'File name (Z → A)'],
-  ['mtime-desc', 'Modified time (new → old)'],
-  ['mtime-asc', 'Modified time (old → new)'],
-  ['created-desc', 'Created time (new → old)'],
-  ['created-asc', 'Created time (old → new)'],
+  ['name-asc', 'Name (A → Z)'],
+  ['name-desc', 'Name (Z → A)'],
+  ['mtime-desc', 'Modified (New → Old)'],
+  ['mtime-asc', 'Modified (Old → New)'],
+  ['created-desc', 'Created (New → Old)'],
+  ['created-asc', 'Created (Old → New)'],
 ];
 
 // Folders always grouped first. Name modes sort folders + files by name (reverse

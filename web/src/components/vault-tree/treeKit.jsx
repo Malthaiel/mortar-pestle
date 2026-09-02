@@ -30,6 +30,21 @@ export const NAV_H = 26;
 // layout). Tied to the same --candy-depth-nav knob the buttons use.
 export const GAP = 'calc(4px + var(--candy-depth-nav))';
 
+// PAINTED air above and below the toolbar band, in px. Both pads below derive
+// from this ONE number so the two gaps can never drift apart — raise it to give
+// the toolbar more room and both sides move together. Deliberately its own knob,
+// not GAP: the band wants more breathing room than the row-to-row rhythm
+// (user-directed 2026-09-02, "not enough space right now" at GAP's 4px).
+export const BAND_AIR = 6.5;
+
+// Padding of the NON-scrolling toolbar band that every tree surface pins above
+// its scroll body. Neither pad equals BAND_AIR, because neither edge is where it
+// looks: the band starts 1px BELOW the section header's own depth slab (so the
+// top pad sheds that 1px), and the toolbar buttons' slab hangs below their box
+// outside layout (so the bottom pad must add it back). Measured 2026-09-01: was
+// 9.00 / 3.95; 2026-09-02: 4.00 / 4.00, now 6.50 / 6.50.
+export const TOOLBAR_BAND = `${BAND_AIR - 1}px 8px calc(${BAND_AIR}px + var(--candy-depth-nav))`;
+
 // Cascade timing presets (Settings → Animations → Vault tree → Folder reveal).
 // step = delay between consecutive children; dur = each child's fade/slide AND the
 // per-level base of the container height slide. 'off' (dur 0) = instant.

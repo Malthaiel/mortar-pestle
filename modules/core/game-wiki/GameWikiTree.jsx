@@ -172,7 +172,7 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
         // reveal_in_files excludes the gamewiki root — coaching_reveal_path is the
         // gamewiki-rooted arm (also below, for scrim folders).
         { label: 'Reveal in Files', icon: IconFolder, onClick: () => { invoke('coaching_reveal_path', { path: SCRIM_BASE }).catch(() => {}); } },
-        { label: 'Copy path', icon: IconLink, onClick: () => { try { navigator.clipboard.writeText(SCRIM_BASE); } catch {} } },
+        { label: 'Copy Path', icon: IconLink, onClick: () => { try { navigator.clipboard.writeText(SCRIM_BASE); } catch {} } },
         iconItem,
       ], { accent });
       return;
@@ -187,11 +187,11 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
         // Renumber, not free rename: `Match N` is what matchOf parses and what coach.py
         // names its deliverable after, so a free-text name would quietly cut the folder
         // off from its own gear and from the notes pipeline.
-        { label: 'Change number', icon: IconFile, onClick: () => setModal({ kind: 'renumber', ...m }) },
+        { label: 'Change Number', icon: IconFile, onClick: () => setModal({ kind: 'renumber', ...m }) },
         { label: 'Delete Match', icon: IconX, danger: true, onClick: () => setModal({ kind: 'delete-match', ...m }) },
         { divider: true },
         { label: 'Reveal in Files', icon: IconFolder, onClick: () => { invoke('coaching_reveal_path', { path: node.vaultPath }).catch(() => {}); } },
-        { label: 'Copy path', icon: IconLink, onClick: () => { try { navigator.clipboard.writeText(node.vaultPath); } catch {} } },
+        { label: 'Copy Path', icon: IconLink, onClick: () => { try { navigator.clipboard.writeText(node.vaultPath); } catch {} } },
         iconItem,
       ], { accent });
       return;
@@ -204,7 +204,7 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
       { label: 'Delete', icon: IconX, danger: true, onClick: () => setModal({ kind: 'delete', base }) },
       { divider: true },
       { label: 'Reveal in Files', icon: IconFolder, onClick: () => { invoke('coaching_reveal_path', { path: node.vaultPath }).catch(() => {}); } },
-      { label: 'Copy path', icon: IconLink, onClick: () => { try { navigator.clipboard.writeText(node.vaultPath); } catch {} } },
+      { label: 'Copy Path', icon: IconLink, onClick: () => { try { navigator.clipboard.writeText(node.vaultPath); } catch {} } },
       iconItem,
     ], { accent });
   };
