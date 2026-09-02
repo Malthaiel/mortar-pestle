@@ -43,7 +43,7 @@ function PlannerDockShell() {
         alignItems: 'flex-start',
         flex: '1 1 auto', minHeight: 0,
       }}>
-        <div className="candy-btn music-tile is-planner" data-shape="tile">
+        <div className="candy-btn rail-tile is-planner" data-shape="tile">
           <div className="candy-face"><PlannerDock/></div>
         </div>
       </div>
@@ -62,7 +62,7 @@ export default {
     api.slots.registerProvider(PlannerProvider);
     api.slots.registerWidget({
       id: 'planner',
-      // Wrapped in the music player's two-layer candy tile chrome (.music-tile,
+      // Wrapped in the music player's two-layer candy tile chrome (.rail-tile,
       // data-shape="tile" + .is-planner) so the dock reads as the same button.
       // The face wraps the dock; the tile hugs its content when the
       // calendar is collapsed and fills the slot when expanded — see

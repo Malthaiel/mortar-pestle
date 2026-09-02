@@ -89,7 +89,7 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
     clone.style.removeProperty('--drag-source-from-h');
     // Mark the clone so per-tile CSS can keep the press-depth look during
     // drag (the original element loses :active the moment the clone takes
-    // over the pointer). E.g. `.music-tile.is-dragging` collapses
+    // over the pointer). E.g. `.rail-tile.is-dragging` collapses
     // its box-shadow to mimic the pressed state.
     clone.classList.add('is-dragging');
     // Axis-aware initial position. `slotY` holds the slot coordinate on the
@@ -264,7 +264,7 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
   // (source stays hidden, gap stays open), then clears it. We ride that
   // window to (1) stop the cursor RAF, (2) animate the clone into the final
   // slot position via CSS transition, and (3) drop the `is-dragging` class
-  // so .music-tile's own 150ms transitions on transform+box-shadow
+  // so .rail-tile's own 150ms transitions on transform+box-shadow
   // animate the press release. Without this, the clone is destroyed the
   // frame after drop and the press-up animation is never visible.
   useEffect(() => {

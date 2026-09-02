@@ -187,7 +187,7 @@ export function useGlobalTactileSound() {
 // (tree rows, dock, tabs, sidebar nav, etc.), stripping an imperatively-added
 // class mid-press — but React leaves a data attribute alone because no candy
 // component authors it. This hook only manages the attribute timing and mirrors
-// the seg-option / music-tile / anim-off / self-managed suppressions so
+// the seg-option / rail-tile / anim-off / self-managed suppressions so
 // non-pressing shapes still don't press.
 let active = null;
 const DEFAULT_HOLD_MS = 70;   // fallback dwell (matches the app default setting)
@@ -240,8 +240,8 @@ function onCandyPressDown(e) {
   // 80ms into the bottom flap's fold, landing it a depth high (a pressed face is
   // slid DOWN, and a 180deg fold flips that slide UP).
   if (e.target.closest('.planner-ring-button, .aos-chat-window, [data-self-press]')) return;
-  if (candy.matches('.music-tile')) {                                 // mirror the :has(...) gate (styles.css)
-    const nested = e.target.closest('button, .music-tile-cover, .music-tile-scrub, .planner-ring-button, [data-no-drag]');
+  if (candy.matches('.rail-tile')) {                                 // mirror the :has(...) gate (styles.css)
+    const nested = e.target.closest('button, .music-tile-cover, .music-tile-scrub, .planner-ring-button, textarea, input, [data-no-drag]');
     if (nested && nested !== candy) return;                           // a nested control owns its own press
   }
   releasePressHold();                                                 // cancel any overlapping press (rapid clicks)

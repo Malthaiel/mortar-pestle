@@ -272,7 +272,7 @@ export const SETTINGS_DEFAULTS = {
   // Music tile candy wrap depth bucket. 'large' → --candy-depth (drives off
   // largeButtonDepth). 'small' → --candy-depth-small (drives off
   // smallButtonDepth). Written to body[data-music-tile-depth]; styles.css
-  // redeclares --candy-depth at .music-tile scope when 'small'.
+  // redeclares --candy-depth at .rail-tile scope when 'small'.
   musicTileDepth: 'large',
   // Candy SURFACE depth bucket — the static offset-shadow band under framed
   // container surfaces (.candy-* family: modals, cards, panels, sections,
@@ -831,7 +831,7 @@ export function useSettings(pageKey = 'pulse') {
   }, [globalSettings.largeButtonDepth, globalSettings.smallButtonDepth]);
 
   // Music tile candy wrap depth bucket. 'large' → inherits --candy-depth;
-  // 'small' → .music-tile rule swaps in --candy-depth-small. See
+  // 'small' → .rail-tile rule swaps in --candy-depth-small. See
   // § Music tile candy wrap in styles.css.
   useEffect(() => {
     const body = document.body;

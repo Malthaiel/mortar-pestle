@@ -113,15 +113,15 @@ export default function MusicPlayerWidget() {
 
   return (
     // Outer query-container wrapper. `cqw` units resolve against the nearest
-    // ancestor container, not the element itself — so `.music-tile`
+    // ancestor container, not the element itself — so `.rail-tile`
     // needs an ancestor with `container-type` for its OWN `height: calc(N *
     // var(--tile-px))` to scale. Inner controls scaled fine before because
-    // they ARE descendants of `.music-tile`, but the tile height
+    // they ARE descendants of `.rail-tile`, but the tile height
     // was reading viewport-cqw (always capped at 1px). This wrapper fixes it.
     <>
     {playlistModal}
     <div style={{ containerType: 'inline-size', width: '100%' }} onWheel={onWheel} onContextMenu={onTileContextMenu}>
-    <div className="candy-btn music-tile" data-shape="tile" aria-label="Music player tile">
+    <div className="candy-btn rail-tile is-music" data-shape="tile" aria-label="Music player tile">
       <div className="candy-face" style={{
         display: 'flex', flexDirection: 'column',
         width: '100%', height: '100%',

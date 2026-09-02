@@ -1,11 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { api } from '../api.js';
 import { navigate, useHashRoute } from '../router.js';
 import { useWidgetSlots, useOverlays } from '../module-sdk/useModuleRegistry.js';
-import { useSidebarOrder, applyOrder, emitSidebarOrderChange } from '../hooks/useSidebarOrder.js';
+import Rail, { useRailOrder } from './ui/Rail.jsx';
 import Sidebar from './Sidebar.jsx';
 import Breadcrumb from './Breadcrumb.jsx';
-import DraggableSidebarList from './DraggableSidebarList.jsx';
 import ToolkitToggleButton from './ToolkitToggleButton.jsx';
 import RightRailStack from './sidebar/RightRailStack.jsx';
 import ResizeSeam, { DRAG_EASE } from './ui/ResizeSeam.jsx';
@@ -69,13 +67,13 @@ function applyLegacyRedirect(path) {
 export default function AppShell({ children, onOpenSettings, settingsOpen, accent, settings }) {
   const rawWidgets = useWidgetSlots();
   const overlays = useOverlays();
-  const { order: savedRightOrder } = useSidebarOrder(WIDGET_ORDER_KEY);
-  const [localRightOrder, setLocalRightOrder] = useState(null);
-  const rightOrderToUse = localRightOrder ?? savedRightOrder;
   // Widgets are keyed/ordered by slot id, not module id — a module may register
   // several widgets (the planner registers four). The two pre-pivot persisted
   // ids ('library', 'planner') stay valid: slot id == module id for both.
-  const rightSlots = applyOrder(rawWidgets, rightOrderToUse, s => s.id);
+  // `rightSlots` is read twice more below — the length guards and the collapsed
+  // RightRailStack — which is why the rail is controlled rather than owning its
+  // own order internally.
+  const { ordered: rightSlots, onReorder: reorderRight } = useRailOrder(rawWidgets, WIDGET_ORDER_KEY);
   const { expanded: toolkitExpanded, toggle: toggleToolkit } = useToolkitExpanded();
   // Right-sidebar hold-to-peek. Modifier key sourced from settings.keybinds
   // (default Alt). When the user is already toggled-open, hold is a no-op.
@@ -201,10 +199,10 @@ export default function AppShell({ children, onOpenSettings, settingsOpen, accen
             />
           </div>
           {effectiveToolkitExpanded ? (
-            <DraggableSidebarList
+            <Rail
               className="sidebar-widget-list"
               items={rightSlots}
-              keyExtractor={(slot) => slot.moduleId + ':' + slot.id}
+              keyOf={(slot) => slot.moduleId + ':' + slot.id}
               // 10px breathing room above the first module (below the toggle-
               // header divider). No inter-tile gap — tiles sit flush, so the
               // un-animated flex gap can't "pop in" when a drop-glide ends.
@@ -222,23 +220,7 @@ export default function AppShell({ children, onOpenSettings, settingsOpen, accen
                 };
               }}
               renderItem={(slot) => slot.render()}
-              onReorder={(from, to) => {
-                const ids = rightSlots.map(s => s.id);
-                if (to === from || to === from + 1) return;
-                const adjustedTo = from < to ? to - 1 : to;
-                const next = ids.slice();
-                const [moved] = next.splice(from, 1);
-                next.splice(adjustedTo, 0, moved);
-                setLocalRightOrder(next);
-                api.setSidebarOrder(WIDGET_ORDER_KEY, next)
-                  .then(() => {
-                    emitSidebarOrderChange(WIDGET_ORDER_KEY);
-                    window.dispatchEvent(new CustomEvent('agentic:sidebar-row-persisted', {
-                      detail: { key: WIDGET_ORDER_KEY, id: moved },
-                    }));
-                  })
-                  .catch(() => {});
-              }}
+              onReorder={reorderRight}
             />
           ) : (
             <RightRailStack rightSlots={rightSlots} accent={accentColor}/>

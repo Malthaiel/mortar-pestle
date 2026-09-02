@@ -260,7 +260,7 @@ export default function PlannerDock() {
     <div ref={dockRef} style={{
       width: '100%', minWidth: 0,
       display: 'flex', flexDirection: 'column',
-      // Transparent so the enclosing .music-tile candy chrome (surface-3
+      // Transparent so the enclosing .rail-tile candy chrome (surface-3
       // fill + hover-red) reads through as the button interior, faithful to the
       // music tile. The inner calendar keeps its own var(--surface) bg below.
       background: 'transparent',
