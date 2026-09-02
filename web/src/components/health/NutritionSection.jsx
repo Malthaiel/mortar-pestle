@@ -5,12 +5,13 @@
 // daily-note mtime cache with the session writers, so off-today they'd write
 // against the wrong base; viewing a past day is read-only. Library writes
 // (meals/goals) are not day-bound.
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../api.js';
 import { sumDay, deriveTargets, naturalSugar, weeklyMacroAvg, STANDARD_DV, DEFAULT_MICROS } from '../../util/nutritionTotals.js';
 import { useHealthLibrary } from '../../hooks/useHealthLibrary.js';
 import PaneHeader from '../planner/PaneHeader.jsx';
-import { StatChip } from '../ui/Stat.jsx';
+import { Cluster, useRailOrder } from '../ui/Rail.jsx';
+import { candyGap } from '../../util/candy.js';
 import { IconPlus, IconTrash } from '../icons.jsx';
 import NutritionRing from './NutritionRing.jsx';
 import MealBuilderWindow from './MealBuilderWindow.jsx';
@@ -39,6 +40,18 @@ function microValue(consumed, key) {
   const m = consumed.micros[key];
   return { amount: m?.amount ?? null, unit: m?.unit ?? (STANDARD_DV[key]?.unit || '') };
 }
+// Everything in STANDARD_DV that isn't one of the eight defaults — static, so
+// it lives out here and the strip's item array keeps a stable identity.
+const MORE_MICROS = Object.keys(STANDARD_DV).filter((k) => !DEFAULT_MICROS.includes(k));
+const ALL_MICROS = [...DEFAULT_MICROS, ...MORE_MICROS];
+
+// Every micro chip is the SAME width so the wrapped lines read as columns, and
+// its text is centred inside that width. That width is a share of the line, not
+// a typed constant: capped at half, floored at CHIP_MIN, so two chips fill the
+// pane at any seam position instead of stranding space at its right edge — and
+// a lone chip on a last odd line stays half-width instead of stretching.
+const CHIP_MIN = 138;
+
 const microTarget = (targets, key) => (targets?.micros?.[key] != null ? targets.micros[key] : (STANDARD_DV[key]?.dv ?? null));
 
 // Candy circle "+" — greyed and inert off-today (creation is today-only).
@@ -118,21 +131,32 @@ export default function NutritionSection({ accent = 'var(--accent)', isToday = f
     await refreshDay();
   }, [pivotDs, refreshDay]);
 
-  const moreMicros = Object.keys(STANDARD_DV).filter((k) => !DEFAULT_MICROS.includes(k));
+  // Persisted left-to-right order for the micro strip. applyOrder (inside
+  // useRailOrder) keeps ids it has never seen in their natural place, so
+  // toggling "More micros" simply appends the extra chips until they are dragged.
+  const microKeys = useMemo(
+    () => (showMore ? ALL_MICROS : DEFAULT_MICROS).map((id) => ({ id })),
+    [showMore],
+  );
+  const { ordered: orderedMicros, onReorder: onReorderMicros } = useRailOrder(microKeys, 'health:micros');
 
-  const renderMicro = (key) => {
+  // One micro as a candy chip. Press and HOLD to lift it, then drag it anywhere
+  // in the run — sideways within a line, up or down between lines. See Cluster
+  // in ui/Rail.jsx; the order persists under `health:micros`.
+  const renderMicro = ({ id: key }) => {
     const { amount, unit } = microValue(consumed, key);
     const target = microTarget(targets, key);
     const reported = amount != null;
     const pct = reported && target ? Math.round((amount / target) * 100) : null;
     return (
-      <StatChip
-        key={key}
-        label={microLabel(key)}
-        value={reported ? `${amount}${unit}` : '—'}
-        sub={pct != null ? `${pct}%` : (reported ? '' : 'n/r')}
-        dot={reported ? accent : undefined}
-      />
+      <button type="button" className="candy-btn" data-shape="chip" title={microLabel(key)} style={{ width: '100%' }}>
+        <span className="candy-face" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, whiteSpace: 'nowrap', overflow: 'hidden' }}>
+          {reported && <span style={{ width: 6, height: 6, borderRadius: '50%', background: accent, flexShrink: 0 }} />}
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{microLabel(key)}</span>
+          <span style={{ fontFamily: 'var(--font-mono)' }}>{reported ? `${amount}${unit}` : '—'}</span>
+          <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-faint)' }}>{pct != null ? `${pct}%` : (reported ? '' : 'n/r')}</span>
+        </span>
+      </button>
     );
   };
 
@@ -181,19 +205,21 @@ export default function NutritionSection({ accent = 'var(--accent)', isToday = f
         )}
       </div>
 
-      {/* Micros — gap 16, not the 8 the rest of the window uses, because this one
-          space is not the whole story. The More micros chip is the last thing in
-          the section, so what sits under it is the OUTER column's 16px gap, not
-          this one; and a candy control skews the two sides differently (lifted
-          --cbtn-depth/2 = 2.5px, then a 5px shadow slab drawn below its box).
-          Above = gap − 2.5, below = 2.5 + 16 − 5 = 13.5. Declaring 8 painted
-          5.5 above against 13.5 below; 16 paints 13.5 both sides. Measured, not
-          guessed — re-measure before changing either number. */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-          {DEFAULT_MICROS.map(renderMicro)}
-          {showMore && moreMicros.map(renderMicro)}
-        </div>
+      {/* Micros. The chips above this gap are candy controls now, each drawing a
+          5px shadow slab below its box, so a declared 16 painted 9 (measured
+          2026-09-02). candyGap adds the depth back, which is the same rule the
+          run's own rowGap follows — one helper, both gaps, nothing restated. */}
+      <div style={{ display: 'flex', flexDirection: 'column', rowGap: candyGap(16, true) }}>
+        <Cluster
+          items={orderedMicros}
+          onReorder={onReorderMicros}
+          renderItem={renderMicro}
+          getItemStyle={() => ({ flex: `1 1 ${CHIP_MIN}px`, maxWidth: 'calc(50% - 3px)' })}
+          // Chips stack downward here, so the ROW gap has to clear each chip's
+          // depth lip (util/candy.js); side by side the lip points away and 6 is
+          // already the painted gap.
+          style={{ columnGap: 6, rowGap: candyGap(6, true) }}
+        />
         <button type="button" className="candy-btn" data-shape="chip" onClick={() => setShowMore((v) => !v)} style={{ alignSelf: 'center' }}>
           <span className="candy-face">{showMore ? 'Less' : 'More micros'}</span>
         </button>

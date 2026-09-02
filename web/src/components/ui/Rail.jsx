@@ -101,6 +101,13 @@ export default function Rail({
   // inside, with exponential resistance. Only the floating Overlay Studio panel
   // wants it — a rail pinned to a window edge has nowhere to grow.
   growToContain = false,
+  // 'vertical' (the stack) or 'horizontal' (the strip). Straight through to
+  // DraggableSidebarList, which has carried both axes since the dock shipped.
+  direction = 'vertical',
+  // Let the pickup start on a button/link inside the tile. Off by default so a
+  // panel's own controls keep their clicks; ON for a run of chips, where the
+  // whole item IS a button and there is nothing else to grab (the dock's case).
+  dragFromInteractive = false,
   className,
   style,
 }) {
@@ -114,6 +121,32 @@ export default function Rail({
       renderItem={renderItem}
       onReorder={onReorder}
       growToContain={growToContain}
+      direction={direction}
+      dragFromInteractive={dragFromInteractive}
     />
   );
+}
+
+// Cluster — THE default for a reorderable RUN of chips: a wrapping run you can
+// drag in any direction, up/down between lines and left/right within one. Rail
+// gives a stack one axis; Cluster gives a wrapped run both, off the SAME drag
+// (hold to lift, the floating copy, the landing glide, the accent hand-off) and
+// the SAME state hook (useRailOrder). The order is still one flat list — the
+// wrap only decides which line each chip lands on.
+//
+// A run that fits on one line simply IS one line, so this covers a single-row
+// strip too; there is no separate horizontal component to choose between.
+//
+// The host owns the box: a flex container with a real gap (never restate it as
+// a prop — DraggableSidebarList measures it off getComputedStyle at lift) and
+// items of a fixed size, so the lines read as columns rather than a ragged edge.
+//
+// A chip IS a button, so pickup has to come off the button itself — hence
+// dragFromInteractive by default. That also sets the gesture: press and HOLD
+// (180ms) lifts the chip, a quick tap still fires its onClick, exactly as the
+// dock disambiguates nav from reorder.
+//
+// Consumers: NutritionSection (the Health column's micros, key `health:micros`).
+export function Cluster(props) {
+  return <Rail dragFromInteractive {...props} direction="grid" />;
 }

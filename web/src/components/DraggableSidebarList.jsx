@@ -42,7 +42,7 @@ const STATE_THROTTLE = 60;
 // reachable inside its bounds.
 const SHIFT_THRESHOLD_FRACTION = 0.2;
 
-function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, slotY, isHorizontal = false, releasing = false, glideMs = 160, containerRef, grow = false }) {
+function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, slotY, slotXY = null, isHorizontal = false, isGrid = false, releasing = false, glideMs = 160, containerRef, grow = false }) {
   const hostRef = useRef(null);
   const cloneRef = useRef(null);
   const modeRef = useRef('slot-snap');
@@ -71,7 +71,12 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
     //                 to cursor center on pickup)
     //   'slot-snap' — clone snaps to slot with a 160ms CSS transition
     // Absent attr defaults to 'cursor' (matches ANIMATION_KEY_CONFIG in useSettings).
-    const mode = document.body?.getAttribute('data-anim-drag-tile-follow') || 'cursor';
+    //
+    // A grid is ALWAYS 'slot-snap', whatever the setting says: its chips live in
+    // a rail of fixed slots, so the lifted one steps between those slots — up,
+    // down, left, right — instead of floating free under the cursor. The mode is
+    // part of what a grid IS, not a preference about it.
+    const mode = isGrid ? 'slot-snap' : (document.body?.getAttribute('data-anim-drag-tile-follow') || 'cursor');
     modeRef.current = mode;
 
     const clone = sourceElement.cloneNode(true);
@@ -87,6 +92,21 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
     // would ALSO collapse to height 0 mid-pickup and vanish.
     clone.removeAttribute('data-dragsrc-collapsing');
     clone.style.removeProperty('--drag-source-from-h');
+    // The global press-hold (useTactileSound) marks the button data-candy-pressed
+    // on pointerdown and keeps it there while the pointer is down — so a chip
+    // lifted by a HOLD is mid-press at lift, and cloneNode copies that. A grid's
+    // chip has to read exactly like its neighbours while it travels, so drop the
+    // press on the clone. (A rail tile keeps it: its pressed face during the drag
+    // is deliberate, and the drop sequence's invariant 2 eases it back up on the
+    // landing glide.)
+    // The mark sits on the .candy-btn INSIDE this wrapper, not on the wrapper,
+    // so strip it from the subtree (and from the root, for a bare-button item).
+    if (isGrid) {
+      for (const el of [clone, ...clone.querySelectorAll('[data-candy-pressed], .is-pressed')]) {
+        el.removeAttribute('data-candy-pressed');
+        el.classList.remove('is-pressed');
+      }
+    }
     // Mark the clone so per-tile CSS can keep the press-depth look during
     // drag (the original element loses :active the moment the clone takes
     // over the pointer). E.g. `.rail-tile.is-dragging` collapses
@@ -106,8 +126,8 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
       const fallback = isHorizontal ? originRect.left : originRect.top;
       initialPos = (typeof slotY === 'number' && !isNaN(slotY)) ? slotY : fallback;
     }
-    const initialX = isHorizontal ? initialPos : originRect.left;
-    const initialY = isHorizontal ? originRect.top : initialPos;
+    const initialX = slotXY ? slotXY.x : (isHorizontal ? initialPos : originRect.left);
+    const initialY = slotXY ? slotXY.y : (isHorizontal ? originRect.top : initialPos);
     Object.assign(clone.style, {
       position: 'fixed',
       left: '0',
@@ -136,6 +156,25 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
     // right sidebar worked. <body> has no transformed ancestor, so fixed ==
     // viewport again; theme vars live on :root/body so the clone still inherits them.
     document.body.appendChild(clone);
+    // Portalling to <body> leaves the surface's styling scope behind, so the chip
+    // inside the clone loses the 2.5px lift the resting chip has and paints 3px
+    // taller — it comes back up BELOW where it started (measured 2026-09-02: the
+    // resting chip's box top is 341.2, the clone's 343.7). Copying the scope's
+    // custom properties across was tried and changed NOTHING, so the difference
+    // is a scoped RULE, not a variable. Rather than chase which rule, pin the
+    // clone's chip to the geometry the real one actually has — read off the live
+    // resting element at lift, so it stays right whatever the scope does.
+    // (Grid only: the dock and sidebar clones are signed off as they are.)
+    if (isGrid) {
+      const srcBtn = sourceElement.querySelector('.candy-btn');
+      const cloneBtn = clone.querySelector('.candy-btn');
+      if (srcBtn && cloneBtn) {
+        const br = srcBtn.getBoundingClientRect();
+        cloneBtn.style.position = 'relative';
+        cloneBtn.style.top = `${br.top - originRect.top}px`;
+        cloneBtn.style.height = `${br.height}px`;
+      }
+    }
     cloneRef.current = clone;
 
     let rafId = null;
@@ -247,17 +286,17 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
       if (growEl) { growEl.style.minHeight = ''; growEl.style.paddingTop = ''; growEl.style.transition = ''; }
       if (cardEl) { cardEl.style.marginTop = ''; cardEl.style.transition = ''; }
     };
-  }, [sourceElement, originRect.left, originRect.top, originRect.width, originRect.height, originDisplay, cursorRef, isHorizontal]);
+  }, [sourceElement, originRect.left, originRect.top, originRect.width, originRect.height, originDisplay, cursorRef, isHorizontal, isGrid]); // eslint-disable-line react-hooks/exhaustive-deps -- slotXY is the LIFT-time slot here; later slots ride the effect below
 
   // Slot-snap mode: update transform when slot changes; CSS transition animates.
   // Gated on modeRef (captured at mount) so cursor-mode RAF writes aren't fought.
   useEffect(() => {
     const clone = cloneRef.current;
     if (!clone || modeRef.current !== 'slot-snap') return;
-    const cx = isHorizontal ? slotY : originRect.left;
-    const cy = isHorizontal ? originRect.top : slotY;
+    const cx = slotXY ? slotXY.x : (isHorizontal ? slotY : originRect.left);
+    const cy = slotXY ? slotXY.y : (isHorizontal ? originRect.top : slotY);
     clone.style.transform = `translate3d(${cx}px, ${cy}px, 0)`;
-  }, [originRect.left, originRect.top, slotY, isHorizontal]);
+  }, [originRect.left, originRect.top, slotY, slotXY, isHorizontal]);
 
   // Drop-release animation. The parent's onUp two-phase flow flips
   // `releasing` true on drop, keeps dragState alive for one transition cycle
@@ -271,8 +310,8 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
     const clone = cloneRef.current;
     if (!clone || !releasing) return;
     releaseRef.current = true;
-    const cx = isHorizontal ? slotY : originRect.left;
-    const cy = isHorizontal ? originRect.top : slotY;
+    const cx = slotXY ? slotXY.x : (isHorizontal ? slotY : originRect.left);
+    const cy = slotXY ? slotXY.y : (isHorizontal ? originRect.top : slotY);
     // Cursor-mode clones run with transition: 'none' during drag (RAF writes
     // the transform every frame). Switching to '160ms' AND changing transform
     // in the same JS task makes the browser batch both writes and skip the
@@ -308,7 +347,7 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
         if (card) { card.style.transition = `margin-top ${ease}`; card.style.marginTop = '0px'; }
       }
     }
-  }, [releasing, slotY, originRect.left, originRect.top, isHorizontal, glideMs, containerRef]);
+  }, [releasing, slotY, slotXY, originRect.left, originRect.top, isHorizontal, glideMs, containerRef]);
 
   return (
     <div
@@ -365,6 +404,14 @@ export default function DraggableSidebarList({
 
   // Axis configuration — vertical (default) keeps the legacy sidebar behavior;
   // horizontal swaps to X-based threshold checks and marginLeft/Right gap.
+  //
+  // 'grid' is a WRAPPING run: still one flat order, but laid out over several
+  // lines, so a slot is picked in READING order (both axes) instead of on one
+  // coordinate. It also drops the margin/collapse choreography entirely — in a
+  // wrapping container, opening a margin or collapsing the source re-flows the
+  // wrap and chips jump between lines. The others slide with `transform`
+  // instead, which is the same rule FoldStandOff follows for the same reason.
+  const isGrid = direction === 'grid';
   const isHorizontal = direction === 'horizontal';
   const axis        = isHorizontal ? 'x'           : 'y';
   const sizeProp    = isHorizontal ? 'width'       : 'height';
@@ -430,8 +477,24 @@ export default function DraggableSidebarList({
   // Coordinate axis is selected by `direction` (Y for vertical, X for horizontal).
   const calcDropIndex = useCallback(() => {
     const draggedIdx = dRef.current?.idx;
-    const coord = mouseRef.current[axis];
     const els = itemRefs.current;
+    if (isGrid) {
+      // Reading order: the cursor is BEFORE item i if it sits on an earlier
+      // line, or on i's own line and left of i's middle. First such i is the
+      // slot. Rects are read live, so a wrap that re-flowed mid-drag is honest.
+      const { x, y } = mouseRef.current;
+      for (let i = 0; i < els.length; i++) {
+        if (i === draggedIdx) continue;
+        const el = els[i];
+        if (!el) continue;
+        const r = el.getBoundingClientRect();
+        if (r.width === 0) continue;
+        if (y < r.top) return i;
+        if (y <= r.bottom && x < r.left + r.width / 2) return i;
+      }
+      return els.length;
+    }
+    const coord = mouseRef.current[axis];
     let firstNonSourceSeen = false;
     for (let i = 0; i < els.length; i++) {
       if (i === draggedIdx) continue;
@@ -445,7 +508,7 @@ export default function DraggableSidebarList({
       if (coord < threshold) return i;
     }
     return els.length;
-  }, [axis, sizeProp, startProp]);
+  }, [axis, sizeProp, startProp, isGrid]);
 
   // Edge-snap (opt-in via `snapZones`, horizontal only). On release, if the
   // cursor is within triggerPx of the bar's left edge, centre, or right edge,
@@ -627,6 +690,13 @@ export default function DraggableSidebarList({
     const gcs = containerRef.current ? window.getComputedStyle(containerRef.current) : null;
     const flexGap = gcs ? (parseFloat(isHorizontal ? gcs.columnGap : gcs.rowGap) || 0) : 0;
 
+    // Grid: every slot's resting origin, measured once at lift. The slide below
+    // and the clone's landing target are both read off these — never predicted
+    // from a column count or a chip width, which a wrap is free to change.
+    const slots = isGrid
+      ? itemRefs.current.map(e => { const r = e?.getBoundingClientRect(); return r ? { x: r.left, y: r.top } : { x: 0, y: 0 }; })
+      : null;
+
     dRef.current = { phase: 'drag', idx };
     mouseRef.current = { x: cx, y: cy };
 
@@ -646,9 +716,10 @@ export default function DraggableSidebarList({
       positions,
       heights,
       flexGap,
+      slots,
     });
     playReorderPickup();
-  }, [onDragActiveChange, startProp, sizeProp]);
+  }, [onDragActiveChange, startProp, sizeProp, isGrid, isHorizontal]);
 
   // Abort a drag/hold that will never see a pointerup: a release outside the OS
   // window, or a window blur mid-drag (Alt-Tab / focus-stealing dialog). Guarding
@@ -702,6 +773,22 @@ export default function DraggableSidebarList({
   // slot equals the item's true footprint and neighbours don't snap on drop.
   const gapSize = (dragState?.originRect?.[sizeProp] ?? gapSizeProp) + (dragState?.flexGap ?? 0);
 
+  // Grid: where each item sits while the drag is live. Removing the source from
+  // the order shifts everything between it and the drop slot by exactly one
+  // place, so item i simply borrows slot j's measured origin — no per-line or
+  // per-column arithmetic, and a wrap of any shape comes out right.
+  const gridSlotIndexFor = (i) => {
+    const src = dragState.idx, drop = dragState.dropIdx;
+    if (src < i && i < drop) return i - 1;
+    if (drop <= i && i < src) return i + 1;
+    return i;
+  };
+  // Where the DRAGGED chip itself lands: the slot the order leaves for it.
+  const gridLanding = (isGrid && dragState?.slots)
+    ? dragState.slots[Math.max(0, Math.min(dragState.slots.length - 1,
+        dragState.dropIdx > dragState.idx ? dragState.dropIdx - 1 : dragState.dropIdx))]
+    : null;
+
   return (
     <>
       {dragState?.dragging && itemRefs.current[dragState.idx] && (
@@ -711,14 +798,16 @@ export default function DraggableSidebarList({
           originDisplay={dragState.originDisplay}
           cursorRef={mouseRef}
           slotY={computeSlotY(dragState.dropIdx, dragState.idx, dragState.positions, dragState.heights, dragState.flexGap ?? 0)}
+          slotXY={gridLanding}
           isHorizontal={isHorizontal}
+          isGrid={isGrid}
           releasing={!!dragState.releasing}
           glideMs={dragState.glideMs ?? 160}
           containerRef={containerRef}
           grow={growToContain}
         />
       )}
-      <div ref={containerRef} data-drag-list="" data-dragging={dragState?.dragging ? 'true' : undefined} className={className} style={{ display: 'flex', flexDirection: flexDir, ...style }}>
+      <div ref={containerRef} data-drag-list="" data-dragging={dragState?.dragging ? 'true' : undefined} className={className} style={{ display: 'flex', flexDirection: flexDir, flexWrap: isGrid ? 'wrap' : undefined, ...style }}>
         {items.map((item, i) => {
           const isDragged = dragState?.idx === i;
           const isDrop    = dragState?.dragging && dragState?.dropIdx === i && !isDragged;
@@ -747,6 +836,18 @@ export default function DraggableSidebarList({
           // would stay visible, blocking layout.
           const itemStyle = getItemStyle ? getItemStyle(item, i) : {};
 
+          // Grid: translate this chip from its own measured origin to the origin
+          // of the slot it currently occupies. Transform only — a margin or a
+          // collapse would re-flow the wrap and throw chips onto other lines.
+          let gridShift;
+          if (isGrid && dragState?.dragging && dragState.slots && !isDragged) {
+            const from = dragState.slots[i];
+            const to = dragState.slots[gridSlotIndexFor(i)];
+            if (from && to && (to.x !== from.x || to.y !== from.y)) {
+              gridShift = `translate3d(${to.x - from.x}px, ${to.y - from.y}px, 0)`;
+            }
+          }
+
           return (
             <div
               key={keyExtractor(item, i)}
@@ -766,14 +867,15 @@ export default function DraggableSidebarList({
                 // collapse keyframe + the drop-gap, or it lands instantly at t=0 and
                 // shoves neighbours by one gap on pickup (the pickup-snap bug).
                 transition: dragState?.dragging
-                  ? `margin ${GLIDE}`
+                  ? (isGrid ? `transform ${GLIDE}` : `margin ${GLIDE}`)
                   : 'none',
-                [marginStart]: isDrop ? gapSize : 0,
+                transform: isGrid ? (gridShift || 'translate3d(0,0,0)') : undefined,
+                [marginStart]: isGrid ? undefined : (isDrop ? gapSize : 0),
                 // Source slot cancels one flex gap so its collapse doesn't leave a
                 // one-gap surplus where it lifted (siblings stay put on drop). Pairs
                 // with the +flexGap in gapSize above to keep the lift itself reflow-
                 // free. No-op when the container has no flex gap.
-                [marginEnd]:   isDragged ? -(dragState?.flexGap ?? 0) : (isDropAfter ? gapSize : 0),
+                [marginEnd]:   isGrid ? undefined : (isDragged ? -(dragState?.flexGap ?? 0) : (isDropAfter ? gapSize : 0)),
                 // Source slot: hide visually + provide the from-height for
                 // the keyframe collapse. `visibility: hidden` keeps the slot
                 // invisible during the collapse so its content doesn't clip-
@@ -783,14 +885,17 @@ export default function DraggableSidebarList({
                 // position, so the visual is: clone in place, planner grows
                 // smoothly upward into the freed space.
                 visibility: isDragged ? 'hidden' : undefined,
-                ['--drag-source-from-h']: isDragged
+                // Grid keeps the source's space (no collapse keyframe): the gap
+                // the eye follows is opened by the neighbours sliding, not by the
+                // container re-flowing around a shrinking hole.
+                ['--drag-source-from-h']: (isDragged && !isGrid)
                   ? `${dragState.originRect.height}px`
                   : undefined,
                 cursor: enabled ? 'grab' : undefined,
                 position: 'relative',
                 pointerEvents: isDragged ? 'none' : undefined,
               }}
-              data-dragsrc-collapsing={isDragged ? 'true' : undefined}
+              data-dragsrc-collapsing={(isDragged && !isGrid) ? 'true' : undefined}
             >
               {renderItem(item, i)}
             </div>
