@@ -8,6 +8,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { musicApi } from './api.js';
 import { useDownloads } from './DownloadProvider.jsx';
+import { useMusicPlayer } from './MusicPlayerProvider.jsx';
 import { AddToLibraryButton } from '../QuickAdd.jsx';
 
 const CAA = 'https://coverartarchive.org';
@@ -141,6 +142,25 @@ export default function BrowsePreview({ result, accent, onBack, libraryEntry }) 
     }
   };
 
+  // Click-to-play. Nothing here is on disk, so every item is `streamable` and
+  // the player resolves a fresh stream URL per play from the metadata alone.
+  // `streamKey` is their identity — albumPath is null for all of them, so the
+  // usual albumPath|n key would collide across every Browse album.
+  const { playTracks, currentTrack, isPlaying } = useMusicPlayer();
+  const queueItems = () => (detail?.tracks || []).map(t => ({
+    albumPath:  null,
+    albumTitle: detail.title,
+    albumImage: coverSrcs[0] || null,
+    artist:     detail.artist,
+    n:          t.position,
+    title:      t.title,
+    audioPath:  null,
+    available:  false,
+    streamable: true,
+    streamKey:  `${detail.releaseGroupMbid}|${t.disc}|${t.position}`,
+    duration:   t.lengthMs != null ? Math.round(t.lengthMs / 1000) : null,
+  }));
+
   // Button reflects, in priority: an in-session job → the library state
   // (in-library / repair) → a fresh download.
   const missing = libraryEntry ? Math.max(0, (libraryEntry.total || 0) - (libraryEntry.present || 0)) : 0;
@@ -248,7 +268,12 @@ export default function BrowsePreview({ result, accent, onBack, libraryEntry }) 
                         padding: '14px 0 6px', borderBottom: '1px solid var(--border)', marginBottom: 2,
                       }}>Disc {t.disc}</div>
                     )}
-                    <TrackRow track={t} />
+                    <TrackRow
+                      track={t}
+                      playing={isPlaying &&
+                        currentTrack?.streamKey === `${detail.releaseGroupMbid}|${t.disc}|${t.position}`}
+                      onPlay={() => playTracks(queueItems(), i)}
+                    />
                   </Fragment>
                 );
               })}
@@ -260,26 +285,33 @@ export default function BrowsePreview({ result, accent, onBack, libraryEntry }) 
   );
 }
 
-function TrackRow({ track }) {
+function TrackRow({ track, playing, onPlay }) {
   const [hover, setHover] = useState(false);
   return (
     <div
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
+      onClick={onPlay}
       style={{
         display: 'flex', alignItems: 'center', gap: 12,
         padding: '8px 8px', borderRadius: 6,
         background: hover ? 'var(--surface-2)' : 'transparent',
         transition: 'background 100ms ease',
+        cursor: 'pointer',
       }}
     >
+      {/* Hover swaps the track number for a play glyph — the row's only cue
+          that it is clickable, matching the library album page's affordance. */}
       <span style={{
         width: 26, flexShrink: 0, textAlign: 'right',
-        fontSize: 12, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)',
+        fontSize: 12, color: playing ? 'var(--accent)' : 'var(--text-faint)',
+        fontFamily: 'var(--font-mono)',
         fontVariantNumeric: 'tabular-nums',
-      }}>{track.position}</span>
+      }}>{playing ? '▶' : (hover ? '▶' : track.position)}</span>
       <span style={{
-        flex: 1, minWidth: 0, fontSize: 13, color: 'var(--text)',
+        flex: 1, minWidth: 0, fontSize: 13,
+        color: playing ? 'var(--accent)' : 'var(--text)',
+        fontWeight: playing ? 600 : 400,
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
       }} title={track.title}>{track.title}</span>
       <span style={{

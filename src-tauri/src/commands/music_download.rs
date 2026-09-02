@@ -260,6 +260,10 @@ pub async fn music_stream_resolve(
     album_path: Option<String>,
     n: Option<i64>,
     watch_url: Option<String>,
+    artist: Option<String>,
+    album_title: Option<String>,
+    track_title: Option<String>,
+    duration_sec: Option<i64>,
 ) -> Result<StreamResolve, String> {
     let Some(script) = resolve_script(&app) else {
         return Err("download script not found (scripts/download_album.py)".into());
@@ -268,6 +272,34 @@ pub async fn music_stream_resolve(
     if let Some(url) = watch_url.filter(|u| !u.is_empty()) {
         let mut cmd = crate::commands::proc_util::python_cmd();
         cmd.arg(&script).arg("--resolve").arg("--watch-url").arg(&url);
+        return run_resolve_cmd(cmd).await;
+    }
+
+    // No album card on disk — a Browse-preview track, which exists only as
+    // MusicBrainz metadata. Hand the script the search inputs directly; there's
+    // no page to read a cached watch URL from or to write one back to.
+    if album_path.is_none() {
+        let (Some(artist), Some(title)) = (
+            artist.filter(|s| !s.is_empty()),
+            track_title.filter(|s| !s.is_empty()),
+        ) else {
+            return Err(
+                "music_stream_resolve needs albumPath + n, watchUrl, or artist + trackTitle".into(),
+            );
+        };
+        let mut cmd = crate::commands::proc_util::python_cmd();
+        cmd.arg(&script)
+            .arg("--resolve")
+            .arg("--artist")
+            .arg(&artist)
+            .arg("--track-title")
+            .arg(&title);
+        if let Some(at) = album_title.filter(|s| !s.is_empty()) {
+            cmd.arg("--album-title").arg(&at);
+        }
+        if let Some(d) = duration_sec.filter(|d| *d > 0) {
+            cmd.arg("--duration-sec").arg(d.to_string());
+        }
         return run_resolve_cmd(cmd).await;
     }
 

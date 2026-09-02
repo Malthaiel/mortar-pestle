@@ -155,7 +155,17 @@ export function MusicPlayerProvider({ children }) {
   const streamSrcKeyRef = useRef(null); // stream key currently loaded in <audio>
   // Loose YouTube hits carry no album card, so albumPath|n would be "null|null"
   // for every one of them — key those by their watch URL instead.
-  const streamKeyOf = (t) => (t ? (t.watchUrl || `${t.albumPath}|${t.n}`) : '');
+  // A Browse-preview track has no album card either, so albumPath|n would be
+  // "null|3" for every one of them too — those carry their own streamKey.
+  const streamKeyOf = (t) => (t ? (t.watchUrl || t.streamKey || `${t.albumPath}|${t.n}`) : '');
+
+  // Which shape `music_stream_resolve` gets: an exact YouTube upload, a library
+  // album card (cached watch URL + writeback), or bare MusicBrainz metadata.
+  const streamResolveArgs = (t) =>
+    t.watchUrl ? { watchUrl: t.watchUrl }
+      : t.albumPath ? { albumPath: t.albumPath, n: t.n }
+        : { artist: t.artist, albumTitle: t.albumTitle, trackTitle: t.title,
+            durationSec: t.duration || 0 };
   const isPlayable = (t) =>
     !!t && (t.available || (t.streamable && !failedStreamsRef.current.has(streamKeyOf(t))));
 
@@ -278,7 +288,8 @@ export function MusicPlayerProvider({ children }) {
   // Local files keep the original synchronous path; streamable tracks resolve
   // a fresh stream URL first, so their branch is async with a stale-guard.
   const currentTrackKey = currentTrack
-    ? `${currentTrack.albumPath}|${currentTrack.n}|${currentTrack.audioPath || ''}`
+    ? `${currentTrack.albumPath}|${currentTrack.n}|${currentTrack.audioPath || ''}` +
+      `|${currentTrack.watchUrl || currentTrack.streamKey || ''}`
     : '';
   useEffect(() => {
     const a = audioRef.current;
@@ -322,9 +333,7 @@ export function MusicPlayerProvider({ children }) {
       }
       const seq = ++resolveSeqRef.current;
       setResolvingStream(true);
-      invoke('music_stream_resolve', currentTrack.watchUrl
-        ? { watchUrl: currentTrack.watchUrl }
-        : { albumPath: currentTrack.albumPath, n: currentTrack.n })
+      invoke('music_stream_resolve', streamResolveArgs(currentTrack))
         .then(res => {
           if (seq !== resolveSeqRef.current) return; // track changed mid-resolve
           setResolvingStream(false);
@@ -431,7 +440,7 @@ export function MusicPlayerProvider({ children }) {
     if ((ended?.audioPath || ended?.streamable)
         && typeof ended.duration === 'number' && ended.duration >= 1) {
       const secs = Math.round(ended.duration);
-      const trackPath = ended.audioPath || `${ended.albumPath}#${ended.n}`;
+      const trackPath = ended.audioPath || ended.streamKey || `${ended.albumPath}#${ended.n}`;
       invoke('music_record_listen', { trackPath, durationSec: secs })
         .catch(err => console.warn('[music] record_listen failed', err));
       setListenMinutesThisMonth(prev => (prev ?? 0) + secs / 60);

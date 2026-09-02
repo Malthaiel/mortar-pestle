@@ -159,8 +159,12 @@ pub async fn music_search_releasegroups(
     }
     let limit = limit.unwrap_or(25).clamp(1, 100);
     let offset = offset.unwrap_or(0);
+    // `dismax=true` — MusicBrainz's multi-field matcher. The default Lucene
+    // parser searches the release-group TITLE only, so a natural query that
+    // names the artist too ("ohms deftones") treats the band as another title
+    // word and buries the right album. dismax weighs title AND artist.
     let url = format!(
-        "{MB_BASE}/release-group?query={}&fmt=json&limit={}&offset={}",
+        "{MB_BASE}/release-group?query={}&dismax=true&fmt=json&limit={}&offset={}",
         urlencoding::encode(q),
         limit,
         offset
@@ -212,8 +216,11 @@ pub async fn music_search_recordings(query: String) -> Result<Vec<RecordingHit>,
     if q.is_empty() {
         return Ok(Vec::new());
     }
+    // `dismax=true` for the same reason as the release-group search above: the
+    // default parser only reads the recording TITLE, so "i think about you all
+    // the time deftones" never ranks the Deftones recording.
     let url = format!(
-        "{MB_BASE}/recording?query={}&fmt=json&limit=25",
+        "{MB_BASE}/recording?query={}&dismax=true&fmt=json&limit=25",
         urlencoding::encode(q)
     );
     let v = mb_get(&url).await?;
