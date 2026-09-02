@@ -1476,6 +1476,22 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
   background: var(--accent);
   color: #fff;
 }
+/* Hover arbitration inside a panel tile — ONE thing lights at a time, and the
+   innermost target wins. The pointer is inside the tile AND inside whatever
+   control it rests on, so the tile has to ASK whether a child owns the hover:
+   :has() is the only way a parent can yield. Point at the tile's own chrome and
+   the tile floods (its nested labels stay muted — see § panel tiles rest MUTED);
+   point at a control and the tile drops to rest so the control can take the
+   accent alone. .is-panel only: the music/planner rails keep the tile-always-
+   floods reading, where the tile IS the button and the transport row goes
+   neutral underneath it. User-directed 2026-09-01. */
+.candy-btn[data-shape="tile"].rail-tile.is-panel:is(:hover, :active):has(.candy-btn:hover) {
+  --cbtn-band: var(--surface);
+}
+.candy-btn[data-shape="tile"].rail-tile.is-panel:is(:hover, :active):has(.candy-btn:hover) > .candy-face {
+  background: var(--surface-2);
+  color: var(--text);
+}
 /* Planner Pack pane widgets ride the plain .rail-tile shape one-to-one (same
    fixed 200·tile-px height, same face chrome) — see PaneWidgetShell in
    modules/core/planner/index.jsx. Their scroll bodies are tagged data-no-drag:
@@ -1953,22 +1969,111 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
 }
 .rail-tile .candy-btn:is(:hover, :active):not(.is-active):not(.is-primary) .candy-face :where(div, span) { color: var(--text); }
 
-/* Panel tiles rest MUTED, light as ONE unit. Inside .is-panel (the Planner day
-   sections and the Overlay Studio panels) every nested label and icon sits at
-   --text-muted like any other candy button, and goes white only when the TILE
-   is hovered — pointing at one control lights the whole section, never just
-   that control. Overrides the blanket #fff at § rail-tile (which exists so the
-   music tile never flickers grey->white->grey on press) and is placed after the
-   neutral-hover block so the (0,6,0) ties fall this way. User-directed
-   2026-09-01. */
+/* Panel tiles rest MUTED and STAY muted while the tile itself is hovered.
+   Inside .is-panel (the Planner day sections and the Overlay Studio panels)
+   every nested label and icon sits at --text-muted like any other candy button;
+   hovering the tile floods the tile alone and leaves its contents exactly as
+   they were, so the section reads as one lit surface rather than a section that
+   also re-colours everything it holds. Only a control the pointer is actually
+   ON goes white — see the accent block below. Overrides the blanket #fff at
+   § rail-tile (which exists so the music tile never flickers grey->white->grey
+   on press) and is placed after the neutral-hover block so the (0,6,0) ties
+   fall this way. User-directed 2026-09-01. */
 .candy-btn[data-shape="tile"].rail-tile.is-panel .candy-face :where(div, span) { color: var(--text-muted); }
-.candy-btn[data-shape="tile"].rail-tile.is-panel:is(:hover, :active) .candy-face :where(div, span) { color: #fff; }
-.candy-btn[data-shape="tile"].rail-tile.is-panel:is(:hover, :active) .chip-field-input { color: #fff; }
+
+/* The hovered control takes the accent the tile just gave up (see the
+   arbitration block at § .is-panel). This is the .is-panel exception to the
+   neutral-hover rule above: there the tile owns the flood and a red control on
+   a red face would vanish, but here the tile has dropped to rest, so the
+   control is the only lit thing on screen and needs the full accent face to
+   read as hovered. Held states keep their standing accent — that is selection,
+   not hover. User-directed 2026-09-01. */
+.candy-btn[data-shape="tile"].rail-tile.is-panel .candy-btn:is(:hover, :active):not(.is-active):not(.is-primary) {
+  --cbtn-band: var(--accent);
+}
+.candy-btn[data-shape="tile"].rail-tile.is-panel .candy-btn:is(:hover, :active):not(.is-active):not(.is-primary) > .candy-face {
+  background: var(--accent);
+  color: #fff;
+}
+.candy-btn[data-shape="tile"].rail-tile.is-panel .candy-btn:is(:hover, :active):not(.is-active):not(.is-primary) .candy-face :where(div, span) { color: #fff; }
+.candy-btn[data-shape="tile"].rail-tile.is-panel .candy-btn:is(:hover, :active):not(.is-active):not(.is-primary) .chip-field-input { color: #fff; }
+/* The HELD twin of the block above, which the hover rules excluded with
+   :not(.is-active) and nothing else ever supplied. A held control carries the
+   same standing accent face as a hovered one, so its label needs the same white
+   — without this the muted rule at § .is-panel wins at (0,5,0) and an open
+   section header reads grey-on-red. Surfaced 2026-09-01 by the split button's
+   held-down open state, but it was wrong for every .is-active control in a
+   panel tile before that. */
+.candy-btn[data-shape="tile"].rail-tile.is-panel .candy-btn.is-active .candy-face :where(div, span) { color: #fff; }
 /* chip-meta — a chip's secondary label (the routine row's time range). Muted at
    the LOWEST specificity on purpose, so the two .is-panel rules above own it
    inside a panel tile and it follows the tile's hover like the rest of the row.
    It used to carry an INLINE colour, which no stylesheet can outrank. */
 .chip-meta { color: var(--text-muted); }
+
+/* ── split — two candy buttons fused into ONE shell ──────────────────────── *
+ * A wrapper, not a shape. The two-layer recipe already gives independent
+ * presses for free: each .candy-btn is its own immovable base with its own lip,
+ * and only its own .candy-face slides. All this class does is stop them LOOKING
+ * like two buttons — square the two inner corners and overlap the abutting
+ * frames into one line. Press, lip, hover flood, band colour, the centering
+ * lift and --cbtn-press-dur all keep working untouched.
+ *
+ * NOT .candy-seg: seg options are deliberately FLAT (no lip, transform:none)
+ * because they sit inside the tray's clip. Here the press IS the point — each
+ * half presses down while its neighbour stays up.
+ *
+ * First consumer: the Planner day-rail section headers (title + "+"),
+ * user-directed 2026-09-01. */
+.candy-split { display: inline-flex; align-items: center; gap: 0; }
+
+/* Both outer ends fully round, DERIVED from the button's own size var: chip
+   declares --corner-max: 14px and circle calc(--cbtn-size / 2), so fused they
+   would curve by different amounts on the same 24px-tall unit. Listed after
+   both shape blocks — equal specificity, source order decides. */
+.candy-split > .candy-btn { --corner-max: calc(var(--cbtn-size, 28px) / 2); }
+
+/* The SEAM is a STRAIGHT line (user-directed 2026-09-01, after trying it curved
+   both ways). Both halves square their inner corners and the two abutting frames
+   overlap into ONE line — the outer ends keep the shell's normal roundness. */
+.candy-split > .candy-btn { --split-lap: var(--cbtn-frame); }
+
+/* Written for ANY number of parts, not just two: only the run's two OUTER ends
+   keep the shell's roundness, every interior edge squares off and overlaps its
+   neighbour. A three-part row (a chip field plus two action buttons) needs no
+   extra rule. */
+.candy-split > .candy-btn:not(:last-child) {
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
+}
+.candy-split > .candy-btn:not(:first-child) {
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
+  margin-left: calc(var(--split-lap) * -1);
+}
+/* The overlap eats the trailing half's left edge, so its content would centre on
+   a box wider than what you can SEE and read shoved against the bulge. Grow the
+   half by the overlap and push its content across by the same amount, MINUS one
+   frame: the overlap swallows the trailing half's own 2px left border too, so the
+   visible left boundary is the LEADING half's border edge, not the trailing
+   half's. Padding by the full overlap over-corrects by exactly that frame and
+   leaves 5px of air on the left against 3px on the right (measured 2026-09-01).
+   ponytail: scoped to the fixed, zero-padding shapes — the only trailing halves
+   that exist. An auto-width trailing chip would need its own padding added to
+   this, not replaced by it; wire that when something actually needs it. */
+.candy-split > .candy-btn:not(:first-child):is([data-shape="circle"], [data-shape="icon"]) {
+  width: calc(var(--cbtn-size, 28px) + var(--split-lap));
+}
+.candy-split > .candy-btn:not(:first-child):is([data-shape="circle"], [data-shape="icon"]) > .candy-face {
+  padding-left: calc(var(--split-lap) - var(--cbtn-frame));
+}
+
+/* A half whose panel is open stays PRESSED into the shell, not just lit, so the
+   button itself shows the panel is open. Slides its own depth — the same number
+   the real press uses, not a restated one. */
+.candy-split > .candy-btn.is-active > .candy-face {
+  transform: translateY(var(--cbtn-depth));
+}
 
 /* select — dropdown trigger (CandySelect.jsx). Neutral candy control like
    chip/icon: no accent flip (a dropdown trigger turning accent-red reads wrong,
@@ -4714,8 +4819,9 @@ button.cal-customdays__step:hover {
    still too big" survived a height pin. Matching the depth fixes both at once. */
 .planner-uniform-btns .candy-seg { height: var(--planner-btn-h); --cbtn-depth: var(--candy-depth-small); }
 .planner-uniform-btns .candy-seg .candy-btn { height: 100%; }
-/* One gap for every run of adjacent buttons, so no row invents its own. */
-.planner-uniform-btns :where(div, span):has(> .candy-btn + .candy-btn) { gap: var(--planner-btn-gap); }
+/* One gap for every run of adjacent buttons, so no row invents its own.
+   .candy-split is exempt: its two halves are ONE fused button and must abut. */
+.planner-uniform-btns :where(div, span):not(.candy-split):has(> .candy-btn + .candy-btn) { gap: var(--planner-btn-gap); }
 /* A Rail's tiles are the same run of adjacent candy buttons, but DraggableSidebarList
    wraps each item in a positioning div, so the :has(> .candy-btn + .candy-btn) test
    above cannot see them. Same number, same owner — measured 2026-08-29 as rowGap

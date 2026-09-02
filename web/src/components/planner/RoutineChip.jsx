@@ -36,7 +36,7 @@ export default function RoutineChip({ item, onToggle }) {
   });
 
   return (
-    <div style={ROW}>
+    <div className="candy-split" style={ROW}>
       <span
         className="candy-btn"
         data-shape="chip-field"

@@ -75,11 +75,6 @@ const GAP_UNDER_BTN = candyGap(INSET, true);                          // candy o
 const chipList = (empty) => ({
   display: empty ? 'none' : 'flex', flexDirection: 'column', gap: GAP_UNDER_BTN,
 });
-// No gap here: the planner scope owns every run of adjacent candy buttons
-// (--planner-btn-gap, styles.css § Planner — one button height), and a gap
-// written on the tag would outrank it and fork the number.
-const HEAD_ROW_STYLE = { display: 'flex', alignItems: 'center' };
-
 // Every section's adder: a bare "+" circle on the section's HEADER row, in the
 // slot the count badge used to occupy (user-directed 2026-08-28 — the counters
 // and the "New ..." wording are both gone). Live on every day — each
@@ -226,9 +221,16 @@ function EventGroups({ groups, colorFor, onEdit, hideDayLabel = false }) {
 // (user-directed 2026-08-28). Same candy chip as every other control in the
 // pane; PaneHeader keeps the heading's own type inside the face, so the four
 // titles still read as headings rather than as toolbar buttons.
+//
+// The title and its "+" are ONE fused button now (user-directed 2026-09-01) —
+// .candy-split squares the two inner corners and merges the frames into a
+// single seam. They stay two real .candy-btn elements, so each half presses,
+// hovers and lights independently; the wrapper only changes how they look. The
+// title half also stays HELD DOWN while its popover is open (the .is-active
+// rule in § split), so the button itself reports the open panel.
 function SectionHead({ title, btnRef, open, onToggle, children }) {
   return (
-    <div style={HEAD_ROW_STYLE}>
+    <div className="candy-split">
       <button
         type="button"
         ref={btnRef}

@@ -30,15 +30,18 @@ export function shortDate(ds) {
 function readLS(k) { try { return localStorage.getItem(k); } catch { return null; } }
 function writeLS(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
 
-// Horizontal row holding a chip-field chip and its out-of-chip action buttons.
-// align-items:center seats the (smaller) action buttons vertically against the
-// chip; each button carries its own explicit height (~25% under the chip) rather
-// than stretching to it, so ✓ / ROUTE / × read as peer controls, not a segmented bar.
-// No gap here: the row sits inside the Planner's one-gap scope (styles.css
-// § Planner — one button height), and a gap written on the tag outranks it, so a
-// hard 6px here left these rows 2px tighter than every other row in the window
-// while the scope rule looked like it was working. Outside that scope the
-// candy-face's own gap still separates the chips.
+// Horizontal row holding a chip-field chip and its action buttons, FUSED into one
+// shell (user-directed 2026-09-01) — the row carries `.candy-split`, so the field
+// and its ✓ / ROUTE / × sit in a single outline with a straight divider between
+// each, and every part still presses and lights on its own. That class also zeroes
+// the gap, and the Planner's one-gap scope skips it by name (styles.css § split).
+//
+// The note that used to sit here said the action buttons were kept ~25% shorter
+// than the chip so they read as peers rather than a segmented bar. That had
+// already stopped being true: the Planner's uniform-height scope pins every candy
+// button in the window to --planner-btn-h with !important, so ChipIconBtn's inline
+// 23px never applied and all three parts measure 24px. The fused row is what they
+// were already painting, minus the gaps.
 const CHIP_ROW_STYLE = { display: 'flex', alignItems: 'center', width: '100%' };
 
 // Press-and-hold (dwell) on a chip to pick it up for a calendar drag, while a
@@ -82,7 +85,7 @@ export function useHoldDrag({ disabled, onPickup }) {
 // `labelColor` lets the day pane's carryover groups wear the age tint.
 export function Group({ label, children, labelColor = 'var(--text-muted)' }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'calc(6px + var(--candy-depth-small))' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'calc(10px + var(--candy-depth-small))' }}>
       <div style={{
         fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
         textTransform: 'uppercase', color: labelColor,
@@ -145,7 +148,7 @@ export function TaskChip({ path, line, text, sourceDate, checked = false, showDa
   });
 
   return (
-    <div style={CHIP_ROW_STYLE}>
+    <div className="candy-split" style={CHIP_ROW_STYLE}>
       <span
         className="candy-btn"
         data-shape="chip-field"
@@ -266,7 +269,7 @@ export function NoteChip({ text, sourceDate, index, showDate = true }) {
   ];
 
   return (
-    <div style={CHIP_ROW_STYLE}>
+    <div className="candy-split" style={CHIP_ROW_STYLE}>
       <span
         className="candy-btn"
         data-shape="chip-field"
