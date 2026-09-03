@@ -469,22 +469,16 @@ export default function DraggableSidebarList({
     if (!d) return;
     window.removeEventListener('pointermove', d.clearOnMove);
     dropAccentRef.current = null;
-    // The bridge suppresses colour transitions only WHILE .is-drop-accent is on
-    // (see styles.css). Taking it off hands the face its normal 150ms
-    // background/colour transition back — fine when the pointer is still on the
-    // tile, because :hover takes over at identical values and nothing repaints,
-    // but when the pointer has LEFT there is nothing to hand over to and the
-    // accent EASES to grey over 150ms. Measured 2026-09-03: class gone in one
-    // frame, colour still travelling accent→grey 176ms later.
-    const nodes = [
-      d.el.querySelector('.candy-btn'),
-      d.el.querySelector('.candy-face'),
-      ...d.el.querySelectorAll('.candy-face :where(div, span)'),
-    ].filter(Boolean);
-    nodes.forEach(n => { n.style.transition = 'none'; });
+    // Taking the class off used to hand the face its normal 150ms background
+    // transition back, easing the accent to grey once the pointer had left. This
+    // used to force `transition: none` on the base, face and label spans, drop
+    // the class, reflow, then restore on the next frame — and it never helped:
+    // it fires on the FIRST pointermove, which is usually still ON the tile, so
+    // it spent its snap on a frame where :hover was holding the colour steady
+    // anyway (measured 2026-09-03: class gone at t+0, :hover not lost until
+    // t+46ms, fade only then). The accent snap-out in styles.css covers the real
+    // moment, at rest, for every button that flies to accent.
     d.el.classList.remove('is-drop-accent');
-    void d.el.offsetWidth;               // commit the un-accented paint first
-    requestAnimationFrame(() => nodes.forEach(n => { n.style.transition = ''; }));
   }, []);
 
   // Force the transient post-drop accent onto wrapper `el`; cleared on the next
