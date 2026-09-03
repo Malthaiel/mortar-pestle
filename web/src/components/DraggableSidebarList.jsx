@@ -46,6 +46,20 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
   const hostRef = useRef(null);
   const cloneRef = useRef(null);
   const modeRef = useRef('slot-snap');
+  // Where the clone is written. Grid uses left/top; every other consumer keeps
+  // the transform it shipped with.
+  //
+  // A transform puts the clone on its own compositing layer, and a layer at a
+  // FRACTIONAL y gets snapped to a whole device pixel. The chips rest at 341.2,
+  // so the clone painted exactly 1px low for the whole drag and jumped back on
+  // the drop — read off a 31-frame burst (top edge row 18 vs 17, bottom 46 vs
+  // 45). Compositing alone isn't the culprit: the neighbours carry
+  // translate3d(0,0,0), also a layer, at an INTEGER offset and never shift.
+  // left/top is laid out, so it rounds exactly like the resting chip does.
+  const place = (el, x, y) => {
+    if (isGrid) { el.style.left = `${x}px`; el.style.top = `${y}px`; }
+    else el.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+  };
   // Flipped true when the parent enters its release phase on drop. The
   // cursor-mode RAF reads this each frame and bails so its writes don't
   // fight the CSS transition that animates the clone into its final slot.
@@ -101,12 +115,16 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
     // landing glide.)
     // The mark sits on the .candy-btn INSIDE this wrapper, not on the wrapper,
     // so strip it from the subtree (and from the root, for a bare-button item).
-    if (isGrid) {
+    // Stripped one FRAME after the clone paints, not before it: cleared up
+    // front there is no pressed state to transition FROM, so the face teleports
+    // up at lift. Painting pressed once lets .candy-face's own 150ms ease-out
+    // carry it back up while the chip travels.
+    const releaseClonePress = () => {
       for (const el of [clone, ...clone.querySelectorAll('[data-candy-pressed], .is-pressed')]) {
         el.removeAttribute('data-candy-pressed');
         el.classList.remove('is-pressed');
       }
-    }
+    };
     // Mark the clone so per-tile CSS can keep the press-depth look during
     // drag (the original element loses :active the moment the clone takes
     // over the pointer). E.g. `.rail-tile.is-dragging` collapses
@@ -144,8 +162,9 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
       // Vertical: X anchors to source column (modules stay locked to rail).
       // Horizontal: Y anchors to source row (dock buttons stay on the bar).
       // Active-axis position depends on the drag mode.
-      transform: `translate3d(${initialX}px, ${initialY}px, 0)`,
+      transform: isGrid ? 'none' : `translate3d(${initialX}px, ${initialY}px, 0)`,
     });
+    place(clone, initialX, initialY);
     // Portal the clone to <body> rather than the in-tree host. The clone is
     // position:fixed and positioned with viewport coords (getBoundingClientRect).
     // If ANY ancestor of the host has a transform, that ancestor — not the
@@ -174,6 +193,7 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
         cloneBtn.style.top = `${br.top - originRect.top}px`;
         cloneBtn.style.height = `${br.height}px`;
       }
+      requestAnimationFrame(releaseClonePress);
     }
     cloneRef.current = clone;
 
@@ -273,7 +293,7 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
       // the reflow, the browser may batch the transition switch with the initial
       // transform and animate from (0, 0) to the first slot on mount.
       void clone.offsetWidth;
-      clone.style.transition = `transform ${GLIDE}`;
+      clone.style.transition = isGrid ? `left ${GLIDE}, top ${GLIDE}` : `transform ${GLIDE}`;
     }
 
     return () => {
@@ -295,7 +315,7 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
     if (!clone || modeRef.current !== 'slot-snap') return;
     const cx = slotXY ? slotXY.x : (isHorizontal ? slotY : originRect.left);
     const cy = slotXY ? slotXY.y : (isHorizontal ? originRect.top : slotY);
-    clone.style.transform = `translate3d(${cx}px, ${cy}px, 0)`;
+    place(clone, cx, cy);
   }, [originRect.left, originRect.top, slotY, slotXY, isHorizontal]);
 
   // Drop-release animation. The parent's onUp two-phase flow flips
@@ -319,9 +339,10 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
     // between the two so the new transition rule is committed before the
     // transform delta is computed. Same pattern the slot-snap init uses at
     // mount (search for `void clone.offsetWidth`).
-    clone.style.transition = `transform ${glideMs}ms ${GLIDE_TIMING}`;
+    const glide = `${glideMs}ms ${GLIDE_TIMING}`;
+    clone.style.transition = isGrid ? `left ${glide}, top ${glide}` : `transform ${glide}`;
     void clone.offsetWidth;
-    clone.style.transform = `translate3d(${cx}px, ${cy}px, 0)`;
+    place(clone, cx, cy);
     // Swap is-dragging → is-drop-accent for the glide. The bridge class carries
     // the same accent (band + face flood, both tile types) but NOT the pressed
     // face transform, so the face eases back up over --cbtn-press-dur during
@@ -332,7 +353,25 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
     // state: accent yes, press no. (Its CSS keeps the transform transition
     // alive and only strips the colour transitions — see styles.css.)
     clone.classList.remove('is-dragging');
-    clone.classList.add('is-drop-accent');
+    // …and only while the cursor is actually ON the clone. The glide used to keep
+    // the accent unconditionally, so dropping and moving away left an accent chip
+    // flying to its slot with the pointer nowhere near it — a fixed 267ms of glow
+    // after the mouse had gone (photographed 2026-09-03: the frames show the lit
+    // chip CHANGING POSITION, which only the clone does). Four earlier fixes
+    // rewrote the post-commit bridge instead and changed nothing, because the
+    // bridge was never the thing still lit. The clone's rect MOVES for the whole
+    // flight, so hit-test its LIVE rect on every pointermove — a comparison
+    // against the release point goes stale on the first frame.
+    const syncLit = (ev) => {
+      const r = clone.getBoundingClientRect();
+      const x = ev ? ev.clientX : cursorRef.current.x;
+      const y = ev ? ev.clientY : cursorRef.current.y;
+      const on = x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+      clone.classList.toggle('is-drop-accent', on);
+      clone.classList.toggle('is-drop-glide', !on);
+    };
+    syncLit(null);
+    window.addEventListener('pointermove', syncLit);
     // Snap the grown card back to content height over the same glide, so the card
     // shrink and the clone settle finish together (transition to the captured
     // resting px, not '' — an auto/none target won't animate).
@@ -347,7 +386,8 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
         if (card) { card.style.transition = `margin-top ${ease}`; card.style.marginTop = '0px'; }
       }
     }
-  }, [releasing, slotY, slotXY, originRect.left, originRect.top, isHorizontal, glideMs, containerRef]);
+    return () => window.removeEventListener('pointermove', syncLit);
+  }, [releasing, slotY, slotXY, originRect.left, originRect.top, isHorizontal, glideMs, containerRef, cursorRef]);
 
   return (
     <div
@@ -427,9 +467,24 @@ export default function DraggableSidebarList({
   const clearDropAccent = useCallback(() => {
     const d = dropAccentRef.current;
     if (!d) return;
-    d.el.classList.remove('is-drop-accent');
     window.removeEventListener('pointermove', d.clearOnMove);
     dropAccentRef.current = null;
+    // The bridge suppresses colour transitions only WHILE .is-drop-accent is on
+    // (see styles.css). Taking it off hands the face its normal 150ms
+    // background/colour transition back — fine when the pointer is still on the
+    // tile, because :hover takes over at identical values and nothing repaints,
+    // but when the pointer has LEFT there is nothing to hand over to and the
+    // accent EASES to grey over 150ms. Measured 2026-09-03: class gone in one
+    // frame, colour still travelling accent→grey 176ms later.
+    const nodes = [
+      d.el.querySelector('.candy-btn'),
+      d.el.querySelector('.candy-face'),
+      ...d.el.querySelectorAll('.candy-face :where(div, span)'),
+    ].filter(Boolean);
+    nodes.forEach(n => { n.style.transition = 'none'; });
+    d.el.classList.remove('is-drop-accent');
+    void d.el.offsetWidth;               // commit the un-accented paint first
+    requestAnimationFrame(() => nodes.forEach(n => { n.style.transition = ''; }));
   }, []);
 
   // Force the transient post-drop accent onto wrapper `el`; cleared on the next
@@ -479,20 +534,32 @@ export default function DraggableSidebarList({
     const draggedIdx = dRef.current?.idx;
     const els = itemRefs.current;
     if (isGrid) {
-      // Reading order: the cursor is BEFORE item i if it sits on an earlier
-      // line, or on i's own line and left of i's middle. First such i is the
-      // slot. Rects are read live, so a wrap that re-flowed mid-drag is honest.
+      // NEAREST SLOT, not reading order. Every candidate drop lands the chip on
+      // exactly one resting slot (measured at lift), so pick the slot whose
+      // centre is closest to the cursor — the chip goes where the cursor IS.
+      //
+      // Reading order ("first item the cursor sits before") had two seams that
+      // each threw the chip sideways on a few px of vertical wobble: the row gap
+      // between two lines matched no item's band, so x was ignored there and the
+      // slot snapped to the START of the next line; and past the last chip on a
+      // line the next slot in order is that next line's first one, so the chip
+      // jumped a column while the cursor only moved down. Distance to a real
+      // slot has neither seam and needs no dead-band tuning.
+      const slots = dRef.current?.slots;
+      const or = dRef.current?.originRect;
+      if (!slots || !or) return draggedIdx ?? els.length;
       const { x, y } = mouseRef.current;
-      for (let i = 0; i < els.length; i++) {
-        if (i === draggedIdx) continue;
-        const el = els[i];
-        if (!el) continue;
-        const r = el.getBoundingClientRect();
-        if (r.width === 0) continue;
-        if (y < r.top) return i;
-        if (y <= r.bottom && x < r.left + r.width / 2) return i;
+      let best = draggedIdx ?? 0;
+      let bestD = Infinity;
+      for (let s = 0; s < slots.length; s++) {
+        const dx = x - (slots[s].x + or.width / 2);
+        const dy = y - (slots[s].y + or.height / 2);
+        const d = dx * dx + dy * dy;
+        if (d < bestD) { bestD = d; best = s; }
       }
-      return els.length;
+      // Inverse of gridLanding's mapping: dropIdx <= idx lands on slot dropIdx,
+      // dropIdx > idx lands on dropIdx − 1. best === draggedIdx is the no-op.
+      return best <= draggedIdx ? best : best + 1;
     }
     const coord = mouseRef.current[axis];
     let firstNonSourceSeen = false;
@@ -637,7 +704,22 @@ export default function DraggableSidebarList({
       // snap to the real one when the source appears.
       setDragState(prev => prev ? { ...prev, dropIdx: to, releasing: true, glideMs } : null);
 
+      // Keep tracking the pointer through the glide. The accent bridge below
+      // hit-tests mouseRef, and without this it would still hold the RELEASE
+      // point: a pointer that moved during the 160ms got a tile lit where it no
+      // longer was, and — since forceDropAccent's clearing listener is only
+      // registered at commit, after that move — nothing ever put it out
+      // (reproduced 2026-09-03: still .is-drop-accent 1200ms after the pointer
+      // parked at 60,60). Tracking rather than a moved/not-moved flag, because
+      // skipping the bridge on ANY movement leaves the tile under a pointer that
+      // moved and stopped on it un-accented until the next move — a flicker on
+      // exactly the drop-and-stay-put gesture. The rule is simply: light what
+      // the cursor is over at commit, and nothing when it is over nothing.
+      const trackMove = (ev) => { mouseRef.current = { x: ev.clientX, y: ev.clientY }; };
+      window.addEventListener('pointermove', trackMove);
+
       setTimeout(() => {
+        window.removeEventListener('pointermove', trackMove);
         // Commit the swap synchronously so the hit-test below reads the new order in
         // the same frame the clone is removed (no un-accented paint in between).
         flushSync(() => {
@@ -697,7 +779,10 @@ export default function DraggableSidebarList({
       ? itemRefs.current.map(e => { const r = e?.getBoundingClientRect(); return r ? { x: r.left, y: r.top } : { x: 0, y: 0 }; })
       : null;
 
-    dRef.current = { phase: 'drag', idx };
+    // slots + originRect ride on dRef (not just dragState) so calcDropIndex can
+    // read them without taking dragState as a dependency — it would rebuild the
+    // whole pointer-handler chain on every drop-index update.
+    dRef.current = { phase: 'drag', idx, slots, originRect };
     mouseRef.current = { x: cx, y: cy };
 
     if (el) el.style.pointerEvents = 'none';
@@ -836,16 +921,19 @@ export default function DraggableSidebarList({
           // would stay visible, blocking layout.
           const itemStyle = getItemStyle ? getItemStyle(item, i) : {};
 
-          // Grid: translate this chip from its own measured origin to the origin
-          // of the slot it currently occupies. Transform only — a margin or a
-          // collapse would re-flow the wrap and throw chips onto other lines.
-          let gridShift;
+          // Grid: offset this chip from its own measured origin to the origin of
+          // the slot it currently occupies. An OFFSET — never a margin or a
+          // collapse, which would re-flow the wrap and throw chips onto other
+          // lines. left/top rather than a transform: a transform makes each
+          // shifted chip its own compositing layer, and a layer at a fractional
+          // position is snapped to a whole device pixel, so every shifted chip
+          // settled by 1px when the offset came off at commit. The item already
+          // carries `position: relative` below.
+          let gridDx = 0, gridDy = 0;
           if (isGrid && dragState?.dragging && dragState.slots && !isDragged) {
             const from = dragState.slots[i];
             const to = dragState.slots[gridSlotIndexFor(i)];
-            if (from && to && (to.x !== from.x || to.y !== from.y)) {
-              gridShift = `translate3d(${to.x - from.x}px, ${to.y - from.y}px, 0)`;
-            }
+            if (from && to) { gridDx = to.x - from.x; gridDy = to.y - from.y; }
           }
 
           return (
@@ -867,9 +955,10 @@ export default function DraggableSidebarList({
                 // collapse keyframe + the drop-gap, or it lands instantly at t=0 and
                 // shoves neighbours by one gap on pickup (the pickup-snap bug).
                 transition: dragState?.dragging
-                  ? (isGrid ? `transform ${GLIDE}` : `margin ${GLIDE}`)
+                  ? (isGrid ? `left ${GLIDE}, top ${GLIDE}` : `margin ${GLIDE}`)
                   : 'none',
-                transform: isGrid ? (gridShift || 'translate3d(0,0,0)') : undefined,
+                left: isGrid ? gridDx : undefined,
+                top:  isGrid ? gridDy : undefined,
                 [marginStart]: isGrid ? undefined : (isDrop ? gapSize : 0),
                 // Source slot cancels one flex gap so its collapse doesn't leave a
                 // one-gap surplus where it lifted (siblings stay put on drop). Pairs

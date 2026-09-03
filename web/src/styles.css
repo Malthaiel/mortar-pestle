@@ -1368,7 +1368,7 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
    the chrome (title / artist / waveform gaps) keeps falling through to the base
    so the whole tile stays grabbable + pressable. */
 .candy-btn[data-shape="tile"].rail-tile
-  :where(.music-tile-cover, .music-tile-scrub, .candy-btn,
+  :where(.music-tile-cover, .music-tile-rail, .candy-btn,
          .planner-ring-button, .button-planner-calendar, button, a, input,
          textarea, [data-no-drag]) {
   pointer-events: auto;
@@ -1379,7 +1379,7 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
    covers the ring's drag-to-set, where pointer-capture makes :has(:active)
    unreliable under WebKitGTK.) */
 .candy-btn[data-shape="tile"].rail-tile:active > .candy-face { transform: none; }
-.candy-btn[data-shape="tile"].rail-tile:active:not(:has(button:active, .music-tile-cover:active, .music-tile-scrub:active, .planner-ring-button:active, .planner-ring-button.is-pressed, textarea:active, input:active, [data-no-drag]:active)) > .candy-face {
+.candy-btn[data-shape="tile"].rail-tile:active:not(:has(button:active, .music-tile-cover:active, .music-tile-rail:active, .planner-ring-button:active, .planner-ring-button.is-pressed, textarea:active, input:active, [data-no-drag]:active)) > .candy-face {
   transform: translateY(var(--cbtn-depth));
 }
 /* Dragging clone — DraggableSidebarList clones the slot + adds .is-dragging to
@@ -1391,22 +1391,34 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
   background: var(--accent);
   transform: translateY(var(--cbtn-depth));
 }
+/* A dragged CHIP (Cluster) keeps the accent it was hovering. The clone is
+   portalled to <body> with pointer-events:none, so :hover can never reach it and
+   the chip went grey the moment it lifted. Colour ONLY — no face slide: the press
+   is released one frame after lift (DraggableSidebarList) so the face eases back
+   up, and re-pressing it here would cancel that. .is-drop-accent carries the same
+   colour through the landing glide, so the drop doesn't blink grey. */
+:is(.is-dragging, .is-drop-accent) .candy-btn[data-shape="chip"] { --cbtn-band: var(--accent); }
+:is(.is-dragging, .is-drop-accent) .candy-btn[data-shape="chip"] > .candy-face {
+  color: #fff;
+  background: var(--accent);
+}
 /* Content colour constant across every state (rest / hover / press / drag) — matches
    the overlay tile so the player + planner text (incl. nested candy-button labels)
    never flickers grey→white→grey on press. Non-!important so the player's designed
    INLINE colours (SF15) still win over it. */
 .candy-btn[data-shape="tile"].rail-tile .candy-face :where(div, span) { color: #fff; }
 /* Waveform inversion — when the chrome goes red (hover / active / drag) the
-   dim-accent bars would vanish into it; flip played -> white, unplayed -> dim
-   white. :hover covers the child-press case (pointer stays on the tile). */
-.candy-btn[data-shape="tile"].rail-tile:is(:hover, :active) .music-tile-pulse-bar,
-.is-dragging .candy-btn[data-shape="tile"].rail-tile .music-tile-pulse-bar,
-.is-drop-accent .candy-btn[data-shape="tile"].rail-tile .music-tile-pulse-bar {
+   accent bars would vanish into it; the rail's unplayed track goes dim white,
+   the meter bars and the played fill go solid white. :hover covers the
+   child-press case (pointer stays on the tile). */
+.candy-btn[data-shape="tile"].rail-tile:is(:hover, :active) .music-tile-rail,
+.is-dragging .candy-btn[data-shape="tile"].rail-tile .music-tile-rail,
+.is-drop-accent .candy-btn[data-shape="tile"].rail-tile .music-tile-rail {
   background: color-mix(in oklch, white, transparent 65%);
 }
-.candy-btn[data-shape="tile"].rail-tile:is(:hover, :active) .music-tile-pulse-bar[data-played="true"],
-.is-dragging .candy-btn[data-shape="tile"].rail-tile .music-tile-pulse-bar[data-played="true"],
-.is-drop-accent .candy-btn[data-shape="tile"].rail-tile .music-tile-pulse-bar[data-played="true"] {
+.candy-btn[data-shape="tile"].rail-tile:is(:hover, :active) :is(.music-tile-meter-bar, .music-tile-rail-fill),
+.is-dragging .candy-btn[data-shape="tile"].rail-tile :is(.music-tile-meter-bar, .music-tile-rail-fill),
+.is-drop-accent .candy-btn[data-shape="tile"].rail-tile :is(.music-tile-meter-bar, .music-tile-rail-fill) {
   background: white;
 }
 /* Music-tile depth setting (Settings -> Animations) — "small" pins the fixed
@@ -2416,6 +2428,13 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
 [data-dragging] :where(.candy-btn, button, a, input, textarea, [data-no-drag]):not(.is-dragging) {
   pointer-events: none !important;
 }
+/* … and killing those pointer events also kills the hand cursor: the button no
+   longer answers the hit-test, so the cursor falls through to whatever is under
+   it (the source slot is pointer-events:none too, so that's the bare container
+   — a plain arrow) mid-drag. Paint the whole live list grabbing while a drag is
+   up. !important because the per-item `cursor: grab` is an INLINE style
+   (DraggableSidebarList's items.map) and nothing else can beat one. */
+[data-drag-list][data-dragging], [data-drag-list][data-dragging] * { cursor: grabbing !important; }
 
 /* Post-drop accent bridge (.is-drop-accent — DraggableSidebarList tags the
    wrapper of the tile under the cursor at drop-commit, and swaps the drag
@@ -2430,7 +2449,46 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
    none here made the release an instant snap. Cleared on the next real
    pointermove, when :hover takes over with identical computed values
    (accent), so the class removal itself repaints nothing. */
-.is-drop-accent :is(.candy-btn, .candy-face) {
+/* .is-drop-glide rides this same list: it is the third state with the accent
+   WITHHELD, worn by the flying clone whenever the cursor is not over it, so the
+   press-release transform still eases while the fill snaps straight to rest.
+   Photographed 2026-09-03 — with the cursor already gone the clone held the
+   accent for its whole 267ms flight, and that flight IS the lingering accent. */
+:is(.is-drop-accent, .is-drop-glide) :is(.candy-btn, .candy-face),
+/* … and the nested label/value spans, which carry their OWN `transition: color`
+   (see the :where rule above). Left out, the face snapped to accent while the
+   text faded grey→white behind it — a flicker on the TEXT only, with the accent
+   itself perfectly steady. (0,2,0) beats that rule's (0,1,0). */
+:is(.is-drop-accent, .is-drop-glide) .candy-face :where(div, span) {
+  transition: transform var(--cbtn-press-dur, 150ms) cubic-bezier(0, 0, 0.58, 1);
+}
+
+/* Accent snap-out — the buttons that opt INTO the accent flood on hover
+   (.is-hover-accent, the .planner-uniform-btns group, and the controls nested in
+   a rail-tile panel) travel grey → accent, far enough that the shared 150ms
+   colour fade reads as the accent clinging on after the cursor has already left.
+   Measured 2026-09-03 on the Health micros Cluster: 142ms of accent draining to
+   grey after :hover dropped — and 145ms for the identical fade on a chip that was
+   never dragged. The drop is NOT special; it only supplies the long colour move
+   that makes the fade visible. Every other candy button keeps the global fade,
+   because on a grey → grey hover it is imperceptible anyway.
+
+   Arriving still fades: while :hover holds this rule does not match, so the base
+   transitions govern. Leaving snaps: at rest there is no colour transition left
+   to travel back through. Do NOT "fix" this by hanging the transition off the
+   :hover rule instead — the base rules still apply on the way out, which is why
+   that shape of the fix failed. transform is kept; the press slide owns it. */
+:is(.candy-btn.is-hover-accent,
+    .planner-uniform-btns .candy-btn:is([data-shape="chip"], [data-shape="icon"], [data-shape="circle"]),
+    .candy-btn[data-shape="tile"].rail-tile.is-panel .candy-btn):not(:hover):not(:active):not(.is-active) {
+  transition: none;
+}
+:is(.candy-btn.is-hover-accent,
+    .planner-uniform-btns .candy-btn:is([data-shape="chip"], [data-shape="icon"], [data-shape="circle"]),
+    .candy-btn[data-shape="tile"].rail-tile.is-panel .candy-btn):not(:hover):not(:active):not(.is-active) > .candy-face,
+:is(.candy-btn.is-hover-accent,
+    .planner-uniform-btns .candy-btn:is([data-shape="chip"], [data-shape="icon"], [data-shape="circle"]),
+    .candy-btn[data-shape="tile"].rail-tile.is-panel .candy-btn):not(:hover):not(:active):not(.is-active) .candy-face :where(div, span) {
   transition: transform var(--cbtn-press-dur, 150ms) cubic-bezier(0, 0, 0.58, 1);
 }
 
@@ -2646,35 +2704,44 @@ body[data-anim-button-depth="off"] .aos-chat-window.is-pressed .aos-chat-face { 
   overflow: hidden;
 }
 
-/* Decorative equalizer bars inside the rail-tile waveform row. Pulse on
- * playback via animation-play-state; each bar's animation-delay is set
- * inline so adjacent bars stay out of phase. Not audio-synced. */
-@keyframes music-tile-pulse {
-  0%, 100% { height: calc(5 * var(--tile-px)); }
-  50%      { height: calc(24 * var(--tile-px)); }
-}
-.music-tile-pulse-bar {
+/* Live spectrum bars in the music tile's SIDEWAYS meter strip (the full-height
+ * column down the tile's right edge, user-directed 2026-09-03). WIDTHS are
+ * written per frame by MusicPlayerWidget from the player's AnalyserNode — the
+ * old `music-tile-pulse` keyframe faked a wave with a staggered animation-delay
+ * and read nothing from the audio. The strip is align-items:flex-end, so bars
+ * are pinned to the right edge and grow leftward only; flex:1 down the column
+ * spreads the 36 of them over whatever height the tile has.
+ *
+ * The strip doubles as the volume fader (drag it up / down), but paints ONE
+ * solid tone — the old two-tier lit/unlit split read as two meters. */
+.music-tile-meter-bar {
   flex: 1;
-  min-width: 0;
-  height: calc(5 * var(--tile-px));
+  min-height: 0;
+  width: calc(5 * var(--tile-px));
   border-radius: calc(1.5 * var(--tile-px));
-  /* Unplayed (default) — dim accent. Played bars upgrade to full accent
-   * via [data-played="true"] below. */
-  background: color-mix(in oklch, var(--accent), transparent 70%);
-  /* Clicks must reach the scrub container so the seek handler fires no
-   * matter where on the strip the cursor lands. */
-  pointer-events: none;
-  animation: music-tile-pulse 0.9s ease-in-out infinite;
-  animation-play-state: paused;
-}
-.music-tile-pulse-bar[data-played="true"] {
+  /* Solid, one tone (user-directed 2026-09-03): the strip used to paint the
+   * volume run brighter than the rest, which read as two stacked meters rather
+   * than one. The `title` tooltip carries the level now. */
   background: var(--accent);
+  /* Clicks must reach the strip so the volume drag fires no matter where on it
+   * the cursor lands. */
+  pointer-events: none;
 }
-/* All bars pulse while the track is playing (played + unplayed alike);
- * the played-vs-unplayed split is shown by colour only, via [data-played]
- * above. */
-.music-tile-pulse-bar[data-playing="true"] {
-  animation-play-state: running;
+
+/* The time scrub: a plain slim rail since 2026-09-03 (it used to BE the bars,
+ * which now live in the meter strip — two sets of bars in one tile read as
+ * noise). Click or drag anywhere along it to seek. */
+.music-tile-rail {
+  height: calc(6 * var(--tile-px));
+  border-radius: calc(3 * var(--tile-px));
+  background: color-mix(in oklch, var(--accent), transparent 70%);
+  overflow: hidden;
+}
+.music-tile-rail-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  pointer-events: none;
 }
 
 /* ── Sidebar background pattern — pure-CSS gradient motifs ───────────────── *
