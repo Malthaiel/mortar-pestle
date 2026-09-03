@@ -11,7 +11,7 @@ import { useAlbumMenu } from './contextMenus.js';
 export default function CoverArtCard({ album, accent, selected, onSelect, onPlay }) {
   const [hover, setHover] = useState(false);
   const albumMenu = useAlbumMenu(accent);
-  const img = coverSrc(album.image, 320);
+  const img = coverSrc(album.image, 320, { library: true });
   const activate = () => onSelect(album.path);
   const onKeyDown = (e) => {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(); }

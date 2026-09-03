@@ -16,6 +16,11 @@ import { mediaUrl } from '../api.js';
 import { navigate } from '../router.js';
 
 const BAR_COUNT = 12;   // 36 → 18 → 12 over 2026-09-03 — fewer, chunkier bars
+// Cover edge length in tile-px. The info column next to it is given the SAME
+// height and the same centring, so the control run's bottom edge lands exactly on
+// the cover's bottom edge (user-directed 2026-09-03) — one constant, read twice,
+// rather than a hand-fitted offset that drifts the moment the cover resizes.
+const COVER = 130;
 // Frozen bar skyline survives an app restart (decision 2026-09-02: pausing
 // holds the shape, closing the app keeps it).
 const LS_BARS = 'music:bars';
@@ -23,17 +28,26 @@ const LS_BARS = 'music:bars';
 // tile's right edge whose bars grow right-to-left, so a bar's LEVEL is its width.
 // Bar 0 (bass) sits at the TOP and treble descends (flipped 2026-09-03).
 const METER_W   = 135; // tile-px, the strip's total width
-const BAR_FLOOR = 5;   // tile-px, the flat resting width
-const BAR_RISE  = 117; // tile-px added at full level → 122 inside the 135-wide strip
+// Zero resting width (user-directed 2026-09-03): a bar with nothing driving it
+// paints NOTHING, so a quiet strip is blank rather than a row of stubs. The rise
+// absorbed the old 5px floor so a full-level bar still reaches the same 122.
+const BAR_FLOOR = 0;   // tile-px, the resting width
+const BAR_RISE  = 122; // tile-px at full level, inside the 135-wide strip
 // getByteFrequencyData is dB-scaled across the analyser's -100..-30 dB window,
 // so on real music the whole signal lives in roughly 100..255 — mapping raw
 // 0..255 pinned every bass bar at the top. Measured on a downloaded track:
 // bass ≈ 205, mids ≈ 150, near-silence ≈ 100. Stretch that band to fill the row.
 const BAR_NOISE = 100; // at or below this, the bar rests on the floor
 const BAR_CEIL  = 255; // at or above this, the bar is full width
-// Snap up on a transient, ease down after it — a raw per-frame height reads as
-// jitter, not as a beat.
-const BAR_FALL = 0.88;
+// Ease toward the target rather than snapping to it. A single-frame jump across
+// the whole strip smears — the eye reads an afterimage, not a beat (user-reported
+// 2026-09-03). Rise is fast enough to still land on the kick, fall is gentle.
+// BAR_RELEASE 0.12 reproduces the old `* 0.88` decay exactly whenever the target
+// is zero, so only the RISE changed.
+const BAR_ATTACK  = 0.45; // ~3 frames to most of a new peak
+const BAR_RELEASE = 0.12;
+// How faded the run ABOVE the volume line is (0 = invisible, 1 = no dimming).
+const BAR_DIM = 0.35;
 
 // Log-spaced sampling POSITIONS (fractional), not integer slices. Provider runs
 // fftSize 256 → 128 bins, one bin ≈ 187 Hz; bin 90 ≈ 17 kHz. Integer slices put
@@ -83,9 +97,13 @@ export default function MusicPlayerWidget() {
   const levelsRef = useRef(loadBars());
   const draggingRef = useRef(false);
   const [openPanel, setOpenPanel] = useState(null); // null | 'lyrics' | 'queue'
+  // Bar pitch, quantised to whole DEVICE pixels off the strip's measured height
+  // (see the effect below). Zero until the first measure — the bars simply have
+  // no height for that one frame.
+  const [barBox, setBarBox] = useState({ h: 0, gap: 0 });
   const accent = 'var(--accent)';
   const hasTrack = !!currentTrack;
-  const cover   = hasTrack ? mediaUrl(currentTrack.albumImage) || null : null;
+  const cover   = hasTrack ? mediaUrl(currentTrack.albumImage, { library: true }) || null : null;
   const title   = hasTrack ? (currentTrack.title  || '—') : '';
   // While a stream track's URL is being fetched, the artist line reads
   // "Finding track" (decision 5 — plain words, no trailing dots).
@@ -115,6 +133,10 @@ export default function MusicPlayerWidget() {
   // beat those rules and break the seam).
   const primarySize = { '--cbtn-size': 'calc(40 * var(--tile-px))' };
   const tileGlyph = { fontSize: 'calc(16 * var(--tile-px))' };
+  // Hard cut at the live volume: solid below it, BAR_DIM alpha above it.
+  const volPct = `${(Math.max(0, Math.min(1, volume)) * 100).toFixed(1)}%`;
+  const volMask =
+    `linear-gradient(to top, #000 0 ${volPct}, rgba(0,0,0,${BAR_DIM}) ${volPct} 100%)`;
 
   const seekToClientX = (clientX) => {
     const el = scrubRef.current;
@@ -169,6 +191,38 @@ export default function MusicPlayerWidget() {
     window.addEventListener('mouseup', onUp);
   };
 
+  // Even bar spacing. `--tile-px` is `min(1px, calc(100cqw / 480))`, so it is
+  // FRACTIONAL on the real sidebar (~0.67px) — a flex:1 height plus a fractional
+  // gap gives a fractional pitch, consecutive bar edges snap to different device
+  // pixels, and the painted gaps alternate 2px / 3px (user-reported 2026-09-03).
+  // Measure the live strip and quantise the pitch to whole device pixels instead.
+  // The <=1px remainder from the floor is absorbed by justify-content:center, so
+  // every gap BETWEEN bars is exact and the slack sits at the two ends.
+  // ponytail: a DPR change mid-session doesn't re-fire ResizeObserver; add a
+  // matchMedia('(resolution: …)') listener only if that ever bites.
+  useEffect(() => {
+    const el = meterRef.current;
+    if (!el) return;
+    const measure = () => {
+      const H = el.clientHeight;
+      if (!H) return;
+      const dpr = window.devicePixelRatio || 1;
+      const q = (v) => Math.max(1 / dpr, Math.round(v * dpr) / dpr);
+      // The gap keeps its old proportion of the tile (3 tile-px of 200), read off
+      // the measured height rather than restated as a pixel count.
+      const gap = q(H * 3 / 200);
+      const h = Math.max(
+        1 / dpr,
+        Math.floor((H - gap * (BAR_COUNT - 1)) * dpr / BAR_COUNT) / dpr,
+      );
+      setBarBox((prev) => (prev.h === h && prev.gap === gap ? prev : { h, gap }));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   // Paint the restored skyline once on mount, so a fresh app start shows the
   // shape the last pause left behind instead of a flat line.
   useEffect(() => {
@@ -198,7 +252,7 @@ export default function MusicPlayerWidget() {
         const frac = f - i0;
         const raw = buf[i0] * (1 - frac) + buf[i1] * frac;
         const target = Math.max(0, Math.min(1, (raw - BAR_NOISE) / (BAR_CEIL - BAR_NOISE)));
-        lv[i] = target > lv[i] ? target : lv[i] * BAR_FALL;
+        lv[i] += (target - lv[i]) * (target > lv[i] ? BAR_ATTACK : BAR_RELEASE);
         const el = barRefs.current[i];
         if (el) el.style.width = barWidth(lv[i]);
       }
@@ -275,14 +329,24 @@ export default function MusicPlayerWidget() {
             // bar 0 (bass) at the TOP and treble descends. Bars stay anchored on
             // the strip's right edge and grow leftward.
             display: 'flex', flexDirection: 'column', alignItems: 'flex-end',
-            gap: 'calc(3 * var(--tile-px))',
+            // Whole-device-pixel pitch, measured (see the effect above). Centring
+            // parks the sub-bar remainder at the two ends so no interior gap drifts.
+            justifyContent: 'center',
+            gap: `${barBox.gap}px`,
             cursor: 'ns-resize', userSelect: 'none',
+            // The unused volume reads DIMMED (user-directed 2026-09-03): a mask cut
+            // at the exact level, so a bar straddling the line is bright below it and
+            // faded above it. A mask only touches this strip — the candy face behind
+            // it is untouched, which an overlaid scrim could not manage. The earlier
+            // two-tone painted the USED run brighter and read as two stacked meters.
+            maskImage: volMask, WebkitMaskImage: volMask,
           }}
           title={`Volume: ${Math.round(volume * 100)}%`}>
           {Array.from({ length: BAR_COUNT }).map((_, i) => (
             <div key={i}
               ref={(el) => { barRefs.current[i] = el; }}
               className="music-tile-meter-bar"
+              style={{ height: `${barBox.h}px`, flex: 'none' }}
             />
           ))}
         </div>
@@ -303,7 +367,7 @@ export default function MusicPlayerWidget() {
             onClick={openAlbum}
             style={{
               position: 'relative', zIndex: 1,
-              width: 'calc(130 * var(--tile-px))', height: 'calc(130 * var(--tile-px))',
+              width: `calc(${COVER} * var(--tile-px))`, height: `calc(${COVER} * var(--tile-px))`,
               alignSelf: 'center',
               flexShrink: 0,
               background: 'var(--surface-2)',
@@ -323,6 +387,11 @@ export default function MusicPlayerWidget() {
             flex: 1, minWidth: 0,
             display: 'flex', flexDirection: 'column',
             gap: 'calc(4 * var(--tile-px))', textAlign: 'left',
+            // Same height and same centring as the cover, so the control run's
+            // bottom edge sits on the cover's bottom edge (user-directed
+            // 2026-09-03). The spacer below the artist eats the slack, so the
+            // controls are pinned to this column's bottom = the cover's bottom.
+            alignSelf: 'center', height: `calc(${COVER} * var(--tile-px))`,
           }}>
             {/* flexShrink:0 — the second control row (2026-09-03) pushed the
                 column over the tile's height and flex shrank these two lines to
@@ -334,12 +403,17 @@ export default function MusicPlayerWidget() {
               lineHeight: 1.2, flexShrink: 0,
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>{title}</div>
+            {/* 17 → 20 (user-directed 2026-09-03): a touch bigger, still clearly
+                under the 26 of the title. */}
             <div data-aos-name="Artist" style={{
-              fontSize: 'calc(17 * var(--tile-px))', fontWeight: 800,
+              fontSize: 'calc(20 * var(--tile-px))', fontWeight: 800,
               color: 'var(--text-muted)',
               lineHeight: 1.25, flexShrink: 0,
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>{artist}</div>
+            {/* Slack sits ABOVE the controls, so they rest on the column's bottom
+                edge — which is the cover's bottom edge. */}
+            <div style={{ flex: 1, minHeight: 0 }}/>
             {/* ONE fused run of all seven (user-directed 2026-09-03), the same
                 .candy-split the Planner section heads use — straight seams
                 between halves, round only on the run's two outer ends. The row
@@ -351,7 +425,13 @@ export default function MusicPlayerWidget() {
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'flex-start',
                 flexShrink: 0,
-                marginTop: 'calc(14 * var(--tile-px))',
+                // Lift by half the candy depth so the run's PAINTED bottom — the
+                // 3D lip under the faces, not the faces themselves — lands on the
+                // cover's bottom edge (user-directed 2026-09-03). depth/2 is the
+                // app's existing depth compensation (cf. candyCenterOffset), read
+                // from the live var rather than restated as the 5px it measures at
+                // today's tile size.
+                marginBottom: 'calc(var(--cbtn-depth) / 2)',
               }}
             >
               <div className="candy-split">
@@ -418,7 +498,6 @@ export default function MusicPlayerWidget() {
                 aria-pressed={openPanel === 'queue'}><span className="candy-face" style={tileGlyph}>≡</span></button>
               </div>
             </div>
-            <div style={{ flex: 1, minHeight: 0 }}/>
           </div>
         </div>
         <div style={{

@@ -2563,56 +2563,154 @@ body[data-anim-button-depth="off"] .candy-btn:is(:active, .is-pressed, [data-can
    sink under it. Mirrors the rail-tile press-exclusion one level down. */
 .planner-ring-button:active:has(button:active) > .candy-face { transform: none; }
 
-/* The dial's three transport controls (Reset / START / Skip) do the app's normal
-   grey→white label flip (user-directed 2026-08-28). They could not before: the
-   enclosing tile pins EVERY nested div/span to #fff at 0,4,0 (see .rail-tile …
-   :where(div, span) above), and a candy button's own face IS a span nested in the
-   tile's face, so all three labels were permanently white. These re-state the
-   standard pair at a weight that clears it. .is-primary is excluded — START wears
-   it while the timer runs, where the face is already accent-filled and its label
-   has to stay white. The 30:00 readout is NOT a button and keeps its own colour. */
-.candy-btn[data-shape="tile"].rail-tile
-  .planner-ring-inner-controls .candy-btn:not(.is-primary) > .candy-face { color: var(--text-muted); }
-.candy-btn[data-shape="tile"].rail-tile
-  .planner-ring-inner-controls .candy-btn:not(.is-primary):is(:hover, :active) > .candy-face { color: #fff; }
+/* The enclosing tile pins EVERY nested div/span to #fff at (0,4,0) (see .rail-tile
+   … :where(div, span) above), and a candy button's own face IS a span nested in
+   that tile — which is why the old circle chips could not do the app's normal
+   grey→white flip on their own. The panels below re-state their colour at a
+   weight that clears it. .is-primary is excluded: START wears it while the timer
+   runs, where the face is accent-filled and the mark has to stay white. */
 
-/* Inner-controls layer sits absolutely inside the rect, bounded just inside
- * the inner ring stroke. pointer-events: none on the container lets the SVG
- * underneath receive drag events on the corner/edge regions; the controls
- * themselves re-enable pointer-events to capture their own clicks.
+/* Inner-controls layer: ONE grid cell holding two stacked layers - the readout
+ * filling the dial's whole interior, and the three control panels covering that
+ * same interior, revealed on hover (user-directed 2026-09-03). It used to be a
+ * flex column that stacked a 15px readout above a row of 26px circles.
  *
- * The box HUGS the inner ring on all four sides — DualRingRect draws that ring
- * at innerInset 22.99 + innerStrokeW 5.57 = 28.56 from the svg edge, and the svg
- * spans the button's border box while this layer is positioned against the face's
- * padding box (3px --cbtn-frame in), so 28.56 − 3 ≈ 26 is the ring's inner edge.
- * Bottom was 32px (26 + a hand-added 6 for the transport row's band); centring
- * only ever applied HALF of it, so the row still sat ~1px high and, worse, the
- * digits landed flush on the buttons with a 0px gap while both outer gaps were ~6.
- * The band is a box-shadow — invisible to layout — so it is declared as
- * padding-bottom instead, and space-evenly then splits the leftover into three
- * IDENTICAL gaps (ring→digits, digits→row, band→ring) with no constant to keep
- * in sync: measured 51px interior − 34px content − 5px band = 4px each. */
+ * The four insets are written by PlannerDock from DualRingRect's exported
+ * RING_INNER_EDGE, not declared here: they were 26/29 literals, a hand-copy of
+ * that same number, and now that this box IS the visible design a drift shows.
+ * pointer-events: none lets the SVG underneath keep the drag-to-set-time gesture
+ * on the ring band around this box; the panels re-enable it for themselves, but
+ * only while hovered, so an unhovered dial is draggable edge to edge. */
 .planner-ring-inner-controls {
   position: absolute;
-  top: 26px;
-  left: 29px;
-  right: 29px;
-  bottom: 26px;
-  padding-bottom: var(--candy-depth-small);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: space-evenly;
+  display: grid;
   pointer-events: none;
+  /* Own compositing layer, so the readout gets GREY-edged antialiasing instead of
+     sub-pixel colour fringing. White digits this large on the dial's near-black
+     fringe orange on one side and blue on the other without it. */
+  will-change: transform;
 }
-.planner-ring-inner-controls > * {
-  pointer-events: auto;
+.planner-ring-inner-controls > * { grid-area: 1 / 1; }
+
+/* The readout IS the interior now, so its size is measured in JS rather than
+ * declared. Tabular figures keep every MM:SS exactly one width, which is what
+ * lets that measurement hold for a whole session instead of re-running per tick. */
+.planner-timer-digits {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  z-index: 1;
+}
+/* The measured span. Two corrections, both so the MEASUREMENT equals the PAINT:
+ * (1) cap/alphabetic trim - the line box carries ascent + descent, and digits use
+ *     neither, so an untrimmed measure fits the box to empty space and parks the
+ *     glyphs ~10px high. `cap alphabetic` is wrong for the app's .text-trim
+ *     spacing rule (it over-trims real prose); here the string is digits and a
+ *     colon, where cap-to-baseline IS the painted extent.
+ * (2) the negative margin cancels the trailing letter-space, which the rect
+ *     counts as ink and which otherwise pushes the run ~6px left of centre. */
+.planner-timer-digits > span {
+  text-box-trim: trim-both;
+  text-box-edge: cap alphabetic;
+  /* KNOWN OFF-CENTRE, cause not yet established: the run sits 8.5px (one full
+     letter-space) RIGHT of the ring centre, measured off pixels 2026-09-03.
+     Adding a matching padding-left to make the box symmetric moved it FURTHER
+     right (+15.5), which disproves the "flex centres the margin box" reading —
+     do not re-try that. Vertical centring is exact. See the handoff. */
+  margin-right: -0.14em;      /* = READOUT_TRACKING */
+  transform-origin: center;   /* the width-filling stretch grows both ways */
 }
 
-/* Transport-pill digits. The pill shows the live MM:SS instead of a
- * START/PAUSE/RESUME word. No paused-state treatment at all (user-directed
- * 2026-08-13 — a blink was tried and cut): the digits simply stop advancing,
- * which is the state cue. Class kept as the styling hook for the digits. */
+/* Three flush equal-width, full-height panels over the readout. The dim is
+ * per-PANEL, never a group opacity: opacity on a group is multiplicative, so a
+ * hovered child could never climb back above the parent's 0.30. Rounded + clipped
+ * because square corners poke outside the inner ring's own rounded corner. */
+.planner-ring-controls {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  z-index: 2;
+  /* Clipped to the ring's own inner corner, handed down from DualRingRect, so the
+     three panels reach the stroke on every side without poking past its curve. */
+  border-radius: var(--ring-radius, 7px);
+  overflow: hidden;
+  pointer-events: none;
+}
+.planner-ring-panel {
+  width: 100%;
+  height: 100%;
+  --cbtn-depth: 0px;
+  --corner-max: 0px;
+  box-shadow: none;
+}
+/* The face and the MARK fade on separate legs. A single opacity on the button
+   dims the icon exactly as hard as the face behind it, and at 0.30 the two
+   unhovered glyphs were invisible (photographed 2026-09-03) — the panels read as
+   blank grey boxes. The face stays translucent so the readout shows through it;
+   the mark rides its own alpha. Two knobs because they are two jobs.
+
+   EVERY rule below carries the full tile prefix. The enclosing rail-tile paints
+   `.candy-face :where(div, span)` at (0,3,0) — and (0,4,0) in its .is-panel form —
+   and a candy button's own face IS a span nested in that tile, so a bare
+   `.planner-ring-panel > .candy-face` at (0,2,0) LOSES and the glyphs stay painted
+   at rest. That is the regression that put all three marks on the dial with the
+   pointer nowhere near it. Prefixed, these sit at (0,6,0)/(0,7,0) and only ever
+   compete with each other, resolved by the source order they are written in. */
+.candy-btn[data-shape="tile"].rail-tile
+  .planner-ring-controls > .planner-ring-panel > .candy-face {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: transparent;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+/* Each glyph sits on a dark disc so it stays legible over the readout behind it
+   (user-directed 2026-09-03). Sized off the panel's own height, not a constant,
+   so it tracks the dial. The mark rides above it. */
+.candy-btn[data-shape="tile"].rail-tile
+  .planner-ring-controls > .planner-ring-panel > .candy-face::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  height: 62%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.62);
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+.planner-ring-panel > .candy-face > svg { position: relative; }
+
+.planner-ring-button:hover .planner-ring-controls { pointer-events: auto; }
+
+.candy-btn[data-shape="tile"].rail-tile .planner-ring-button:hover
+  .planner-ring-controls > .planner-ring-panel > .candy-face {
+  background: color-mix(in srgb, var(--surface-3) var(--planner-ctrl-face, 32%), transparent);
+  color: rgba(255, 255, 255, var(--planner-ctrl-ink, 0.62));
+  transition-duration: 140ms;
+}
+.candy-btn[data-shape="tile"].rail-tile .planner-ring-button:hover
+  .planner-ring-controls > .planner-ring-panel > .candy-face::before {
+  opacity: 1;
+  transition-duration: 140ms;
+}
+/* The panel under the pointer comes up; its two siblings stay faint. Its face
+   stops SHORT of opaque on purpose — the readout has to stay legible even under
+   the panel being pointed at, which is the whole reason the digits live behind
+   these rather than above them. The mark goes to white, and that is what makes
+   the target unmistakable. Also covers :active, so no accent flood gets in: an
+   accent face here would sit on top of the accent-coloured ring arcs. */
+.candy-btn[data-shape="tile"].rail-tile .planner-ring-button:hover
+  .planner-ring-controls > .planner-ring-panel:is(:hover, :active) > .candy-face {
+  background: color-mix(in srgb, var(--surface-3) var(--planner-ctrl-face-on, 68%), transparent);
+  color: #fff;
+}
 
 /* Floating agent chat window (Atelier / Concierge) rendered as ONE candy
  * button, styled after the Planner chip-field candy chip (Tasks / Quick Notes):
@@ -2709,19 +2807,21 @@ body[data-anim-button-depth="off"] .aos-chat-window.is-pressed .aos-chat-face { 
  * written per frame by MusicPlayerWidget from the player's AnalyserNode — the
  * old `music-tile-pulse` keyframe faked a wave with a staggered animation-delay
  * and read nothing from the audio. The strip is align-items:flex-end, so bars
- * are pinned to the right edge and grow leftward only; flex:1 down the column
- * spreads the 36 of them over whatever height the tile has.
+ * are pinned to the right edge and grow leftward only.
  *
- * The strip doubles as the volume fader (drag it up / down), but paints ONE
- * solid tone — the old two-tier lit/unlit split read as two meters. */
+ * HEIGHT and the column gap are written inline by the widget, not here: they are
+ * quantised to whole device pixels off the strip's measured height, because a
+ * fractional `--tile-px` pitch made the painted gaps alternate 2px / 3px.
+ *
+ * The strip doubles as the volume fader (drag it up / down). It paints ONE tone —
+ * the old two-tier split painted the USED run brighter and read as two stacked
+ * meters; the level now shows as a mask DIMMING the unused run above it. */
 .music-tile-meter-bar {
-  flex: 1;
-  min-height: 0;
-  width: calc(5 * var(--tile-px));
+  /* Zero at rest (user-directed 2026-09-03): nothing driving a bar means nothing
+   * on screen. This is only the value before the mount effect writes the restored
+   * skyline — a non-zero default flashed a row of stubs on every mount. */
+  width: 0;
   border-radius: calc(1.5 * var(--tile-px));
-  /* Solid, one tone (user-directed 2026-09-03): the strip used to paint the
-   * volume run brighter than the rest, which read as two stacked meters rather
-   * than one. The `title` tooltip carries the level now. */
   background: var(--accent);
   /* Clicks must reach the strip so the volume drag fires no matter where on it
    * the cursor lands. */
@@ -2846,6 +2946,22 @@ body[data-anim-button-depth="off"] .aos-chat-window.is-pressed .aos-chat-face { 
    sits LATER in the file, so it would win the tie and silently kill the hover. */
 .button-planner-calendar:not(:hover):not(:active) { --cbtn-band: var(--planner-face); }
 .button-planner-calendar:not(:hover):not(:active) > .candy-face { background: var(--planner-face); }
+
+/* NEITHER planner surface lights up under the pointer, in any state
+   (user-directed 2026-09-03). The rail-tile floods every nested candy button with
+   the accent on hover at (0,7,0) — see `.rail-tile.is-panel .candy-btn:is(:hover,
+   :active)` above — which beat both surfaces' own "stay near-black" rules at
+   (0,2,0) and lit their faces. These restate the pin at (0,8,0) so the dial and
+   the strip below it keep one colour throughout: the press depression, and the
+   label going white, are the only feedback. */
+.candy-btn[data-shape="tile"].rail-tile.is-panel
+  .candy-btn:is(.planner-ring-button, .button-planner-calendar):is(:hover, :active) {
+  --cbtn-band: var(--planner-face);
+}
+.candy-btn[data-shape="tile"].rail-tile.is-panel
+  .candy-btn:is(.planner-ring-button, .button-planner-calendar):is(:hover, :active) > .candy-face {
+  background: var(--planner-face);
+}
 
 .candy-btn[data-shape="tile"].rail-tile
   .button-planner-calendar > .candy-face :where(div, span) { color: var(--text-muted); }

@@ -8,7 +8,7 @@ import { mediaUrl } from '@host/api.js';
 export default function VinylSpindle({ accent }) {
   const { currentTrack, isPlaying, toggle } = useMusicPlayer();
   const hasTrack = !!currentTrack;
-  const cover = hasTrack ? mediaUrl(currentTrack.albumImage) || null : null;
+  const cover = hasTrack ? mediaUrl(currentTrack.albumImage, { library: true }) || null : null;
   const label = hasTrack
     ? (currentTrack.title + (currentTrack.artist ? ' · ' + currentTrack.artist : ''))
     : 'No Track';

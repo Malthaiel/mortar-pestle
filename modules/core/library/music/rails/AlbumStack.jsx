@@ -8,7 +8,7 @@ import { mediaUrl } from '@host/api.js';
 export default function AlbumStack({ accent }) {
   const { currentTrack, queue, index, isPlaying, toggle } = useMusicPlayer();
   const hasTrack = !!currentTrack;
-  const cover = hasTrack ? mediaUrl(currentTrack.albumImage) || null : null;
+  const cover = hasTrack ? mediaUrl(currentTrack.albumImage, { library: true }) || null : null;
 
   const recent = (() => {
     if (!Array.isArray(queue) || queue.length === 0) return [];
@@ -45,13 +45,13 @@ export default function AlbumStack({ accent }) {
         position: 'relative', width: 36, height: 36, flexShrink: 0,
       }}>
         {recent[1] && (
-          <Tile src={mediaUrl(recent[1].albumImage)} style={{
+          <Tile src={mediaUrl(recent[1].albumImage, { library: true })} style={{
             position: 'absolute', top: 6, left: 6, width: 26, height: 26,
             opacity: 0.55, transform: 'rotate(-4deg)',
           }}/>
         )}
         {recent[0] && (
-          <Tile src={mediaUrl(recent[0].albumImage)} style={{
+          <Tile src={mediaUrl(recent[0].albumImage, { library: true })} style={{
             position: 'absolute', top: 3, left: 3, width: 30, height: 30,
             opacity: 0.8, transform: 'rotate(3deg)',
           }}/>

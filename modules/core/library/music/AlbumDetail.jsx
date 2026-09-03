@@ -77,7 +77,7 @@ export default function AlbumDetail({ accent, albumPath }) {
   const [highlight, setHighlight] = useState(null);
   useEffect(() => { setHighlight(consumeTrackHighlight(albumPath)); }, [albumPath]);
 
-  const coverImgSrc = album ? coverSrc(album.image, 400) : null;
+  const coverImgSrc = album ? coverSrc(album.image, 400, { library: true }) : null;
   const tint = useCoverTint(coverImgSrc);
 
   if (loading) return <Centered>Loading</Centered>;

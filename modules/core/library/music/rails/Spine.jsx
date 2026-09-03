@@ -27,7 +27,7 @@ export default function Spine({ accent }) {
     currentTrack, isPlaying, position, duration, toggle, getAnalyser,
   } = useMusicPlayer();
   const hasTrack = !!currentTrack;
-  const cover = hasTrack ? mediaUrl(currentTrack.albumImage) || null : null;
+  const cover = hasTrack ? mediaUrl(currentTrack.albumImage, { library: true }) || null : null;
   const trackName = hasTrack ? (currentTrack.title || '—') : 'No Track';
   const artistName = hasTrack ? (currentTrack.artist || '') : '';
   const pct = (hasTrack && duration > 0)

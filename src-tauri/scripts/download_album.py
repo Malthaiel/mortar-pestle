@@ -54,6 +54,7 @@ import subprocess
 import sys
 import time
 import unicodedata
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import date
@@ -797,13 +798,69 @@ def write_track_page(folder_abs, album_link, t, fm):
         fh.write("\n".join(lines))
 
 
-def head_ok(url):
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Stops urllib from chasing a 3xx, so the redirect itself can be inspected."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def cover_url(url):
+    """Ask Cover Art Archive whether this cover exists. Returns `url` or "".
+
+    Deliberately does NOT follow the redirect. CAA answers a 307 (pointing at
+    the Internet Archive) when art exists and a 404 when it does not, so the
+    redirect IS the answer and the redirect target never gets a vote on a mere
+    existence question.
+
+    That mattered: until 2026-09-03 this followed the 307, and on a Windows box
+    whose certificate store had not yet cached the archive.org root, Python
+    raised SSLCertVerificationError. The old `head_ok` caught every exception
+    alike and returned False, so a TLS gap was indistinguishable from "this
+    album has no cover art" -- albums shipped with an empty `Image:` field while
+    a 2.2 MB JPEG sat at the other end of the link. Anything that is not a clean
+    404 is now logged rather than silently swallowed.
+    """
     try:
-        req = urllib.request.Request(url, method="HEAD")
-        with urllib.request.urlopen(req, timeout=15) as r:
-            return 200 <= r.status < 400
-    except Exception:
-        return False
+        opener = urllib.request.build_opener(_NoRedirect)
+        req = urllib.request.Request(url, method="HEAD", headers={"User-Agent": MB_UA})
+        with opener.open(req, timeout=15) as r:
+            return url if 200 <= r.status < 300 else ""
+    except urllib.error.HTTPError as e:
+        if e.code in (301, 302, 303, 307, 308):
+            return url
+        if e.code != 404:
+            log(f"cover: lookup returned HTTP {e.code} for {url}")
+        return ""
+    except Exception as e:
+        log(f"cover: lookup failed for {url}: {e}")
+        return ""
+
+
+def fetch_cover(url, folder_abs):
+    """Save the cover beside the album's audio. Returns the filename, or "".
+
+    Never fatal, and never worse than before: if the bytes cannot be fetched the
+    caller keeps the remote URL in the page, which is exactly the pre-2026-09-03
+    behaviour. Following the redirect is unavoidable here -- we want the actual
+    image -- so this is the one place the redirect target's reachability counts.
+    """
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": MB_UA})
+        with urllib.request.urlopen(req, timeout=60) as r:
+            ctype = (r.headers.get("Content-Type") or "").lower()
+            data = r.read()
+        if not data:
+            log("cover: download returned an empty body")
+            return ""
+        name = "cover.png" if "png" in ctype else "cover.jpg"
+        with open(os.path.join(folder_abs, name), "wb") as f:
+            f.write(data)
+        log(f"cover: saved {name} ({len(data)} bytes)")
+        return name
+    except Exception as e:
+        log(f"cover: download failed for {url}: {e}")
+        return ""
 
 
 # ── main ─────────────────────────────────────────────────────────────────────
@@ -918,10 +975,17 @@ def main():
     os.makedirs(os.path.dirname(album_abs), exist_ok=True)
 
     # ── cover (decision #10: rg cover, else release cover, else none) ──
-    image_url = f"{CAA}/release-group/{rg_mbid}/front"
-    if not head_ok(image_url):
-        rel_cover = f"{CAA}/release/{release_mbid}/front"
-        image_url = rel_cover if head_ok(rel_cover) else ""
+    image_url = (cover_url(f"{CAA}/release-group/{rg_mbid}/front")
+                 or cover_url(f"{CAA}/release/{release_mbid}/front"))
+    # Save it next to the audio (user-directed 2026-09-03) so the catalog renders
+    # offline and never re-fetches. `image_ref` is what goes in the page: the
+    # Library-relative file when we got the bytes, else the remote URL as before.
+    # Metadata-only cards have no track folder, so they keep the URL.
+    image_ref = image_url
+    if image_url and not args.metadata_only:
+        name = fetch_cover(image_url, folder_abs)
+        if name:
+            image_ref = f"{TRACKS_REL}/{folder_name}/{name}"
 
     emit({
         "event": "release", "title": title, "artist": artist0,
@@ -952,7 +1016,7 @@ def main():
               "artists": artists, "year": year, "release_type": release_type,
               "country": country, "genres": genres, "length_ms": total_ms or None,
               "status": args.status}
-        write_album_page(album_abs, fm, track_sources, image_url, [], multi_disc)
+        write_album_page(album_abs, fm, track_sources, image_ref, [], multi_disc)
         emit({"event": "done", "ok": True, "metadataOnly": True, "skipped": False,
               "albumPath": f"{ALBUMS_REL}/{album_basename}.md", "downloaded": 0,
               "trackTotal": len(tracks), "savePath": "", "sizeBytes": 0, "failed": []})
@@ -1044,7 +1108,7 @@ def main():
     fm = {"rg_mbid": rg_mbid, "release_mbid": release_mbid, "title": title,
           "artists": artists, "year": year, "release_type": release_type,
           "country": country, "genres": genres, "length_ms": total_ms or None}
-    write_album_page(album_abs, fm, track_sources, image_url, failed, multi_disc)
+    write_album_page(album_abs, fm, track_sources, image_ref, failed, multi_disc)
     for t in done_meta:
         if t.get("url"):
             write_track_page(folder_abs, album_link, t, fm)

@@ -15,7 +15,7 @@ const FFT_BINS = 128; // fftSize/2 with provider's fftSize: 256
 export default function LiveWaveform({ accent }) {
   const { currentTrack, isPlaying, toggle, getAnalyser } = useMusicPlayer();
   const hasTrack = !!currentTrack;
-  const cover = hasTrack ? mediaUrl(currentTrack.albumImage) || null : null;
+  const cover = hasTrack ? mediaUrl(currentTrack.albumImage, { library: true }) || null : null;
   const [bars, setBars] = useState(() => Array.from({ length: BAR_COUNT }, () => 0.2));
   const rafRef = useRef(null);
   const analyserRef = useRef(null);
