@@ -1,29 +1,29 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import DualRingRect from './watchfaces/DualRingRect.jsx';
+import DualRingRect, { RING_INNER_EDGE, RING_INNER_CORNER } from './watchfaces/DualRingRect.jsx';
+import SegmentReadout from './watchfaces/SegmentReadout.jsx';
 import CalendarPanel from './CalendarPanel.jsx';
-import { CircleChip } from '@host/components/ui/index.js';
-import { TREE_TEXT } from '@host/components/vault-tree/treeKit.jsx';
 import {
   IconReset, IconSkip, IconChevronRight, IconX, IconCheck, IconStop,
+  IconPlay, IconPause,
 } from '@host/components/icons.jsx';
 
-// Icon sizes in the control row are set PER CALL SITE, not left at the pack
-// default, because the default lies: `size` sets the SVG box, not the mark in
-// it. IconSkip is a Boxicons glyph on a 24 viewBox whose path only spans 7..17,
-// so it inks ~42% of its box; IconReset and IconStop are Font Awesome paths on
-// a 384/448 viewBox that fill it edge to edge. At a shared size=15 the two FA
-// marks painted ~2.4x larger than the skip arrow — which is exactly what
-// "the icons are way too large" looked like. Sizes below are tuned so all
-// three paint at matching visual weight (a solid square reads heavier than an
-// outline at equal ink, so IconStop sits smallest). Pack defaults are shared
-// app-wide and must NOT be changed for this.
-// The TimerPrimary pill is text-only (no play/pause icon per user request), so
-// IconPlay/IconPause are not needed here.
-// Measured in the live row: IconSkip at the pack default inks 6.3px. Reset is
-// matched to it; Stop sits a touch under because a solid square reads heavier
-// than an outline at equal ink.
-const ICON_RESET_PX = 7;
-const ICON_STOP_PX = 6;
+// Icon sizes are set PER CALL SITE because the `size` prop lies: it sets the SVG
+// box, not the mark inside it. The two Boxicons glyphs here (IconSkip, IconPlay)
+// are drawn on a 24 viewBox with paths spanning only 7..17, so they ink ~42% of
+// their box; every Font Awesome one (IconReset, IconPause, IconStop, IconX,
+// IconCheck) fills its box edge to edge. At a shared size the FA marks painted
+// ~2.4x larger, which is what "the icons are way too large" looked like.
+// So ONE ink target, two derived box sizes - nothing to keep in sync by hand.
+// Pack defaults are shared app-wide and must NOT be changed for this.
+// Ratios below are read off the path data, not guessed:
+//   IconSkip  bx 24 box, path x 7..17          -> 0.42 of the box
+//   IconPlay  bx 24 box, path y 6..18          -> 0.50 of the box (its TALL axis)
+//   FA glyphs 512 box, paths fill it           -> 1.00
+// A SOLID mark reads heavier than an outline at equal ink, so the two filled
+// ones (play, pause) are shaved — the same correction the old row applied to
+// IconStop, kept because it is a fact about the eye, not about the box.
+const PANEL_INK_PX = 16;    // painted mark inside a control panel, design px
+const SOLID_TRIM = 0.85;    // filled marks read heavier than outlines
 
 import { useModuleSettings } from '@host/hooks/useSettings.js';
 import { usePlanner } from './PlannerProvider.jsx';
@@ -217,41 +217,47 @@ export default function PlannerDock() {
     return () => ro.disconnect();
   }, [running, sessionStart, calendarCollapsed]);
 
-  // Controls (Reset / START·PAUSE / Skip-or-EndEarly). Built once and placed
-  // inside the rect ring-button via TimerWidget's innerControls prop.
-  // Block runs swap the whole row for cancel + finish-early circles: pause is
-  // disallowed during a block (it would drift the finish past the block's
-  // calendar end), and Reset/Stop were three spellings of the same cancel.
-  const ctrlCircleSize = Math.round(26 * scale);
+  // Controls (Reset / Play-Pause / Skip-or-EndEarly). Built once and placed
+  // inside the rect ring-button via TimerWidget's innerControls prop, where they
+  // are three flush full-height panels covering the dial's whole interior,
+  // revealed on hover (user-directed 2026-09-03). Block runs swap the whole row
+  // for cancel + finish-early: pause is disallowed during a block (it would
+  // drift the finish past the block's calendar end), and Reset/Stop were three
+  // spellings of the same cancel.
+  const ink = PANEL_INK_PX * scale;
+  const faPx = Math.round(ink);                        // FA outlines fill their box
+  const bxPx = Math.round(ink / 0.42);                 // IconSkip
+  const playPx = Math.round((ink * SOLID_TRIM) / 0.50); // IconPlay, sized on its tall axis
+  const pausePx = Math.round(ink * SOLID_TRIM);        // IconPause (FA, solid)
   const ctrlThird = phase === 'focus' && sessionStart ? (() => {
     const elapsedMs = (pauseStartRef.current ?? now) - sessionStart;
     const elapsedMin = Math.max(1, Math.round(elapsedMs / 60000));
     return (
-      <CircleChip className="is-hover-accent" size={ctrlCircleSize} onClick={endSessionEarly}
-        title={`End session early · logs ${elapsedMin}m`}><IconStop size={ICON_STOP_PX}/></CircleChip>
+      <RingPanel onClick={endSessionEarly}
+        title={`End session early · logs ${elapsedMin}m`}><IconStop size={pausePx}/></RingPanel>
     );
   })() : (
-    <CircleChip className="is-hover-accent" size={ctrlCircleSize} onClick={skipPhase}
-      title={phase === 'focus' ? 'Skip to break' : 'Skip to focus'}><IconSkip/></CircleChip>
+    <RingPanel onClick={skipPhase}
+      title={phase === 'focus' ? 'Skip to break' : 'Skip to focus'}><IconSkip size={bxPx}/></RingPanel>
   );
-  // MM:SS is a plain line ABOVE this row again (TimerWidget renders it) — the
-  // transport button carries a WORD, not the digits (user-directed 2026-08-27).
-  // A block run has no pause (it would drift the finish past the block's
-  // calendar end), so its row is cancel + finish only; the readout above covers
-  // the digits that used to sit between them.
+  // The readout is no longer a line ABOVE this row - it fills the same interior
+  // underneath the panels, and the panels are dim enough to read it through
+  // (user-directed 2026-09-03). The middle panel is a play/pause glyph, not a
+  // word, so nothing here carries text any more.
   const controlsJSX = blockRun ? (
     <>
-      <CircleChip className="is-hover-accent" size={ctrlCircleSize} onClick={stopBlockRun}
-        title="Cancel block timer — nothing is logged"><IconX/></CircleChip>
-      <CircleChip className="is-hover-accent" size={ctrlCircleSize} onClick={finishBlockEarly}
-        title="Finish block early — trims the block to now"><IconCheck/></CircleChip>
+      <RingPanel onClick={stopBlockRun}
+        title="Cancel block timer — nothing is logged"><IconX size={faPx}/></RingPanel>
+      <RingPanel onClick={finishBlockEarly}
+        title="Finish block early — trims the block to now"><IconCheck size={faPx}/></RingPanel>
     </>
   ) : (
     <>
-      <CircleChip className="is-hover-accent" size={ctrlCircleSize} onClick={resetTimer} title="Reset"><IconReset size={ICON_RESET_PX}/></CircleChip>
-      <TimerPrimary onClick={toggleTimer} running={running}
-        label={running ? 'Pause' : (idle ? 'Start' : 'Resume')}
-        size={ctrlCircleSize} scale={scale}/>
+      <RingPanel onClick={resetTimer} title="Reset"><IconReset size={faPx}/></RingPanel>
+      <RingPanel onClick={toggleTimer}
+        title={running ? 'Pause' : (idle ? 'Start' : 'Resume')}>
+        {running ? <IconPause size={pausePx}/> : <IconPlay size={playPx}/>}
+      </RingPanel>
       {ctrlThird}
     </>
   );
@@ -449,6 +455,25 @@ function TimerWidget({
   // the zero-width flash on first render.
   const ringButtonRef = useRef(null);
   const [ringSize, setRingSize] = useState({ w: 0, h: 0 });
+
+  // The readout FILLS the ring's interior (user-directed 2026-09-03), so the box
+  // is MEASURED and handed to the display, which lays itself out to fill it. The
+  // old measured-text fit died with the typeface: SegmentReadout is drawn, so it
+  // sizes off real px rather than chasing a font's painted extent.
+  const innerBoxRef = useRef(null);
+  const [readoutBox, setReadoutBox] = useState({ w: 0, h: 0 });
+  useLayoutEffect(() => {
+    const box = innerBoxRef.current;
+    if (!box) return undefined;
+    const measure = () => setReadoutBox({
+      w: box.clientWidth - 2 * READOUT_PAD_PX,
+      h: box.clientHeight - 2 * READOUT_PAD_PX,
+    });
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(box);
+    return () => ro.disconnect();
+  }, []);
   // ONE height, two consumers: the button's own style and the SVG's pre-measure
   // fallback. They were separate literals (126 and a stale 113) — a restated
   // constant that had already gone wrong, painting one frame at the old size.
@@ -508,13 +533,11 @@ function TimerWidget({
                 // 14px margin per side (see line ~195), so inset the ring the same
                 // 28px total. The inner SVG auto-tracks via the ResizeObserver above.
                 width: 'calc(100% - 28px)',
-                // 121 → 126: the readout went from 11px to READOUT_FONT_PX, and
-                // the interior is what the ring's fixed 28.56px inset leaves —
-                // height − 2×28.56. Growing the dial 5px keeps the three inner
-                // gaps at ~4px instead of squeezing them to fit a bigger number
-                // (user-directed 2026-08-28: "make the dual ring slightly larger
-                // to accommodate"). Width is untouched — the interior is 186px
-                // wide and the widest readout is nowhere near it.
+                // 126: the interior is what the ring's inner edge leaves —
+                // height − 2×RING_INNER_EDGE. Grown from 121 on 2026-08-28
+                // ("make the dual ring slightly larger to accommodate"); the
+                // readout that lives in that interior now MEASURES itself to
+                // fill it, so this height is what decides how big it gets.
                 height: ringH,
               }}
             >
@@ -535,27 +558,22 @@ function TimerWidget({
                 onPressedChange={setPressed}
               />
               {innerControls && (
-                <div className="planner-ring-inner-controls">
-                  {/* MM:SS is plain text ABOVE the control row (user-directed
-                      2026-08-27) — not inside a button. dragMins flows through
-                      mmss() so it previews the new duration while the dial is
-                      dragged to set time. */}
-                  <div className="planner-timer-digits" style={{
-                    // Bigger and wider-tracked than the surrounding candy text
-                    // (user-directed 2026-08-28) — it is the readout, not a label,
-                    // and at the inherited 11px/0.08em it read as one more button.
-                    // READOUT_FONT_PX was left declared-but-unused when the digits
-                    // moved out of the pill; it is the value again.
-                    fontSize: Math.round(READOUT_FONT_PX * scale),
-                    letterSpacing: READOUT_TRACKING,
-                    lineHeight: 1,
-                  }}>{mmss(secsLeft, dragMins)}</div>
-                  <div style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    gap: Math.round(6 * scale),
-                  }}>
-                    {innerControls}
+                /* The interior is ONE box with two layers stacked in a single
+                   grid cell: the readout filling it, and the three control
+                   panels covering it, revealed on hover. The four insets come
+                   from DualRingRect's own exported ring geometry - they were
+                   hardcoded 26/29 literals in styles.css, a copy of that
+                   number that could drift the moment the ring was retuned. */
+                <div className="planner-ring-inner-controls" ref={innerBoxRef} style={{
+                  top: RING_INSET, bottom: RING_INSET,
+                  left: RING_INSET, right: RING_INSET,
+                  '--ring-radius': `${RING_RADIUS}px`,
+                }}>
+                  <div className="planner-timer-digits">
+                    <SegmentReadout value={mmss(secsLeft, dragMins)}
+                      w={readoutBox.w} h={readoutBox.h}/>
                   </div>
+                  <div className="planner-ring-controls">{innerControls}</div>
                 </div>
               )}
               </div>
@@ -566,56 +584,33 @@ function TimerWidget({
   );
 }
 
-// The transport button carries a WORD (Start / Pause / Resume), not the digits —
-// MM:SS is a plain line above the row (user-directed 2026-08-27). Its HEIGHT is
-// handed in from the caller as the same value the sibling CircleChips get, so
-// all three controls in the row share one height by construction rather than by
-// two constants kept in sync. Width still hugs the label.
-const READOUT_FONT_PX = 15;   // the standalone MM:SS above the row, design px
-const READOUT_TRACKING = '0.14em';  // wider than any label in the widget — it IS the readout
-// The pill's TYPE is the sidebar tree's, IMPORTED rather than re-typed
-// (user-directed 2026-08-28: "the exact same as the left sidebar treebar
-// buttons"). Deliberately NOT scaled — the tree's rows are a fixed 10.5px, so
-// scaling this would make "the same" true at exactly one dock width.
-const LABEL_PAD_X_PX = 10;     // design px, left/right only — height comes from `size`
+// Breathing room between the readout and the inner ring stroke. The display fills
+// BOTH axes of what is left (height sets the glyph size, the gaps take up the
+// width), so this one number is the gap on all four sides - even by construction,
+// not by tuning.
+const READOUT_PAD_PX = 10;
 
-function TimerPrimary({ onClick, label, running = false, size, scale = 1 }) {
-  // Accent ONLY while the timer is actually ticking; paused and idle read the
-  // same neutral face as the Reset/Skip circles beside it, so the accent is a
-  // running indicator rather than permanent chrome.
+// The interior's insets, in real px. RING_INNER_EDGE is where DualRingRect draws
+// the inner ring's inner face measured from the svg edge; the svg spans the
+// button's border box while this overlay is positioned against the face's
+// padding box, so the button's own frame comes back off.
+const CBTN_FRAME_PX = 3;   // --cbtn-frame on .planner-ring-button
+const RING_INSET = RING_INNER_EDGE - CBTN_FRAME_PX;
+const RING_RADIUS = RING_INNER_CORNER;
+
+// One of the three flush full-height panels covering the dial's interior. Flat by
+// design (no depth band, no frame - see styles.css), icon-only, and invisible
+// until the dial is hovered.
+function RingPanel({ onClick, title, children }) {
   return (
     <button
+      type="button"
+      data-own-press
       onClick={onClick}
-      className={`candy-btn${running ? ' is-primary' : ''}`}
-      data-shape="block"
-      style={{
-        minWidth: 0,
-        height: size,
-        // The block shape declares --corner-max: 18px because it assumes a 33px
-        // tall button. This one is `size` tall (26), so it inherited a rounder
-        // corner than the circles beside it at the same global --corner. Half the
-        // real height is the shape system's own definition of fully-round, which
-        // is exactly what the circle shape computes — same formula, same source.
-        '--corner-max': `${size / 2}px`,
-        // No transform here: the parent overlay is promoted to its own layer for
-        // grey-edged text (styles.css § .planner-ring-inner-controls), and a
-        // transform on this button would hand it a separate OPAQUE layer that
-        // switches sub-pixel fringing back on for its label alone.
-        // Same lip as the circles beside it, and it tracks the user's depth setting.
-        '--cbtn-depth': 'var(--candy-depth-small)',
-      }}
+      title={title}
+      className="candy-btn planner-ring-panel"
     >
-      <span
-        className="candy-face"
-        style={{
-          height: '100%',
-          padding: `0 ${Math.round(LABEL_PAD_X_PX * scale)}px`,
-          ...TREE_TEXT,
-          lineHeight: 1,
-        }}
-      >{label}</span>
+      <span className="candy-face">{children}</span>
     </button>
   );
 }
-
-

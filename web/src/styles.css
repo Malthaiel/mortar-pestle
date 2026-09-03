@@ -2592,36 +2592,49 @@ body[data-anim-button-depth="off"] .candy-btn:is(:active, .is-pressed, [data-can
 }
 .planner-ring-inner-controls > * { grid-area: 1 / 1; }
 
-/* The readout IS the interior now, so its size is measured in JS rather than
- * declared. Tabular figures keep every MM:SS exactly one width, which is what
- * lets that measurement hold for a whole session instead of re-running per tick. */
+/* The readout is a DRAWN seven-segment display (SegmentReadout.jsx), not text -
+ * chosen 2026-09-03 over milled type, a split-flap and a drain-fill, all four
+ * mocked side by side first. Nothing here sizes it: the component is handed the
+ * interior's real px and lays itself out to fill both axes. */
 .planner-timer-digits {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
   z-index: 1;
+  /* A GRID item's automatic minimum size is its min-content width, which froze
+     this box 23.6px wider than its cell and centred the readout in the OVERFLOW
+     rather than in the ring - a whole session of "the number sits 8px right"
+     (measured 2026-09-03). Keep this even though the content changed. */
+  min-width: 0;
 }
-/* The measured span. Two corrections, both so the MEASUREMENT equals the PAINT:
- * (1) cap/alphabetic trim - the line box carries ascent + descent, and digits use
- *     neither, so an untrimmed measure fits the box to empty space and parks the
- *     glyphs ~10px high. `cap alphabetic` is wrong for the app's .text-trim
- *     spacing rule (it over-trims real prose); here the string is digits and a
- *     colon, where cap-to-baseline IS the painted extent.
- * (2) the negative margin cancels the trailing letter-space, which the rect
- *     counts as ink and which otherwise pushes the run ~6px left of centre. */
-.planner-timer-digits > span {
-  text-box-trim: trim-both;
-  text-box-edge: cap alphabetic;
-  /* KNOWN OFF-CENTRE, cause not yet established: the run sits 8.5px (one full
-     letter-space) RIGHT of the ring centre, measured off pixels 2026-09-03.
-     Adding a matching padding-left to make the box symmetric moved it FURTHER
-     right (+15.5), which disproves the "flex centres the margin box" reading —
-     do not re-try that. Vertical centring is exact. See the handoff. */
-  margin-right: -0.14em;      /* = READOUT_TRACKING */
-  transform-origin: center;   /* the width-filling stretch grows both ways */
+/* Lit is the app's ink; a DEAD segment stays faintly present, the way a physical
+ * LCD shows the bars it is not driving. --seg-ghost is the live tuning knob for
+ * how present. */
+.planner-seg {
+  display: block;
+  --seg-ghost: 0.085;
 }
+.planner-seg rect,
+.planner-seg circle { fill: var(--text); }
+/* A segment LEAVING trails off; one arriving snaps on. Two durations, one
+ * property: data-lit is already flipped when the transition starts, so the lit
+ * rule wins on the way in and loses on the way out.
+ *
+ * 320ms on the DEFAULT ease, not 700ms on the exit ease. The exit ease holds a
+ * value high and drops it late, so at 700ms a leaving segment was still half lit
+ * when the next second arrived and consecutive readings smeared into each other -
+ * the display read as though it were not counting properly (user-reported
+ * 2026-09-03). The default ease drops immediately and trails, so the digit is
+ * unambiguous within ~100ms and still never snaps. */
+.planner-seg rect {
+  transition: opacity 320ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.planner-seg rect[data-lit="1"] {
+  transition-duration: 90ms;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+/* Rides the clock's own ambient-motion toggle, like the breath and the aura. */
+body[data-anim-clock-ambient="off"] .planner-seg rect { transition: none; }
 
 /* Three flush equal-width, full-height panels over the readout. The dim is
  * per-PANEL, never a group opacity: opacity on a group is multiplicative, so a
@@ -2948,17 +2961,21 @@ body[data-anim-button-depth="off"] .aos-chat-window.is-pressed .aos-chat-face { 
 .button-planner-calendar:not(:hover):not(:active) > .candy-face { background: var(--planner-face); }
 
 /* NEITHER planner surface lights up under the pointer, in any state
-   (user-directed 2026-09-03). The rail-tile floods every nested candy button with
-   the accent on hover at (0,7,0) — see `.rail-tile.is-panel .candy-btn:is(:hover,
-   :active)` above — which beat both surfaces' own "stay near-black" rules at
-   (0,2,0) and lit their faces. These restate the pin at (0,8,0) so the dial and
-   the strip below it keep one colour throughout: the press depression, and the
-   label going white, are the only feedback. */
-.candy-btn[data-shape="tile"].rail-tile.is-panel
+   (user-directed 2026-09-03). `.rail-tile .candy-btn:is(:hover, :active)` (~1968)
+   repaints every nested candy button's band and face at (0,3,0), which beat both
+   surfaces' own "stay near-black" pins at (0,2,0) and lit them. These restate the
+   pin at (0,7,0): the press depression, and the label going white, are the only
+   feedback left.
+
+   NOTE the tile flavour: the planner dock's tile is `.is-planner`, NOT `.is-panel`
+   (`modules/core/planner/index.jsx`). A first pass scoped this block to .is-panel
+   and matched NOTHING — it looked like a specificity problem and was a selector
+   that was never live. Check the flavour before blaming the weight. */
+.candy-btn[data-shape="tile"].rail-tile
   .candy-btn:is(.planner-ring-button, .button-planner-calendar):is(:hover, :active) {
   --cbtn-band: var(--planner-face);
 }
-.candy-btn[data-shape="tile"].rail-tile.is-panel
+.candy-btn[data-shape="tile"].rail-tile
   .candy-btn:is(.planner-ring-button, .button-planner-calendar):is(:hover, :active) > .candy-face {
   background: var(--planner-face);
 }

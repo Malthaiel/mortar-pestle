@@ -8,6 +8,24 @@ import { GLIDE_MS, glideEase } from '@host/util/motion.js';
 // rectangular button. Drag-to-set duration is horizontal delta-based (6 px per
 // minute) rather than angular click-to-set — the entire SVG surface is one
 // grip target and "left = less, right = more" maps cleanly to user intent.
+// Ring geometry, in svg px from the svg edge. Hoisted to module scope so the one
+// consumer that has to line up with the inner ring can READ these instead of
+// copying them: PlannerDock's inner-controls overlay hardcoded 26/29 in
+// styles.css, which is this sum minus the ring button's 3px frame.
+const outerInset = 10.89;
+const outerR = 16.94;
+const outerStrokeW = 2.18;
+const innerInset = 22.99;
+const innerR = 9.68;
+const innerStrokeW = 5.57;
+
+// The inner ring's INNER FACE - where the dial's interior actually starts. The
+// stroke is CENTRED on the path, so it reaches innerStrokeW/2 inward of the
+// inset, not the whole width (that overshot by 2.8px and left a visible gap).
+export const RING_INNER_EDGE = innerInset + innerStrokeW / 2;
+// ...and the corner radius of that same inner face, for anything clipped to it.
+export const RING_INNER_CORNER = innerR - innerStrokeW / 2;
+
 export default function DualRingRect({
   remainingMins, phase, running,
   accent = '#c0392b',
@@ -18,13 +36,6 @@ export default function DualRingRect({
   onPressedChange,
 }) {
   const svgRef = useRef(null);
-
-  const outerInset = 10.89;
-  const outerR = 16.94;
-  const outerStrokeW = 2.18;
-  const innerInset = 22.99;
-  const innerR = 9.68;
-  const innerStrokeW = 5.57;
 
   const totalSec = Math.max(0, Math.round(remainingMins * 60));
   const totalSecRef = useRef(totalSec);
