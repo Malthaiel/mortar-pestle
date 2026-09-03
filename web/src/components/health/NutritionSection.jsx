@@ -154,7 +154,7 @@ export default function NutritionSection({ accent = 'var(--accent)', isToday = f
           {reported && <span style={{ width: 6, height: 6, borderRadius: '50%', background: accent, flexShrink: 0 }} />}
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{microLabel(key)}</span>
           <span style={{ fontFamily: 'var(--font-mono)' }}>{reported ? `${amount}${unit}` : '—'}</span>
-          <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-faint)' }}>{pct != null ? `${pct}%` : (reported ? '' : 'n/r')}</span>
+          <span style={{ fontFamily: 'var(--font-mono)', opacity: 0.6 }}>{pct != null ? `${pct}%` : (reported ? '' : 'n/r')}</span>
         </span>
       </button>
     );
@@ -214,11 +214,20 @@ export default function NutritionSection({ accent = 'var(--accent)', isToday = f
           items={orderedMicros}
           onReorder={onReorderMicros}
           renderItem={renderMicro}
-          getItemStyle={() => ({ flex: `1 1 ${CHIP_MIN}px`, maxWidth: 'calc(50% - 3px)' })}
+          // maxWidth is FLOORED to a whole pixel. A 339px pane halves to 166.5,
+          // which puts the right column on x.5 — exactly between two screen
+          // pixels. A chip mid-slide sits on its own fast-paint layer, and a
+          // layer rounds x.5 DOWN while ordinary layout painting rounds it UP,
+          // so a reordered neighbour landed 1px left and only closed the gap
+          // ~90ms later when the layer retired (measured 2026-09-02: left edge
+          // 218.5 for six captured frames, then 219.5). Rows never showed it
+          // because their pitch is a whole 35. space-between hands the pixel the
+          // floor gives up back to the gap, so the run still ends flush right.
+          getItemStyle={() => ({ flex: `1 1 ${CHIP_MIN}px`, maxWidth: 'round(down, calc(50% - 3px), 1px)' })}
           // Chips stack downward here, so the ROW gap has to clear each chip's
           // depth lip (util/candy.js); side by side the lip points away and 6 is
           // already the painted gap.
-          style={{ columnGap: 6, rowGap: candyGap(6, true) }}
+          style={{ columnGap: 6, rowGap: candyGap(6, true), justifyContent: 'space-between' }}
         />
         <button type="button" className="candy-btn" data-shape="chip" onClick={() => setShowMore((v) => !v)} style={{ alignSelf: 'center' }}>
           <span className="candy-face">{showMore ? 'Less' : 'More micros'}</span>
