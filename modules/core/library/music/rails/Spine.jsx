@@ -10,7 +10,7 @@ import { useMusicPlayer } from '../MusicPlayerProvider.jsx';
 import { mediaUrl } from '@host/api.js';
 
 const BAR_COUNT = 9;
-const FFT_BINS = 32;
+const FFT_BINS = 128; // fftSize/2 with provider's fftSize: 256
 
 // ponytail: NOT searchShared's fmtDuration — this is the transport clock, so a
 // missing/negative time must read 0:00, where the shared one returns ''. Kept

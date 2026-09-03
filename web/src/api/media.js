@@ -119,6 +119,16 @@ export function mediaHttpUrl(p, opts) {
   const abs = absFromInput(p, opts && opts.library ? LIBRARY_ROOT_FOR_MEDIA : undefined);
   return `${_mediaBaseUrl}/media?path=${encodeURIComponent(abs)}&t=${_mediaToken}`;
 }
+// Relay a resolved googlevideo URL through the loopback media server, which does
+// send Access-Control-Allow-Origin (googlevideo sends none). Needed so streamed
+// music can load CORS-approved: an un-approved media element feeds
+// createMediaElementSource digital silence, and that graph is the only output
+// path — the track advances with no sound. Null until the port is known; callers
+// await awaitMediaBaseUrl() first.
+export function streamHttpUrl(url) {
+  if (!url || !_mediaBaseUrl) return null;
+  return `${_mediaBaseUrl}/ytstream?u=${encodeURIComponent(url)}&t=${_mediaToken}`;
+}
 export async function awaitMediaBaseUrl() {
   return mediaBaseUrl();
 }

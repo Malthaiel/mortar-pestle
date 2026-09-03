@@ -4,7 +4,7 @@
 // from this context.
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { mediaUrl, mediaHttpUrl, awaitMediaBaseUrl, invoke } from '@host/api.js';
+import { mediaUrl, mediaHttpUrl, streamHttpUrl, awaitMediaBaseUrl, invoke } from '@host/api.js';
 import { musicApi } from './api.js';
 
 const Ctx = createContext(null);
@@ -55,6 +55,9 @@ export function MusicPlayerProvider({ children }) {
   const audioRef = useRef(null);
   if (!audioRef.current && typeof Audio !== 'undefined') {
     audioRef.current = new Audio();
+    // crossOrigin is set in the sync effect below, never here — it only takes
+    // effect if set immediately before .src. Both source kinds now go through
+    // the loopback media server, so both load 'anonymous'.
     audioRef.current.preload = 'metadata';
   }
 
@@ -66,6 +69,11 @@ export function MusicPlayerProvider({ children }) {
   const audioContextRef = useRef(null);
   const sourceNodeRef   = useRef(null);
   const analyserRef     = useRef(null);
+  // Loudness moves onto a GainNode placed AFTER the analyser the moment the
+  // graph exists. `<audio>.volume` is applied inside the element, i.e. upstream
+  // of the source node, so leaving it there scaled the meter with the knob —
+  // the tile's bars showed speaker loudness, not the track's.
+  const gainNodeRef     = useRef(null);
   const getAnalyser = useCallback(() => {
     if (analyserRef.current) return analyserRef.current;
     const a = audioRef.current;
@@ -82,11 +90,21 @@ export function MusicPlayerProvider({ children }) {
       if (ctx.state === 'suspended') ctx.resume().catch(() => {});
       if (!sourceNodeRef.current) sourceNodeRef.current = ctx.createMediaElementSource(a);
       const analyser = ctx.createAnalyser();
-      analyser.fftSize = 64;
+      // 256 → 128 bins. The sidebar tile paints 36 bars and 64 (= 32 bins)
+      // couldn't feed them; the 9-bar rails reduce across all 128 the same way
+      // they did across 32.
+      analyser.fftSize = 256;
       analyser.smoothingTimeConstant = 0.72;
+      // Seed the gain from the element's own current value rather than
+      // restating the curve — whatever the knob last applied is already there.
+      const gain = ctx.createGain();
+      gain.gain.value = a.volume;
       sourceNodeRef.current.connect(analyser);
-      analyser.connect(ctx.destination);
+      analyser.connect(gain);
+      gain.connect(ctx.destination);
       analyserRef.current = analyser;
+      gainNodeRef.current = gain;
+      a.volume = 1; // last — a throw above must leave the element's own volume intact
       return analyser;
     } catch (e) {
       console.warn('[music] getAnalyser failed', e);
@@ -133,8 +151,10 @@ export function MusicPlayerProvider({ children }) {
 
   // Force a re-render once the loopback media server port is known so
   // audioSrcFor() can produce a non-null URL for tracks selected before the
-  // port was ready.
-  const [, _setMediaReadyTick] = useState(0);
+  // port was ready. The tick is also a dep of the src-sync effect below: a
+  // re-render alone left `a.src` empty for the restored track, so toggle()'s
+  // `!a?.src` guard swallowed the first press of play after every app start.
+  const [mediaReadyTick, _setMediaReadyTick] = useState(0);
   useEffect(() => {
     const onReady = () => _setMediaReadyTick((n) => n + 1);
     window.addEventListener('agentic:media-server-ready', onReady);
@@ -176,7 +196,13 @@ export function MusicPlayerProvider({ children }) {
   useEffect(() => {
     const a = audioRef.current;
     if (!a) return;
-    a.volume = Math.pow(volume, 3);
+    const gain = Math.pow(volume, 3);
+    if (gainNodeRef.current) {
+      gainNodeRef.current.gain.value = gain;
+      a.volume = 1;
+    } else {
+      a.volume = gain; // no WebAudio graph yet — the element is the only knob
+    }
   }, [volume]);
 
   useEffect(() => {
@@ -227,17 +253,25 @@ export function MusicPlayerProvider({ children }) {
   // last real album (the restore below keys entirely on albumPath).
   useEffect(() => {
     if (!currentTrack || !currentTrack.albumPath) return;
-    const interval = setInterval(() => {
+    const persist = () => {
       const a = audioRef.current;
-      if (!a) return;
+      // readyState 0 = nothing loaded, so currentTime is a meaningless 0. On a
+      // fresh start this effect runs before the restore below has seeked, and
+      // persisting that 0 wiped the very position we were about to restore.
+      if (!a || a.readyState === 0) return;
       saveJSON(LS.last, {
         albumPath: currentTrack.albumPath,
         trackIndex: index,
         position: a.currentTime,
       });
-    }, 3000);
+    };
+    // `isPlaying` is a dep purely so pausing re-runs this effect and persists
+    // immediately — on the 3s interval alone, pausing then closing the app
+    // inside that window lost up to 3 seconds of position.
+    persist();
+    const interval = setInterval(persist, 3000);
     return () => clearInterval(interval);
-  }, [currentTrack, index]);
+  }, [currentTrack, index, isPlaying]);
 
   // On mount, restore the last-played track into the queue (paused) so the
   // sidebar music slot shows it instead of an empty placeholder.
@@ -300,7 +334,14 @@ export function MusicPlayerProvider({ children }) {
       streamSrcKeyRef.current = null;
       setResolvingStream(false);
       const want = audioSrcFor(currentTrack.audioPath);
-      if (a.src !== want) {
+      // Without a CORS fetch the media is never "CORS-approved", so
+      // createMediaElementSource legally feeds the graph digital silence — the
+      // analyser reads zeros AND the user hears nothing, since the graph is the
+      // output path once the source node exists. The loopback media server
+      // answers with Access-Control-Allow-Origin: * (media_server.rs), so
+      // asking costs nothing here. Must be set before .src.
+      if (a.src !== want || a.crossOrigin !== 'anonymous') {
+        a.crossOrigin = 'anonymous';
         a.src = want;
         a.load();
       }
@@ -334,11 +375,20 @@ export function MusicPlayerProvider({ children }) {
       const seq = ++resolveSeqRef.current;
       setResolvingStream(true);
       invoke('music_stream_resolve', streamResolveArgs(currentTrack))
-        .then(res => {
+        .then(async res => {
           if (seq !== resolveSeqRef.current) return; // track changed mid-resolve
+          // googlevideo sends no Access-Control-Allow-Origin, so the URL can't be
+          // loaded CORS-approved directly — and loading it un-approved makes
+          // createMediaElementSource feed the graph silence, which is the only
+          // output path once the graph exists (track advances, nothing audible).
+          // Relay it through the loopback media server, which does send ACAO.
+          await awaitMediaBaseUrl();
+          if (seq !== resolveSeqRef.current) return; // and again after the await
+          const want = streamHttpUrl(res.streamUrl) || res.streamUrl;
           setResolvingStream(false);
           streamSrcKeyRef.current = key;
-          a.src = res.streamUrl;
+          a.crossOrigin = 'anonymous';
+          a.src = want;
           a.load();
           a.play().catch(err => emitPlayError(currentTrack, err));
         })
@@ -363,7 +413,7 @@ export function MusicPlayerProvider({ children }) {
     streamSrcKeyRef.current = null;
     setResolvingStream(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentTrackKey, isPlaying, index]);
+  }, [currentTrackKey, isPlaying, index, mediaReadyTick]);
 
   // Build a shuffle order whenever the queue changes (or shuffle is toggled
   // on). Only the available tracks participate; missing-audio tracks are

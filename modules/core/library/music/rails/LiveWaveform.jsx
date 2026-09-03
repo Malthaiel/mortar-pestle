@@ -10,7 +10,7 @@ import { useMusicPlayer } from '../MusicPlayerProvider.jsx';
 import { mediaUrl } from '@host/api.js';
 
 const BAR_COUNT = 9;
-const FFT_BINS = 32; // fftSize/2 with provider's fftSize: 64
+const FFT_BINS = 128; // fftSize/2 with provider's fftSize: 256
 
 export default function LiveWaveform({ accent }) {
   const { currentTrack, isPlaying, toggle, getAnalyser } = useMusicPlayer();

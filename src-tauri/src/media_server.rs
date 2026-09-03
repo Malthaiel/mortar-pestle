@@ -16,6 +16,7 @@
 //! GET /transcode/<16-hex>.mp4                    → live ffmpeg remux
 //! GET /subs/<16-hex>.vtt                         → extracted WebVTT
 //! GET /editor-proxy/<16-hex>.mp4                 → Video Editor proxy lane
+//! GET /ytstream?u=<googlevideo url>              → CORS relay for streamed audio
 //! ```
 //!
 //! Path containment + the hash-prefix access-token check are inherited from
@@ -56,7 +57,8 @@ pub fn token() -> Option<String> {
 pub async fn run() -> std::io::Result<()> {
     let app = Router::new()
         .route("/media", get(handle_media).options(handle_preflight))
-        .route("/editor-proxy/:hash", get(handle_editor_proxy).options(handle_preflight));
+        .route("/editor-proxy/:hash", get(handle_editor_proxy).options(handle_preflight))
+        .route("/ytstream", get(handle_ytstream).options(handle_preflight));
 
     let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
     let listener = TcpListener::bind(addr).await?;
@@ -115,6 +117,67 @@ async fn handle_media(Query(q): Query<MediaQuery>, headers: HeaderMap) -> Respon
         .and_then(|v| v.to_str().ok())
         .and_then(|raw| parse_range_against(raw, file_size));
     cow_response_to_axum(serve_file_range(&canonical, file_size, range_opt))
+}
+
+#[derive(Deserialize)]
+struct StreamQuery {
+    u: String,
+    t: Option<String>,
+}
+
+static PROXY_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+
+/// CORS relay for a resolved googlevideo audio URL (music streaming).
+///
+/// googlevideo answers with no `Access-Control-Allow-Origin` at all, so an
+/// `<audio crossOrigin="anonymous">` load of it fails outright — and loading it
+/// *without* CORS approval is worse: `createMediaElementSource` then legally
+/// feeds the WebAudio graph digital silence, and the graph is the element's only
+/// output path once it exists. The track advances and nothing is audible.
+/// Relaying through this loopback origin (which does send ACAO) makes streamed
+/// tracks audible again and hands the analyser real samples.
+///
+/// Not a general-purpose proxy: token-gated like `/media` and host-restricted.
+async fn handle_ytstream(Query(q): Query<StreamQuery>, headers: HeaderMap) -> Response<Body> {
+    let ok = matches!((token(), q.t.as_deref()), (Some(t), Some(qt)) if t == qt);
+    if !ok {
+        return status(StatusCode::FORBIDDEN, "bad or missing token");
+    }
+    if !q.u.starts_with("https://") || !q.u.contains(".googlevideo.com/") {
+        return status(StatusCode::FORBIDDEN, "host not allowed");
+    }
+
+    let client = PROXY_CLIENT.get_or_init(reqwest::Client::new);
+    let mut req = client.get(&q.u);
+    // Forward the media element's Range verbatim — seeking depends on it, and
+    // googlevideo grants open-ended `bytes=0-` for a healthy resolve.
+    if let Some(r) = headers.get(header::RANGE) {
+        req = req.header(header::RANGE, r);
+    }
+    let upstream = match req.send().await {
+        Ok(r) => r,
+        Err(_) => return status(StatusCode::BAD_GATEWAY, "upstream fetch failed"),
+    };
+
+    let mut builder = Response::builder().status(upstream.status());
+    for name in [
+        header::CONTENT_TYPE,
+        header::CONTENT_LENGTH,
+        header::CONTENT_RANGE,
+        header::ACCEPT_RANGES,
+    ] {
+        if let Some(v) = upstream.headers().get(&name) {
+            builder = builder.header(name, v);
+        }
+    }
+    builder
+        .header("Access-Control-Allow-Origin", "*")
+        .header(
+            "Access-Control-Expose-Headers",
+            "Content-Range, Content-Length, Accept-Ranges",
+        )
+        .body(Body::from_stream(upstream.bytes_stream()))
+        .unwrap_or_else(|_| status(StatusCode::INTERNAL_SERVER_ERROR, "proxy build failed"))
 }
 
 /// Video Editor proxy lane (parsers/editor_proxy.rs registry — NOT the player
