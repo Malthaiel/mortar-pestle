@@ -32,7 +32,6 @@ import { IconPlus } from '../icons.jsx';
 import NewEventModal from './NewEventModal.jsx';
 import PaneHeader from './PaneHeader.jsx';
 import Popover from '../ui/Popover.jsx';
-import Rail, { useRailOrder } from '../ui/Rail.jsx';
 import { TaskChip, NoteChip, Group, Subdued, shortDate } from './ItemChips.jsx';
 import RoutineChip from './RoutineChip.jsx';
 import { useRoutineItems } from '../../hooks/useRoutineItems.js';
@@ -431,8 +430,8 @@ export default function DayPane({ accent = 'var(--accent)', pivotDs, onPivotChan
   const allCarryTasks = unorg.loading ? [] : groupBySource(unorg.tasks);
   const allCarryNotes = unorg.loading ? [] : groupBySource(unorg.notes);
 
-  // The day rail's items. Adding a fifth section is one entry here — it
-  // inherits the tile chrome, the drag-to-reorder and the saved order.
+  // The pane's sections, in fixed on-screen order. Adding a fifth is one entry
+  // here — it inherits the padding and the hairline above it.
   const sections = [
         /* ── Events — forward agenda anchored at the viewed day ── */
     { id: 'events', render: () => (<>
@@ -551,9 +550,6 @@ export default function DayPane({ accent = 'var(--accent)', pivotDs, onPivotChan
           </div>
     </>) },
   ];
-  const { ordered: orderedSections, onReorder: reorderSections } =
-    useRailOrder(sections, 'planner:day-sections:order');
-
   return (
     <div style={{
       flex: 1, minHeight: 0,
@@ -566,33 +562,30 @@ export default function DayPane({ accent = 'var(--accent)', pivotDs, onPivotChan
           CalendarPane's one centered header row (user-directed 2026-08-27),
           which sits directly above this pane in the stacked layout. */}
 
-      {/* Sections body — one scroll container for all three sections, keyed
-          by the pivot so a day switch remounts it (fresh scroll + slide). */}
+      {/* Sections body — one scroll container for all four sections, keyed
+          by the pivot so a day switch remounts it (fresh scroll + slide).
+          NOT a rail (user-directed 2026-09-04): the `.rail-tile.is-panel`
+          chrome and the drag-to-reorder that came with it are gone, so each
+          section is just its header button plus its list. The divider is a
+          full-width hairline carried by the section BELOW it, which keeps the
+          container's own top and bottom edges clean. */}
       <div
         key={pivotDs}
         style={{
           flex: 1, minHeight: 0, overflowY: 'auto',
-          padding: '14px 18px',
           display: 'flex', flexDirection: 'column',
           ...(slideName ? { animation: `${slideName} 400ms cubic-bezier(0.16, 1, 0.3, 1)` } : {}),
         }}>
-        <Rail
-          items={orderedSections}
-          onReorder={reorderSections}
-          keyOf={(s) => s.id}
-          renderItem={(s) => (
-            // data-spacing-intent: rowAudit's uniform-height scope check would
-            // otherwise flag a panel for not being --planner-btn-h tall.
-            <div className="candy-btn rail-tile is-panel" data-shape="tile" data-spacing-intent="">
-              <div className="candy-face">{s.render()}</div>
-            </div>
-          )}
-          // No gap written here on purpose: the planner scope owns every run of
-          // adjacent candy buttons via --planner-btn-gap, and an inline gap would
-          // outrank it and fork the number. The tile reserves its own lip in
-          // layout (margin-bottom), so that gap paints as the real INSET.
-          style={{ flex: 1, minHeight: 0 }}
-        />
+        {sections.map((s, i) => (
+          <div
+            key={s.id}
+            style={{
+              padding: '14px 18px',
+              borderTop: i === 0 ? undefined : '1px solid var(--border)',
+            }}>
+            {s.render()}
+          </div>
+        ))}
       </div>
 
       {/* "Show all" popovers. Each body is mounted only while its popover is

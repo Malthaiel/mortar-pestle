@@ -1822,7 +1822,10 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
      it (the Planner calendar header, 2026-08-10). Squashing is now visible as a
      squashed pill instead of as two stacked words. */
   white-space: nowrap;
-  padding: 5px 10px;
+  /* Side padding gets a var so .candy-split can ADD its overlap to it rather
+     than restate the number and fork it. */
+  --chip-pad-x: 10px;
+  padding: 5px var(--chip-pad-x);
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -2061,14 +2064,18 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
    visible left boundary is the LEADING half's border edge, not the trailing
    half's. Padding by the full overlap over-corrects by exactly that frame and
    leaves 5px of air on the left against 3px on the right (measured 2026-09-01).
-   ponytail: scoped to the fixed, zero-padding shapes — the only trailing halves
-   that exist. An auto-width trailing chip would need its own padding added to
-   this, not replaced by it; wire that when something actually needs it. */
+   The fixed shapes grow their WIDTH by the overlap because they have none of
+   their own; a chip is auto-width and already has side padding, so it only ADDS
+   the same correction to what it has — hence --chip-pad-x, so the number lives
+   in one place (Planner calendar header, 2026-09-04). */
 .candy-split > .candy-btn:not(:first-child):is([data-shape="circle"], [data-shape="icon"]) {
   width: calc(var(--cbtn-size, 28px) + var(--split-lap));
 }
 .candy-split > .candy-btn:not(:first-child):is([data-shape="circle"], [data-shape="icon"]) > .candy-face {
   padding-left: calc(var(--split-lap) - var(--cbtn-frame));
+}
+.candy-split > .candy-btn:not(:first-child)[data-shape="chip"] > .candy-face {
+  padding-left: calc(var(--chip-pad-x) + var(--split-lap) - var(--cbtn-frame));
 }
 
 /* A half whose panel is open stays PRESSED into the shell, not just lit, so the
@@ -2077,6 +2084,16 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
 .candy-split > .candy-btn.is-active > .candy-face {
   transform: translateY(var(--cbtn-depth));
 }
+
+/* The overlap above means a later half paints ON TOP of the seam, so the frame
+   you see at the seam always belongs to the RIGHTMOST of the two. A hovered
+   LEADING half therefore lit three sides and lost its accent right edge, while
+   a hovered trailing half showed all four (photographed 2026-09-04, Planner
+   "Tasks List" + "+" and the music transport row). Whichever half is lit floats
+   above its neighbours so its own frame owns the seam; hover outranks a merely
+   open half when both apply. .candy-btn is already position: relative. */
+.candy-split > .candy-btn.is-active { z-index: 1; }
+.candy-split > .candy-btn:is(:hover, :active) { z-index: 2; }
 
 /* select — dropdown trigger (CandySelect.jsx). Neutral candy control like
    chip/icon: no accent flip (a dropdown trigger turning accent-red reads wrong,

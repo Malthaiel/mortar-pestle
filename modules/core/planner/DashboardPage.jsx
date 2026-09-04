@@ -4,18 +4,18 @@
 // handler, Tab focus trap and plannerModalIn animation are gone; the modal
 // file is deleted. Everything below the header is unchanged.
 //
-// TWO columns since 2026-08-27 (user-directed): the calendar and the unified
-// DayPane are STACKED in the left column — calendar on top, day list under it,
-// split by a HORIZONTAL drag seam — and Health is the one full-height column on
-// the right behind its own vertical seam. All three panes share one day pivot
-// (`pivotDs`); the calendar header's prev/next/Today nav and its day-picker chip
-// (moved out of DayPane's now-deleted header) move the whole dashboard together.
-// By default the calendar and day list flex to equal halves of the left column
-// while health keeps a pinned px basis; dragging a seam pins that pane.
+// THREE columns (user-directed 2026-08-28, reverting the 2026-08-27 stack):
+// the calendar, the unified DayPane and Health sit side by side, split by two
+// vertical seams. All three panes share one day pivot (`pivotDs`); the calendar
+// header's prev/next/Today nav and its day-picker chip (which stayed there when
+// DayPane's own header was deleted) move the whole dashboard together. By
+// default the calendar and day list flex to equal halves of the pool while
+// health keeps a pinned px basis; dragging a seam pins that pane.
 //
 // Both dividers are owned HERE, on the wrapper divs — the seam component paints
 // nothing at rest, so the line has to be a border on a neighbour, and exactly
-// one neighbour per seam or it doubles.
+// one neighbour per seam or it doubles (the pair once painted two lines 6px
+// apart, measured at x=759 and x=766).
 //
 // Ctrl+Z is scoped to this page being mounted (it was scoped to the modal
 // being open). EditorPage owns the only other Ctrl+Z and never co-renders.
@@ -23,7 +23,7 @@
 import { useEffect, useRef, useState } from 'react';
 import ResizeSeam, { DRAG_EASE } from '@host/components/ui/ResizeSeam.jsx';
 import { usePlannerUndo } from '@host/hooks/usePlannerUndo.js';
-import { usePlannerSplit, HEALTH_CONFIG, CALENDAR_HEIGHT_CONFIG } from '@host/hooks/usePlannerSplit.js';
+import { usePlannerSplit, HEALTH_CONFIG } from '@host/hooks/usePlannerSplit.js';
 import { todayLocalStr } from '@host/util/time.js';
 import CalendarPane from '@host/components/planner/CalendarPane.jsx';
 import DayPane from '@host/components/planner/DayPane.jsx';
@@ -37,7 +37,7 @@ function isTypingTarget(el) {
 
 export default function DashboardPage({ accent }) {
   const { push: pushUndo, undo: undoOnce, clear: clearUndo } = usePlannerUndo();
-  const { width: calHeight, setWidth: setCalHeight, config: calCfg } = usePlannerSplit(CALENDAR_HEIGHT_CONFIG);
+  const { width: calWidth, setWidth: setCalWidth, config: splitCfg } = usePlannerSplit();
   const { width: healthWidth, setWidth: setHealthWidth, config: healthCfg } = usePlannerSplit(HEALTH_CONFIG);
   const [isResizing, setIsResizing] = useState(false);
   const bodyRowRef = useRef(null);
@@ -64,25 +64,29 @@ export default function DashboardPage({ accent }) {
     };
   }, [undoOnce, clearUndo]);
 
-  // Measure the LEFT STACK's HEIGHT so the calendar can report its live px to
-  // the horizontal seam (a drag starts from the real height) and so the seam's
-  // min/max can bracket it — no jump at tall or short windows.
+  // Measure the body row so the flexed columns can report their live px to the
+  // seam (a drag starts from the real width) and so the seam's min/max can
+  // bracket that width — no jump at large or small windows.
   useEffect(() => {
     const el = bodyRowRef.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
-    const measure = () => setRowW(el.getBoundingClientRect().height);
+    const measure = () => setRowW(el.getBoundingClientRect().width);
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
 
-  // Equal-halves math on the VERTICAL axis now: with no override the calendar
-  // takes an equal half of the left stack; calEff is the px it currently
-  // occupies, fed to the seam as the drag origin.
-  const SEAM_PX = 6; // the one 6px hotzone between calendar and day list
+  // Equal-halves math: with no override the calendar flexes to an equal half;
+  // flexEach is the px such a column currently occupies, fed to the seam as
+  // the drag origin. A pinned calendar subtracts from the pool.
+  const SEAMS_PX = 12; // two 6px hotzone seams: calendar|day and day|health
   const healthEff = healthWidth ?? healthCfg.def; // health is always a pinned px basis
-  const calEff = calHeight ?? (rowW > 0 ? Math.max(0, (rowW - SEAM_PX) / 2) : calCfg.def);
+  const flexCols = 1 + (calWidth == null ? 1 : 0);
+  const flexEach = rowW > 0
+    ? Math.max(0, (rowW - SEAMS_PX - (calWidth || 0) - healthEff) / flexCols)
+    : splitCfg.def;
+  const calEff = calWidth ?? flexEach;
 
   return (
     <div
@@ -93,62 +97,57 @@ export default function DashboardPage({ accent }) {
         overflow: 'hidden',
         background: 'var(--surface)',
       }}>
-      {/* Body — the stacked left column + health, split by one vertical seam. */}
+      {/* Body — calendar + unified day pane + health, split by two seams. */}
       <div ref={bodyRowRef} style={{ flex: 1, minHeight: 0, display: 'flex', overflowX: 'auto' }}>
-        {/* Left column — calendar over day list. Owns the borderRight that IS
-            the divider against the health seam. */}
+        {/* Left: Calendar (its own borderRight divides it from the seam). */}
+        <div style={{
+          flex: calWidth == null ? 1 : `0 0 ${calWidth}px`,
+          minWidth: calWidth == null ? splitCfg.min : 0,
+          display: 'flex', flexDirection: 'column', minHeight: 0,
+          // No borderRight — this seam's divider lives on the DAY column's LEFT
+          // edge instead (below), on the far side of the 6px seam. Painted here
+          // it sat 7px left of where the day pane's section hairlines start, so
+          // every hairline stopped short of it (measured x=789 vs x=796).
+          // Still exactly ONE neighbour per seam, just the other one.
+          // A drag TRAILS the cursor on ResizeSeam's shared clock rather than
+          // tracking it 1:1 — same lag and curve as the seam's own menu.
+          transition: isResizing ? `flex-basis ${DRAG_EASE}` : 'flex-basis 180ms ease',
+        }}>
+          <CalendarPane
+            accent={accent}
+            pushUndo={pushUndo}
+            pivotDs={pivotDs}
+            onPivotChange={setPivotDs}
+          />
+        </div>
+        <ResizeSeam
+          width={calEff}
+          onWidthChange={setCalWidth}
+          accent={accent || 'var(--text)'}
+          defaultWidth={null}
+          minWidth={Math.min(splitCfg.min, Math.floor(calEff))}
+          maxWidth={Math.max(splitCfg.max, Math.ceil(calEff))}
+          presets={splitCfg.presets}
+          storageKey={splitCfg.key}
+          ariaLabel="Resize calendar pane"
+          onDragStart={() => setIsResizing(true)}
+          onDragEnd={() => setIsResizing(false)}
+        />
+        {/* Middle: the unified day pane — the flex absorber, floored so the
+            always-on health column can't crush it (small-window fallback: the
+            body row scrolls horizontally below the combined column mins). Owns
+            the borderRight that IS the health seam's divider. */}
         <div style={{
           flex: 1, minWidth: 360, minHeight: 0,
           display: 'flex', flexDirection: 'column',
+          borderLeft: '1px solid var(--border)',
           borderRight: '1px solid var(--border)',
         }}>
-          {/* Calendar (top). */}
-          <div style={{
-            flex: calHeight == null ? 1 : `0 0 ${calHeight}px`,
-            minHeight: calHeight == null ? calCfg.min : 0,
-            display: 'flex', flexDirection: 'column',
-            // A drag TRAILS the cursor on ResizeSeam's shared clock rather than
-            // tracking it 1:1 — same lag and curve as every other seam.
-            transition: isResizing ? `flex-basis ${DRAG_EASE}` : 'flex-basis 180ms ease',
-          }}>
-            <CalendarPane
-              accent={accent}
-              pushUndo={pushUndo}
-              pivotDs={pivotDs}
-              onPivotChange={setPivotDs}
-            />
-          </div>
-          {/* Horizontal seam — drag up/down to resize the calendar. No presets:
-              the preset fold menu unfolds sideways off a vertical divider and
-              is skipped on an empty list. */}
-          <ResizeSeam
-            horizontal
-            width={calEff}
-            onWidthChange={setCalHeight}
-            accent={accent || 'var(--text)'}
-            defaultWidth={null}
-            minWidth={Math.min(calCfg.min, Math.floor(calEff))}
-            maxWidth={Math.max(calCfg.max, Math.ceil(calEff))}
-            presets={[]}
-            storageKey={calCfg.key}
-            ariaLabel="Resize calendar height"
-            onDragStart={() => setIsResizing(true)}
-            onDragEnd={() => setIsResizing(false)}
+          <DayPane
+            accent={accent}
+            pivotDs={pivotDs}
+            onPivotChange={setPivotDs}
           />
-          {/* Day list (bottom) — the flex absorber, floored so a tall calendar
-              can't crush it. Owns the borderTop that IS the horizontal seam's
-              divider. */}
-          <div style={{
-            flex: 1, minHeight: 180,
-            display: 'flex', flexDirection: 'column',
-            borderTop: '1px solid var(--border)',
-          }}>
-            <DayPane
-              accent={accent}
-              pivotDs={pivotDs}
-              onPivotChange={setPivotDs}
-            />
-          </div>
         </div>
         {/* Health seam — left-edge + inverted: dragging left grows the
             column to the right of it. */}
