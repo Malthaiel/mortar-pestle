@@ -287,8 +287,13 @@ pub fn overlay_get_live_target() -> Result<Option<LiveTarget>, VaultError> {
 /// DEV code-freshness (Vite HMR doesn't reach the occluded overlay webview) is
 /// handled by `hide_overlay_host` reloading AFTER each hide — reloading here made
 /// every open eat a full webview boot (seconds), and it also auto-opened devtools.
-/// Shared by the capture `overlay` hotkey bridge (`lib.rs`) and `overlay_go_live`
-/// so Shift+C and Go-Live surface the host identically.
+/// The capture `overlay` hotkey bridge in `lib.rs` is its ONLY caller — Shift+C is
+/// the only thing that shows this window. `overlay_go_live` deliberately does not
+/// (see its own comment above for why), and nothing invokable from the frontend
+/// does either: the handler registers `hide_overlay_host` and no show, and the
+/// frontend holds no `core:window:allow-show`. Said plainly because this comment
+/// used to claim Go-Live shared it, which sends a reader hunting for a show path
+/// that was removed on purpose.
 pub fn show_overlay_host(win: &tauri::WebviewWindow) {
     harden_capture_overlay(win);
     // Size to the chosen monitor when a pref is set; else preserve the prior

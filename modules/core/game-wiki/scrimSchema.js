@@ -11,6 +11,11 @@
 // renders it (a cycle: the tree mounts the popup).
 export const SCRIM_BASE = 'Deadlock/Coaching/Scrim';
 
+// Personal VODs — solo matches Malthaiel reviews alone. One match = ONE FILE
+// here, not a folder: there is no transcript, no coach and no report to give a
+// folder shape to, only the live notes he dictates during the game.
+export const VOD_BASE = 'Deadlock/Coaching/Personal VODs';
+
 // Filename-safe team name.
 const sanitizeTeam = (name) => String(name || '').replace(/[/\\:*?"<>|]/g, '').replace(/\s+/g, ' ').trim();
 
@@ -23,4 +28,14 @@ export function newScrimName({ team1, team2 } = {}) {
   const p2 = (x) => String(x).padStart(2, '0');
   const short = `${p2(d.getMonth() + 1)}-${p2(d.getDate())}-${String(d.getFullYear()).slice(2)}`;
   return `${t1} VS ${t2} (${short})`;
+}
+
+// `<label> (MM-DD-YY)` for today — same date grammar as a scrim folder, so the
+// two coaching surfaces read alike in the tree. Reuses the scrim sanitiser: a
+// VOD is a FILE, so a stray slash would silently make a folder instead.
+export function newVodName(label) {
+  const base = sanitizeTeam(label) || 'Match';
+  const d = new Date();
+  const p2 = (x) => String(x).padStart(2, '0');
+  return `${base} (${p2(d.getMonth() + 1)}-${p2(d.getDate())}-${String(d.getFullYear()).slice(2)})`;
 }

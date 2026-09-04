@@ -318,6 +318,7 @@ fn main() {
         "overlay_note_toast",
         "overlay_toast_pending",
         "overlay_toast_done",
+        "vod_set_timer_keys",
         "broadcast_get_state",
         "broadcast_request",
         "broadcast_start_record",

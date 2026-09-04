@@ -52,4 +52,27 @@ export function formatBinding(binding) {
   return ['?'];
 }
 
+// Tauri accelerator string for a chord binding ("F6", "Shift+F6",
+// "CommandOrControl+K") — the shape `global_shortcut`'s Shortcut::from_str
+// parses. Returns '' for a hold binding or an empty key (an Unbound row), which
+// Rust treats as "skip this one", not as an error.
+//
+// 'meta' is platform-primary in this registry (Ctrl on Windows), and
+// CommandOrControl is the accelerator spelling of exactly that.
+export function toAccelerator(binding) {
+  if (!binding || binding.kind !== 'chord' || !binding.key) return '';
+  const mods = binding.modifiers || [];
+  const parts = [];
+  if (mods.includes('meta')) parts.push('CommandOrControl');
+  if (mods.includes('ctrl') && !mods.includes('meta')) parts.push('Control');
+  if (mods.includes('alt')) parts.push('Alt');
+  if (mods.includes('shift')) parts.push('Shift');
+  const k = String(binding.key).trim();
+  // F-keys and single characters are the only shapes these rows carry; anything
+  // else goes through as-is and Rust logs an unparseable-accelerator warning
+  // rather than binding something the user did not ask for.
+  parts.push(/^f([1-9]|1\d|2[0-4])$/i.test(k) ? k.toUpperCase() : k.length === 1 ? k.toUpperCase() : k);
+  return parts.join('+');
+}
+
 export { IS_MAC };

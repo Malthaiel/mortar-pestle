@@ -15,6 +15,10 @@ import { invoke } from '../api.js';
 import { safeDecode } from '../router.js';
 import CollapsibleRail from '../components/ui/CollapsibleRail.jsx';
 import GameWikiRail, { RailHeaderPill } from '@modules/core/game-wiki/GameWikiRail.jsx';
+import { api } from '../api.js';
+import { VOD_BASE } from '@modules/core/game-wiki/scrimSchema.js';
+import { appendNote, vodFile } from '@modules/core/game-wiki/vodNotes.js';
+import * as vodTimer from '@modules/core/game-wiki/vodTimer.js';
 
 // Scrim Teardown (2026-07-26): the live-notes path is GONE. Overview.md, match
 // pages and the per-match stopwatch it read no longer exist, so the panel is a
@@ -63,6 +67,13 @@ const loadRailOpen = () => { try { return localStorage.getItem(RAIL_KEY) !== '0'
 
 // "TEAM1 VS TEAM2 (MM-DD-YY)" → "TEAM1 VS TEAM2" (date suffix dropped).
 const titleOf = (base) => String(base || '').replace(/\s*\(\d{2}-\d{2}-\d{2}\)\s*$/, '');
+
+// A Personal VOD note file: a direct child of VOD_BASE, no deeper.
+function vodPathOf(sel) {
+  if (!sel || !sel.startsWith(VOD_BASE + '/')) return null;
+  const rest = sel.slice(VOD_BASE.length + 1);
+  return rest && !rest.includes('/') ? sel : null;
+}
 
 export default function ScrimOverlayPanel() {
   const { style: dragStyle, dragProps, nudgeX, nudgeY, commitPos } = useOverlayPanelDrag('overlay-panel-scrim', { x: 40, y: 40 });
@@ -124,6 +135,110 @@ export default function ScrimOverlayPanel() {
     setLive(null);
   }, []);
 
+
+  // ── Personal VODs: the match timer + the dictated-note sink ──────────────
+  // This panel is the note sink because the overlay-host window is created at
+  // boot and never destroyed — Shift+C only hides it — so a listener here is
+  // alive while Malthaiel is in the game. Rust already reroutes a hold-to-talk
+  // transcript to `overlay-dictation-committed` whenever a live target is set;
+  // that event has had NO listener since the Scrim Teardown deleted the match
+  // pages. This is that listener, aimed at a VOD file instead.
+  const selVod = vodPathOf(sel);
+  const [timer, setTimer] = useState(vodTimer.read);
+  const armedPath = timer.target;
+
+  // One 1 s tick while the clock runs — elapsed is DERIVED from the anchor, so
+  // the tick only exists to repaint, never to count.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!timer.running) return undefined;
+    const id = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, [timer.running]);
+
+  // Arming a VOD IS starting the timer (user call): one action, and End is the
+  // only way a stray hold-to-talk stops writing into a finished match.
+  const armVod = useCallback((path) => {
+    if (!path) return;
+    setTimer(vodTimer.start(path));
+    invoke('overlay_go_live', { target: { scrimPath: path, matchN: 0, coachedTeam: null } }).catch(() => {});
+  }, []);
+  const endVod = useCallback(() => {
+    setTimer(vodTimer.end());
+    invoke('overlay_go_offline').catch(() => {});
+  }, []);
+
+  // Re-publish the armed VOD on mount. The Rust cell survives a webview reload,
+  // but the scrim effect above republishes ITS persisted target, so without this
+  // a Shift+C mid-match would silently repoint dictation at a dead scrim.
+  useEffect(() => {
+    const t = vodTimer.read();
+    if (t.target) {
+      invoke('overlay_go_live', { target: { scrimPath: t.target, matchN: 0, coachedTeam: null } }).catch(() => {});
+    }
+  }, []);
+
+  // The global timer keys (Rust `global_shortcut` → `vod-timer-key`). They fire
+  // while Deadlock has focus, which is the whole reason they are not DOM chords.
+  useEffect(() => {
+    const sub = listen('vod-timer-key', (e) => {
+      const action = e.payload?.action;
+      if (action === 'start') {
+        // Start needs something to write into. Prefer what is already armed
+        // (a no-op), else the VOD currently open in this panel.
+        const path = vodTimer.read().target || vodPathOf(loadSel());
+        if (!path) {
+          invoke('overlay_note_toast', { text: 'Pick a VOD in the overlay first' }).catch(() => {});
+          return;
+        }
+        armVod(path);
+      } else if (action === 'pause') {
+        setTimer(vodTimer.pauseResume());
+      } else if (action === 'end') {
+        endVod();
+      }
+    });
+    return () => { sub.then((un) => un()).catch(() => {}); };
+  }, [armVod, endVod]);
+
+  // The PRESS stamp. `stt-dictation-started` fires when the hold-to-talk key
+  // goes DOWN; the transcript arrives seconds later on release. Stamping the
+  // release would push every note as late as the sentence was long, so latch the
+  // clock here and spend it when the words land.
+  const pressMsRef = useRef(null);
+  useEffect(() => {
+    const sub = listen('stt-dictation-started', () => {
+      pressMsRef.current = vodTimer.isArmed() ? vodTimer.elapsedMs() : null;
+    });
+    return () => { sub.then((un) => un()).catch(() => {}); };
+  }, []);
+
+  // The sink. Reads the file, appends the bullet, writes it back, and toasts —
+  // the toast fires whether the overlay is hidden or open, so the confirmation
+  // reaches him mid-game without Shift+C.
+  useEffect(() => {
+    const sub = listen('overlay-dictation-committed', async (e) => {
+      const text = String(e.payload?.text || '').trim();
+      const path = e.payload?.scrimPath;
+      if (!text || !path || !vodPathOf(path)) return; // not a VOD target
+      // Fall back to the live clock only if the press event never arrived — a
+      // missing stamp is worse than a slightly late one.
+      const stamp = pressMsRef.current ?? vodTimer.elapsedMs();
+      pressMsRef.current = null;
+      try {
+        const file = vodFile(path);
+        const body = await api.getRawFile(file, 'gamewiki');
+        await api.savePage(file, appendNote(body, stamp, text), null, 'gamewiki');
+        invoke('overlay_note_toast', { text: `${vodTimer.fmt(stamp)} — ${text}` }).catch(() => {});
+      } catch (err) {
+        // A dropped note is a defect, not an acceptable degradation — say so on
+        // screen rather than losing the words silently.
+        invoke('overlay_note_toast', { text: `Note NOT saved: ${String(err?.message || err)}` }).catch(() => {});
+      }
+    });
+    return () => { sub.then((un) => un()).catch(() => {}); };
+  }, []);
+
   // Resize (all edges + corners). Refs feed the pointer handlers the current size
   // without re-binding them each frame.
   const [width, setWidth] = useState(loadScrimW);
@@ -169,6 +284,13 @@ export default function ScrimOverlayPanel() {
   // loop. The MATCH n / elapsed items went with the match pages that fed them.
   const tickerItems = [{ text: 'GAMEWIKI OVERLAY', bright: true }];
   if (scrimTitle) tickerItems.push({ text: scrimTitle, bright: true });
+  // The match clock rides the ticker rather than getting its own row: it is
+  // read at a glance mid-game, and the band is already the thing the eye lands
+  // on. `fmt` is the single source of the m:ss shape (the saved note uses it too).
+  if (armedPath) {
+    tickerItems.push({ text: titleOf(armedPath.split('/').pop()), bright: true });
+    tickerItems.push({ text: `${vodTimer.fmt(vodTimer.elapsedMs(timer))}${timer.running ? '' : ' PAUSED'}`, bright: true });
+  }
   const renderTickerGroup = (keyPrefix) => tickerItems.map((it, i) => (
     <span className="ov-scrim-ticker-group" key={`${keyPrefix}-${i}`}>
       <span className="ov-scrim-ticker-sep" aria-hidden="true">●</span>
@@ -189,11 +311,38 @@ export default function ScrimOverlayPanel() {
           </div>
           {/* End Live — only while a scrim IS live; the scrim push-to-talk bind
               routes to it until this clears. */}
-          {live && (
+          {/* Personal VOD timer. Shown when a VOD is open OR one is armed, so
+              the End control cannot go out of reach by browsing elsewhere. */}
+          {(selVod || armedPath) && (
+            <>
+              {!armedPath && (
+                <button type="button" data-no-drag className="candy-btn" data-size="small"
+                  title="Start the match timer and send voice notes to this VOD"
+                  onClick={() => armVod(selVod)}>
+                  <span className="candy-face">Start</span>
+                </button>
+              )}
+              {armedPath && (
+                <>
+                  <button type="button" data-no-drag className="candy-btn" data-size="small"
+                    title={timer.running ? 'Pause the match timer' : 'Resume the match timer'}
+                    onClick={() => setTimer(vodTimer.pauseResume())}>
+                    <span className="candy-face">{timer.running ? 'Pause' : 'Resume'}</span>
+                  </button>
+                  <button type="button" data-no-drag className="candy-btn" data-size="small"
+                    title="End the match timer and stop sending voice notes"
+                    onClick={endVod}>
+                    <span className="candy-face">End</span>
+                  </button>
+                </>
+              )}
+            </>
+          )}
+          {live && !armedPath && (
             <button type="button" data-no-drag className="candy-btn" data-size="small"
               title="Stop routing scrim voice notes to this match"
               aria-label="End live scrim" onClick={endLive}>
-              End Live
+              <span className="candy-face">End Live</span>
             </button>
           )}
         </div>

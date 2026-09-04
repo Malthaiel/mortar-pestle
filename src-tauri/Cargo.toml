@@ -27,6 +27,10 @@ tauri-plugin-log = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-updater = "2"
+# Personal VODs — the match-timer keys must fire while Deadlock has focus, so they
+# are OS-level RegisterHotKey binds, not DOM chords (the keybind registry only
+# reaches the focused webview). Rebound at runtime via vod_set_timer_keys.
+tauri-plugin-global-shortcut = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "fs", "process", "time", "io-util", "net"] }
 notify = "6"
 notify-debouncer-full = "0.3"

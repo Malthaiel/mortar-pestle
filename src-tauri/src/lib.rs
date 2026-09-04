@@ -197,6 +197,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(commands::vod_timer::plugin())
         .register_uri_scheme_protocol("mortar-pestle-asset", |ctx, req| asset_protocol::handle(ctx, req))
         .setup(|app| {
             // Mortar & Pestle rebrand — migrate legacy app-data
@@ -996,6 +997,7 @@ pub fn run() {
             overlay::state::overlay_note_toast,
             overlay::state::overlay_toast_pending,
             overlay::state::overlay_toast_done,
+            commands::vod_timer::vod_set_timer_keys,
             commands::broadcast::broadcast_get_state,
             commands::broadcast::broadcast_request,
             commands::broadcast::broadcast_start_record,

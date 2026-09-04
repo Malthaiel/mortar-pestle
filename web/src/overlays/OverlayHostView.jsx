@@ -15,6 +15,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import SttProvider from '@modules/studio/overlay/SttProvider.jsx';
 import OverlayStudioPanel from './OverlayStudioPanel.jsx';
 import ScrimOverlayPanel from './ScrimOverlayPanel.jsx';
+import VodTimerBridge from './VodTimerBridge.jsx';
 import ConciergeProvider from '@host/agents/concierge/ConciergeProvider.jsx';
 import AgentsOverlayLauncher from './AgentsOverlayLauncher.jsx';
 import OverlayBrowserPanel from './OverlayBrowserPanel.jsx';
@@ -163,6 +164,10 @@ export default function OverlayHostView() {
       <SttProvider api={hostApi}>
         <OverlayStudioPanel showToast={showToast} />
       </SttProvider>
+      {/* Renders nothing — pushes the Personal-VOD timer binds to the OS. It
+          lives here because this window is created at boot and never destroyed,
+          so the keys are armed before the overlay is ever shown. */}
+      <VodTimerBridge />
       <ScrimOverlayPanel />
       <OverlayBrowserPanel visible={visible} />
       <BrowserOverlayLauncher />

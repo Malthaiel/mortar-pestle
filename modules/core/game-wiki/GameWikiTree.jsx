@@ -33,8 +33,9 @@ import TreeIconPicker from '@host/components/vault-tree/TreeIconPicker.jsx';
 
 // Re-exported (it now lives in scrimSchema.js, which CoachPopup can import
 // without cycling back through this file) so existing importers are unchanged.
-export { SCRIM_BASE } from './scrimSchema.js';
-import { SCRIM_BASE } from './scrimSchema.js';
+export { SCRIM_BASE, VOD_BASE } from './scrimSchema.js';
+import { SCRIM_BASE, VOD_BASE, newVodName } from './scrimSchema.js';
+import { newVodScaffold, vodFile } from './vodNotes.js';
 
 // "<base>" when vp is a scrim folder (direct subfolder of SCRIM_BASE), else null.
 function scrimBaseOf(vp) {
@@ -51,6 +52,14 @@ function matchOf(vp) {
   if (parts.length !== 2) return null;
   const m = /^Match (\d+)$/.exec(parts[1]);
   return m ? { scrim: parts[0], match: parseInt(m[1], 10) } : null;
+}
+
+// A Personal VOD note file (a direct .md child of VOD_BASE) — the only leaf in
+// this tree with a menu of its own, because it is the only file the app writes.
+function vodOf(vp) {
+  if (!vp || !vp.startsWith(VOD_BASE + '/')) return null;
+  const rest = vp.slice(VOD_BASE.length + 1);
+  return rest && !rest.includes('/') ? rest : null;
 }
 
 // Which folders carry the coaching gear: a scrim (creates a match folder) and
@@ -95,7 +104,12 @@ function TreeNode({ node, tree, accent, currentPath, openMenu, nav, onGear, icon
     const entry = tree.childrenOf(node.vaultPath);
     const mounted = open || !!entry;
     const count = entry?.nodes?.length || 0;
-    const hasMenu = node.vaultPath === SCRIM_BASE || !!gearOf(node.vaultPath);
+    // VOD_BASE belongs here for the same reason SCRIM_BASE does: it is the other
+    // folder whose menu carries a "New" action. Leaving it out made the whole
+    // `node.vaultPath === VOD_BASE` branch in openMenu dead code — the folder fell
+    // through to the no-menu path and offered only Change Icon, so there was no
+    // way to create a Personal VOD at all (measured 2026-09-04).
+    const hasMenu = node.vaultPath === SCRIM_BASE || node.vaultPath === VOD_BASE || !!gearOf(node.vaultPath);
     const gear = gearOf(node.vaultPath);
     return (
       <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -130,7 +144,7 @@ function TreeNode({ node, tree, accent, currentPath, openMenu, nav, onGear, icon
   return (
     <TreeRow label={node.name} selected={selected} accent={accent}
       leadIcon={icons.leadIcon(node.vaultPath)}
-      onContextMenu={(e) => openMenu(e, node, false)}
+      onContextMenu={(e) => openMenu(e, node, !!vodOf(node.vaultPath))}
       onClick={() => nav('/game-wiki/' + encodePagePath(node.vaultPath))}/>
   );
 }
@@ -146,6 +160,13 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
   // Right-click row icons (shared store + picker with the vault tree).
   const icons = useTreeIcons('gamewiki:tree');
   const [picker, setPicker] = useState(null);
+
+  // The Personal VODs folder is the ONLY way in to "New VOD", and the only thing
+  // that used to create it was doCreateVod — which you can't reach without the
+  // folder already being there. Scrim never hit this because its folder has
+  // existed on disk since the scrim tooling shipped. Ensure it once on mount;
+  // createFolder is not idempotent (it throws "Already exists"), so swallow.
+  useEffect(() => { api.createFolder(VOD_BASE, 'gamewiki').catch(() => {}); }, []);
 
   // Open a finished match's notes. The filename is coach.py's deliverable
   // convention; navigating to the folder would land on an empty-folder blurb.
@@ -173,6 +194,31 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
         // gamewiki-rooted arm (also below, for scrim folders).
         { label: 'Reveal in Files', icon: IconFolder, onClick: () => { invoke('coaching_reveal_path', { path: SCRIM_BASE }).catch(() => {}); } },
         { label: 'Copy Path', icon: IconLink, onClick: () => { try { navigator.clipboard.writeText(SCRIM_BASE); } catch {} } },
+        iconItem,
+      ], { accent });
+      return;
+    }
+    if (node.vaultPath === VOD_BASE) {
+      openContextMenu(e, [
+        { label: 'New VOD', icon: IconPlus, onClick: () => setModal({ kind: 'new-vod' }) },
+        { divider: true },
+        { label: 'Reveal in Files', icon: IconFolder, onClick: () => { invoke('coaching_reveal_path', { path: VOD_BASE }).catch(() => {}); } },
+        { label: 'Copy Path', icon: IconLink, onClick: () => { try { navigator.clipboard.writeText(VOD_BASE); } catch {} } },
+        iconItem,
+      ], { accent });
+      return;
+    }
+    // A VOD note file. Free rename (unlike `Match N`, nothing parses this name)
+    // and a delete that is one file, so the Recycle Bin restores it whole.
+    const vod = vodOf(node.vaultPath);
+    if (vod) {
+      openContextMenu(e, [
+        { label: 'New VOD', icon: IconPlus, onClick: () => setModal({ kind: 'new-vod' }) },
+        { label: 'Rename', icon: IconFile, onClick: () => setModal({ kind: 'rename-vod', vod }) },
+        { label: 'Delete', icon: IconX, danger: true, onClick: () => setModal({ kind: 'delete-vod', vod }) },
+        { divider: true },
+        { label: 'Reveal in Files', icon: IconFolder, onClick: () => { invoke('coaching_reveal_path', { path: node.vaultPath }).catch(() => {}); } },
+        { label: 'Copy Path', icon: IconLink, onClick: () => { try { navigator.clipboard.writeText(node.vaultPath); } catch {} } },
         iconItem,
       ], { accent });
       return;
@@ -271,6 +317,51 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
     }
   };
 
+  // Create one VOD note file. createFolder is NOT idempotent — it throws
+  // "Already exists" (measured 2026-09-03), which would abort every VOD after
+  // the first — so its failure is swallowed. savePage is the operation that
+  // actually has to work, and it reports its own error into the modal.
+  const doNewVod = async (label) => {
+    const name = newVodName(label);
+    const path = `${VOD_BASE}/${name}`;
+    try {
+      await api.createFolder(VOD_BASE, 'gamewiki').catch(() => {});
+      await api.savePage(vodFile(path), newVodScaffold(name), null, 'gamewiki');
+      await tree.refresh(VOD_BASE);
+      setModal(null);
+      nav('/game-wiki/' + encodePagePath(path));
+    } catch (e) {
+      setModal({ kind: 'new-vod', err: String(e?.message || e) });
+    }
+  };
+
+  const doRenameVod = async (oldName, raw) => {
+    const next = String(raw || '').trim();
+    if (!next || next === oldName) { setModal(null); return; }
+    const from = `${VOD_BASE}/${oldName}`;
+    const to = `${VOD_BASE}/${next}`;
+    try {
+      await api.renamePath(vodFile(from), vodFile(to), 'gamewiki');
+      await tree.refresh(VOD_BASE);
+      setModal(null);
+      if (currentPath === from) nav('/game-wiki/' + encodePagePath(to));
+    } catch (e) {
+      setModal({ kind: 'rename-vod', vod: oldName, err: String(e?.message || e) });
+    }
+  };
+
+  const doDeleteVod = async (name) => {
+    const path = `${VOD_BASE}/${name}`;
+    try {
+      await api.deleteFile(vodFile(path), 'gamewiki');
+      await tree.refresh(VOD_BASE);
+      setModal(null);
+      if (currentPath === path) nav('/game-wiki');
+    } catch (e) {
+      setModal({ kind: 'delete-vod', vod: name, err: String(e?.message || e) });
+    }
+  };
+
   const doDelete = async (base) => {
     const folder = `${SCRIM_BASE}/${base}`;
     try {
@@ -330,6 +421,27 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
               // no-op, so one call covers both without branching on what happened.
               onFolderChange={() => { tree.refresh(SCRIM_BASE); tree.refresh(`${SCRIM_BASE}/${coach.scrim}`); }}
               onOpenNotes={openNotes}/>
+          )}
+          {modal?.kind === 'new-vod' && (
+            <NameInputModal open title="New personal VOD" confirmLabel="Create"
+              label={modal.err || 'What was this match?'} placeholder="Lash mid"
+              onCancel={() => setModal(null)}
+              onSubmit={doNewVod}/>
+          )}
+          {modal?.kind === 'rename-vod' && (
+            <NameInputModal open title={`Rename ${modal.vod}`} confirmLabel="Rename" initialValue={modal.vod}
+              label={modal.err || 'New name'}
+              onCancel={() => setModal(null)}
+              onSubmit={(name) => doRenameVod(modal.vod, name)}/>
+          )}
+          {modal?.kind === 'delete-vod' && (
+            <ConfirmModal open title={`Delete ${modal.vod}?`}
+              message={modal.err
+                ? `Last attempt failed: ${modal.err}`
+                : 'Sends this one VOD note file to the Recycle Bin. Every note you dictated during that match goes with it.'}
+              confirmLabel="Delete" cancelLabel="Cancel"
+              onCancel={() => setModal(null)}
+              onConfirm={() => doDeleteVod(modal.vod)}/>
           )}
           {modal?.kind === 'rename' && (
             <NameInputModal open title={`Rename ${modal.base}`} label="New name" confirmLabel="Rename" initialValue={modal.base}

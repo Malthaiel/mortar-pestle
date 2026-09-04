@@ -38,6 +38,9 @@ pub mod music_search;
 pub mod proc_util;
 pub mod pty;
 pub mod video_config;
+// Personal VODs — the OS-level match-timer hotkeys (global_shortcut), which
+// fire while Deadlock has focus and the DOM keybind registry cannot.
+pub mod vod_timer;
 pub mod recycle_bin;
 pub mod reference;
 pub mod release;
