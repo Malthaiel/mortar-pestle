@@ -281,7 +281,7 @@ export default function CalendarPane({ accent, pushUndo, pivotDs, onPivotChange 
         </div>
         {/* View mode — was a Seg tray; the two options are now split halves so
             the whole header reads as one family. The chosen half is .is-active,
-            which .candy-split already holds PRESSED and lit. */}
+            which lights accent at rest depth like every other candy button. */}
         <div className="candy-split" role="group" aria-label="Calendar view">
           {[{ value: 'day', label: 'Day' }, { value: 'custom', label: '3-Day' }].map(o => (
             <button

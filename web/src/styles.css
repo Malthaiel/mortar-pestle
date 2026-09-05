@@ -2078,13 +2078,6 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
   padding-left: calc(var(--chip-pad-x) + var(--split-lap) - var(--cbtn-frame));
 }
 
-/* A half whose panel is open stays PRESSED into the shell, not just lit, so the
-   button itself shows the panel is open. Slides its own depth — the same number
-   the real press uses, not a restated one. */
-.candy-split > .candy-btn.is-active > .candy-face {
-  transform: translateY(var(--cbtn-depth));
-}
-
 /* The overlap above means a later half paints ON TOP of the seam, so the frame
    you see at the seam always belongs to the RIGHTMOST of the two. A hovered
    LEADING half therefore lit three sides and lost its accent right edge, while

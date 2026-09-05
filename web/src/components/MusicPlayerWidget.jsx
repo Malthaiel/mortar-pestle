@@ -460,9 +460,8 @@ export default function MusicPlayerWidget() {
                 disabled={!hasTrack}
                 style={primarySize}
                 title="Previous"><span className="candy-face" style={tileGlyph}>⏮</span></button>
-              {/* No is-active while playing (user-directed 2026-09-03): inside a
-                  .candy-split an active half is HELD DOWN and lit, which made play
-                  read as having fallen out of the run. The glyph carries the state. */}
+              {/* No is-active while playing (user-directed 2026-09-03): the glyph
+                  already flips play/pause, so lighting the half too is redundant. */}
               <button type="button" data-own-press
                 className="candy-btn"
                 data-shape="icon"
