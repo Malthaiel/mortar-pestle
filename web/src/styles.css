@@ -2466,46 +2466,18 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
    none here made the release an instant snap. Cleared on the next real
    pointermove, when :hover takes over with identical computed values
    (accent), so the class removal itself repaints nothing. */
-/* .is-drop-glide rides this same list: it is the third state with the accent
-   WITHHELD, worn by the flying clone whenever the cursor is not over it, so the
-   press-release transform still eases while the fill snaps straight to rest.
-   Photographed 2026-09-03 — with the cursor already gone the clone held the
-   accent for its whole 267ms flight, and that flight IS the lingering accent. */
-:is(.is-drop-accent, .is-drop-glide) :is(.candy-btn, .candy-face),
+/* .is-drop-glide (the third state — accent WITHHELD, worn by the flying clone
+   whenever the cursor is not over it) is deliberately NOT on this list. It is the
+   state the accent LEAVES through, and stripping its colour transition made the
+   accent vanish in one frame at release; user-directed 2026-09-04, it drains on
+   the app-wide 150ms fade like every other candy button. The base rules already
+   carry the press-release transform, so nothing is lost by letting them govern. */
+:is(.is-drop-accent) :is(.candy-btn, .candy-face),
 /* … and the nested label/value spans, which carry their OWN `transition: color`
    (see the :where rule above). Left out, the face snapped to accent while the
    text faded grey→white behind it — a flicker on the TEXT only, with the accent
    itself perfectly steady. (0,2,0) beats that rule's (0,1,0). */
-:is(.is-drop-accent, .is-drop-glide) .candy-face :where(div, span) {
-  transition: transform var(--cbtn-press-dur, 150ms) cubic-bezier(0, 0, 0.58, 1);
-}
-
-/* Accent snap-out — the buttons that opt INTO the accent flood on hover
-   (.is-hover-accent, the .planner-uniform-btns group, and the controls nested in
-   a rail-tile panel) travel grey → accent, far enough that the shared 150ms
-   colour fade reads as the accent clinging on after the cursor has already left.
-   Measured 2026-09-03 on the Health micros Cluster: 142ms of accent draining to
-   grey after :hover dropped — and 145ms for the identical fade on a chip that was
-   never dragged. The drop is NOT special; it only supplies the long colour move
-   that makes the fade visible. Every other candy button keeps the global fade,
-   because on a grey → grey hover it is imperceptible anyway.
-
-   Arriving still fades: while :hover holds this rule does not match, so the base
-   transitions govern. Leaving snaps: at rest there is no colour transition left
-   to travel back through. Do NOT "fix" this by hanging the transition off the
-   :hover rule instead — the base rules still apply on the way out, which is why
-   that shape of the fix failed. transform is kept; the press slide owns it. */
-:is(.candy-btn.is-hover-accent,
-    .planner-uniform-btns .candy-btn:is([data-shape="chip"], [data-shape="icon"], [data-shape="circle"]),
-    .candy-btn[data-shape="tile"].rail-tile.is-panel .candy-btn):not(:hover):not(:active):not(.is-active) {
-  transition: none;
-}
-:is(.candy-btn.is-hover-accent,
-    .planner-uniform-btns .candy-btn:is([data-shape="chip"], [data-shape="icon"], [data-shape="circle"]),
-    .candy-btn[data-shape="tile"].rail-tile.is-panel .candy-btn):not(:hover):not(:active):not(.is-active) > .candy-face,
-:is(.candy-btn.is-hover-accent,
-    .planner-uniform-btns .candy-btn:is([data-shape="chip"], [data-shape="icon"], [data-shape="circle"]),
-    .candy-btn[data-shape="tile"].rail-tile.is-panel .candy-btn):not(:hover):not(:active):not(.is-active) .candy-face :where(div, span) {
+:is(.is-drop-accent) .candy-face :where(div, span) {
   transition: transform var(--cbtn-press-dur, 150ms) cubic-bezier(0, 0, 0.58, 1);
 }
 

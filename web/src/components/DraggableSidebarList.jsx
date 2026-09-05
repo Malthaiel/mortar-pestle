@@ -476,8 +476,9 @@ export default function DraggableSidebarList({
     // it fires on the FIRST pointermove, which is usually still ON the tile, so
     // it spent its snap on a frame where :hover was holding the colour steady
     // anyway (measured 2026-09-03: class gone at t+0, :hover not lost until
-    // t+46ms, fade only then). The accent snap-out in styles.css covers the real
-    // moment, at rest, for every button that flies to accent.
+    // t+46ms, fade only then). A styles.css rule that snapped the accent out with
+    // no fade at all was tried and removed 2026-09-04 — user-directed: the
+    // accent leaves on the same 150ms fade as every other candy button.
     d.el.classList.remove('is-drop-accent');
   }, []);
 
