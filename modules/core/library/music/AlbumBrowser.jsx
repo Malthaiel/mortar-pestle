@@ -8,6 +8,7 @@ import { musicApi, subscribeManifest } from './api.js';
 import { useMusicPlayer } from './MusicPlayerProvider.jsx';
 import CoverArtCard from './CoverArtCard.jsx';
 import { FilterChip as Pill, Seg } from '@host/components/ui/index.js';
+import { Cluster, useRailOrder } from '@host/components/ui/Rail.jsx';
 import { usePlaylists, isSavedTracks } from './PlaylistProvider.jsx';
 import { PlaylistCard } from './PlaylistsPage.jsx';
 import { TILE_GRID, TILE_GAP } from './util.js';
@@ -22,7 +23,13 @@ const SORT_DIMENSIONS = [
   { key: 'artist',   label: 'Artist',     defaultDir: 'asc',  value: a => (a.artist || '').toLowerCase() },
   { key: 'year',     label: 'Year',       defaultDir: 'desc', value: a => a.year || 0 },
   { key: 'title',    label: 'Title',      defaultDir: 'asc',  value: a => (a.title || '').toLowerCase() },
+  // Custom carries no comparator: `filtered` returns the list unsorted and the
+  // grid becomes a Cluster you can drag. It is the ONLY sort under which the
+  // tiles lift (user-directed 2026-09-04 - no auto-switch on drag), and it has
+  // no direction, because a hand-made order has no forwards or backwards.
+  { key: 'custom',   label: 'Custom',     defaultDir: 'asc' },
 ];
+const isCustom = (key) => key === 'custom';
 
 
 const SORT_LS_KEY = 'tools:musicSort';
@@ -64,6 +71,7 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
   }, [sortDim, sortDir]);
 
   const onPillClick = (dim) => {
+    if (isCustom(dim.key)) { setSortDim(dim.key); return; }   // no direction to flip
     if (sortDim === dim.key) setSortDir(d => d === 'desc' ? 'asc' : 'desc');
     else { setSortDim(dim.key); setSortDir(dim.defaultDir); }
   };
@@ -119,6 +127,10 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
       (a.artist || '').toLowerCase().includes(q)
     );
     if (statusFilter) out = out.filter(a => a.status === statusFilter);
+    // Custom leaves the order alone so useRailOrder below can impose the saved
+    // one. Status/query still filter — one order covers every filter, and
+    // applyOrder tolerates the ids a filter hides.
+    if (isCustom(sortDim)) return out;
     const dim = SORT_DIMENSIONS.find(d => d.key === sortDim) || SORT_DIMENSIONS[0];
     const mult = sortDir === 'desc' ? -1 : 1;
     const cmp = (a, b) => {
@@ -136,6 +148,27 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
       playAlbumTracks(detail, 0);
     } catch {}
   };
+
+  // Saved Tracks is pinned first and stays OUT of the drag group - the same
+  // guarantee Spotify gives Liked Songs. Everything behind it reorders freely.
+  const savedTracks = visiblePlaylists.find(isSavedTracks) || null;
+  const otherPlaylists = useMemo(
+    () => visiblePlaylists.filter(p => !isSavedTracks(p)), [visiblePlaylists]);
+  const { ordered: orderedPlaylists, onReorder: reorderPlaylists } =
+    useRailOrder(otherPlaylists, 'music:playlists', { idOf: p => p.path });
+  const { ordered: orderedAlbums, onReorder: reorderAlbums } =
+    useRailOrder(filtered, 'music:albums', { idOf: a => a.path });
+
+  const renderAlbum = (a, key) => (
+    <CoverArtCard
+      key={key}
+      album={a}
+      accent={accent}
+      selected={a.path === selectedPath}
+      onSelect={onSelect}
+      onPlay={onPlay}
+    />
+  );
 
   const showAlbums = view === 'albums' || view === 'both';
   const showPlaylists = view === 'playlists' || view === 'both';
@@ -204,12 +237,22 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
             {visiblePlaylists.length === 0 && (
               <Empty>{query.trim() ? 'No playlists match.' : 'No playlists yet.'}</Empty>
             )}
-            <div style={TILE_GRID}>
-              {visiblePlaylists.map(p => (
-                <PlaylistCard key={p.path} playlist={p} accent={accent}
+            {savedTracks && (
+              <div style={TILE_GRID}>
+                <PlaylistCard playlist={savedTracks} accent={accent}
+                              onOpen={() => openPlaylist(savedTracks.path)} />
+              </div>
+            )}
+            <Cluster
+              style={TILE_GRID}
+              items={orderedPlaylists}
+              keyOf={p => p.path}
+              onReorder={reorderPlaylists}
+              renderItem={p => (
+                <PlaylistCard playlist={p} accent={accent}
                               onOpen={() => openPlaylist(p.path)} />
-              ))}
-            </div>
+              )}
+            />
           </div>
         )}
 
@@ -218,18 +261,22 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
         {showAlbums && (
           <>
             {albums && filtered.length === 0 && <Empty>No albums match.</Empty>}
-            <div style={TILE_GRID}>
-              {filtered.map(a => (
-                <CoverArtCard
-                  key={a.path}
-                  album={a}
-                  accent={accent}
-                  selected={a.path === selectedPath}
-                  onSelect={onSelect}
-                  onPlay={onPlay}
-                />
-              ))}
-            </div>
+            {/* Cluster only under the Custom sort - every other sort owns the
+                order, so the tiles must not lift there (user-directed). One
+                renderAlbum feeds both branches so the tile exists once. */}
+            {isCustom(sortDim) ? (
+              <Cluster
+                style={TILE_GRID}
+                items={orderedAlbums}
+                keyOf={a => a.path}
+                onReorder={reorderAlbums}
+                renderItem={renderAlbum}
+              />
+            ) : (
+              <div style={TILE_GRID}>
+                {filtered.map(a => renderAlbum(a, a.path))}
+              </div>
+            )}
           </>
         )}
 
@@ -276,7 +323,10 @@ function SortPillRow({ dimensions, sortDim, sortDir, onPillClick, accent }) {
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
       {dimensions.map(dim => {
         const active = sortDim === dim.key;
-        const arrow = active ? (sortDir === 'desc' ? ' ↓' : ' ↑') : '';
+        // Custom has no direction to show - onPillClick never flips one for it,
+        // and the stale sortDir from the previous dimension would otherwise
+        // paint an arrow that means nothing.
+        const arrow = active && !isCustom(dim.key) ? (sortDir === 'desc' ? ' ↓' : ' ↑') : '';
         return (
           <Pill key={dim.key} active={active} accent={accent} onClick={() => onPillClick(dim)}>
             {dim.label}{arrow}

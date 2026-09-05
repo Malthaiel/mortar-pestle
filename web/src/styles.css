@@ -1391,14 +1391,19 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
   background: var(--accent);
   transform: translateY(var(--cbtn-depth));
 }
-/* A dragged CHIP (Cluster) keeps the accent it was hovering. The clone is
+/* A dragged Cluster item keeps the accent it was hovering. The clone is
    portalled to <body> with pointer-events:none, so :hover can never reach it and
-   the chip went grey the moment it lifted. Colour ONLY — no face slide: the press
+   the item went grey the moment it lifted. Colour ONLY — no face slide: the press
    is released one frame after lift (DraggableSidebarList) so the face eases back
    up, and re-pressing it here would cancel that. .is-drop-accent carries the same
-   colour through the landing glide, so the drop doesn't blink grey. */
-:is(.is-dragging, .is-drop-accent) .candy-btn[data-shape="chip"] { --cbtn-band: var(--accent); }
-:is(.is-dragging, .is-drop-accent) .candy-btn[data-shape="chip"] > .candy-face {
+   colour through the landing glide, so the drop doesn't blink grey.
+
+   Two shapes, one rule: a CHIP (the Health micros) and a cover TILE that is not a
+   rail-tile (the Music left column's albums + playlists, added 2026-09-04). The
+   :not(.rail-tile) matters — a real rail-tile has its own rule above that ALSO
+   slides the face, which is right for the player tile and wrong here. */
+:is(.is-dragging, .is-drop-accent) .candy-btn:is([data-shape="chip"], [data-shape="tile"]:not(.rail-tile)) { --cbtn-band: var(--accent); }
+:is(.is-dragging, .is-drop-accent) .candy-btn:is([data-shape="chip"], [data-shape="tile"]:not(.rail-tile)) > .candy-face {
   color: #fff;
   background: var(--accent);
 }

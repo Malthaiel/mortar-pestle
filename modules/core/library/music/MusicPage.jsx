@@ -3,7 +3,6 @@
 // exist only inside the `downloaded` route). The mode picks what fills the right
 // half; it is parsed from the URL rest (everything after /tools/library/music/):
 //   ""                                   → MusicHome (combined search-first home)
-//   "library" | "library/<status>"       → MusicLibrary grid (all / status-filtered)
 //   "downloaded" | "downloaded/<album>"  → AlbumDetail
 //   "playlists" | "playlists/<path>"     → PlaylistsPage (grid / detail)
 //   "browse"                             → MusicBrainz discovery + download
@@ -17,7 +16,6 @@ import AlbumDetail  from './AlbumDetail.jsx';
 import BrowsePage   from './BrowsePage.jsx';
 import PlaylistsPage from './PlaylistsPage.jsx';
 import MusicHome    from './MusicHome.jsx';
-import MusicLibrary from './MusicLibrary.jsx';
 import MusicTopBar  from './MusicTopBar.jsx';
 import ResizeSeam, { DRAG_EASE } from '@host/components/ui/ResizeSeam.jsx';
 import { encodePath, decodePath } from '../paths.js';
@@ -42,7 +40,6 @@ const SPLIT_PRESETS = [
 // Split the rest into a mode:
 //   "" (bare /tools/library/music)        → home (the combined search-first surface)
 //   "browse" | "browse/q/<query>" | "browse/artists/q/<query>" → Browse (seeded)
-//   "library[/<status>]"          → MusicLibrary grid (all / status-filtered)
 //   "playlists[/<path>]"          → Playlists
 //   "downloaded[/<album>]" | legacy "personal[/<album>]" | bare "<album>" → album split-view
 function parseMusicRoute(rest) {
@@ -79,7 +76,6 @@ function parseMusicRoute(rest) {
   }
   const slash = rest.indexOf('/');
   const tail  = slash === -1 ? '' : rest.slice(slash + 1);
-  if (first === 'library') return { mode: 'library', album: '', status: segs[1] || null };
   if (first === 'playlists') return { mode: 'playlists', album: tail ? decodePath(tail) : '' };
   // 'downloaded' (canonical) and legacy 'personal' both resolve to the library.
   if (first === 'downloaded' || first === 'personal') return { mode: 'downloaded', album: tail ? decodePath(tail) : '' };
@@ -96,7 +92,7 @@ function readInitialSplitWidth() {
 }
 
 export default function MusicPage({ accent, rest }) {
-  const { mode, album, status, homeQuery, browseMode, browseQuery, browseRg, browseArtist } = parseMusicRoute(rest || '');
+  const { mode, album, homeQuery, browseMode, browseQuery, browseRg, browseArtist } = parseMusicRoute(rest || '');
   const selectedPath = album;
 
   // ── Search (topbar-owned) ────────────────────────────────────────────
@@ -211,8 +207,6 @@ export default function MusicPage({ accent, rest }) {
         albums={albums} ownedIds={ownedIds} onPlay={playAlbum}
       />
     );
-  } else if (mode === 'library') {
-    content = <MusicLibrary accent={accent} status={status}/>;
   } else if (mode === 'browse') {
     content = (
       <BrowsePage
