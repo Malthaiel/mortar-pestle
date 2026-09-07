@@ -125,10 +125,21 @@ fn watch_until_finished(session: Arc<Session>, handle: Arc<ManagedTorrent>) {
 /// An explicit `output_dir` also makes the engine write **flat** into it
 /// (`session.rs` picks the folder verbatim instead of appending the torrent's
 /// own root name), which is what the anime pipeline's episode scan expects.
+///
+/// `only_files` restricts which file indices are DOWNLOADED. The TV pipeline
+/// passes Torrentio's `fileIdx`, so choosing a season pack fetches one episode's
+/// worth of data instead of the whole season.
+///
+/// It does NOT control what appears on disk: librqbit creates every file in the
+/// torrent, and a piece straddling a file boundary writes real bytes into the
+/// neighbours. A pack therefore leaves the wanted episode complete beside a
+/// scatter of empty and part-written ones — which is why the TV lane downloads
+/// into a scratch folder and lifts the single episode out (`process_tv_job`).
 pub async fn add(
     app: &AppHandle,
     magnet: String,
     output_dir: Option<String>,
+    only_files: Option<Vec<usize>>,
 ) -> Result<TorrentAdded, String> {
     let session = session(app).await?;
     let handle = session
@@ -139,6 +150,7 @@ pub async fn add(
                 // over what's already on disk, otherwise a retry dead-ends.
                 overwrite: true,
                 output_folder: output_dir,
+                only_files,
                 ..Default::default()
             }),
         )
@@ -196,13 +208,26 @@ pub async fn delete_under(
     Ok(removed)
 }
 
+/// Drop a torrent from the session WITHOUT touching its files, releasing the
+/// engine's handles on them. The TV lane calls this the moment a download
+/// finishes: Windows will not let a file be moved while the engine still holds
+/// it open, and the finished episode has to be lifted out of its scratch folder.
+pub async fn forget(app: &AppHandle, id: usize) -> Result<(), String> {
+    let session = session(app).await?;
+    session
+        .delete(TorrentIdOrHash::Id(id), false)
+        .await
+        .map_err(|e| format!("could not release the torrent: {e}"))
+}
+
 #[tauri::command]
 pub async fn torrent_add(
     app: AppHandle,
     magnet: String,
     output_dir: Option<String>,
+    only_files: Option<Vec<usize>>,
 ) -> Result<TorrentAdded, String> {
-    add(&app, magnet, output_dir).await
+    add(&app, magnet, output_dir, only_files).await
 }
 
 #[tauri::command]

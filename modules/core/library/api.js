@@ -60,6 +60,20 @@ export const videoApi = {
     _api.invoke('anime_torrent_search', {
       title, englishTitle: englishTitle || '', animeType: type || 'TV', audio: audio || 'sub',
     }),
+  // TV Shows lane: the card already exists (tv_add_to_library) and the magnet
+  // already came from the picker, so this queues ONE episode and nothing else.
+  // Shares the anime queue in Rust, so TV jobs surface in the same dock.
+  tvDownloadEnqueue: (seriesPath, title, magnet, season, episode, fileIdx, image) =>
+    _api.invoke('tv_download_enqueue', {
+      seriesPath, title, magnet, season, episode,
+      fileIdx: fileIdx ?? null, image: image || null,
+    }),
+  // Torrentio picker search. Keyed by IMDb id, not by a title string, so there
+  // is no free-text query to edit — a series needs BOTH season and episode.
+  torrentioSearch: (imdbId, season, episode) =>
+    _api.invoke('torrentio_torrent_search', {
+      imdbId, kind: 'series', season: season ?? null, episode: episode ?? null,
+    }),
   // Uninstall a library entry: card + cover + its torrents [+ files].
   animeUninstall: (seriesPath, deleteFiles) =>
     _api.invoke('anime_uninstall', { seriesPath, deleteFiles: !!deleteFiles }),

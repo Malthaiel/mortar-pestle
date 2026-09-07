@@ -197,6 +197,7 @@
     "allow-video-get-config",
     "allow-video-set-config",
     "allow-anime-download-enqueue",
+    "allow-tv-download-enqueue",
     "allow-anime-download-status",
     "allow-anime-download-cancel",
     "allow-anime-torrent-search",

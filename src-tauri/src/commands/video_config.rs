@@ -55,6 +55,24 @@ pub fn anime_video_root(app: &AppHandle, library: &str) -> PathBuf {
     }
 }
 
+/// The save root for TV videos, a sibling of the anime one under the SAME
+/// configured folder: `<video root>/TV Shows`, else `<library>/TV Shows/Videos`.
+/// One setting covers both rooms — there is deliberately no separate TV folder
+/// picker until anime and TV actually need to live on different drives.
+///
+/// A show's files land at `<root>/<Title>/<Season N>/`, which is what the
+/// season-section reader already scans (`parsers/series.rs` joins the card's
+/// `Local Path` with each section's name).
+pub fn tv_video_root(app: &AppHandle, library: &str) -> PathBuf {
+    let stored = load_stored(app);
+    let chosen = stored.video_root.trim();
+    if chosen.is_empty() {
+        Path::new(library).join("TV Shows").join("Videos")
+    } else {
+        PathBuf::from(chosen).join("TV Shows")
+    }
+}
+
 #[tauri::command]
 pub fn video_get_config(app: AppHandle) -> Result<VideoConfig, VaultError> {
     let video_root = load_stored(&app).video_root.trim().to_string();

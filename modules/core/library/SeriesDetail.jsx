@@ -91,6 +91,8 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
   const { jobs, enqueue } = useAnimeDownloads();
   const { openContextMenu } = useContextMenu();
   const [pickerOpen, setPickerOpen] = useState(false);
+  // Which season/episode the picker is open for (TV Shows lane only).
+  const [tvPick, setTvPick] = useState(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleteFiles, setDeleteFiles] = useState(true);
   const [uninstalling, setUninstalling] = useState(false);
@@ -103,6 +105,22 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
       .then(d => { if (!cancelled) { setSeries(d); setLoading(false); } })
       .catch(err => { if (!cancelled) { setError(err.message); setLoading(false); } });
     return () => { cancelled = true; };
+  }, [seriesPath]);
+
+  // A download that lands while this page is open has to show up on it. The
+  // engine runs in Rust and the provider re-broadcasts its done event as
+  // `video-library-changed`; without this the episode you just downloaded stays
+  // greyed out until you navigate away and back. Re-read quietly — no loading
+  // screen, the page is already showing real content.
+  useEffect(() => {
+    let cancelled = false;
+    const reread = () => {
+      videoApi.readSeries(seriesPath)
+        .then(d => { if (!cancelled) setSeries(d); })
+        .catch(() => {});
+    };
+    window.addEventListener('video-library-changed', reread);
+    return () => { cancelled = true; window.removeEventListener('video-library-changed', reread); };
   }, [seriesPath]);
 
   // Determine view mode + the visible-episode slice early so the hooks below
@@ -164,7 +182,12 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
   // Download state for this title (the engine runs in Rust; surface its job
   // here so a not-yet-downloaded title shows live progress + a retry path
   // instead of a dead greyed-out Play button with no explanation).
-  const dlJob = jobs.find(j => j.malId === Number(series.providerId)) || null;
+  // A TV job carries no MAL id, and every TV card's `providerId` is only the
+  // numeric half of an IMDb id — so matching on it would tie unrelated shows
+  // together. The card path is the TV lane's identity.
+  const dlJob = jobs.find(j => (isAnime
+    ? j.malId === Number(series.providerId)
+    : j.seriesPath === series.path)) || null;
   const dlActive = !!dlJob && (dlJob.state === 'queued' || dlJob.state === 'preparing' || dlJob.state === 'downloading');
   const dlLabel = (() => {
     if (!dlJob) return null;
@@ -187,6 +210,33 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
   const onDownload = () => {
     if (!series.providerId) return;
     setPickerOpen(true);
+  };
+  // TV Shows: the download entry point is the episode row, because Torrentio
+  // needs a season AND an episode. `tvPick` holds which one the picker is for.
+  // From `activeSeason`, not `seasonName` — that const is declared further down,
+  // and reading it here would be a temporal-dead-zone crash on every render.
+  const seasonNum = Number(String((activeSeason && activeSeason.name) || '').match(/\d+/)?.[0]) || null;
+  const tvEpJob = (n) => jobs.find(j => j.seriesPath === series.path && j.tv
+    && j.tv.season === seasonNum && j.tv.episode === n) || null;
+  const onDownloadEpisode = (n) => {
+    if (!series.imdbId || !seasonNum) return;
+    setTvPick({ season: seasonNum, episode: n });
+    setPickerOpen(true);
+  };
+  const onPickTvTorrent = async (magnet, _audio, cand) => {
+    setPickerOpen(false);
+    const pick = tvPick;
+    setTvPick(null);
+    if (!pick) return;
+    try {
+      await videoApi.tvDownloadEnqueue(
+        series.path, series.title, magnet, pick.season, pick.episode,
+        cand ? cand.file_idx : null, series.image || null,
+      );
+      notify({ type: 'info', title: 'Download started', message: `${series.title} S${String(pick.season).padStart(2, '0')}E${String(pick.episode).padStart(2, '0')}`, iconKey: 'download', accent: accent || 'var(--accent)', duration: 4000 });
+    } catch (e) {
+      notify({ type: 'error', title: 'Download failed to start', message: (e && e.message) || String(e), iconKey: 'alert', accent: accent || 'var(--accent)' });
+    }
   };
   const onPickTorrent = async (magnet, audioUsed) => {
     setPickerOpen(false);
@@ -439,6 +489,8 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
             if (p && p.duration > 0) frac = Math.min(1, p.time / p.duration);
           }
           if (isWatched && (frac == null || frac < 1)) frac = 1;
+          const epJob = isAnime ? null : tvEpJob(ep.n);
+          const epActive = !!epJob && (epJob.state === 'queued' || epJob.state === 'downloading');
           return (
             <EpisodeRow
               key={(ep.seasonName || '') + ':' + ep.n + ':' + ep.title}
@@ -449,6 +501,8 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
               playing={isPlaying}
               progress={frac}
               onPlay={() => onPlayEpisode(idx)}
+              onDownload={!isAnime && series.imdbId && seasonNum ? () => onDownloadEpisode(ep.n) : null}
+              dlPct={epActive ? (epJob.progressPct || 0) : null}
             />
           );
         })}
@@ -459,8 +513,11 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
         englishTitle=""
         type="TV"
         accent={accent}
-        onPick={onPickTorrent}
-        onCancel={() => setPickerOpen(false)}
+        imdbId={tvPick ? series.imdbId : null}
+        season={tvPick ? tvPick.season : null}
+        episode={tvPick ? tvPick.episode : null}
+        onPick={tvPick ? onPickTvTorrent : onPickTorrent}
+        onCancel={() => { setPickerOpen(false); setTvPick(null); }}
       />
       <ConfirmModal
         open={confirmOpen}

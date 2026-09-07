@@ -4,6 +4,12 @@
 // toggle, both re-run the search), lists ranked candidates with batch/episode
 // labels, and hands the chosen magnet back via onPick → which rides
 // anime_download_enqueue(downloadSource) and skips download_anime.py's Nyaa search.
+//
+// TV Shows reuse this same modal: pass `imdbId` + `season` + `episode` and it
+// searches Torrentio instead of Nyaa. That lane is keyed by an IMDb id, not by a
+// title string, so the editable query and the Sub/Dub chips are hidden — there is
+// nothing for them to change. The candidate shape is identical either way
+// (title, group, seeders, size_human, is_batch, episode_count, file_idx).
 
 import { useEffect, useRef, useState } from 'react';
 import { videoApi } from './api.js';
@@ -13,8 +19,9 @@ import { FilterChip, OutlinedBtn, PrimaryBtn } from '@host/components/ui/index.j
 const NYAA_TYPES = ['Movie', 'OVA', 'Special'];
 const normType = (t) => (NYAA_TYPES.includes(t) ? t : 'TV');
 
-export default function TorrentPickerModal({ open, title, englishTitle, type, accent, onPick, onCancel }) {
+export default function TorrentPickerModal({ open, title, englishTitle, type, accent, onPick, onCancel, imdbId, season, episode }) {
   const a = accent || 'var(--accent)';
+  const tv = !!imdbId;
   const [query, setQuery] = useState(title || '');
   const [audio, setAudio] = useState('sub');
   const [cands, setCands] = useState(null);   // null = not searched yet
@@ -25,15 +32,17 @@ export default function TorrentPickerModal({ open, title, englishTitle, type, ac
 
   async function runSearch(q, aud) {
     const term = (q ?? query).trim();
-    if (!term) { setError('Type something to search.'); setCands([]); return; }
+    if (!tv && !term) { setError('Type something to search.'); setCands([]); return; }
     const myId = ++reqId.current;
     setLoading(true); setError(null);
     try {
-      const res = await videoApi.animeTorrentSearch(term, englishTitle, normType(type), aud ?? audio);
+      const res = tv
+        ? await videoApi.torrentioSearch(imdbId, season, episode)
+        : await videoApi.animeTorrentSearch(term, englishTitle, normType(type), aud ?? audio);
       if (myId !== reqId.current) return;
       const list = (res && res.candidates) || [];
       setCands(list); setSel(0);
-      if (!list.length) setError('No torrents found.');
+      if (!list.length) setError(res && res.error === 'no_results' ? 'No torrents found for this episode.' : 'No torrents found.');
     } catch (e) {
       if (myId !== reqId.current) return;
       setCands([]); setError((e && e.message) || 'Search failed.');
@@ -42,13 +51,14 @@ export default function TorrentPickerModal({ open, title, englishTitle, type, ac
     }
   }
 
-  // (Re)seed query + auto-search each time the modal opens for a title.
+  // (Re)seed query + auto-search each time the modal opens for a title. The TV
+  // lane also re-runs per episode, since the episode is part of the search.
   useEffect(() => {
     if (!open) return;
     setQuery(title || ''); setAudio('sub');
     runSearch(title || '', 'sub');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, title]);
+  }, [open, title, season, episode]);
 
   // Esc cancels.
   useEffect(() => {
@@ -70,32 +80,38 @@ export default function TorrentPickerModal({ open, title, englishTitle, type, ac
       <div onClick={(e) => e.stopPropagation()} className="candy-section" style={S.panel}>
         <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>Choose a torrent</div>
         <div style={{ fontSize: 11.5, lineHeight: 1.45, color: 'var(--text-muted)', marginTop: -4 }}>
-          Pick the release to download. If the results aren’t the show you want, edit the search.
+          {tv
+            ? `Pick the release to download for ${title} season ${season}, episode ${episode}. A whole-season release downloads only this episode.`
+            : 'Pick the release to download. If the results aren’t the show you want, edit the search.'}
         </div>
 
-        {/* Editable query + audio */}
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <input
-            value={query}
-            autoFocus
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); runSearch(); } }}
-            placeholder="Search Nyaa"
-            className="candy-input"
-            style={{ flex: 1, minWidth: 0, padding: '7px 10px', fontSize: 12, color: 'var(--text)' }}
-          />
-          <PrimaryBtn small accent={a} onClick={() => runSearch()}>Search</PrimaryBtn>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={S.label}>Audio</span>
-          <FilterChip active={audio === 'sub'} accent={a} onClick={() => { setAudio('sub'); runSearch(query, 'sub'); }}>Sub</FilterChip>
-          <FilterChip active={audio === 'dub'} accent={a} onClick={() => { setAudio('dub'); runSearch(query, 'dub'); }}>Dub</FilterChip>
-        </div>
+        {/* Editable query + audio — Nyaa only; Torrentio is keyed by IMDb id. */}
+        {!tv && (
+          <>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                value={query}
+                autoFocus
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); runSearch(); } }}
+                placeholder="Search Nyaa"
+                className="candy-input"
+                style={{ flex: 1, minWidth: 0, padding: '7px 10px', fontSize: 12, color: 'var(--text)' }}
+              />
+              <PrimaryBtn small accent={a} onClick={() => runSearch()}>Search</PrimaryBtn>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={S.label}>Audio</span>
+              <FilterChip active={audio === 'sub'} accent={a} onClick={() => { setAudio('sub'); runSearch(query, 'sub'); }}>Sub</FilterChip>
+              <FilterChip active={audio === 'dub'} accent={a} onClick={() => { setAudio('dub'); runSearch(query, 'dub'); }}>Dub</FilterChip>
+            </div>
+          </>
+        )}
 
         {/* Results */}
         <div style={S.list}>
           {loading && <div style={S.muted}>Searching</div>}
-          {!loading && error && <div style={S.muted}>{error} Try editing the search above.</div>}
+          {!loading && error && <div style={S.muted}>{error}{tv ? '' : ' Try editing the search above.'}</div>}
           {!loading && cands && cands.map((c, i) => {
             const active = i === sel;
             return (

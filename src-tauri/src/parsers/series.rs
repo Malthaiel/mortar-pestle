@@ -499,7 +499,7 @@ fn extract_body_section(body: &str, name: &str) -> Option<String> {
     }
 }
 
-fn parse_episode_number(file: &str) -> Option<i64> {
+pub(crate) fn parse_episode_number(file: &str) -> Option<i64> {
     if !RE_VIDEO_EXT.is_match(file) {
         return None;
     }

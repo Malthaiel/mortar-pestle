@@ -47,6 +47,24 @@ pub enum JobState {
     Cancelled,
 }
 
+/// The TV lane's extra parameters. Its PRESENCE is the domain switch: a job
+/// carrying one skips Phase 1 entirely (no Python at all), because the card was
+/// already written by `tv_add_to_library` and the magnet already came from the
+/// Torrentio picker. All that is left is magnet → engine → mark the card.
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct TvJob {
+    pub season: i64,
+    pub episode: i64,
+    /// Torrentio's `fileIdx` — which file inside a season pack IS this episode.
+    /// Handed to the engine as `only_files`, so choosing a 60 GB season pack
+    /// downloads one episode's file and nothing else. That is why this lane has
+    /// no extraction step.
+    pub file_idx: Option<usize>,
+    #[serde(skip)]
+    pub magnet: String,
+}
+
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct DownloadJob {
@@ -97,6 +115,8 @@ pub struct DownloadJob {
     /// Initial frontmatter Status for metadata-only cards (quick-status menu).
     #[serde(skip)]
     pub initial_status: Option<String>,
+    /// Set for a TV Shows job, `None` for an anime one. See `TvJob`.
+    pub tv: Option<TvJob>,
 }
 
 static DOWNLOAD_STATE: Mutex<job_queue::Queue<DownloadJob>> = Mutex::new(job_queue::Queue::new());
@@ -201,6 +221,84 @@ pub async fn anime_download_enqueue(
             download_source,
             metadata_only: metadata_only.unwrap_or(false),
             initial_status,
+            tv: None,
+        });
+        recompute_queue_positions(&mut guard);
+        if !guard.worker_running {
+            guard.worker_running = true;
+            true
+        } else {
+            false
+        }
+    };
+    emit_progress(&app, &id);
+    if should_start {
+        let app2 = app.clone();
+        tauri::async_runtime::spawn(async move { run_worker(app2).await });
+    }
+    Ok(id)
+}
+
+/// Queue one TV episode. Shares the anime queue, worker, status, cancel and
+/// history wholesale — only the acquisition phase differs, and `TvJob` is what
+/// switches it.
+///
+/// `series_path` is the existing card (`TV Shows/Catalog/<Title>.md`) written by
+/// `tv_add_to_library`; nothing here creates or enriches a card.
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub async fn tv_download_enqueue(
+    app: AppHandle,
+    series_path: String,
+    title: String,
+    magnet: String,
+    season: i64,
+    episode: i64,
+    file_idx: Option<usize>,
+    image: Option<String>,
+) -> Result<String, String> {
+    if !magnet.starts_with("magnet:") {
+        return Err("a magnet link is required".into());
+    }
+    if series_path.trim().is_empty() {
+        return Err("the show's card path is required".into());
+    }
+    let id = format!("tdl{}", JOB_SEQ.fetch_add(1, Ordering::Relaxed));
+    // The dock label carries the episode: the queue is sequential, so several
+    // episodes of one show stack up and bare titles would be unreadable.
+    let label = format!("{title} S{season:02}E{episode:02}");
+    log::info!("[anime_download] enqueue TV {label} job {id}");
+    let should_start = {
+        let mut guard = DOWNLOAD_STATE.lock().unwrap();
+        guard.jobs.push(DownloadJob {
+            id: id.clone(),
+            mal_id: 0,
+            title: label,
+            audio: String::new(),
+            image,
+            airing: false,
+            anime_type: "TV Show".into(),
+            episodes_total: None,
+            tag: format!("tv-s{season:02}e{episode:02}"),
+            torrent_id: None,
+            local_path: None,
+            series_path: Some(series_path),
+            state: JobState::Queued,
+            progress_pct: 0.0,
+            files_done: 0,
+            files_total: 0,
+            queue_position: 0,
+            error: None,
+            size_bytes: None,
+            dl_speed: None,
+            eta_secs: None,
+            save_path: None,
+            child_pid: None,
+            cancel_requested: false,
+            download_source: None,
+            metadata_only: false,
+            initial_status: None,
+            tv: Some(TvJob { season, episode, file_idx, magnet }),
         });
         recompute_queue_positions(&mut guard);
         if !guard.worker_running {
@@ -574,7 +672,152 @@ fn job_prep_args(
     })
 }
 
+/// A TV job's own arguments, and the switch that routes it away from Phase 1.
+fn tv_prep_args(job_id: &str) -> Option<(String, TvJob)> {
+    let g = DOWNLOAD_STATE.lock().unwrap();
+    let j = g.jobs.iter().find(|j| j.id == job_id)?;
+    let tv = j.tv.clone()?;
+    Some((j.series_path.clone()?, tv))
+}
+
+/// The TV lane: no Phase 1. The card exists and the magnet is already chosen, so
+/// this is folder → engine → the shared poll loop.
+///
+/// `Local Path` is written UP FRONT rather than on completion: librqbit creates a
+/// torrent's files the moment it is added, so the season folder is readable
+/// immediately and in-flight episodes show up in the card straight away.
+async fn process_tv_job(app: &AppHandle, job_id: &str, series_rel: String, tv: TvJob) {
+    let library = vault::library_vault_root();
+    let root = crate::commands::video_config::tv_video_root(app, &library);
+    // The folder is named from the CARD, not from the job's label — the label
+    // carries the episode ("Breaking Bad S01E02"), which would give every single
+    // episode its own show folder. The card's stem is already filename-safe.
+    let show_name = Path::new(&series_rel)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("Unknown")
+        .to_string();
+    let show_dir = root.join(&show_name);
+    // `Season N` matches the card's `## SEASON N` section, which is what the
+    // season reader joins onto `Local Path` when it scans for episode files.
+    let season_dir = show_dir.join(format!("Season {}", tv.season));
+    if let Err(e) = std::fs::create_dir_all(&season_dir) {
+        log::warn!("[anime_download] TV video root unavailable {season_dir:?}: {e}");
+        finalize_error(
+            app,
+            job_id,
+            "Your video folder isn't available — reconnect the drive or change it in Settings → Library.",
+        );
+        return;
+    }
+    set_card_field(
+        &series_rel,
+        "Local Path",
+        &card_local_path(&show_dir, Path::new(&library)),
+    );
+    set_download_status(&series_rel, "Downloading");
+
+    // Its own scratch folder, because librqbit puts EVERY file of a season pack
+    // on disk (empty, or part-written where a piece straddles a file boundary).
+    // Dropped straight into the season folder those look exactly like downloaded
+    // episodes. One finished episode gets lifted out of here and the rest goes.
+    let scratch = season_dir.join(format!(".dl-{job_id}"));
+    if let Err(e) = std::fs::create_dir_all(&scratch) {
+        finalize_error(app, job_id, &format!("could not make the download folder: {e}"));
+        return;
+    }
+    let season_path = Some(season_dir.to_string_lossy().into_owned());
+    {
+        let mut guard = DOWNLOAD_STATE.lock().unwrap();
+        if let Some(j) = guard.jobs.iter_mut().find(|j| j.id == job_id) {
+            j.state = JobState::Downloading;
+            // The season folder, not the scratch one — this is what Reveal opens.
+            j.local_path = season_path.clone();
+            j.files_total = 1;
+        }
+    }
+    let added = match crate::commands::torrent::add(
+        app,
+        tv.magnet.clone(),
+        Some(scratch.to_string_lossy().into_owned()),
+        tv.file_idx.map(|i| vec![i]),
+    )
+    .await
+    {
+        Ok(a) => a,
+        Err(e) => {
+            finalize_error(app, job_id, &e);
+            return;
+        }
+    };
+    {
+        let mut guard = DOWNLOAD_STATE.lock().unwrap();
+        if let Some(j) = guard.jobs.iter_mut().find(|j| j.id == job_id) {
+            j.torrent_id = Some(added.id);
+            j.save_path = season_path.clone();
+        }
+    }
+    emit_progress(app, job_id);
+    poll_until_done(
+        app,
+        job_id,
+        added.id,
+        Some(series_rel),
+        None,
+        Some(TvLift { scratch, season_dir, episode: tv.episode }),
+    )
+    .await;
+}
+
+/// What the poll loop does with a finished TV torrent: release the engine's
+/// handles, move this episode's file into the season folder, bin the scratch.
+struct TvLift {
+    scratch: PathBuf,
+    season_dir: PathBuf,
+    episode: i64,
+}
+
+/// Move the one file that IS this episode out of the scratch folder, then delete
+/// everything else the pack left behind.
+///
+/// The match uses the same filename parser the episode scan uses, so a file that
+/// lands here is a file the card will find. Ties (a pack with several matches)
+/// go to the largest, which is the complete one — the neighbours only ever hold
+/// the overspill from a straddling piece.
+fn lift_episode(lift: &TvLift) -> Option<PathBuf> {
+    let mut best: Option<(u64, PathBuf)> = None;
+    for entry in std::fs::read_dir(&lift.scratch).ok()?.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+        if crate::parsers::series::parse_episode_number(name) != Some(lift.episode) {
+            continue;
+        }
+        let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
+        if best.as_ref().is_none_or(|(b, _)| size > *b) {
+            best = Some((size, path));
+        }
+    }
+    let (_, src) = best?;
+    let dest = lift.season_dir.join(src.file_name()?);
+    // rename first (same volume, instant); copy is the cross-volume fallback.
+    if std::fs::rename(&src, &dest).is_err() {
+        if let Err(e) = std::fs::copy(&src, &dest) {
+            log::warn!("[anime_download] could not move {src:?} to {dest:?}: {e}");
+            return None;
+        }
+    }
+    Some(dest)
+}
+
 async fn process_job(app: &AppHandle, job_id: &str) {
+    // TV Shows: a different acquisition model entirely — see `process_tv_job`.
+    if let Some((series_rel, tv)) = tv_prep_args(job_id) {
+        process_tv_job(app, job_id, series_rel, tv).await;
+        return;
+    }
     let Some((mal_id, audio, airing, anime_type, download_source, metadata_only, initial_status)) =
         job_prep_args(job_id)
     else {
@@ -750,7 +993,7 @@ async fn process_job(app: &AppHandle, job_id: &str) {
         finalize_error(app, job_id, "the download script resolved no magnet");
         return;
     };
-    let added = match crate::commands::torrent::add(app, magnet, local_path.clone()).await {
+    let added = match crate::commands::torrent::add(app, magnet, local_path.clone(), None).await {
         Ok(a) => a,
         Err(e) => {
             finalize_error(app, job_id, &e);
@@ -764,10 +1007,21 @@ async fn process_job(app: &AppHandle, job_id: &str) {
             j.save_path = local_path.clone();
         }
     }
-    let torrent_id = added.id;
     emit_progress(app, job_id);
+    poll_until_done(app, job_id, added.id, series_path, local_path, None).await;
+}
 
-    // ── Phase 2 — Poll the built-in engine until the torrent completes ──────
+/// Phase 2 — poll the built-in engine until the torrent completes, then mark the
+/// card and finalize. Shared by both lanes: the acquisition differs, the waiting
+/// does not.
+async fn poll_until_done(
+    app: &AppHandle,
+    job_id: &str,
+    torrent_id: usize,
+    series_path: Option<String>,
+    local_path: Option<String>,
+    tv_lift: Option<TvLift>,
+) {
     let mut empty_polls = 0u32;
     let mut dead_polls = 0u32;
     let mut polls = 0u32;
@@ -844,6 +1098,21 @@ async fn process_job(app: &AppHandle, job_id: &str) {
                     if all_done {
                         if let Some(lp) = &local_path {
                             cleanup_download_extras(lp);
+                        }
+                        if let Some(lift) = &tv_lift {
+                            // Windows will not move a file the engine still holds
+                            // open, so drop the torrent (keeping its files) first.
+                            let _ = crate::commands::torrent::forget(app, torrent_id).await;
+                            if lift_episode(lift).is_none() {
+                                let _ = std::fs::remove_dir_all(&lift.scratch);
+                                finalize_error(
+                                    app,
+                                    job_id,
+                                    "the download finished but held no file for this episode — press Retry and pick a different source.",
+                                );
+                                return;
+                            }
+                            let _ = std::fs::remove_dir_all(&lift.scratch);
                         }
                         if let Some(rel) = &series_path {
                             set_download_status(rel, "Complete");
@@ -968,6 +1237,8 @@ fn record_history(app: &AppHandle, job_id: &str) {
             title: j.title.clone(),
             subtitle: if j.metadata_only {
                 "Added to library".into()
+            } else if let Some(tv) = &j.tv {
+                format!("TV Show · Season {} episode {}", tv.season, tv.episode)
             } else {
                 format!("{} · {}", j.anime_type, j.audio)
             },
@@ -1014,7 +1285,10 @@ fn finalize_error(app: &AppHandle, job_id: &str, msg: &str) {
                 job.state = JobState::Error;
                 job.error = Some(msg.to_string());
                 job.child_pid = None;
-                job.series_path.clone()
+                // A TV job owns ONE episode of a show that may already have
+                // twenty on disk, so a dead torrent must not flip the whole
+                // card to Failed. The error lives on the job and the row.
+                job.tv.is_none().then(|| job.series_path.clone()).flatten()
             }
             None => None,
         }
@@ -1248,7 +1522,7 @@ async fn poll_airing_once(app: &AppHandle) {
             }
         };
         for (n, magnet) in episodes_to_fetch(&have, &offered, s.episodes_total, AIRING_POLL_MAX_ADDS) {
-            match crate::commands::torrent::add(app, magnet, Some(folder.clone())).await {
+            match crate::commands::torrent::add(app, magnet, Some(folder.clone()), None).await {
                 Ok(t) => {
                     queued += 1;
                     log::info!("[airing] {} ep {n} queued ({})", s.title, t.info_hash);
