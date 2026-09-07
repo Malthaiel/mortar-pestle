@@ -6,7 +6,7 @@
 // flip-or-insert in the log's `## Routine` section. So this row talks to the
 // routine writer, and reuses the SAME shared primitives TaskChip does —
 // `.candy-btn[data-shape="chip-field"]` for the face and `ChipIconBtn` for the
-// tick — so the two lists read as one surface.
+// tick and the delete — so the two lists read as one surface.
 //
 // A timed item shows its range on the right; an untimed one shows nothing there
 // and lives only in this list. Hold-and-drag hands off to startPaneDrag with
@@ -14,7 +14,7 @@
 // one-off session (see PlannerProvider.handleRoutineDrop).
 
 import { ChipIconBtn, useHoldDrag } from './ItemChips.jsx';
-import { IconCheck } from '../icons.jsx';
+import { IconCheck, IconX } from '../icons.jsx';
 import { usePlanner } from '@modules/core/planner/PlannerProvider.jsx';
 
 const ROW = { display: 'flex', alignItems: 'center', width: '100%' };
@@ -24,7 +24,7 @@ function range(start, end) {
   return `${start}–${end}`;
 }
 
-export default function RoutineChip({ item, onToggle }) {
+export default function RoutineChip({ item, onToggle, onDelete }) {
   const { startPaneDrag } = usePlanner();
   const checked = !!item.checked;
 
@@ -66,6 +66,19 @@ export default function RoutineChip({ item, onToggle }) {
         active={checked}
         onClick={() => onToggle?.(item.name)}
       ><IconCheck size={12}/></ChipIconBtn>
+
+      {/* Delete — the same round ✕ TaskChip carries, so the two lists still
+          read as one surface. It drops the item from THIS weekday's frames
+          entry, which is every future occurrence of it; unlike a task's ✕
+          there is no undo toast behind it (the routine writer has none). Only
+          rendered when a host passes onDelete. */}
+      {onDelete && (
+        <ChipIconBtn
+          round
+          title="Delete routine item"
+          onClick={() => onDelete(item)}
+        ><IconX/></ChipIconBtn>
+      )}
     </div>
   );
 }

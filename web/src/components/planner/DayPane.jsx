@@ -392,6 +392,18 @@ export default function DayPane({ accent = 'var(--accent)', pivotDs, onPivotChan
     try { await writeFrames(next); }
     catch (e) { console.error('routine add failed', e); }
   };
+  // The mirror of addRoutineItem: drop the item from THIS weekday's frames
+  // entry. By id, not name — two items may share a name across weekdays and
+  // makeUniqueId only guarantees uniqueness within the day. The tick line the
+  // item may have left in the log's `## Routine` section is keyed by name and
+  // simply stops being rendered; nothing reads a tick without an item.
+  const removeRoutineItem = async (item) => {
+    const dayKey = weekdayForKey(pivotDs).toLowerCase();
+    const day = frames?.[dayKey] || [];
+    const next = { ...frames, [dayKey]: day.filter(b => b.id !== item.id) };
+    try { await writeFrames(next); }
+    catch (e) { console.error('routine delete failed', e); }
+  };
   const [addingNote, setAddingNote] = useState(false);
 
   const colorFor = (typeName) => colorForType(types, typeName);
@@ -480,7 +492,7 @@ export default function DayPane({ accent = 'var(--accent)', pivotDs, onPivotChan
           {routine.total > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: GAP_UNDER_BTN }}>
               {routine.items.map(it => (
-                <RoutineChip key={it.id} item={it} onToggle={routine.toggle}/>
+                <RoutineChip key={it.id} item={it} onToggle={routine.toggle} onDelete={removeRoutineItem}/>
               ))}
             </div>
           )}
@@ -640,7 +652,7 @@ export default function DayPane({ accent = 'var(--accent)', pivotDs, onPivotChan
                   routine item is checked per DAY, and the other six weekdays
                   have no day to check against, so they list as plain rows. */}
               {isViewed
-                ? routine.items.map(it => <RoutineChip key={it.id} item={it} onToggle={routine.toggle}/>)
+                ? routine.items.map(it => <RoutineChip key={it.id} item={it} onToggle={routine.toggle} onDelete={removeRoutineItem}/>)
                 : items.map(it => (
                     <div key={it.id} style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.35 }}>
                       {it.name}
