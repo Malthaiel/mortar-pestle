@@ -15,14 +15,14 @@ import { EyebrowHeading } from '@host/components/ui/Eyebrow.jsx';
 // 11px mono uppercase faint label with a bottom border.
 
 // Body-text block (Synopsis / Background) — same prose styling as the old
-// DiscoveryDetail inline synopsis (13px muted, 1.6 line-height, pre-wrap).
+// DiscoveryDetail inline synopsis (13px soft, 1.6 line-height, pre-wrap).
 function TextSection({ title, body }) {
   if (!body) return null;
   return (
     <section>
       <EyebrowHeading>{title}</EyebrowHeading>
       <p style={{
-        margin: 0, fontSize: 13, lineHeight: 1.6, color: 'var(--text-muted)',
+        margin: 0, fontSize: 13, lineHeight: 1.6, color: 'color-mix(in oklch, var(--text-2), var(--text-muted) 33%)',
         maxWidth: 760, whiteSpace: 'pre-wrap',
       }}>{body}</p>
     </section>
