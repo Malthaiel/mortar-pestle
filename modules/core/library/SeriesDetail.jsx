@@ -436,7 +436,6 @@ export default function SeriesDetail({ accent, seriesPath }) {
               ep={ep}
               idx={flatIdx}
               accent={accent}
-              seriesPath={series.path}
               watched={isWatched}
               playing={isPlaying}
               progress={frac}

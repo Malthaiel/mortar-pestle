@@ -17,10 +17,35 @@ use tauri::AppHandle;
 
 use crate::render;
 
+/// The built-in Citadel candidates, best first. `dirs::document_dir()` is NOT
+/// one place on Windows: with OneDrive folder backup on it reports
+/// `…\OneDrive\Documents` while the vault sits in the un-redirected
+/// `…\Documents`. Both are candidates everywhere this fallback is used.
+fn citadel_candidates() -> Vec<PathBuf> {
+    let mut roots = Vec::new();
+    if let Some(d) = dirs::document_dir() {
+        roots.push(d.join("Citadel"));
+    }
+    if let Some(h) = dirs::home_dir() {
+        let un_redirected = h.join("Documents").join("Citadel");
+        if !roots.contains(&un_redirected) {
+            roots.push(un_redirected);
+        }
+    }
+    roots
+}
+
 /// Vault root. Precedence: `AGENTIC_VAULT_ROOT` env (tests) → the active vault
 /// from the multi-vault registry (`commands::vaults`) → built-in Citadel
 /// fallback (first-run / pre-init). Re-read on every call so a vault switch or
 /// a per-test tempdir takes effect immediately.
+///
+/// The fallback used to hand back `document_dir()/Citadel` unconditionally, so
+/// on a machine with OneDrive folder backup it named a directory that does not
+/// exist while the real vault sat one level up (2026-08-23). It now picks the
+/// candidate that is really on disk, and only falls back to naming the first
+/// one when neither is — so the caller's "missing at {path}" error still names
+/// something recognisable rather than an empty string.
 pub fn vault_root() -> String {
     if let Ok(v) = std::env::var("AGENTIC_VAULT_ROOT") {
         return v;
@@ -28,8 +53,12 @@ pub fn vault_root() -> String {
     if let Some(p) = crate::commands::vaults::active_vault_path() {
         return p;
     }
-    dirs::document_dir()
-        .map(|d| d.join("Citadel").to_string_lossy().into_owned())
+    let roots = citadel_candidates();
+    roots
+        .iter()
+        .find(|r| r.is_dir())
+        .or_else(|| roots.first())
+        .map(|r| r.to_string_lossy().into_owned())
         .unwrap_or_else(|| "Citadel".to_string())
 }
 
@@ -48,17 +77,11 @@ pub fn vault_root() -> String {
 /// from it, so passing the active vault reintroduced the same bug one process
 /// deeper (2026-08-24).
 pub fn content_vault_root() -> PathBuf {
-    // `dirs::document_dir()` is not one place on Windows: with OneDrive folder
-    // backup on it reports `…\OneDrive\Documents` while the vault sits in the
-    // un-redirected `…\Documents`. So both are candidates and the one that
-    // really holds the scripts wins.
+    // The OneDrive-redirection candidates live in `citadel_candidates()` — the
+    // active vault goes first here, then the built-ins, and the one that really
+    // holds the scripts wins.
     let mut roots = vec![PathBuf::from(vault_root())];
-    if let Some(d) = dirs::document_dir() {
-        roots.push(d.join("Citadel"));
-    }
-    if let Some(h) = dirs::home_dir() {
-        roots.push(h.join("Documents").join("Citadel"));
-    }
+    roots.extend(citadel_candidates());
     let found = roots
         .iter()
         .find(|r| r.join("Infrastructure").join("Scripts").is_dir())

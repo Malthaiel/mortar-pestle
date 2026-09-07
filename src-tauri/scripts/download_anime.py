@@ -54,6 +54,7 @@ import re
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import date
@@ -65,6 +66,16 @@ CATALOG_REL = "Anime/Catalog"
 ASSETS_REL = "Anime/Assets"
 
 _last_call = [0.0]
+
+# Jikan's documented ceiling is 3 requests/second. 0.34s spacing sits just under
+# it. Separate from `_last_call`, which paces AniList — the two are different
+# services with different budgets and must not share a clock.
+JIKAN_SPACING = 0.34
+# A 429 whose Retry-After is longer than this is not worth waiting out: every
+# Jikan field here is optional, so giving up costs some episode titles while
+# stalling costs the whole download's wall-clock.
+RETRY_AFTER_CAP = 5.0
+_jikan_last = [0.0]
 
 
 # ── output ────────────────────────────────────────────────────────────────
@@ -158,10 +169,24 @@ def jikan_side(path):
     """Best-effort Jikan GET for the handful of fields AniList does not carry
     (opening/ending songs, age rating, background blurb, episode titles).
 
-    ONE attempt, short timeout, `None` on any failure — a dead Jikan must leave
-    those fields empty and never slow down or fail a download. `Accept-Encoding:
-    gzip` is the bucket their cache still answers from, and urllib does not
-    auto-decompress it."""
+    Short timeout, `None` on any failure — a dead Jikan must leave those fields
+    empty and never fail a download. `Accept-Encoding: gzip` is the bucket their
+    cache still answers from, and urllib does not auto-decompress it.
+
+    THROTTLE + ONE 429 RETRY (2026-09-06). This is the ONLY place the script
+    talks to Jikan, so the spacing lives here rather than at the three call
+    sites. It matters because `episode_titles` pages up to 25 times in a row:
+    unspaced, that blows Jikan's 3 req/s limit within the first second, and the
+    loop's `if not resp: break` then TRUNCATES the episode list silently — the
+    show downloads with half its titles missing and nothing says why. On a 429
+    we honour `Retry-After` for one bounded wait (capped at RETRY_AFTER_CAP, so
+    a "wait 60s" header gives up instead of stalling the download) and retry
+    once. Worst case per call is one spacing gap + one capped wait; the
+    best-effort contract is unchanged."""
+    elapsed = time.monotonic() - _jikan_last[0]
+    if elapsed < JIKAN_SPACING:
+        time.sleep(JIKAN_SPACING - elapsed)
+
     req = urllib.request.Request(
         f"{JIKAN_BASE}/{path}",
         headers={
@@ -170,15 +195,34 @@ def jikan_side(path):
             "Accept-Encoding": "gzip",
         },
     )
-    try:
-        with urllib.request.urlopen(req, timeout=8) as r:
-            raw = r.read()
-            if r.headers.get("Content-Encoding") == "gzip":
-                raw = gzip.decompress(raw)
-        return json.loads(raw)
-    except Exception as e:  # noqa: BLE001 — every failure is non-fatal here
-        log(f"jikan side-fetch {path} unavailable ({e})")
-        return None
+    for attempt in (0, 1):
+        try:
+            _jikan_last[0] = time.monotonic()
+            with urllib.request.urlopen(req, timeout=8) as r:
+                raw = r.read()
+                if r.headers.get("Content-Encoding") == "gzip":
+                    raw = gzip.decompress(raw)
+            return json.loads(raw)
+        except urllib.error.HTTPError as e:
+            _jikan_last[0] = time.monotonic()
+            if e.code == 429 and attempt == 0:
+                try:
+                    wait = float(e.headers.get("Retry-After") or JIKAN_SPACING)
+                except ValueError:
+                    wait = JIKAN_SPACING
+                if wait <= RETRY_AFTER_CAP:
+                    log(f"jikan 429 on {path}; waiting {wait:.1f}s and retrying once")
+                    time.sleep(wait)
+                    continue
+                log(f"jikan 429 on {path}; Retry-After {wait:.0f}s exceeds cap, giving up")
+            else:
+                log(f"jikan side-fetch {path} unavailable ({e})")
+            return None
+        except Exception as e:  # noqa: BLE001 — every failure is non-fatal here
+            _jikan_last[0] = time.monotonic()
+            log(f"jikan side-fetch {path} unavailable ({e})")
+            return None
+    return None
 
 
 DETAIL_QUERY = """

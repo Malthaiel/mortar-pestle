@@ -1,25 +1,18 @@
-// Single episode row in SeriesDetail. Click to play, hover affordances for
-// open-page + watched indicator.
+// Single episode row in SeriesDetail. Click to play, watched indicator.
+//
+// The hover-reveal pop-out arrow was DELETED 2026-09-06. It called
+// `window.open`, which returns null in WebView2 and creates no OS window, and
+// the standalone player route it targeted lost its picture host when Phase 4 of
+// the Native Video Player plan dropped pop-out. So it opened an empty window,
+// every time. Playback is the mpv lane only; there is no second window to open.
+// `hover`/`setHover` and the `seriesPath` prop existed solely for that arrow.
 
-import { useState } from 'react';
-
-export default function EpisodeRow({ ep, idx, accent, seriesPath, watched, playing, progress, onPlay }) {
-  const [hover, setHover] = useState(false);
+export default function EpisodeRow({ ep, idx, accent, watched, playing, progress, onPlay }) {
   const unavailable = !ep.available;
   const filled = watched || playing;
 
-  const onPopout = (e) => {
-    e.stopPropagation();
-    if (unavailable || !seriesPath) return;
-    const encoded = seriesPath.split('/').map(encodeURIComponent).join('/');
-    const url = window.location.origin + '/#/player/' + encoded + '?ep=' + idx;
-    window.open(url, 'video-popout-' + idx, 'popup,width=1280,height=720');
-  };
-
   return (
     <div
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
       onClick={() => !unavailable && onPlay()}
       title={unavailable ? 'episode not downloaded' : (ep.title || '')}
       className={'candy-btn' + (playing ? ' is-playing' : '') + (unavailable ? ' is-unavailable' : '')}
@@ -67,22 +60,6 @@ export default function EpisodeRow({ ep, idx, accent, seriesPath, watched, playi
         )}
       </div>
 
-      {/* Popout button (hover reveal) */}
-      {!unavailable && (
-        <button
-          onClick={onPopout}
-          title="Open in separate window"
-          data-own-press
-          className="candy-btn"
-          data-shape="circle"
-          style={{
-            opacity: hover ? 1 : 0,
-            pointerEvents: hover ? 'auto' : 'none',
-            transition: 'opacity 120ms ease',
-            flexShrink: 0,
-          }}
-        ><span className="candy-face">↗</span></button>
-      )}
       </div>
 
       {/* Progress sliver along the bottom edge */}
