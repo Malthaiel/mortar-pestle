@@ -24,6 +24,8 @@ import WikilinkHoverPreview from './components/WikilinkHoverPreview.jsx';
 import WhatsNewOverlay from './components/WhatsNewOverlay.jsx';
 import DocsPage from './pages/docs/DocsPage.jsx';
 import Dock from './components/dock/Dock.jsx';
+// TEMPORARY icon picker host — removed with IconPicker.jsx once icons are baked in.
+import { IconPickerHost } from './components/IconPicker.jsx';
 import MarkupOverlay from './components/markup/MarkupOverlay.jsx';
 import { useMarkupMode } from './components/markup/useMarkupMode.js';
 import RecyclingBinModal from './components/RecyclingBinModal.jsx';
@@ -33,6 +35,8 @@ import { ContextMenuProvider } from './context-menu/ContextMenuProvider.jsx';
 import TransientToastLayer from './notifications/TransientToastLayer.jsx';
 import NotificationPanel from './notifications/NotificationPanel.jsx';
 import { DownloadsProvider } from './downloads/DownloadsProvider.jsx';
+import ProcessesProvider from './processes/ProcessesProvider.jsx';
+import ProcessesModal from './processes/ProcessesModal.jsx';
 import DownloadsPanel from './downloads/DownloadsPanel.jsx';
 import DownloadsManager from './downloads/DownloadsManager.jsx';
 import { VaultProvider, useVaults } from './hooks/useVaults.jsx';
@@ -138,6 +142,7 @@ function MainApp() {
   const [downloadsOpen, setDownloadsOpen] = useState(false);
   const [downloadsManagerOpen, setDownloadsManagerOpen] = useState(false);
   const [recycleBinOpen, setRecycleBinOpen] = useState(false);
+  const [processesOpen, setProcessesOpen] = useState(false);
   const accent = settings.accentColor;
   // Site Bridge, both directions. Off by default; reads nothing while off.
   useSitePush(settings.sitePushEnabled === true);
@@ -248,6 +253,7 @@ function MainApp() {
     >
     <ComposedProviders>
       <DownloadsProvider settings={settings}>
+      <ProcessesProvider>
       <TitleBar
         settings={settings}
         accent={accent}
@@ -256,6 +262,7 @@ function MainApp() {
         setNotifOpen={setNotifOpen}
         notifOpen={notifOpen}
         setRecycleBinOpen={setRecycleBinOpen}
+        setProcessesOpen={setProcessesOpen}
       />
       <AppShell
         onOpenSettings={() => setSettingsOpen(true)}
@@ -291,6 +298,11 @@ function MainApp() {
         accent={accent}
         keybinds={settings.keybinds}
       />
+      <ProcessesModal
+        open={processesOpen}
+        onClose={() => setProcessesOpen(false)}
+        accent={accent}
+      />
       <RecyclingBinModal
         open={recycleBinOpen}
         onClose={() => setRecycleBinOpen(false)}
@@ -319,7 +331,9 @@ function MainApp() {
       <ConfettiBurst accent={accent}/>
       <WikilinkHoverPreview/>
       <WhatsNewOverlay/>
+      <IconPickerHost/>
       {markupOn && <MarkupOverlay accent={accent} onPick={copyMarkupTarget}/>}
+      </ProcessesProvider>
       </DownloadsProvider>
     </ComposedProviders>
     </ContextMenuProvider>

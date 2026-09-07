@@ -5,6 +5,7 @@
 // vedit_remux_start deliberately skip the media-root gate Rust-side.
 
 import { open } from '@tauri-apps/plugin-dialog';
+import { remuxWithProcess } from './remuxJob.js';
 
 // Import codec gate: pass only what WebKit can decode AND MP4 can carry.
 // ≤1080p sources remux `-c:v copy`; >1080p sources re-encode into a 1080p
@@ -46,7 +47,10 @@ export async function pickAndImport({ api, existingHashes, onProgress }) {
       }
       const needsProxy = (v.height || 0) > 1080 || (v.width || 0) > 1920;
       onProgress?.({ name, state: needsProxy ? 'building 1080p preview proxy for' : 'remuxing' });
-      const r = await api.invoke('vedit_remux_start', { path, audioTrack: 0 });
+      const r = await remuxWithProcess(api, {
+        path,
+        statusLine: needsProxy ? 'Building 1080p preview proxy' : 'Remuxing',
+      });
       if (existingHashes?.has(r.hash)) {
         rejected.push({ path, name, reason: 'already in the bin' });
         continue;

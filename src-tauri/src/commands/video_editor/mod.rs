@@ -150,6 +150,22 @@ pub fn vedit_remux_release(hashes: Vec<String>) -> Result<(), VaultError> {
     Ok(())
 }
 
+/// Stop the running clip prep (the Processes panel's Stop on a `remux:` row).
+/// Mirrors `vedit_export_cancel`: no argument, hard kill, the awaiting
+/// `vedit_remux_start` returns Err on the next poll tick.
+#[tauri::command]
+pub fn vedit_proxy_cancel() {
+    editor_proxy::cancel_running();
+}
+
+/// Live clip-prep pids, so the Processes panel can put CPU + memory on the
+/// row. `vedit_remux_start` only returns when the job is over, so the pid has
+/// to be asked for separately while it runs.
+#[tauri::command]
+pub fn vedit_proxy_status() -> Vec<u32> {
+    editor_proxy::running_pids()
+}
+
 // ───────────────────────── SF10: export engine ─────────────────────────
 //
 // Pure builder fns (unit-tested below, build_transcode_argv precedent) feed a

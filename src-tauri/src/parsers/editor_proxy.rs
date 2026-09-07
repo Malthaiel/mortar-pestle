@@ -37,6 +37,9 @@ struct ProxyEntry {
     started_at: Instant,
     status: EntryStatus,
     pinned: bool,
+    /// ffmpeg child pid, for the Processes panel's Stop (`vedit_proxy_cancel`).
+    /// `None` once the child exits.
+    pid: Option<u32>,
 }
 
 fn registry() -> &'static Mutex<HashMap<String, ProxyEntry>> {
@@ -92,6 +95,7 @@ pub fn start_or_reuse(
                 started_at: Instant::now(),
                 status: EntryStatus::Done,
                 pinned: false,
+                pid: None,
             },
         );
         return Ok(());
@@ -100,6 +104,7 @@ pub fn start_or_reuse(
     let part = final_path.with_extension("mp4.part");
     let _ = std::fs::remove_file(&part);
     let child = spawn_ffmpeg_to_file(&abs, audio, &part, copy_audio, proxy.as_ref())?;
+    let pid = child.id();
     let started_at = Instant::now();
     {
         let mut r = lock();
@@ -110,6 +115,7 @@ pub fn start_or_reuse(
                 started_at,
                 status: EntryStatus::Running,
                 pinned: false,
+                pid,
             },
         );
     }
@@ -153,10 +159,38 @@ pub fn start_or_reuse(
         if let Some(entry) = r.get_mut(&hash) {
             if entry.started_at == started_at {
                 entry.status = new_status;
+                entry.pid = None;
             }
         }
     });
     Ok(())
+}
+
+/// Hard-kill every running remux (the Processes panel's Stop on a clip-prep
+/// row). The supervisor task sees the non-zero exit and writes `Failed`, which
+/// `vedit_remux_start`'s poll loop turns into an `Err` for the caller — no
+/// separate Cancelled state needed. Returns how many children were killed.
+///
+/// ponytail: kills ALL live children, not one hash. This lane is serialized by
+/// design (see the module doc), so in practice there is at most one. Take a
+/// hash argument if concurrent remuxes ever become real.
+/// Live ffmpeg pids, for the Processes panel's CPU/memory columns. Empty on a
+/// cache hit (nothing was spawned).
+pub fn running_pids() -> Vec<u32> {
+    lock().values().filter_map(|e| e.pid).collect()
+}
+
+pub fn cancel_running() -> usize {
+    let pids = running_pids();
+    for pid in &pids {
+        #[cfg(unix)]
+        unsafe {
+            libc::kill(*pid as i32, libc::SIGKILL);
+        }
+        #[cfg(not(unix))]
+        crate::commands::proc_util::terminate_pid(*pid);
+    }
+    pids.len()
 }
 
 pub fn status_of(hash: &str) -> Option<EntryStatus> {

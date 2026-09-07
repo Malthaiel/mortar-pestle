@@ -7,6 +7,8 @@
 // editor's remux cache so the clip is import-ready the moment the editor opens
 // it. Returns the probe/remux result or throws with a human-readable reason.
 
+import { remuxWithProcess } from '../video-editor/remuxJob.js';
+
 const PLAYABLE = new Set(['h264', 'hevc', 'vp9', 'av1']);
 
 export async function sendToEditor({ api, path }) {
@@ -16,6 +18,6 @@ export async function sendToEditor({ api, path }) {
   if (!PLAYABLE.has(v.codec)) {
     throw new Error(`codec "${v.codec}" can't be imported yet`);
   }
-  const r = await api.invoke('vedit_remux_start', { path, audioTrack: 0 });
+  const r = await remuxWithProcess(api, { path });
   return { hash: r.hash, url: r.url, overBudget: !!r.overBudget };
 }

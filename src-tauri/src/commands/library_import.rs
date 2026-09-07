@@ -62,7 +62,7 @@ pub struct ImportJob {
     pub add_albums: bool,
     #[serde(skip)]
     pub initial_status: Option<String>,
-    #[serde(skip)]
+    /// Serialized for the Processes window's CPU/memory readout.
     pub child_pid: Option<u32>,
     #[serde(skip)]
     pub cancel_requested: bool,
@@ -615,7 +615,7 @@ async fn process_mal_job(app: &AppHandle, job_id: &str) {
     }
 
     // ── dedupe: existing MAL ids (provider_id ∪ related_ids) ──────────────────
-    let existing: HashSet<i64> = match crate::parsers::series::list_series() {
+    let existing: HashSet<i64> = match crate::parsers::series::list_series("Anime") {
         Ok(list) => {
             let mut s = HashSet::new();
             for ser in list {

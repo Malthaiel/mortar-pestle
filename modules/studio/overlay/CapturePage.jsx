@@ -4,6 +4,7 @@ import { PrimaryBtn, OutlinedBtn, DangerOutlinedBtn } from '@host/components/ui/
 import { mediaHttpUrl } from '@host/api.js';
 import useCaptureState from './useCaptureState.js';
 import { sendToEditor } from './sendToEditor.js';
+import { remuxWithProcess } from '../video-editor/remuxJob.js';
 import { sendToStt } from './sendToStt.js';
 import { openInFiles } from '@host/components/vault-tree/revealInFiles.js';
 import { IconFolder } from '@host/components/icons.jsx';
@@ -130,7 +131,7 @@ export default function CapturePage({ api, accent }) {
       const current = () => mountedRef.current && loadedPathRef.current === selectedPath;
       const fallback = () => mediaHttpUrl(selectedPath, { library: true });
       try {
-        const r = await api.invoke('vedit_remux_start', { path: selectedPath, audioTrack: 0 });
+        const r = await remuxWithProcess(api, { path: selectedPath });
         const httpUrl = r?.url || fallback();
         let playUrl = httpUrl;
         try {

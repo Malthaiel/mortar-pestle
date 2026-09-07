@@ -25,12 +25,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { invoke } from '@tauri-apps/api/core';
-import { IconMinus, IconSquare, IconRestore, IconX, IconSettings, IconTrash } from './icons.jsx';
+import { IconMinus, IconSquare, IconRestore, IconX, IconSettings, IconTrash, IconCpu } from './icons.jsx';
 import { CircleChip } from './ui/Button.jsx';
 import { candyCenterOffset } from '../util/candy.js';
 import FoldMenu, { FoldStandOff } from './ui/FoldMenu.jsx';
 import NotificationBell from '../notifications/NotificationBell.jsx';
 import { useUpdateStatus } from '../hooks/useUpdateStatus.js';
+import { useProcesses } from '../processes/ProcessesProvider.jsx';
 import { navigate } from '../router.js';
 import { makeFeedbackApi } from '@modules/core/feedback/feedbackApi.js';
 import { useSession } from '@modules/core/feedback/useSession.js';
@@ -55,6 +56,7 @@ export default function TitleBar({
   setSettingsOpen, setSettingsTab,
   setNotifOpen, notifOpen,
   setRecycleBinOpen,
+  setProcessesOpen,
 }) {
   const [maximized, setMaximized] = useState(false);
   const [signInOpen, setSignInOpen] = useState(false);
@@ -102,6 +104,8 @@ export default function TitleBar({
   // TABS list, and module-contributed settings render as a PAGE under the
   // 'modules' tab (pagesByModuleId, keyed by module id). A bare tab id fails
   // validation and silently lands on the last-visited tab instead.
+  const { activeCount: runningCount } = useProcesses();
+
   const openAccountSettings = () => {
     setSettingsTab?.('modules/feedback');
     setSettingsOpen?.(true);
@@ -152,6 +156,28 @@ export default function TitleBar({
           style={CENTER} onClick={() => setRecycleBinOpen?.(true)}>
           <IconTrash size={16}/>
         </CircleChip>
+
+        {/* Processes — everything the app is currently running. Same wrapper
+            idiom as the Settings chip above: CENTER rides the WRAPPER so the
+            count badge travels with it, and --cbtn-depth is re-declared here
+            because the var only exists on .candy-btn (without it the chip lifts
+            1px more than its neighbours). */}
+        <span style={{ display: 'inline-flex', position: 'relative', '--cbtn-depth': 'var(--candy-depth-small)', ...CENTER }}>
+          <CircleChip title={runningCount ? `Processes — ${runningCount} running` : 'Processes'}
+            size={BTN} className="is-hover-accent" onClick={() => setProcessesOpen?.(true)}>
+            <IconCpu size={16}/>
+          </CircleChip>
+          {runningCount > 0 && (
+            <span aria-hidden style={{
+              position: 'absolute', top: -2, right: -2, minWidth: 13, height: 13,
+              padding: '0 3px', borderRadius: 7,
+              background: accent || 'var(--accent, #c0392b)', color: '#fff',
+              fontSize: 9, fontWeight: 700, lineHeight: '13px', textAlign: 'center',
+              boxShadow: '0 0 0 2px var(--surface)',
+              pointerEvents: 'none', zIndex: 5,
+            }}>{runningCount}</span>
+          )}
+        </span>
       </div>
 
       <div className="titlebar-cluster">

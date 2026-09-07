@@ -7,6 +7,7 @@ import { newProject, normalizeProject, newId, defaultTitle, TITLE_FONTS } from '
 import { evaluate, transformAtFrame, gainAtFrame } from './keyframes/engine.js';
 import useAutosave from './useAutosave.js';
 import { pickAndImport } from './importQueue.js';
+import { remuxWithProcess } from './remuxJob.js';
 import BinPanel from './BinPanel.jsx';
 import PreviewPlayer from './PreviewPlayer.jsx';
 import Timeline, { clampStartToGap } from './Timeline.jsx';
@@ -525,7 +526,7 @@ export default function EditorPage({ api, accent, rest }) {
         if (cancelled) return;
         setMediaStatus(prev => new Map(prev).set(m.id, 'remuxing'));
         try {
-          const r = await api.invoke('vedit_remux_start', { path: m.src, audioTrack: 0 });
+          const r = await remuxWithProcess(api, { path: m.src });
           if (cancelled) return;
           setMediaUrls(prev => new Map(prev).set(m.id, r.url));
           setMediaStatus(prev => new Map(prev).set(m.id, 'ready'));

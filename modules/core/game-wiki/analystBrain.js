@@ -166,13 +166,34 @@ export async function buildPatchDigest(api, invoke, agents = {}, { count = 13, s
       parts.push(`=== PATCH ${d} ===\n${String(content).slice(0, 80000)}`);
     } catch { /* unreadable patch page — skip */ }
   }
-  const body = await invoke('coaching_classify_match', {
-    systemPrompt: PATCH_DIGEST_SYSTEM_PROMPT,
-    userPrompt: parts.join('\n\n'),
-    backend: agents.authBackend || 'api-key',
-    model: agents.model || 'opus',
-    cliPath: agents.claudeCliPath || '',
-  });
+  // Register with the Processes window (lane B - this run has no Rust job cell,
+  // only a `coaching-progress` byte counter). Dispatched inline rather than
+  // imported so this module stays dependency-free for its offline selftest.
+  const signal = (op, extra) => {
+    if (typeof window === 'undefined') return;
+    window.dispatchEvent(new CustomEvent('agentic:process', {
+      detail: {
+        op, id: 'deadlock-notes', kind: 'notes', title: 'Deadlock notes',
+        subtitle: `${dates.length} patches`, canCancel: true, ...extra,
+      },
+    }));
+  };
+  signal('begin', { startedMs: Date.now(), statusLine: 'Reading patches' });
+  let body;
+  try {
+    body = await invoke('coaching_classify_match', {
+      systemPrompt: PATCH_DIGEST_SYSTEM_PROMPT,
+      userPrompt: parts.join('\n\n'),
+      backend: agents.authBackend || 'api-key',
+      model: agents.model || 'opus',
+      cliPath: agents.claudeCliPath || '',
+    });
+  } catch (e) {
+    const msg = String((e && e.message) || e || 'Failed');
+    signal('end', { statusLine: msg, error: msg });
+    throw e;
+  }
+  signal('end', { statusLine: 'Written' });
   return renderPatchDigest(String(body || '').trim(), dates.slice().sort(), stamp);
 }
 

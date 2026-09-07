@@ -74,6 +74,8 @@ pub struct CoachSnapshot {
     /// Absolute path of the finished notes, parsed off the `Done.` line.
     pub deliverable: Option<String>,
     pub started_ms: u64,
+    /// coach.py's pid, for the Processes window's CPU/memory readout.
+    pub pid: Option<u32>,
 }
 
 struct CoachJob {
@@ -122,6 +124,7 @@ fn snapshot(job: &CoachJob) -> CoachSnapshot {
         lines: job.lines.clone(),
         deliverable: job.deliverable.clone(),
         started_ms: job.started_ms,
+        pid: job.pid,
     }
 }
 

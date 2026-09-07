@@ -717,6 +717,8 @@ pub fn run() {
             commands::video_editor::vedit_remux_release,
             commands::video_editor::vedit_export_start,
             commands::video_editor::vedit_export_cancel,
+            commands::video_editor::vedit_proxy_cancel,
+            commands::video_editor::vedit_proxy_status,
             commands::video_editor::vedit_export_status,
             commands::video_editor::vedit_encoder_probe,
             commands::video_editor::vedit_encode_smoke,
@@ -847,6 +849,12 @@ pub fn run() {
             commands::music_search::music_artist_releasegroups,
             commands::music_search::music_releasegroup_detail,
             commands::music_search::music_release_personnel,
+            commands::torrentio::torrentio_torrent_search,
+            commands::cinemeta::cinemeta_search,
+            commands::cinemeta::cinemeta_catalog,
+            commands::cinemeta::cinemeta_detail,
+            commands::cinemeta::cinemeta_calendar,
+            commands::tv_library::tv_add_to_library,
             commands::anime_search::anime_search,
             commands::anime_search::anime_top,
             commands::anime_search::anime_season_now,
@@ -911,6 +919,7 @@ pub fn run() {
             commands::build::build_app_start,
             commands::build::build_app_status,
             commands::build::build_app_cancel,
+            commands::process_stats::process_stats,
             commands::credentials::creds_status,
             commands::credentials::creds_init_master,
             commands::credentials::creds_unlock,
@@ -1021,13 +1030,6 @@ pub fn run() {
             if let WindowEvent::Focused(focused) = event {
                 commands::self_update::record_focus_change(*focused);
                 commands::feedback::record_focus_change(*focused);
-                // The video player's controls ride the app: always-on-top
-                // windows that keep floating over other apps are a bug. Driven
-                // from here rather than from a handler player_host registers
-                // itself, because that one is behind a Once that a single
-                // missed window lookup spends for good.
-                #[cfg(target_os = "windows")]
-                player_host::on_focus_change(window.app_handle(), window.label(), *focused);
                 // Lock-on-blur: toplevel focus loss = real app-switch (does NOT
                 // fire when focus moves to a child native web view).
                 if !*focused {

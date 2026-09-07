@@ -24,6 +24,7 @@ import AppWindow from '@host/components/ui/AppWindow.jsx';
 import { PrimaryBtn, OutlinedBtn } from '@host/components/ui/Button.jsx';
 import { IconClapperboard } from '@host/components/icons.jsx';
 import { createGlDisplay } from './glDisplay.js';
+import { remuxWithProcess } from '../remuxJob.js';
 import { parseCube, compileGrade, toRGBA8, serializeCube, LUT_N } from './gradeLut.js';
 import { resolveColorimetry } from './colorimetry.js';
 
@@ -274,7 +275,7 @@ export default function ParityPanel({ onClose, api, accent }) {
   const fixtureCtx = async (fx) => {
     const probe = await api.invoke('vedit_probe', { path: fx.path });
     const v0 = (probe.video || [])[0] || {};
-    const remux = await api.invoke('vedit_remux_start', { path: fx.path, audioTrack: null });
+    const remux = await remuxWithProcess(api, { path: fx.path, audioTrack: null });
     await loadVideo(videoRef.current, remux.url);
     await seekVideo(videoRef.current, (FRAME_IDX + 0.5) / (v0.fps || 30));
     return {

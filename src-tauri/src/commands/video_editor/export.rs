@@ -36,7 +36,8 @@ pub struct ExportStatus {
     pub eta_secs: Option<i64>,
     pub error: Option<String>,
     pub output_path: Option<String>,
-    #[serde(skip)]
+    /// The ffmpeg child. Serialized (it used to be `#[serde(skip)]`) so the
+    /// Processes window can ask Windows what this render is costing.
     pub child_pid: Option<u32>,
     #[serde(skip)]
     pub cancel_requested: bool,

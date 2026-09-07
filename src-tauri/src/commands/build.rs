@@ -48,6 +48,8 @@ pub struct BuildSnapshot {
     pub last_exit_code: Option<i32>,
     pub last_elapsed_ms: Option<u64>,
     pub repo_ok: bool,
+    /// The npm/cargo child, for the Processes window's CPU/memory readout.
+    pub child_pid: Option<u32>,
 }
 
 struct BuildJobState {
@@ -204,6 +206,7 @@ pub fn build_app_status() -> BuildSnapshot {
             last_exit_code: s.last_exit_code,
             last_elapsed_ms: s.last_elapsed_ms,
             repo_ok,
+            child_pid: s.child_pid,
         }
     } else {
         BuildSnapshot {
@@ -215,6 +218,7 @@ pub fn build_app_status() -> BuildSnapshot {
             last_exit_code: None,
             last_elapsed_ms: None,
             repo_ok,
+            child_pid: None,
         }
     }
 }

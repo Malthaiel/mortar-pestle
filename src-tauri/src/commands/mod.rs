@@ -8,8 +8,10 @@ pub mod browser;
 // Browser nav/host allow-list helpers, split out when the driver was per-OS.
 pub mod browser_common;
 pub mod build;
+pub mod process_stats;
 pub mod capture;
 pub mod claude_usage;
+pub mod cinemeta;
 pub mod coach_job;
 pub mod coaching;
 // Comms-extraction job (Scrim Coaching): stt-engine-driving, so it shares stt's
@@ -51,6 +53,8 @@ pub mod site;
 pub mod skills;
 pub mod stt;
 pub mod torrent;
+pub mod torrentio;
+pub mod tv_library;
 pub mod vault;
 pub mod vaults;
 pub mod video_editor;
