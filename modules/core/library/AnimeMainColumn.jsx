@@ -29,14 +29,22 @@ function TextSection({ title, body }) {
   );
 }
 
+// Credits, themes and recommendations are all live MAL fetches keyed by malId.
+// A card without one (a TV show) has no such data and must not render their
+// headings or skeletons — an empty CHARACTERS strip that never fills is worse
+// than no strip.
 export default function AnimeMainColumn({ malId, accent, synopsis, background, openings, endings }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
       <TextSection title="Synopsis" body={synopsis} />
       <TextSection title="Background" body={background} />
-      <AnimeCredits malId={malId} accent={accent} />
-      <AnimeThemes openings={openings} endings={endings} accent={accent} />
-      <AnimeRecommendations malId={malId} accent={accent} />
+      {malId ? (
+        <>
+          <AnimeCredits malId={malId} accent={accent} />
+          <AnimeThemes openings={openings} endings={endings} accent={accent} />
+          <AnimeRecommendations malId={malId} accent={accent} />
+        </>
+      ) : null}
     </div>
   );
 }

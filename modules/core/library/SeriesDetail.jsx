@@ -75,7 +75,13 @@ function notify(detail) {
   }
 }
 
-export default function SeriesDetail({ accent, seriesPath }) {
+// `domain` is 'Anime' (default) or 'TV Shows'. Everything the two rooms share —
+// season tabs, episode list, ticking, status, rating, Play — is domain-blind and
+// runs off the card. The anime-only affordances are the ones wired to
+// `anime_download` / `anime_uninstall`, which are MAL-keyed and would be a guess
+// pointed at a TV card; they hide until the TV pipeline exists (SF7b).
+export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
+  const isAnime = domain === 'Anime';
   const [series, setSeries] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -233,7 +239,9 @@ export default function SeriesDetail({ accent, seriesPath }) {
       <AnimeDetailHeader
         title={series.title}
         subtitle={isFranchise ? `${series.seasons.length} ${series.seasons.length === 1 ? 'entry' : 'entries'}` : null}
-        malId={series.providerId}
+        malId={isAnime ? series.providerId : null}
+        sourceUrl={!isAnime && series.imdbId ? `https://www.imdb.com/title/${series.imdbId}/` : null}
+        sourceLabel={isAnime ? null : 'IMDb'}
         image={img}
         score={series.onlineRating}
         scoredBy={series.scoredBy}
@@ -260,7 +268,7 @@ export default function SeriesDetail({ accent, seriesPath }) {
         accent={accent}
         rightColumn={(
           <AnimeMainColumn
-            malId={series.providerId}
+            malId={isAnime ? series.providerId : null}
             accent={accent}
             synopsis={series.synopsis || (detail && detail.synopsis)}
             background={series.background || (detail && detail.background)}
@@ -314,13 +322,13 @@ export default function SeriesDetail({ accent, seriesPath }) {
                 <button onClick={onPlayAll} className="candy-btn is-primary" style={{ cursor: 'pointer' }}>
                   <span className="candy-face" style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><IconPlay size={14}/> {nextUnwatched >= 0 ? 'Resume' : 'Play'}</span>
                 </button>
-                {canGrabMore && (
+                {canGrabMore && isAnime && (
                   <button onClick={onDownload} title="Download more episodes" data-own-press className="candy-btn" data-shape="icon" style={{ cursor: 'pointer' }}>
                     <span className="candy-face"><IconDownload size={16}/></span>
                   </button>
                 )}
               </>
-            ) : dlActive ? (
+            ) : !isAnime ? null : dlActive ? (
               <button disabled className="candy-btn is-primary" style={{ cursor: 'default', opacity: 0.6 }}>
                 <span className="candy-face">{dlLabel}</span>
               </button>
@@ -340,11 +348,12 @@ export default function SeriesDetail({ accent, seriesPath }) {
               onClick={(e) => {
                 const r = e.currentTarget.getBoundingClientRect();
                 const items = [];
-                if (canRedownload) items.push({ label: 'Re-download', onClick: onDownload });
-                items.push({ label: 'Uninstall', onClick: () => {
+                if (canRedownload && isAnime) items.push({ label: 'Re-download', onClick: onDownload });
+                if (isAnime) items.push({ label: 'Uninstall', onClick: () => {
                   setDeleteFiles(true);
                   setConfirmOpen(true);
                 } });
+                if (items.length === 0) return;
                 openContextMenu({ x: r.left, y: r.bottom + 4 }, items, { accent });
               }}>
               <span className="candy-face">⋯</span>

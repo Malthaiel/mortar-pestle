@@ -3,10 +3,11 @@
 //! Ported from the now-removed Node sidecar (`server/src/video/library.js`). Sub-feature 7 of the Desktop-Only
 //! Migration.
 //!
-//! Series pages live at `Anime/Catalog/<Title>.md` in the Library vault (see
-//! `ANIME_DIR`) and carry `Local Path:` pointing to a folder of episode files
-//! (usually outside the vault). The body holds a `## Episodes` table with one
-//! row per episode.
+//! Series pages live at `<Domain>/Catalog/<Title>.md` in the Library vault (see
+//! `SERIES_DOMAINS`) and carry `Local Path:` pointing to a folder of episode
+//! files (usually outside the vault). The body holds a `## Episodes` table with
+//! one row per episode. Anime and TV Shows share this reader wholesale — the
+//! record shape is identical, only the catalog folder differs.
 //!
 //! Franchise pages aggregate multiple MAL entries (seasons / movies / OVAs)
 //! under one card. They carry `Related IDs:` plus per-section suffixed
@@ -25,7 +26,22 @@ use serde_json::{Map, Value};
 use crate::commands::vault::{atomic_write, check_mtime, library_vault_root, mtime_ms, VaultError};
 use crate::parsers::frontmatter::{parse_frontmatter, set_frontmatter_field};
 
-const ANIME_DIR: &str = "Anime/Catalog";
+/// Media domains that keep a series catalog. A domain is a folder name under the
+/// Library vault root and `list_series` is reachable from the frontend over IPC,
+/// so it resolves through this allow-list rather than trusting the caller's
+/// string — a free-form value here would be a path-traversal seam.
+pub const SERIES_DOMAINS: [&str; 2] = ["Anime", "TV Shows"];
+pub const DEFAULT_DOMAIN: &str = "Anime";
+
+/// `<domain>/Catalog`, falling back to Anime for an unrecognised domain.
+fn catalog_rel(domain: &str) -> String {
+    let d = SERIES_DOMAINS
+        .iter()
+        .copied()
+        .find(|x| *x == domain)
+        .unwrap_or(DEFAULT_DOMAIN);
+    format!("{d}/Catalog")
+}
 
 static ACRONYMS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     ["OVA", "ONA", "ED", "OP", "TV", "SP"].into_iter().collect()
@@ -81,6 +97,11 @@ pub struct SeriesSummary {
     /// Numeric MAL ID (`Provider ID:`). Lets the Anime Browse tab dedup search
     /// hits against the library; `None` for cards missing the field.
     pub provider_id: Option<i64>,
+    /// Full `tt…` id (`IMDb ID:`) for TV cards — what Cinemeta's calendar feed
+    /// and Torrentio are keyed by. `Provider ID` holds only its numeric half, and
+    /// re-padding that back to an id would be guessing at the zeros. `None` for
+    /// anime cards, which are MAL-keyed.
+    pub imdb_id: Option<String>,
     pub year: Option<Value>,
     pub image: Option<String>,
     pub status: Option<String>,
@@ -188,6 +209,8 @@ pub struct Series {
     /// MAL id from `Provider ID` frontmatter — lets the detail page fetch live
     /// AniList credits (characters/staff/relations) for an owned entry.
     pub provider_id: Option<i64>,
+    /// Full `tt…` id for TV cards — see the same field on SeriesSummary.
+    pub imdb_id: Option<String>,
     pub seasons: Option<Vec<Season>>,
     pub episodes: Vec<Episode>,
 }
@@ -698,6 +721,11 @@ fn build_episodes(
 }
 
 fn is_franchise(meta: &Map<String, Value>) -> bool {
+    // A TV card has no franchise sibling ids to list — its seasons live in one
+    // Cinemeta record — so it flips this reader on with a `Seasons` count.
+    if meta_i64(meta, "Seasons").unwrap_or(0) > 0 {
+        return true;
+    }
     match meta.get("Related IDs") {
         Some(Value::Array(a)) => !a.is_empty(),
         Some(Value::Null) => false,
@@ -705,6 +733,17 @@ fn is_franchise(meta: &Map<String, Value>) -> bool {
         Some(_) => true,
         None => false,
     }
+}
+
+/// Test-only: the season suffixes a card body yields. Lets the TV card writer
+/// assert its output against this reader rather than against a copy of the regex.
+#[cfg(test)]
+pub fn __test_sections(text: &str) -> Vec<String> {
+    let (_, body) = parse_frontmatter(text);
+    parse_franchise_sections(&body)
+        .into_iter()
+        .map(|s| s.suffix)
+        .collect()
 }
 
 fn rollup_status(meta: &Map<String, Value>, suffixes: &[String]) -> String {
@@ -754,14 +793,12 @@ fn sum_rewatches(meta: &Map<String, Value>, suffixes: &[String]) -> i64 {
         .sum()
 }
 
-fn anime_dir() -> PathBuf {
-    PathBuf::from(library_vault_root()).join(ANIME_DIR)
-}
-
 // ─── Public commands ────────────────────────────────────────────────────────
 
-pub fn list_series() -> Result<Vec<SeriesSummary>, VaultError> {
-    let dir = anime_dir();
+/// List every card in one domain's catalog. `domain` is one of `SERIES_DOMAINS`.
+pub fn list_series(domain: &str) -> Result<Vec<SeriesSummary>, VaultError> {
+    let catalog = catalog_rel(domain);
+    let dir = PathBuf::from(library_vault_root()).join(&catalog);
     let mut entries = safe_read_dir(&dir);
     entries.sort();
     let mut out = Vec::new();
@@ -815,10 +852,11 @@ pub fn list_series() -> Result<Vec<SeriesSummary>, VaultError> {
             .map(|p| has_any_video_file(Path::new(p)))
             .unwrap_or(false);
         out.push(SeriesSummary {
-            path: format!("{ANIME_DIR}/{entry}"),
+            path: format!("{catalog}/{entry}"),
             name: name.clone(),
             title: meta_str(&meta, "Title").unwrap_or(name),
             provider_id: meta_i64(&meta, "Provider ID"),
+            imdb_id: meta_str(&meta, "IMDb ID"),
             year: meta_clone(&meta, "Year"),
             image: meta_str(&meta, "Image"),
             status,
@@ -992,6 +1030,7 @@ pub fn read_series(series_path: &str) -> Result<Series, VaultError> {
         franchise,
         related_ids,
         provider_id: meta_i64(&meta, "Provider ID"),
+        imdb_id: meta_str(&meta, "IMDb ID"),
         seasons: seasons_out,
         episodes: episodes_out,
     })
@@ -1201,6 +1240,17 @@ mod tests {
         assert!(!airing_now(&meta("true", Some("2026-06-22T00:00:00+00:00"))));
         // Garbage in the field must not silently retire a live show.
         assert!(airing_now(&meta("true", Some("soon"))));
+    }
+
+    #[test]
+    fn catalog_rel_allows_only_known_domains() {
+        assert_eq!(catalog_rel("Anime"), "Anime/Catalog");
+        assert_eq!(catalog_rel("TV Shows"), "TV Shows/Catalog");
+        // Anything else falls back to Anime — an unknown domain can never
+        // escape the Library root or reach a folder it wasn't allow-listed for.
+        assert_eq!(catalog_rel("../../etc"), "Anime/Catalog");
+        assert_eq!(catalog_rel("Movies"), "Anime/Catalog");
+        assert_eq!(catalog_rel(""), "Anime/Catalog");
     }
 
     #[test]

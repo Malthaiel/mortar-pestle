@@ -7,7 +7,8 @@ let _api = null;
 export function bindVideoApi(api) { _api = api; }
 
 export const videoApi = {
-  listSeries:        () => _api.invoke('video_list_series', {}),
+  // domain: 'Anime' (default) | 'TV Shows' — both share the Rust series reader.
+  listSeries:        (domain) => _api.invoke('video_list_series', { domain: domain || null }),
   readSeries:        (path) => _api.invoke('video_read_series', { path }),
   probeVideo:        (abs) => _api.invoke('video_probe', { path: abs }),
   markEpisodeWatched: (seriesPath, episode, season = null) =>
@@ -16,6 +17,14 @@ export const videoApi = {
     _api.invoke('video_mark_series_rating', { seriesPath, rating }),
   markSeriesStatus:  (seriesPath, status, season = null) =>
     _api.invoke('video_mark_series_status', { seriesPath, status, season }),
+  // TV Shows — Cinemeta discovery (keyless, IMDb-keyed) + the card writer. One
+  // command family serves films too: `kind` is 'series' or 'movie'.
+  cinemetaSearch:   (kind, query) => _api.invoke('cinemeta_search', { kind, query }),
+  cinemetaCatalog:  (kind, catalog, genre, skip) =>
+    _api.invoke('cinemeta_catalog', { kind, catalog, genre: genre || null, skip: skip || null }),
+  cinemetaDetail:   (kind, imdbId) => _api.invoke('cinemeta_detail', { kind, imdbId }),
+  cinemetaCalendar: (imdbIds) => _api.invoke('cinemeta_calendar', { imdbIds }),
+  tvAddToLibrary:   (imdbId) => _api.invoke('tv_add_to_library', { imdbId }),
   // Anime Browse — Jikan discovery (read-only; covers hot-linked from MAL).
   animeSearch:       (query) => _api.invoke('anime_search', { query }),
   animeTop:          (page) => _api.invoke('anime_top', { page: page || 1 }),

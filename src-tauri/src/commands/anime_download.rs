@@ -1068,7 +1068,7 @@ pub async fn anime_move_videos(app: AppHandle) -> Result<MoveReport, String> {
             .to_string()
     })?;
 
-    let series = crate::parsers::series::list_series().map_err(|e| format!("{e:?}"))?;
+    let series = crate::parsers::series::list_series("Anime").map_err(|e| format!("{e:?}"))?;
 
     // A folder referenced by two cards is shared — never move it out from under
     // the other one. Counting the resolved paths beats string-comparing raw card
@@ -1225,7 +1225,7 @@ pub fn arm_airing_poll(app: AppHandle) {
 /// with no local files is skipped on purpose: a metadata-only card (added to
 /// the library but never downloaded) must not start downloading on its own.
 async fn poll_airing_once(app: &AppHandle) {
-    let series = match crate::parsers::series::list_series() {
+    let series = match crate::parsers::series::list_series("Anime") {
         Ok(s) => s,
         Err(e) => {
             log::warn!("[airing] could not list the library: {e:?}");

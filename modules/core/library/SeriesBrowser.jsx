@@ -1,5 +1,11 @@
-// LEFT pane of /tools/library/anime. Fetches the series list, exposes search + status
-// pills + genre chips, renders a poster grid.
+// The series shelf, shared by the Anime and TV Shows rooms. Fetches the series
+// list for one `domain`, exposes search + status pills, renders a poster grid.
+//
+// `domain` is the only thing that differs between the two rooms — it picks the
+// catalog the Rust reader lists, the route a card opens, and whether the
+// anime-only Uninstall entry appears in the context menu. Everything else (the
+// sort pills, the ownership filters, the card) is identical by construction, so
+// a change here lands in both rooms at once.
 
 import { useEffect, useMemo, useState } from 'react';
 import { videoApi, prefetchCredits } from './api.js';
@@ -19,7 +25,7 @@ const SORT_DIMENSIONS = [
 
 const SORT_LS_KEY = 'tools:videoSort';
 
-export default function SeriesBrowser({ accent, onSelect, selectedPath, initialStatus = null }) {
+export default function SeriesBrowser({ accent, onSelect, selectedPath, initialStatus = null, domain = 'Anime' }) {
   const [series, setSeries] = useState(null);
   const [sortDim, setSortDim] = useState(() => {
     const saved = typeof localStorage !== 'undefined' ? localStorage.getItem(SORT_LS_KEY) : null;
@@ -35,6 +41,12 @@ export default function SeriesBrowser({ accent, onSelect, selectedPath, initialS
   });
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState(initialStatus);
+  // Same dimensions, one label: the online score comes from MAL for anime and
+  // from IMDb for TV, and it reads as a lie under the wrong name.
+  const dimensions = useMemo(
+    () => SORT_DIMENSIONS.map(d => (d.key === 'mal' && domain !== 'Anime' ? { ...d, label: '★ IMDb' } : d)),
+    [domain],
+  );
 
   // Follow the route: a topbar tile changing `initialStatus` re-seeds the
   // filter, while in-page pill clicks (which don't touch initialStatus) stick.
@@ -52,7 +64,7 @@ export default function SeriesBrowser({ accent, onSelect, selectedPath, initialS
   useEffect(() => {
     let cancelled = false;
     const load = () => {
-      videoApi.listSeries()
+      videoApi.listSeries(domain)
         .then((series) => { if (!cancelled) setSeries(series || []); })
         .catch(() => { if (!cancelled) setSeries([]); });
     };
@@ -71,7 +83,7 @@ export default function SeriesBrowser({ accent, onSelect, selectedPath, initialS
       window.removeEventListener('series-updated', onLocal);
       window.removeEventListener('video-library-changed', load);
     };
-  }, []);
+  }, [domain]);
 
   const filtered = useMemo(() => {
     if (!series) return [];
@@ -111,7 +123,7 @@ export default function SeriesBrowser({ accent, onSelect, selectedPath, initialS
             color: 'var(--text)', fontSize: 12, outline: 'none',
           }}
         />
-        <SortPillRow dimensions={SORT_DIMENSIONS} sortDim={sortDim} sortDir={sortDir}
+        <SortPillRow dimensions={dimensions} sortDim={sortDim} sortDir={sortDir}
                      onPillClick={onPillClick} accent={accent}/>
       </div>
 
@@ -135,6 +147,7 @@ export default function SeriesBrowser({ accent, onSelect, selectedPath, initialS
               accent={accent}
               selected={s.path === selectedPath}
               onSelect={onSelect}
+              domain={domain}
             />
           ))}
         </div>
@@ -147,7 +160,12 @@ export default function SeriesBrowser({ accent, onSelect, selectedPath, initialS
 // delete_files flag is the only real choice the detail page's confirm dialog
 // offers — exposing both here avoids lifting that dialog out of SeriesDetail.
 // Exported so AnimeHome's ContinueCard shares one implementation.
-export function useSeriesMenu(accent) {
+//
+// Anime only: `anime_uninstall` also clears the title's torrents and cover, so
+// pointing it at a TV card would be a guess. Other domains get no menu until
+// they have a remover of their own — returning null so the caller can leave
+// onContextMenu unbound rather than opening a menu that does nothing.
+export function useSeriesMenu(accent, domain = 'Anime') {
   const { openContextMenu } = useContextMenu();
   const uninstall = async (series, deleteFiles) => {
     // eslint-disable-next-line no-alert
@@ -166,15 +184,16 @@ export function useSeriesMenu(accent) {
       window.alert(`Remove failed: ${err?.message || err}`);
     }
   };
+  if (domain !== 'Anime') return null;
   return (e, series) => openContextMenu(e, [
     { label: 'Remove from Library', danger: true, onClick: () => uninstall(series, false) },
     { label: 'Remove + Delete Files', danger: true, onClick: () => uninstall(series, true) },
   ], { accent, header: series.title });
 }
 
-export function SeriesCard({ series, accent, selected, onSelect }) {
+export function SeriesCard({ series, accent, selected, onSelect, domain = 'Anime' }) {
   const img = coverSrc(series.image);
-  const seriesMenu = useSeriesMenu(accent);
+  const seriesMenu = useSeriesMenu(accent, domain);
   const total = series.episodesTotal || 0;
   // Franchise rows: server pre-rolls watchedEpisodes to an integer count.
   // Non-franchise rows: it's an integer array — count its length.
@@ -191,8 +210,8 @@ export function SeriesCard({ series, accent, selected, onSelect }) {
   return (
     <div
       onClick={activate}
-      onContextMenu={(e) => seriesMenu(e, series)}
-      onMouseEnter={() => prefetchCredits(series.providerId)}
+      onContextMenu={seriesMenu ? (e) => seriesMenu(e, series) : undefined}
+      onMouseEnter={() => { if (domain === 'Anime') prefetchCredits(series.providerId); }}
       onKeyDown={onKeyDown}
       role="button"
       tabIndex={0}

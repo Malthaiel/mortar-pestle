@@ -95,7 +95,7 @@ function MetaChip({ kind, value, accent }) {
 }
 
 export default function AnimeDetailHeader({
-  title, subtitle, malId, image,
+  title, subtitle, malId, image, sourceUrl, sourceLabel,
   score, scoredBy, rank, popularity, members,
   genres, themes, demographics, studios, producers,
   premiered, format, episodes, duration,
@@ -143,13 +143,19 @@ export default function AnimeDetailHeader({
           {subtitle && <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>{subtitle}</div>}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          {malId ? (
+          {/* One "open the source" button. Anime passes a malId and gets the MAL
+              link; other domains pass the url and label they belong to. Without
+              either there is no source to open, so no button. */}
+          {(sourceUrl || malId) ? (
             <button
-              onClick={() => { window.location.hash = '/tools/browser/' + encodeURIComponent('https://myanimelist.net/anime/' + malId); }}
-              title="Open this title on MyAnimeList in the in-app browser"
+              onClick={() => {
+                const url = sourceUrl || ('https://myanimelist.net/anime/' + malId);
+                window.location.hash = '/tools/browser/' + encodeURIComponent(url);
+              }}
+              title={`Open this title on ${sourceLabel || 'MyAnimeList'} in the in-app browser`}
               className="candy-btn is-primary"
               style={{ height: 30 }}
-            ><span className="candy-face" style={{ fontSize: 11 }}>MyAnimeList ↗</span></button>
+            ><span className="candy-face" style={{ fontSize: 11 }}>{sourceLabel || 'MyAnimeList'} ↗</span></button>
           ) : null}
           {topRight}
         </div>

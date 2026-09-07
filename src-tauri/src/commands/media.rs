@@ -115,13 +115,24 @@ pub fn music_delete_album(app: AppHandle, path: String) -> Result<(), VaultError
 
 // ─── Video ──────────────────────────────────────────────────────────────────
 
+/// Lists one domain's series catalog — `"Anime"` (the default, so every existing
+/// call site is unchanged) or `"TV Shows"`. Both share `parsers::series`; only
+/// the catalog folder differs.
+///
 /// Also arms the airing-episode poller (once per app run) — the first time the
 /// library is listed is the first moment anime matters in a session, and it
-/// keeps the arming out of the currently foreign-dirty `lib.rs`.
+/// keeps the arming out of the currently foreign-dirty `lib.rs`. Only the Anime
+/// domain arms it; the poller's backlog sweep is Nyaa-specific.
 #[tauri::command]
-pub fn video_list_series(app: tauri::AppHandle) -> Result<Vec<series::SeriesSummary>, VaultError> {
-    crate::commands::anime_download::arm_airing_poll(app);
-    series::list_series()
+pub fn video_list_series(
+    app: tauri::AppHandle,
+    domain: Option<String>,
+) -> Result<Vec<series::SeriesSummary>, VaultError> {
+    let domain = domain.as_deref().unwrap_or(series::DEFAULT_DOMAIN);
+    if domain == series::DEFAULT_DOMAIN {
+        crate::commands::anime_download::arm_airing_poll(app);
+    }
+    series::list_series(domain)
 }
 
 #[tauri::command]

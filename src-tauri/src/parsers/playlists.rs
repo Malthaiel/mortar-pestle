@@ -177,12 +177,12 @@ pub(crate) fn sanitize_name(title: &str) -> String {
 }
 
 /// A YAML double-quoted scalar (escaping `\` and `"`). Safe for any title/path.
-fn yaml_str(s: &str) -> String {
+pub(crate) fn yaml_str(s: &str) -> String {
     format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
 /// Escape a value for a markdown-table cell: literal pipes become `\|`.
-fn cell_escape(s: &str) -> String {
+pub(crate) fn cell_escape(s: &str) -> String {
     s.replace('|', "\\|")
 }
 
