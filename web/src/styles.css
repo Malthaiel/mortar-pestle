@@ -45,13 +45,13 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
 
   /* Titlebar fill. FIXED across every theme, exactly like --dock-bg: the two
      chrome strips bookend the app and shouldn't repaint with the content
-     palette. Matches the dock's default 0.190 by design — the strips bookend
+     palette. Matches the dock's default 0.230 by design — the strips bookend
      the app and read as one chrome. Kept as a literal rather than
      var(--dock-bg) because --dock-bg is declared on .dock-root, not :root, and
      community themes re-derive it from --surface-2; the titlebar stays fixed.
      NOTE the dark-theme surface scale runs LIGHTER as the number rises
      (--surface 0.190 → -2 0.215 → -3 0.245). */
-  --titlebar-bg: oklch(0.190 0.005 78);
+  --titlebar-bg: oklch(0.230 0.005 78);
 
   /* Candy SURFACE rest depth — the STATIC offset-shadow band under framed
      container surfaces (the .candy-* family). Distinct from --candy-depth:
@@ -496,7 +496,7 @@ body[data-design-pointer="markup"] *:not(input):not(textarea):not(select):not([d
    [data-dragging] collapse rule above leaves them untouched. */
 .dock-root .dock-sep {
   flex: 0 0 auto; width: 1px; height: 24px; align-self: center;
-  background: color-mix(in oklch, var(--dock-bg, oklch(0.190 0.005 78)), white 22%);
+  background: color-mix(in oklch, var(--dock-bg, oklch(0.230 0.005 78)), white 22%);
   border-radius: 1px; cursor: grab;
 }
 .dock-root .dock-spacer { width: 100%; height: 36px; cursor: grab; }
@@ -515,7 +515,7 @@ body[data-design-pointer="markup"] *:not(input):not(textarea):not(select):not([d
   gap: 8px;
   padding: 0 8px;
   background: var(--titlebar-bg);
-  border-bottom: 1px solid color-mix(in oklch, var(--titlebar-bg), black 30%);
+  border-bottom: 1px solid color-mix(in oklch, var(--titlebar-bg), white 10%);
 }
 /* The two button clusters. Everything BETWEEN them is bare strip, which is what
    stays draggable — the clusters sit on top of the drag region and swallow their
@@ -532,7 +532,7 @@ body[data-design-pointer="markup"] *:not(input):not(textarea):not(select):not([d
    lines-pattern is dropped. `height` is the single source of truth for the
    app-wide bottom reservation (AppShell: calc(100vh - --dock-height)). */
 .dock-root {
-  --dock-bg: oklch(0.190 0.005 78);
+  --dock-bg: oklch(0.230 0.005 78);
   height: var(--dock-height);
   background-color: var(--dock-bg);
   background-image: none;
@@ -558,12 +558,13 @@ body[data-design-pointer="markup"] *:not(input):not(textarea):not(select):not([d
    inactive buttons so the .is-active accent fill is never touched. Both
    variants swap the candy frame/shadow base to --dock-bg (so the depth reads
    on the grey across rest/hover/active automatically — see
-   button.button-dock-icon) and set only the face + glyph colour. */
+   button.button-dock-icon) and set only the glyph colour (the FACE is the shared --surface-3 base:
+   every candy button in the app wears one resting colour, user-directed
+   2026-09-07). */
 .dock-root[data-dock-icon-style="light"] .candy-btn[data-shape="icon"]:not(.is-active) {
   --cbtn-band: var(--dock-bg);
 }
 .dock-root[data-dock-icon-style="light"] .candy-btn[data-shape="icon"]:not(.is-active) > .candy-face {
-  background: oklch(0.940 0.004 78);
   color: oklch(0.420 0.010 78);
 }
 .dock-root[data-dock-icon-style="light"] .candy-btn[data-shape="icon"]:not(.is-active):is([data-dock-hover], :hover) > .candy-face {
@@ -573,7 +574,6 @@ body[data-design-pointer="markup"] *:not(input):not(textarea):not(select):not([d
   --cbtn-band: var(--dock-bg);
 }
 .dock-root[data-dock-icon-style="dark"] .candy-btn[data-shape="icon"]:not(.is-active) > .candy-face {
-  background: color-mix(in oklch, var(--dock-bg), white 9%);
   color: oklch(0.780 0.010 78);
 }
 .dock-root[data-dock-icon-style="dark"] .candy-btn[data-shape="icon"]:not(.is-active):is([data-dock-hover], :hover) > .candy-face {
@@ -1275,7 +1275,7 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: color-mix(in oklch, var(--text-2), var(--text-muted) 33%);
   background: var(--surface-3);
   border: var(--cbtn-frame) solid color-mix(in oklch, var(--cbtn-band), black 22%);
   border-radius: inherit;
@@ -1310,7 +1310,6 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
   text-transform: none;
   text-align: left;
   color: var(--text);
-  background: var(--surface);
 }
 /* Cover-card captions sit on the red face when the tile flips (hover / selected);
    flip their inline text colours to white for legibility. Excludes .rail-tile —
@@ -1358,7 +1357,6 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
 .candy-btn[data-shape="tile"].rail-tile:is(.is-music, .is-planner) > .candy-face {
   height: 100%;
   padding: 0;                                 /* the inner flex column owns padding */
-  background: var(--surface-3);               /* chrome grey at rest */
 }
 /* Band accent for the post-drop bridge (the still cursor can't trigger the base
    .candy-btn:hover flip at ~2039). */
@@ -1466,7 +1464,6 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
 .candy-btn[data-shape="tile"].rail-tile.is-panel > .candy-face {
   height: auto;
   padding: 12px;
-  background: var(--surface-2);
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -1497,7 +1494,7 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
   --cbtn-band: var(--surface);
 }
 .candy-btn[data-shape="tile"].rail-tile.is-panel:is(:hover, :active):has(.candy-btn:hover) > .candy-face {
-  background: var(--surface-2);
+  background: var(--surface-3);
   color: var(--text);
 }
 /* Planner Pack pane widgets ride the plain .rail-tile shape one-to-one (same
