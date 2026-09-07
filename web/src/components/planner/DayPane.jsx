@@ -227,9 +227,14 @@ function EventGroups({ groups, colorFor, onEdit, hideDayLabel = false }) {
 // hovers and lights independently; the wrapper only changes how they look. The
 // title half also stays HELD DOWN while its popover is open (the .is-active
 // rule in § split), so the button itself reports the open panel.
+//
+// alignSelf: the split is `display: inline-flex`, which shrink-wraps in block
+// flow but STRETCHES to full width now that the section wrapper is a flex
+// column. flex-start pins it back. It goes here rather than as align-items on
+// the wrapper because the chip rows below still want the column's stretch.
 function SectionHead({ title, btnRef, open, onToggle, children }) {
   return (
-    <div className="candy-split">
+    <div className="candy-split" style={{ alignSelf: 'flex-start' }}>
       <button
         type="button"
         ref={btnRef}
@@ -568,7 +573,14 @@ export default function DayPane({ accent = 'var(--accent)', pivotDs, onPivotChan
           chrome and the drag-to-reorder that came with it are gone, so each
           section is just its header button plus its list. The divider is a
           full-width hairline carried by the section BELOW it, which keeps the
-          container's own top and bottom edges clean. */}
+          container's own top and bottom edges clean.
+
+          Each section is a flex COLUMN on the pane's one rhythm: its header
+          button, any inline adder and its list are candy on both sides, so
+          GAP_UNDER_BTN is the same gap the lists already use internally.
+          Without it the first chip painted straight over the header's depth
+          lip. The bottom padding carries that same lip clearance, so the gap
+          above each hairline reads equal to the gap below it. */}
       <div
         key={pivotDs}
         style={{
@@ -580,7 +592,8 @@ export default function DayPane({ accent = 'var(--accent)', pivotDs, onPivotChan
           <div
             key={s.id}
             style={{
-              padding: '14px 18px',
+              padding: `14px 18px ${candyGap(14, true)}`,
+              display: 'flex', flexDirection: 'column', gap: GAP_UNDER_BTN,
               borderTop: i === 0 ? undefined : '1px solid var(--border)',
             }}>
             {s.render()}
