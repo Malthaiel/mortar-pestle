@@ -78,6 +78,10 @@ static EP_NUM_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
         Regex::new(r"\s-\s*(\d{1,3})(?:[\s.\[v]|$)").unwrap(),
         Regex::new(r"^\s*(\d{1,3})\s*-\s+").unwrap(),
         Regex::new(r"[Ee][Pp]?(\d{1,3})\b").unwrap(),
+        // The word spelled out ("Alien 9 - Episode 1 [OnDeed] [70293EBC].mkv").
+        // Its own pattern rather than loosening the `Ep` one above: letting that
+        // accept a separator would read "The 9" as episode 9.
+        Regex::new(r"[Ee]pisode[\s._-]*(\d{1,3})\b").unwrap(),
         Regex::new(r"\[(\d{1,3})\]").unwrap(),
         // Bare trailing number right before the extension ("[Group] Show 01.mkv").
         // Last so the delimited patterns above win first; separator-anchored and
@@ -1303,6 +1307,15 @@ mod tests {
         assert_eq!(parse_episode_number("12 - Title.mkv"), Some(12));
         assert_eq!(parse_episode_number("Title E12.mkv"), Some(12));
         assert_eq!(parse_episode_number("foo.txt"), None);
+        // Spelled out, with a title that ends in a digit of its own.
+        assert_eq!(
+            parse_episode_number("Alien 9 - Episode 1 [OnDeed] [70293EBC] (V2).mkv"),
+            Some(1)
+        );
+        assert_eq!(parse_episode_number("Show - Episode.03.mkv"), Some(3));
+        // The reason that pattern is spelled out in full: a bare word ending in
+        // "e" before a number must NOT read as an episode marker.
+        assert_eq!(parse_episode_number("The 9 - Title.mkv"), None);
     }
 
     /// A movie's release filename carries no episode number, so every pattern
