@@ -144,6 +144,34 @@ fn yaml_list(key: &str, items: &[String]) -> String {
     s
 }
 
+/// The five credit fields Cinemeta already returns and both card writers used to
+/// throw away. Shared so a film and a show can never drift apart on them.
+///
+/// `Cast` is written in full: a card is the record, and trimming it here would
+/// lose names nothing else stores. The pre-add page already caps its own display
+/// at six (`RoomTitle.jsx`:141), which is where a cap belongs.
+///
+/// No `Awards` field -- Cinemeta does not carry one. That is an OMDb field, and
+/// OMDb's terms bind the builder, so no user key can bring it back.
+fn push_credits(fm: &mut String, d: &CineDetail) {
+    fm.push_str(&yaml_list("Cast", &d.cast));
+    fm.push_str(&yaml_list("Writer", &d.writer));
+    fm.push_str(&format!(
+        "Country: {}\n",
+        yaml_str(d.country.as_deref().unwrap_or(""))
+    ));
+    let trailer = d
+        .trailer_youtube_id
+        .as_deref()
+        .map(|id| format!("https://www.youtube.com/watch?v={id}"))
+        .unwrap_or_default();
+    fm.push_str(&format!("Trailer: {}\n", yaml_str(&trailer)));
+    fm.push_str(&format!(
+        "Logo: {}\n",
+        yaml_str(d.logo.as_deref().unwrap_or(""))
+    ));
+}
+
 /// A film's card: the same frontmatter block a show gets, minus everything that
 /// only means something across many episodes (`Seasons`, `Episodes`, `Airing`,
 /// the per-season `Status ...` block) and with `Released` in place of the aired
@@ -184,6 +212,7 @@ fn render_movie_card(d: &CineDetail) -> String {
         yaml_str(&iso_date(d.released.as_deref()))
     ));
     fm.push_str(&format!("Director: {}\n", yaml_str(&d.director.join(", "))));
+    push_credits(&mut fm, d);
     fm.push_str("Local Path: \"\"\n");
     fm.push_str("Download Status: Not-Downloaded\n");
     fm.push_str(&format!(
@@ -290,6 +319,7 @@ fn render_card(d: &CineDetail, seasons: &BTreeMap<i64, Vec<&CineEpisode>>) -> St
         "Director: {}\n",
         yaml_str(&d.director.join(", "))
     ));
+    push_credits(&mut fm, d);
     fm.push_str("Local Path: \"\"\n");
     fm.push_str("Download Status: Not-Downloaded\n");
     fm.push_str(&format!(
@@ -525,14 +555,14 @@ mod tests {
             description: Some("A chemistry teacher.".into()),
             imdb_rating: Some("9.5".into()),
             genres: vec!["Crime".into(), "Drama".into()],
-            cast: vec![],
+            cast: vec!["Bryan Cranston".into(), "Aaron Paul".into()],
             director: vec!["Vince Gilligan".into()],
-            writer: vec![],
+            writer: vec!["Vince Gilligan".into()],
             country: Some("United States".into()),
             poster: Some("https://p".into()),
             background: Some("https://b".into()),
             logo: None,
-            trailer_youtube_id: None,
+            trailer_youtube_id: Some("HhesaQXLuRY".into()),
             episodes,
             seasons: vec![],
             is_anime: false,
@@ -576,6 +606,13 @@ mod tests {
         assert!(card.contains("Aired To: \"2009-03-08\"\n"));
         assert!(card.contains("Watched Episodes Season 2: []\n"));
         assert!(card.contains("Status Season 1: Plan-to-Watch\n"));
+
+        // Credits: lists nest, a present scalar is quoted, a missing one is empty.
+        assert!(card.contains("Cast:\n  - \"Bryan Cranston\"\n  - \"Aaron Paul\"\n"));
+        assert!(card.contains("Writer:\n  - \"Vince Gilligan\"\n"));
+        assert!(card.contains("Country: \"United States\"\n"));
+        assert!(card.contains("Trailer: \"https://www.youtube.com/watch?v=HhesaQXLuRY\"\n"));
+        assert!(card.contains("Logo: \"\"\n"));
 
         // Body: all-caps season H2s, dates truncated to the table's date form.
         assert!(card.contains("\n## SEASON 1\n"));

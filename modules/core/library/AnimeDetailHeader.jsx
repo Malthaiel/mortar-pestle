@@ -100,6 +100,7 @@ export default function AnimeDetailHeader({
   genres, themes, demographics, studios, producers,
   premiered, format, episodes, duration,
   source, contentRating, broadcast, aired, trailer,
+  director, cast, writer, country,
   synonyms, titleJapanese, titleEnglish,
   accent, topRight, rating, actions, rightColumn,
 }) {
@@ -113,13 +114,28 @@ export default function AnimeDetailHeader({
     : (has(studios) ? studios : null);
 
   const scoreShown = score != null && score !== '';
-  const hasTrailer = !!(trailer && trailer.url);
+  // A card's `Trailer:` frontmatter is a plain YouTube URL string (written by
+  // tv_library.rs); the live MAL detail hands over a resolved object instead.
+  // Normalise here, the one place both shapes meet, so AnimeTrailer only ever
+  // sees the { youtubeId, url, image } it documents.
+  // ponytail: YouTube only — that is the only host either source emits.
+  const trailerObj = (() => {
+    if (!trailer) return null;
+    if (typeof trailer === 'object') return trailer.url ? trailer : null;
+    const m = String(trailer).match(/(?:[?&]v=|youtu\.be\/)([\w-]{6,})/);
+    return m ? { youtubeId: m[1], url: String(trailer), image: `https://img.youtube.com/vi/${m[1]}/hqdefault.jpg` } : null;
+  })();
+  const hasTrailer = !!trailerObj;
   // Left stats panel: ranked/popularity/members (large) over premiered/type/
   // studios/episodes/duration (small). Source/Rating/Broadcast/Aired live in the
   // left column under the alt-titles; the trailer takes the third top-row slot.
   const hasStatsLeft = rank != null || popularity != null || members != null
     || has(premiered) || has(format) || has(studiosVal) || has(episodes) || has(duration);
-  const hasMoreInfo = has(source) || has(contentRating) || has(broadcast) || has(aired);
+  const hasMoreInfo = has(source) || has(contentRating) || has(broadcast) || has(aired)
+    || has(director) || has(cast) || has(writer) || has(country);
+  // Film/TV credits. Arrays join; InfoRow drops a null row entirely, so an
+  // anime card (which carries none of these) grows no empty labels.
+  const list = (v) => (Array.isArray(v) ? (v.filter(Boolean).join(', ') || null) : (has(v) ? v : null));
   // Genres/themes/demographics/producers stay clickable chips in the left column.
   const hasChips = has(genres) || has(themes) || has(demographics) || has(producers);
   // Meta rail facts — Episodes/Duration as plain text after the taxon chips. The
@@ -198,6 +214,10 @@ export default function AnimeDetailHeader({
               <InfoRow label="Rating" value={has(contentRating) ? contentRating : null} />
               <InfoRow label="Broadcast" value={has(broadcast) ? broadcast : null} />
               <InfoRow label="Aired" value={has(aired) ? aired : null} />
+              <InfoRow label="Director" value={list(director)} />
+              <InfoRow label="Cast" value={list(cast)} />
+              <InfoRow label="Writer" value={list(writer)} />
+              <InfoRow label="Country" value={list(country)} />
               <TaxonTextRow label="Genres" kind="genre" values={genres} accent={a} />
               <TaxonTextRow label="Themes" kind="theme" values={themes} accent={a} />
               <TaxonTextRow label="Demographic" kind="demographic" values={demographics} accent={a} />
@@ -242,7 +262,7 @@ export default function AnimeDetailHeader({
                   {/* TRAILER — 16:9, fills the row height to match the stats panel */}
                   {hasTrailer && (
                     <div style={{ flexShrink: 0, display: 'flex' }}>
-                      <AnimeTrailer trailer={trailer} accent={a} fill />
+                      <AnimeTrailer trailer={trailerObj} accent={a} fill />
                     </div>
                   )}
                 </div>

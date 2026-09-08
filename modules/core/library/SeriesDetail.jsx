@@ -335,6 +335,12 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
         contentRating={series.rating || (detail && detail.rating)}
         broadcast={series.broadcast || (detail && detail.broadcast)}
         aired={series.aired || (detail && detail.aired)}
+        // Card-only, no `detail` fallback: `detail` is the live Jikan/AniList
+        // anime record, whose staff and characters are not film credits.
+        director={series.director}
+        cast={series.cast}
+        writer={series.writer}
+        country={series.country}
         synonyms={series.synonyms && series.synonyms.length ? series.synonyms : (detail && detail.synonyms)}
         titleJapanese={series.titleJapanese || (detail && detail.titleJapanese)}
         titleEnglish={series.titleEnglish || (detail && detail.titleEnglish)}

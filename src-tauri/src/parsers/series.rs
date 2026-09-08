@@ -168,6 +168,11 @@ pub struct Series {
     pub demographics: Vec<String>,
     pub producers: Vec<String>,
     pub director: Option<String>,
+    /// Cinemeta credits from the card frontmatter (Bring Your Own Source SF5).
+    /// Absent on MAL-era anime cards, which never carried them.
+    pub cast: Vec<String>,
+    pub writer: Vec<String>,
+    pub country: Option<String>,
     pub music: Option<String>,
     pub duration: Option<String>,
     pub episodes_total: i64,
@@ -1006,6 +1011,15 @@ pub fn read_series(series_path: &str) -> Result<Series, VaultError> {
             .map(|s| strip_wikilink(s))
             .collect(),
         director: meta_str(&meta, "Director").map(|s| strip_wikilink(&s)),
+        cast: as_strings(meta.get("Cast"))
+            .iter()
+            .map(|s| strip_wikilink(s))
+            .collect(),
+        writer: as_strings(meta.get("Writer"))
+            .iter()
+            .map(|s| strip_wikilink(s))
+            .collect(),
+        country: meta_str(&meta, "Country"),
         music: meta_str(&meta, "Music").map(|s| strip_wikilink(&s)),
         duration: meta_str(&meta, "Duration"),
         episodes_total,
