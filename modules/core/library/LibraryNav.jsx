@@ -14,11 +14,12 @@ import { navigate } from '@host/router.js';
 import TreeSidebar from '@host/components/vault-tree/TreeSidebar.jsx';
 import { useTreeExpansion } from '@host/components/vault-tree/useTreeExpansion.js';
 import { openInFiles } from '@host/components/vault-tree/revealInFiles.js';
-import { useAnimeStats, useTvStats } from './useAnimeStats.js';
+import { useAnimeStats, useTvStats, useMovieStats } from './useAnimeStats.js';
 import { useMusicStats } from './music/useMusicStats.js';
 
 const ANIME = '/tools/library/anime';
 const TV = '/tools/library/tv';
+const MOVIES = '/tools/library/movies';
 const MUSIC = '/tools/library/music';
 
 // Rows that sit directly under the media pill (no count).
@@ -27,6 +28,7 @@ const animeTopRows = [{ label: 'Homepage', path: ANIME }];
 // and lists playlists itself, so the tree entry was a second door to one room.
 const musicTopRows = [{ label: 'Homepage', path: MUSIC }];
 const tvTopRows = [{ label: 'Homepage', path: TV }];
+const movieTopRows = [{ label: 'Homepage', path: MOVIES }];
 
 // Status-count rows for each media type's nested "Library" folder. status keys
 // match the frontmatter Status values (and URL segments) the topbar tiles used.
@@ -55,6 +57,18 @@ function tvRows(s) {
     { label: 'Not Downloaded', path: `${TV}/library/Not-Downloaded`,     count: s.total - s.downloaded },
   ];
 }
+// A film is watched once: no Watching, no On-Hold — those two verbs only mean
+// something for a title you are partway through across many sittings.
+function movieRows(s) {
+  return [
+    { label: 'Completed',      path: `${MOVIES}/library/Completed`,      count: s.byStatus['Completed'] || 0 },
+    { label: 'Plan',           path: `${MOVIES}/library/Plan-to-Watch`,  count: s.byStatus['Plan-to-Watch'] || 0 },
+    { label: 'Dropped',        path: `${MOVIES}/library/Dropped`,        count: s.byStatus['Dropped'] || 0 },
+    { label: 'Total',          path: `${MOVIES}/library`,                count: s.total },
+    { label: 'Downloaded',     path: `${MOVIES}/library/Downloaded`,     count: s.downloaded },
+    { label: 'Not Downloaded', path: `${MOVIES}/library/Not-Downloaded`, count: s.total - s.downloaded },
+  ];
+}
 function musicRows(s) {
   return [
     { label: 'Listening',      path: `${MUSIC}/library/Currently-Listening`, count: s.byStatus['Currently-Listening'] || 0 },
@@ -75,12 +89,13 @@ function Count({ value }) {
 export default function LibraryNav({ route, accent }) {
   const anime = useAnimeStats();
   const tv = useTvStats();
+  const movies = useMovieStats();
   const music = useMusicStats();
   const exp = useTreeExpansion('library:tree:expanded', []); // every folder collapsed by default
 
   const currentPath = '/tools/library/' + (route?.rest || '');
   const seg = (route?.rest || '').split('/')[0];
-  const loading = anime.loading || tv.loading || music.loading;
+  const loading = anime.loading || tv.loading || movies.loading || music.loading;
 
   const nodes = useMemo(() => {
     const toNode = (r) => ({
@@ -97,20 +112,22 @@ export default function LibraryNav({ route, accent }) {
         children: [...animeTopRows.map(toNode), libFolder('anime:library', animeRows(anime))] },
       { id: 'tv', label: 'TV Shows', isFolder: true,
         children: [...tvTopRows.map(toNode), libFolder('tv:library', tvRows(tv))] },
+      { id: 'movies', label: 'Movies', isFolder: true,
+        children: [...movieTopRows.map(toNode), libFolder('movies:library', movieRows(movies))] },
       { id: 'music', label: 'Music', isFolder: true,
         children: [...musicTopRows.map(toNode), libFolder('music:library', musicRows(music))] },
     ];
-  }, [anime, tv, music, currentPath, loading]);
+  }, [anime, tv, movies, music, currentPath, loading]);
 
   const controller = {
     isOpen: exp.isOpen,
     toggle: exp.toggle,
     anyExpanded: exp.anyExpanded,
-    expandAll: () => exp.expandAll(['anime', 'anime:library', 'tv', 'tv:library', 'music', 'music:library']),
+    expandAll: () => exp.expandAll(['anime', 'anime:library', 'tv', 'tv:library', 'movies', 'movies:library', 'music', 'music:library']),
     collapseAll: exp.collapseAll,
     canReveal: true,
     revealCurrent: () => {
-      const media = seg === 'music' ? 'music' : seg === 'tv' ? 'tv' : 'anime';
+      const media = seg === 'music' ? 'music' : seg === 'tv' ? 'tv' : seg === 'movies' ? 'movies' : 'anime';
       // Open the media pill AND its nested Library folder — the active row lives
       // inside the latter for every filtered grid.
       exp.reveal([media, `${media}:library`]);
@@ -130,7 +147,7 @@ export default function LibraryNav({ route, accent }) {
     // Reveal the active media type's folder under the Library vault (~/.local/
     // share/.../Library/{Anime,Music}). 'library' root → library_vault_root.
     revealInFiles: { show: true, title: 'Reveal in files',
-      onClick: () => openInFiles(seg === 'music' ? 'Music' : seg === 'tv' ? 'TV Shows' : 'Anime', { isFolder: true, root: 'library' }) },
+      onClick: () => openInFiles(seg === 'music' ? 'Music' : seg === 'tv' ? 'TV Shows' : seg === 'movies' ? 'Movies' : 'Anime', { isFolder: true, root: 'library' }) },
   };
 
   return <TreeSidebar nodes={nodes} controller={controller} buttons={buttons} accent={accent}/>;

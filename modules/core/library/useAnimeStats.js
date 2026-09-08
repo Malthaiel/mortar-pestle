@@ -5,9 +5,9 @@
 // updates. Lifted out of AnimeTopBar so the two subtrees (sidebar in
 // renderSecondary, topbar in AnimePage) can never disagree on counts.
 //
-// One store per domain, built by the same factory: Anime and TV Shows read the
-// same Rust command with a different catalog, so a copy of this file would only
-// be a second place to fix the same bug.
+// One store per domain, built by the same factory: Anime, TV Shows and Movies
+// read the same Rust command with a different catalog, so a copy of this file
+// would only be a second place to fix the same bug.
 
 import { useSyncExternalStore } from 'react';
 import { videoApi } from './api.js';
@@ -61,3 +61,6 @@ function makeSeriesStats(domain) {
 
 export const useAnimeStats = makeSeriesStats('Anime');
 export const useTvStats = makeSeriesStats('TV Shows');
+// A film card carries no episode table, so `episodes` and `rewatched` come out
+// 0 for this store — the Movies topbar reads `total` and `downloaded` instead.
+export const useMovieStats = makeSeriesStats('Movies');

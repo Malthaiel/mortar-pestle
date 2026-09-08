@@ -165,6 +165,7 @@ fn main() {
         "cinemeta_detail",
         "cinemeta_calendar",
         "tv_add_to_library",
+        "movie_add_to_library",
         "anime_search",
         "anime_top",
         "anime_season_now",

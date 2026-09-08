@@ -9,17 +9,15 @@ import AnimeResultCard from '../AnimeResultCard.jsx';
 import { toResultCard, toTitle } from './util.js';
 
 const TITLES = {
-  top: 'Top Shows',
-  imdbRating: 'By Rating',
-  year: 'By Year',
-  search: 'Search',
+  series: { top: 'Top Shows', imdbRating: 'By Rating', year: 'By Year', search: 'Search' },
+  movie:  { top: 'Top Films', imdbRating: 'By Rating', year: 'By Year', search: 'Search' },
 };
 
 // Cinemeta's `year` catalog refuses to answer without a genre; Drama is its
 // broadest, and the homepage row uses the same one so the grid matches it.
 const YEAR_GENRE = 'Drama';
 
-export default function TvBrowse({ accent, mode, query }) {
+export default function RoomBrowse({ accent, kind = 'series', mode, query }) {
   const [items, setItems] = useState(null);
   const [skip, setSkip] = useState(0);
   const [more, setMore] = useState(true);
@@ -31,8 +29,8 @@ export default function TvBrowse({ accent, mode, query }) {
     let cancelled = false;
     setLoading(true);
     const req = mode === 'search'
-      ? videoApi.cinemetaSearch('series', query)
-      : videoApi.cinemetaCatalog('series', mode, mode === 'year' ? YEAR_GENRE : null, skip);
+      ? videoApi.cinemetaSearch(kind, query)
+      : videoApi.cinemetaCatalog(kind, mode, mode === 'year' ? YEAR_GENRE : null, skip);
     req
       .then(r => {
         if (cancelled) return;
@@ -45,7 +43,7 @@ export default function TvBrowse({ accent, mode, query }) {
     return () => { cancelled = true; };
   }, [mode, query, skip]);
 
-  const heading = mode === 'search' ? `Search — ${query}` : (TITLES[mode] || 'Browse');
+  const heading = mode === 'search' ? `Search — ${query}` : ((TITLES[kind] || TITLES.series)[mode] || 'Browse');
 
   return (
     <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '20px 22px 40px', display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -57,7 +55,7 @@ export default function TvBrowse({ accent, mode, query }) {
       {items && items.length > 0 && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 14 }}>
           {items.map(h => (
-            <AnimeResultCard key={h.imdbId} result={toResultCard(h)} accent={accent} onSelect={() => toTitle(h.imdbId)} />
+            <AnimeResultCard key={h.imdbId} result={toResultCard(h, kind)} accent={accent} onSelect={() => toTitle(kind, h.imdbId)} />
           ))}
         </div>
       )}

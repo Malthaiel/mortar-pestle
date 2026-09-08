@@ -30,7 +30,7 @@ use crate::parsers::frontmatter::{parse_frontmatter, set_frontmatter_field};
 /// Library vault root and `list_series` is reachable from the frontend over IPC,
 /// so it resolves through this allow-list rather than trusting the caller's
 /// string — a free-form value here would be a path-traversal seam.
-pub const SERIES_DOMAINS: [&str; 2] = ["Anime", "TV Shows"];
+pub const SERIES_DOMAINS: [&str; 3] = ["Anime", "TV Shows", "Movies"];
 pub const DEFAULT_DOMAIN: &str = "Anime";
 
 /// `<domain>/Catalog`, falling back to Anime for an unrecognised domain.
@@ -1246,10 +1246,10 @@ mod tests {
     fn catalog_rel_allows_only_known_domains() {
         assert_eq!(catalog_rel("Anime"), "Anime/Catalog");
         assert_eq!(catalog_rel("TV Shows"), "TV Shows/Catalog");
+        assert_eq!(catalog_rel("Movies"), "Movies/Catalog");
         // Anything else falls back to Anime — an unknown domain can never
         // escape the Library root or reach a folder it wasn't allow-listed for.
         assert_eq!(catalog_rel("../../etc"), "Anime/Catalog");
-        assert_eq!(catalog_rel("Movies"), "Anime/Catalog");
         assert_eq!(catalog_rel(""), "Anime/Catalog");
     }
 

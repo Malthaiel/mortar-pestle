@@ -1,19 +1,20 @@
-// A show you do not own yet: the Cinemeta record plus the Add to Library button.
-// Once added, the route hands off to the owned page (SeriesDetail), so this page
-// exists only for the not-owned case.
+// A title you do not own yet — a show in the TV room, a film in the Movies room:
+// the Cinemeta record plus the Add to Library button. Once added, the route hands
+// off to the owned page (SeriesDetail), so this page exists only for the
+// not-owned case.
 //
-// The anime gate lives in Rust — `tv_add_to_library` refuses rather than writes,
-// and hands back a reason. This page turns each reason into the right offer: a
-// jump to the Anime room, or a jump to the card that already owns the title.
-// Checking here as well would be a second copy of a rule with one owner.
+// The anime gate lives in Rust — `tv_add_to_library` / `movie_add_to_library`
+// refuse rather than write, and hand back a reason. This page turns each reason
+// into the right offer: a jump to the Anime room, or a jump to the card that
+// already owns the title. Checking here as well would be a second copy of a rule
+// with one owner.
 
 import { useEffect, useMemo, useState } from 'react';
 import { videoApi } from '../api.js';
 import { coverSrc } from '../util.js';
 import { encodePath } from '../paths.js';
 import LoadingScreen from '../LoadingScreen.jsx';
-import { useTvStats } from '../useAnimeStats.js';
-import { go, TV_HOME } from './util.js';
+import { room, roomHome, go } from './util.js';
 
 const ANIME_HOME = '/tools/library/anime';
 
@@ -25,12 +26,15 @@ function errText(e, fallback) {
   try { return JSON.stringify(e); } catch { return fallback; }
 }
 
-export default function TvTitle({ accent, imdbId }) {
+export default function RoomTitle({ accent, kind = 'series', imdbId }) {
+  const cfg = room(kind);
+  const HOME = roomHome(kind);
+  const noun = cfg.hasEpisodes ? 'show' : 'film';
   const [detail, setDetail] = useState(null);
   const [error, setError] = useState(null);
   const [adding, setAdding] = useState(false);
   const [refused, setRefused] = useState(null);
-  const { series } = useTvStats();
+  const { series } = cfg.useStats();
 
   // Already on the shelf → offer the owned page instead of a second Add.
   const owned = useMemo(
@@ -41,26 +45,26 @@ export default function TvTitle({ accent, imdbId }) {
   useEffect(() => {
     let cancelled = false;
     setDetail(null); setError(null); setRefused(null);
-    videoApi.cinemetaDetail('series', imdbId)
+    videoApi.cinemetaDetail(kind, imdbId)
       .then(d => { if (!cancelled) setDetail(d); })
-      .catch(e => { if (!cancelled) setError(errText(e, 'Could not load this show.')); });
+      .catch(e => { if (!cancelled) setError(errText(e, `Could not load this ${noun}.`)); });
     return () => { cancelled = true; };
-  }, [imdbId]);
+  }, [imdbId, kind, noun]);
 
   const onAdd = async () => {
     if (adding) return;
     setAdding(true); setError(null); setRefused(null);
     try {
-      const res = await videoApi.tvAddToLibrary(imdbId);
+      const res = await cfg.addToLibrary(imdbId);
       if (res && res.ok) {
         // The shelf stores reload off this event, the same way a download does.
         window.dispatchEvent(new CustomEvent('video-library-changed', { detail: {} }));
-        go(TV_HOME + '/' + encodePath(res.seriesPath));
+        go(HOME + '/' + encodePath(res.seriesPath));
         return;
       }
-      setRefused((res && res.refused) || { reason: 'unknown', message: 'Could not add this show.' });
+      setRefused((res && res.refused) || { reason: 'unknown', message: `Could not add this ${noun}.` });
     } catch (e) {
-      setError(errText(e, 'Could not add this show.'));
+      setError(errText(e, `Could not add this ${noun}.`));
     } finally {
       setAdding(false);
     }
@@ -71,13 +75,20 @@ export default function TvTitle({ accent, imdbId }) {
 
   const poster = coverSrc(detail.poster);
   const seasons = (detail.seasons || []).filter(n => n > 0).length;
-  const facts = [
+  // A film has no seasons, no episode count and no Continuing/Ended status; its
+  // runtime is the fact that matters instead.
+  const facts = (cfg.hasEpisodes ? [
     detail.year,
     seasons ? `${seasons} season${seasons === 1 ? '' : 's'}` : null,
     detail.episodes && detail.episodes.length ? `${detail.episodes.length} episodes` : null,
     detail.imdbRating ? `★ ${detail.imdbRating}` : null,
     detail.status,
-  ].filter(Boolean).join('  ·  ');
+  ] : [
+    detail.year,
+    detail.runtime,
+    detail.imdbRating ? `★ ${detail.imdbRating}` : null,
+    detail.director && detail.director.length ? detail.director.join(', ') : null,
+  ]).filter(Boolean).join('  ·  ');
 
   return (
     <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '22px 24px 40px' }}>
@@ -101,7 +112,7 @@ export default function TvTitle({ accent, imdbId }) {
 
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 2 }}>
             {owned ? (
-              <button onClick={() => go(TV_HOME + '/' + encodePath(owned.path))} className="candy-btn is-primary" style={{ cursor: 'pointer' }}>
+              <button onClick={() => go(HOME + '/' + encodePath(owned.path))} className="candy-btn is-primary" style={{ cursor: 'pointer' }}>
                 <span className="candy-face">Open in your library</span>
               </button>
             ) : (
@@ -112,7 +123,7 @@ export default function TvTitle({ accent, imdbId }) {
             )}
           </div>
 
-          {refused && <Refused refused={refused} accent={accent} />}
+          {refused && <Refused refused={refused} accent={accent} home={HOME} />}
           {error && <div style={{ fontSize: 12, color: 'var(--text)' }}>{error}</div>}
 
           {detail.description && (
@@ -130,7 +141,7 @@ export default function TvTitle({ accent, imdbId }) {
 }
 
 // The refusal reasons Rust can hand back, each with the one thing worth doing next.
-function Refused({ refused, accent }) {
+function Refused({ refused, accent, home }) {
   const toAnime = refused.reason === 'anime' || refused.reason === 'already-in-anime';
   const owned = refused.seriesPath;
   return (
@@ -147,7 +158,7 @@ function Refused({ refused, accent }) {
         </button>
       )}
       {!toAnime && owned && (
-        <button onClick={() => go(`${TV_HOME}/${encodePath(owned)}`)}
+        <button onClick={() => go(`${home}/${encodePath(owned)}`)}
           data-own-press className="candy-btn" data-shape="chip" style={{ marginLeft: 'auto', '--accent': accent }}>
           <span className="candy-face" style={{ fontSize: 11 }}>Open it →</span>
         </button>

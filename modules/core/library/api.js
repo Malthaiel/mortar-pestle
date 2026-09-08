@@ -25,6 +25,7 @@ export const videoApi = {
   cinemetaDetail:   (kind, imdbId) => _api.invoke('cinemeta_detail', { kind, imdbId }),
   cinemetaCalendar: (imdbIds) => _api.invoke('cinemeta_calendar', { imdbIds }),
   tvAddToLibrary:   (imdbId) => _api.invoke('tv_add_to_library', { imdbId }),
+  movieAddToLibrary: (imdbId) => _api.invoke('movie_add_to_library', { imdbId }),
   // Anime Browse — Jikan discovery (read-only; covers hot-linked from MAL).
   animeSearch:       (query) => _api.invoke('anime_search', { query }),
   animeTop:          (page) => _api.invoke('anime_top', { page: page || 1 }),

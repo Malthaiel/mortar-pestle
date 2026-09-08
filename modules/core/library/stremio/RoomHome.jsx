@@ -1,9 +1,13 @@
-// TV Shows homepage, mirroring AnimeHome's shape: a search bar spanning your
-// shelf and Cinemeta, then — when the query is empty — Continue Watching,
-// Upcoming Episodes, Top, By Rating and By Year.
+// Homepage for a Stremio-backed room (TV Shows or Movies), mirroring AnimeHome's
+// shape: a search bar spanning your shelf and Cinemeta, then — when the query is
+// empty — Continue Watching, Upcoming Episodes, Top, By Rating and By Year.
+//
+// Continue Watching and Upcoming Episodes are the two rows that only mean
+// something across many episodes, so the Movies room hides both (`hasEpisodes`)
+// rather than drawing them empty.
 //
 // Discovery comes from the keyless Cinemeta catalogs; Continue Watching and the
-// search's local half derive from the one TV Shows series list. Discovery cards
+// search's local half derive from that room's one card list. Discovery cards
 // route to /title/<ttId> (Cinemeta detail + Add); shelf cards route by path.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -13,12 +17,11 @@ import AnimeResultCard from '../AnimeResultCard.jsx';
 import { SeriesCard } from '../SeriesBrowser.jsx';
 import { coverSrc } from '../util.js';
 import { encodePath } from '../paths.js';
-import { useTvStats } from '../useAnimeStats.js';
-import { toResultCard, go, TV_HOME, toTitle } from './util.js';
+import { room, roomHome, toResultCard, go, toTitle } from './util.js';
 
 const GRID = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 14 };
 
-const toSeries = (path) => go(TV_HOME + '/' + encodePath(path));
+const toCard = (kind, path) => go(roomHome(kind) + '/' + encodePath(path));
 
 function errText(e, fallback) {
   if (!e) return fallback;
@@ -32,10 +35,11 @@ function watchedCount(s) {
   return typeof s.watchedEpisodes === 'number' ? s.watchedEpisodes : (s.watchedEpisodes || []).length;
 }
 
-export default function TvHome({ accent }) {
+export default function RoomHome({ accent, kind = 'series' }) {
+  const cfg = room(kind);
   // The shelf comes from the shared store, so the homepage, the sidebar counts
   // and the topbar all read one fetch.
-  const { series } = useTvStats();
+  const { series } = cfg.useStats();
   const [top, setTop] = useState(null);
   const [rated, setRated] = useState(null);
   const [byYear, setByYear] = useState(null);
@@ -43,7 +47,7 @@ export default function TvHome({ accent }) {
 
   useEffect(() => {
     let cancelled = false;
-    const pull = (catalog, genre, set) => videoApi.cinemetaCatalog('series', catalog, genre)
+    const pull = (catalog, genre, set) => videoApi.cinemetaCatalog(kind, catalog, genre)
       .then(r => { if (!cancelled) set(r || []); })
       .catch(() => { if (!cancelled) set([]); });
     pull('top', null, setTop);
@@ -66,20 +70,20 @@ export default function TvHome({ accent }) {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search your shows and Cinemeta"
+          placeholder={cfg.hasEpisodes ? "Search your shows and Cinemeta" : "Search your films and Cinemeta"}
           className="candy-input"
           style={{ padding: '11px 14px', fontSize: 14, color: 'var(--text)', outline: 'none', width: '100%' }}
         />
 
         {q ? (
-          <SearchResults query={q} accent={accent} series={series} />
+          <SearchResults query={q} accent={accent} kind={kind} series={series} />
         ) : (
           <>
-            <ContinueWatching series={series} accent={accent} />
-            <UpcomingEpisodes series={series} accent={accent} />
-            <DiscoverySection title="Top Shows" items={top} accent={accent} onSeeAll={() => go(`${TV_HOME}/browse/top`)} />
-            <DiscoverySection title="By Rating" items={rated} accent={accent} onSeeAll={() => go(`${TV_HOME}/browse/imdbRating`)} />
-            <DiscoverySection title="By Year" items={byYear} accent={accent} onSeeAll={() => go(`${TV_HOME}/browse/year`)} />
+            {cfg.hasEpisodes && <ContinueWatching series={series} accent={accent} kind={kind} />}
+            {cfg.hasEpisodes && <UpcomingEpisodes series={series} accent={accent} kind={kind} />}
+            <DiscoverySection title={cfg.hasEpisodes ? 'Top Shows' : 'Top Films'} items={top} accent={accent} kind={kind} onSeeAll={() => go(`${roomHome(kind)}/browse/top`)} />
+            <DiscoverySection title="By Rating" items={rated} accent={accent} kind={kind} onSeeAll={() => go(`${roomHome(kind)}/browse/imdbRating`)} />
+            <DiscoverySection title="By Year" items={byYear} accent={accent} kind={kind} onSeeAll={() => go(`${roomHome(kind)}/browse/year`)} />
           </>
         )}
       </div>
@@ -89,7 +93,7 @@ export default function TvHome({ accent }) {
 
 // ---- Continue Watching ----------------------------------------------------
 
-function ContinueWatching({ series, accent }) {
+function ContinueWatching({ series, accent, kind }) {
   const items = useMemo(() => {
     return (series || []).filter(s => {
       const status = s.status || '';
@@ -107,19 +111,19 @@ function ContinueWatching({ series, accent }) {
 
   return (
     <PosterRow title="Continue Watching" accent={accent}>
-      {items.map(s => <ContinueCard key={s.path} series={s} accent={accent} />)}
+      {items.map(s => <ContinueCard key={s.path} series={s} accent={accent} kind={kind} />)}
     </PosterRow>
   );
 }
 
-function ContinueCard({ series, accent }) {
+function ContinueCard({ series, accent, kind }) {
   const [hover, setHover] = useState(false);
   const img = coverSrc(series.image);
   const total = series.episodesTotal || 0;
   const watched = watchedCount(series);
   const nextEp = total > 0 ? Math.min(total, watched + 1) : watched + 1;
   const progress = total > 0 ? watched / total : 0;
-  const open = () => toSeries(series.path);
+  const open = () => toCard(kind, series.path);
 
   return (
     <div
@@ -166,7 +170,7 @@ function ContinueCard({ series, accent }) {
 
 // Cinemeta has no account, so its calendar feed is asked about the shows the
 // shelf already holds. Nothing owned → no request and no row.
-function UpcomingEpisodes({ series, accent }) {
+function UpcomingEpisodes({ series, accent, kind }) {
   const [items, setItems] = useState(null);
   const ids = useMemo(
     () => (series || []).map(s => s.imdbId).filter(Boolean),
@@ -196,13 +200,13 @@ function UpcomingEpisodes({ series, accent }) {
   );
 }
 
-function UpcomingCard({ ep, accent }) {
+function UpcomingCard({ ep, accent, kind = 'series' }) {
   const img = coverSrc(ep.poster);
   const when = (ep.released || '').slice(0, 10);
   return (
     <div
-      onClick={() => toTitle(ep.imdbId)}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toTitle(ep.imdbId); } }}
+      onClick={() => toTitle(kind, ep.imdbId)}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toTitle(kind, ep.imdbId); } }}
       role="button" tabIndex={0}
       className="candy-btn"
       data-shape="tile"
@@ -227,13 +231,13 @@ function UpcomingCard({ ep, accent }) {
 
 // ---- Discovery rows -------------------------------------------------------
 
-function DiscoverySection({ title, items, accent, onSeeAll }) {
+function DiscoverySection({ title, items, accent, kind = 'series', onSeeAll }) {
   if (items === null) return <RowSkeleton title={title} />;
   if (items.length === 0) return null;
   return (
     <PosterRow title={title} accent={accent} onSeeAll={onSeeAll}>
       {items.slice(0, 20).map(h => (
-        <AnimeResultCard key={h.imdbId} result={toResultCard(h)} accent={accent} onSelect={() => toTitle(h.imdbId)} />
+        <AnimeResultCard key={h.imdbId} result={toResultCard(h, kind)} accent={accent} onSelect={() => toTitle(kind, h.imdbId)} />
       ))}
     </PosterRow>
   );
@@ -241,7 +245,7 @@ function DiscoverySection({ title, items, accent, onSeeAll }) {
 
 // ---- Search ---------------------------------------------------------------
 
-function SearchResults({ query, accent, series }) {
+function SearchResults({ query, accent, kind = 'series', series }) {
   const [hits, setHits] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -252,7 +256,7 @@ function SearchResults({ query, accent, series }) {
     setLoading(true); setError(null);
     const t = setTimeout(async () => {
       try {
-        const r = await videoApi.cinemetaSearch('series', query);
+        const r = await videoApi.cinemetaSearch(kind, query);
         if (myId === reqId.current) setHits(r || []);
       } catch (e) {
         if (myId === reqId.current) setError(errText(e, 'Search failed.'));
@@ -261,7 +265,7 @@ function SearchResults({ query, accent, series }) {
       }
     }, 350);
     return () => clearTimeout(t);
-  }, [query]);
+  }, [query, kind]);
 
   const localHits = useMemo(() => {
     const ql = query.toLowerCase();
@@ -275,7 +279,7 @@ function SearchResults({ query, accent, series }) {
         {localHits.length === 0
           ? <Muted>No matches on your shelf.</Muted>
           : <div style={GRID}>{localHits.map(s => (
-              <SeriesCard key={s.path} series={s} accent={accent} selected={false} onSelect={toSeries} domain="TV Shows" />
+              <SeriesCard key={s.path} series={s} accent={accent} selected={false} onSelect={(path) => toCard(kind, path)} domain={room(kind).domain} />
             ))}</div>}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -283,7 +287,7 @@ function SearchResults({ query, accent, series }) {
           <GroupHeading>Cinemeta</GroupHeading>
           {hits && hits.length > 0 && (
             <button
-              onClick={() => go(`${TV_HOME}/browse/search/` + encodeURIComponent(query))}
+              onClick={() => go(`${roomHome(kind)}/browse/search/` + encodeURIComponent(query))}
               data-own-press
               className="candy-btn"
               data-shape="chip"
@@ -297,7 +301,7 @@ function SearchResults({ query, accent, series }) {
           hits.length === 0
             ? <Muted>No results.</Muted>
             : <div style={GRID}>{hits.map(h => (
-                <AnimeResultCard key={h.imdbId} result={toResultCard(h)} accent={accent} onSelect={() => toTitle(h.imdbId)} />
+                <AnimeResultCard key={h.imdbId} result={toResultCard(h, kind)} accent={accent} onSelect={() => toTitle(kind, h.imdbId)} />
               ))}</div>
         )}
       </div>

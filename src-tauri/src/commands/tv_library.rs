@@ -26,13 +26,14 @@ use crate::parsers::playlists::{cell_escape, sanitize_name, yaml_str};
 
 const TV_CATALOG: &str = "TV Shows/Catalog";
 const ANIME_CATALOG: &str = "Anime/Catalog";
+const MOVIES_CATALOG: &str = "Movies/Catalog";
 
 /// Why an add was refused. A stable machine string, not prose — the room
 /// branches on it (anime → jump to the Anime room; already there → open it).
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Refusal {
-    /// `anime` | `already-in-anime` | `already-in-tv`
+    /// `anime` | `already-in-anime` | `already-in-tv` | `already-in-movies`
     pub reason: String,
     /// Catalog-relative path of the card that already owns this title, when one does.
     pub series_path: Option<String>,
@@ -141,6 +142,92 @@ fn yaml_list(key: &str, items: &[String]) -> String {
         s.push_str(&format!("  - {}\n", yaml_str(item)));
     }
     s
+}
+
+/// A film's card: the same frontmatter block a show gets, minus everything that
+/// only means something across many episodes (`Seasons`, `Episodes`, `Airing`,
+/// the per-season `Status ...` block) and with `Released` in place of the aired
+/// range. No `## SEASON` sections, so `series.rs` reads it as a flat record with
+/// zero episodes -- which is exactly what a film is.
+///
+/// Verified 2026-09-07 against a hand-written card of this exact shape:
+/// `video_read_series`, `video_mark_series_status` and `video_mark_series_rating`
+/// all work on it unchanged, which is why there is no `parsers/movies.rs`.
+fn render_movie_card(d: &CineDetail) -> String {
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    let mut fm = String::from("---\n");
+    fm.push_str("Type: Media-Entry\n");
+    fm.push_str("Domain: Movie\n");
+    fm.push_str("Provider: cinemeta\n");
+    fm.push_str(&format!("Provider ID: {}\n", numeric_id(&d.imdb_id)));
+    fm.push_str(&format!("IMDb ID: {}\n", yaml_str(&d.imdb_id)));
+    fm.push_str(&format!("Title: {}\n", yaml_str(&d.name)));
+    fm.push_str("Status: Plan-to-Watch\n");
+    fm.push_str(&format!("Created: {today}\n"));
+    fm.push_str(&format!("Ingested: {today}\n"));
+    fm.push_str("Personal Rating: 0\n");
+    match first_year(d.year.as_deref()) {
+        Some(y) => fm.push_str(&format!("Year: {y}\n")),
+        None => fm.push_str("Year: \"\"\n"),
+    }
+    fm.push_str(&yaml_list("Genres", &d.genres));
+    fm.push_str(&format!(
+        "Duration: {}\n",
+        yaml_str(d.runtime.as_deref().unwrap_or(""))
+    ));
+    match d.imdb_rating.as_deref().and_then(|r| r.parse::<f64>().ok()) {
+        Some(r) => fm.push_str(&format!("Online Rating: {r}\n")),
+        None => fm.push_str("Online Rating: \"\"\n"),
+    }
+    fm.push_str(&format!(
+        "Released: {}\n",
+        yaml_str(&iso_date(d.released.as_deref()))
+    ));
+    fm.push_str(&format!("Director: {}\n", yaml_str(&d.director.join(", "))));
+    fm.push_str("Local Path: \"\"\n");
+    fm.push_str("Download Status: Not-Downloaded\n");
+    fm.push_str(&format!(
+        "Image: {}\n",
+        yaml_str(d.poster.as_deref().unwrap_or(""))
+    ));
+    fm.push_str(&format!(
+        "Background: {}\n",
+        yaml_str(d.background.as_deref().unwrap_or(""))
+    ));
+    fm.push_str(&format!(
+        "Source URL: \"https://www.imdb.com/title/{}/\"\n",
+        d.imdb_id
+    ));
+    fm.push_str("---\n\n");
+
+    let mut body = String::new();
+    if let Some(desc) = d.description.as_deref().filter(|s| !s.trim().is_empty()) {
+        body.push_str("## Plot\n\n");
+        body.push_str(desc.trim());
+        body.push('\n');
+    }
+    format!("{fm}{}", body.trim_end())
+}
+
+/// `<Title (Year)>.md` -- a film ALWAYS carries its year, unlike a show.
+///
+/// Two reasons. Remakes share a title far more often than shows do (three films
+/// are just called `The Thing`), and the download lane names the video folder
+/// from this stem, so carrying the year here is what makes the folder on disk
+/// `Movies/Inception (2010)/` without the job needing a year field of its own.
+fn pick_movie_filename(dir: &Path, title: &str, year: Option<i64>) -> Result<String, VaultError> {
+    let base = sanitize_name(title);
+    if base.is_empty() {
+        return Err(VaultError::Invalid("film has no usable title".into()));
+    }
+    let name = match year {
+        Some(y) => format!("{base} ({y})"),
+        None => base,
+    };
+    if !dir.join(format!("{name}.md")).exists() {
+        return Ok(format!("{name}.md"));
+    }
+    Err(VaultError::Conflict { current_mtime: 0.0 })
 }
 
 /// Build the whole card — frontmatter plus season sections.
@@ -352,6 +439,60 @@ pub async fn tv_add_to_library(imdb_id: String) -> Result<AddResult, VaultError>
         title: detail.name,
         seasons: seasons.len() as i64,
         episodes: seasons.values().map(|v| v.len() as i64).sum(),
+        refused: None,
+    })
+}
+
+/// Write a Cinemeta film into the Movies catalog.
+///
+/// The film twin of `tv_add_to_library`, and deliberately the same shape: it
+/// refuses rather than `Err`s, for the same reason (each reason becomes a
+/// different button in the room). An anime film goes to the Anime room, which
+/// owns it -- the same one-entity-one-page rule the TV room follows.
+#[tauri::command]
+pub async fn movie_add_to_library(imdb_id: String) -> Result<AddResult, VaultError> {
+    let detail = cinemeta_detail("movie".to_string(), imdb_id).await?;
+    let id = detail.imdb_id.clone();
+
+    if detail.is_anime {
+        return Ok(refuse(
+            "anime",
+            format!("{} is anime -- it belongs in the Anime room.", detail.name),
+            None,
+            detail.name,
+        ));
+    }
+    if let Some(path) = find_by_imdb(ANIME_CATALOG, &id) {
+        return Ok(refuse(
+            "already-in-anime",
+            format!("{} is already in the Anime library.", detail.name),
+            Some(path),
+            detail.name,
+        ));
+    }
+    if let Some(path) = find_by_imdb(MOVIES_CATALOG, &id) {
+        return Ok(refuse(
+            "already-in-movies",
+            format!("{} is already in the Movies library.", detail.name),
+            Some(path),
+            detail.name,
+        ));
+    }
+
+    let dir = catalog_dir(MOVIES_CATALOG);
+    std::fs::create_dir_all(&dir)?;
+    let file = pick_movie_filename(&dir, &detail.name, first_year(detail.year.as_deref()))?;
+    let card = render_movie_card(&detail);
+    atomic_write(&dir.join(&file), card.as_bytes())?;
+
+    Ok(AddResult {
+        ok: true,
+        series_path: Some(format!("{MOVIES_CATALOG}/{file}")),
+        title: detail.name,
+        // A film is one thing: no seasons, and the single "episode" is the film
+        // itself, which the flat card does not enumerate.
+        seasons: 0,
+        episodes: 0,
         refused: None,
     })
 }
