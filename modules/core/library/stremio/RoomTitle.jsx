@@ -9,7 +9,7 @@
 // already owns the title. Checking here as well would be a second copy of a rule
 // with one owner.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { videoApi } from '../api.js';
 import { coverSrc } from '../util.js';
 import { encodePath } from '../paths.js';
@@ -33,6 +33,10 @@ export default function RoomTitle({ accent, kind = 'series', imdbId }) {
   const [detail, setDetail] = useState(null);
   const [error, setError] = useState(null);
   const [adding, setAdding] = useState(false);
+  // A ref, not the state above: two clicks in one tick both read the OLD
+  // `adding` and both get through, so the second add finds the card the first
+  // just wrote and refuses it as already-in-library.
+  const addingRef = useRef(false);
   const [refused, setRefused] = useState(null);
   const { series } = cfg.useStats();
 
@@ -52,7 +56,8 @@ export default function RoomTitle({ accent, kind = 'series', imdbId }) {
   }, [imdbId, kind, noun]);
 
   const onAdd = async () => {
-    if (adding) return;
+    if (addingRef.current) return;
+    addingRef.current = true;
     setAdding(true); setError(null); setRefused(null);
     try {
       const res = await cfg.addToLibrary(imdbId);
@@ -66,6 +71,7 @@ export default function RoomTitle({ accent, kind = 'series', imdbId }) {
     } catch (e) {
       setError(errText(e, `Could not add this ${noun}.`));
     } finally {
+      addingRef.current = false;
       setAdding(false);
     }
   };
