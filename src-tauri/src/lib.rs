@@ -859,6 +859,7 @@ pub fn run() {
             commands::cinemeta::cinemeta_calendar,
             commands::tv_library::tv_add_to_library,
             commands::tv_library::movie_add_to_library,
+            commands::tv_library::movie_refresh_credits,
             commands::anime_search::anime_search,
             commands::anime_search::anime_top,
             commands::anime_search::anime_season_now,

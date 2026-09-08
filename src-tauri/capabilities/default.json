@@ -181,6 +181,7 @@
     "allow-cinemeta-calendar",
     "allow-tv-add-to-library",
     "allow-movie-add-to-library",
+    "allow-movie-refresh-credits",
     "allow-anime-search",
     "allow-anime-top",
     "allow-anime-season-now",

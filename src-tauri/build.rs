@@ -169,6 +169,7 @@ fn main() {
         "cinemeta_calendar",
         "tv_add_to_library",
         "movie_add_to_library",
+        "movie_refresh_credits",
         "anime_search",
         "anime_top",
         "anime_season_now",

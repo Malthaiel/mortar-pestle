@@ -100,7 +100,7 @@ export default function AnimeDetailHeader({
   genres, themes, demographics, studios, producers,
   premiered, format, episodes, duration,
   source, contentRating, broadcast, aired, trailer,
-  director, cast, writer, country,
+  director, cast, writer, country, crew, budget, boxOffice,
   synonyms, titleJapanese, titleEnglish,
   accent, topRight, rating, actions, rightColumn,
 }) {
@@ -132,10 +132,42 @@ export default function AnimeDetailHeader({
   const hasStatsLeft = rank != null || popularity != null || members != null
     || has(premiered) || has(format) || has(studiosVal) || has(episodes) || has(duration);
   const hasMoreInfo = has(source) || has(contentRating) || has(broadcast) || has(aired)
-    || has(director) || has(cast) || has(writer) || has(country);
+    || has(director) || has(cast) || has(writer) || has(country)
+    || has(crew) || budget != null || boxOffice != null;
   // Film/TV credits. Arrays join; InfoRow drops a null row entirely, so an
   // anime card (which carries none of these) grows no empty labels.
   const list = (v) => (Array.isArray(v) ? (v.filter(Boolean).join(', ') || null) : (has(v) ? v : null));
+  // A film's card holds every one of TMDb's 24 cast and 40 crew, because a
+  // card is the record. This column is 200px wide, so the PAGE shows a
+  // readable head of each and says how many it left — the same bargain
+  // RoomTitle.jsx:141 already strikes on the pre-add page.
+  const capped = (v, n) => {
+    const a = Array.isArray(v) ? v.filter(Boolean) : [];
+    if (!a.length) return null;
+    const rest = a.length - n;
+    return a.slice(0, n).join(', ') + (rest > 0 ? `  +${rest} more` : '');
+  };
+  // Crew is ordered by TMDb's own department weighting, which buries the
+  // director under stunts on some films. Pull the jobs a viewer actually
+  // asks about to the front, then let the rest follow.
+  const CREW_FIRST = ['Director', 'Screenplay', 'Writer', 'Novel', 'Story', 'Producer',
+    'Original Music Composer', 'Director of Photography', 'Editor'];
+  const crewShown = capped(
+    (Array.isArray(crew) ? crew : []).slice().sort((a, b) => {
+      const rank = (s) => {
+        const i = CREW_FIRST.findIndex(j => String(s).endsWith(`— ${j}`) || String(s).endsWith(`-- ${j}`));
+        return i < 0 ? CREW_FIRST.length : i;
+      };
+      return rank(a) - rank(b);
+    }),
+    8,
+  );
+  // Whole dollars, no cents — TMDb reports these to the dollar and a film's
+  // budget is an approximation anyway. Absent (not $0) when unknown; the Rust
+  // client already filtered TMDb's 0-means-unknown to null.
+  const money = (n) => (typeof n === 'number' && n > 0
+    ? n.toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
+    : null);
   // Genres/themes/demographics/producers stay clickable chips in the left column.
   const hasChips = has(genres) || has(themes) || has(demographics) || has(producers);
   // Meta rail facts — Episodes/Duration as plain text after the taxon chips. The
@@ -215,9 +247,12 @@ export default function AnimeDetailHeader({
               <InfoRow label="Broadcast" value={has(broadcast) ? broadcast : null} />
               <InfoRow label="Aired" value={has(aired) ? aired : null} />
               <InfoRow label="Director" value={list(director)} />
-              <InfoRow label="Cast" value={list(cast)} />
+              <InfoRow label="Cast" value={capped(cast, 8) || list(cast)} />
               <InfoRow label="Writer" value={list(writer)} />
               <InfoRow label="Country" value={list(country)} />
+              <InfoRow label="Crew" value={crewShown} />
+              <InfoRow label="Budget" value={money(budget)} />
+              <InfoRow label="Box Office" value={money(boxOffice)} />
               <TaxonTextRow label="Genres" kind="genre" values={genres} accent={a} />
               <TaxonTextRow label="Themes" kind="theme" values={themes} accent={a} />
               <TaxonTextRow label="Demographic" kind="demographic" values={demographics} accent={a} />

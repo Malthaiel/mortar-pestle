@@ -20,6 +20,7 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 
 use crate::commands::cinemeta::{cinemeta_detail, CineDetail, CineEpisode};
+use crate::commands::tmdb::TmdbDetail;
 use crate::commands::vault::{atomic_write, library_vault_root, VaultError};
 use crate::parsers::frontmatter_cache::get_frontmatter;
 use crate::parsers::playlists::{cell_escape, sanitize_name, yaml_str};
@@ -144,8 +145,11 @@ fn yaml_list(key: &str, items: &[String]) -> String {
     s
 }
 
-/// The five credit fields Cinemeta already returns and both card writers used to
-/// throw away. Shared so a film and a show can never drift apart on them.
+/// The credit fields Cinemeta already returns and both card writers used to
+/// throw away, plus -- for a film, when the user has supplied a TMDb key -- the
+/// richer set Cinemeta cannot reach. Shared so a film and a show can never drift
+/// apart on the fields they have in common, and so the add path and the refresh
+/// path can never drift apart at all.
 ///
 /// `Cast` is written in full: a card is the record, and trimming it here would
 /// lose names nothing else stores. The pre-add page already caps its own display
@@ -153,8 +157,28 @@ fn yaml_list(key: &str, items: &[String]) -> String {
 ///
 /// No `Awards` field -- Cinemeta does not carry one. That is an OMDb field, and
 /// OMDb's terms bind the builder, so no user key can bring it back.
-fn push_credits(fm: &mut String, d: &CineDetail) {
-    fm.push_str(&yaml_list("Cast", &d.cast));
+fn push_credits(fm: &mut String, d: &CineDetail, t: Option<&TmdbDetail>) {
+    // TMDb's cast carries the character each actor played, which is the whole
+    // reason to ask it -- so when it answered, its cast REPLACES Cinemeta's bare
+    // list rather than sitting beside it (one entity, one field).
+    let tmdb = t.filter(|t| t.available && !t.cast.is_empty());
+    match tmdb {
+        Some(t) => {
+            let cast: Vec<String> = t
+                .cast
+                .iter()
+                .map(|c| {
+                    if c.role.trim().is_empty() {
+                        c.name.clone()
+                    } else {
+                        format!("{} as {}", c.name, c.role)
+                    }
+                })
+                .collect();
+            fm.push_str(&yaml_list("Cast", &cast));
+        }
+        None => fm.push_str(&yaml_list("Cast", &d.cast)),
+    }
     fm.push_str(&yaml_list("Writer", &d.writer));
     fm.push_str(&format!(
         "Country: {}\n",
@@ -170,7 +194,43 @@ fn push_credits(fm: &mut String, d: &CineDetail) {
         "Logo: {}\n",
         yaml_str(d.logo.as_deref().unwrap_or(""))
     ));
+    let Some(t) = t.filter(|t| t.available) else {
+        return;
+    };
+    // Crew is written as "Name -- Job" rather than a nested map: `series.rs`
+    // reads flat string lists, and one line per person is what the page shows.
+    let crew: Vec<String> = t
+        .crew
+        .iter()
+        .filter(|c| !c.role.trim().is_empty())
+        .map(|c| format!("{} — {}", c.name, c.role))
+        .collect();
+    if !crew.is_empty() {
+        fm.push_str(&yaml_list("Crew", &crew));
+    }
+    if !t.studios.is_empty() {
+        fm.push_str(&yaml_list("Studios", &t.studios));
+    }
+    // Absent, not zero: TMDb sends 0 for "unknown", which the client already
+    // filtered to None, and a row that says $0 would be a lie.
+    if let Some(b) = t.budget {
+        fm.push_str(&format!("Budget: {b}\n"));
+    }
+    if let Some(r) = t.revenue {
+        fm.push_str(&format!("Box Office: {r}\n"));
+    }
+    if let Some(tag) = t.tagline.as_deref() {
+        fm.push_str(&format!("Tagline: {}\n", yaml_str(tag)));
+    }
 }
+
+/// Every frontmatter key `push_credits` can emit. `movie_refresh_credits` strips
+/// these before splicing a fresh block in, so a film that loses a field on a
+/// re-fetch loses the stale line too rather than keeping it forever.
+const CREDIT_KEYS: &[&str] = &[
+    "Cast", "Writer", "Country", "Trailer", "Logo", "Crew", "Studios", "Budget", "Box Office",
+    "Tagline",
+];
 
 /// A film's card: the same frontmatter block a show gets, minus everything that
 /// only means something across many episodes (`Seasons`, `Episodes`, `Airing`,
@@ -181,7 +241,7 @@ fn push_credits(fm: &mut String, d: &CineDetail) {
 /// Verified 2026-09-07 against a hand-written card of this exact shape:
 /// `video_read_series`, `video_mark_series_status` and `video_mark_series_rating`
 /// all work on it unchanged, which is why there is no `parsers/movies.rs`.
-fn render_movie_card(d: &CineDetail) -> String {
+fn render_movie_card(d: &CineDetail, tmdb: Option<&TmdbDetail>) -> String {
     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
     let mut fm = String::from("---\n");
     fm.push_str("Type: Media-Entry\n");
@@ -212,7 +272,7 @@ fn render_movie_card(d: &CineDetail) -> String {
         yaml_str(&iso_date(d.released.as_deref()))
     ));
     fm.push_str(&format!("Director: {}\n", yaml_str(&d.director.join(", "))));
-    push_credits(&mut fm, d);
+    push_credits(&mut fm, d, tmdb);
     fm.push_str("Local Path: \"\"\n");
     fm.push_str("Download Status: Not-Downloaded\n");
     fm.push_str(&format!(
@@ -319,7 +379,8 @@ fn render_card(d: &CineDetail, seasons: &BTreeMap<i64, Vec<&CineEpisode>>) -> St
         "Director: {}\n",
         yaml_str(&d.director.join(", "))
     ));
-    push_credits(&mut fm, d);
+    // No TMDb tier for a show: `tmdb_movie_detail` is film-only by design.
+    push_credits(&mut fm, d, None);
     fm.push_str("Local Path: \"\"\n");
     fm.push_str("Download Status: Not-Downloaded\n");
     fm.push_str(&format!(
@@ -512,7 +573,13 @@ pub async fn movie_add_to_library(imdb_id: String) -> Result<AddResult, VaultErr
     let dir = catalog_dir(MOVIES_CATALOG);
     std::fs::create_dir_all(&dir)?;
     let file = pick_movie_filename(&dir, &detail.name, first_year(detail.year.as_deref()))?;
-    let card = render_movie_card(&detail);
+    // Best-effort: no key, no network, or a TMDb outage all mean the card is
+    // written with Cinemeta's thinner credits, never that the add fails.
+    let tmdb = crate::commands::tmdb::tmdb_movie_detail(id.clone())
+        .await
+        .ok()
+        .filter(|t| t.available);
+    let card = render_movie_card(&detail, tmdb.as_ref());
     atomic_write(&dir.join(&file), card.as_bytes())?;
 
     Ok(AddResult {
@@ -525,6 +592,109 @@ pub async fn movie_add_to_library(imdb_id: String) -> Result<AddResult, VaultErr
         episodes: 0,
         refused: None,
     })
+}
+
+/// Re-fetch a card's credits in place, leaving every other line alone.
+///
+/// This is the backfill path: a card written before the user had a TMDb key (or
+/// before the credit fields existed at all) carries thin credits or none, and
+/// re-adding the film is not an option -- it would throw away the watch status,
+/// rating and local path the user has accumulated on it.
+///
+/// So this rewrites ONLY the keys `push_credits` owns (`CREDIT_KEYS`), splicing
+/// the fresh block in where the old one was. Everything else in the frontmatter,
+/// and the whole body, is untouched by construction.
+#[tauri::command]
+pub async fn movie_refresh_credits(path: String) -> Result<bool, VaultError> {
+    let full = PathBuf::from(library_vault_root()).join(&path);
+    let text = std::fs::read_to_string(&full)?;
+    let Some(imdb) = frontmatter_value(&text, "IMDb ID") else {
+        return Err(VaultError::Invalid(format!("{path} has no IMDb ID")));
+    };
+
+    // A show card takes the same refresh: same Cinemeta fields, same frontmatter
+    // keys. Only the TMDb tier is film-only, so a show simply gets None -- one
+    // command, rather than a second that would drift from this one.
+    let kind = match frontmatter_value(&text, "Domain").as_deref() {
+        Some("Movie") => "movie",
+        _ => "series",
+    };
+    let detail = cinemeta_detail(kind.to_string(), imdb.clone()).await?;
+    let tmdb = if kind == "movie" {
+        crate::commands::tmdb::tmdb_movie_detail(imdb)
+            .await
+            .ok()
+            .filter(|t| t.available)
+    } else {
+        None
+    };
+
+    let mut block = String::new();
+    push_credits(&mut block, &detail, tmdb.as_ref());
+
+    let updated = splice_credits(&text, &block);
+    if updated == text {
+        return Ok(false);
+    }
+    atomic_write(&full, updated.as_bytes())?;
+    Ok(true)
+}
+
+/// A frontmatter scalar, with surrounding quotes stripped. Used for `IMDb ID`
+/// (which the writers always quote) and `Domain` (which they never do); neither
+/// is ever wrapped onto a second line.
+fn frontmatter_value(text: &str, key: &str) -> Option<String> {
+    let head = text.split("\n---").next()?;
+    for line in head.lines() {
+        if let Some(rest) = line.strip_prefix(key).and_then(|r| r.strip_prefix(": ")) {
+            let v = rest.trim().trim_matches('"').trim();
+            return (!v.is_empty()).then(|| v.to_string());
+        }
+    }
+    None
+}
+
+/// Drop every `CREDIT_KEYS` line (and its list items) from the frontmatter, then
+/// insert `block` where the first of them was -- or after `Director:` if the card
+/// carried none, which is where the writers put them.
+fn splice_credits(text: &str, block: &str) -> String {
+    let Some(end) = text[3..].find("\n---").map(|i| i + 3) else {
+        return text.to_string();
+    };
+    let (head, tail) = text.split_at(end);
+
+    let mut out: Vec<String> = Vec::new();
+    let mut insert_at: Option<usize> = None;
+    let mut dropping = false;
+    for line in head.lines() {
+        // A list item under a dropped key. Any other indented line belongs to a
+        // key we are keeping, so `dropping` is cleared by the next bare key.
+        if dropping && line.starts_with("  - ") {
+            continue;
+        }
+        let key = line.split_once(':').map(|(k, _)| k);
+        if let Some(k) = key {
+            dropping = CREDIT_KEYS.contains(&k);
+            if dropping {
+                insert_at.get_or_insert(out.len());
+                continue;
+            }
+            if k == "Director" {
+                // Fallback anchor: a card with no credit lines at all.
+                if insert_at.is_none() {
+                    out.push(line.to_string());
+                    insert_at = Some(out.len());
+                    continue;
+                }
+            }
+        }
+        out.push(line.to_string());
+    }
+
+    let at = insert_at.unwrap_or(out.len());
+    let fresh: Vec<String> = block.lines().map(str::to_string).collect();
+    out.splice(at..at, fresh);
+    format!("{}{}", out.join("\n"), tail)
 }
 
 #[cfg(test)]
@@ -624,6 +794,40 @@ mod tests {
         // The reader must find exactly the two season sections, numbered from 1.
         let sections = crate::parsers::series::__test_sections(&card);
         assert_eq!(sections, vec!["Season 1".to_string(), "Season 2".to_string()]);
+    }
+
+    /// `splice_credits` rewrites a live card's frontmatter in place, so it gets
+    /// checked in both directions: a card that already carries credit lines must
+    /// have them REPLACED (never duplicated, never left stale), and a card that
+    /// carries none must gain them after `Director:` -- with the body, the user's
+    /// own fields, and the key order around them all untouched.
+    #[test]
+    fn splice_credits_replaces_in_place_and_leaves_everything_else() {
+        let block = "Cast:\n  - \"New Name as Someone\"\nCountry: \"France\"\nBudget: 5\n";
+
+        // 1. A card that already has credits, including a stale key the fresh
+        //    block does not emit (`Logo`), which must NOT survive.
+        let existing = "---\nTitle: \"X\"\nDirector: \"D\"\nCast:\n  - \"Old One\"\n  - \"Old Two\"\nCountry: \"United States\"\nLogo: \"http://old\"\nLocal Path: \"/v\"\nPersonal Rating: 7\n---\n\n## Plot\n\nA body with a Cast: word in it.\n";
+        let out = splice_credits(existing, block);
+        assert!(out.contains("Cast:\n  - \"New Name as Someone\"\n"), "{out}");
+        assert!(!out.contains("Old One"), "stale list item survived: {out}");
+        assert!(!out.contains("http://old"), "stale Logo survived: {out}");
+        assert!(!out.contains("United States"), "stale Country survived: {out}");
+        assert!(out.contains("Budget: 5\n"));
+        // The user's own fields and the body are untouched.
+        assert!(out.contains("Local Path: \"/v\"\n"));
+        assert!(out.contains("Personal Rating: 7\n"));
+        assert!(out.contains("\n## Plot\n\nA body with a Cast: word in it.\n"));
+        // Credits land where they were, still ahead of Local Path.
+        assert!(out.find("Cast:").unwrap() < out.find("Local Path:").unwrap());
+        assert_eq!(out.matches("Country:").count(), 1);
+
+        // 2. A card with no credit lines at all: they go in after Director.
+        let bare = "---\nTitle: \"X\"\nDirector: \"D\"\nLocal Path: \"\"\n---\n\nbody\n";
+        let out2 = splice_credits(bare, block);
+        assert!(out2.find("Director:").unwrap() < out2.find("Cast:").unwrap(), "{out2}");
+        assert!(out2.find("Cast:").unwrap() < out2.find("Local Path:").unwrap(), "{out2}");
+        assert!(out2.ends_with("---\n\nbody\n"), "{out2}");
     }
 
     #[test]

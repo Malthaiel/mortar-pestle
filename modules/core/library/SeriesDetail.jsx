@@ -300,6 +300,30 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
     }
   };
 
+  // Re-fetch this card's credits from Cinemeta (and TMDb, for a film with a
+  // key) and write them back. The command rewrites only the credit keys, so
+  // status/rating/watch state are safe -- but it does not know the page is
+  // open, so the re-read has to be announced here or the page keeps the copy
+  // it loaded before the write.
+  const onRefreshDetails = async () => {
+    try {
+      const changed = await videoApi.refreshCredits(series.path);
+      if (changed) window.dispatchEvent(new CustomEvent('video-library-changed', { detail: {} }));
+      notify({
+        type: 'info',
+        title: changed ? 'Details updated' : 'Already up to date',
+        message: changed ? `${series.title} now shows the latest cast and crew.` : `${series.title} already had the latest details.`,
+        iconKey: 'download', accent: accent || 'var(--accent)', duration: 4000,
+      });
+    } catch (e) {
+      notify({
+        type: 'error', title: 'Refresh failed',
+        message: (e && e.message) || 'Could not fetch the details.',
+        iconKey: 'alert', accent: accent || 'var(--accent)',
+      });
+    }
+  };
+
   const seasonName = activeSeason ? activeSeason.name : null;
   const statusValue = isFranchise ? (activeSeason ? activeSeason.status : '') : (series.status || '');
   const statusTitle = isFranchise
@@ -325,7 +349,9 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
         genres={series.genres}
         themes={series.themes}
         demographics={series.demographics}
-        studios={series.studio}
+        // A film's studios come from TMDb (series.studios); an anime's from the
+        // MAL card (series.studio). One prop, whichever the card actually has.
+        studios={series.studio && series.studio.length ? series.studio : series.studios}
         producers={series.producers}
         premiered={series.premiered}
         format={series.format}
@@ -341,6 +367,9 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
         cast={series.cast}
         writer={series.writer}
         country={series.country}
+        crew={series.crew}
+        budget={series.budget}
+        boxOffice={series.boxOffice}
         synonyms={series.synonyms && series.synonyms.length ? series.synonyms : (detail && detail.synonyms)}
         titleJapanese={series.titleJapanese || (detail && detail.titleJapanese)}
         titleEnglish={series.titleEnglish || (detail && detail.titleEnglish)}
@@ -429,6 +458,9 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
                 const r = e.currentTarget.getBoundingClientRect();
                 const items = [];
                 if (canRedownload && isAnime) items.push({ label: 'Re-download', onClick: onDownload });
+                // Films and shows only: the command reads Cinemeta, which has no
+                // anime lane (those cards come from MAL via download_anime.py).
+                if (!isAnime) items.push({ label: 'Refresh details', onClick: onRefreshDetails });
                 if (isAnime) items.push({ label: 'Uninstall', onClick: () => {
                   setDeleteFiles(true);
                   setConfirmOpen(true);
