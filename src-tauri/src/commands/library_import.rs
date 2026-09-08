@@ -44,7 +44,7 @@ pub enum ImportState {
 #[serde(rename_all = "camelCase")]
 pub struct ImportJob {
     pub id: String,
-    pub kind: String, // "music" (SF5) | "mal" (SF6)
+    pub kind: String, // "music" (SF5) | "mal" (SF6) | "watchlist" (SF7)
     pub source: String, // file basename, for display
     pub state: ImportState,
     pub total: i64,   // distinct albums to resolve (music)
@@ -53,6 +53,12 @@ pub struct ImportJob {
     pub created: i64, // album cards written
     pub skipped: i64, // already in library
     pub unmatched: Vec<String>, // "Album — Artist" with no confident MB match
+    /// Watchlist only: rows of a type the import does not admit (TV Episode,
+    /// Video Game …). Stays 0 for every other kind.
+    pub skipped_rows: i64,
+    /// Watchlist only: anime titles the TV/Movies writers refused, named so they
+    /// can be brought in from MAL — which carries the episode data they need.
+    pub anime: Vec<String>,
     pub playlist_path: Option<String>,
     pub summary: Option<String>,
     pub error: Option<String>,
@@ -109,6 +115,7 @@ fn emit_done(app: &AppHandle, job_id: &str) {
                 "summary": job.summary,
                 "playlistPath": job.playlist_path,
                 "unmatched": job.unmatched,
+                "anime": job.anime,
                 "state": job.state,
             }),
         );
@@ -161,6 +168,8 @@ pub async fn library_import_enqueue(
             created: 0,
             skipped: 0,
             unmatched: Vec::new(),
+            skipped_rows: 0,
+            anime: Vec::new(),
             playlist_path: None,
             summary: None,
             error: None,
@@ -241,6 +250,7 @@ async fn run_worker(app: AppHandle) {
         match kind.as_str() {
             "music" => process_music_job(&app, &job_id).await,
             "mal" => process_mal_job(&app, &job_id).await,
+            "watchlist" => process_watchlist_job(&app, &job_id).await,
             other => finalize_error(&app, &job_id, &format!("unsupported import kind: {other}")),
         }
     }
@@ -765,6 +775,248 @@ async fn spawn_anime_card(
     let _ = child.wait().await;
     with_job(job_id, |j| j.child_pid = None);
     result
+}
+
+// ── watchlist (SF7b) ─────────────────────────────────────────────────────────
+
+#[derive(Clone, Default)]
+struct WatchRow {
+    domain: String,  // "Movies" | "TV Shows"
+    imdb_id: String, // empty for a Letterboxd row — it carries no id
+    name: String,
+    year: String,
+    rating: Option<f64>,
+    finished: String,
+}
+
+/// A Cinemeta hit only counts when the name AND the year both match. Case is
+/// ignored (Letterboxd title-cases some entries IMDb does not) but nothing else
+/// is: no substring, no normalization, no "closest". A near-miss is reported,
+/// never guessed — the same rule the music import is trusted for.
+fn watch_hit_matches(row: &WatchRow, hit_name: &str, hit_year: Option<&str>) -> bool {
+    if row.year.is_empty() {
+        return false;
+    }
+    row.name.trim().eq_ignore_ascii_case(hit_name.trim())
+        && hit_year.map(|y| y.trim() == row.year).unwrap_or(false)
+}
+
+async fn process_watchlist_job(app: &AppHandle, job_id: &str) {
+    let file_path = {
+        let g = IMPORT_STATE.lock().unwrap();
+        match g.jobs.iter().find(|j| j.id == job_id) {
+            Some(j) => j.file_path.clone(),
+            None => return,
+        }
+    };
+
+    // ── phase 1: parse the CSV ────────────────────────────────────────────────
+    let Some(script) = resolve_script(app, "import_watchlist_parse.py") else {
+        finalize_error(app, job_id, "parse script not found (scripts/import_watchlist_parse.py)");
+        return;
+    };
+    let mut cmd = crate::commands::proc_util::python_cmd();
+    cmd.arg(&script).arg("--file").arg(&file_path);
+    cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null());
+    let mut child = match cmd.spawn() {
+        Ok(c) => c,
+        Err(e) => {
+            finalize_error(app, job_id, &format!("failed to spawn python3: {e}"));
+            return;
+        }
+    };
+
+    let mut rows: Vec<WatchRow> = Vec::new();
+    let mut types_label = String::new();
+    let mut skipped_rows = 0i64;
+    let mut parse_error: Option<String> = None;
+    if let Some(out) = child.stdout.take() {
+        let mut lines = BufReader::new(out).lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            let Ok(v) = serde_json::from_str::<serde_json::Value>(&line) else { continue };
+            match v.get("event").and_then(|x| x.as_str()) {
+                Some("row") => rows.push(WatchRow {
+                    domain: jstr(&v, "domain"),
+                    imdb_id: jstr(&v, "imdbId"),
+                    name: jstr(&v, "name"),
+                    year: jstr(&v, "year"),
+                    rating: v.get("rating").and_then(|x| x.as_f64()),
+                    finished: jstr(&v, "finished"),
+                }),
+                Some("parsed") => {
+                    skipped_rows = v.get("skipped").and_then(|x| x.as_i64()).unwrap_or(0);
+                    if let Some(map) = v.get("skippedTypes").and_then(|x| x.as_object()) {
+                        types_label = map.keys().cloned().collect::<Vec<_>>().join(", ");
+                    }
+                }
+                Some("error") => parse_error = Some(jstr(&v, "message")),
+                _ => {}
+            }
+        }
+    }
+    let _ = child.wait().await;
+
+    if let Some(msg) = parse_error {
+        finalize_error(app, job_id, &msg);
+        return;
+    }
+    if rows.is_empty() {
+        finalize_error(app, job_id, "No films or shows to import from the file.");
+        return;
+    }
+
+    // ── phase 2: one card per row ─────────────────────────────────────────────
+    with_job(job_id, |j| {
+        j.state = ImportState::Importing;
+        j.total = rows.len() as i64;
+        j.skipped_rows = skipped_rows;
+    });
+    emit_progress(app, job_id);
+
+    for (i, row) in rows.iter().enumerate() {
+        if cancelled(job_id) {
+            with_job(job_id, |j| j.state = ImportState::Cancelled);
+            emit_progress(app, job_id);
+            emit_done(app, job_id);
+            return;
+        }
+        with_job(job_id, |j| {
+            j.index = i as i64;
+            j.current_title = Some(row.name.clone());
+        });
+        emit_progress(app, job_id);
+
+        let is_movie = row.domain == "Movies";
+        let kind = if is_movie { "movie" } else { "series" };
+
+        // Letterboxd carries no id, so the title has to be looked up. Cinemeta
+        // is a cached CDN and the browse grid already queries it unspaced — the
+        // ~1 s a cold title costs is the network, not politeness.
+        let imdb_id = if !row.imdb_id.is_empty() {
+            Some(row.imdb_id.clone())
+        } else {
+            match crate::commands::cinemeta::cinemeta_search(kind.to_string(), row.name.clone()).await
+            {
+                Ok(hits) => hits
+                    .into_iter()
+                    .find(|h| watch_hit_matches(row, &h.name, h.year.as_deref()))
+                    .map(|h| h.imdb_id),
+                Err(_) => None,
+            }
+        };
+
+        let Some(imdb_id) = imdb_id else {
+            with_job(job_id, |j| {
+                j.unmatched.push(format!("{} ({})", row.name, row.year));
+                j.index = (i + 1) as i64;
+            });
+            emit_progress(app, job_id);
+            continue;
+        };
+
+        let added = if is_movie {
+            crate::commands::tv_library::movie_add_to_library(imdb_id).await
+        } else {
+            crate::commands::tv_library::tv_add_to_library(imdb_id).await
+        };
+        let res = match added {
+            Ok(r) => r,
+            Err(e) => {
+                with_job(job_id, |j| {
+                    j.unmatched.push(format!("{} ({e:?})", row.name));
+                    j.index = (i + 1) as i64;
+                });
+                emit_progress(app, job_id);
+                continue;
+            }
+        };
+
+        if let Some(refusal) = res.refused {
+            with_job(job_id, |j| match refusal.reason.as_str() {
+                "anime" => j.anime.push(res.title.clone()),
+                r if r.starts_with("already-in") => j.skipped += 1,
+                _ => j.unmatched.push(format!("{} ({})", res.title, refusal.message)),
+            });
+            with_job(job_id, |j| j.index = (i + 1) as i64);
+            emit_progress(app, job_id);
+            continue;
+        }
+
+        // A row in a watched list is a film or show finished; the date and the
+        // rating ride along on the same card.
+        if let Some(path) = res.series_path.as_deref() {
+            let finished = Some(row.finished.as_str()).filter(|d| !d.is_empty());
+            // The card is written; a failure to stamp it is a half-done import,
+            // so it is reported rather than swallowed.
+            let mut stamp_err: Option<String> = None;
+            if let Err(e) = crate::parsers::series::mark_status(path, "Completed", None, finished, None)
+            {
+                stamp_err = Some(format!("status: {e:?}"));
+            }
+            // `read_series` rolls a multi-season card's status up from its
+            // `Status Season N` keys and ignores the plain `Status` one
+            // (series.rs:988), so a show stamped only at the top level still
+            // reads Plan-to-Watch in the room. A film has `seasons == 0` and
+            // never enters this loop.
+            for s in 1..=res.seasons {
+                let season = format!("Season {s}");
+                if let Err(e) =
+                    crate::parsers::series::mark_status(path, "Completed", Some(&season), finished, None)
+                {
+                    stamp_err = Some(format!("{season}: {e:?}"));
+                }
+            }
+            if let Some(r) = row.rating {
+                if let Err(e) = crate::parsers::series::mark_rating(path, r, None) {
+                    stamp_err = Some(format!("rating: {e:?}"));
+                }
+            }
+            if let Some(msg) = stamp_err {
+                with_job(job_id, |j| {
+                    j.unmatched.push(format!("{} (added, but not stamped — {msg})", res.title))
+                });
+            }
+        }
+        with_job(job_id, |j| {
+            j.created += 1;
+            j.index = (i + 1) as i64;
+        });
+        emit_progress(app, job_id);
+    }
+
+    let summary = {
+        let g = IMPORT_STATE.lock().unwrap();
+        match g.jobs.iter().find(|j| j.id == job_id) {
+            Some(j) => {
+                let mut parts = vec![format!("{} added", j.created)];
+                if j.skipped > 0 {
+                    parts.push(format!("{} already there", j.skipped));
+                }
+                if j.skipped_rows > 0 {
+                    parts.push(if types_label.is_empty() {
+                        format!("{} skipped", j.skipped_rows)
+                    } else {
+                        format!("{} skipped ({types_label})", j.skipped_rows)
+                    });
+                }
+                if !j.anime.is_empty() {
+                    parts.push(format!("{} anime — bring these in from MAL", j.anime.len()));
+                }
+                if !j.unmatched.is_empty() {
+                    parts.push(format!("{} not found", j.unmatched.len()));
+                }
+                parts.join(" · ")
+            }
+            None => return,
+        }
+    };
+    with_job(job_id, |j| {
+        j.state = ImportState::Done;
+        j.current_title = None;
+        j.summary = Some(summary);
+    });
+    emit_progress(app, job_id);
+    emit_done(app, job_id);
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────

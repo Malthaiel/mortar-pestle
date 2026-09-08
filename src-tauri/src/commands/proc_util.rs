@@ -57,17 +57,31 @@ pub fn std_cmd<S: AsRef<OsStr>>(program: S) -> std::process::Command {
 /// - Unix: `python3` (identical to the previous hardcoded callsites).
 /// - Windows: the `py -3` launcher — the canonical Windows Python entrypoint
 ///   installed with the official installer's "py launcher" option.
+///
+/// `PYTHONIOENCODING` is not optional. Windows gives a child with a *piped*
+/// stdout the console codepage (cp1252), not UTF-8, so every script that writes
+/// `json.dumps(..., ensure_ascii=False)` — which is all of them — emits raw
+/// cp1252 bytes for a non-ASCII title. Rust's `BufReader::lines()` yields `Err`
+/// on invalid UTF-8, and the `while let Ok(Some(line))` readers throughout the
+/// app stop at that line without reporting anything: the download or import
+/// silently ends early, or reports the wrong error. Measured 2026-09-08 on
+/// `import_watchlist_parse.py`'s em dash (byte `0x97`).
 pub fn python_cmd() -> TokioCommand {
-    #[cfg(windows)]
-    {
-        let mut c = tokio_cmd("py");
-        c.arg("-3");
-        c
-    }
-    #[cfg(not(windows))]
-    {
-        tokio_cmd("python3")
-    }
+    #[allow(unused_mut)]
+    let mut c = {
+        #[cfg(windows)]
+        {
+            let mut c = tokio_cmd("py");
+            c.arg("-3");
+            c
+        }
+        #[cfg(not(windows))]
+        {
+            tokio_cmd("python3")
+        }
+    };
+    c.env("PYTHONIOENCODING", "utf-8");
+    c
 }
 
 /// Hard-terminate a process *tree* by PID — the non-Unix arm for the cancel

@@ -42,8 +42,13 @@ def run(text, suffix=".csv"):
     with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
         f.write(text)
     try:
+        # The same env `proc_util::python_cmd()` hands every spawn. Without it,
+        # Windows pipes stdout in the console codepage and the em dash in the
+        # "not an export" message arrives as cp1252 — undecodable here and in
+        # the Rust reader alike.
+        env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
         p = subprocess.run([sys.executable, SCRIPT, "--file", path],
-                           capture_output=True, text=True, encoding="utf-8")
+                           capture_output=True, text=True, encoding="utf-8", env=env)
         events = [json.loads(l) for l in p.stdout.splitlines() if l.strip()]
         return p.returncode, events
     finally:

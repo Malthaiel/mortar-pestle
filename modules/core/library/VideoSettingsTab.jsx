@@ -37,7 +37,33 @@ export default function VideoSettingsTab({ accent }) {
       <DownloadsSection accent={accent}/>
       <TorrentSourcesSection accent={accent}/>
       <FilmInfoSection accent={accent}/>
-      <MalImportSection accent={accent}/>
+      <ImportSection
+        accent={accent}
+        kind="mal"
+        title="Import from MyAnimeList"
+        anchor="set-video-malImport"
+        fieldLabel="MAL XML file"
+        filter={{ name: 'MAL export', extensions: ['xml', 'gz'] }}
+        blurb={<>
+          Import your MAL export (<b>.xml</b> or <b>.xml.gz</b>, from MyAnimeList → List → Export).
+          Adds each anime as a not-downloaded entry with your status, score, episode progress, rewatches, and dates.
+          Large lists take a while — each title is fetched from MyAnimeList in turn.
+        </>}
+      />
+      <ImportSection
+        accent={accent}
+        kind="watchlist"
+        title="Import from a film or show list"
+        anchor="set-video-watchlistImport"
+        fieldLabel="Letterboxd or IMDb CSV"
+        filter={{ name: 'Letterboxd or IMDb export', extensions: ['csv'] }}
+        blurb={<>
+          Import a <b>Letterboxd</b> diary export or an <b>IMDb</b> list export (both <b>.csv</b>).
+          Films land in Movies, shows in TV Shows, each marked Completed with your rating and the day you finished it.
+          A Letterboxd list has no ids, so every title is looked up by name and year — a title that does not match
+          exactly is reported, never guessed. Long lists take a while.
+        </>}
+      />
       <SubtitleSection accent={accent}/>
     </div>
   );
@@ -187,33 +213,35 @@ function FilmInfoSection({ accent }) {
   );
 }
 
-// ── Import from MyAnimeList ───────────────────────────────────────────────────
-// Pick a MAL list export (.xml / .xml.gz) → a background job (shared engine with
-// the music CSV import) writes each anime as a not-downloaded entry carrying the
-// user's status, score, watched count, rewatches, and start/finish dates.
+// ── File imports ──────────────────────────────────────────────────────────────
+// Two sections, one component. Both pick an export file → a background job
+// (shared engine with the music CSV import) writes each title as a
+// not-downloaded entry carrying the user's status, rating and dates. They differ
+// only in job kind, wording and file filter, so they share the whole interaction
+// rather than living as two copies that drift.
 // Survives the drawer closing (state in ImportProvider / the Rust job queue).
 
-function MalImportSection({ accent }) {
+function ImportSection({ accent, kind, title, anchor, blurb, fieldLabel, filter }) {
   const { jobs, enqueue, cancel } = useImportJobs();
   const [file, setFile] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
 
-  const malJobs = jobs.filter(j => j.kind === 'mal');
-  const active = malJobs.find(j => ['queued', 'parsing', 'importing'].includes(j.state));
-  const lastDone = [...malJobs].reverse().find(j => ['done', 'error', 'cancelled'].includes(j.state));
+  const mine = jobs.filter(j => j.kind === kind);
+  const active = mine.find(j => ['queued', 'parsing', 'importing'].includes(j.state));
+  const lastDone = [...mine].reverse().find(j => ['done', 'error', 'cancelled'].includes(j.state));
 
   const pick = async () => {
     setErr(null);
     try {
-      const p = await open({ multiple: false, filters: [{ name: 'MAL export', extensions: ['xml', 'gz'] }] });
+      const p = await open({ multiple: false, filters: [filter] });
       if (typeof p === 'string') setFile(p);
     } catch (e) { setErr(String(e?.message || e)); }
   };
   const start = async () => {
     if (!file) return;
     setBusy(true); setErr(null);
-    try { await enqueue({ kind: 'mal', filePath: file }); setFile(''); }
+    try { await enqueue({ kind, filePath: file }); setFile(''); }
     catch (e) { setErr(String(e?.message || e)); }
     finally { setBusy(false); }
   };
@@ -222,13 +250,11 @@ function MalImportSection({ accent }) {
     ? Math.round((active.index / active.total) * 100) : null;
 
   return (
-    <SectionBand gap={12} title="Import from MyAnimeList">
-      <div data-search-anchor="set-video-malImport" style={{ fontSize: 11, color: 'var(--text-2)', lineHeight: 1.5 }}>
-        Import your MAL export (<b>.xml</b> or <b>.xml.gz</b>, from MyAnimeList → List → Export).
-        Adds each anime as a not-downloaded entry with your status, score, episode progress, rewatches, and dates.
-        Large lists take a while — each title is fetched from MyAnimeList in turn.
+    <SectionBand gap={12} title={title}>
+      <div data-search-anchor={anchor} style={{ fontSize: 11, color: 'var(--text-2)', lineHeight: 1.5 }}>
+        {blurb}
       </div>
-      <Field label="MAL XML file">
+      <Field label={fieldLabel}>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <input className="candy-input" value={basename(file)} readOnly placeholder="No file chosen"
                  style={{ ...inputStyle, flex: 1 }}/>
@@ -259,7 +285,26 @@ function MalImportSection({ accent }) {
           {lastDone.state === 'error' ? (lastDone.error || 'Import failed') : (lastDone.summary || 'Done')}
         </div>
       )}
+      {!active && lastDone && lastDone.state !== 'error' && (
+        <>
+          <NameList label="Bring these in from MyAnimeList" names={lastDone.anime}/>
+          <NameList label="Not found — nothing was guessed" names={lastDone.unmatched}/>
+        </>
+      )}
     </SectionBand>
+  );
+}
+
+// The summary counts them; this names them, folded away until asked for.
+function NameList({ label, names }) {
+  if (!names || !names.length) return null;
+  return (
+    <details style={{ fontSize: 11, color: 'var(--text-2)' }}>
+      <summary style={{ cursor: 'pointer' }}>{label} ({names.length})</summary>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, paddingTop: 4 }}>
+        {names.map((n, i) => <span key={i}>{n}</span>)}
+      </div>
+    </details>
   );
 }
 
