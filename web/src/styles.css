@@ -43,15 +43,13 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
      it alongside --dock-height so content ends flush under the strip. */
   --titlebar-h: 40px;
 
-  /* Titlebar fill. FIXED across every theme, exactly like --dock-bg: the two
-     chrome strips bookend the app and shouldn't repaint with the content
-     palette. Matches the dock's default 0.230 by design — the strips bookend
-     the app and read as one chrome. Kept as a literal rather than
-     var(--dock-bg) because --dock-bg is declared on .dock-root, not :root, and
-     community themes re-derive it from --surface-2; the titlebar stays fixed.
-     NOTE the dark-theme surface scale runs LIGHTER as the number rises
-     (--surface 0.190 → -2 0.215 → -3 0.245). */
-  --titlebar-bg: oklch(0.230 0.005 78);
+  /* Titlebar fill. Tracks --surface so the four chrome edges (titlebar, dock,
+     left rail, right rail) read as one continuous frame around the content
+     (user-directed 2026-09-07). --dock-bg does the same; kept as its own token
+     because --dock-bg is declared on .dock-root, not :root. NOTE the dark-theme
+     surface scale runs LIGHTER as the number rises (--surface 0.190 → -2 0.215
+     → -3 0.245). */
+  --titlebar-bg: var(--surface);
 
   /* Candy SURFACE rest depth — the STATIC offset-shadow band under framed
      container surfaces (the .candy-* family). Distinct from --candy-depth:
@@ -527,25 +525,16 @@ body[data-design-pointer="markup"] *:not(input):not(textarea):not(select):not([d
 
 /* Dock — a full-width rectangle flush with the screen bottom, the horizontal
    twin of the side rails. Squared, a single top hairline, no float shadow.
-   Solid dark-grey charcoal fill, FIXED across every theme (the Dock color
-   picker + graphite/slate were removed). The shared
+   Fill tracks --surface so the bar matches the side rails and titlebar exactly
+   (the Dock color picker + graphite/slate were removed). The shared
    lines-pattern is dropped. `height` is the single source of truth for the
    app-wide bottom reservation (AppShell: calc(100vh - --dock-height)). */
 .dock-root {
-  --dock-bg: oklch(0.230 0.005 78);
+  --dock-bg: var(--surface);
   height: var(--dock-height);
   background-color: var(--dock-bg);
   background-image: none;
   border-top: 1px solid color-mix(in oklch, var(--dock-bg), white 10%);
-}
-/* Community themes reskin the dock bar — derive --dock-bg from the theme's
-   elevated surface so the bar matches the palette. Active only while a
-   community (non-Monastic) theme is on; Monastic uses the fixed charcoal
-   --dock-bg set on .dock-root above. Specificity (0,4,0) beats .dock-root
-   (0,1,0). The dark-icon dock buttons follow automatically (their --cbtn-band
-   reads --dock-bg). */
-:root[data-theme-preset]:not([data-theme-preset="monastic"]) .dock-root {
-  --dock-bg: var(--surface-2);
 }
 /* Edge depth — user-toggleable in Settings → Dock. Default 'flush' is the bare
    top hairline above; 'band' adds a calm static upward band so the bar lifts
