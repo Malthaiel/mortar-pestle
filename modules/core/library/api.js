@@ -92,9 +92,11 @@ export const videoApi = {
       imdbId, kind: season == null ? 'movie' : 'series',
       season: season ?? null, episode: episode ?? null,
     }),
-  // Uninstall a library entry: card + cover + its torrents [+ files].
-  animeUninstall: (seriesPath, deleteFiles) =>
-    _api.invoke('anime_uninstall', { seriesPath, deleteFiles: !!deleteFiles }),
+  // Uninstall a library entry from ANY room: card + cover + its torrents
+  // [+ files]. The room is worked out from seriesPath's first segment, so one
+  // call serves Anime, TV Shows and Movies.
+  seriesUninstall: (seriesPath, deleteFiles) =>
+    _api.invoke('series_uninstall', { seriesPath, deleteFiles: !!deleteFiles }),
   revealInFiles:     (path) => _api.invoke('reveal_in_files', { path }),
 };
 

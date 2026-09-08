@@ -1,5 +1,6 @@
 // Library settings page (Settings → Modules › Library). Two sub-tabs on the
-// shared host Topbar: Anime (qBittorrent + subtitles — VideoSettingsTab) and
+// shared host Topbar: Anime (downloads, torrent sources, TMDb key, the two file
+// imports + subtitles — VideoSettingsTab) and
 // Music (Spotify credentials + playlist/album export — MusicSettingsTab).
 // Controlled by the drawer address via {initialSection, onNavigateSection}
 // per PAGE_SECTIONS.library; falls back to local state standalone. The module

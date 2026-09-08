@@ -208,6 +208,7 @@
     "allow-anime-download-cancel",
     "allow-anime-torrent-search",
     "allow-anime-uninstall",
+    "allow-series-uninstall",
     "allow-music-download-enqueue",
     "allow-music-download-status",
     "allow-music-download-cancel",

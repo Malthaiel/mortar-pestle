@@ -281,7 +281,7 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
     if (uninstalling) return;
     setUninstalling(true);
     try {
-      const rep = await videoApi.animeUninstall(series.path, deleteFiles);
+      const rep = await videoApi.seriesUninstall(series.path, deleteFiles);
       setConfirmOpen(false);
       window.dispatchEvent(new CustomEvent('video-library-changed', { detail: {} }));
       const warns = (rep && rep.warnings) || [];
@@ -461,7 +461,9 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
                 // Films and shows only: the command reads Cinemeta, which has no
                 // anime lane (those cards come from MAL via download_anime.py).
                 if (!isAnime) items.push({ label: 'Refresh details', onClick: onRefreshDetails });
-                if (isAnime) items.push({ label: 'Uninstall', onClick: () => {
+                // Every room: series_uninstall works out which one from the
+                // card path, so a film and a show remove like an anime does.
+                items.push({ label: 'Uninstall', onClick: () => {
                   setDeleteFiles(true);
                   setConfirmOpen(true);
                 } });

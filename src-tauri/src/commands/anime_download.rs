@@ -512,18 +512,34 @@ fn local_path_is_shared(ingested_dir: &Path, this_card: &Path, target: &str) -> 
     false
 }
 
-/// Uninstall a library entry: cancel its job, remove its torrents from the
-/// built-in engine (+files when `delete_files`), stop its airing poll (the card
-/// is gone, so it drops out of the poll set on its own),
+/// The room a card belongs to, read off the card's own path. An unknown first
+/// segment falls back to Anime, matching how `SERIES_DOMAINS` behaves.
+fn domain_of(series_path: &str) -> &'static str {
+    match series_path.split(['/', '\\']).next().unwrap_or("") {
+        "TV Shows" => "TV Shows",
+        "Movies" => "Movies",
+        _ => "Anime",
+    }
+}
+
+/// Uninstall a library entry from ANY of the three rooms: cancel its job, remove
+/// its torrents from the built-in engine (+files when `delete_files`), stop its
+/// airing poll (the card is gone, so it drops out of the poll set on its own),
 /// delete the local video folder (collision- and path-guarded), the cover, and
 /// the card last. Keyed on the CARD (`series_path`) so a multi-id franchise
 /// entry removes as one unit.
+///
+/// The three rooms differ in exactly two ways, both derived from the card path:
+/// which video root the folder must sit under, and whether there is a cover
+/// sidecar to bin at all (only Anime writes one — TV and Movies cards carry a
+/// remote poster URL and have no `Assets/` folder).
 #[tauri::command]
-pub async fn anime_uninstall(
+pub async fn series_uninstall(
     app: AppHandle,
     series_path: String,
     delete_files: bool,
 ) -> Result<UninstallReport, String> {
+    let domain = domain_of(&series_path);
     let card_abs = PathBuf::from(vault::library_vault_root()).join(&series_path);
     let text = std::fs::read_to_string(&card_abs)
         .map_err(|e| format!("can't read card {series_path}: {e}"))?;
@@ -562,13 +578,20 @@ pub async fn anime_uninstall(
     // No reachability probe any more: the engine is in-process, so there is no
     // "is it up" question to answer before deleting anything.
 
-    // Stop any in-flight job for these ids before pulling its torrents.
+    // Stop any in-flight job for this card before pulling its torrents.
+    // BOTH matches are needed, and neither covers the other: a TV or Movies job
+    // has `mal_id: 0` and is only findable by its card path, while an ANIME job
+    // carries no `series_path` until its script reports one (it is written after
+    // the card is), so an early-cancelled anime job is only findable by id.
     {
         let mut guard = DOWNLOAD_STATE.lock().unwrap();
         let job_ids: Vec<String> = guard
             .jobs
             .iter()
-            .filter(|j| ids.contains(&j.mal_id))
+            .filter(|j| {
+                (j.mal_id != 0 && ids.contains(&j.mal_id))
+                    || j.series_path.as_deref() == Some(series_path.as_str())
+            })
             .map(|j| j.id.clone())
             .collect();
         for jid in job_ids {
@@ -602,8 +625,14 @@ pub async fn anime_uninstall(
     let library = PathBuf::from(vault::library_vault_root());
 
     // Cover sidecar (stem from the card filename, matching how it was written).
+    // Anime only: a TV or Movies card stores a remote poster URL, and neither
+    // room has an `Assets/` folder to hold one.
     let mut sidecars: Vec<(String, PathBuf)> = Vec::new();
-    if let Some(stem) = Path::new(&series_path).file_stem().and_then(|s| s.to_str()) {
+    if let Some(stem) = Path::new(&series_path)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .filter(|_| domain == "Anime")
+    {
         let cover_rel = format!("Anime/Assets/{stem}.jpg");
         let cover_abs = library.join(&cover_rel);
         if cover_abs.exists() {
@@ -628,14 +657,16 @@ pub async fn anime_uninstall(
             } else {
                 library.join(lp)
             };
-            let video_root = crate::commands::video_config::anime_video_root(
-                &app,
-                &library.to_string_lossy(),
-            );
+            let lib_str = library.to_string_lossy();
+            let video_root = match domain {
+                "TV Shows" => crate::commands::video_config::tv_video_root(&app, &lib_str),
+                "Movies" => crate::commands::video_config::movies_video_root(&app, &lib_str),
+                _ => crate::commands::video_config::anime_video_root(&app, &lib_str),
+            };
             let ingested_dir = card_abs
                 .parent()
                 .map(Path::to_path_buf)
-                .unwrap_or_else(|| library.join("Anime/Catalog"));
+                .unwrap_or_else(|| library.join(format!("{domain}/Catalog")));
             if let Some(key) = video_bin_key(&lp_abs, &video_root, &library) {
                 if local_path_is_shared(&ingested_dir, &card_abs, lp) {
                     report
@@ -692,7 +723,7 @@ pub async fn anime_uninstall(
     }
     report.ok = report.card_deleted;
     log::info!(
-        "[anime_uninstall] {title:?} ({} ids) torrents={} files={} card={} warns={}",
+        "[series_uninstall] {domain} {title:?} ({} ids) torrents={} files={} card={} warns={}",
         ids.len(),
         report.removed_torrents,
         report.deleted_files,
@@ -700,6 +731,17 @@ pub async fn anime_uninstall(
         report.warnings.len()
     );
     Ok(report)
+}
+
+/// The old name, kept so existing callers keep working. It was never
+/// anime-specific in anything but its lookups, which now come off the card path.
+#[tauri::command]
+pub async fn anime_uninstall(
+    app: AppHandle,
+    series_path: String,
+    delete_files: bool,
+) -> Result<UninstallReport, String> {
+    series_uninstall(app, series_path, delete_files).await
 }
 
 async fn run_worker(app: AppHandle) {
@@ -1276,6 +1318,23 @@ fn set_download_status(series_rel: &str, status: &str) {
     set_card_field(series_rel, "Download Status", status);
 }
 
+/// Read one `Key: value` frontmatter line back off a series card. The mirror of
+/// [`set_card_field`], and deliberately as dumb: first matching line wins, no
+/// YAML parse, `None` when the card or the key is missing.
+fn card_field(series_rel: &str, key: &str) -> Option<String> {
+    let abs = PathBuf::from(vault::library_vault_root()).join(series_rel);
+    field_from_text(&std::fs::read_to_string(&abs).ok()?, key)
+}
+
+/// The parse half of [`card_field`], split out so it can be tested without a
+/// library root on disk.
+fn field_from_text(text: &str, key: &str) -> Option<String> {
+    let prefix = format!("{key}:");
+    text.lines()
+        .find(|l| l.starts_with(&prefix))
+        .map(|l| l[prefix.len()..].trim().trim_matches('"').to_string())
+}
+
 /// Field-level rewrite of one `Key: value` frontmatter line on a series card.
 /// Rewrites nothing when the key is absent — a card that never had the field
 /// keeps its exact shape rather than growing one.
@@ -1400,9 +1459,17 @@ fn finalize_error(app: &AppHandle, job_id: &str, msg: &str) {
             None => None,
         }
     };
-    // Mark a written card Failed so its badge stops lying about "Queued".
+    // Mark a written card Failed so its badge stops lying about "Queued" — but
+    // never overwrite a card that already finished. An anime job can fail long
+    // after its episodes are on disk (a re-download of a title already held, a
+    // dead re-check), and the old code stamped Failed regardless, so a complete
+    // library read as broken. Hyouka (22/22 on disk) and Sousou no Frieren
+    // (28/28) both sat at `Failed` this way; their history records were already
+    // rotated out, so the triggering error was never readable.
     if let Some(rel) = series_path {
-        set_download_status(&rel, "Failed");
+        if card_field(&rel, "Download Status").as_deref() != Some("Complete") {
+            set_download_status(&rel, "Failed");
+        }
     }
     emit_progress(app, job_id);
     emit_done(app, job_id, None);
@@ -1733,9 +1800,30 @@ fn episodes_to_fetch(
 
 #[cfg(test)]
 mod tests {
-    use super::{card_local_path, episodes_to_fetch, video_bin_key};
+    use super::{card_local_path, episodes_to_fetch, field_from_text, video_bin_key};
     use std::collections::HashSet;
     use std::path::Path;
+
+    /// The read that decides whether a failing job is allowed to stamp a card
+    /// `Failed`. If it stops recognising a finished card, a dead re-download
+    /// flips a complete library to Failed again — which is exactly what Hyouka
+    /// (22/22) and Frieren (28/28) showed before the guard existed.
+    #[test]
+    fn a_finished_card_is_recognised() {
+        let card = "---\nTitle: \"Hyouka\"\nDownload Status: Complete\nEpisodes: 22\n---\n";
+        assert_eq!(field_from_text(card, "Download Status").as_deref(), Some("Complete"));
+        assert_eq!(field_from_text(card, "Title").as_deref(), Some("Hyouka"));
+        // A card mid-download, and one that never carried the key at all, must
+        // both stay stampable.
+        assert_eq!(
+            field_from_text("Download Status: Downloading\n", "Download Status").as_deref(),
+            Some("Downloading"),
+        );
+        assert_eq!(field_from_text("Title: \"x\"\n", "Download Status"), None);
+        // The key must anchor to the line start, or `Watched Episodes` would
+        // answer for `Episodes`.
+        assert_eq!(field_from_text("Watched Episodes: 4\n", "Episodes"), None);
+    }
 
     /// The airing poller's whole decision. Its dedupe is the disk, so the set
     /// maths is the only place a bug can hide — and both failure directions are

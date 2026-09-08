@@ -886,6 +886,7 @@ pub fn run() {
             commands::anime_download::anime_download_cancel,
             commands::anime_download::anime_torrent_search,
             commands::anime_download::anime_uninstall,
+            commands::anime_download::series_uninstall,
             commands::music_download::music_download_enqueue,
             commands::music_download::music_download_status,
             commands::music_download::music_download_cancel,

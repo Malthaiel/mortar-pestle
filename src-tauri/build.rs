@@ -197,6 +197,7 @@ fn main() {
         "anime_download_cancel",
         "anime_torrent_search",
         "anime_uninstall",
+        "series_uninstall",
         "music_download_enqueue",
         "music_download_status",
         "music_download_cancel",

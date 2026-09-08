@@ -175,7 +175,7 @@ export function useSeriesMenu(accent, domain = 'Anime') {
       ' The card goes to the recycling bin.'
     )) return;
     try {
-      const rep = await videoApi.animeUninstall(series.path, deleteFiles);
+      const rep = await videoApi.seriesUninstall(series.path, deleteFiles);
       window.dispatchEvent(new CustomEvent('video-library-changed', { detail: {} }));
       // eslint-disable-next-line no-alert
       if (rep && !rep.ok) window.alert((rep.warnings || [])[0] || 'Could not remove the library card.');
@@ -184,7 +184,6 @@ export function useSeriesMenu(accent, domain = 'Anime') {
       window.alert(`Remove failed: ${err?.message || err}`);
     }
   };
-  if (domain !== 'Anime') return null;
   return (e, series) => openContextMenu(e, [
     { label: 'Remove from Library', danger: true, onClick: () => uninstall(series, false) },
     { label: 'Remove + Delete Files', danger: true, onClick: () => uninstall(series, true) },
