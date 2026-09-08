@@ -65,6 +65,7 @@
       "scripts/download_anime.py": "scripts/download_anime.py",
       "scripts/import_music_parse.py": "scripts/import_music_parse.py",
       "scripts/import_mal_parse.py": "scripts/import_mal_parse.py",
+      "scripts/import_watchlist_parse.py": "scripts/import_watchlist_parse.py",
       "resources/usda_foods.db": "resources/usda_foods.db",
       "resources/bin/mpv.exe": "bin/mpv.exe"
     },

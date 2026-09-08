@@ -168,14 +168,24 @@ pub fn video_mark_episode_watched(
     series::mark_episode_watched(&series_path, episode, season.as_deref(), base_mtime)
 }
 
+/// `finished` is an optional `Finished:` watch date written in the same pass as
+/// the status. A caller that omits it leaves the field alone — see
+/// `series::mark_status`.
 #[tauri::command]
 pub fn video_mark_series_status(
     series_path: String,
     status: String,
     season: Option<String>,
+    finished: Option<String>,
     base_mtime: Option<f64>,
 ) -> Result<series::MarkSeriesStatusResponse, VaultError> {
-    series::mark_status(&series_path, &status, season.as_deref(), base_mtime)
+    series::mark_status(
+        &series_path,
+        &status,
+        season.as_deref(),
+        finished.as_deref(),
+        base_mtime,
+    )
 }
 
 #[tauri::command]

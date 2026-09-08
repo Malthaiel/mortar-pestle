@@ -1173,10 +1173,18 @@ pub fn mark_episode_watched(
     })
 }
 
+/// `finished` writes the card's `Finished:` watch date in the SAME pass as
+/// `Status`, because the two always move together — a card only becomes
+/// `Completed` on the day it was finished. Added for the watch-list importer
+/// (`Movies Tab.md` SF7c): TV and Movies cards are written by Rust from an IMDb
+/// id alone, so unlike the anime lane — where `download_anime.py --metadata-only`
+/// takes `--finished` at card-creation time — there was nowhere for an imported
+/// date to land. `None` (the existing callers) leaves the field untouched.
 pub fn mark_status(
     series_path: &str,
     new_status: &str,
     season: Option<&str>,
+    finished: Option<&str>,
     base_mtime: Option<f64>,
 ) -> Result<MarkSeriesStatusResponse, VaultError> {
     let abs = PathBuf::from(library_vault_root()).join(series_path);
@@ -1200,7 +1208,17 @@ pub fn mark_status(
         "Status".to_string()
     };
     let (head, tail) = frontmatter_head_tail(&text)?;
-    let next_head = set_frontmatter_field(&head, &status_key, new_status);
+    let mut next_head = set_frontmatter_field(&head, &status_key, new_status);
+    // Season-level `Finished N` mirrors the season-level `Status N` key, so a
+    // franchise card's per-season dates cannot overwrite each other.
+    if let Some(date) = finished.map(str::trim).filter(|d| !d.is_empty()) {
+        let finished_key = if use_season {
+            format!("Finished {}", season_str.as_ref().unwrap())
+        } else {
+            "Finished".to_string()
+        };
+        next_head = set_frontmatter_field(&next_head, &finished_key, date);
+    }
     let out = format!("{next_head}{tail}");
     atomic_write(&abs, out.as_bytes())?;
     Ok(MarkSeriesStatusResponse {
