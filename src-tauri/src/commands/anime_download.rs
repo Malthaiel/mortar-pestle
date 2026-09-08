@@ -1045,8 +1045,8 @@ async fn process_job(app: &AppHandle, job_id: &str) {
         let detail = result.get("detail").and_then(|x| x.as_str()).unwrap_or("");
         let msg = match code {
             "no_results" => format!("No torrent found. {detail}"),
-            "jikan_failed" => format!("MyAnimeList lookup failed: {detail}"),
-            "jikan_no_data" => format!("MyAnimeList has no entry for {detail}."),
+            "anilist_failed" => format!("AniList lookup failed: {detail}"),
+            "anilist_no_data" => format!("AniList has no entry for {detail}."),
             _ => format!("{code}: {detail}"),
         };
         finalize_error(app, job_id, &msg);

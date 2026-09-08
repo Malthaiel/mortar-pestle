@@ -135,6 +135,12 @@ def anilist_gql(query, variables):
                 "Accept": "application/json",
                 "Content-Type": "application/json",
                 "Accept-Encoding": "gzip",
+                # AniList answers 403 with "The AniList API has been temporarily
+                # disabled due to severe stability issues" to any client that
+                # does not present as their own site. Measured 2026-09-08:
+                # Referer ALONE flips it to 200 -- Origin does nothing, and the
+                # User-Agent is irrelevant either way (a browser UA still 403s).
+                "Referer": "https://anilist.co/",
             },
         )
         try:
@@ -726,9 +732,9 @@ def main():
     try:
         detail = fetch_detail(args.mal_id)
     except Exception as e:  # noqa: BLE001 — surface any lookup failure to the worker
-        fatal("jikan_failed", e)
+        fatal("anilist_failed", e)
     if not detail:
-        fatal("jikan_no_data", f"MAL {args.mal_id}")
+        fatal("anilist_no_data", f"MAL {args.mal_id}")
     title = detail.get("title") or f"anime-{args.mal_id}"
     english = detail.get("title_english") or ""
 

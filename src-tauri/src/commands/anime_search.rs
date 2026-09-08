@@ -352,6 +352,10 @@ async fn anilist_post(
         let result = client
             .post(ANILIST_URL)
             .header(reqwest::header::ACCEPT, "application/json")
+            // See the note in scripts/download_anime.py: AniList 403s any
+            // client that does not present as their own site, and the Referer
+            // alone is what clears it.
+            .header(reqwest::header::REFERER, "https://anilist.co/")
             .json(&body)
             .timeout(Duration::from_secs(15))
             .send()
