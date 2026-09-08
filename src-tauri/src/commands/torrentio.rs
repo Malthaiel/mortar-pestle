@@ -22,6 +22,7 @@ use crate::commands::vault;
 /// empty picker with a reason in it, not a crash for the user to interpret.
 #[tauri::command]
 pub async fn torrentio_torrent_search(
+    app: tauri::AppHandle,
     imdb_id: String,
     kind: Option<String>,
     season: Option<i64>,
@@ -50,13 +51,28 @@ pub async fn torrentio_torrent_search(
         return Err("a series search needs a season and an episode".into());
     }
 
+    // No index ships with the app; both addresses are the user's own. All-empty
+    // is a fresh install's correct state, so it answers with the same empty
+    // picker shape a dead index gets, pointed at Settings instead.
+    let sources = crate::commands::video_config::torrent_sources(&app);
+    if sources.torrentio.is_empty() && sources.eztv.is_empty() {
+        return Ok(serde_json::json!({
+            "candidates": [],
+            "error": "no_source_configured",
+        }));
+    }
+
     let script = vault::script_path("torrentio_search.py");
     let mut cmd = crate::commands::proc_util::python_cmd();
     cmd.arg(&script)
         .arg("--imdb-id")
         .arg(&imdb_id)
         .arg("--kind")
-        .arg(kind);
+        .arg(kind)
+        .arg("--torrentio-base")
+        .arg(&sources.torrentio)
+        .arg("--eztv-base")
+        .arg(&sources.eztv);
     if let Some(s) = season {
         cmd.arg("--season").arg(s.to_string());
     }

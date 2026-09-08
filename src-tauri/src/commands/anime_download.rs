@@ -431,6 +431,7 @@ fn cancel_job_inner(guard: &mut job_queue::Queue<DownloadJob>, job_id: &str) {
 /// the user picks a magnet, which then rides `anime_download_enqueue(downloadSource)`.
 #[tauri::command]
 pub async fn anime_torrent_search(
+    app: tauri::AppHandle,
     title: String,
     english_title: Option<String>,
     anime_type: Option<String>,
@@ -440,6 +441,14 @@ pub async fn anime_torrent_search(
     if title.is_empty() {
         return Err("title required".into());
     }
+    // No index ships with the app — see the torrentio lane for the same gate.
+    let nyaa = crate::commands::video_config::torrent_sources(&app).nyaa;
+    if nyaa.is_empty() {
+        return Ok(serde_json::json!({
+            "candidates": [],
+            "error": "no_source_configured",
+        }));
+    }
     let script = vault::script_path("nyaa_search.py");
     let mut cmd = crate::commands::proc_util::python_cmd();
     cmd.arg(&script)
@@ -447,6 +456,7 @@ pub async fn anime_torrent_search(
         .arg("--english-title").arg(english_title.unwrap_or_default())
         .arg("--type").arg(anime_type.unwrap_or_else(|| "TV".into()))
         .arg("--audio").arg(audio.unwrap_or_else(|| "sub".into()))
+        .arg("--nyaa-base").arg(&nyaa)
         .arg("--list")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -1596,6 +1606,14 @@ pub fn arm_airing_poll(app: AppHandle) {
 /// with no local files is skipped on purpose: a metadata-only card (added to
 /// the library but never downloaded) must not start downloading on its own.
 async fn poll_airing_once(app: &AppHandle) {
+    // Read once per sweep, before the library scan: with no index configured
+    // there is nothing this sweep could find, and walking every series to ask a
+    // source that does not exist is pure waste.
+    let nyaa = crate::commands::video_config::torrent_sources(app).nyaa;
+    if nyaa.is_empty() {
+        log::info!("[airing] sweep skipped — no torrent source configured");
+        return;
+    }
     let series = match crate::parsers::series::list_series("Anime") {
         Ok(s) => s,
         Err(e) => {
@@ -1611,7 +1629,7 @@ async fn poll_airing_once(app: &AppHandle) {
         let Some(folder) = s.local_path.clone() else { continue };
         swept += 1;
         let have = crate::parsers::series::episode_numbers_on_disk(Path::new(&folder));
-        let offered = match nyaa_backlog(&s.title, english_title(&s.path).as_deref()).await {
+        let offered = match nyaa_backlog(&s.title, english_title(&s.path).as_deref(), &nyaa).await {
             Ok(v) => v,
             Err(e) => {
                 log::warn!("[airing] {}: {e}", s.title);
@@ -1645,7 +1663,11 @@ fn english_title(series_path: &str) -> Option<String> {
 
 /// `nyaa_search.py --backlog`: every single-episode release for a title, as
 /// `(episode number, magnet)`, already sorted ascending by the script.
-async fn nyaa_backlog(title: &str, english: Option<&str>) -> Result<Vec<(i64, String)>, String> {
+async fn nyaa_backlog(
+    title: &str,
+    english: Option<&str>,
+    nyaa_base: &str,
+) -> Result<Vec<(i64, String)>, String> {
     let script = vault::script_path("nyaa_search.py");
     let mut cmd = crate::commands::proc_util::python_cmd();
     cmd.arg(&script)
@@ -1653,6 +1675,8 @@ async fn nyaa_backlog(title: &str, english: Option<&str>) -> Result<Vec<(i64, St
         .arg(title)
         .arg("--english-title")
         .arg(english.unwrap_or(""))
+        .arg("--nyaa-base")
+        .arg(nyaa_base)
         .arg("--backlog")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())

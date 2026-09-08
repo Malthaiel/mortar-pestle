@@ -34,11 +34,35 @@ export default function SystemTab({ settings, setSetting, accent, section, onSec
           <BuildSection accent={accent}/>
           <UpdatesSection settings={settings} setSetting={setSetting} accent={accent}/>
           <SitePushSection settings={settings} setSetting={setSetting} accent={accent}/>
+          <CreditsSection/>
         </>
       )}
       {active === 'downloads' && <DownloadsPanel settings={settings} setSetting={setSetting} accent={accent}/>}
       {active === 'recycle'   && <RecyclePanel   settings={settings} setSetting={setSetting} accent={accent}/>}
     </div>
+  );
+}
+
+// -- Credits ------------------------------------------------------------------
+// Attribution required by the data providers whose terms ask for it. TMDb's free
+// key is conditional on this notice appearing in an About/Credits surface, so it
+// is NOT decoration and must not be removed or hidden -- see the Bring Your Own
+// Source plan and the 2026-09-08 decision of the same name. A provider is listed
+// here whether or not the user has supplied a key for it: the app integrates it
+// either way, and naming it is the point.
+
+function CreditsSection() {
+  return (
+    <SectionBand title="Credits">
+      <StackedRow
+        label="TMDB"
+        hint="Film cast, crew, studios and box office, when you supply your own TMDb key in Modules > Library > Anime > Film info."
+      >
+        <div style={{ fontSize: 11.5, lineHeight: 1.6, color: 'var(--text-muted)' }}>
+          This product uses the TMDB API but is not endorsed or certified by TMDB.
+        </div>
+      </StackedRow>
+    </SectionBand>
   );
 }
 

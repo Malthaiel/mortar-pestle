@@ -4,11 +4,21 @@
 //! `"series"`, so the Movies room is this same client with a different string.
 //! See `Knowledge/Mortar & Pestle/Plans/Library Migration/TV Shows Tab.md`.
 //!
-//! **Why Cinemeta and not TMDb** (measured 2026-09-07): TMDb needs an account
-//! only the user can create, and it is TMDb-keyed — every download would need an
-//! extra `/external_ids` call to recover the IMDb id. Cinemeta is keyless and
-//! **IMDb-keyed**, which is the same id `torrentio_search` downloads by, so the
-//! browse id IS the download id. It carries the full episode list (title, air
+//! **Why Cinemeta and not TMDb**: Cinemeta is keyless and **IMDb-keyed**, which
+//! is the same id `torrentio_search` downloads by, so the browse id IS the
+//! download id.
+//!
+//! Two 2026-09-07 reasons recorded here were WRONG and are struck (2026-09-08):
+//! "an account only the user can create" is now the deliberate design, not an
+//! objection — the user supplies their own TMDb key, so no key ships with the
+//! app (`Knowledge/Mortar & Pestle/Plans/Bring Your Own Source.md`). And TMDb
+//! needs no `/external_ids` round-trip: Cinemeta's own payload already carries
+//! `moviedb_id` (measured `6435` for Practical Magic, 2026-09-08), so the
+//! translation is free where it is needed at all.
+//!
+//! Cinemeta's own terms remain UNRESOLVED — its manifest carries no licence and
+//! it repackages IMDb, TMDb, TheTVDB and Fanart.tv rather than owning the data.
+//! Logged, not fixed. It carries the full episode list (title, air
 //! date, thumbnail, per-episode rating), poster/background/logo, cast and genres.
 //!
 //! Endpoints (all GET, all JSON, no auth):

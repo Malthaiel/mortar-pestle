@@ -35,9 +35,155 @@ export default function VideoSettingsTab({ accent }) {
   return (
     <div style={{ color: 'var(--text)', fontSize: 12 }}>
       <DownloadsSection accent={accent}/>
+      <TorrentSourcesSection accent={accent}/>
+      <FilmInfoSection accent={accent}/>
       <MalImportSection accent={accent}/>
       <SubtitleSection accent={accent}/>
     </div>
+  );
+}
+
+// ── Torrent sources ───────────────────────────────────────────────────────────
+// No index address ships with the app. Every search lane reads its address from
+// here, and with all three blank nothing is searched — the picker opens empty
+// and points back at this section. See the Bring Your Own Source plan.
+
+const SOURCE_FIELDS = [
+  { key: 'torrentioBase', label: 'Films and TV', hint: 'Used for both the Movies and TV Shows rooms.' },
+  { key: 'eztvBase',      label: 'TV fallback',  hint: 'Tried only when the films-and-TV source returns nothing for an episode.' },
+  { key: 'nyaaBase',      label: 'Anime',        hint: 'Used by the Anime room and the airing-series sweep.' },
+];
+
+function TorrentSourcesSection({ accent }) {
+  const [cfg, setCfg] = useState(null);
+  const [draft, setDraft] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const [saved, setSaved] = useState(false);
+
+  const load = useCallback(() => (
+    videoApi.videoGetConfig()
+      .then(c => { setCfg(c); setDraft(Object.fromEntries(SOURCE_FIELDS.map(f => [f.key, c[f.key] || '']))); })
+      .catch(e => setErr(errText(e, 'Could not read the download source settings.')))
+  ), []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const dirty = !!cfg && !!draft && SOURCE_FIELDS.some(f => (draft[f.key] || '') !== (cfg[f.key] || ''));
+
+  const save = async () => {
+    setBusy(true); setErr(null); setSaved(false);
+    try {
+      await videoApi.videoSetConfig(draft);
+      await load();
+      setSaved(true);
+    } catch (e) { setErr(errText(e, 'Could not save the download sources.')); }
+    finally { setBusy(false); }
+  };
+
+  const none = !!draft && SOURCE_FIELDS.every(f => !(draft[f.key] || '').trim());
+
+  return (
+    <SectionBand gap={12} title="Download sources">
+      <div data-search-anchor="set-video-torrentSources" style={{ fontSize: 11, color: 'var(--text-2)', lineHeight: 1.5 }}>
+        Mortar &amp; Pestle ships with no download sources. Nothing is searched until you add
+        an address of your own, and you are responsible for what you download through it.
+        Leave a box empty to switch that lane off.
+      </div>
+      {SOURCE_FIELDS.map(f => (
+        <Field key={f.key} label={f.label}>
+          <input
+            className="candy-input"
+            value={draft ? draft[f.key] : ''}
+            onChange={e => { setSaved(false); setDraft(d => ({ ...d, [f.key]: e.target.value })); }}
+            placeholder="Not set"
+            spellCheck={false}
+            style={inputStyle}
+          />
+          <div style={{ fontSize: 10, color: 'var(--text-faint)' }}>{f.hint}</div>
+        </Field>
+      ))}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <button onClick={save} disabled={!dirty || busy} className="candy-btn">
+          <span className="candy-face">{busy ? 'Saving' : 'Save'}</span>
+        </button>
+        {saved && !dirty && <span style={{ fontSize: 11, color: 'var(--text-2)' }}>Saved</span>}
+        {none && !dirty && (
+          <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>
+            No source set — downloading is off.
+          </span>
+        )}
+      </div>
+      {err && <div style={{ fontSize: 11, color: 'var(--text-2)' }}>{err}</div>}
+    </SectionBand>
+  );
+}
+
+// ── Film info (TMDb) ─────────────────────────────────────────
+// The key belongs to the USER, not the app — no key ships, and film pages simply
+// stay thinner without one. Naming TMDb here is deliberate and required: the
+// design rests on the user knowingly holding their own agreement with them, and
+// TMDb's terms require the attribution line below. See the Bring Your Own Source
+// plan. The key itself is never read back out of the keychain — the UI only
+// learns whether one is stored.
+
+const TMDB_ATTRIBUTION = 'This product uses the TMDB API but is not endorsed or certified by TMDB.';
+
+function FilmInfoSection({ accent }) {
+  const [has, setHas] = useState(null);
+  const [key, setKey] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const load = useCallback(() => (
+    videoApi.tmdbHasApiKey().then(setHas).catch(() => setHas(false))
+  ), []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const save = async (value) => {
+    setBusy(true); setErr(null);
+    try { await videoApi.tmdbSetApiKey(value); setKey(''); await load(); }
+    catch (e) { setErr(errText(e, 'Could not save the key.')); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <SectionBand gap={12} title="Film info">
+      <div data-search-anchor="set-video-tmdbKey" style={{ fontSize: 11, color: 'var(--text-2)', lineHeight: 1.5 }}>
+        Film pages show cast, crew, studios and box office when you add your own free
+        TMDb key. No key ships with Mortar &amp; Pestle — you make the account, the key stays
+        on this computer, and without one the pages simply show less.
+        {' '}
+        <a href="https://www.themoviedb.org/signup" target="_blank" rel="noreferrer"
+           style={{ color: 'var(--accent)' }}>Make a free TMDb account</a>, then paste the key below.
+      </div>
+      <Field label={has ? 'TMDb key (stored)' : 'TMDb key'}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input
+            className="candy-input"
+            type="password"
+            value={key}
+            onChange={e => setKey(e.target.value)}
+            placeholder={has ? 'A key is saved' : 'Not set'}
+            spellCheck={false}
+            style={{ ...inputStyle, flex: 1 }}
+          />
+          <button onClick={() => save(key)} disabled={!key.trim() || busy} className="candy-btn">
+            <span className="candy-face">{busy ? 'Saving' : 'Save'}</span>
+          </button>
+          {has && (
+            <button onClick={() => save('')} disabled={busy} className="candy-btn">
+              <span className="candy-face">Remove</span>
+            </button>
+          )}
+        </div>
+      </Field>
+      <div style={{ fontSize: 10, color: 'var(--text-faint)', lineHeight: 1.5 }}>
+        {TMDB_ATTRIBUTION}
+      </div>
+      {err && <div style={{ fontSize: 11, color: 'var(--text-2)' }}>{err}</div>}
+    </SectionBand>
   );
 }
 
@@ -140,7 +286,7 @@ function DownloadsSection({ accent }) {
   const apply = async (root) => {
     setBusy(true); setErr(null);
     try {
-      await videoApi.videoSetConfig(root);
+      await videoApi.videoSetConfig({ videoRoot: root });
       await load();
     } catch (e) { setErr(errText(e, 'Could not save the video folder.')); }
     finally { setBusy(false); }

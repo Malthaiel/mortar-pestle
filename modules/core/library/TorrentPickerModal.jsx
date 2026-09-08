@@ -27,6 +27,7 @@ export default function TorrentPickerModal({ open, title, englishTitle, type, ac
   const [cands, setCands] = useState(null);   // null = not searched yet
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [noSource, setNoSource] = useState(false);
   const [sel, setSel] = useState(0);
   const reqId = useRef(0);
 
@@ -43,9 +44,15 @@ export default function TorrentPickerModal({ open, title, englishTitle, type, ac
       const list = (res && res.candidates) || [];
       setCands(list); setSel(0);
       if (!list.length) {
-        setError(res && res.error === 'no_results'
-          ? (season == null ? 'No torrents found for this film.' : 'No torrents found for this episode.')
-          : 'No torrents found.');
+        // A fresh install has no download source at all, which is not a failed
+        // search — say so plainly and point at where it is fixed.
+        const noSource = !!res && res.error === 'no_source_configured';
+        setNoSource(noSource);
+        setError(noSource
+          ? 'No download source is set. Add one in Settings, under Video Player → Download sources.'
+          : res && res.error === 'no_results'
+            ? (season == null ? 'No torrents found for this film.' : 'No torrents found for this episode.')
+            : 'No torrents found.');
       }
     } catch (e) {
       if (myId !== reqId.current) return;
@@ -117,7 +124,7 @@ export default function TorrentPickerModal({ open, title, englishTitle, type, ac
         {/* Results */}
         <div style={S.list}>
           {loading && <div style={S.muted}>Searching</div>}
-          {!loading && error && <div style={S.muted}>{error}{tv ? '' : ' Try editing the search above.'}</div>}
+          {!loading && error && <div style={S.muted}>{error}{tv || noSource ? '' : ' Try editing the search above.'}</div>}
           {!loading && cands && cands.map((c, i) => {
             const active = i === sel;
             return (

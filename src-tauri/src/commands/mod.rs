@@ -53,6 +53,7 @@ pub mod site;
 pub mod skills;
 pub mod stt;
 pub mod torrent;
+pub mod tmdb;
 pub mod torrentio;
 pub mod tv_library;
 pub mod vault;

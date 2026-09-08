@@ -12,11 +12,43 @@ use crate::commands::vault::{self, VaultError};
 
 const VIDEO_CONFIG_FILE: &str = "video.json";
 
+/// Every field is `#[serde(default)]` so a `video.json` written before a field
+/// existed still loads — the file is the user's, and an older one must never be
+/// an error.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct VideoStored {
     #[serde(default)]
     video_root: String,
+    /// Torrent index addresses. **Empty by default, deliberately** — the app
+    /// ships with nowhere to search and stays that way until the user supplies
+    /// an address. See `Knowledge/Mortar & Pestle/Plans/Bring Your Own Source.md`.
+    #[serde(default)]
+    torrentio_base: String,
+    #[serde(default)]
+    eztv_base: String,
+    #[serde(default)]
+    nyaa_base: String,
+}
+
+/// The three index addresses, read in one pass because a search needs to know
+/// about more than one of them before it can decide it has nowhere to look.
+#[derive(Debug, Clone, Default)]
+pub struct TorrentSources {
+    pub torrentio: String,
+    pub eztv: String,
+    pub nyaa: String,
+}
+
+/// The user's configured index addresses. All-empty is the expected state of a
+/// fresh install, not a fault.
+pub fn torrent_sources(app: &AppHandle) -> TorrentSources {
+    let s = load_stored(app);
+    TorrentSources {
+        torrentio: s.torrentio_base.trim().to_string(),
+        eztv: s.eztv_base.trim().to_string(),
+        nyaa: s.nyaa_base.trim().to_string(),
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -27,6 +59,9 @@ pub struct VideoConfig {
     /// Where videos actually land right now — always an absolute path.
     pub effective_root: String,
     pub is_default: bool,
+    pub torrentio_base: String,
+    pub eztv_base: String,
+    pub nyaa_base: String,
 }
 
 fn config_path(app: &AppHandle) -> Result<PathBuf, VaultError> {
@@ -88,20 +123,41 @@ fn room_video_root(app: &AppHandle, library: &str, room: &str) -> PathBuf {
 
 #[tauri::command]
 pub fn video_get_config(app: AppHandle) -> Result<VideoConfig, VaultError> {
-    let video_root = load_stored(&app).video_root.trim().to_string();
+    let stored = load_stored(&app);
+    let video_root = stored.video_root.trim().to_string();
     let library = vault::library_vault_root();
     Ok(VideoConfig {
         is_default: video_root.is_empty(),
         effective_root: anime_video_root(&app, &library).to_string_lossy().into_owned(),
         video_root,
+        torrentio_base: stored.torrentio_base,
+        eztv_base: stored.eztv_base,
+        nyaa_base: stored.nyaa_base,
     })
 }
 
+/// Patch, never replace: every field is optional and `None` leaves the stored
+/// value alone. Whole-struct replacement was the old shape and would silently
+/// wipe the index addresses every time the folder picker saved.
 #[tauri::command]
-pub fn video_set_config(app: AppHandle, video_root: String) -> Result<(), VaultError> {
-    let stored = VideoStored {
-        video_root: video_root.trim().to_string(),
-    };
+pub fn video_set_config(
+    app: AppHandle,
+    video_root: Option<String>,
+    torrentio_base: Option<String>,
+    eztv_base: Option<String>,
+    nyaa_base: Option<String>,
+) -> Result<(), VaultError> {
+    let mut stored = load_stored(&app);
+    for (field, value) in [
+        (&mut stored.video_root, video_root),
+        (&mut stored.torrentio_base, torrentio_base),
+        (&mut stored.eztv_base, eztv_base),
+        (&mut stored.nyaa_base, nyaa_base),
+    ] {
+        if let Some(v) = value {
+            *field = v.trim().to_string();
+        }
+    }
     let path = config_path(&app)?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)

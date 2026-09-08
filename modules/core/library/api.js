@@ -45,7 +45,14 @@ export const videoApi = {
   personFull:        (malId) => _api.invoke('person_full', { malId }),
   animeMoveVideos:   () => _api.invoke('anime_move_videos', {}),
   videoGetConfig:    () => _api.invoke('video_get_config', {}),
-  videoSetConfig:    (videoRoot) => _api.invoke('video_set_config', { videoRoot }),
+  // Patch, not replace: send only the keys you are changing. Omitted keys
+  // keep their stored value (videoRoot, torrentioBase, eztvBase, nyaaBase).
+  videoSetConfig:    (patch) => _api.invoke('video_set_config', patch),
+  // TMDb is the user's own key, kept in the OS keychain. There is no getter
+  // for the key itself on purpose — only whether one is stored.
+  tmdbSetApiKey:     (key) => _api.invoke('tmdb_set_api_key', { key }),
+  tmdbHasApiKey:     () => _api.invoke('tmdb_has_api_key', {}),
+  tmdbMovieDetail:   (imdbId) => _api.invoke('tmdb_movie_detail', { imdbId }),
   // Anime download engine (built-in librqbit, poll-driven). `type` → Rust `anime_type`.
   animeDownloadEnqueue: (malId, title, audio, image, airing, type, episodes, downloadSource, metadataOnly, initialStatus) =>
     _api.invoke('anime_download_enqueue', {
