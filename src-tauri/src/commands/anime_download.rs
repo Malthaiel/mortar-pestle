@@ -47,15 +47,19 @@ pub enum JobState {
     Cancelled,
 }
 
-/// The TV lane's extra parameters. Its PRESENCE is the domain switch: a job
-/// carrying one skips Phase 1 entirely (no Python at all), because the card was
-/// already written by `tv_add_to_library` and the magnet already came from the
-/// Torrentio picker. All that is left is magnet → engine → mark the card.
+/// The Stremio lane's extra parameters, shared by TV Shows and Movies. Its
+/// PRESENCE is the domain switch: a job carrying one skips Phase 1 entirely (no
+/// Python at all), because the card was already written by `tv_add_to_library` /
+/// `movie_add_to_library` and the magnet already came from the Torrentio picker.
+/// All that is left is magnet → engine → mark the card.
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct TvJob {
-    pub season: i64,
-    pub episode: i64,
+    /// `None` for a film — it has no season folder and no episode to match, and
+    /// that absence is what routes the job down the single-file path. A show
+    /// always carries both.
+    pub season: Option<i64>,
+    pub episode: Option<i64>,
     /// Torrentio's `fileIdx` — which file inside a season pack IS this episode.
     /// Handed to the engine as `only_files`, so choosing a 60 GB season pack
     /// downloads one episode's file and nothing else. That is why this lane has
@@ -263,11 +267,69 @@ pub async fn tv_download_enqueue(
     if series_path.trim().is_empty() {
         return Err("the show's card path is required".into());
     }
-    let id = format!("tdl{}", JOB_SEQ.fetch_add(1, Ordering::Relaxed));
     // The dock label carries the episode: the queue is sequential, so several
     // episodes of one show stack up and bare titles would be unreadable.
     let label = format!("{title} S{season:02}E{episode:02}");
-    log::info!("[anime_download] enqueue TV {label} job {id}");
+    let tag = format!("tv-s{season:02}e{episode:02}");
+    let id = push_stremio_job(
+        &app,
+        series_path,
+        label,
+        tag,
+        "TV Show",
+        image,
+        TvJob { season: Some(season), episode: Some(episode), file_idx, magnet },
+    );
+    Ok(id)
+}
+
+/// Queue one film. Identical to the TV lane bar the two things a film does not
+/// have — a season and an episode — whose absence is exactly what routes the job
+/// to a flat folder and a take-the-one-file lift.
+///
+/// `series_path` is the existing card (`Movies/Catalog/<Title (Year)>.md`)
+/// written by `movie_add_to_library`; nothing here creates or enriches a card.
+#[tauri::command]
+pub async fn movie_download_enqueue(
+    app: AppHandle,
+    series_path: String,
+    title: String,
+    magnet: String,
+    file_idx: Option<usize>,
+    image: Option<String>,
+) -> Result<String, String> {
+    if !magnet.starts_with("magnet:") {
+        return Err("a magnet link is required".into());
+    }
+    if series_path.trim().is_empty() {
+        return Err("the film's card path is required".into());
+    }
+    let id = push_stremio_job(
+        &app,
+        series_path,
+        title,
+        "movie".to_string(),
+        "Movie",
+        image,
+        TvJob { season: None, episode: None, file_idx, magnet },
+    );
+    Ok(id)
+}
+
+/// The queue push both Stremio rooms share: build the job, take its place in
+/// line, and wake the worker if it is asleep. Only the label, the tag and the
+/// `TvJob` differ between a show's episode and a film.
+fn push_stremio_job(
+    app: &AppHandle,
+    series_path: String,
+    label: String,
+    tag: String,
+    kind_label: &str,
+    image: Option<String>,
+    tv: TvJob,
+) -> String {
+    let id = format!("tdl{}", JOB_SEQ.fetch_add(1, Ordering::Relaxed));
+    log::info!("[anime_download] enqueue {kind_label} {label} job {id}");
     let should_start = {
         let mut guard = DOWNLOAD_STATE.lock().unwrap();
         guard.jobs.push(DownloadJob {
@@ -277,9 +339,9 @@ pub async fn tv_download_enqueue(
             audio: String::new(),
             image,
             airing: false,
-            anime_type: "TV Show".into(),
+            anime_type: kind_label.into(),
             episodes_total: None,
-            tag: format!("tv-s{season:02}e{episode:02}"),
+            tag,
             torrent_id: None,
             local_path: None,
             series_path: Some(series_path),
@@ -298,7 +360,7 @@ pub async fn tv_download_enqueue(
             download_source: None,
             metadata_only: false,
             initial_status: None,
-            tv: Some(TvJob { season, episode, file_idx, magnet }),
+            tv: Some(tv),
         });
         recompute_queue_positions(&mut guard);
         if !guard.worker_running {
@@ -308,12 +370,12 @@ pub async fn tv_download_enqueue(
             false
         }
     };
-    emit_progress(&app, &id);
+    emit_progress(app, &id);
     if should_start {
         let app2 = app.clone();
         tauri::async_runtime::spawn(async move { run_worker(app2).await });
     }
-    Ok(id)
+    id
 }
 
 #[tauri::command]
@@ -688,10 +750,15 @@ fn tv_prep_args(job_id: &str) -> Option<(String, TvJob)> {
 /// immediately and in-flight episodes show up in the card straight away.
 async fn process_tv_job(app: &AppHandle, job_id: &str, series_rel: String, tv: TvJob) {
     let library = vault::library_vault_root();
-    let root = crate::commands::video_config::tv_video_root(app, &library);
+    let root = if tv.season.is_some() {
+        crate::commands::video_config::tv_video_root(app, &library)
+    } else {
+        crate::commands::video_config::movies_video_root(app, &library)
+    };
     // The folder is named from the CARD, not from the job's label — the label
     // carries the episode ("Breaking Bad S01E02"), which would give every single
-    // episode its own show folder. The card's stem is already filename-safe.
+    // episode its own show folder. The card's stem is already filename-safe, and
+    // for a film it is the `<Title (Year)>` stem `pick_movie_filename` chose.
     let show_name = Path::new(&series_rel)
         .file_stem()
         .and_then(|s| s.to_str())
@@ -699,10 +766,14 @@ async fn process_tv_job(app: &AppHandle, job_id: &str, series_rel: String, tv: T
         .to_string();
     let show_dir = root.join(&show_name);
     // `Season N` matches the card's `## SEASON N` section, which is what the
-    // season reader joins onto `Local Path` when it scans for episode files.
-    let season_dir = show_dir.join(format!("Season {}", tv.season));
+    // season reader joins onto `Local Path` when it scans for episode files. A
+    // film has no seasons, so its file lands in the title folder itself.
+    let season_dir = match tv.season {
+        Some(n) => show_dir.join(format!("Season {n}")),
+        None => show_dir.clone(),
+    };
     if let Err(e) = std::fs::create_dir_all(&season_dir) {
-        log::warn!("[anime_download] TV video root unavailable {season_dir:?}: {e}");
+        log::warn!("[anime_download] video root unavailable {season_dir:?}: {e}");
         finalize_error(
             app,
             job_id,
@@ -769,37 +840,56 @@ async fn process_tv_job(app: &AppHandle, job_id: &str, series_rel: String, tv: T
     .await;
 }
 
-/// What the poll loop does with a finished TV torrent: release the engine's
-/// handles, move this episode's file into the season folder, bin the scratch.
+/// What the poll loop does with a finished Stremio torrent: release the engine's
+/// handles, move the wanted file into the title folder, bin the scratch.
 struct TvLift {
     scratch: PathBuf,
     season_dir: PathBuf,
-    episode: i64,
+    /// The episode to keep, or `None` for a film — which has no number to match,
+    /// so the biggest video file in the scratch is the film.
+    episode: Option<i64>,
 }
 
-/// Move the one file that IS this episode out of the scratch folder, then delete
+/// Move the one file we actually wanted out of the scratch folder, then delete
 /// everything else the pack left behind.
 ///
-/// The match uses the same filename parser the episode scan uses, so a file that
-/// lands here is a file the card will find. Ties (a pack with several matches)
-/// go to the largest, which is the complete one — the neighbours only ever hold
-/// the overspill from a straddling piece.
+/// For a show the match uses the same filename parser the episode scan uses, so
+/// a file that lands here is a file the card will find. Ties (a pack with
+/// several matches) go to the largest, which is the complete one — the
+/// neighbours only ever hold the overspill from a straddling piece.
+///
+/// For a film there is no number to match on, so every video file is a
+/// candidate and the largest wins, which drops the sample rip and the trailer
+/// that riff-packed releases bundle in. Films are also routinely wrapped in
+/// their own folder inside the torrent, so the search recurses; a show's pack is
+/// flat and unaffected by that.
 fn lift_episode(lift: &TvLift) -> Option<PathBuf> {
-    let mut best: Option<(u64, PathBuf)> = None;
-    for entry in std::fs::read_dir(&lift.scratch).ok()?.flatten() {
-        let path = entry.path();
-        if !path.is_file() {
-            continue;
-        }
-        let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
-        if crate::parsers::series::parse_episode_number(name) != Some(lift.episode) {
-            continue;
-        }
-        let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
-        if best.as_ref().is_none_or(|(b, _)| size > *b) {
-            best = Some((size, path));
+    fn scan(dir: &Path, want: Option<i64>, depth: usize, best: &mut Option<(u64, PathBuf)>) {
+        let Ok(entries) = std::fs::read_dir(dir) else { return };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                if depth > 0 {
+                    scan(&path, want, depth - 1, best);
+                }
+                continue;
+            }
+            let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+            let keep = match want {
+                Some(n) => crate::parsers::series::parse_episode_number(name) == Some(n),
+                None => crate::parsers::series::RE_VIDEO_EXT.is_match(name),
+            };
+            if !keep {
+                continue;
+            }
+            let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
+            if best.as_ref().is_none_or(|(b, _)| size > *b) {
+                *best = Some((size, path));
+            }
         }
     }
+    let mut best: Option<(u64, PathBuf)> = None;
+    scan(&lift.scratch, lift.episode, if lift.episode.is_some() { 0 } else { 3 }, &mut best);
     let (_, src) = best?;
     let dest = lift.season_dir.join(src.file_name()?);
     // rename first (same volume, instant); copy is the cross-volume fallback.
@@ -1108,7 +1198,11 @@ async fn poll_until_done(
                                 finalize_error(
                                     app,
                                     job_id,
-                                    "the download finished but held no file for this episode — press Retry and pick a different source.",
+                                    if lift.episode.is_some() {
+                                        "the download finished but held no file for this episode — press Retry and pick a different source."
+                                    } else {
+                                        "the download finished but held no video file — press Retry and pick a different source."
+                                    },
                                 );
                                 return;
                             }
@@ -1238,7 +1332,10 @@ fn record_history(app: &AppHandle, job_id: &str) {
             subtitle: if j.metadata_only {
                 "Added to library".into()
             } else if let Some(tv) = &j.tv {
-                format!("TV Show · Season {} episode {}", tv.season, tv.episode)
+                match (tv.season, tv.episode) {
+                    (Some(s), Some(e)) => format!("TV Show · Season {s} episode {e}"),
+                    _ => "Film".into(),
+                }
             } else {
                 format!("{} · {}", j.anime_type, j.audio)
             },

@@ -69,11 +69,20 @@ export const videoApi = {
       seriesPath, title, magnet, season, episode,
       fileIdx: fileIdx ?? null, image: image || null,
     }),
+  // Movies lane: the same deal one room over, minus the season and episode a
+  // film does not have. Their absence is what gives the job a flat folder and a
+  // take-the-one-file lift on the Rust side.
+  movieDownloadEnqueue: (seriesPath, title, magnet, fileIdx, image) =>
+    _api.invoke('movie_download_enqueue', {
+      seriesPath, title, magnet, fileIdx: fileIdx ?? null, image: image || null,
+    }),
   // Torrentio picker search. Keyed by IMDb id, not by a title string, so there
-  // is no free-text query to edit — a series needs BOTH season and episode.
+  // is no free-text query to edit — a series needs BOTH season and episode, and
+  // no season is how a film asks for the movie catalogue instead.
   torrentioSearch: (imdbId, season, episode) =>
     _api.invoke('torrentio_torrent_search', {
-      imdbId, kind: 'series', season: season ?? null, episode: episode ?? null,
+      imdbId, kind: season == null ? 'movie' : 'series',
+      season: season ?? null, episode: episode ?? null,
     }),
   // Uninstall a library entry: card + cover + its torrents [+ files].
   animeUninstall: (seriesPath, deleteFiles) =>

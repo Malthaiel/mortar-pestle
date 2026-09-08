@@ -42,7 +42,11 @@ export default function TorrentPickerModal({ open, title, englishTitle, type, ac
       if (myId !== reqId.current) return;
       const list = (res && res.candidates) || [];
       setCands(list); setSel(0);
-      if (!list.length) setError(res && res.error === 'no_results' ? 'No torrents found for this episode.' : 'No torrents found.');
+      if (!list.length) {
+        setError(res && res.error === 'no_results'
+          ? (season == null ? 'No torrents found for this film.' : 'No torrents found for this episode.')
+          : 'No torrents found.');
+      }
     } catch (e) {
       if (myId !== reqId.current) return;
       setCands([]); setError((e && e.message) || 'Search failed.');
@@ -80,9 +84,11 @@ export default function TorrentPickerModal({ open, title, englishTitle, type, ac
       <div onClick={(e) => e.stopPropagation()} className="candy-section" style={S.panel}>
         <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>Choose a torrent</div>
         <div style={{ fontSize: 11.5, lineHeight: 1.45, color: 'var(--text-muted)', marginTop: -4 }}>
-          {tv
-            ? `Pick the release to download for ${title} season ${season}, episode ${episode}. A whole-season release downloads only this episode.`
-            : 'Pick the release to download. If the results aren’t the show you want, edit the search.'}
+          {tv && season == null
+            ? `Pick the release to download for ${title}.`
+            : tv
+              ? `Pick the release to download for ${title} season ${season}, episode ${episode}. A whole-season release downloads only this episode.`
+              : 'Pick the release to download. If the results aren’t the show you want, edit the search.'}
         </div>
 
         {/* Editable query + audio — Nyaa only; Torrentio is keyed by IMDb id. */}

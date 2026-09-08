@@ -188,6 +188,7 @@ fn main() {
         "video_set_config",
         "anime_download_enqueue",
         "tv_download_enqueue",
+        "movie_download_enqueue",
         "anime_download_status",
         "anime_download_cancel",
         "anime_torrent_search",

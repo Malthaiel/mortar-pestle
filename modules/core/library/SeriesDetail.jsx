@@ -82,6 +82,10 @@ function notify(detail) {
 // pointed at a TV card; they hide until the TV pipeline exists (SF7b).
 export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
   const isAnime = domain === 'Anime';
+  // A film has no episodes. Its one video file still becomes a synthetic
+  // episode 1 in Rust — that is what Play targets — but nothing about it is
+  // shown, so the page reads as a film rather than a one-episode series.
+  const isMovie = domain === 'Movies';
   const [series, setSeries] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -155,6 +159,10 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
   const playable = visibleEpisodes.filter(e => e.available);
   const nextUnwatched = visibleEpisodes.findIndex(e => e.available && !watchedSet.has(e.n));
   const playStartIdxLocal = nextUnwatched >= 0 ? nextUnwatched : visibleEpisodes.findIndex(e => e.available);
+  // "Resume" only once something has actually been watched. `nextUnwatched >= 0`
+  // alone is true for a title nobody has started, so a brand-new series — and
+  // every film — offered to resume a thing that had never been played.
+  const canResume = nextUnwatched >= 0 && visibleEpisodes.some(e => watchedSet.has(e.n));
 
   // playSeries() expects an index into series.episodes (the flat list across
   // all seasons). Translate the per-season local index into the flat one.
@@ -207,8 +215,11 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
   // corrupt or better rip.
   const canRedownload = flatStartIdx >= 0 && !dlActive && !canGrabMore && !!series.providerId;
   // The engine is in-process, so the picker opens straight away (no pre-flight).
+  // Anime searches Nyaa by title and needs a MAL id; a film searches Torrentio
+  // by IMDb id and needs that instead.
+  const canDownload = isMovie ? !!series.imdbId : !!series.providerId;
   const onDownload = () => {
-    if (!series.providerId) return;
+    if (!canDownload) return;
     setPickerOpen(true);
   };
   // TV Shows: the download entry point is the episode row, because Torrentio
@@ -222,6 +233,19 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
     if (!series.imdbId || !seasonNum) return;
     setTvPick({ season: seasonNum, episode: n });
     setPickerOpen(true);
+  };
+  // Movies: one film, one download, so there is no per-row entry point and no
+  // pick to remember — the primary button opens the picker and this takes it.
+  const onPickMovieTorrent = async (magnet, _audio, cand) => {
+    setPickerOpen(false);
+    try {
+      await videoApi.movieDownloadEnqueue(
+        series.path, series.title, magnet, cand ? cand.file_idx : null, series.image || null,
+      );
+      notify({ type: 'info', title: 'Download started', message: series.title, iconKey: 'download', accent: accent || 'var(--accent)', duration: 4000 });
+    } catch (e) {
+      notify({ type: 'error', title: 'Download failed to start', message: (e && e.message) || String(e), iconKey: 'alert', accent: accent || 'var(--accent)' });
+    }
   };
   const onPickTvTorrent = async (magnet, _audio, cand) => {
     setPickerOpen(false);
@@ -305,7 +329,7 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
         producers={series.producers}
         premiered={series.premiered}
         format={series.format}
-        episodes={series.episodesTotal}
+        episodes={isMovie ? null : series.episodesTotal}
         duration={prettyDuration(series.duration)}
         source={series.source || (detail && detail.source)}
         contentRating={series.rating || (detail && detail.rating)}
@@ -370,7 +394,7 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
             {flatStartIdx >= 0 ? (
               <>
                 <button onClick={onPlayAll} className="candy-btn is-primary" style={{ cursor: 'pointer' }}>
-                  <span className="candy-face" style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><IconPlay size={14}/> {nextUnwatched >= 0 ? 'Resume' : 'Play'}</span>
+                  <span className="candy-face" style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><IconPlay size={14}/> {canResume ? 'Resume' : 'Play'}</span>
                 </button>
                 {canGrabMore && isAnime && (
                   <button onClick={onDownload} title="Download more episodes" data-own-press className="candy-btn" data-shape="icon" style={{ cursor: 'pointer' }}>
@@ -378,13 +402,13 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
                   </button>
                 )}
               </>
-            ) : !isAnime ? null : dlActive ? (
+            ) : (!isAnime && !isMovie) ? null : dlActive ? (
               <button disabled className="candy-btn is-primary" style={{ cursor: 'default', opacity: 0.6 }}>
                 <span className="candy-face">{dlLabel}</span>
               </button>
             ) : (
-              <button onClick={onDownload} disabled={!series.providerId} className="candy-btn is-primary"
-                style={{ cursor: series.providerId ? 'pointer' : 'not-allowed', opacity: series.providerId ? 1 : 0.4 }}>
+              <button onClick={onDownload} disabled={!canDownload} className="candy-btn is-primary"
+                style={{ cursor: canDownload ? 'pointer' : 'not-allowed', opacity: canDownload ? 1 : 0.4 }}>
                 <span className="candy-face" style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><IconDownload size={15}/> {dlJob && dlJob.state === 'error' ? 'Retry download' : 'Download'}</span>
               </button>
             )}
@@ -454,7 +478,9 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
         </div>
       )}
 
-      {/* Episode list */}
+      {/* Episode list — a film's single synthetic episode is Play's target, not
+          something to list, so the whole section (empty state included) is off. */}
+      {!isMovie && (
       <div style={{
         padding: '10px 14px 32px',
         display: 'flex', flexDirection: 'column', gap: 8,
@@ -507,16 +533,17 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
           );
         })}
       </div>
+      )}
       <TorrentPickerModal
         open={pickerOpen}
         title={series.title}
         englishTitle=""
         type="TV"
         accent={accent}
-        imdbId={tvPick ? series.imdbId : null}
+        imdbId={(isMovie || tvPick) ? series.imdbId : null}
         season={tvPick ? tvPick.season : null}
         episode={tvPick ? tvPick.episode : null}
-        onPick={tvPick ? onPickTvTorrent : onPickTorrent}
+        onPick={isMovie ? onPickMovieTorrent : (tvPick ? onPickTvTorrent : onPickTorrent)}
         onCancel={() => { setPickerOpen(false); setTvPick(null); }}
       />
       <ConfirmModal

@@ -67,7 +67,7 @@ static RE_EPISODE_ROW: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^\s*\|\s*(\d+)\s*\|\s*([^|]+?)\s*\|\s*([\d-]+)?\s*\|").unwrap());
 static RE_CELL_WIKILINK: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^\[\[([^\]|]+?)(?:\|([^\]]+))?\]\]\s*$").unwrap());
-static RE_VIDEO_EXT: LazyLock<Regex> =
+pub(crate) static RE_VIDEO_EXT: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)\.(mkv|mp4|webm|avi|mov|m4v|ogv|m2ts)$").unwrap());
 
 const SENT: char = '\u{0001}';
@@ -648,8 +648,9 @@ fn index_files_by_episode(root: Option<&Path>, episodes_total: Option<i64>) -> H
     // ("[Commie] Gurren Lagann The Movie - … [BFC3EBA1].mkv"), so every pattern
     // above misses and the card reads as nothing-to-play while a finished file
     // sits in the folder — no Play button, and the action button still offers
-    // "Download". When the card says ONE episode and the folder holds exactly
-    // ONE video file there is nothing to guess: that file is episode 1.
+    // "Download". When the card says ONE episode — or, for a film's card, says
+    // nothing at all, which `read_series` passes in as one — and the folder holds
+    // exactly ONE video file, there is nothing to guess: that file is episode 1.
     // ponytail: single-file only. A name-sorted fallback for numberless
     // MULTI-file folders can silently mis-order a real series; add it only if a
     // release actually turns up that needs it.
@@ -944,8 +945,17 @@ pub fn read_series(series_path: &str) -> Result<Series, VaultError> {
         episodes_out = flat;
     } else {
         let table_eps = parse_episode_table(&body);
-        let files_by_num =
-            index_files_by_episode(local_path.as_deref().map(Path::new), meta_i64(&meta, "Episodes"));
+        // A film's card declares no `Episodes:` at all, and its release filename
+        // numbers nothing ("The Thing 1982 1080p …"), so the numbering scan comes
+        // back empty and the card reads as nothing-to-play while the file sits in
+        // the folder. Treating a missing count as one enables the single-file
+        // fallback for exactly that case, and cannot disturb a numbered folder —
+        // the fallback only fires when the scan found no numbers at all. The
+        // filename is read here at load time, never written into the card.
+        let files_by_num = index_files_by_episode(
+            local_path.as_deref().map(Path::new),
+            meta_i64(&meta, "Episodes").or(Some(1)),
+        );
         episodes_out = build_episodes(&table_eps, files_by_num, None);
     }
 

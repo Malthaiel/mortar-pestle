@@ -64,12 +64,25 @@ pub fn anime_video_root(app: &AppHandle, library: &str) -> PathBuf {
 /// season-section reader already scans (`parsers/series.rs` joins the card's
 /// `Local Path` with each section's name).
 pub fn tv_video_root(app: &AppHandle, library: &str) -> PathBuf {
+    room_video_root(app, library, "TV Shows")
+}
+
+/// The save root for films, the same arrangement one room over: `<video
+/// root>/Movies`, else `<library>/Movies/Videos`. A film's file lands at
+/// `<root>/<Title (Year)>/` — no season folder, since there are no seasons.
+pub fn movies_video_root(app: &AppHandle, library: &str) -> PathBuf {
+    room_video_root(app, library, "Movies")
+}
+
+/// Both Stremio rooms arrange their videos identically and differ only in the
+/// folder they sit in, so they share one body rather than two near-copies.
+fn room_video_root(app: &AppHandle, library: &str, room: &str) -> PathBuf {
     let stored = load_stored(app);
     let chosen = stored.video_root.trim();
     if chosen.is_empty() {
-        Path::new(library).join("TV Shows").join("Videos")
+        Path::new(library).join(room).join("Videos")
     } else {
-        PathBuf::from(chosen).join("TV Shows")
+        PathBuf::from(chosen).join(room)
     }
 }
 

@@ -877,6 +877,7 @@ pub fn run() {
             commands::video_config::video_set_config,
             commands::anime_download::anime_download_enqueue,
             commands::anime_download::tv_download_enqueue,
+            commands::anime_download::movie_download_enqueue,
             commands::anime_download::anime_download_status,
             commands::anime_download::anime_download_cancel,
             commands::anime_download::anime_torrent_search,
