@@ -36,15 +36,21 @@ const COVER_EXTS: [&str; 6] = ["png", "jpg", "jpeg", "webp", "gif", "avif"];
 const MAX_COVER_BYTES: usize = 20 * 1024 * 1024;
 const SENT: char = '\u{0001}';
 
+// Titles legitimately carry brackets (`voyager [slowed]`), so these anchor on
+// the trailing `]]` and split target from display at the pipe instead of banning
+// `]` in the target — a `[^\]]` class silently demoted every bracketed track to
+// Plain, i.e. no audio path, i.e. unplayable. parse_tracks_table has already
+// unmasked the escaped pipe, and RE_ILLEGAL keeps `|` out of filenames, so the
+// lazy target group always stops at the real separator.
 static RE_WIKILINK: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^\[\[([^\]|]+?)(?:\|([^\]]+))?\]\]$").unwrap());
-static RE_EMBED: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^!\[\[([^\]]+?)\]\]$").unwrap());
+    LazyLock::new(|| Regex::new(r"^\[\[([^|]+?)(?:\|(.+))?\]\]$").unwrap());
+static RE_EMBED: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^!\[\[(.+?)\]\]$").unwrap());
 // A streamed track has no file and no track page, so its Title cell holds a
 // plain markdown link to the source instead of a wikilink or an embed. Keeping
 // it in the SAME cell means the table columns never changed — playlists written
 // before 2026-08-08 parse byte-identically.
 static RE_URLLINK: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^\[([^\]]*)\]\((https?://[^)\s]+)\)$").unwrap());
+    LazyLock::new(|| Regex::new(r"^\[(.*)\]\((https?://[^)\s]+)\)$").unwrap());
 static RE_DURATION: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^(\d+):(\d{1,2})(?::(\d{1,2}))?$").unwrap());
 static RE_NUM_PREFIX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\d+\s*-\s*").unwrap());
@@ -281,6 +287,13 @@ fn album_image(album_rel_no_ext: &str, cache: &mut HashMap<String, Option<String
         .and_then(|t| meta_str(&parse_frontmatter(&t).0, "Image"));
     cache.insert(album_rel_no_ext.to_string(), img.clone());
     img
+}
+
+/// `Length` off an owned track page (`<wikilink>.md`), in seconds.
+fn track_page_duration(wikilink_no_ext: &str) -> Option<i64> {
+    let text = fs::read_to_string(root().join(format!("{wikilink_no_ext}.md"))).ok()?;
+    let len = meta_str(&parse_frontmatter(&text).0, "Length")?;
+    parse_duration_to_seconds(&len)
 }
 
 fn title_from_audio_leaf(audio_path: &str) -> String {
@@ -559,6 +572,14 @@ pub fn write_playlist(
         .and_then(read_created)
         .unwrap_or_else(today_str);
 
+    // Callers that only have a job/search result (the loose-single auto-save)
+    // carry no duration, leaving the Length cell blank forever — the owned track
+    // page already knows it, so read it back rather than trusting the caller.
+    let mut tracks = tracks;
+    for t in tracks.iter_mut().filter(|t| t.duration.is_none()) {
+        t.duration = t.wikilink.as_deref().and_then(track_page_duration);
+    }
+
     let content = emit_canonical(title, image.as_deref(), &created, &tracks);
     atomic_write(&new_abs, content.as_bytes())?;
 
@@ -678,6 +699,25 @@ mod tests {
             title_from_audio_leaf("Knowledge/Music/MusicBrainz Pipeline/Tracks/A - B/03 - Pulsewidth.opus"),
             "Pulsewidth"
         );
+    }
+
+    #[test]
+    fn emit_then_parse_bracketed_title() {
+        // `voyager [slowed]` nests brackets inside the `[[target|display]]` cell.
+        // The old target class banned `]`, so the row came back as Plain — no
+        // audio_path, nothing for the player to load.
+        let wl = "Music/Tracks/Singles/midxs - daft punk - voyager [slowed]";
+        let page = emit_canonical(
+            "S", None, "2026-09-08",
+            &[r(Some(wl), None, "daft punk - voyager [slowed]", None, None, Some(280))],
+        );
+        let rows = parse_tracks_table(&page);
+        let mut cache = HashMap::new();
+        let t = row_to_track(1, &rows[0], &mut cache);
+        assert_eq!(t.wikilink.as_deref(), Some(wl));
+        assert_eq!(t.audio_path.as_deref(), Some(format!("{wl}.opus").as_str()));
+        assert_eq!(t.title, "daft punk - voyager [slowed]");
+        assert_eq!(t.duration, Some(280));
     }
 
     #[test]

@@ -170,6 +170,9 @@ def sanitize_segment(s):
     for ch in "*<>|":
         s = s.replace(ch, "_")
     s = s.replace('"', "'")
+    # Square brackets nest inside the `[[path|title]]` cell the playlist writer
+    # emits, which Obsidian's own link parser can't unpick. Parens read the same.
+    s = s.replace("[", "(").replace("]", ")")
     s = re.sub(r"[‐-―−]", "-", s)
     s = "".join("_" if ord(c) < 32 else c for c in s)
     s = re.sub(r"\s+", " ", s).strip().strip(".")
@@ -182,6 +185,7 @@ def safe_filename(s):
     s = s.replace("/", "-").replace("\\", "-")
     s = s.replace(":", " -")
     s = re.sub(r'[*?"<>|]', "", s)
+    s = s.replace("[", "(").replace("]", ")")  # see sanitize_segment
     s = re.sub(r"\s+", " ", s).strip().strip(".")
     return s or "Untitled"
 
