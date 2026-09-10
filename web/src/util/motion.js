@@ -36,9 +36,19 @@ export const GLIDE = `${GLIDE_MS}ms ${GLIDE_TIMING}`;
  * this curve's flat tail is full of.
  */
 export function glideEase(x) {
+  return bezierEase(GLIDE_BEZIER, x);
+}
+
+/**
+ * The same solver, for ANY four control points — so a surface animating in JS
+ * against a curve it READ off the stylesheet (getComputedStyle's
+ * `transitionTimingFunction`) can evaluate that curve instead of restating it.
+ * The planner tube's liquid does exactly that: it chases the pointer on the
+ * calendar's own transition, whatever that transition currently is.
+ */
+export function bezierEase([x1, y1, x2, y2], x) {
   if (!(x > 0)) return 0;
   if (x >= 1) return 1;
-  const [x1, y1, x2, y2] = GLIDE_BEZIER;
   const cx = (t) => ((1 - t) ** 3 * 0 + 3 * (1 - t) ** 2 * t * x1 + 3 * (1 - t) * t * t * x2 + t ** 3);
   const cy = (t) => ((1 - t) ** 3 * 0 + 3 * (1 - t) ** 2 * t * y1 + 3 * (1 - t) * t * t * y2 + t ** 3);
   const dx = (t) => (3 * (1 - t) ** 2 * x1 + 6 * (1 - t) * t * (x2 - x1) + 3 * t * t * (1 - x2));
