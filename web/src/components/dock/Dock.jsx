@@ -9,7 +9,6 @@ import { useState, useRef, useCallback } from 'react';
 import { useHashRoute, navigate } from '../../router.js';
 import DockButton from './DockButton.jsx';
 import ModuleDockButton from './ModuleDockButton.jsx';
-import DownloadsDockButton from '../../downloads/DownloadsDockButton.jsx';
 import DockAgentsButton from './DockAgentsButton.jsx';
 import DraggableSidebarList from '../DraggableSidebarList.jsx';
 import { DOCK_BUTTONS } from './dock-buttons.js';
@@ -59,7 +58,6 @@ export default function Dock({
   setSetting,
   setPaletteOpen, paletteOpen,
   setHintsOpen, hintsOpen,
-  setDownloadsOpen, downloadsOpen,
   accent,
   resolvedTheme,
 }) {
@@ -96,7 +94,6 @@ export default function Dock({
     settings, setSetting, route, navigate, accent,
     setPaletteOpen, paletteOpen,
     setHintsOpen, hintsOpen,
-    setDownloadsOpen, downloadsOpen,
     setQuickCaptureOpen, quickCaptureOpen,
     plannerTimer: null, // sub-feature 5 wires this
   };
@@ -131,16 +128,6 @@ export default function Dock({
   const centerIndex = firstSpacerIdx >= 0 ? firstSpacerIdx + 1 : Math.floor(visibleItems.length / 2);
 
   const renderBtn = (b) => {
-    if (b.id === 'downloads') return (
-      <DownloadsDockButton
-        key={b.id}
-        label={b.label}
-        onClick={() => b.onClick?.(ctx)}
-        isActive={b.isActive ? !!b.isActive(ctx) : false}
-        accent="var(--text-muted)"
-        onContextMenu={(e) => onItemContext(e, b.id)}
-      />
-    );
     if (b.id === 'design-mode') return (
       <DockAgentsButton
         key={b.id}

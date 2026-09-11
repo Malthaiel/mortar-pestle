@@ -4,7 +4,8 @@
 //
 // Two clusters ride the strip (Titlebar Overhaul):
 //   left  — the brand button (logo + wordmark + version, jumps to Releases),
-//           then Settings / Recycling bin, relocated out of the Dock so they no
+//           then ONE fused .candy-split shell carrying Settings / Recycling bin
+//           / Processes / Downloads, all relocated out of the Dock so they no
 //           longer hover-expand into labelled pills; `title` carries the label
 //           instead.
 //   right — Notifications, the account button (avatar + display name in one
@@ -25,13 +26,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { invoke } from '@tauri-apps/api/core';
-import { IconMinus, IconSquare, IconRestore, IconX, IconSettings, IconTrash, IconCpu } from './icons.jsx';
+import { IconMinus, IconSquare, IconRestore, IconX, IconSettings, IconTrash, IconChart, IconDownload } from './icons.jsx';
 import { CircleChip } from './ui/Button.jsx';
 import { candyCenterOffset } from '../util/candy.js';
 import FoldMenu, { FoldStandOff } from './ui/FoldMenu.jsx';
 import NotificationBell from '../notifications/NotificationBell.jsx';
 import { useUpdateStatus } from '../hooks/useUpdateStatus.js';
 import { useProcesses } from '../processes/ProcessesProvider.jsx';
+import { useAllDownloads } from '../downloads/DownloadsProvider.jsx';
 import { navigate } from '../router.js';
 import { makeFeedbackApi } from '@modules/core/feedback/feedbackApi.js';
 import { useSession } from '@modules/core/feedback/useSession.js';
@@ -51,12 +53,43 @@ const MARK = 18;
 // candy button too, and the offset reads its own --cbtn-depth.
 const CENTER = candyCenterOffset();
 
+// Every badge on the strip is one shape — an accent pip pinned to its button's
+// top-right corner, ringed in --surface so it reads against any band. Passing
+// no children gives the bare 7px dot (Settings' update flag); a number gives
+// the wider count pill (Processes, Downloads).
+//
+// It rides INSIDE .candy-face on purpose. .candy-face is position:static, so
+// the badge anchors to the position:relative .candy-btn above it — which means
+// no wrapper <span> around the button. That matters now the four are fused:
+// .candy-split squares and overlaps its DIRECT .candy-btn children, and a
+// wrapper sitting between them would swallow the :first-child / :last-child
+// rounding rules and break the shell. Pinned at right:0 rather than -2 so it
+// stops AT the seam instead of spilling over its neighbour; zIndex lifts it
+// above the next half's overlapping frame either way.
+function Badge({ children, accent, title }) {
+  const dot = children == null;
+  return (
+    <span aria-hidden title={title} style={{
+      position: 'absolute', top: 0, right: 0,
+      minWidth: dot ? 7 : 13, height: dot ? 7 : 13,
+      padding: dot ? 0 : '0 3px',
+      borderRadius: dot ? '50%' : 7,
+      background: accent || 'var(--accent, #c0392b)', color: '#fff',
+      fontSize: 9, fontWeight: 700, lineHeight: '13px', textAlign: 'center',
+      boxShadow: '0 0 0 2px var(--surface)',
+      animation: dot ? 'newBadgePulse 2.5s ease-in-out infinite' : undefined,
+      pointerEvents: 'none', zIndex: 5,
+    }}>{children}</span>
+  );
+}
+
 export default function TitleBar({
   settings, accent,
   setSettingsOpen, setSettingsTab,
   setNotifOpen, notifOpen,
   setRecycleBinOpen,
   setProcessesOpen,
+  setDownloadsOpen, downloadsOpen,
 }) {
   const [maximized, setMaximized] = useState(false);
   const [signInOpen, setSignInOpen] = useState(false);
@@ -105,6 +138,7 @@ export default function TitleBar({
   // 'modules' tab (pagesByModuleId, keyed by module id). A bare tab id fails
   // validation and silently lands on the last-visited tab instead.
   const { activeCount: runningCount } = useProcesses();
+  const { activeCount: downloadCount } = useAllDownloads();
 
   const openAccountSettings = () => {
     setSettingsTab?.('modules/feedback');
@@ -133,51 +167,59 @@ export default function TitleBar({
           </span>
         </button>
 
-        {/* --cbtn-depth re-declared because CENTER sits on this WRAPPER (so the
-            update dot rides along) and the var is only defined on .candy-btn —
-            without it the fallback is the full 7px and the gear lifts 1px more
-            than its neighbours. Same fix as NotificationBell's wrapper. */}
-        <span style={{ display: 'inline-flex', '--cbtn-depth': 'var(--candy-depth-small)', ...CENTER }}>
-          <CircleChip title="Settings" size={BTN} className="is-hover-accent"
-            onClick={() => setSettingsOpen?.(true)}>
-            <IconSettings size={16}/>
-          </CircleChip>
-          {showUpdateDot && (
-            <span aria-hidden title="Update available — open Settings → System" style={{
-              position: 'absolute', top: 0, right: 0, width: 7, height: 7,
-              borderRadius: '50%', background: accent || 'var(--accent, #c0392b)',
-              boxShadow: '0 0 0 2px var(--surface)',
-              animation: 'newBadgePulse 2.5s ease-in-out infinite',
-              pointerEvents: 'none', zIndex: 5,
-            }}/>
-          )}
-        </span>
-        <CircleChip title="Recycling bin" size={BTN} className="is-hover-accent"
-          style={CENTER} onClick={() => setRecycleBinOpen?.(true)}>
-          <IconTrash size={16}/>
-        </CircleChip>
+        {/* The four utility buttons — Settings, Recycling bin, Processes,
+            Downloads — fused into ONE shell (user-directed 2026-09-11), the
+            same .candy-split the Planner header uses for
+            [date | Today | ‹ | ›]. The class is written for any number of
+            parts: only the run's two outer ends stay round, every interior
+            edge squares off and overlaps its neighbour into one line. Each
+            half keeps its own press, lip and hover flood.
 
-        {/* Processes — everything the app is currently running. Same wrapper
-            idiom as the Settings chip above: CENTER rides the WRAPPER so the
-            count badge travels with it, and --cbtn-depth is re-declared here
-            because the var only exists on .candy-btn (without it the chip lifts
-            1px more than its neighbours). */}
-        <span style={{ display: 'inline-flex', position: 'relative', '--cbtn-depth': 'var(--candy-depth-small)', ...CENTER }}>
-          <CircleChip title={runningCount ? `Processes — ${runningCount} running` : 'Processes'}
-            size={BTN} className="is-hover-accent" onClick={() => setProcessesOpen?.(true)}>
-            <IconCpu size={16}/>
+            Downloads MOVED here from the Dock, the same trip Settings,
+            Notifications and the Recycling bin already took; its entry is gone
+            from dock-buttons.js and effectiveOrder() drops the stale id out of
+            saved dock orders on its own.
+
+            No wrapper <span>s: .candy-split's rounding rules match its DIRECT
+            .candy-btn children, so the three badges live inside their buttons
+            now (see Badge above). */}
+        <div className="candy-split">
+          <CircleChip title="Settings" size={BTN} className="is-hover-accent"
+            style={CENTER} onClick={() => setSettingsOpen?.(true)}>
+            <IconSettings size={16}/>
+            {showUpdateDot && <Badge accent={accent} title="Update available — open Settings → System"/>}
           </CircleChip>
-          {runningCount > 0 && (
-            <span aria-hidden style={{
-              position: 'absolute', top: -2, right: -2, minWidth: 13, height: 13,
-              padding: '0 3px', borderRadius: 7,
-              background: accent || 'var(--accent, #c0392b)', color: '#fff',
-              fontSize: 9, fontWeight: 700, lineHeight: '13px', textAlign: 'center',
-              boxShadow: '0 0 0 2px var(--surface)',
-              pointerEvents: 'none', zIndex: 5,
-            }}>{runningCount}</span>
-          )}
-        </span>
+
+          <CircleChip title="Recycling bin" size={BTN} className="is-hover-accent"
+            style={CENTER} onClick={() => setRecycleBinOpen?.(true)}>
+            <IconTrash size={16}/>
+          </CircleChip>
+
+          {/* Processes — everything the app is currently running. Rising bars,
+              NOT the chip glyph it wore until 2026-09-11: at 16px that chip's
+              leg-notches read as gear teeth, so fused a seam away from the
+              Settings gear the two were a matched pair of cogs. The gap in the
+              old un-fused cluster was all that hid it. */}
+          <CircleChip title={runningCount ? `Processes — ${runningCount} running` : 'Processes'}
+            size={BTN} className="is-hover-accent"
+            style={CENTER} onClick={() => setProcessesOpen?.(true)}>
+            <IconChart size={16}/>
+            {runningCount > 0 && <Badge accent={accent}>{runningCount}</Badge>}
+          </CircleChip>
+
+          {/* Downloads — [data-downloads-btn] stays on the BUTTON so
+              DownloadsPanel still finds its anchor rect and its click-outside
+              guard still exempts the trigger. The panel drops DOWN from here
+              now instead of rising off the dock. */}
+          <CircleChip title={downloadCount ? `Downloads — ${downloadCount} active` : 'Downloads'}
+            size={BTN} className={`is-hover-accent${downloadsOpen ? ' is-active' : ''}`} data-downloads-btn
+            style={CENTER} onClick={() => setDownloadsOpen?.(o => !o)}>
+            <IconDownload size={16}/>
+            {downloadCount > 0 && (
+              <Badge accent={accent}>{downloadCount > 99 ? '99+' : downloadCount}</Badge>
+            )}
+          </CircleChip>
+        </div>
       </div>
 
       <div className="titlebar-cluster">

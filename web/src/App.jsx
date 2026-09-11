@@ -263,6 +263,8 @@ function MainApp() {
         notifOpen={notifOpen}
         setRecycleBinOpen={setRecycleBinOpen}
         setProcessesOpen={setProcessesOpen}
+        setDownloadsOpen={setDownloadsOpen}
+        downloadsOpen={downloadsOpen}
       />
       <AppShell
         onOpenSettings={() => setSettingsOpen(true)}
@@ -317,8 +319,6 @@ function MainApp() {
         paletteOpen={paletteOpen}
         setHintsOpen={setHintsOpen}
         hintsOpen={hintsOpen}
-        setDownloadsOpen={setDownloadsOpen}
-        downloadsOpen={downloadsOpen}
         accent={accent}
         resolvedTheme={resolvedTheme}
       />

@@ -1,8 +1,9 @@
-// The Downloads popup — an anchored popover above the Downloads dock button
-// (mirrors NotificationPanel). Renders through the shared Popover template:
-// candy floating surface, anchored to the [data-downloads-btn] rect via
-// useAnchoredRect (falls back to centered-above-dock if the dock collapsed it
-// away); Esc + click-outside close (the dock button is exempt so it toggles).
+// The Downloads popup — drops DOWN from the Downloads button in the titlebar's
+// fused utility shell (mirrors NotificationPanel). Renders through the shared
+// Popover template: candy floating surface, anchored to the
+// [data-downloads-btn] rect via useAnchoredRect (falls back to a centered drop
+// if the button is gone); Esc + click-outside close (the button is exempt so it
+// toggles).
 // Two sections: Active (in-flight, progress bars) on top, Recent (finished/
 // failed, deduped from persisted history) below — flat across music, video, and
 // voice-model (STT) sources with a per-row source glyph. Row actions: Cancel
@@ -136,7 +137,9 @@ export default function DownloadsPanel({ open, onClose, accent = GREEN, onOpenMa
   const { active, recent, cancel, retry, clear, open: openRow, reveal } = useAllDownloads();
   const pos = useAnchoredRect(
     () => document.querySelector('[data-downloads-btn]')?.getBoundingClientRect(),
-    { open, width: PANEL_W },
+    // place:'below' since the button left the dock for the titlebar's fused
+    // utility shell — the same trip the notification bell took.
+    { open, width: PANEL_W, place: 'below' },
   );
 
   if (!open || !pos) return null;
@@ -162,9 +165,13 @@ export default function DownloadsPanel({ open, onClose, accent = GREEN, onOpenMa
         </div>
       )}
       style={{
-        position: 'fixed', left: pos.left, bottom: pos.bottom, width: PANEL_W,
-        maxHeight: 460, zIndex: 130, transformOrigin: 'bottom center',
-        animation: 'notifPanelIn 200ms cubic-bezier(0.16, 1, 0.3, 1) both',
+        // top/'top center'/…InDown, NOT bottom/'bottom center'/…In: place:'below'
+        // returns a `top`, so the old `bottom: pos.bottom` read undefined and
+        // dropped the panel off the foot of the window. Same trio as
+        // NotificationPanel, which drops from the same strip.
+        position: 'fixed', left: pos.left, top: pos.top, width: PANEL_W,
+        maxHeight: 460, zIndex: 130, transformOrigin: 'top center',
+        animation: 'notifPanelInDown 200ms cubic-bezier(0.16, 1, 0.3, 1) both',
       }}
     >
       {empty ? (

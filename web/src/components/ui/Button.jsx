@@ -58,7 +58,10 @@ export function DangerOutlinedBtn({ children, onClick, disabled, small, chip, ti
 // planner-circle treatment (neutral surface-3 face + dark frame).
 // `className` appends extra candy modifiers — e.g. `is-hover-accent`, which opts
 // the circle back into the base accent-flood hover (the titlebar controls).
-export function CircleChip({ children, onClick, title, size = 30, className = '', style, type = 'button' }) {
+// `...rest` spreads onto the BUTTON element (aria-*, data-* hooks) — the
+// titlebar's Downloads chip carries [data-downloads-btn] that way, which is
+// what DownloadsPanel queries for its anchor rect and its outside-click exempt.
+export function CircleChip({ children, onClick, title, size = 30, className = '', style, type = 'button', ...rest }) {
   return (
     <button
       type={type}
@@ -68,6 +71,7 @@ export function CircleChip({ children, onClick, title, size = 30, className = ''
       className={`candy-btn${className ? ' ' + className : ''}`}
       data-shape="circle"
       style={{ '--cbtn-size': `${size}px`, ...style }}
+      {...rest}
     ><span className="candy-face">{children}</span></button>
   );
 }

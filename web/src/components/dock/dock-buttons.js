@@ -8,22 +8,19 @@
 
 import {
   IconCommand, IconKeyboard, IconPlus,
-  IconCalendar, IconBookOpen, IconSparkles, IconDownload,
+  IconCalendar, IconBookOpen, IconSparkles,
 } from '../icons.jsx';
 
 export const DOCK_BUTTONS = [
   // Tools
-  // Settings / Notifications / Recycling bin used to live here. The Titlebar
-  // Overhaul moved all three into the titlebar's left cluster (TitleBar.jsx) —
-  // one home per button. The vault switcher left the same way: it now lives in the
-  // file-tree toolbar as <TreeVaultSwitcher/>. Saved dock orders holding any of
-  // those old ids are dropped automatically by effectiveOrder() in Dock.jsx, so no
-  // migration is needed.
-  {
-    id: 'downloads', group: 'tools', Icon: IconDownload, label: 'Downloads',
-    onClick: (ctx) => ctx.setDownloadsOpen?.(o => !o),
-    isActive: (ctx) => !!ctx.downloadsOpen,
-  },
+  // Settings / Notifications / Recycling bin / Downloads used to live here. The
+  // Titlebar Overhaul moved the first three into the titlebar's left cluster
+  // (TitleBar.jsx), and Downloads followed them 2026-09-11 when all four fused
+  // into one .candy-split shell there — one home per button. The vault switcher
+  // left the same way: it now lives in the file-tree toolbar as
+  // <TreeVaultSwitcher/>. Saved dock orders holding any of those old ids are
+  // dropped automatically by effectiveOrder() in Dock.jsx, so no migration is
+  // needed.
   {
     id: 'palette', group: 'tools', Icon: IconCommand, label: 'Command palette',
     onClick: (ctx) => ctx.setPaletteOpen(true),
