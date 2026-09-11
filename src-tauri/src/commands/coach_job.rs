@@ -15,13 +15,12 @@
 //! Two things the script does that the UI has to understand:
 //!
 //! 1. **Exit code 2 is a normal outcome, not a crash.** `coach.py` raises `Halt`
-//!    for every gate. The human-facing one is the review gate: phase 1 found more
-//!    uncertain terms than the threshold, printed them as correction-log table
-//!    rows, and stopped. That lands as `status: gate` with the terms parsed out,
-//!    NOT as an error. Every other Halt (turn-count drift, contamination,
-//!    §10/§11 conformance, missing delta-log blocks) lands as `error` with the
-//!    message verbatim — those name a file and a problem and must not be
-//!    paraphrased.
+//!    for every gate it refuses on (turn-count drift, one phase-1 chunk whose
+//!    reply is bad three tries running, contamination, §10/§11 conformance,
+//!    missing delta-log blocks). Each lands as `error` with the message verbatim
+//!    — those name a file and a problem and must not be paraphrased. There is no
+//!    gate that wants the user mid-run: words phase 1 cannot place are filed to
+//!    the Update Queue by the script itself (his ruling, 2026-08-02).
 //! 2. **Every run costs real money.** Per-phase cost is printed as it accrues and
 //!    totalled at the end; the snapshot carries the running figure so the popup
 //!    can show what has been spent so far.
@@ -42,9 +41,6 @@ const MAX_LINES: usize = 500;
 #[serde(rename_all = "lowercase")]
 pub enum CoachStatus {
     Running,
-    /// The review gate stopped the run (exit 2) — `gateTerms` is populated and
-    /// the user resumes with `fromPhase: 2` or restarts with `noGate`.
-    Gate,
     Done,
     Error,
     Cancelled,
@@ -65,8 +61,6 @@ pub struct CoachSnapshot {
     pub chunk_total: Option<u32>,
     /// Dollars billed so far this run.
     pub cost: f64,
-    /// The `heard` column of each flagged correction-log row, for the tick list.
-    pub gate_terms: Vec<String>,
     /// A Halt message (verbatim) or a spawn failure.
     pub error: Option<String>,
     /// Every stdout/stderr line, in order.
@@ -85,7 +79,6 @@ struct CoachJob {
     chunk: Option<u32>,
     chunk_total: Option<u32>,
     cost: f64,
-    gate_terms: Vec<String>,
     error: Option<String>,
     lines: Vec<String>,
     deliverable: Option<String>,
@@ -93,8 +86,6 @@ struct CoachJob {
     status: CoachStatus,
     cancel_requested: bool,
     pid: Option<u32>,
-    /// Set while consuming the indented table rows that follow a gate header.
-    in_gate_block: bool,
     /// Set by the `HALT:` header so every following line joins the same message.
     in_halt: bool,
     /// Set by the `Done. $X this run.` line so the NEXT line is read as the path.
@@ -119,7 +110,6 @@ fn snapshot(job: &CoachJob) -> CoachSnapshot {
         chunk: job.chunk,
         chunk_total: job.chunk_total,
         cost: job.cost,
-        gate_terms: job.gate_terms.clone(),
         error: job.error.clone(),
         lines: job.lines.clone(),
         deliverable: job.deliverable.clone(),
@@ -170,18 +160,6 @@ fn parse_cost(line: &str) -> Option<f64> {
     num.parse().ok()
 }
 
-/// The `heard` column of a flagged correction-log row:
-/// `   | Richelist | Ritualist | Ritualist 1-6 | CORRECTED | … |`
-fn parse_gate_term(line: &str) -> Option<String> {
-    let t = line.trim();
-    let cell = t.strip_prefix('|')?.split('|').next()?.trim();
-    if cell.is_empty() {
-        None
-    } else {
-        Some(cell.to_string())
-    }
-}
-
 /// Fold one output line into the job state. Returns true when something the UI
 /// renders changed, so an unremarkable line doesn't cost an IPC round trip.
 fn absorb(job: &mut CoachJob, line: &str) -> bool {
@@ -203,35 +181,12 @@ fn absorb(job: &mut CoachJob, line: &str) -> bool {
         return true;
     }
 
-    // A gate block runs from its header to the first non-table line.
-    if job.in_gate_block {
-        if let Some(term) = parse_gate_term(trimmed) {
-            job.gate_terms.push(term);
-            return true;
-        }
-        if !trimmed.trim().is_empty() {
-            job.in_gate_block = false;
-        }
-    }
-
     if job.expect_deliverable {
         job.expect_deliverable = false;
         if !trimmed.trim().is_empty() {
             job.deliverable = Some(trimmed.trim().to_string());
             return true;
         }
-    }
-
-    // "Review gate — N uncertain terms (threshold M):" STOPS the run; the
-    // near-identical "…uncertain term(s), threshold M. Continuing." does not.
-    // The trailing colon is the only thing separating them.
-    if trimmed.starts_with("Review gate — ") {
-        if trimmed.ends_with(':') {
-            job.in_gate_block = true;
-            job.gate_terms.clear();
-            return true;
-        }
-        return true;
     }
 
     if let Some((n, total)) = parse_phase(trimmed) {
@@ -309,9 +264,8 @@ fn script_path(app: &AppHandle) -> std::path::PathBuf {
         .unwrap_or_else(|| coach_in(&crate::commands::vault::vault_root()))
 }
 
-/// Start a coaching run. `from_phase` resumes (the review-gate continue is
-/// `from_phase: 2`); `no_gate` skips the review stop entirely. A RUNNING job
-/// blocks a start — the script archives rather than overwrites, but two
+/// Start a coaching run. `from_phase` resumes at a later phase; `only` runs one
+/// phase and nothing else. A RUNNING job blocks a start — the script archives rather than overwrites, but two
 /// concurrent runs over one match folder would still race each other's writes.
 #[tauri::command]
 pub async fn coach_job_start(
@@ -320,7 +274,6 @@ pub async fn coach_job_start(
     match_n: u32,
     from_phase: Option<u8>,
     only: Option<u8>,
-    no_gate: Option<bool>,
 ) -> Result<(), String> {
     if scrim.trim().is_empty() {
         return Err("scrim name required".into());
@@ -348,7 +301,6 @@ pub async fn coach_job_start(
             chunk: None,
             chunk_total: None,
             cost: 0.0,
-            gate_terms: Vec::new(),
             error: None,
             lines: Vec::new(),
             deliverable: None,
@@ -356,7 +308,6 @@ pub async fn coach_job_start(
             status: CoachStatus::Running,
             cancel_requested: false,
             pid: None,
-            in_gate_block: false,
             in_halt: false,
             expect_deliverable: false,
         });
@@ -383,9 +334,6 @@ pub async fn coach_job_start(
     }
     if let Some(o) = only {
         cmd.arg("--only").arg(o.to_string());
-    }
-    if no_gate.unwrap_or(false) {
-        cmd.arg("--no-gate");
     }
     // coach.py resolves its imports and vault paths off __file__, so cwd is only
     // hygiene — but it keeps relative paths in any future error message readable.
@@ -453,10 +401,6 @@ fn settle(app: &AppHandle, code: i32) {
             CoachStatus::Cancelled
         } else if code == 0 {
             CoachStatus::Done
-        } else if !job.gate_terms.is_empty() {
-            // Exit 2 with terms in hand is the review gate: a stop that WANTS
-            // the user, not a failure.
-            CoachStatus::Gate
         } else {
             if job.error.is_none() {
                 job.error = Some(format!("the pipeline stopped with exit code {code}"));
@@ -523,9 +467,9 @@ mod tests {
     fn job() -> CoachJob {
         CoachJob {
             scrim: "s".into(), match_n: 1, phase: 0, chunk: None, chunk_total: None,
-            cost: 0.0, gate_terms: Vec::new(), error: None, lines: Vec::new(),
+            cost: 0.0, error: None, lines: Vec::new(),
             deliverable: None, started_ms: 0, status: CoachStatus::Running,
-            cancel_requested: false, pid: None, in_gate_block: false, in_halt: false,
+            cancel_requested: false, pid: None, in_halt: false,
             expect_deliverable: false,
         }
     }
@@ -544,9 +488,9 @@ mod tests {
         assert_eq!(j.chunk, Some(3));
         assert_eq!(j.cost, 0.1384);
 
-        // The passing gate must NOT open a gate block.
-        absorb(&mut j, "Review gate — 2 uncertain term(s), threshold 5. Continuing.");
-        assert!(!j.in_gate_block);
+        // A retry line carries no ' in / ' pair, so it must not add to the cost.
+        absorb(&mut j, "  phase1 chunk 4/12: bad reply (the phase emitted empty file(s): x), trying again (2 of 3)");
+        assert_eq!(j.cost, 0.1384);
 
         absorb(&mut j, "Phase 2 — Author");
         assert_eq!(j.phase, 2);
@@ -559,16 +503,11 @@ mod tests {
     }
 
     #[test]
-    fn stopping_gate_collects_the_heard_column() {
+    fn reused_chunk_line_adds_no_cost() {
         let mut j = job();
-        absorb(&mut j, "Review gate — 48 uncertain terms (threshold 5):");
-        absorb(&mut j, "   | Richelist | Ritualist | Ritualist 1-6 | CORRECTED | phonetic |");
-        absorb(&mut j, "   | T-Bolee | T-Bolee | — | UNMATCHED | unclear |");
-        absorb(&mut j, "");
-        assert_eq!(j.gate_terms, vec!["Richelist", "T-Bolee"]);
-        // A blank line inside the block is tolerated; the next real line closes it.
-        absorb(&mut j, "something else");
-        assert!(!j.in_gate_block);
+        absorb(&mut j, "  phase1 chunk 3/26: reused from a stopped run");
+        assert_eq!(j.cost, 0.0);
+        assert_eq!(j.chunk, None, "a reuse line carries no paid-call fraction");
     }
 
     #[test]
