@@ -220,7 +220,13 @@ async fn bearer(require_user: bool) -> Result<Option<String>, FeedbackError> {
             Ok(Some(fresh.access_token))
         }
         Err(e) => {
-            clear_session();
+            // Only a REJECTED token is worth deleting. A transport failure says
+            // nothing about the token's validity, and wiping it there turned one
+            // offline moment into a permanent sign-out — the stored refresh
+            // token was gone before the network came back.
+            if !matches!(e, FeedbackError::Network(_)) {
+                clear_session();
+            }
             if require_user {
                 Err(e)
             } else {
@@ -357,9 +363,11 @@ pub async fn feedback_get_session() -> Result<Value, FeedbackError> {
     if load_session().is_none() {
         return Ok(json!({ "signedIn": false }));
     }
-    // refresh-if-needed; a dead refresh token = graceful signed-out
+    // refresh-if-needed; a dead refresh token = graceful signed-out. `bearer`
+    // owns the decision to delete the stored session (rejected token only), so
+    // an offline answer here reports signed-out for this call while the token
+    // survives for the next one.
     if bearer(true).await.is_err() {
-        clear_session();
         return Ok(json!({ "signedIn": false }));
     }
     let uid = current_uid()?;

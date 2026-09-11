@@ -116,9 +116,26 @@ const standOffShift = (dir, i, seams) => {
  * an inline one on the button itself would outrank them and kill the press for
  * as long as the menu is open.
  */
-export function FoldStandOff({ dir, open, t, gap = 8, children, ...rest }) {
+//
+// `openIdx` is for a row of SIBLING folds, where the open trigger is one of the
+// children rather than a separate element the group flanks. The row then parts
+// around that child: everything before it is a left block pinned at its far
+// edge, everything after it a right block pinned at its own, and the open
+// trigger itself never moves. It is the same rule applied twice, not a second
+// rule — the flanking `dir` form is what you get when the group holds no
+// trigger at all. Born 2026-09-06: the player bar went from one fold with two
+// flanking blocks to four sibling folds, and regrouping the children per open
+// fold would have remounted the open one and shut it mid-flight.
+export function FoldStandOff({ dir, openIdx = -1, open, t, gap = 8, children, ...rest }) {
   const kids = Children.toArray(children);
   const seams = kids.length - 1;
+  const shift = (i) => {
+    if (openIdx < 0) return standOffShift(dir, i, seams);
+    if (i === openIdx) return 0;
+    return i < openIdx
+      ? standOffShift(-1, i, openIdx - 1)
+      : standOffShift(1, i - openIdx - 1, seams - openIdx - 1);
+  };
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap }} {...rest}>
       {kids.map((kid, i) => (
@@ -126,7 +143,7 @@ export function FoldStandOff({ dir, open, t, gap = 8, children, ...rest }) {
           key={kid.key ?? i}
           style={{
             display: 'inline-flex',
-            transform: `translateX(${open ? standOffShift(dir, i, seams) : 0}px)`,
+            transform: `translateX(${open ? shift(i) : 0}px)`,
             transition: t ? `transform ${t}` : undefined,
           }}
         >{kid}</span>
@@ -159,6 +176,13 @@ const CHIP_TEXT = {
   fontWeight: 600,
   letterSpacing: 0,
   textTransform: 'none',
+  // EVEN, because the row height is even. `normal` resolves to 15px here, and
+  // centring 15 in a 28px row puts the label's box on a HALF pixel — which the
+  // composited paper rounds down and the plain-layout trigger rounds up, so the
+  // word steps a pixel at the handover. The whole-pixel `snap` below squares the
+  // BUTTON; this squares the word inside it. Measured 2026-09-10: label y 200.5
+  // before, 200 after, with the row at 194 and the button 28 tall.
+  lineHeight: '16px',
 };
 
 /**
@@ -240,7 +264,13 @@ export default function FoldMenu({
   // a self-sizing grid instead lets the rows set the column and the trigger
   // stretch to them, which silently widens the button that already exists.
   const triggerRef = useRef(null);
-  const [box, setBox] = useState({ w: 160, h: rowH });
+  // Seeded at ZERO width, not a guess. The group floors at this, and since
+  // 2026-09-10 the trigger floors at the group, so any made-up starting width
+  // is self-sustaining: the group would floor at 160, the trigger would floor
+  // at the group, the trigger would then MEASURE 160, and the pair would sit at
+  // the placeholder forever. From 0 the first real read is the only number in
+  // the loop and both settle on the wider of (trigger content, longest row).
+  const [box, setBox] = useState({ w: 0, h: rowH });
   // The open group, and the row buttons inside it. FoldPaper measures both every
   // frame — it is the frame the paper is placed in, and they are what it hugs.
   const groupRef = useRef(null);
@@ -269,6 +299,35 @@ export default function FoldMenu({
     ro.observe(el);
     return () => ro.disconnect();
   }, [rowH]);
+
+  // The floor runs BOTH ways (2026-09-10, user-directed). The group was floored
+  // at the trigger's width, but nothing floored the trigger at the group's — so
+  // a fold whose longest ROW is wider than its trigger handed over to a stack
+  // visibly bigger than the button, and since the handover is a SWAP rather
+  // than a transition the button appeared to snap to a new size the instant it
+  // was clicked. Measuring the group back onto the trigger's min-width makes
+  // the shut button already the size it hands over at, so the handover moves
+  // nothing in either direction.
+  //
+  // This converges rather than chasing its own tail: once the trigger reaches
+  // the group's width the group's own floor is that same number, max-content
+  // has nothing left to add, and both stop. The 1px deadband stops sub-pixel
+  // rounding from ratcheting the pair a hair wider every frame. Skipped under
+  // `noTrigger`, where the stub is not a floor for anything and widening it
+  // would only widen a button nobody can see.
+  const [groupW, setGroupW] = useState(0);
+  useEffect(() => {
+    const el = groupRef.current;
+    if (!el || noTrigger) return undefined;
+    const read = () => {
+      const w = Math.round(el.getBoundingClientRect().width);
+      if (w) setGroupW(prev => (Math.abs(prev - w) >= 1 ? w : prev));
+    };
+    read();
+    const ro = new ResizeObserver(read);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [noTrigger]);
 
   // Gap between neighbouring rows, as marginTop: the depth lip plus air. The lip
   // part is not optional — the rows are candy buttons, lip included, and a lip is
@@ -544,6 +603,27 @@ export default function FoldMenu({
     };
   }, [open, isCtl]);
 
+  // Whole-pixel landing. The centring lift is half a lip (2.5px on a chip), so a
+  // root on a whole pixel parks the trigger BETWEEN two. There the composited
+  // rows and the plain-layout trigger round the name differently, and the paper's
+  // last frame draws it lower than the button it hands back to: the name hopped
+  // 0.8px up on the SHUT frame. User-reported 2026-09-10 on the music column
+  // copies (root y 196, trigger 193.5); the titlebar never showed it only because
+  // its root sits at 5.5 and the lift lands it on 3.0. Measured at the open, off
+  // the live root and the resolved `top`, and handed to BOTH states, so they
+  // share one whole-pixel line. Applied while the trigger is faded out, so its
+  // own nudge is never seen; zero wherever the lift already lands whole.
+  const [snap, setSnap] = useState(0);
+  useLayoutEffect(() => {
+    const el = triggerRef.current;
+    if (!open || noTrigger || !el || !rootRef.current) return;
+    const dpr = window.devicePixelRatio || 1;
+    const raw = (rootRef.current.getBoundingClientRect().y
+      + parseFloat(getComputedStyle(el).top) - snap) * dpr;
+    const next = Math.round(((Math.round(raw) - raw) / dpr) * 1000) / 1000;
+    if (next !== snap) setSnap(next);
+  }, [open]);
+
   // Always writes --cbtn-depth rather than adding and removing the key: React
   // only touches style keys that CHANGED, and a key that disappears takes its
   // value with it while the untouched rest of the rule stays put. The rest value
@@ -764,6 +844,19 @@ export default function FoldMenu({
         onPointerDown={noTrigger ? undefined : () => { downAt.current = performance.now(); }}
         onClick={noTrigger ? undefined : openAfterPress}
         style={{
+          // The centring lift, taken here rather than waited for. The GROUP
+          // lifts itself unconditionally (see its `top`), so a host that forgot
+          // candyCenterOffset() left the stack half a lip ABOVE the button it
+          // hands back to: the whole close played high and the button appeared
+          // at the lower line on the handover frame. User-reported 2026-09-10
+          // on the two music folds - the only call sites in the app that did
+          // not pass it - "the last fold ends up folding ABOVE the completely
+          // folded custom button", photographed as a two-face frame then a drop.
+          // Same calc as the group's, off the same measured depth, so a host
+          // that DOES pass candyCenterOffset() writes the identical value
+          // through the spread below and nothing changes for it.
+          position: 'relative',
+          top: `calc(${depth} / -2 * var(--candy-center-on, 1))`,
           // `style` lands on BOTH states, never on the root wrapper. It carries
           // the host's optical-centring lift, and candyCenterOffset() reads
           // --cbtn-depth, which is defined on the candy button ITSELF — on a
@@ -772,10 +865,18 @@ export default function FoldMenu({
           // a band out. The fold group takes the same lift so the two states sit
           // on the same line.
           ...style,
+          // After the spread, so the host's own lift is kept and only nudged.
+          ...(snap ? {
+            top: `calc(${style?.top ?? `${depth} / -2 * var(--candy-center-on, 1)`} + ${snap}px)`,
+          } : null),
           // No width: the trigger shrink-wraps its own content (the account chip
           // has no width of its own — it wraps the avatar plus a display name of
-          // whatever length), and the rows are measured FROM it.
+          // whatever length), and the rows are measured FROM it. It is FLOORED
+          // at the group's measured width, though, so a stack with a longer
+          // label than the trigger's own cannot make the button change size at
+          // the handover (see groupW above).
           gridArea: '1 / 1', alignSelf: 'start', height: rowH,
+          ...(groupW ? { minWidth: groupW } : null),
           // The stub is never painted and never hit — but it is still LAID OUT,
           // which is the whole point: `visibility: hidden` keeps its box and its
           // computed style, so the lip and the row height below are read off a
@@ -881,7 +982,7 @@ export default function FoldMenu({
           top: noTrigger
             ? 'var(--fold-settle, 0px)'
             : `calc(${depth} / -2 * var(--candy-center-on, 1)`
-              + ' + var(--fold-settle, 0px))',
+              + ` + var(--fold-settle, 0px) + ${snap}px)`,
           // The GROUP sets the width and the rows take 100% of it, so every row
           // is the same rectangle and perspective-origin (which defaults to the
           // centre of whatever DECLARES perspective) lands on their centre — a
