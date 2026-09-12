@@ -436,7 +436,9 @@ export default function PlannerDock() {
     // and what the dock's own rect is measured in. `fresh` says a move has arrived
     // that the loop has not yet turned into a destination; it is cleared on use, so a
     // hand that stops steering stops moving the liquid without needing a timer.
-    const pointer = { x: 0, y: 0, fresh: false };
+    const pointer = {
+      x: 0, y: 0, fresh: false,
+    };
     const frame = () => {
       const d = dock.getBoundingClientRect();
       const b = body.getBoundingClientRect();
@@ -521,66 +523,32 @@ export default function PlannerDock() {
         // mouth and runs forward, 0 is the left mouth and runs backward toward 1, and
         // the two branches are mirrors, so the right one is asked and the left follows.
         //
-        // The hand's travel is THE WHOLE TUBE'S HEIGHT, measured off the live path's
-        // own box. Anchoring the top at the spout mouths instead left the hundred-odd
-        // pixels above them - the hand out over the clock - buying nothing at all,
-        // which is a dead spot like any other. Top of the tube is the liquid home, foot
-        // of the tube is a full pour, one rate between, and both ends move with the
-        // calendar because the box is re-read every time a hand moves.
-        // CENTRED ON THE HAND, AND STILL CONTINUOUS (user-directed 2026-09-11, both in
-        // one turn: "moves smoothly now without any jumps: but it doesnt center
-        // vertically to the cursor").
+        // ONE RATE, WHOLE CIRCUIT (user-directed 2026-09-12). The hand's travel maps
+        // EVENLY onto the pipe's own arc length - the same pipe-pixels per hand-pixel
+        // on the drop, on the calendar's sides, and on the two flat stretches in the
+        // band between the clock and the calendar. Nothing speeds up anywhere.
         //
-        // A pure HEIGHT search - the front whose slug MIDDLE is painted at the hand's
-        // own y - centres exactly but TELEPORTS, because the circuit has two LEVEL
-        // stretches (the ring's bottom edge, the calendar's top edge) and a level
-        // stretch is ~94px of pipe at ONE y, which no height search can resolve.
-        // Measured and photographed 2026-09-11: 94px of pipe per 3px of hand, twice,
-        // both inside the band between the clock and the calendar. A pure EVEN-along-
-        // the-pipe mapping is continuous everywhere and centres nowhere.
+        // It is NOT centred on the hand, and that is the accepted trade (user-directed
+        // 2026-09-12, "go back to when it was off center but even movement"). Three
+        // mappings that chased centring were tried and all three failed on the same
+        // geometry. A pure HEIGHT search TELEPORTS: the circuit has two LEVEL stretches
+        // (the ring's bottom edge, the calendar's top edge), each ~94px of pipe at ONE
+        // y - measured and photographed 2026-09-11 at 94px of pipe per 3px of hand. A
+        // HYBRID of height and a solved share of the pipe killed the teleport and
+        // bought it back as a hand-coupled fast sweep across those same stretches. A
+        // height search with the crossing put on a CLOCK instead lagged the hand.
+        // Evenness is what survived all three.
         //
-        // So the hand is matched against HEIGHT PLUS A SHARE OF THE PIPE, which rises
-        // strictly even where the height does not. `K` is not a taste knob and is not
-        // typed in: it is solved, every move, from the ranges this widget actually has.
-        // `hand` is the hand's travel, `Yr` the slug middle's own vertical range, `A`
-        // the pipe it covers. Asking for dy/dhand == 1 along a descending stretch -
-        // where a pixel of pipe IS a pixel of drop - gives
-        //     (Yr + K*A) / ((1 + K) * hand) = 1   ->   K = (hand - Yr) / (A - hand)
-        // so a descending stretch tracks the cursor exactly, and the hand travel left
-        // over (hand - Yr) is what walks the level stretches instead of teleporting
-        // across them. A tube with no level stretch solves to K 0 and is the plain
-        // height search again.
-        //
-        // WHERE THE LEFTOVER IS SPENT decides where the liquid sits off the cursor, and
-        // it can only be spent ONCE - the middle covers less height (Yr ~490) than the
-        // tube's box (~557), so some of the hand's travel has to buy pipe rather than
-        // drop. Running the hand to the box's FOOT split that slack evenly and left the
-        // liquid a constant ~33px ABOVE the cursor everywhere (user-reported
-        // 2026-09-11: "its not centered. still too far up"). So the hand's travel now
-        // ENDS AT THE MIDDLE'S OWN FOOT, `yAt(1)`: the slack is all spent above the two
-        // level stretches - up on the clock, where the pour is home anyway - and from
-        // the spout down, which is the whole calendar, the liquid's middle is painted
-        // at the cursor's own height. Both ends are still measured off the live path.
+        // Both ends are still measured off the live path every move: the top of the
+        // tube's own box is the liquid home, the slug middle's foot at full pour is
+        // the far end, and the calendar's height moves both because the box and the
+        // path are re-read here.
         const len = hitPath.getTotalLength() || 1;
         const midHome = 0.75 * geom.fTop;
-        const arc = mouthRun * len;
-        const yAt = (f) => hitPath.getPointAtLength((midHome + f * mouthRun) * len).y;
         const bb = hitPath.getBBox();
-        const y0 = yAt(0);
-        const yr = yAt(1) - y0;
-        const hand = Math.max(1, yAt(1) - bb.y);
-        const K = Math.max(0, (hand - yr) / Math.max(1, arc - hand));
-        const span = yr + K * arc;
-        const py = pointer.y - d.top - bb.y;
-        const target = y0 + (py / hand) * span;
-        let lo = 0;
-        let hi = 1;
-        for (let i = 0; i < 16; i++) {
-          const mid = (lo + hi) / 2;
-          if (yAt(mid) + K * mid * arc <= target) lo = mid;
-          else hi = mid;
-        }
-        const next = Math.min(1, Math.max(0, lo));
+        const foot = hitPath.getPointAtLength((midHome + mouthRun) * len).y;
+        const hand = Math.max(1, foot - bb.y);
+        const next = Math.min(1, Math.max(0, (pointer.y - d.top - bb.y) / hand));
         // Written straight through: a zero-length run is the tween arriving on the frame
         // it starts, so there is one code path for both this and the toggle.
         tw.from = next;
