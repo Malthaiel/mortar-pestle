@@ -450,7 +450,7 @@ export default function DraggableSidebarList({
   // coordinate. It also drops the margin/collapse choreography entirely — in a
   // wrapping container, opening a margin or collapsing the source re-flows the
   // wrap and chips jump between lines. The others slide with `transform`
-  // instead, which is the same rule FoldStandOff follows for the same reason.
+  // instead, which never touches layout.
   const isGrid = direction === 'grid';
   const isHorizontal = direction === 'horizontal';
   const axis        = isHorizontal ? 'x'           : 'y';

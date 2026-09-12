@@ -102,7 +102,8 @@ export default function CandySelect({
       ta.str = now - ta.t > 600 ? e.key : ta.str + e.key;
       ta.t = now;
       const q = ta.str.toLowerCase();
-      const hit = options.findIndex(o => (o.label || '').toLowerCase().startsWith(q));
+      // A JSX label (glyph + text row face) is an object — skip it, don't throw.
+      const hit = options.findIndex(o => typeof o.label === 'string' && o.label.toLowerCase().startsWith(q));
       if (hit >= 0) setActiveIndex(hit);
     }
   };

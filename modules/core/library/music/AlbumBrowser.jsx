@@ -1,6 +1,6 @@
 // LEFT pane of the Music page — the permanent library column beside EVERY Music
 // screen. Fetches the album list + playlists, exposes a Playlists / Albums /
-// Both selector plus a search box and a status / sort fold, and renders the tiles.
+// Both selector plus a search box and status / sort selects, and renders the tiles.
 // Saved Tracks is pinned first among the playlists.
 
 import { useEffect, useMemo, useState } from 'react';
@@ -8,45 +8,63 @@ import { musicApi, subscribeManifest } from './api.js';
 import { useMusicPlayer } from './MusicPlayerProvider.jsx';
 import CoverArtCard from './CoverArtCard.jsx';
 import { Seg } from '@host/components/ui/index.js';
-import FoldMenu from '@host/components/ui/FoldMenu.jsx';
-import { candyCenterOffset } from '@host/util/candy.js';
+import CandySelect from '@host/components/ui/CandySelect.jsx';
+import {
+  IconLayers, IconClock, IconPlay, IconCheck, IconX,
+  IconCalendar, IconStar, IconMic, IconTag, IconTypeText, IconSort,
+} from '@host/components/icons.jsx';
+import { statusLabel } from '@host/util/media-status.js';
 import { Cluster, useRailOrder } from '@host/components/ui/Rail.jsx';
 import { usePlaylists, isSavedTracks } from './PlaylistProvider.jsx';
 import { PlaylistCard } from './PlaylistsPage.jsx';
 import { TILE_GRID, TILE_GAP } from './util.js';
 import { encodePath } from '../paths.js';
 import { navigate as go } from '@host/router.js';
-import { invoke } from '@tauri-apps/api/core';
-import { sharedEvents } from '@host/module-sdk/index.js';
-import { makeFeedbackApi } from '@modules/core/feedback/feedbackApi.js';
-import { useSession } from '@modules/core/feedback/useSession.js';
-import UserAvatar from '@modules/core/feedback/UserAvatar.jsx';
-import SignInModal from '@modules/core/feedback/SignInModal.jsx';
 
-// One fold row per sort dimension; picking a row activates it with the default
+// One row per sort dimension; picking a row activates it with the default
 // direction, picking the active one again flips it. The active row and the
 // trigger both carry the direction arrow.
 const SORT_DIMENSIONS = [
-  { key: 'added',    label: 'Date Added', defaultDir: 'desc', value: a => a.mtime || 0 },
-  { key: 'personal', label: '★ Personal', defaultDir: 'desc', value: a => Number(a.personalRating) || 0 },
-  { key: 'artist',   label: 'Artist',     defaultDir: 'asc',  value: a => (a.artist || '').toLowerCase() },
-  { key: 'year',     label: 'Year',       defaultDir: 'desc', value: a => a.year || 0 },
-  { key: 'title',    label: 'Title',      defaultDir: 'asc',  value: a => (a.title || '').toLowerCase() },
+  { key: 'added',    label: 'Date Added', icon: IconCalendar, defaultDir: 'desc', value: a => a.mtime || 0 },
+  // The typed ★ is gone with the glyph gutter — it was a stand-in for exactly
+  // the icon the row now carries, and kept both would read as two stars.
+  { key: 'personal', label: 'Personal',   icon: IconStar,     defaultDir: 'desc', value: a => Number(a.personalRating) || 0 },
+  { key: 'artist',   label: 'Artist',     icon: IconMic,      defaultDir: 'asc',  value: a => (a.artist || '').toLowerCase() },
+  { key: 'year',     label: 'Year',       icon: IconTag,      defaultDir: 'desc', value: a => a.year || 0 },
+  { key: 'title',    label: 'Title',      icon: IconTypeText, defaultDir: 'asc',  value: a => (a.title || '').toLowerCase() },
   // Custom carries no comparator: `filtered` returns the list unsorted and the
   // grid becomes a Cluster you can drag. It is the ONLY sort under which the
   // tiles lift (user-directed 2026-09-04 - no auto-switch on drag), and it has
   // no direction, because a hand-made order has no forwards or backwards.
-  { key: 'custom',   label: 'Custom',     defaultDir: 'asc' },
+  { key: 'custom',   label: 'Custom',     icon: IconSort,     defaultDir: 'asc' },
 ];
 const isCustom = (key) => key === 'custom';
 
-// Both slots hold a verbatim duplicate of the titlebar account fold
-// (TitleBar.jsx) — avatar, name, Settings / Sign out rows, and the "Sign in"
-// button when signed out. Rows, face and constants included; nothing adapted.
-// User-directed 2026-09-10.
-const BTN = 28;
-const MARK = 18;
-const CENTER = candyCenterOffset();
+// The context menu's row face (ContextMenuRoot.jsx rowFace), same numbers: a
+// fixed 14px glyph gutter so every label starts on one vertical line, 8px off
+// the words, and `width: 100%` so the row fills its option. Not imported — rowFace is private to the context menu and carries
+// its disabled/chevron/iconFor branches, none of which exist here.
+const rowFace = (Icon, text) => (
+  <span style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
+    <span style={{
+      width: 14, flexShrink: 0, display: 'inline-flex',
+      alignItems: 'center', justifyContent: 'center',
+    }}>
+      <Icon size={14} />
+    </span>
+    <span style={{ whiteSpace: 'nowrap' }}>{text}</span>
+  </span>
+);
+
+// Keyed on the STORED status, never on the shortened label — the short names are
+// paint (see media-status.js) and the map has to survive one being renamed.
+const STATUS_ICON = {
+  'Plan-to-Listen': IconClock,
+  'Currently-Listening': IconPlay,
+  Listened: IconCheck,
+  Dropped: IconX,
+};
+const ALL_STATUS_ICON = IconLayers;
 
 // Custom has no direction to show — onPillClick never flips one for it, and the
 // stale sortDir from the previous dimension would otherwise paint an arrow that
@@ -54,10 +72,8 @@ const CENTER = candyCenterOffset();
 const sortArrow = (dim, sortDim, sortDir) =>
   (sortDim === dim.key && !isCustom(dim.key)) ? (sortDir === 'desc' ? ' ↓' : ' ↑') : '';
 
-const activeSortLabel = (sortDim, sortDir) => {
-  const dim = SORT_DIMENSIONS.find(d => d.key === sortDim) || SORT_DIMENSIONS[0];
-  return dim.label + sortArrow(dim, sortDim, sortDir);
-};
+const activeSortDim = (sortDim) =>
+  SORT_DIMENSIONS.find(d => d.key === sortDim) || SORT_DIMENSIONS[0];
 
 
 const SORT_LS_KEY = 'tools:musicSort';
@@ -84,25 +100,11 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
   });
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState(null); // null = all
-  const [foldOpen, setFoldOpen] = useState(false);
-  const [foldT, setFoldT] = useState('');
   const [view, setView] = useState(() => {
     try { return VIEW_OPTIONS.some(o => o.value === localStorage.getItem(VIEW_LS_KEY)) ? localStorage.getItem(VIEW_LS_KEY) : 'both'; } catch { return 'both'; }
   });
   const { playAlbumTracks } = useMusicPlayer();
   const { playlists } = usePlaylists();
-
-  // Account wiring copied from TitleBar.jsx. The one delta: the titlebar opens
-  // Settings through its setSettingsTab/setSettingsOpen props, which a module
-  // has no access to, so this sends the same 'modules/feedback' address through
-  // the host event App.jsx listens on.
-  const [signInOpen, setSignInOpen] = useState(false);
-  const fb = useMemo(() => makeFeedbackApi({ invoke }), []);
-  const { session, refresh } = useSession(fb);
-  const profile = session?.profile || null;
-  const signedIn = !!session?.signedIn;
-  const name = profile?.display_name || profile?.handle || '';
-  const openAccountSettings = () => sharedEvents.emit('host:open-settings', { path: 'modules/feedback' });
 
   useEffect(() => {
     try { localStorage.setItem(VIEW_LS_KEY, view); } catch {}
@@ -236,15 +238,6 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
         display: 'flex', flexDirection: 'column', gap: 10,
         borderBottom: '1px solid var(--border)',
         flexShrink: 0,
-        // Above the tile list, so an OPEN fold paints over the tiles instead of
-        // behind them. Each fold sits inside a FoldStandOff span, and that span
-        // carries a transform - which makes it its own layer, trapping the
-        // fold's own z-index inside it where the later-painting tiles beat it.
-        // Photographed 2026-09-10: the sort fold's middle rows were invisible,
-        // showing only where they happened to land in the gap between tile rows.
-        // On the BAR rather than the fold, so anything added to this bar later
-        // clears the list for the same reason.
-        position: 'relative', zIndex: 1,
       }}>
         <Seg options={VIEW_OPTIONS} value={view} onChange={setView} accent={accent}/>
 
@@ -261,87 +254,29 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
           }}
         />
 
-        {/* Two verbatim pastes of TitleBar.jsx's account slot, in the titlebar's
-            own cluster class, with no stand-off wrappers because the titlebar
-            fold has none. User-directed 2026-09-10. */}
         {showAlbums && (
-          <>
-            <div className="titlebar-cluster">
-        {signedIn ? (
-          <FoldMenu
-            style={CENTER}
-            rowH={BTN}
-            triggerClassName="titlebar-account is-hover-accent"
-            triggerTitle={name || 'Account'}
-            data-titlebar-avatar
-            ariaLabel="Filter by status"
-            onOpenChange={(o, t) => { setFoldOpen(o); setFoldT(t); }}
-            items={[
-              // The music column's own rows. The trigger is left exactly as the
-              // titlebar paste made it (user-directed 2026-09-10: the buttons
-              // themselves were right, only the rows were wrong), so a row label
-              // longer than the display name widens the stack — which is why the
-              // status list is the fold's only content and not a second column.
-              { label: 'All Status', onClick: () => setStatusFilter(null) },
-              ...statuses.map(s => ({ label: s, onClick: () => setStatusFilter(s) })),
-            ]}
-          >
-            {statusFilter || 'All Status'}
-          </FoldMenu>
-        ) : (
-          <button
-            type="button"
-            data-own-press
-            data-titlebar-avatar
-            className="candy-btn titlebar-account is-hover-accent"
-            data-shape="chip"
-            style={{ height: BTN, ...CENTER }}
-            title="Sign in"
-            onClick={() => setSignInOpen(true)}
-          >
-            <span className="candy-face">
-              <UserAvatar src={profile?.avatar_url} name={name} size={MARK}/>
-              Sign in
-            </span>
-          </button>
-        )}
-        {signedIn ? (
-          <FoldMenu
-            style={CENTER}
-            rowH={BTN}
-            triggerClassName="titlebar-account is-hover-accent"
-            triggerTitle={name || 'Account'}
-            data-titlebar-avatar
-            ariaLabel="Sort albums"
-            onOpenChange={(o, t) => { setFoldOpen(o); setFoldT(t); }}
-            items={SORT_DIMENSIONS.map(d => ({
-              // Picking the active dimension again flips its direction, exactly
-              // as the old pills did; the arrow rides the active row.
-              label: d.label + sortArrow(d, sortDim, sortDir),
-              onClick: () => onPillClick(d),
-            }))}
-          >
-            {activeSortLabel(sortDim, sortDir)}
-          </FoldMenu>
-        ) : (
-          <button
-            type="button"
-            data-own-press
-            data-titlebar-avatar
-            className="candy-btn titlebar-account is-hover-accent"
-            data-shape="chip"
-            style={{ height: BTN, ...CENTER }}
-            title="Sign in"
-            onClick={() => setSignInOpen(true)}
-          >
-            <span className="candy-face">
-              <UserAvatar src={profile?.avatar_url} name={name} size={MARK}/>
-              Sign in
-            </span>
-          </button>
-        )}
-            </div>
-          </>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <CandySelect
+              value={statusFilter || ''}
+              options={[
+                { value: '', label: rowFace(ALL_STATUS_ICON, 'All Status') },
+                ...statuses.map(s => ({ value: s, label: rowFace(STATUS_ICON[s], statusLabel(s)) })),
+              ]}
+              onChange={(v) => setStatusFilter(v || null)}
+              title="Filter by status"
+            />
+            {/* Picking the active dimension again flips its direction, exactly
+                as the old pills did — CandySelect fires onChange on a re-pick. */}
+            <CandySelect
+              value={sortDim}
+              options={SORT_DIMENSIONS.map(d => ({
+                value: d.key,
+                label: rowFace(d.icon, d.label + sortArrow(d, sortDim, sortDir)),
+              }))}
+              onChange={(k) => onPillClick(activeSortDim(k))}
+              title="Sort albums"
+            />
+          </div>
         )}
       </div>
 
@@ -405,14 +340,6 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
         )}
 
       </div>
-
-      <SignInModal
-        open={signInOpen}
-        onClose={() => setSignInOpen(false)}
-        fb={fb}
-        accent={accent}
-        onSignedIn={() => refresh()}
-      />
     </div>
   );
 }

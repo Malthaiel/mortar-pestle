@@ -282,9 +282,8 @@ export function spacingAudit(root = document.body, { quiet = false, bridge = tru
       const gapAfterBand = gap != null ? +(gap - band).toFixed(1) : null;                          // whitespace past the band
       // hasIntent honoured HERE too, not just in the rhythm pass below — the
       // contract at the top of this section says intent opts a gap out of BOTH,
-      // and the overrun flag was silently ignoring it. A FoldMenu shut has every
-      // row rotated 180deg onto row 0, so their boxes genuinely coincide and the
-      // overlap is the fold working.
+      // and the overrun flag was silently ignoring it. A stack whose rows overlap
+      // on purpose declares that intent, and then the overlap is no overrun.
       if (gapAfterBand != null && gapAfterBand < -TOL && !hasIntent(k) && !hasIntent(cont)) {
         flags.push({ el: k, cls: k.className || k.tagName.toLowerCase(), band, gap, overlap: +(-gapAfterBand).toFixed(1),
           // Move 10 — pin the flagged element so a flag resolves to a file:line

@@ -11,7 +11,7 @@
 //      different offset at every call site. It is measured now — see
 //      dividerPos(). Restating it as a constant is what caused the bug.
 //   2. The width chooser was a hand-rolled pill list with its own hover colours.
-//      It is a real FoldMenu now — the app's dropdown, candy rows and all.
+//      It wears CandySelect's menu skin now (.candy-select-menu / -option).
 //   3. Each call site declared five `snapTargets` 40px apart, unrelated to its
 //      three presets, so a drag ratcheted. The snap set IS the presets now.
 //
@@ -46,7 +46,6 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import FoldMenu from './FoldMenu.jsx';
 import { IconChevronLeft, IconChevronRight, IconDot } from '../icons.jsx';
 import { GLIDE } from '../../util/motion.js';
 
@@ -58,13 +57,11 @@ const SEAM_WIDTH  = 2;
 // past that leaves no unsnapped width between them at all.
 const SNAP_RADIUS = 14;
 const RUBBER_MAX  = 28;
-// Cursor to the paper's edge. FoldPaper reaches FOLD_PAD outside the rows, so
-// the gap you actually see is this minus that.
-const MENU_GAP    = 14;
+// Divider to the menu's near edge — the 8px the old fold's paper left visible.
+const MENU_GAP    = 8;
 // How long the cursor may be off BOTH the seam and the menu before it folds
 // away — enough to travel the MENU_GAP between them.
 const MENU_GRACE  = 150;
-const ROW_H       = 28;
 
 // The trail a dragged thing keeps behind the cursor, exported so all six hosts
 // share one clock instead of six copies of a number. Property-less: a host
@@ -108,9 +105,8 @@ const PRESET_ICON = {
   Wide:    <><IconChevronLeft size={CHEV} /><IconChevronRight size={CHEV} /></>,
 };
 
-// Same block-level flex wrapper the context menu's rows use, for the same
-// reason: an inline wrapper sits on a text line and prints its content ~1.6px
-// high inside FoldMenu's centred row.
+// Same glyph gutter the context menu's rows use: a fixed 14px slot, so every
+// label starts on one vertical line.
 function rowFace(label) {
   return (
     <span style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
@@ -124,20 +120,6 @@ function rowFace(label) {
     </span>
   );
 }
-
-// The context menu's own row type, restated here for the same reason it is
-// restated there: FoldMenu's face defaults to the titlebar account chip's mono
-// 11.5, which is right for a chip and wrong for a menu row.
-const FACE = {
-  fontFamily: 'var(--font-body)',
-  fontSize: 12,
-  fontWeight: 500,
-  letterSpacing: 0,
-  textTransform: 'none',
-  padding: '0 12px',
-  alignItems: 'center',
-  justifyItems: 'stretch',
-};
 
 function rubberBand(over) {
   return RUBBER_MAX * (1 - Math.exp(-over / 50));
@@ -242,17 +224,17 @@ export default function ResizeSeam({
   // Sideways mode: the seam is a horizontal bar and the pane it sizes is ABOVE
   // it (or BELOW, with `inverted`), so the drag reads clientY and `width` is a
   // HEIGHT. Added 2026-08-27 for the planner's calendar-over-day-list split
-  // rather than forking a second seam component. The preset fold menu is not
-  // ported — it unfolds sideways off a vertical divider — so a horizontal seam
+  // rather than forking a second seam component. The preset menu is not
+  // ported — it opens sideways off a vertical divider — so a horizontal seam
   // must pass `presets={[]}`, which already skips it (see the render).
   horizontal = false,
   style: outerStyle,
 }) {
   const [hover, setHover] = useState(false);
   const [menuHover, setMenuHover] = useState(false);
-  // The fold is CLICK-opened now, not hover-opened — a hover-opened menu popped
+  // The menu is CLICK-opened now, not hover-opened — a hover-opened menu popped
   // up every time the cursor crossed the seam on its way somewhere else.
-  // User-directed 2026-08-13. It still folds away on its own once the cursor
+  // User-directed 2026-08-13. It still closes on its own once the cursor
   // leaves both it and the seam, so the ways OUT are unchanged.
   const [menuOpen, setMenuOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -302,7 +284,7 @@ export default function ResizeSeam({
     const onKey = (e) => { if (e.key === 'Escape') setMenuOpen(false); };
     const onDown = (e) => {
       if (hitRef.current?.contains(e.target)) return;
-      if (e.target.closest?.('[data-seam-fold]')) return;
+      if (e.target.closest?.('[data-seam-menu]')) return;
       setMenuOpen(false);
     };
     window.addEventListener('keydown', onKey);
@@ -405,7 +387,7 @@ export default function ResizeSeam({
       setDragging(false);
       onDragEnd?.();
 
-      // A click, not a drag: toggle the fold and touch nothing else. Returning
+      // A click, not a drag: toggle the menu and touch nothing else. Returning
       // before the snap below matters — SNAP_RADIUS is 18px now, so running a
       // click through it would silently resize a pane nobody dragged.
       if (!dragStateRef.current.moved) {
@@ -578,7 +560,7 @@ export default function ResizeSeam({
       )}
 
       {presets.length > 0 && (
-        <SeamFold
+        <SeamMenu
           wanted={menuOpen}
           cursorY={cursor.y}
           anchorX={anchorXRef.current}
@@ -594,136 +576,75 @@ export default function ResizeSeam({
 }
 
 /**
- * The width chooser: a FoldMenu unfolded beside the point you CLICKED, following
- * the cursor up and down but never sideways, and staying up for the whole drag.
- *
- * `noTrigger` + controlled `open` is the same configuration the right-click menu
- * uses for a menu that opens AT A POINT — there is no button here to fold out
- * of, the stack is the whole control.
+ * The width chooser: a flat panel beside the point you CLICKED, following the
+ * cursor up and down but never sideways, and staying up for the whole drag.
+ * CandySelect's menu skin, portaled and fixed because the seam's ancestors clip
+ * (see the file header). The seam owns every close (cursor gone, Escape,
+ * outside press, second click, row picked), all through `wanted`.
  *
  * `anchorX` is a frozen number, not a live cursor x. That is the whole of the
  * horizontal lock: the transform below reads y only.
  */
-function SeamFold({ wanted, cursorY, anchorX, mirror, presets, value, onPick, onHoverChange }) {
-  const wrapRef = useRef(null);
-  const [mounted, setMounted] = useState(false);
-  const [open, setOpen] = useState(false);
-  // Half the OPEN stack's height, so the menu can sit centred on the cursor.
-  // The FoldMenu root is only one row tall (the stack hangs off it absolutely),
-  // so this has to come off the stack itself. A fold is a transform and
-  // transforms do not touch layout, so the box is honest even while shut.
-  const [half, setHalf] = useState(null);
-  // The OPEN stack's width, for the same reason `half` exists and measured off
-  // the same box. A mirrored fold used to be pulled back by `-100%`, but a
-  // percentage resolves against this wrapper — and the wrapper is FoldMenu's
-  // ONE-ROW root (~20px), not the 112px stack hanging off it absolutely. So a
-  // leftward fold moved back 20px instead of 112 and painted straight over the
-  // rail it was resizing. Photographed 2026-08-13; never seen before because no
-  // mirrored seam had ever been opened on screen.
-  const [stackW, setStackW] = useState(null);
-  // How far the stack sits BELOW this wrapper's origin, read live every frame.
-  //
-  // FoldPaper ramps `--fold-settle` from 0 to FOLD_PAD as the paper grows, and
-  // FoldMenu's stack carries it as its own `top` — the group giving the halo
-  // back so the paper's near edge stays pinned in a titlebar. There is no
-  // titlebar here, so the whole menu simply came to rest FOLD_PAD below the
-  // cursor it is supposed to be centred on. Reported round 1, unfixed until
-  // 2026-08-27. Read off the real box (`offsetTop`, a layout value the fold's
-  // transforms cannot poison) rather than adding an imported FOLD_PAD back:
-  // the settle is ANIMATED, so a constant would only be right once it landed.
-  const [settle, setSettle] = useState(0);
-
-  // Mount on demand; unmount only once the close has actually PLAYED (onClosed
-  // below). No grace period here — the seam owns the whole close decision now,
-  // including the cursor-left grace, so a second one here would just make every
-  // dismissal 150ms late.
-  useEffect(() => {
-    if (wanted) setMounted(true);
-    else setOpen(false);
-  }, [wanted]);
+function SeamMenu({ wanted, cursorY, anchorX, mirror, presets, value, onPick, onHoverChange }) {
+  const ref = useRef(null);
+  // The panel's own measured size: half its height centres it on the cursor,
+  // its width pulls a mirrored panel back to the divider's far side.
+  const [box, setBox] = useState(null);
+  // Trail only once placed, or the first visible frame glides in from the
+  // unmeasured origin.
+  const [placed, setPlaced] = useState(false);
 
   useLayoutEffect(() => {
-    if (!mounted) return;
-    const stack = wrapRef.current?.querySelector('[role="menu"]');
-    if (stack) { setHalf(stack.offsetHeight / 2); setStackW(stack.offsetWidth); }
-  }, [mounted, presets.length]);
+    // Unmounting under the cursor fires no mouseleave, so clear the hover here.
+    if (!wanted) { setBox(null); setPlaced(false); onHoverChange(false); return; }
+    const r = ref.current?.getBoundingClientRect();
+    if (r) setBox({ w: r.width, h: r.height });
+  }, [wanted, presets.length]);
 
-  // The settle moves under its own clock, so it is read per frame rather than
-  // once — the same reason the seam's own line runs a rAF loop.
   useEffect(() => {
-    if (!mounted) return undefined;
-    let raf = 0;
-    const tick = () => {
-      const stack = wrapRef.current?.querySelector('[role="menu"]');
-      if (stack) setSettle(stack.offsetTop);
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [mounted]);
-
-  // Unfold on the frame AFTER the stack has been measured and placed, so it is
-  // never seen folding at the wrong spot — the same order the context menu uses.
-  useEffect(() => {
-    if (!mounted || half == null || !wanted) return undefined;
-    const r = requestAnimationFrame(() => setOpen(true));
+    if (!box) return undefined;
+    const r = requestAnimationFrame(() => setPlaced(true));
     return () => cancelAnimationFrame(r);
-  }, [mounted, half, wanted]);
+  }, [box]);
 
-  if (!mounted) return null;
-
-  const selected = presets.findIndex(p => p.value === value);
-  const items = presets.map(p => ({
-    label: rowFace(p.label),
-    onClick: () => onPick(p.value),
-  }));
+  if (!wanted) return null;
 
   return createPortal(
     <div
-      ref={wrapRef}
-      data-seam-fold
+      ref={ref}
+      data-seam-menu
+      role="menu"
+      aria-label="Resize presets"
+      className="candy-select-menu"
+      data-open="true"
       onMouseEnter={() => onHoverChange(true)}
       onMouseLeave={() => onHoverChange(false)}
       style={{
         position: 'fixed',
         top: 0,
-        // Anchored on the side AWAY from the pane being resized. A rightward
-        // menu grows from this x; a leftward one is pulled back by its own
-        // width, which is the one thing the transform below has to know.
+        // Anchored on the side AWAY from the pane being resized.
         left: mirror ? anchorX - MENU_GAP : anchorX + MENU_GAP,
+        minWidth: 112,
         zIndex: 1300,
-        // Vertical only, and the x above is a frozen click point rather than a
-        // live cursor, so nothing can walk the menu sideways across the pane.
-        transform: `translate3d(${mirror ? -(stackW || 0) : 0}px, ${cursorY - (half || 0) - settle}px, 0)`,
-        transition: `transform ${DRAG_EASE}`,
-        // Hidden for the one frame between mounting and being measured — the
-        // stack has to be laid out to be measured, and an unplaced stack would
-        // otherwise flash at the top-left of the window.
-        visibility: half == null || (mirror && stackW == null) ? 'hidden' : 'visible',
-        // The rows own their own hit-testing; this wrapper must not swallow the
-        // seam's drag when the cursor passes over the gap beside them.
-        pointerEvents: 'none',
+        transform: `translate3d(${mirror ? -(box?.w || 0) : 0}px, ${cursorY - (box?.h || 0) / 2}px, 0)`,
+        transition: placed ? `transform ${DRAG_EASE}` : 'none',
+        visibility: box ? 'visible' : 'hidden',
       }}
     >
-      <div style={{ pointerEvents: 'auto', width: 'max-content' }}>
-        <FoldMenu
-          noTrigger
-          open={open}
-          // Deliberately NOT wired. FoldMenu dismisses itself on any mousedown
-          // outside its own root, and the seam IS outside it — so starting a
-          // drag folded the menu away on the first press, exactly when it is
-          // meant to stay up and trail. The seam owns every close (cursor gone,
-          // Escape, outside press, second click, row picked), and all five run
-          // through `wanted`, so there is nothing left for this to do.
-          onClosed={() => { setMounted(false); setHalf(null); setStackW(null); setSettle(0); }}
-          items={items}
-          selected={selected}
-          rowH={ROW_H}
-          shape="row"
-          faceStyle={FACE}
-          minWidth={112}
-          ariaLabel="Resize presets"
-        />
+      <div style={{ padding: 4 }}>
+        {presets.map((p) => {
+          const sel = p.value === value;
+          return (
+            <button
+              key={p.value}
+              type="button"
+              role="menuitemradio"
+              aria-checked={sel}
+              className={'candy-select-option' + (sel ? ' is-selected' : '')}
+              onClick={() => onPick(p.value)}
+            >{rowFace(p.label)}</button>
+          );
+        })}
       </div>
     </div>,
     document.body,

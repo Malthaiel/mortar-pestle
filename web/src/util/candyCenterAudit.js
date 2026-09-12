@@ -48,8 +48,8 @@ export function candyCenterAudit(root = document.body, { quiet = false } = {}) {
     // <input>'s value lives in .value, so its .textContent is empty.
     // A wrapper CONTAINING a candy control is not a text baseline either — it
     // has no lip of its own but its ink does, so it sits with the buttons, not
-    // with the text. Without this a FoldMenu (a grid holding a candy trigger and
-    // its candy rows) reads as a fat text node and false-flags every candy
+    // with the text. Without this a wrapper holding a candy trigger and its
+    // candy rows reads as a fat text node and false-flags every candy
     // sibling on the row at exactly +depth/2.
     const isFlatText = (el) =>
       el !== btn &&
