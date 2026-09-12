@@ -10,6 +10,8 @@ import { navigate } from '../../router.js';
 import TreeSidebar from '../../components/vault-tree/TreeSidebar.jsx';
 import { useTreeExpansion, usePersistedState } from '../../components/vault-tree/useTreeExpansion.js';
 import { openInFiles } from '../../components/vault-tree/revealInFiles.js';
+import { useContextMenu } from '../../context-menu/useContextMenu.js';
+import { buildFileItemMenu } from '../../context-menu/defaultMenus.js';
 import { useDocsManifest } from './useDocsManifest.js';
 import { writeSectionPage } from '../../hooks/useSectionMemory.js';
 
@@ -35,6 +37,7 @@ function sortEntries(entries, mode) {
 export default function DocsNav({ route, accent }) {
   const { manifest } = useDocsManifest();
   const exp = useTreeExpansion('docs:tree:expanded', []);
+  const { openContextMenu } = useContextMenu();
   const [sortMode, setSortMode] = usePersistedState('docs:tree:sort', 'name-asc');
 
   const selectedPath = route.sub === 'releases'
@@ -57,6 +60,15 @@ export default function DocsNav({ route, accent }) {
     if (!saved) exp.expandAll(manifest.categories.map((c) => 'cat:' + c.id));
   }, [manifest]);
 
+  // Docs files live in the APP vault, so every disk action carries root:'app'.
+  // `entry.path` is already app-vault-relative — the same path DocsPage renders
+  // through api.getPage(path, 'app'), so no second mapping exists to drift.
+  // Category pills are manifest groupings with no folder on disk: deliberately no
+  // file menu, so they keep TreeSidebar's icon picker.
+  const fileMenu = (vaultPath, href) => (ev) => openContextMenu(ev, buildFileItemMenu({
+    vaultPath, isFolder: false, href, root: 'app',
+  }), { accent });
+
   const nodes = useMemo(() => {
     if (!manifest) return [];
     // Pinned top-level Releases leaf (folded in from the retired standalone page).
@@ -64,6 +76,7 @@ export default function DocsNav({ route, accent }) {
       id: '/docs/releases', label: 'Releases', isFolder: false,
       active: selectedPath === '/docs/releases',
       onActivate: () => navigate('/docs/releases'),
+      onContextMenu: fileMenu('Mortar & Pestle/Releases.md', '/docs/releases'),
     };
     const cats = manifest.categories.map((cat) => ({
       id: 'cat:' + cat.id, label: cat.label, isFolder: true,
@@ -73,11 +86,12 @@ export default function DocsNav({ route, accent }) {
           id: path, label: e.title, isFolder: false,
           active: selectedPath === path,
           onActivate: () => navigate(path),
+          onContextMenu: fileMenu(e.path, path),
         };
       }),
     }));
     return [releases, ...cats];
-  }, [manifest, sortMode, selectedPath]);
+  }, [manifest, sortMode, selectedPath, openContextMenu, accent]);
 
   const controller = {
     isOpen: exp.isOpen,

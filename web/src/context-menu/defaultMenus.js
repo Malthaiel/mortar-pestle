@@ -13,6 +13,7 @@ import { IconCommand, IconSettings, IconRotateCw, IconExternal, IconFolder, Icon
 import { invoke, api } from '../api.js';
 import { navigate } from '../router.js';
 import { obsidianHref } from '../util/obsidian.js';
+import { openInFiles } from '../components/vault-tree/revealInFiles.js';
 import { openConcierge } from '../agents/concierge/ConciergeProvider.jsx';
 
 export function isEditable(t) {
@@ -221,13 +222,17 @@ export function buildLinkMenu(a) {
 // don't apply: create only on folders, nothing on section roots), so a callback
 // is present iff the action is allowed. Surfaces without `ops` (e.g. links) get
 // the read-only menu unchanged.
-export function buildFileItemMenu({ vaultPath, isFolder, href, ops }) {
+// `root` names the mount `vaultPath` is relative to ('app' / 'pulse' / 'library' /
+// 'gamewiki'); omitted → the content vault. A surface showing another vault's rows
+// (the Docs sidebar) MUST pass it, or every disk action resolves against content
+// and 404s.
+export function buildFileItemMenu({ vaultPath, isFolder, href, ops, root }) {
   const items = [];
   if (href) items.push({ label: 'Open', icon: isFolder ? IconFolder : IconFileText, onClick: () => { try { navigate(href); } catch (e) {} } });
   if (!isFolder && vaultPath) items.push({ label: 'Open in Obsidian', icon: IconExternal, onClick: () => { try { window.location.href = obsidianHref(vaultPath); } catch (e) {} } });
-  if (vaultPath) items.push({ label: 'Reveal in Files', icon: IconFolder, onClick: () => { try { invoke('reveal_in_files', { path: vaultPath }); } catch (e) {} } });
+  if (vaultPath) items.push({ label: 'Reveal in Files', icon: IconFolder, onClick: () => { openInFiles(vaultPath, { isFolder, root }); } });
   // The item itself, like Ctrl+C in Explorer (navigator.clipboard only does text).
-  if (vaultPath) items.push({ label: isFolder ? 'Copy Folder' : 'Copy File', icon: IconCopy, onClick: () => { invoke('copy_to_clipboard', { path: vaultPath }).catch(() => {}); } });
+  if (vaultPath) items.push({ label: isFolder ? 'Copy Folder' : 'Copy File', icon: IconCopy, onClick: () => { invoke('copy_to_clipboard', { path: vaultPath, root }).catch(() => {}); } });
   if (vaultPath) items.push({ label: 'Copy Path', icon: IconLink, onClick: () => copyText(vaultPath) });
   if (ops) {
     const fileOps = [];

@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use std::sync::OnceLock;
 
 
-use crate::commands::vault::{vault_root, VaultError};
+use crate::commands::vault::VaultError;
 use crate::parsers::{albums, probe_cache, series};
 use tauri::AppHandle;
 use tauri_plugin_opener::OpenerExt;
@@ -201,7 +201,7 @@ pub fn video_mark_series_rating(
 
 /// Open the host file manager with the given path highlighted. Mirrors the
 /// containment check from Node's `POST /api/reveal` (`server/src/routes.js`):
-/// vault-relative paths resolve against `vault_root()`; absolute paths stay
+/// relative paths resolve against the `root` mount; absolute paths stay
 /// absolute; canonical form must sit under the vault or one of the configured
 /// `media_roots()`. Behavior diverges from Node deliberately — Node used
 /// `xdg-open` (which *opens* the file in its default application), this uses
@@ -209,14 +209,23 @@ pub fn video_mark_series_rating(
 /// the OS file manager). The function name `revealInFiles` always meant the
 /// latter; Node was misnamed.
 #[tauri::command]
-pub fn reveal_in_files(app: tauri::AppHandle, path: String) -> Result<(), VaultError> {
+pub fn reveal_in_files(
+    app: tauri::AppHandle,
+    path: String,
+    root: Option<String>,
+) -> Result<(), VaultError> {
     if path.is_empty() {
         return Err(VaultError::Invalid("path required".into()));
     }
+    // A relative path resolves against the named mount (content default, or
+    // app/pulse/library/gamewiki), exactly like `open_path` — so an App-vault row
+    // (the Docs sidebar) reveals its real file instead of silently resolving
+    // against the content vault. Absolute paths pass through.
     let abs = if path.starts_with('/') {
         PathBuf::from(&path)
     } else {
-        PathBuf::from(vault_root()).join(&path)
+        let base = crate::commands::vault::RootKind::from_opt(root.as_deref()).root();
+        PathBuf::from(base).join(&path)
     };
     let canonical = std::fs::canonicalize(&abs)
         .map_err(|_| VaultError::NotFound(format!("Path not found: {path}")))?;
