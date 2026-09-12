@@ -257,6 +257,73 @@ pub fn open_path(app: tauri::AppHandle, path: String, root: Option<String>) -> R
         .map_err(|e| VaultError::Io(e.to_string()))
 }
 
+/// Put a file or folder on the clipboard as a real copied item — what Ctrl+C in
+/// Explorer does — so it pastes anywhere. The webview's `navigator.clipboard`
+/// only writes text, hence Rust. Same path resolution as `open_path` (relative
+/// resolves against the named mount), and the same containment check widened by
+/// the GameWiki vault, which `is_under_allowed_root` deliberately excludes.
+#[tauri::command]
+pub fn copy_to_clipboard(path: String, root: Option<String>) -> Result<(), VaultError> {
+    if path.is_empty() {
+        return Err(VaultError::Invalid("path required".into()));
+    }
+    let abs = if path.starts_with('/') {
+        PathBuf::from(&path)
+    } else {
+        let base = crate::commands::vault::RootKind::from_opt(root.as_deref()).root();
+        PathBuf::from(base).join(&path)
+    };
+    let canonical = std::fs::canonicalize(&abs)
+        .map_err(|_| VaultError::NotFound(format!("Path not found: {path}")))?;
+    let gamewiki = std::fs::canonicalize(crate::commands::vault::gamewiki_vault_root()).ok();
+    let in_gamewiki = gamewiki.map(|g| canonical.starts_with(&g)).unwrap_or(false);
+    if !is_under_allowed_root(&canonical) && !in_gamewiki {
+        return Err(VaultError::Invalid("path not under an allowed root".into()));
+    }
+    copy_item_to_clipboard(&canonical).map_err(|e| VaultError::Io(format!("clipboard: {e}")))
+}
+
+#[cfg(windows)]
+fn copy_item_to_clipboard(p: &std::path::Path) -> windows::core::Result<()> {
+    use windows::Win32::Foundation::{E_OUTOFMEMORY, HANDLE};
+    use windows::Win32::System::DataExchange::{CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData};
+    use windows::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
+    use windows::Win32::System::Ole::CF_HDROP;
+    use windows::Win32::UI::Shell::DROPFILES;
+
+    // canonicalize() yields a \\?\ verbatim path; Explorer's paste wants the plain form.
+    let s = p.to_string_lossy();
+    let plain = s.strip_prefix(r"\\?\").unwrap_or(&s);
+    // CF_HDROP layout: DROPFILES header, then UTF-16 paths, list ended by a double NUL.
+    let wide: Vec<u16> = plain.encode_utf16().chain([0, 0]).collect();
+    let header = std::mem::size_of::<DROPFILES>();
+    let bytes = wide.len() * 2;
+    unsafe {
+        // ponytail: the block leaks (a few hundred bytes) if SetClipboardData fails;
+        // add GlobalFree on that arm if it ever matters. On success Windows owns it.
+        let hglob = GlobalAlloc(GMEM_MOVEABLE, header + bytes)?;
+        let ptr = GlobalLock(hglob) as *mut u8;
+        if ptr.is_null() {
+            return Err(E_OUTOFMEMORY.into());
+        }
+        let df = DROPFILES { pFiles: header as u32, fWide: true.into(), ..Default::default() };
+        std::ptr::copy_nonoverlapping(&df as *const DROPFILES as *const u8, ptr, header);
+        std::ptr::copy_nonoverlapping(wide.as_ptr() as *const u8, ptr.add(header), bytes);
+        // Reports "failure" once the lock count reaches zero — that is the expected case.
+        let _ = GlobalUnlock(hglob);
+        OpenClipboard(None)?;
+        let r = EmptyClipboard()
+            .and_then(|_| SetClipboardData(CF_HDROP.0 as u32, Some(HANDLE(hglob.0))).map(|_| ()));
+        let _ = CloseClipboard();
+        r
+    }
+}
+
+#[cfg(not(windows))]
+fn copy_item_to_clipboard(_: &std::path::Path) -> Result<(), String> {
+    Err("copying a file to the clipboard is Windows-only".into())
+}
+
 // ─── Shared helper used by both probe + asset_protocol ──────────────────────
 
 /// Check a canonicalized path against `vault_root()` + every `media_roots()`

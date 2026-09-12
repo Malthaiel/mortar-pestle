@@ -26,19 +26,67 @@ use crate::parsers::video_transcode::{compute_hash_with_recipe, mtime_ms_for};
 /// path, not a user pick), then reveals via the opener plugin (same as reveal_in_files).
 #[tauri::command]
 pub fn coaching_reveal_path(app: tauri::AppHandle, path: String) -> Result<(), VaultError> {
+    let canonical = gamewiki_resolve(&path)?;
+    app.opener()
+        .reveal_item_in_dir(&canonical)
+        .map_err(|e| VaultError::Io(e.to_string()))
+}
+
+/// Resolve a GameWiki-relative path to its canonical on-disk path, refusing
+/// anything that escapes the vault root.
+fn gamewiki_resolve(path: &str) -> Result<PathBuf, VaultError> {
     if path.is_empty() {
         return Err(VaultError::Invalid("path required".into()));
     }
     let root = std::fs::canonicalize(crate::commands::vault::gamewiki_vault_root())
         .map_err(|e| VaultError::Io(format!("gamewiki root: {e}")))?;
-    let canonical = std::fs::canonicalize(root.join(&path))
+    let canonical = std::fs::canonicalize(root.join(path))
         .map_err(|_| VaultError::NotFound(format!("Path not found: {path}")))?;
     if !canonical.starts_with(&root) {
         return Err(VaultError::Invalid("path not under the GameWiki vault".into()));
     }
-    app.opener()
-        .reveal_item_in_dir(&canonical)
-        .map_err(|e| VaultError::Io(e.to_string()))
+    Ok(canonical)
+}
+
+#[cfg(windows)]
+fn copy_item_to_clipboard(p: &Path) -> windows::core::Result<()> {
+    use windows::Win32::Foundation::{E_OUTOFMEMORY, HANDLE};
+    use windows::Win32::System::DataExchange::{CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData};
+    use windows::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
+    use windows::Win32::System::Ole::CF_HDROP;
+    use windows::Win32::UI::Shell::DROPFILES;
+
+    // canonicalize() yields a \\?\ verbatim path; Explorer's paste wants the plain form.
+    let s = p.to_string_lossy();
+    let plain = s.strip_prefix(r"\\?\").unwrap_or(&s);
+    // CF_HDROP layout: DROPFILES header, then UTF-16 paths, list ended by a double NUL.
+    let wide: Vec<u16> = plain.encode_utf16().chain([0, 0]).collect();
+    let header = std::mem::size_of::<DROPFILES>();
+    let bytes = wide.len() * 2;
+    unsafe {
+        // ponytail: the block leaks (a few hundred bytes) if SetClipboardData fails;
+        // add GlobalFree on that arm if it ever matters. On success Windows owns it.
+        let hglob = GlobalAlloc(GMEM_MOVEABLE, header + bytes)?;
+        let ptr = GlobalLock(hglob) as *mut u8;
+        if ptr.is_null() {
+            return Err(E_OUTOFMEMORY.into());
+        }
+        let df = DROPFILES { pFiles: header as u32, fWide: true.into(), ..Default::default() };
+        std::ptr::copy_nonoverlapping(&df as *const DROPFILES as *const u8, ptr, header);
+        std::ptr::copy_nonoverlapping(wide.as_ptr() as *const u8, ptr.add(header), bytes);
+        // Reports "failure" once the lock count reaches zero — that is the expected case.
+        let _ = GlobalUnlock(hglob);
+        OpenClipboard(None)?;
+        let r = EmptyClipboard()
+            .and_then(|_| SetClipboardData(CF_HDROP.0 as u32, Some(HANDLE(hglob.0))).map(|_| ()));
+        let _ = CloseClipboard();
+        r
+    }
+}
+
+#[cfg(not(windows))]
+fn copy_item_to_clipboard(_: &Path) -> Result<(), String> {
+    Err("copying a file to the clipboard is Windows-only".into())
 }
 
 // ── Comms Extraction (audio → 16 kHz mono WAV) ───────────────────────────────

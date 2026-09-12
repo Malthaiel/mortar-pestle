@@ -704,6 +704,10 @@ pub fn run() {
 
             Ok(())
         })
+        // A command needs THREE entries, not one: this list, the `commands(&[…])`
+        // manifest in build.rs, and `"allow-<command>"` in capabilities/default.json.
+        // Missing either of the latter two = `<cmd> not allowed. Command not found`
+        // at runtime, which reads like a missing binary rather than a missing entry.
         .invoke_handler(tauri::generate_handler![
             commands::ping,
             media_server_port,
@@ -826,6 +830,7 @@ pub fn run() {
             commands::media::reveal_in_files,
             commands::media::open_path,
             commands::coaching::coaching_reveal_path,
+            commands::media::copy_to_clipboard,
             commands::coaching::coaching_extract_audio,
             commands::coaching::coaching_media_duration,
             commands::coaching::coaching_audio_track_count,

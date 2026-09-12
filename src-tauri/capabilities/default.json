@@ -84,6 +84,7 @@
     "allow-vault-read-file",
     "allow-vault-write-file",
     "allow-coaching-reveal-path",
+    "allow-copy-to-clipboard",
     "allow-coaching-extract-audio",
     "allow-coaching-audio-track-count",
     "allow-coaching-media-duration",

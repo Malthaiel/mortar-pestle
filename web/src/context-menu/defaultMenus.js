@@ -9,7 +9,7 @@
 // Richer file actions (sidebar files/folders) arrive in SF9; SF1 added icons +
 // danger, SF7 fleshed out the link menu.
 
-import { IconCommand, IconSettings, IconRotateCw, IconExternal, IconFolder, IconLink, IconFileText, IconFile, IconPlus, IconX, IconSearch, IconSparkles, IconBrush } from '../components/icons.jsx';
+import { IconCommand, IconSettings, IconRotateCw, IconExternal, IconFolder, IconLink, IconFileText, IconFile, IconPlus, IconX, IconSearch, IconSparkles, IconBrush, IconCopy } from '../components/icons.jsx';
 import { invoke, api } from '../api.js';
 import { navigate } from '../router.js';
 import { obsidianHref } from '../util/obsidian.js';
@@ -226,6 +226,8 @@ export function buildFileItemMenu({ vaultPath, isFolder, href, ops }) {
   if (href) items.push({ label: 'Open', icon: isFolder ? IconFolder : IconFileText, onClick: () => { try { navigate(href); } catch (e) {} } });
   if (!isFolder && vaultPath) items.push({ label: 'Open in Obsidian', icon: IconExternal, onClick: () => { try { window.location.href = obsidianHref(vaultPath); } catch (e) {} } });
   if (vaultPath) items.push({ label: 'Reveal in Files', icon: IconFolder, onClick: () => { try { invoke('reveal_in_files', { path: vaultPath }); } catch (e) {} } });
+  // The item itself, like Ctrl+C in Explorer (navigator.clipboard only does text).
+  if (vaultPath) items.push({ label: isFolder ? 'Copy Folder' : 'Copy File', icon: IconCopy, onClick: () => { invoke('copy_to_clipboard', { path: vaultPath }).catch(() => {}); } });
   if (vaultPath) items.push({ label: 'Copy Path', icon: IconLink, onClick: () => copyText(vaultPath) });
   if (ops) {
     const fileOps = [];

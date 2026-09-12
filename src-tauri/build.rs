@@ -74,6 +74,7 @@ fn main() {
         "vault_read_file",
         "vault_write_file",
         "coaching_reveal_path",
+        "copy_to_clipboard",
         "coaching_extract_audio",
         "coaching_audio_track_count",
         "coaching_media_duration",

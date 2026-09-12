@@ -21,7 +21,7 @@ import { encodePagePath } from '@host/components/SidebarBrowser.jsx';
 import { useContextMenu } from '@host/context-menu/useContextMenu.js';
 import NameInputModal from '@host/components/vault-tree/NameInputModal.jsx';
 import ConfirmModal from '@host/components/ui/ConfirmModal.jsx';
-import { IconPlus, IconFolder, IconLink, IconFile, IconX, IconSettings, IconBrush } from '@host/components/icons.jsx';
+import { IconPlus, IconFolder, IconLink, IconFile, IconX, IconSettings, IconBrush, IconCopy } from '@host/components/icons.jsx';
 import { CircleChip } from '@host/components/ui/Button.jsx';
 import CoachPopup from './CoachPopup.jsx';
 import {
@@ -181,19 +181,32 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
     // no menu, right-click IS the picker.
     const iconItem = { label: 'Change Icon', icon: IconBrush,
       onClick: () => setPicker({ at: { x: e.clientX, y: e.clientY }, key: node.vaultPath }) };
-    // Route even the one-item case through openContextMenu: it marks the event
+    // File rows carry a vaultPath with `.md` stripped (useGameWikiTree), so put it
+    // back for anything that touches the disk or the path 404s.
+    const diskPath = node.isFolder ? node.vaultPath : `${node.vaultPath}.md`;
+    // Every row can be revealed. reveal_in_files excludes the gamewiki root —
+    // coaching_reveal_path is the gamewiki-rooted arm.
+    const revealItem = { label: 'Reveal in Files', icon: IconFolder, onClick: () => {
+      invoke('coaching_reveal_path', { path: diskPath }).catch(() => {});
+    } };
+    // The item itself on the clipboard (like Ctrl+C in Explorer); navigator.clipboard only does text.
+    const copyFileItem = { label: node.isFolder ? 'Copy Folder' : 'Copy File', icon: IconCopy, onClick: () => {
+      invoke('copy_to_clipboard', { path: diskPath, root: 'gamewiki' }).catch(() => {});
+    } };
+    // writeText rejects (async, so try/catch can't see it) when the window isn't focused.
+    const copyItem = { label: 'Copy Path', icon: IconLink, onClick: () => { navigator.clipboard.writeText(node.vaultPath).catch(() => {}); } };
+    // Route the no-menu case through openContextMenu too: it marks the event
     // handled and preventDefaults it. Opening the picker straight from the raw
     // event left the app's global right-click free to fire its own menu too, so
     // BOTH appeared at once.
-    if (!hasMenu) { openContextMenu(e, [iconItem], { accent }); return; }
+    if (!hasMenu) { openContextMenu(e, [revealItem, copyFileItem, copyItem, iconItem], { accent }); return; }
     if (node.vaultPath === SCRIM_BASE) {
       openContextMenu(e, [
         { label: 'New Scrim', icon: IconPlus, onClick: () => onNewScrim?.() },
         { divider: true },
-        // reveal_in_files excludes the gamewiki root — coaching_reveal_path is the
-        // gamewiki-rooted arm (also below, for scrim folders).
-        { label: 'Reveal in Files', icon: IconFolder, onClick: () => { invoke('coaching_reveal_path', { path: SCRIM_BASE }).catch(() => {}); } },
-        { label: 'Copy Path', icon: IconLink, onClick: () => { try { navigator.clipboard.writeText(SCRIM_BASE); } catch {} } },
+        revealItem,
+        copyFileItem,
+        copyItem,
         iconItem,
       ], { accent });
       return;
@@ -202,8 +215,9 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
       openContextMenu(e, [
         { label: 'New VOD', icon: IconPlus, onClick: () => setModal({ kind: 'new-vod' }) },
         { divider: true },
-        { label: 'Reveal in Files', icon: IconFolder, onClick: () => { invoke('coaching_reveal_path', { path: VOD_BASE }).catch(() => {}); } },
-        { label: 'Copy Path', icon: IconLink, onClick: () => { try { navigator.clipboard.writeText(VOD_BASE); } catch {} } },
+        revealItem,
+        copyFileItem,
+        copyItem,
         iconItem,
       ], { accent });
       return;
@@ -217,8 +231,9 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
         { label: 'Rename', icon: IconFile, onClick: () => setModal({ kind: 'rename-vod', vod }) },
         { label: 'Delete', icon: IconX, danger: true, onClick: () => setModal({ kind: 'delete-vod', vod }) },
         { divider: true },
-        { label: 'Reveal in Files', icon: IconFolder, onClick: () => { invoke('coaching_reveal_path', { path: node.vaultPath }).catch(() => {}); } },
-        { label: 'Copy Path', icon: IconLink, onClick: () => { try { navigator.clipboard.writeText(node.vaultPath); } catch {} } },
+        revealItem,
+        copyFileItem,
+        copyItem,
         iconItem,
       ], { accent });
       return;
@@ -236,8 +251,9 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
         { label: 'Change Number', icon: IconFile, onClick: () => setModal({ kind: 'renumber', ...m }) },
         { label: 'Delete Match', icon: IconX, danger: true, onClick: () => setModal({ kind: 'delete-match', ...m }) },
         { divider: true },
-        { label: 'Reveal in Files', icon: IconFolder, onClick: () => { invoke('coaching_reveal_path', { path: node.vaultPath }).catch(() => {}); } },
-        { label: 'Copy Path', icon: IconLink, onClick: () => { try { navigator.clipboard.writeText(node.vaultPath); } catch {} } },
+        revealItem,
+        copyFileItem,
+        copyItem,
         iconItem,
       ], { accent });
       return;
@@ -249,8 +265,9 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
       { label: 'Rename', icon: IconFile, onClick: () => setModal({ kind: 'rename', base }) },
       { label: 'Delete', icon: IconX, danger: true, onClick: () => setModal({ kind: 'delete', base }) },
       { divider: true },
-      { label: 'Reveal in Files', icon: IconFolder, onClick: () => { invoke('coaching_reveal_path', { path: node.vaultPath }).catch(() => {}); } },
-      { label: 'Copy Path', icon: IconLink, onClick: () => { try { navigator.clipboard.writeText(node.vaultPath); } catch {} } },
+      revealItem,
+      copyFileItem,
+      copyItem,
       iconItem,
     ], { accent });
   };
