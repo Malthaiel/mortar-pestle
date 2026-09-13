@@ -56,11 +56,10 @@ export default function ChatInput({ onSend, streaming, accent, mentions = [], on
   return (
     <div
       data-aos-no-mark
+      data-aos-chat-input
       style={{
-        borderTop: '1px solid var(--border-soft)',
         padding: '8px 10px 10px',
         display: 'flex', flexDirection: 'column', gap: 6,
-        background: 'var(--surface)',
       }}
     >
       {mentions.length > 0 && (

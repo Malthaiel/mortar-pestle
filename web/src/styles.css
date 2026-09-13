@@ -2698,79 +2698,26 @@ body[data-anim-clock-ambient="off"] .planner-seg rect { transition: none; }
   color: #fff;
 }
 
-/* Floating agent chat window (Atelier / Concierge) rendered as ONE candy
- * button, styled after the Planner chip-field candy chip (Tasks / Quick Notes):
- * a surface-3 face on a 2px frame, on a 5px (--candy-depth-small) band, with
- * var(--radius-md) corners. The outer .aos-chat-window is the immovable base —
- * transparent, carries the band (box-shadow) + the drag transform (imperative,
- * JS-controlled by useDragChat) + the radius that shapes the band. The inner
- * .aos-chat-face holds the header + body (surface-3 + 2px frame) and slides
- * DOWN --cbtn-depth while the header is held (.is-pressed), springs back on
- * release — "holding it down → pressed down; let go → released." On press the
- * face slides down and the top strip reveals app content behind the transparent
- * base, exactly like a chip-field chip pressing onto its band. The translate
- * goes on the INNER face, never the outer base: a wrapper-level translate
- * would clobber the JS drag-position transform.
+/* Floating agent chat window (Atelier / Concierge / Analyst) — the SAME shell
+ * as an overlay module window (user-directed 2026-09-13): `.candy-card` +
+ * `.ov-studio-head`, exactly what OverlayStudioPanel wears. It is a CONTAINER,
+ * not a control — no hover flood, no press, no accent. It used to be ~70 lines
+ * of hand-copied candy button, then briefly the rail tile; both are gone.
  *
- * Candy accent behavior (mirrors the chip-field candy chip, 2029-2032 / 1561):
- * the band + 2px frame + face bg flip to --accent on .is-pressed (held by
- * useDragChat's JS `pressed` state for the whole drag — :active would flicker
- * once the pointer leaves the element) and on :focus-within (chat input focused
- * = the active window). The body's OWN opaque surfaces (MessageList surface-2,
- * ChatInput surface, the surface-2 trays) mask the accent face bg, so the
- * accent reads on the chrome only — header strip + frame + band light up, the
- * message area + input stay on their own surfaces and stay readable. Hover is
- * intentionally omitted: a 520px window you live in would flash the whole frame
- * accent on every mouse-over, which reads as a bug even though the small chips
- * do it. */
-.aos-chat-window {
-  --cbtn-band: var(--surface);
-  --cbtn-frame: 2px;
-  --cbtn-depth: var(--candy-depth-small);
-  border-radius: var(--radius-md);
-  box-shadow:
-    0 var(--cbtn-depth) 0 -2px color-mix(in oklch, var(--cbtn-band), black 10%),
-    0 var(--cbtn-depth) 0 0 color-mix(in oklch, var(--cbtn-band), black 22%);
-  transition: box-shadow 150ms cubic-bezier(0, 0, 0.58, 1);
+ * The card's own padding is --ov-gap (inline, matching .ov-studio-panel), and
+ * the two chrome bands cancel it with negative margins to run edge-to-edge, the
+ * same trick .ov-studio-head uses. The header IS .ov-studio-head, taken
+ * verbatim; only the bottom bar is defined here, mirrored from it.
+ *
+ * .aos-chat-window stays as the hook: useTactileSound excludes it from the
+ * click sound. */
+.aos-chat-window > [data-aos-chat-input] {
+  margin: 0 calc(-1 * var(--ov-gap)) calc(-1 * var(--ov-gap));
+  padding: 10px var(--ov-gap);
+  background: color-mix(in oklch, var(--text) 5%, transparent);
+  border-top: 2px solid var(--border-2);     /* same weight + colour as the card frame */
+  border-radius: 0 0 calc(var(--radius-md) - 2px) calc(var(--radius-md) - 2px);
 }
-.aos-chat-face {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  background: var(--surface-3);
-  border: var(--cbtn-frame) solid color-mix(in oklch, var(--cbtn-band), black 22%);
-  border-radius: inherit;
-  overflow: hidden;
-  transition:
-    transform var(--cbtn-press-dur, 150ms) cubic-bezier(0, 0, 0.58, 1),
-    background 150ms cubic-bezier(0, 0, 0.58, 1),
-    border-color 150ms cubic-bezier(0, 0, 0.58, 1);
-}
-/* Accent states — flip band + frame + face bg to --accent (candy chip
- * behavior). .is-pressed (JS-held, whole drag) + :focus-within (input
- * focused). The body's opaque surfaces mask the accent bg → chrome-only. */
-.aos-chat-window:is(.is-pressed, :focus-within) { --cbtn-band: var(--accent); }
-.aos-chat-window:is(.is-pressed, :focus-within) > .aos-chat-face {
-  background: var(--accent);
-}
-.aos-chat-window.is-pressed > .aos-chat-face {
-  transform: translateY(var(--cbtn-depth));
-}
-/* Header title/subtitle flip white on the accent face — scoped to the title
- * column (.aos-chat-titlecol) so the avatar + header controls + close button
- * (their own colors) are untouched; !important overrides the inline rest
- * colors. Smooth fade matches the bg/border transition. */
-.aos-chat-titlecol span {
-  transition: color 150ms cubic-bezier(0, 0, 0.58, 1);
-}
-.aos-chat-window:is(.is-pressed, :focus-within) .aos-chat-titlecol span {
-  color: #fff !important;
-}
-/* Respect the global animation toggles (mirror the .candy-btn gates). */
-body[data-anim-spring-press="off"] .aos-chat-window.is-pressed .aos-chat-face { transform: none !important; }
-body[data-anim-button-depth="off"] .aos-chat-window { box-shadow: none !important; }
-body[data-anim-button-depth="off"] .aos-chat-window.is-pressed .aos-chat-face { transform: none !important; }
 
 /* Source slot collapse animation. When DraggableSidebarList lifts a tile,
  * the original slot stays in the flow but visibility:hidden + this keyframe

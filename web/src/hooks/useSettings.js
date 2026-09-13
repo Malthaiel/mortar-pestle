@@ -114,19 +114,17 @@ const DEV_DEFAULT = {
 };
 
 // Design mode (SF1-SF11 of Design Mode plan). `mode` is the master overlay
-// toggle exposed by the dock brush button. The Atelier chat window drags freely
-// with an edge magnet: `magnetRadius` (px; 0 = off) is how close to a
-// content-area edge before it snaps flush, `snapCorners` also docks corners, and
-// `dragSmoothness` (none|light|medium|heavy) sets how much it trails the cursor.
+// toggle exposed by the dock brush button. The agent chat windows drag
+// freely — the drag is the overlay panel's (see useDragChat): the app's one
+// glide carries the trail, and the only constraint is a minimum clearance from
+// each app edge. The old magnetRadius / snapCorners / dragSmoothness knobs went
+// with the edge magnets on 2026-09-13.
 // `pendingEdits` mirrors the Tauri-persisted pending-overrides list for fast
 // reads at chat-window mount; the Rust side at app_config_root()/design-pending.json
 // is the source of truth.
 // (The bag lives at settings.agents since the Agents-tab rename; the overlay
 // feature and its design_* IPC keep the Design Mode name.)
 export const AGENTS_DEFAULT = {
-  magnetRadius: 80,
-  snapCorners: false,
-  dragSmoothness: 'medium',
   // Overlay Agents surface — reopen the over-game Concierge to its last open/closed
   // state on each overlay show. Off = the launcher always starts closed. Read in the
   // providerless overlay host by AgentsOverlayLauncher; toggled in Overlay settings.

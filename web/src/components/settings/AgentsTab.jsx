@@ -6,8 +6,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Seg, OutlinedBtn, TextInput, Slider, Topbar } from '../ui/index.js';
-import EnableToggle from '../ui/EnableToggle.jsx';
+import { Seg, OutlinedBtn, TextInput, Topbar } from '../ui/index.js';
 import { AGENTS_DEFAULT, SETTINGS_DEFAULTS } from '../../hooks/useSettings.js';
 import { TAB_SECTIONS, scopeFor, scopeModified } from './settings-registry.js';
 
@@ -221,50 +220,9 @@ function ChatWindowPanel({ settings, setSetting, accent }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <Section title="Chat window">
         <Row
-          anchor="set-agents-magnetRadius"
-          label="Edge magnetism"
-          hint="An agent chat drags freely and snaps flush to the nearest content-area edge when released within this range. 0 = off (free drag anywhere)."
-        >
-          <Slider
-            accent={accent}
-            value={agents.magnetRadius}
-            min={0} max={200} step={10} unit="px"
-            onChange={(v) => setSetting('agents', { magnetRadius: v })}
-          />
-        </Row>
-        <Row
-          anchor="set-agents-snapCorners"
-          label="Snap to corners"
-          hint="Also dock to the corners, not just the four edges, when you drag into one."
-        >
-          <EnableToggle
-            accent={accent}
-            enabled={agents.snapCorners}
-            title="Snap to corners"
-            onChange={(v) => setSetting('agents', { snapCorners: v })}
-          />
-        </Row>
-        <Row
-          anchor="set-agents-dragSmoothness"
-          label="Drag glide"
-          hint="How much an agent chat trails your cursor while you drag it. None pins it exactly (1:1); heavier gives a weightier, smoother trail."
-        >
-          <Seg
-            accent={accent}
-            value={agents.dragSmoothness}
-            options={[
-              { value: 'none',   label: 'None' },
-              { value: 'light',  label: 'Light' },
-              { value: 'medium', label: 'Medium' },
-              { value: 'heavy',  label: 'Heavy' },
-            ]}
-            onChange={(v) => setSetting('agents', { dragSmoothness: v })}
-          />
-        </Row>
-        <Row
           anchor="set-agents-resetPosition"
           label="Chat position"
-          hint="Snap an agent chat back to its default bottom-right corner."
+          hint="Send an agent chat back to its default spot in the bottom-right."
         >
           <OutlinedBtn small onClick={() => setSetting('agents', { chatPosition: null })}>
             Reset position

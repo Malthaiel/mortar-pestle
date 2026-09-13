@@ -31,7 +31,7 @@ export default function AgentChatWindow({
   animIn = 'agentChatIn',
   animOut = 'agentChatOut',
 }) {
-  const { position, pressed, dragHandleProps, dragRef } = useDragChat({ settings, setSetting, posKey });
+  const { pressed, dragStyle, dragHandleProps, dragRef } = useDragChat({ settings, setSetting, posKey });
 
   // Portaled to document.body so the window escapes #root's stacking context
   // (a design-mode filter on #root would otherwise trap it below body-portaled
@@ -39,38 +39,39 @@ export default function AgentChatWindow({
   return createPortal(
     <>
       {preWindow}
+      {/* Two layers on purpose: the OUTER carries the drag translate + the app's
+          glide (the overlay panel's exact mechanism), the INNER carries the
+          entrance/exit animation. One element cannot do both — an animation
+          driving `transform` would clobber the drag position for its whole
+          duration. */}
+      <div ref={dragRef} style={{ position: 'fixed', left: 0, top: 0, zIndex: 'var(--z-design)', ...dragStyle }}>
       <div
-        ref={dragRef}
         data-aos-no-mark
-        className={'aos-chat-window' + (pressed ? ' is-pressed' : '')}
+        className={'candy-card aos-chat-window' + (pressed ? ' is-pressed' : '')}
         style={{
-          position: 'fixed',
-          left: position.x,
-          top: position.y,
           width,
           height,
           display: 'flex', flexDirection: 'column',
-          zIndex: 'var(--z-design)',
+          padding: 'var(--ov-gap)',
+          overflow: 'hidden',
           animation: exiting
             ? `${animOut} 200ms cubic-bezier(0.7, 0, 0.84, 0) both`
             : `${animIn} 240ms cubic-bezier(0.16, 1, 0.3, 1) backwards`,
           transformOrigin: 'bottom right',
-          transition: 'none',
         }}
       >
-        <div className="aos-chat-face">
-          <AgentChatHeader
-            avatar={avatar}
-            title={title}
-            subtitle={subtitle}
-            onClose={onClose}
-            closeTitle={closeTitle}
-            dragHandleProps={dragHandleProps}
-            pressed={pressed}
-            controls={headerControls}
-          />
-          {children}
-        </div>
+        <AgentChatHeader
+          avatar={avatar}
+          title={title}
+          subtitle={subtitle}
+          onClose={onClose}
+          closeTitle={closeTitle}
+          dragHandleProps={dragHandleProps}
+          pressed={pressed}
+          controls={headerControls}
+        />
+        {children}
+      </div>
       </div>
     </>
   , document.body);
@@ -80,11 +81,11 @@ function AgentChatHeader({ avatar, title, subtitle, onClose, closeTitle, dragHan
   return (
     <div
       data-aos-chat-drag-handle
+      className="candy-center-row ov-studio-head"
       {...dragHandleProps}
       style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '10px 12px',
-        borderBottom: '1px solid var(--border-soft)',
+        touchAction: 'none',
+        justifyContent: 'space-between',
         cursor: pressed ? 'grabbing' : 'grab',
         userSelect: 'none',
         flexShrink: 0,

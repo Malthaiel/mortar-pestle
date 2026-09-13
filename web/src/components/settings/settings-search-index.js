@@ -174,12 +174,6 @@ export const SETTINGS_SEARCH_INDEX = [
     keywords: ['opus', 'sonnet', 'haiku', 'concierge', 'analyst'], settingsKey: 'agents.model' },
   { id: 'agents.apiKey', label: 'Anthropic key', tabId: 'agents', section: 'general', anchor: 'set-agents-apiKey',
     keywords: ['api key', 'secret', 'keychain', 'token'] },
-  { id: 'agents.magnetRadius', label: 'Edge magnetism', tabId: 'agents', section: 'chat-window', anchor: 'set-agents-magnetRadius',
-    keywords: ['chat', 'snap', 'free', 'magnet', 'edge', 'drag', 'window'], settingsKey: 'agents.magnetRadius' },
-  { id: 'agents.snapCorners', label: 'Snap chat to corners', tabId: 'agents', section: 'chat-window', anchor: 'set-agents-snapCorners',
-    keywords: ['chat', 'snap', 'corner', 'dock', 'drag', 'window'], valueText: (s) => (s?.agents?.snapCorners ? 'on' : 'off') },
-  { id: 'agents.dragSmoothness', label: 'Drag glide', tabId: 'agents', section: 'chat-window', anchor: 'set-agents-dragSmoothness',
-    keywords: ['chat', 'drag', 'smooth', 'glide', 'trail', 'lag', 'weight', 'window'], settingsKey: 'agents.dragSmoothness' },
   { id: 'agents.resetPosition', label: 'Reset chat position', tabId: 'agents', section: 'chat-window', anchor: 'set-agents-resetPosition',
     keywords: ['chat', 'reset', 'position', 'default', 'window', 'drag'] },
 
