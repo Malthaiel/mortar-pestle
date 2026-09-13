@@ -109,10 +109,12 @@ export default function BrowserPage({ api, accent, rest, inOverlay = false, sync
     return () => { syncRef.current = null; };
   }, [syncRef, syncBounds]);
 
-  const navigateActive = useCallback((url) => {
-    if (!active || !url) return;
+  // Takes the tab id rather than assuming the active tab: the deep-link effect
+  // below opens a FRESH tab and must drive that one, and `active` would still be
+  // the previous tab on the render where newTab() was called.
+  const navigateTab = useCallback((id, url) => {
+    if (!id || !url) return;
     setPopup(null);
-    const id = active.id;
     store.navigate(id, url);
     (async () => {
       // A tab added after the one-shot seed (a new tab, or the replacement for
@@ -134,7 +136,9 @@ export default function BrowserPage({ api, accent, rest, inOverlay = false, sync
       store.setTabMeta(id, { crashed: String(e?.message || e || 'load failed'), loading: false });
       console.error('[browser] navigate', e);
     });
-  }, [active, api, syncBounds]);
+  }, [api, syncBounds]);
+
+  const navigateActive = useCallback((url) => navigateTab(active?.id, url), [active, navigateTab]);
 
   // Recreate persisted tabs in the Rust backend once per app session.
   useEffect(() => {
@@ -232,17 +236,27 @@ export default function BrowserPage({ api, accent, rest, inOverlay = false, sync
   // Mirror the active tab's URL into the editable address bar.
   useEffect(() => { setDraft(activeUrl ?? ''); setHint(''); setConfirmClear(false); }, [activeKey, activeUrl]);
 
-  // Deep-link: /tools/browser/<encoded-url> loads into the active tab.
+  // Deep-link: /tools/browser/<url> opens the URL in a NEW tab (user-directed
+  // 2026-09-13 — it used to take over whichever tab was active, so following a
+  // link from a film page destroyed what you were reading).
+  //
+  // NOT decoded here: the browser module's own route matcher safeDecodes its
+  // capture (index.jsx), which is the convention every module matcher follows —
+  // App.jsx matches slots against the RAW route.path. A second pass here would
+  // turn a deep-linked literal %41 into an A and silently load a different URL.
+  //
+  // The ref guard is load-bearing: StrictMode double-invokes effects in dev, and
+  // without it one click produced two tabs. It resets on unmount, so leaving the
+  // browser and clicking the same link again correctly opens another tab.
+  const lastDeepLink = useRef(null);
   useEffect(() => {
-    if (!ready || !rest || !active) return;
+    if (!ready || !rest) return;
     if (rest === 'vault' || rest.startsWith('vault/')) return; // reserved for the full vault route (SF4)
     if (rest === 'history') return; // reserved for the full history route
-    // NOT decoded here: `rest` is a router capture and matchRoute already decoded it. The second pass
-    // turned a deep-linked literal %41 into an A, silently loading a different URL; the try/catch only
-    // hid the throwing half of that.
-    navigateActive(rest);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, rest]);
+    if (lastDeepLink.current === rest) return;
+    lastDeepLink.current = rest;
+    navigateTab(store.newTab(), rest);
+  }, [ready, rest, navigateTab]);
 
   // Keyboard: Ctrl+T new tab, Ctrl+Tab next; Ctrl+Shift+Tab prev + Ctrl+1..9
   // jump are handled manually (avoids 9 registry rows + exact-shift matching).
@@ -476,12 +490,21 @@ const hintStyle = {
 // Shown over the (hidden) native view when a tab's renderer process died and
 // the one automatic reload didn't bring it back. Offers a manual retry.
 function CrashedNotice({ reason, accent, onReload }) {
-  const msg = (reason === 'ExceededMemoryLimit'
+  // `reason` is either a WebView2 ProcessFailed kind (a real renderer death, which
+  // the Rust side already auto-reloaded once) or the literal message from a failed
+  // create/navigate — see navigateTab's catch. The second kind used to be flattened
+  // into the same generic sentence, which hid "blocked: only https:// public URLs
+  // are allowed" behind "stopped responding" and cost a whole debugging session.
+  // Renderer kinds keep their friendly wording; anything else shows what actually
+  // failed, and drops the reload claim, which is untrue for a navigate that never ran.
+  const rendererMsg = reason === 'ExceededMemoryLimit'
     ? "This page used too much memory and was stopped."
     : reason === 'Crashed'
     ? "This page crashed the browser engine."
-    : "This page's renderer stopped unexpectedly.")
-    + " It was reloaded once automatically — reload again if it didn't recover.";
+    : null;
+  const msg = rendererMsg
+    ? rendererMsg + " It was reloaded once automatically — reload again if it didn't recover."
+    : (reason || "This page's renderer stopped unexpectedly.");
   return (
     <div style={crashWrap}>
       <div style={crashCard}>
