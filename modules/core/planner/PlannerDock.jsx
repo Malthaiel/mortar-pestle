@@ -60,6 +60,36 @@ const DEFAULT_APP_ACCENT = '#c0392b';
 // so they stay the same FRACTION of the widget at any sidebar width.
 const SPOUT_GAP = 40;
 const SPOUT_JOIN = 14;
+// How far PAST the hand the opening pour shoots before it comes back (user-directed
+// 2026-09-13), as a fraction of the whole run from the spout mouths to full pour.
+// A third: far enough to read as a throw, short enough that a hand near the top does
+// not just get the old flat-out run to the foot of the pipe under a new name. It is
+// clamped to a full pour at the far end, so a hand already at the bottom simply stops
+// there - there is no pipe past it to shoot down.
+// NOT linear in what you see (measured 2026-09-13): the run's first fifth is the drop
+// plus ~122px of the calendar's top edge, all at one height, so 0.2 buys an 18px dip
+// and 0.333 buys 104. Past that flat stretch it is ~684px of dip per unit. Read any
+// change to this number off a capture, never off the fraction.
+const SLING_OVER = 0.27;
+// The throw's share of that clock (user-directed 2026-09-13: "decrease the time that
+// it stops at the peak slightly"). The app's curve arrives at ~98% of the throw with
+// a sixth of its time still to run, and the water sits there until the leg is over -
+// measured at 7 frames, ~115ms, of near-stationary before the return begins. This
+// cuts that tail off. It does NOT shorten the throw: the target is long since
+// reached, so the depth is unchanged and only the dwell goes.
+const SLING_OUT = 0.55;
+// The throw's own curve, and the ONE place this animation departs from the app's
+// (user-directed 2026-09-13: "the slingshot slows down when it gets TOWARDS the peak
+// - i want to make it faster"). The app's easing is a hard ease-OUT: measured on the
+// throw it gives up 26px in its first frame and then crawls the last 20px over
+// fourteen, which is a long glide, not a throw. This is a shallow ease-out instead -
+// it holds speed for most of the run and only eases at the very end. The RETURN is
+// untouched and still rides the app's own curve.
+const SLING_OUT_BEZ = [0.25, 0.46, 0.45, 0.94];
+// The catch-up a hand gets when it LEAVES the widget and comes back somewhere else,
+// as a share of the calendar's clock. Half: long enough to read as travel rather than
+// a jump, short enough that the front is under the hand before it starts steering.
+const SLING_CATCH = 0.5;
 // THE FRONT CHASES THE POINTER (user-directed 2026-09-09), and it REMEMBERS where
 // it was left (user-directed 2026-09-09).
 //
@@ -280,7 +310,19 @@ export default function PlannerDock() {
   // the lap left to travel. The flag that chose between them (`wrapRef`) survived
   // the rewrite as dead weight - `tubeSpans` folds `2 - lead` straight back to
   // `lead`, so it painted the retrace either way - and is gone with it.
-  const toggleCalendar = () => setModuleSetting('calendarCollapsed', !calendarCollapsed);
+  // The live pointer, in CLIENT coordinates because that is what the event carries
+  // and what the dock's own rect is measured in. `fresh` says a move has arrived
+  // that the loop has not yet turned into a destination; it is cleared on use, so a
+  // hand that stops steering stops moving the liquid without needing a timer.
+  //
+  // It lives out here rather than inside the tube effect because THE OPENING CLICK
+  // WRITES IT: on the frame the calendar opens no pointermove has arrived yet, and
+  // the click's own position is the only thing the slingshot has to aim at.
+  const pointRef = useRef({ x: 0, y: 0, fresh: false });
+  const toggleCalendar = (e) => {
+    if (e?.clientX != null) { pointRef.current.x = e.clientX; pointRef.current.y = e.clientY; }
+    setModuleSetting('calendarCollapsed', !calendarCollapsed);
+  };
 
   // ── The tube (Ribbon Pour revision, 2026-09-09) ────────────────────
   // The strip is a TUBE. One closed circuit drawn as a single stroke: a ring
@@ -305,7 +347,17 @@ export default function PlannerDock() {
   // leaves the widget leaves `to` standing and the front holds that spot instead of
   // falling back to the calendar's own number (user-directed 2026-09-09). Also a ref
   // for the same reason `waterRef` is: a toggle tears the loop down mid-flight.
-  const tweenRef = useRef({ from: 0, to: 0, t0: 0, ms: 0, ease: (x) => x });
+  //
+  // `phase` is the OPENING SLINGSHOT (user-directed 2026-09-13). An open used to aim
+  // the liquid at the foot of the pipe flat out, and the first pointer move after it
+  // landed re-aimed the front with a ZERO-length run - a teleport back up to the hand,
+  // which is the "goes all the way down then jumps back" this replaces. Now an open
+  // runs two legs on the calendar's own clock: `sling`, to SLING_OVER past wherever
+  // the hand is, then `settle`, back onto the hand. Both legs RE-READ the hand every
+  // frame, so a moving hand bends the shot instead of cancelling it; only once the
+  // second leg lands does the phase go `free` and the hand write the front directly
+  // again. A close is `free` from the start - it has one place to go.
+  const tweenRef = useRef({ from: 0, to: 0, t0: 0, ms: 0, ease: (x) => x, phase: 'free', aim: 0 });
   const grooveRef = useRef(null);   // ring 3 on the dial: the top ring's ruler
   const tubeRef = useRef([]);       // [top ring, laid wall, liquid, hit target]
   // An ARRAY ref, and the callbacks below re-seed it: Fast Refresh keeps the ref
@@ -432,13 +484,11 @@ export default function PlannerDock() {
     const clock = getComputedStyle(body);
     const tweenMs = (parseFloat(clock.transitionDuration) || 0) * 1000;
     const tweenBez = parseBezier(clock.transitionTimingFunction);
-    // The live pointer, in CLIENT coordinates because that is what the event carries
-    // and what the dock's own rect is measured in. `fresh` says a move has arrived
-    // that the loop has not yet turned into a destination; it is cleared on use, so a
-    // hand that stops steering stops moving the liquid without needing a timer.
-    const pointer = {
-      x: 0, y: 0, fresh: false,
-    };
+    // Shared with the click handler (see `pointRef`), so the position the calendar
+    // was opened AT survives into this loop. Cleared of any stale `fresh` on mount:
+    // a move that arrived before the toggle is not a steer of this pour.
+    const pointer = pointRef.current;
+    pointer.fresh = false;
     const frame = () => {
       const d = dock.getBoundingClientRect();
       const b = body.getBoundingClientRect();
@@ -500,25 +550,33 @@ export default function PlannerDock() {
       const now = performance.now();
       if (!seeded) {
         seeded = true;
-        // Every toggle rebuilds this loop, and a toggle is a destination of its own:
-        // a click aims the liquid at the end of the pipe (open) or back home (shut),
-        // and a hand that never moves after the click gets the plain pour it always
-        // got. A pointer move inside the widget overrides this a frame later.
+        // Every toggle rebuilds this loop, and a toggle is a destination of its own.
+        // An OPEN sets off on the slingshot's first leg and lets the block below aim
+        // it, every frame, at whatever the hand is doing; a CLOSE has one place to go
+        // and goes there. Either way a hand that never moves gets a complete journey.
+        tw.phase = calendarCollapsed ? 'free' : 'sling';
         tw.from = waterRef.current;
-        tw.to = calendarCollapsed ? 0 : 1;
+        tw.to = calendarCollapsed ? 0 : waterRef.current;
         tw.t0 = now;
-        tw.ms = tweenMs;      // a toggle is a journey: the calendar's own clock
-        tw.ease = (x) => bezierEase(tweenBez, x);
+        // A toggle is a journey: the calendar's own clock, less the throw's dead tail.
+        tw.ms = calendarCollapsed ? tweenMs : tweenMs * SLING_OUT;
+        tw.ease = calendarCollapsed
+          ? (x) => bezierEase(tweenBez, x)
+          : (x) => bezierEase(SLING_OUT_BEZ, x);
         // A widget that was already at rest when this effect mounted starts with the
         // water where the pipe is; without it the first frame would haul the front
         // home from nothing. Mid-pour (a toggle) it deliberately does NOT snap.
+        // No slingshot for a widget that was ALREADY open when this mounted (a reload,
+        // a Fast Refresh, the sidebar coming back): nothing was clicked, so there is
+        // no throw to make and the front just sits where the pipe is.
         if (Math.abs(m - (calendarCollapsed ? 0 : 1)) < 0.001) {
           waterRef.current = m;
           tw.from = m;
+          tw.to = m;
+          tw.phase = 'free';
         }
       }
-      if (!calendarCollapsed && mouthRun > 0 && pointer.fresh) {
-        pointer.fresh = false;
+      if (!calendarCollapsed && mouthRun > 0) {
         // ONE number serves both slugs because they move together: `fTop` is the right
         // mouth and runs forward, 0 is the left mouth and runs backward toward 1, and
         // the two branches are mirrors, so the right one is asked and the left follows.
@@ -539,6 +597,18 @@ export default function PlannerDock() {
         // height search with the crossing put on a CLOCK instead lagged the hand.
         // Evenness is what survived all three.
         //
+        // So the rate is LEAST-SQUARES FITTED to the slug middle's own height, every
+        // move, off the live path. Sample where the middle actually sits at N evenly
+        // spaced points of the pour, fit ONE straight line through those heights, and
+        // invert it. The line's slope is a single pipe-per-pixel rate, so evenness is
+        // untouched; what changes is that the line is the best straight answer to a
+        // curve that bulges rather than a chord pinned to a corner of the bounding box
+        // the middle never visits. The residual error now STRADDLES the hand - a little
+        // high near the top, a little low near the bottom - instead of sitting above it
+        // everywhere, which is the whole of the "off centre, too high" complaint.
+        //
+        // Every input is measured here: the heights come from the path that was written
+        // this frame, so the calendar's easing height moves the fit with it.
         // Both ends are still measured off the live path every move: the top of the
         // tube's own box is the liquid home, the slug middle's foot at full pour is
         // the far end, and the calendar's height moves both because the box and the
@@ -548,13 +618,32 @@ export default function PlannerDock() {
         const bb = hitPath.getBBox();
         const foot = hitPath.getPointAtLength((midHome + mouthRun) * len).y;
         const hand = Math.max(1, foot - bb.y);
-        const next = Math.min(1, Math.max(0, (pointer.y - d.top - bb.y) / hand));
-        // Written straight through: a zero-length run is the tween arriving on the frame
-        // it starts, so there is one code path for both this and the toggle.
-        tw.from = next;
-        tw.to = next;
-        tw.t0 = now;
-        tw.ms = 0;
+        // Asked EVERY FRAME, not only when a move arrives: the slingshot's two legs
+        // re-aim off it continuously, and the calendar's own height is still growing
+        // under the hand while they run, so the same hand is a different place on the
+        // pipe from one frame to the next.
+        tw.aim = Math.min(1, Math.max(0, (pointer.y - d.top - bb.y) / hand));
+        if (tw.phase === 'free' && pointer.fresh) {
+          // A hand ARRIVING gets a run; a hand STEERING gets the front written straight
+          // to it. Both go through the same tween - the steering case is a zero-length
+          // one, which arrives on the frame it starts - so there is one code path here,
+          // for this, for the toggle, and for the catch-up.
+          const back = pointer.back;
+          pointer.back = false;
+          tw.phase = back ? 'settle' : 'free';
+          tw.from = back ? waterRef.current : tw.aim;
+          tw.to = tw.aim;
+          tw.t0 = now;
+          tw.ms = back ? tweenMs * SLING_CATCH : 0;
+          tw.ease = (x) => bezierEase(tweenBez, x);
+        } else if (tw.phase === 'sling') {
+          // Leg one: past the hand. Only the DESTINATION moves - `from`, `t0` and `ms`
+          // stand - so a hand moving mid-shot bends the throw rather than cancelling it.
+          tw.to = Math.min(1, tw.aim + SLING_OVER);
+        } else if (tw.phase === 'settle') {
+          tw.to = tw.aim;
+        }
+        pointer.fresh = false;
       }
       // The run itself, on the calendar's curve. Clamped to the pipe every frame: a
       // destination further down the tube than the pipe has been laid is simply the
@@ -562,6 +651,18 @@ export default function PlannerDock() {
       // with no hand on it look exactly as it did before any of this existed.
       const p = tw.ms > 0 ? Math.min(1, (now - tw.t0) / tw.ms) : 1;
       waterRef.current = Math.min(m, tw.from + (tw.to - tw.from) * tw.ease(p));
+      // A landed leg hands over to the next one. `from` is WHERE THE WATER ACTUALLY IS,
+      // read back off the line above rather than assumed to be the leg's target: the
+      // clamp to the pipe may have held it short, and starting the return from a place
+      // the front never reached is the one way to put a jump back into this.
+      if (p >= 1 && tw.phase !== 'free') {
+        tw.phase = tw.phase === 'sling' ? 'settle' : 'free';
+        tw.from = waterRef.current;
+        tw.to = tw.phase === 'settle' ? tw.aim : tw.to;
+        tw.t0 = now;
+        tw.ms = tw.phase === 'settle' ? tweenMs : 0;   // the return runs the pour's clock
+        tw.ease = (x) => bezierEase(tweenBez, x);      // ... and the pour's own curve
+      }
 
       const { wallFrom, wallTo, tail, head, tailL, headL } = tubeSpans(m, geom, waterRef.current);
       const run = Math.max(0, head - tail);
@@ -601,7 +702,10 @@ export default function PlannerDock() {
       // pipe: a front left partway down the tube by a hand that walked away is a
       // legitimate resting place now, and testing against `m` here would spin the loop
       // forever waiting for a catch-up that is never coming.
-      const done = rest && p >= 1;
+      // ... and a slingshot still mid-flight is a run of its own: the phase has to be
+      // back to `free` before the loop is allowed to stop, or the return leg would be
+      // cut off the moment the calendar finished opening under it.
+      const done = rest && p >= 1 && tw.phase === 'free';
       raf = done ? 0 : requestAnimationFrame(frame);
     };
 
@@ -619,7 +723,15 @@ export default function PlannerDock() {
     const onMove = (e) => {
       const r = dock.getBoundingClientRect();
       if (e.clientX < r.left || e.clientX > r.right
-        || e.clientY < r.top || e.clientY > r.bottom) return;
+        || e.clientY < r.top || e.clientY > r.bottom) { pointer.away = true; return; }
+      // A hand that LEFT and came back somewhere else is not steering, it is arriving
+      // (user-directed 2026-09-13). Dropping the outside moves is what makes the
+      // difference visible: the hand crosses half the widget while unwatched, so the
+      // first move back inside is a jump, and the straight-through write below paints
+      // it as a teleport. Flagged here, it gets the same short glide the slingshot's
+      // return uses instead. Only the FIRST move back is flagged; once the front has
+      // caught up, steering is immediate again.
+      if (pointer.away) { pointer.away = false; pointer.back = true; }
       pointer.x = e.clientX;
       pointer.y = e.clientY;
       pointer.fresh = true;
