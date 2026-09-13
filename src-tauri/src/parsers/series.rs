@@ -186,6 +186,9 @@ pub struct Series {
     /// Credit headshots, index-aligned with `crew`. Empty string = no photo.
     pub crew_images: Vec<String>,
     pub studios: Vec<String>,
+    /// Theatrical release dates as "YYYY-MM-DD|CC|CERT" lines -- the page groups
+    /// them by day and names the country itself.
+    pub releases: Vec<String>,
     pub budget: Option<i64>,
     pub box_office: Option<i64>,
     /// TMDb's own id for the film — the page links straight to it.
@@ -1045,6 +1048,7 @@ pub fn read_series(series_path: &str) -> Result<Series, VaultError> {
         crew: as_strings(meta.get("Crew")),
         crew_images: as_strings(meta.get("Crew Images")),
         studios: as_strings(meta.get("Studios")),
+        releases: as_strings(meta.get("Releases")),
         budget: meta_i64(&meta, "Budget"),
         box_office: meta_i64(&meta, "Box Office"),
         tmdb_id: meta_i64(&meta, "TMDb ID"),

@@ -233,6 +233,11 @@ fn push_credits(fm: &mut String, d: &CineDetail, t: Option<&TmdbDetail>) {
     if !t.studios.is_empty() {
         fm.push_str(&yaml_list("Studios", &t.studios));
     }
+    // "YYYY-MM-DD|CC|CERT" per line, already sorted by the TMDb client. Written
+    // in full for the same reason `Cast` is: the card is the record.
+    if !t.releases.is_empty() {
+        fm.push_str(&yaml_list("Releases", &t.releases));
+    }
     // Absent, not zero: TMDb sends 0 for "unknown", which the client already
     // filtered to None, and a row that says $0 would be a lie.
     if let Some(b) = t.budget {
@@ -259,7 +264,7 @@ fn push_credits(fm: &mut String, d: &CineDetail, t: Option<&TmdbDetail>) {
 
 const CREDIT_KEYS: &[&str] = &[
     "Cast", "Cast Images", "Writer", "Country", "Trailer", "Logo", "Crew", "Crew Images",
-    "Studios", "Budget", "Box Office", "Tagline", "TMDb ID", "Backdrop",
+    "Studios", "Releases", "Budget", "Box Office", "Tagline", "TMDb ID", "Backdrop",
 ];
 
 /// A film's card: the same frontmatter block a show gets, minus everything that

@@ -19,6 +19,7 @@
 // Source/Rating/Broadcast/Aired sit under the alt-titles in the left column.
 // Premiered / Type / Studios render as clickable candy chips (taxon discovery).
 
+import { cloneElement } from 'react';
 import { go as goTaxon } from './TaxonLinks.jsx';
 import { BODY_COLOR as FILM_BODY_COLOR } from './AnimeMainColumn.jsx';
 import { candyCenterOffset } from '@host/util/candy.js';
@@ -30,6 +31,21 @@ import AnimeTrailer, { normalizeTrailer } from './AnimeTrailer.jsx';
 const FILM_POSTER_W = 221;
 
 const fmtNum = (n) => (n == null || n === '' ? null : Number(n).toLocaleString());
+
+// An ISO day as the reader's own long date. Exported because the Releases tab
+// prints the same kind of day and must not re-derive the guard below.
+//
+// A bare YYYY-MM-DD parses as UTC midnight, which then renders as the PREVIOUS
+// day in any timezone behind UTC -- 1979-06-22 showed as June 21. Build it from
+// the parts so the date means the calendar day it states. Anything unparseable
+// passes through as written rather than rendering "Invalid Date".
+export const prettyDate = (iso) => {
+  if (iso == null || iso === '') return null;
+  const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const d = m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(iso);
+  if (Number.isNaN(d.getTime())) return String(iso);
+  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
+};
 const has = (v) => (Array.isArray(v) ? v.length > 0 : v != null && v !== '');
 
 // Label/value row for the alt-titles + the left-column Information block. The
@@ -111,7 +127,7 @@ function SourceBtn({ label, url, filmLayout }) {
       data-shape={filmLayout ? 'chip' : undefined}
       className={filmLayout ? 'candy-btn is-hover-accent' : 'candy-btn is-primary'}
       style={{ height: filmLayout ? 26 : 30 }}
-    ><span className="candy-face" style={{ fontSize: 11 }}>{label} ↗</span></button>
+    ><span className="candy-face" style={{ fontSize: 11 }}>{label}</span></button>
   );
 }
 
@@ -197,16 +213,6 @@ export default function AnimeDetailHeader({
   // A film leads with its release DAY, not a season label. Read from the card's
   // own ISO string; anything unparseable passes through as written rather than
   // rendering "Invalid Date".
-  const prettyDate = (iso) => {
-    if (!has(iso)) return null;
-    // A bare YYYY-MM-DD parses as UTC midnight, which then renders as the
-    // PREVIOUS day in any timezone behind UTC -- 1979-06-22 showed as June 21.
-    // Build it from the parts so the date means the calendar day it states.
-    const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
-    const d = m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(iso);
-    if (Number.isNaN(d.getTime())) return String(iso);
-    return d.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
-  };
   const filmDate = prettyDate(released);
   // One "open the source" button per site. Anime passes a malId and gets the MAL
   // link; other domains pass the url and label they belong to, plus whatever
@@ -218,6 +224,9 @@ export default function AnimeDetailHeader({
     ...(Array.isArray(extraSources) ? extraSources : []),
   ].filter(x => x && x.url);
   const sourceBtns = sources.map(x => <SourceBtn key={x.label} {...x} filmLayout={filmLayout} />);
+  // Sits beside the title: who directed it. The DATE used to live here too;
+  // it now sits on the fact line below, immediately left of the runtime, so
+  // when-and-how-long read as one pair. Stated in exactly one place either way.
   // Sits beside the title: who directed it. The DATE used to live here too;
   // it now sits on the fact line below, immediately left of the runtime, so
   // when-and-how-long read as one pair. Stated in exactly one place either way.
@@ -297,6 +306,13 @@ export default function AnimeDetailHeader({
             </span>
           </button>
 
+          {/* Source buttons sit under the poster on a film: the title line above
+              carries enough already, and the poster column is the one place they
+              are the full column width with nothing to compete with. */}
+          {filmLayout && sourceBtns.length > 0 && (
+            <div className="candy-split" style={{ '--cbtn-size': '26px', alignSelf: 'center' }}>{sourceBtns}</div>
+          )}
+
           {/* Information — unified MAL-style label/value list: Japanese, Synonyms,
               Source, Rating, Broadcast, Aired, Genres, Themes, Demographic, Producers.
               Taxa values stay clickable (text links) for taxon discovery. */}
@@ -329,7 +345,7 @@ export default function AnimeDetailHeader({
         </div>
 
         {/* ── RIGHT COLUMN — score + left stats + trailer + controls OVER synopsis ── */}
-        <div style={{ flex: 1, minWidth: 320, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ flex: 1, minWidth: 320, display: 'flex', flexDirection: 'column', gap: 10 }}>
           {/* FILM HEAD — title beside the poster, release date + director on the
               same line, then rating / date / genres / runtime left to right. */}
           {filmLayout && (
@@ -338,7 +354,6 @@ export default function AnimeDetailHeader({
                 <h2 style={{ margin: 0, fontSize: 'calc(28px * var(--film-head))', fontWeight: 700, color: 'var(--text)', lineHeight: 1.12, letterSpacing: '-0.015em' }}>{title}</h2>
                 {filmByline && <span style={{ fontSize: 'calc(13px * var(--film-head))', color: FILM_BODY_COLOR }}>{filmByline}</span>}
                 <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                  {sourceBtns}
                   {topRight}
                 </div>
               </div>
@@ -409,7 +424,7 @@ export default function AnimeDetailHeader({
               )}
 
               {/* CONTROLS — uniform-height buttons, evenly spaced, vertically centered */}
-              {(rating || actions) && (
+              {!filmLayout && (rating || actions) && (
                 <div className={filmLayout ? 'anime-controls-box is-bare' : 'candy-panel anime-controls-box'}>
                   <div className="anime-rail-controls">
                     {rating}
@@ -421,7 +436,12 @@ export default function AnimeDetailHeader({
           )}
 
           {/* Synopsis + credits etc. (passed by the page) */}
-          {rightColumn}
+          {/* On a film the controls belong on the tab strip line, and the tab
+              strip lives inside the main column — so they are handed down
+              rather than rendered in their own box above it. */}
+          {filmLayout && (rating || actions)
+            ? cloneElement(rightColumn, { tabActions: <>{rating}{actions}</> })
+            : rightColumn}
         </div>
       </div>
 

@@ -16,6 +16,7 @@ import AnimeCredits from './AnimeCredits.jsx';
 import AnimeThemes from './AnimeThemes.jsx';
 import AnimeRecommendations from './AnimeRecommendations.jsx';
 import AnimeTrailer, { normalizeTrailer } from './AnimeTrailer.jsx';
+import { prettyDate } from './AnimeDetailHeader.jsx';
 import { usePersistedState } from '@host/components/vault-tree/useTreeExpansion.js';
 import { EyebrowHeading } from '@host/components/ui/Eyebrow.jsx';
 
@@ -31,60 +32,69 @@ function splitCredit(entry, sep) {
   return { name: entry.slice(0, i).trim(), role: entry.slice(i + sep.length).trim() };
 }
 
-// Cast / Crew as FUSED PAIRS: a headshot button welded on top of the name chip,
-// the two reading as one unit -- the vertical twin of .candy-split (which is
-// row-only: it overlaps with margin-left and squares the start/end corners, so
-// a column needs its own rule set, .candy-stack).
-//
-// The name chip is UNCHANGED from the plain-chip version: same .candy-btn
-// [data-shape="chip"], same name + role, same auto width. The photo simply
-// takes whatever width that name needs, cropped to fill. Both halves press.
-//
-// Images arrive as a list parallel to the names BY INDEX (Rust writes
-// `Cast Images` / `Crew Images` alongside `Cast` / `Crew`, an empty string where
-// TMDb has no headshot), so the pairing is positional -- never re-sort one list
-// without the other.
-function CreditPair({ name, role, image }) {
-  const title = role ? `${name} — ${role}` : name;
+// One chip: a bold thing, and the quieter thing about it. Cast uses it for
+// name/character, Crew for name/job, Releases for country/certificate -- one
+// shape, so those three lists can never drift apart visually.
+function Chip({ name, role }) {
   return (
-    <span className="candy-stack" title={title}>
-      <span className="candy-btn film-credit-photo" data-shape="chip">
-        <span className="candy-face">
-          {image
-            ? <img src={image} alt="" loading="lazy" />
-            : <span className="film-credit-nophoto" aria-hidden>—</span>}
-        </span>
-      </span>
-      <span className="candy-btn" data-shape="chip">
-        <span className="candy-face">
-          {name}
-          {role && <span className="film-credit-role">{role}</span>}
-        </span>
+    <span className="candy-btn is-hover-accent" data-shape="chip"
+      title={role ? `${name} — ${role}` : name}>
+      <span className="candy-face">
+        {name}
+        {role && <span className="film-credit-role">{role}</span>}
       </span>
     </span>
   );
 }
 
-// No portraits at all in a list (TMDb had none for anyone) -> fall back to the
-// bare chips rather than a run of empty grey boxes.
-function CreditList({ entries, images, sep }) {
+// Cast / Crew as plain chips: name, plus the role beside it. Headshots were
+// tried and reverted -- text only.
+function CreditList({ entries, sep }) {
   const rows = (entries || []).filter(Boolean).map(e => splitCredit(e, sep));
   if (!rows.length) return null;
-  const imgs = Array.isArray(images) ? images : [];
-  const anyPhoto = imgs.some(Boolean);
   return (
-    <div className={'film-credit-list' + (anyPhoto ? ' has-photos' : '')}>
-      {rows.map((r, i) => (anyPhoto
-        ? <CreditPair key={`${r.name}-${i}`} name={r.name} role={r.role} image={imgs[i] || ''} />
-        : (
-          <span key={`${r.name}-${i}`} className="candy-btn" data-shape="chip"
-            title={r.role ? `${r.name} — ${r.role}` : r.name}>
-            <span className="candy-face">
-              {r.name}
-              {r.role && <span className="film-credit-role">{r.role}</span>}
-            </span>
-          </span>
-        )))}
+    <div className="film-credit-list">
+      {rows.map((r, i) => <Chip key={`${r.name}-${i}`} name={r.name} role={r.role} />)}
+    </div>
+  );
+}
+
+// A country CODE is not a country: the platform already ships the name table for
+// the reader's own language, so nothing here holds a list of 200 countries that
+// would go stale. An unknown code falls back to the code itself.
+const REGION_NAMES = (() => {
+  try { return new Intl.DisplayNames(undefined, { type: 'region' }); } catch { return null; }
+})();
+const country = (code) => {
+  try { return REGION_NAMES?.of(code) || code; } catch { return code; }
+};
+
+// Release dates arrive as flat "YYYY-MM-DD|CC|CERT" lines, already sorted by the
+// Rust client. Group the run of lines sharing a day into one dated block -- the
+// same shape IMDb's release-info page uses, because a film's release is a
+// sequence of days, not a list of countries.
+//
+// No flags: Windows ships no flag glyphs in its emoji font and paints the two
+// letters of the code instead, which is worse than the country's own name.
+function ReleaseList({ entries }) {
+  const days = [];
+  for (const e of (entries || []).filter(Boolean)) {
+    const [date, code, cert] = String(e).split('|');
+    if (!date || !code) continue;
+    if (!days.length || days[days.length - 1].date !== date) days.push({ date, rows: [] });
+    days[days.length - 1].rows.push({ code, cert });
+  }
+  if (!days.length) return null;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {days.map(d => (
+        <div key={d.date} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)' }}>{prettyDate(d.date)}</div>
+          <div className="film-credit-list">
+            {d.rows.map((r, i) => <Chip key={`${r.code}-${i}`} name={country(r.code)} role={r.cert} />)}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -111,15 +121,15 @@ function EmptyTab({ children }) {
   return <div style={{ fontSize: 12, color: 'var(--text-faint)', padding: '4px 0' }}>{children}</div>;
 }
 
-function FilmColumn({
-  accent, synopsis, cast, crew, castImages, crewImages, writer, studios, country, budget, boxOffice, trailer,
+function FilmColumn({ tabActions,
+  accent, synopsis, cast, crew, castImages, crewImages, writer, studios, countries, releases, budget, boxOffice, trailer,
 }) {
   const [tab, setTab] = usePersistedState('library:filmTab', 'Cast');
   const trailerObj = normalizeTrailer(trailer);
   const active = FILM_TABS.includes(tab) ? tab : 'Cast';
   const details = [
     ['Studios', list(studios)],
-    ['Country', list(country)],
+    ['Country', list(countries)],
     ['Budget', money(budget)],
     ['Box Office', money(boxOffice)],
   ].filter(([, v]) => v != null && v !== '');
@@ -127,7 +137,7 @@ function FilmColumn({
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       {synopsis && (
         <p style={{
-          margin: 0, fontSize: 13, lineHeight: 1.6, color: BODY_COLOR,
+          margin: 0, fontSize: 14, lineHeight: 1.6, color: BODY_COLOR,
           maxWidth: 760, whiteSpace: 'pre-wrap',
         }}>{synopsis}</p>
       )}
@@ -135,25 +145,29 @@ function FilmColumn({
           ONE unit (Component Map § Default Components), the same fused shell the
           titlebar's Settings / Recycling bin / Processes / Downloads run uses.
           CSS-only: a div plus ordinary .candy-btn children, sized by --cbtn-size. */}
-      <div className="candy-split" style={{ '--accent': accent || 'var(--accent)', '--cbtn-size': '26px' }}>
-        {FILM_TABS.map(t => (
-          <button
-            key={t}
-            type="button"
-            data-own-press
-            data-shape="chip"
-            className={'candy-btn is-hover-accent' + (t === active ? ' is-active' : '')}
-            onClick={() => setTab(t)}
-          ><span className="candy-face">{t}</span></button>
-        ))}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', paddingBottom: 14, borderBottom: '1px solid var(--border)' }}>
+        <div className="candy-split" style={{ '--accent': accent || 'var(--accent)', '--cbtn-size': '26px' }}>
+          {FILM_TABS.map(t => (
+            <button
+              key={t}
+              type="button"
+              data-own-press
+              data-shape="chip"
+              className={'candy-btn is-hover-accent' + (t === active ? ' is-active' : '')}
+              onClick={() => setTab(t)}
+            ><span className="candy-face">{t}</span></button>
+          ))}
+        </div>
+        {tabActions && <div className="anime-rail-controls">{tabActions}</div>}
       </div>
       <div>
         {active === 'Cast' && ((cast || []).length
-          ? <CreditList entries={cast} images={castImages} sep=" as " />
+          ? <CreditList entries={cast} sep=" as " />
           : <EmptyTab>No cast listed.</EmptyTab>)}
         {active === 'Crew' && (
           <>
-            <CreditList entries={crew} images={crewImages} sep=" — " />
+            <CreditList entries={crew} sep=" — " />
             {/* Writers arrive as bare names with no job attached, so they ride
                 below the jobbed crew rather than pretending to one. */}
             {list(writer) && (
@@ -167,10 +181,13 @@ function FilmColumn({
         {active === 'Details' && (details.length
           ? <div className="anime-alt-titles">{details.map(([k, v]) => <InfoRow key={k} label={k} value={v} />)}</div>
           : <EmptyTab>No details on this card.</EmptyTab>)}
-        {active === 'Releases' && <EmptyTab>No release information on this card yet.</EmptyTab>}
+        {active === 'Releases' && ((releases || []).length
+          ? <ReleaseList entries={releases} />
+          : <EmptyTab>No release dates on this card yet. Refresh details to fetch them.</EmptyTab>)}
         {active === 'Videos' && (trailerObj
           ? <div style={{ maxWidth: 420 }}><AnimeTrailer trailer={trailerObj} accent={accent} /></div>
           : <EmptyTab>No videos on this card.</EmptyTab>)}
+      </div>
       </div>
     </div>
   );
@@ -197,14 +214,14 @@ function TextSection({ title, body }) {
 // than no strip.
 export default function AnimeMainColumn({
   malId, accent, synopsis, background, openings, endings,
-  cast, crew, castImages, crewImages, filmLayout, writer, studios, country, budget, boxOffice, trailer,
+  cast, crew, castImages, crewImages, filmLayout, tabActions, writer, studios, country, releases, budget, boxOffice, trailer,
 }) {
   if (filmLayout) {
     return (
-      <FilmColumn
+      <FilmColumn tabActions={tabActions}
         accent={accent} synopsis={synopsis} cast={cast} crew={crew} writer={writer}
         castImages={castImages} crewImages={crewImages}
-        studios={studios} country={country} budget={budget} boxOffice={boxOffice}
+        studios={studios} countries={country} releases={releases} budget={budget} boxOffice={boxOffice}
         trailer={trailer}
       />
     );

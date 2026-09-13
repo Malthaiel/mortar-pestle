@@ -14,7 +14,7 @@
 // clears it), type-ahead jumps to the first status matching recent keystrokes,
 // Esc closes. When closed, ↑/↓/Enter/Space open the menu. (Mirrors CandySelect.)
 
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 // Display-only shortening (media-status.js). The `statuses` array and every
 // onChange still carry the real schema value; only the drawn word changes.
 import { statusLabel } from '../../util/media-status.js';
@@ -28,6 +28,8 @@ export default function StatusDropdown({ value, accent, placeholder, title, stat
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const ref = useRef(null);
+  const btnRef = useRef(null);
+  const [menuLeft, setMenuLeft] = useState(0);
   const listRef = useRef(null);
   const typeahead = useRef({ str: '', t: 0 });
   const dot = dotFor ? dotFor(value) : null;
@@ -36,6 +38,10 @@ export default function StatusDropdown({ value, accent, placeholder, title, stat
   // On open, highlight the selected status (or the first); clear on close.
   useEffect(() => {
     if (!open) { setActiveIndex(-1); return; }
+    // A chip trigger has no wrapper, so the menu anchors to whatever ancestor
+    // is positioned -- the .candy-split, whose left edge is the FIRST chip in
+    // the run, not this one. Read the real offset rather than assume they line up.
+    if (chip && btnRef.current) setMenuLeft(btnRef.current.offsetLeft);
     const sel = statuses.indexOf(value);
     setActiveIndex(sel >= 0 ? sel : 0);
   }, [open]);
@@ -51,7 +57,10 @@ export default function StatusDropdown({ value, accent, placeholder, title, stat
   // Click-outside + Escape close (mirrors the ContextMenu capture pattern).
   useEffect(() => {
     if (!open) return;
-    const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    // The chip variant renders WITHOUT a wrapper (so its trigger can be a direct
+    // child of a .candy-split), so "inside" is the trigger or the menu, not one box.
+    const inside = (t) => [ref.current, btnRef.current, listRef.current].some(el => el && el.contains(t));
+    const onDown = (e) => { if (!inside(e.target)) setOpen(false); };
     const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
     window.addEventListener('mousedown', onDown, true);
     window.addEventListener('keydown', onKey);
@@ -98,9 +107,18 @@ export default function StatusDropdown({ value, accent, placeholder, title, stat
     }
   };
 
+  // A chip trigger returns a FRAGMENT: .candy-split fuses only its DIRECT
+  // .candy-btn children, so a wrapper here would leave the status chip unfused
+  // beside the buttons it is meant to read as one unit with. The menu is already
+  // absolutely positioned, so it anchors to the nearest positioned ancestor --
+  // the .candy-split at the call site.
+  const Shell = chip ? Fragment : 'div';
+  const shellProps = chip ? {} : { ref, style: { position: 'relative', '--accent': accent || 'var(--accent)' } };
   return (
-    <div ref={ref} style={{ position: 'relative', '--accent': accent || 'var(--accent)' }}>
+    <Shell {...shellProps}>
       <button
+        ref={btnRef}
+        style={chip ? { '--accent': accent || 'var(--accent)' } : undefined}
         type="button"
         className={chip ? 'candy-btn is-hover-accent' : 'status-candy'}
         data-shape={chip ? 'chip' : undefined}
@@ -123,7 +141,9 @@ export default function StatusDropdown({ value, accent, placeholder, title, stat
         }}/>
         <span style={{
           fontSize: 11, fontFamily: 'var(--font-mono)',
-          letterSpacing: '0.06em', textTransform: 'uppercase',
+          // A chip reads as a peer of Download beside it, which is Title Case;
+          // the select trigger keeps the uppercase label it has everywhere else.
+          letterSpacing: '0.06em', textTransform: chip ? 'none' : 'uppercase',
           // A chip inherits .candy-face's colour so it rests exactly as dark as
           // Download beside it AND lets the hover accent-flood recolour it -- an
           // inline colour here beat every stylesheet rule, so the chip read bold
@@ -149,7 +169,7 @@ export default function StatusDropdown({ value, accent, placeholder, title, stat
         role="listbox"
         className="status-candy-menu"
         data-open={open ? 'true' : 'false'}
-        style={{ maxHeight: open ? 320 : 0, opacity: open ? 1 : 0 }}
+        style={{ maxHeight: open ? 320 : 0, opacity: open ? 1 : 0, left: chip ? menuLeft : undefined }}
       >
         <div style={{ padding: 4 }}>
           {statuses.map((s, i) => {
@@ -180,6 +200,6 @@ export default function StatusDropdown({ value, accent, placeholder, title, stat
           })}
         </div>
       </div>
-    </div>
+    </Shell>
   );
 }

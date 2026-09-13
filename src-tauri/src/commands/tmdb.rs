@@ -71,6 +71,9 @@ pub struct TmdbDetail {
     pub budget: Option<i64>,
     pub revenue: Option<i64>,
     pub tagline: Option<String>,
+    /// Theatrical release dates, one flat "YYYY-MM-DD|CC|CERT" line per country
+    /// per date -- see `release_dates`.
+    pub releases: Vec<String>,
     /// Wide scene still, already a full URL. The film header paints it behind
     /// the poster + title. Credit PORTRAITS stay deleted -- this is the one
     /// image the page asks TMDb for.
@@ -215,6 +218,64 @@ fn credits(v: Option<&Value>, role_field: &str, limit: usize) -> Vec<TmdbCredit>
         .unwrap_or_default()
 }
 
+/// Theatrical release dates, flattened to "YYYY-MM-DD|CC|CERT" -- one line per
+/// country per date, because a flat string list is what a card's frontmatter and
+/// `series.rs` both already read, and a nested map would need a parser neither
+/// has.
+///
+/// TMDb's `type` is 1 premiere / 2 limited theatrical / 3 theatrical / 4 digital
+/// / 5 physical / 6 TV. Only the first three are the film's RELEASE; the rest are
+/// how it later reached a living room, which is a different question and would
+/// list most countries three more times.
+///
+/// Sorted, so the order is the date order the page shows and no JS re-sorts it.
+fn release_dates(v: Option<&Value>) -> Vec<String> {
+    let mut out: Vec<String> = v
+        .and_then(|x| x.get("results"))
+        .and_then(|x| x.as_array())
+        .map(|a| {
+            a.iter()
+                .flat_map(|c| {
+                    let code = c
+                        .get("iso_3166_1")
+                        .and_then(|s| s.as_str())
+                        .unwrap_or_default()
+                        .to_string();
+                    let rows = c
+                        .get("release_dates")
+                        .and_then(|d| d.as_array())
+                        .cloned()
+                        .unwrap_or_default();
+                    rows.into_iter()
+                        .filter(|r| {
+                            matches!(r.get("type").and_then(|t| t.as_i64()), Some(1..=3))
+                        })
+                        .filter_map(|r| {
+                            // TMDb sends a full timestamp; the DAY is the fact.
+                            let date = r
+                                .get("release_date")
+                                .and_then(|d| d.as_str())
+                                .and_then(|d| d.get(..10))?
+                                .to_string();
+                            let cert = r
+                                .get("certification")
+                                .and_then(|c| c.as_str())
+                                .unwrap_or_default()
+                                .trim()
+                                .to_string();
+                            Some(format!("{date}|{code}|{cert}"))
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    // A country with both a limited and a wide date on the SAME day says it once.
+    out.sort();
+    out.dedup();
+    out
+}
+
 /// Credits for a film, keyed by its IMDb id.
 ///
 /// Two calls: `/find` translates the IMDb id, then `/movie/{id}` with credits
@@ -254,7 +315,7 @@ pub async fn tmdb_movie_detail(imdb_id: String) -> Result<TmdbDetail, String> {
     };
 
     let m = get_json(
-        &format!("/movie/{tmdb_id}?append_to_response=credits"),
+        &format!("/movie/{tmdb_id}?append_to_response=credits,release_dates"),
         &key,
     )
     .await?;
@@ -276,6 +337,8 @@ pub async fn tmdb_movie_detail(imdb_id: String) -> Result<TmdbDetail, String> {
             .and_then(|t| t.as_str())
             .filter(|s| !s.trim().is_empty())
             .map(str::to_string),
+        // Appended to the same request -- no extra round trip.
+        releases: release_dates(m.get("release_dates")),
         // Already on the /movie response -- no extra request.
         backdrop: m
             .get("backdrop_path")

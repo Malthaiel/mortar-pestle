@@ -416,6 +416,7 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
             writer={isMovie ? series.writer : null}
             studios={isMovie ? (series.studio && series.studio.length ? series.studio : series.studios) : null}
             country={isMovie ? series.country : null}
+            releases={isMovie ? series.releases : null}
             budget={isMovie ? series.budget : null}
             boxOffice={isMovie ? series.boxOffice : null}
             trailer={isMovie ? series.trailer : null}
@@ -427,19 +428,11 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
         )}
         rating={(
           <>
-            <RatingStrip
-              value={series.personalRating || 0}
-              accent={accent}
-              onChange={(v) => {
-                const r = Number(v);
-                videoApi.markSeriesRating(series.path, r)
-                  .then(() => {
-                    setSeries(s => ({ ...s, personalRating: r }));
-                    window.dispatchEvent(new CustomEvent('series-updated', { detail: { path: series.path, personalRating: r } }));
-                  })
-                  .catch(err => alert('Rating failed: ' + err.message));
-              }}
-            />
+            {/* Status, Download and More read as ONE unit on a film — the same
+                fused .candy-split shell the tab strip above them uses. It is
+                the positioned ancestor the status menu unrolls against. */}
+            <div className={isMovie ? 'candy-split' : undefined}
+              style={isMovie ? { position: 'relative', '--cbtn-size': '26px' } : undefined}>
             <StatusDropdown
               value={statusValue}
               accent={accent}
@@ -466,6 +459,30 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
                   .catch(err => alert('Status failed: ' + err.message));
               }}
             />
+            {/* Rating as a peer of the status chip: StatusDropdown IS the
+                app's fusable pick-one chip (CandySelect wraps its trigger and
+                so cannot weld into a .candy-split). The values are the schema
+                numbers; re-picking the current one clears it, as the dot strip did. */}
+            {isMovie && (
+              <StatusDropdown
+                value={series.personalRating ? String(series.personalRating) : ''}
+                accent={accent}
+                variant="chip"
+                title="Your rating out of 10"
+                placeholder="Rate"
+                statuses={Array.from({ length: 10 }, (_, n) => String(10 - n))}
+                dotFor={(r) => (r && String(r) === String(series.personalRating) ? accent : null)}
+                onChange={(v) => {
+                  const r = Number(v) || 0;
+                  videoApi.markSeriesRating(series.path, r)
+                    .then(() => {
+                      setSeries(s => ({ ...s, personalRating: r }));
+                      window.dispatchEvent(new CustomEvent('series-updated', { detail: { path: series.path, personalRating: r } }));
+                    })
+                    .catch(err => alert('Rating failed: ' + err.message));
+                }}
+              />
+            )}
             {flatStartIdx >= 0 ? (
               <>
                 <button onClick={onPlayAll} className="candy-btn is-primary" style={{ cursor: 'pointer' }}>
@@ -505,7 +522,7 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
                 26x26 square, which read as a smaller control); every other
                 domain keeps the compact icon. */}
             <button type="button" data-own-press title="More" className="candy-btn"
-              data-shape={isMovie ? 'text' : 'icon'}
+              data-shape={isMovie ? 'chip' : 'icon'}
               onClick={(e) => {
                 const r = e.currentTarget.getBoundingClientRect();
                 const items = [];
@@ -524,6 +541,22 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
               }}>
               <span className="candy-face">⋯</span>
             </button>
+            </div>
+            {!isMovie && (
+              <RatingStrip
+                value={series.personalRating || 0}
+                accent={accent}
+                onChange={(v) => {
+                  const r = Number(v) || 0;
+                  videoApi.markSeriesRating(series.path, r)
+                    .then(() => {
+                      setSeries(s => ({ ...s, personalRating: r }));
+                      window.dispatchEvent(new CustomEvent('series-updated', { detail: { path: series.path, personalRating: r } }));
+                    })
+                    .catch(err => alert('Rating failed: ' + err.message));
+                }}
+              />
+            )}
           </>
         )}
         actions={flatStartIdx < 0 && dlJob && dlJob.state === 'error' ? (

@@ -444,125 +444,29 @@
  * hover" (the titlebar wears it). Exempted above so the source buttons and the
  * tab run keep lighting up while every other film control stays dark. */
 
-/* Cast / Crew as a wrapping run of fused photo+name pairs. */
+/* Cast / Crew as a wrapping run of plain name chips. */
 .film-credit-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  /* ONE gap knob, both directions. A chip lip is a box-shadow and takes NO
+     layout space, so an equal `gap` paints unequal: the vertical space loses
+     the lip. Row gap therefore adds the chip shape's own lip token back.
+     --cbtn-depth is declared ON the button and is invalid up here;
+     --candy-depth-small is the same 5px value at root, which is what the chip
+     shape pins its lip to. */
+  --credit-gap: 5px;
+  column-gap: var(--credit-gap);
+  row-gap: calc(var(--credit-gap) + var(--candy-depth-small));
   max-width: 760px;
 }
-.film-credit-list.has-photos {
-  /* stretch, not flex-start: a wrapped flex line hands every item the line's
-     height, so the name buttons line up along one bottom edge instead of each
-     sizing to its own text (a four-line character name made the row ragged the
-     moment the two halves stopped being welded). */
-  align-items: stretch;
-  gap: 8px;
-}
-
-/* === CANDY STACK ========================================================== *
- * A vertical column of candy buttons, each a WHOLE button: own corners, own
- * frame, own lip, own press. NOT the vertical twin of .candy-split -- that
- * welds two halves into one unit, and welded vertically the pair reads as a
- * single flat card rather than as buttons. Only the column and the lip-sized
- * gap live here; everything else is stock .candy-btn. */
-.candy-stack {
-  /* ONE depth for the pair: the lip UNDER each half and the gap BETWEEN them are
-     the same value, so the upper half's lip always has exactly its own room and
-     a deeper shadow can never collide with the button below. Turn this, not the
-     two separately. --candy-tile-depth is the app's deepest stock lip. */
-  --stack-depth: var(--candy-tile-depth);
-  display: inline-flex;
-  flex-direction: column;
-  align-items: stretch;
-  /* TWO buttons, not one fused unit. Each half keeps its own frame, its own lip
-     and its own press, so each reads as a button -- fused flush they read as a
-     single flat card with a faint outline, which is what "doesnt look like an
-     actual button" meant (2026-09-12).
-     The gap exists because the LIP needs room: a candy button's depth is a
-     box-shadow and takes no layout space, so without a gap the upper half's lip
-     lands on top of the lower half. --candy-depth is the full-size lip token,
-     one step wider than the chip's own 5px and still under the 8px between
-     cards, so the pair holds together. Do NOT reach for --cbtn-depth here: it is
-     declared ON the buttons, so up here it is invalid and silently yields NO
-     gap (rowGap computed "normal" -- measured 2026-09-12). */
-  gap: var(--stack-depth);
-}
-.candy-stack > .candy-btn { --cbtn-depth: var(--stack-depth); }
-/* The two halves face each other with FLAT edges and turn their rounded corners
-   outward, so the pair still reads as one card even with the gap between them.
-   Radius is flattened on the facing side only -- the outer corners are stock. */
-.candy-stack > .candy-btn:not(:last-child) {
-  border-end-start-radius: 0;
-  border-end-end-radius: 0;
-}
-.candy-stack > .candy-btn:not(:first-child) {
-  border-start-start-radius: 0;
-  border-start-end-radius: 0;
-}
-
-/* Every credit pair is the SAME size, so the run reads as a grid of faces
- * rather than a ragged run of name-width boxes. One width here is the only
- * number: the photo takes its height from the portrait aspect below, and the
- * name half takes its width from the stack. */
-.film-credit-list.has-photos > .candy-stack { width: 124px; }
-/* The NAME half takes the leftover height; the photo half does not grow because
-   its 2:3 aspect-ratio owns its box. So a tall name makes its own button taller,
-   not the picture above it. */
-.film-credit-list.has-photos > .candy-stack > .candy-btn:last-child { flex: 1; }
-
-/* The photo half. A headshot is 2:3, so the box is too -- stated once, with
- * object-fit:cover so a file that ever arrives at another shape crops instead
- * of breaking the row. The crop sits high because a headshot's subject is its
- * face, not its centre. */
-/* Selector carries the shape too: the chip recipe sets padding through
-   `.candy-btn[data-shape="chip"] > .candy-face`, which out-specifies a plain
-   two-class rule -- so a bare `.film-credit-photo > .candy-face { padding: 0 }`
-   lost, and the headshot kept a 5px/10px gutter (measured 2026-09-12). */
-.candy-btn.film-credit-photo[data-shape="chip"] > .candy-face {
-  padding: 0;
-  overflow: hidden;
-  display: block;
-  aspect-ratio: 2 / 3;
-  /* Edge to edge INSIDE the frame. The gutter was the chip's 5px/10px padding,
-     not the frame -- the frame IS the candy button's edge, and removing it left
-     a bare photo that read as no button at all. */
-}
-.film-credit-photo img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center 22%;
-}
-/* No headshot on file: the slot stays, holding a dash, so every pair keeps the
- * same two-part shape and the row stays level. */
-.film-credit-nophoto {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-  font-family: var(--font-mono);
-  font-size: 14px;
+/* The role is a second value inside one chip, so it needs a mark of its own to
+   stop the two reading as one long name. Middot, in the chip face colour at
+   reduced strength -- the same separator the film fact line already uses. */
+.film-credit-role { color: var(--text-muted); }
+.film-credit-role::before {
+  content: " · ";
   color: var(--text-faint);
 }
-
-/* Name over character, not side by side. The base chip face is a nowrap single
- * line, so both of those have to be undone here. */
-.film-credit-list.has-photos > .candy-stack > .candy-btn:last-child > .candy-face {
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 2px;
-  padding: 7px 8px;
-  white-space: normal;
-  text-align: center;
-  line-height: 1.25;
-  overflow-wrap: anywhere;
-}
-/* Stacked, so the separating middot has nothing to separate. */
-.film-credit-list.has-photos .film-credit-role::before { content: none; }
 
 /* === FILM BACKDROP ======================================================== *
  * The wide TMDb scene still, painted behind the film header (poster, title,
@@ -589,11 +493,23 @@
      runtime row all multiply their base size by it, so they grow together and
      keep their relative weight instead of drifting apart as three numbers. */
   --film-head: 1.3;
+  /* Reading measure for everything EXCEPT the backdrop, which stays full bleed.
+     The NARROWEST value that still keeps the tab strip and the status/rating/
+     download run on ONE line, measured 2026-09-13: tabs 307px + 12px gap + the
+     widest that run gets in a settled state (349px -- the longest status label
+     "Currently-Watching", a two-digit rating, "Download") = 668px, plus the
+     221px poster and its 24px gap = 913px.
+
+     The two TRANSIENT download labels are wider still ("Retry download" 953px,
+     "Downloading 100%" 967px) and wrap onto a second line while they show.
+     Deliberate: covering them would cost nearly the whole narrowing, for a
+     state that lasts as long as one download. */
+  --film-measure: 915px;
   --film-backdrop-ratio: 56.25%;   /* 9 / 16 */
   --film-backdrop-solid: 0.60;     /* unitless: the mask multiplies it by 100% */
   padding: calc(var(--film-backdrop-ratio) * var(--film-backdrop-solid)) 28px 24px;
 }
-.film-detail > *:not(.film-backdrop) { position: relative; z-index: 1; }
+.film-detail > *:not(.film-backdrop) { position: relative; z-index: 1; max-width: var(--film-measure); margin-inline: auto; }
 .film-detail > .film-backdrop {
   position: absolute;
   /* No height here: the <img> inside sets it, so the whole still is always
