@@ -27,11 +27,18 @@ use serde::Serialize;
 use serde_json::Value;
 
 const BASE: &str = "https://api.themoviedb.org/3";
+/// TMDb's image CDN. `w1280` is the widest backdrop size that still downloads
+/// fast enough to paint with the page; the original can exceed 3 MB.
+const BACKDROP_BASE: &str = "https://image.tmdb.org/t/p/w1280";
+/// Credit portraits. `w185` is TMDb's headshot size -- the cast pairs draw them
+/// about 120px wide, so anything larger is bytes nobody sees.
+const PROFILE_BASE: &str = "https://image.tmdb.org/t/p/w185";
 const USER_AGENT: &str = "Citadel/1.0 (mortar-pestle)";
 const TIMEOUT: Duration = Duration::from_secs(20);
 /// A released film's credits do not change. The cache exists to keep a browse
 /// session off the network, not to track anything.
 const TTL: Duration = Duration::from_secs(7 * 24 * 60 * 60);
+
 
 const KR_SERVICE: &str = "mortar-pestle";
 const KR_ACCOUNT: &str = "tmdb";
@@ -44,6 +51,10 @@ pub struct TmdbCredit {
     pub name: String,
     /// Character for cast, job for crew.
     pub role: String,
+    /// Headshot, already a full URL. Empty when TMDb has no photo on file --
+    /// the card writes a blank entry so the image list stays index-aligned
+    /// with the name list.
+    pub image: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -60,6 +71,10 @@ pub struct TmdbDetail {
     pub budget: Option<i64>,
     pub revenue: Option<i64>,
     pub tagline: Option<String>,
+    /// Wide scene still, already a full URL. The film header paints it behind
+    /// the poster + title. Credit PORTRAITS stay deleted -- this is the one
+    /// image the page asks TMDb for.
+    pub backdrop: Option<String>,
 }
 
 // ── Key ──────────────────────────────────────────────────────────────────────
@@ -186,6 +201,12 @@ fn credits(v: Option<&Value>, role_field: &str, limit: usize) -> Vec<TmdbCredit>
                             .and_then(|c| c.as_str())
                             .unwrap_or_default()
                             .to_string(),
+                        image: e
+                            .get("profile_path")
+                            .and_then(|p| p.as_str())
+                            .filter(|p| !p.trim().is_empty())
+                            .map(|p| format!("{PROFILE_BASE}{p}"))
+                            .unwrap_or_default(),
                     })
                 })
                 .take(limit)
@@ -255,5 +276,11 @@ pub async fn tmdb_movie_detail(imdb_id: String) -> Result<TmdbDetail, String> {
             .and_then(|t| t.as_str())
             .filter(|s| !s.trim().is_empty())
             .map(str::to_string),
+        // Already on the /movie response -- no extra request.
+        backdrop: m
+            .get("backdrop_path")
+            .and_then(|b| b.as_str())
+            .filter(|s| !s.trim().is_empty())
+            .map(|s| format!("{BACKDROP_BASE}{s}")),
     })
 }

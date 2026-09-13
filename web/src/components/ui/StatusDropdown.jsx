@@ -15,14 +15,23 @@
 // Esc closes. When closed, ↑/↓/Enter/Space open the menu. (Mirrors CandySelect.)
 
 import { useEffect, useRef, useState } from 'react';
+// Display-only shortening (media-status.js). The `statuses` array and every
+// onChange still carry the real schema value; only the drawn word changes.
+import { statusLabel } from '../../util/media-status.js';
 
-export default function StatusDropdown({ value, accent, placeholder, title, statuses, disabled, onChange, dotFor }) {
+// `variant="chip"` draws the trigger as an ordinary candy chip with no chevron —
+// neutral at rest, accent on hover (`is-hover-accent`) — for surfaces that want
+// the status to read as a peer action rather than a select. The menu is
+// unchanged. It was `is-primary` (standing accent) until 2026-09-12; the film
+// page wanted every control dark until pointed at.
+export default function StatusDropdown({ value, accent, placeholder, title, statuses, disabled, onChange, dotFor, variant }) {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const ref = useRef(null);
   const listRef = useRef(null);
   const typeahead = useRef({ str: '', t: 0 });
   const dot = dotFor ? dotFor(value) : null;
+  const chip = variant === 'chip';
 
   // On open, highlight the selected status (or the first); clear on close.
   useEffect(() => {
@@ -93,7 +102,8 @@ export default function StatusDropdown({ value, accent, placeholder, title, stat
     <div ref={ref} style={{ position: 'relative', '--accent': accent || 'var(--accent)' }}>
       <button
         type="button"
-        className="status-candy"
+        className={chip ? 'candy-btn is-hover-accent' : 'status-candy'}
+        data-shape={chip ? 'chip' : undefined}
         data-own-press
         title={title}
         disabled={disabled}
@@ -103,6 +113,8 @@ export default function StatusDropdown({ value, accent, placeholder, title, stat
         onKeyDown={onKeyDown}
         onClick={() => !disabled && setOpen(o => !o)}
       >
+        <span className={chip ? 'candy-face' : undefined}
+          style={chip ? { display: 'inline-flex', alignItems: 'center', gap: 7 } : undefined}>
         <span style={{
           width: 7, height: 7, borderRadius: '50%',
           background: dot || 'transparent',
@@ -112,14 +124,23 @@ export default function StatusDropdown({ value, accent, placeholder, title, stat
         <span style={{
           fontSize: 11, fontFamily: 'var(--font-mono)',
           letterSpacing: '0.06em', textTransform: 'uppercase',
-          color: value ? 'var(--text)' : 'var(--text-muted)',
+          // A chip inherits .candy-face's colour so it rests exactly as dark as
+          // Download beside it AND lets the hover accent-flood recolour it -- an
+          // inline colour here beat every stylesheet rule, so the chip read bold
+          // at rest and stayed unlit on hover (2026-09-12).
+          color: chip ? undefined : (value ? 'var(--text)' : 'var(--text-muted)'),
           whiteSpace: 'nowrap',
-        }}>{value || placeholder}</span>
-        <span aria-hidden style={{
-          marginLeft: 2, fontSize: 9, color: 'var(--text-muted)',
-          transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
-          transition: 'transform 180ms cubic-bezier(0.16, 1, 0.3, 1)',
-        }}>▾</span>
+        }}>{value ? statusLabel(value) : placeholder}</span>
+        {/* The chevron is the select affordance; a primary trigger reads as an
+            action button instead, so it carries none. */}
+        {!chip && (
+          <span aria-hidden style={{
+            marginLeft: 2, fontSize: 9, color: 'var(--text-muted)',
+            transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
+            transition: 'transform 180ms cubic-bezier(0.16, 1, 0.3, 1)',
+          }}>▾</span>
+        )}
+        </span>
       </button>
 
       {/* Overlay menu — height-clip unroll downward (~180ms). */}
@@ -152,7 +173,7 @@ export default function StatusDropdown({ value, accent, placeholder, title, stat
                   background: sd || 'transparent',
                   border: sd ? 'none' : '1px solid var(--border-2)',
                 }}/>
-                <span style={{ flex: 1, textAlign: 'left' }}>{s}</span>
+                <span style={{ flex: 1, textAlign: 'left' }}>{statusLabel(s)}</span>
                 {isSel && <span aria-hidden style={{ fontSize: 11 }}>✓</span>}
               </button>
             );

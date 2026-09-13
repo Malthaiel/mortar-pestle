@@ -20,10 +20,14 @@
 // Premiered / Type / Studios render as clickable candy chips (taxon discovery).
 
 import { go as goTaxon } from './TaxonLinks.jsx';
+import { BODY_COLOR as FILM_BODY_COLOR } from './AnimeMainColumn.jsx';
 import { candyCenterOffset } from '@host/util/candy.js';
 import ImageLightbox, { useLightbox } from './ImageLightbox.jsx';
 import AnimeStatistics from './AnimeStatistics.jsx';
-import AnimeTrailer from './AnimeTrailer.jsx';
+import AnimeTrailer, { normalizeTrailer } from './AnimeTrailer.jsx';
+
+// 15% off the 260 the film poster shipped at (2026-09-12).
+const FILM_POSTER_W = 221;
 
 const fmtNum = (n) => (n == null || n === '' ? null : Number(n).toLocaleString());
 const has = (v) => (Array.isArray(v) ? v.length > 0 : v != null && v !== '');
@@ -94,6 +98,23 @@ function MetaChip({ kind, value, accent }) {
   );
 }
 
+// External-source button — IMDb, Letterboxd, TMDb. 26px on a film to match the
+// Download button, which is the size every control on that page shares. A film
+// draws them NEUTRAL and lights accent on hover via the shared `is-hover-accent`
+// opt-in (the titlebar's own class, chip-scoped); every other domain keeps the
+// standing-accent is-primary it always had.
+function SourceBtn({ label, url, filmLayout }) {
+  return (
+    <button
+      onClick={() => { window.location.hash = '/tools/browser/' + encodeURIComponent(url); }}
+      title={`Open this title on ${label} in the in-app browser`}
+      data-shape={filmLayout ? 'chip' : undefined}
+      className={filmLayout ? 'candy-btn is-hover-accent' : 'candy-btn is-primary'}
+      style={{ height: filmLayout ? 26 : 30 }}
+    ><span className="candy-face" style={{ fontSize: 11 }}>{label} ↗</span></button>
+  );
+}
+
 export default function AnimeDetailHeader({
   title, subtitle, malId, image, sourceUrl, sourceLabel,
   score, scoredBy, rank, popularity, members,
@@ -102,6 +123,7 @@ export default function AnimeDetailHeader({
   source, contentRating, broadcast, aired, trailer,
   director, cast, writer, country, crew, budget, boxOffice,
   synonyms, titleJapanese, titleEnglish,
+  released, filmLayout, extraSources, backdrop,
   accent, topRight, rating, actions, rightColumn,
 }) {
   const lb = useLightbox();
@@ -114,26 +136,20 @@ export default function AnimeDetailHeader({
     : (has(studios) ? studios : null);
 
   const scoreShown = score != null && score !== '';
-  // A card's `Trailer:` frontmatter is a plain YouTube URL string (written by
-  // tv_library.rs); the live MAL detail hands over a resolved object instead.
-  // Normalise here, the one place both shapes meet, so AnimeTrailer only ever
-  // sees the { youtubeId, url, image } it documents.
-  // ponytail: YouTube only — that is the only host either source emits.
-  const trailerObj = (() => {
-    if (!trailer) return null;
-    if (typeof trailer === 'object') return trailer.url ? trailer : null;
-    const m = String(trailer).match(/(?:[?&]v=|youtu\.be\/)([\w-]{6,})/);
-    return m ? { youtubeId: m[1], url: String(trailer), image: `https://img.youtube.com/vi/${m[1]}/hqdefault.jpg` } : null;
-  })();
-  const hasTrailer = !!trailerObj;
+  const trailerObj = normalizeTrailer(trailer);
+  const hasTrailer = !filmLayout && !!trailerObj;
   // Left stats panel: ranked/popularity/members (large) over premiered/type/
   // studios/episodes/duration (small). Source/Rating/Broadcast/Aired live in the
   // left column under the alt-titles; the trailer takes the third top-row slot.
-  const hasStatsLeft = rank != null || popularity != null || members != null
-    || has(premiered) || has(format) || has(studiosVal) || has(episodes) || has(duration);
-  const hasMoreInfo = has(source) || has(contentRating) || has(broadcast) || has(aired)
-    || has(director) || has(cast) || has(writer) || has(country)
-    || has(crew) || budget != null || boxOffice != null;
+  const hasStatsLeft = !filmLayout && (rank != null || popularity != null || members != null
+    || has(premiered) || has(format) || has(studiosVal) || has(episodes) || has(duration));
+  // On a film every one of these has moved out to the tab strip, so the left
+  // column below the poster is empty and must not draw an empty frame.
+  const hasMoreInfo = filmLayout
+    ? (has(source) || has(contentRating) || has(broadcast) || has(aired))
+    : (has(source) || has(contentRating) || has(broadcast) || has(aired)
+      || has(director) || has(cast) || has(writer) || has(country)
+      || has(crew) || budget != null || boxOffice != null);
   // Film/TV credits. Arrays join; InfoRow drops a null row entirely, so an
   // anime card (which carries none of these) grows no empty labels.
   const list = (v) => (Array.isArray(v) ? (v.filter(Boolean).join(', ') || null) : (has(v) ? v : null));
@@ -178,10 +194,68 @@ export default function AnimeDetailHeader({
   ].filter(Boolean).join(' · ');
   const hasMetaChips = has(premiered) || has(format) || has(studiosVal);
 
+  // A film leads with its release DAY, not a season label. Read from the card's
+  // own ISO string; anything unparseable passes through as written rather than
+  // rendering "Invalid Date".
+  const prettyDate = (iso) => {
+    if (!has(iso)) return null;
+    // A bare YYYY-MM-DD parses as UTC midnight, which then renders as the
+    // PREVIOUS day in any timezone behind UTC -- 1979-06-22 showed as June 21.
+    // Build it from the parts so the date means the calendar day it states.
+    const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    const d = m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(iso);
+    if (Number.isNaN(d.getTime())) return String(iso);
+    return d.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
+  };
+  const filmDate = prettyDate(released);
+  // One "open the source" button per site. Anime passes a malId and gets the MAL
+  // link; other domains pass the url and label they belong to, plus whatever
+  // `extraSources` the page could resolve (Letterboxd / TMDb on a film).
+  const sources = [
+    (sourceUrl || malId)
+      ? { label: sourceLabel || 'MyAnimeList', url: sourceUrl || ('https://myanimelist.net/anime/' + malId) }
+      : null,
+    ...(Array.isArray(extraSources) ? extraSources : []),
+  ].filter(x => x && x.url);
+  const sourceBtns = sources.map(x => <SourceBtn key={x.label} {...x} filmLayout={filmLayout} />);
+  // Sits beside the title: who directed it. The DATE used to live here too;
+  // it now sits on the fact line below, immediately left of the runtime, so
+  // when-and-how-long read as one pair. Stated in exactly one place either way.
+  const directedBy = list(director) ? `Directed by ${list(director)}` : null;
+  const filmByline = directedBy;
+  // The left-to-right fact line under the title. Genres stay clickable here
+  // because the left column's Genres row is hidden on a film — this line
+  // REPLACES that row rather than repeating it.
+  const filmGenres = Array.isArray(genres) ? genres.filter(Boolean) : [];
+  const hasFilmFacts = scoreShown || filmGenres.length > 0 || has(filmDate) || has(duration);
+  const dot = <span aria-hidden>·</span>;
+
   return (
-    <div style={{ padding: '28px 28px 24px', borderBottom: '1px solid var(--border)' }}>
+    // A film pads deeper at the top so more of the backdrop shows above the
+    // poster and title. That padding lives in .film-detail (library.css), not
+    // here: it is derived from the backdrop's own aspect and mask stops, and an
+    // inline style would beat the stylesheet and re-fork the number.
+    // The backdrop is unaffected either way: an absolutely positioned child lays
+    // out against the PADDING box, so it stays pinned to the top edge while the
+    // content slides down.
+    <div className={filmLayout ? 'film-detail' : undefined}
+      style={{ padding: filmLayout ? undefined : '28px 28px 24px', borderBottom: filmLayout ? 'none' : '1px solid var(--border)' }}>
+      {/* The wide TMDb scene still, behind everything. Films only, and only when
+          the card actually carries one — an absent Backdrop key just means the
+          header keeps the flat background it always had. */}
+      {filmLayout && backdrop && (
+        <div className="film-backdrop" aria-hidden>
+          {/* A real <img>, not a background-image: the box then takes its height
+              from the FILE, so the still is never cropped at any window width and
+              no aspect ratio is restated here. */}
+          <img src={backdrop} alt="" />
+        </div>
+      )}
       {/* Title bar — title + English (+ subtitle) stacked on the left; the MyAnimeList
-          button on the right, vertically centered between the title and English. */}
+          button on the right, vertically centered between the title and English.
+          A film skips this band entirely: its title sits beside the poster and
+          its source buttons ride that same line, so nothing floats alone up here. */}
+      {!filmLayout && (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
         <div style={{ minWidth: 0 }}>
           <h2 style={{ margin: 0, fontSize: 28, fontWeight: 700, color: 'var(--text)', lineHeight: 1.12, letterSpacing: '-0.015em' }}>{title}</h2>
@@ -191,28 +265,16 @@ export default function AnimeDetailHeader({
           {subtitle && <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>{subtitle}</div>}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          {/* One "open the source" button. Anime passes a malId and gets the MAL
-              link; other domains pass the url and label they belong to. Without
-              either there is no source to open, so no button. */}
-          {(sourceUrl || malId) ? (
-            <button
-              onClick={() => {
-                const url = sourceUrl || ('https://myanimelist.net/anime/' + malId);
-                window.location.hash = '/tools/browser/' + encodeURIComponent(url);
-              }}
-              title={`Open this title on ${sourceLabel || 'MyAnimeList'} in the in-app browser`}
-              className="candy-btn is-primary"
-              style={{ height: 30 }}
-            ><span className="candy-face" style={{ fontSize: 11 }}>{sourceLabel || 'MyAnimeList'} ↗</span></button>
-          ) : null}
+          {sourceBtns}
           {topRight}
         </div>
       </div>
+      )}
 
       {/* Left column (cover + info + chips) | right column (panels over synopsis) */}
-      <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap', marginTop: 18 }}>
+      <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap', marginTop: filmLayout ? 0 : 18 }}>
         {/* ── LEFT COLUMN ── */}
-        <div style={{ width: 200, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ width: filmLayout ? FILM_POSTER_W : 200, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
           {/* Cover → lightbox */}
           <button
             type="button"
@@ -246,14 +308,16 @@ export default function AnimeDetailHeader({
               <InfoRow label="Rating" value={has(contentRating) ? contentRating : null} />
               <InfoRow label="Broadcast" value={has(broadcast) ? broadcast : null} />
               <InfoRow label="Aired" value={has(aired) ? aired : null} />
-              <InfoRow label="Director" value={list(director)} />
-              <InfoRow label="Cast" value={capped(cast, 8) || list(cast)} />
-              <InfoRow label="Writer" value={list(writer)} />
-              <InfoRow label="Country" value={list(country)} />
-              <InfoRow label="Crew" value={crewShown} />
-              <InfoRow label="Budget" value={money(budget)} />
-              <InfoRow label="Box Office" value={money(boxOffice)} />
-              <TaxonTextRow label="Genres" kind="genre" values={genres} accent={a} />
+              {/* On a film these move up to the title line and out to the Cast
+                  and Crew rails, so the column never says it twice. */}
+              {!filmLayout && <InfoRow label="Director" value={list(director)} />}
+              {!filmLayout && <InfoRow label="Cast" value={capped(cast, 8) || list(cast)} />}
+              {!filmLayout && <InfoRow label="Writer" value={list(writer)} />}
+              {!filmLayout && <InfoRow label="Country" value={list(country)} />}
+              {!filmLayout && <InfoRow label="Crew" value={crewShown} />}
+              {!filmLayout && <InfoRow label="Budget" value={money(budget)} />}
+              {!filmLayout && <InfoRow label="Box Office" value={money(boxOffice)} />}
+              {!filmLayout && <TaxonTextRow label="Genres" kind="genre" values={genres} accent={a} />}
               <TaxonTextRow label="Themes" kind="theme" values={themes} accent={a} />
               <TaxonTextRow label="Demographic" kind="demographic" values={demographics} accent={a} />
               <TaxonTextRow label="Producers" kind="producer" values={producers} accent={a} />
@@ -266,9 +330,50 @@ export default function AnimeDetailHeader({
 
         {/* ── RIGHT COLUMN — score + left stats + trailer + controls OVER synopsis ── */}
         <div style={{ flex: 1, minWidth: 320, display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {(scoreShown || hasStatsLeft || hasTrailer || rating || actions) && (
+          {/* FILM HEAD — title beside the poster, release date + director on the
+              same line, then rating / date / genres / runtime left to right. */}
+          {filmLayout && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, flexWrap: 'wrap' }}>
+                <h2 style={{ margin: 0, fontSize: 'calc(28px * var(--film-head))', fontWeight: 700, color: 'var(--text)', lineHeight: 1.12, letterSpacing: '-0.015em' }}>{title}</h2>
+                {filmByline && <span style={{ fontSize: 'calc(13px * var(--film-head))', color: FILM_BODY_COLOR }}>{filmByline}</span>}
+                <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                  {sourceBtns}
+                  {topRight}
+                </div>
+              </div>
+              {hasFilmFacts && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 'calc(12px * var(--film-head))', color: FILM_BODY_COLOR }}>
+                  {scoreShown && (
+                    <span>
+                      <span className="anime-hero-star" aria-hidden="true">★ </span>{score}
+                    </span>
+                  )}
+                  {scoreShown && (filmGenres.length > 0 || has(duration)) ? dot : null}
+                  {filmGenres.map((g, i) => (
+                    <span key={g}>
+                      <span
+                        className="taxon-link"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => goTaxon('genre', g)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goTaxon('genre', g); } }}
+                        title={`Discover ${g}`}
+                        style={{ '--accent': a }}
+                      >{g}</span>{i < filmGenres.length - 1 ? ',' : ''}
+                    </span>
+                  ))}
+                  {filmGenres.length > 0 && (has(filmDate) || has(duration)) ? dot : null}
+                  {has(filmDate) && <span>{filmDate}</span>}
+                  {has(filmDate) && has(duration) ? dot : null}
+                  {has(duration) && <span>{duration}</span>}
+                </div>
+              )}
+            </div>
+          )}
+          {((!filmLayout && (scoreShown || hasStatsLeft || hasTrailer)) || rating || actions) && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {(scoreShown || hasStatsLeft || hasTrailer) && (
+              {(!filmLayout && (scoreShown || hasStatsLeft || hasTrailer)) && (
                 <div style={{ display: 'flex', gap: 12, alignItems: 'stretch', flexWrap: 'wrap', '--panel-h': '124px' }}>
                   {/* UNIFIED PANEL — hero numbers (hairline-divided) + meta rail; takes the freed width */}
                   {(scoreShown || hasStatsLeft) && (
@@ -305,7 +410,7 @@ export default function AnimeDetailHeader({
 
               {/* CONTROLS — uniform-height buttons, evenly spaced, vertically centered */}
               {(rating || actions) && (
-                <div className="candy-panel anime-controls-box">
+                <div className={filmLayout ? 'anime-controls-box is-bare' : 'candy-panel anime-controls-box'}>
                   <div className="anime-rail-controls">
                     {rating}
                     {actions}

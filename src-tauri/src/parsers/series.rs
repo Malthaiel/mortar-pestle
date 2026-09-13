@@ -175,14 +175,24 @@ pub struct Series {
     /// Cinemeta credits from the card frontmatter (Bring Your Own Source SF5).
     /// Absent on MAL-era anime cards, which never carried them.
     pub cast: Vec<String>,
+    /// Credit headshots, index-aligned with `cast`. Empty string = no photo.
+    pub cast_images: Vec<String>,
     pub writer: Vec<String>,
     pub country: Option<String>,
+    /// Film release date (`Released:`), full ISO day. `Year` holds only the year.
+    pub released: Option<String>,
     /// TMDb tier, films only, present only when the user supplied a key.
     pub crew: Vec<String>,
+    /// Credit headshots, index-aligned with `crew`. Empty string = no photo.
+    pub crew_images: Vec<String>,
     pub studios: Vec<String>,
     pub budget: Option<i64>,
     pub box_office: Option<i64>,
+    /// TMDb's own id for the film — the page links straight to it.
+    pub tmdb_id: Option<i64>,
     pub tagline: Option<String>,
+    /// TMDb wide scene still -- painted behind the film header.
+    pub backdrop: Option<String>,
     pub music: Option<String>,
     pub duration: Option<String>,
     pub episodes_total: i64,
@@ -1029,12 +1039,17 @@ pub fn read_series(series_path: &str) -> Result<Series, VaultError> {
             .iter()
             .map(|s| strip_wikilink(s))
             .collect(),
+        cast_images: as_strings(meta.get("Cast Images")),
         country: meta_str(&meta, "Country"),
+        released: meta_str(&meta, "Released"),
         crew: as_strings(meta.get("Crew")),
+        crew_images: as_strings(meta.get("Crew Images")),
         studios: as_strings(meta.get("Studios")),
         budget: meta_i64(&meta, "Budget"),
         box_office: meta_i64(&meta, "Box Office"),
+        tmdb_id: meta_i64(&meta, "TMDb ID"),
         tagline: meta_str(&meta, "Tagline"),
+        backdrop: meta_str(&meta, "Backdrop"),
         music: meta_str(&meta, "Music").map(|s| strip_wikilink(&s)),
         duration: meta_str(&meta, "Duration"),
         episodes_total,

@@ -14,7 +14,7 @@ import EpisodeRow from './EpisodeRow.jsx';
 import { IconFolder, IconDownload, IconPlay } from '@host/components/icons.jsx';
 import { coverSrc, STATUS_DOT_COLOR, DOWNLOAD_DOT_COLOR, resolveDot } from './util.js';
 import StatusDropdown from '@host/components/ui/StatusDropdown.jsx';
-import CandySelect from '@host/components/ui/CandySelect.jsx';
+import RatingStrip from './RatingStrip.jsx';
 import AnimeMainColumn from './AnimeMainColumn.jsx';
 import LoadingScreen from './LoadingScreen.jsx';
 import AnimeDetailHeader from './AnimeDetailHeader.jsx';
@@ -24,6 +24,11 @@ import ConfirmModal from '@host/components/ui/ConfirmModal.jsx';
 import { useContextMenu } from '@host/context-menu/useContextMenu.js';
 
 const PROGRESS_KEY = 'video:progress';
+
+// Films whose portraits we already tried to fetch this session. A film TMDb has
+// no photos for would otherwise re-fetch on every single visit, since "no
+// photos" and "not tried yet" look identical on the card.
+const backfilled = new Set();
 
 function readProgressMap() {
   try { return JSON.parse(localStorage.getItem(PROGRESS_KEY) || '{}') || {}; }
@@ -53,14 +58,6 @@ function useProgressMap() {
 
 const STATUSES = ['Plan-to-Watch', 'Currently-Watching', 'Completed', 'On-Hold', 'Dropped'];
 
-// Personal-rating dropdown options (0 = unrated).
-const RATING_OPTIONS = [
-  { value: 0, label: '— / 10' },
-  ...Array.from({ length: 10 }, (_, i) => ({ value: i + 1, label: `${i + 1} / 10` })),
-];
-
-// Header backdrop: blurred poster behind the header. Flip to false to disable.
-const SHOW_HEADER_BACKDROP = true;
 
 function prettyDuration(d) {
   if (!d) return null;
@@ -150,6 +147,31 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
       .catch(() => { if (!cancelled) setDetail(null); });
     return () => { cancelled = true; };
   }, [series && series.providerId]);
+
+  // A film added before the TMDb pass existed has Cinemeta's bare cast and no
+  // crew, studios or money. Fetch the TMDb block once, quietly, the first time
+  // such a film is opened -- the same command the More menu runs, unattended.
+  //
+  // The "already done" marker is the TMDb id, which only that command writes.
+  // It used to be `castImages`, and when credit portraits were dropped
+  // (2026-09-12) that field went with them -- leaving the guard permanently
+  // false and re-fetching every film on every open.
+  //
+  // MUST stay above the early returns below: a hook that only runs on the
+  // render where `series` is loaded changes the hook count between renders,
+  // which React rejects outright ("Rendered more hooks than during the
+  // previous render"). The guards belong INSIDE the effect, not around it.
+  useEffect(() => {
+    if (!isMovie || !series || !series.path) return;
+    if (series.tmdbId) return;
+    if (backfilled.has(series.path)) return;
+    backfilled.add(series.path);
+    videoApi.refreshCredits(series.path)
+      .then(changed => {
+        if (changed) window.dispatchEvent(new CustomEvent('video-library-changed', { detail: {} }));
+      })
+      .catch(() => {});
+  }, [isMovie, series]);
 
   if (loading) return <LoadingScreen accent={accent} />;
   if (error)   return <Centered tone="error">Failed to load: {error}</Centered>;
@@ -340,6 +362,10 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
         malId={isAnime ? series.providerId : null}
         sourceUrl={!isAnime && series.imdbId ? `https://www.imdb.com/title/${series.imdbId}/` : null}
         sourceLabel={isAnime ? null : 'IMDb'}
+        extraSources={isMovie ? [
+          series.imdbId ? { label: 'Letterboxd', url: `https://letterboxd.com/imdb/${series.imdbId}/` } : null,
+          series.tmdbId ? { label: 'TMDb', url: `https://www.themoviedb.org/movie/${series.tmdbId}` } : null,
+        ].filter(Boolean) : null}
         image={img}
         score={series.onlineRating}
         scoredBy={series.scoredBy}
@@ -363,6 +389,9 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
         aired={series.aired || (detail && detail.aired)}
         // Card-only, no `detail` fallback: `detail` is the live Jikan/AniList
         // anime record, whose staff and characters are not film credits.
+        filmLayout={isMovie}
+        released={series.released}
+        backdrop={series.backdrop}
         director={series.director}
         cast={series.cast}
         writer={series.writer}
@@ -379,6 +408,17 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
           <AnimeMainColumn
             malId={isAnime ? series.providerId : null}
             accent={accent}
+            filmLayout={isMovie}
+            cast={isMovie ? series.cast : null}
+            crew={isMovie ? series.crew : null}
+            castImages={isMovie ? series.castImages : null}
+            crewImages={isMovie ? series.crewImages : null}
+            writer={isMovie ? series.writer : null}
+            studios={isMovie ? (series.studio && series.studio.length ? series.studio : series.studios) : null}
+            country={isMovie ? series.country : null}
+            budget={isMovie ? series.budget : null}
+            boxOffice={isMovie ? series.boxOffice : null}
+            trailer={isMovie ? series.trailer : null}
             synopsis={series.synopsis || (detail && detail.synopsis)}
             background={series.background || (detail && detail.background)}
             openings={series.openings && series.openings.length ? series.openings : (detail && detail.openings)}
@@ -387,10 +427,9 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
         )}
         rating={(
           <>
-            <CandySelect
+            <RatingStrip
               value={series.personalRating || 0}
-              options={RATING_OPTIONS}
-              title="Set your rating"
+              accent={accent}
               onChange={(v) => {
                 const r = Number(v);
                 videoApi.markSeriesRating(series.path, r)
@@ -404,6 +443,7 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
             <StatusDropdown
               value={statusValue}
               accent={accent}
+              variant={isMovie ? 'chip' : null}
               title={statusTitle}
               placeholder={isFranchise ? `${seasonName} status` : 'Status'}
               statuses={STATUSES}
@@ -438,11 +478,19 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
                 )}
               </>
             ) : (!isAnime && !isMovie) ? null : dlActive ? (
-              <button disabled className="candy-btn is-primary" style={{ cursor: 'default', opacity: 0.6 }}>
+              <button disabled
+                className={isMovie ? 'candy-btn is-hover-accent' : 'candy-btn is-primary'}
+                data-shape={isMovie ? 'chip' : undefined}
+                style={{ cursor: 'default', opacity: 0.6 }}>
                 <span className="candy-face">{dlLabel}</span>
               </button>
             ) : (
-              <button onClick={onDownload} disabled={!canDownload} className="candy-btn is-primary"
+              // A film draws Download neutral and lights it on hover, matching
+              // the source buttons beside it; every other domain keeps the
+              // standing accent that marks it the primary action.
+              <button onClick={onDownload} disabled={!canDownload}
+                className={isMovie ? 'candy-btn is-hover-accent' : 'candy-btn is-primary'}
+                data-shape={isMovie ? 'chip' : undefined}
                 style={{ cursor: canDownload ? 'pointer' : 'not-allowed', opacity: canDownload ? 1 : 0.4 }}>
                 <span className="candy-face" style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><IconDownload size={15}/> {dlJob && dlJob.state === 'error' ? 'Retry download' : 'Download'}</span>
               </button>
@@ -453,7 +501,11 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
                 <span className="candy-face"><IconFolder size={16}/></span>
               </button>
             )}
-            <button type="button" data-own-press title="More" className="candy-btn" data-shape="icon"
+            {/* A film sizes it like the buttons beside it (the icon shape is a
+                26x26 square, which read as a smaller control); every other
+                domain keeps the compact icon. */}
+            <button type="button" data-own-press title="More" className="candy-btn"
+              data-shape={isMovie ? 'text' : 'icon'}
               onClick={(e) => {
                 const r = e.currentTarget.getBoundingClientRect();
                 const items = [];
@@ -625,50 +677,6 @@ function Centered({ children, tone }) {
       color: tone === 'error' ? 'var(--text)' : 'var(--text-faint)',
       fontSize: 13,
     }}>{children}</div>
-  );
-}
-
-function RatingStrip({ value, accent, onChange }) {
-  const [hover, setHover] = useState(0);
-  const display = hover || value || 0;
-  return (
-    <div
-      onMouseLeave={() => setHover(0)}
-      style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 2 }}
-    >
-      <span style={{
-        fontSize: 9, fontFamily: 'var(--font-mono)',
-        letterSpacing: '0.08em', textTransform: 'uppercase',
-        color: 'var(--text-faint)',
-      }}>Personal</span>
-      <div style={{ display: 'flex', gap: 4 }}>
-        {Array.from({ length: 10 }, (_, i) => i + 1).map(n => {
-          const filled = n <= display;
-          return (
-            <button
-              key={n}
-              type="button"
-              data-own-press
-              onMouseEnter={() => setHover(n)}
-              onClick={() => onChange(n === value ? 0 : n)}
-              aria-label={`Rate ${n} out of 10`}
-              title={`${n}/10`}
-              className={'candy-btn' + (filled ? ' is-filled' : '')}
-              data-shape="dot"
-              style={{ '--accent': accent || 'var(--accent)' }}
-            ><span className="candy-face" /></button>
-          );
-        })}
-      </div>
-      <span style={{
-        fontSize: 10, fontFamily: 'var(--font-mono)',
-        color: value > 0 ? 'var(--text-muted)' : 'var(--text-faint)',
-        fontVariantNumeric: 'tabular-nums',
-        minWidth: 32,
-      }}>
-        {value > 0 ? `${value}/10` : '— /10'}
-      </span>
-    </div>
   );
 }
 

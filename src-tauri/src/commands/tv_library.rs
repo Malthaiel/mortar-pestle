@@ -176,6 +176,13 @@ fn push_credits(fm: &mut String, d: &CineDetail, t: Option<&TmdbDetail>) {
                 })
                 .collect();
             fm.push_str(&yaml_list("Cast", &cast));
+            // Parallel to `Cast` BY INDEX -- one entry per name, empty when TMDb
+            // has no headshot. Written only on the TMDb branch, because Cinemeta's
+            // bare list has no photos to pair with.
+            let cast_imgs: Vec<String> = t.cast.iter().map(|c| c.image.clone()).collect();
+            if cast_imgs.iter().any(|s| !s.is_empty()) {
+                fm.push_str(&yaml_list("Cast Images", &cast_imgs));
+            }
         }
         None => fm.push_str(&yaml_list("Cast", &d.cast)),
     }
@@ -197,6 +204,11 @@ fn push_credits(fm: &mut String, d: &CineDetail, t: Option<&TmdbDetail>) {
     let Some(t) = t.filter(|t| t.available) else {
         return;
     };
+    // The film's TMDb id, so the page can link straight to its TMDb entry
+    // instead of running a search on the IMDb id.
+    if let Some(id) = t.tmdb_id {
+        fm.push_str(&format!("TMDb ID: {id}\n"));
+    }
     // Crew is written as "Name -- Job" rather than a nested map: `series.rs`
     // reads flat string lists, and one line per person is what the page shows.
     let crew: Vec<String> = t
@@ -207,6 +219,16 @@ fn push_credits(fm: &mut String, d: &CineDetail, t: Option<&TmdbDetail>) {
         .collect();
     if !crew.is_empty() {
         fm.push_str(&yaml_list("Crew", &crew));
+        // Same filter as `crew` above, so the two lists stay index-aligned.
+        let crew_imgs: Vec<String> = t
+            .crew
+            .iter()
+            .filter(|c| !c.role.trim().is_empty())
+            .map(|c| c.image.clone())
+            .collect();
+        if crew_imgs.iter().any(|s| !s.is_empty()) {
+            fm.push_str(&yaml_list("Crew Images", &crew_imgs));
+        }
     }
     if !t.studios.is_empty() {
         fm.push_str(&yaml_list("Studios", &t.studios));
@@ -222,14 +244,22 @@ fn push_credits(fm: &mut String, d: &CineDetail, t: Option<&TmdbDetail>) {
     if let Some(tag) = t.tagline.as_deref() {
         fm.push_str(&format!("Tagline: {}\n", yaml_str(tag)));
     }
+    // Wide scene still -- the film header background.
+    if let Some(bd) = t.backdrop.as_deref() {
+        fm.push_str(&format!("Backdrop: {}\n", yaml_str(bd)));
+    }
 }
 
 /// Every frontmatter key `push_credits` can emit. `movie_refresh_credits` strips
 /// these before splicing a fresh block in, so a film that loses a field on a
 /// re-fetch loses the stale line too rather than keeping it forever.
+/// `Cast Images` / `Crew Images` carry the credit headshots, index-aligned with
+/// `Cast` / `Crew`. Portraits were dropped 2026-09-12 and restored the same day
+/// as the top half of the fused credit pairs, so these are WRITTEN again.
+
 const CREDIT_KEYS: &[&str] = &[
-    "Cast", "Writer", "Country", "Trailer", "Logo", "Crew", "Studios", "Budget", "Box Office",
-    "Tagline",
+    "Cast", "Cast Images", "Writer", "Country", "Trailer", "Logo", "Crew", "Crew Images",
+    "Studios", "Budget", "Box Office", "Tagline", "TMDb ID", "Backdrop",
 ];
 
 /// A film's card: the same frontmatter block a show gets, minus everything that

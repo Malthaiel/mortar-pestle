@@ -9,12 +9,16 @@
    (.status-candy 36px, select 27px, AddToLibrary 33px inline). */
 /* Controls live in a rectangle (.anime-controls-box) at the foot of the head
  * card, laid out as a horizontal wrapping row: [Rating] [Status] [Play/D-L]. */
-.anime-rail-controls { display: flex; flex-flow: row wrap; gap: 12px; align-items: center; }
-.anime-rail-controls .candy-btn,
-.anime-rail-controls button.status-candy { height: 33px; }
-.anime-rail-controls .candy-btn[data-shape="select"] { height: 33px; }
-.anime-rail-controls .candy-btn[data-shape="icon"] { width: 33px; height: 33px; }
-.anime-rail-controls .candy-btn > .candy-face { height: 100%; }
+/* Uniform height matches the file-tree row (data-shape="row" is --corner-max
+   13px => 26px tall), so the detail controls read as the same size button the
+   sidebar uses. The rating dots opt OUT: they are small circles, and stretching
+   them to row height would turn them into capsules. */
+.anime-rail-controls { display: flex; flex-flow: row wrap; gap: 10px; align-items: center; justify-content: center; }
+.anime-rail-controls .candy-btn:not([data-shape="dot"]),
+.anime-rail-controls button.status-candy { height: 26px; }
+.anime-rail-controls .candy-btn[data-shape="select"] { height: 26px; }
+.anime-rail-controls .candy-btn[data-shape="icon"] { width: 26px; height: 26px; }
+.anime-rail-controls .candy-btn:not([data-shape="dot"]) > .candy-face { height: 100%; }
 /* Add-to-Library split candy button sizes to content in the horizontal row. */
 .anime-rail-add > div { display: flex !important; }
 .anime-rail-add > div > button.candy-btn:first-child { flex: 0 1 auto; width: auto; }
@@ -153,7 +157,7 @@
   white-space: nowrap;
 }
 .anime-controls-box {
-  padding: 11px 12px;
+  padding: 7px 9px;
 }
 
 /* Score histogram — ten rows, score 1..10. Each row: [score] [groove bar]
@@ -400,4 +404,232 @@
   overflow-x: auto;
   padding-bottom: 6px;
   scrollbar-width: thin;
+}
+
+
+/* === FILM DETAIL ========================================================== *
+ * A film page is flatter than the anime page it shares a header with: no
+ * framed score/controls panels, no credit photos, and one Seg tab strip in
+ * place of the stacked sections. Scoped to .film-detail so anime and TV keep
+ * the look they had. */
+
+/* The controls row keeps its padding but loses the .candy-panel frame, and
+ * starts at the left edge so it lines up with the title and the synopsis
+ * rather than floating centred in the column. */
+.anime-controls-box.is-bare {
+  padding: 7px 0;
+}
+.anime-controls-box.is-bare .anime-rail-controls {
+  justify-content: flex-start;
+}
+
+/* HOVER — user-directed 2026-09-12: on a film page ONLY the Download button
+ * lights accent. Every neutral control (⋯, Reveal, the poster tile, the Seg
+ * options) stays at its rest colours through hover and press. is-primary
+ * buttons (Download, the status trigger, IMDb / Letterboxd / TMDb) are already
+ * accent at rest and are untouched, as are the rating dots, which carry their
+ * fill as .is-filled rather than :hover. */
+.film-detail .candy-btn:not(.is-primary, .is-hover-accent, .is-active, .is-selected, [data-shape="dot"]):is(:hover, :active) {
+  --cbtn-band: var(--surface);
+}
+.film-detail .candy-btn:not(.is-primary, .is-hover-accent, .is-active, .is-selected, [data-shape="dot"]):is(:hover, :active) > .candy-face {
+  color: var(--text-muted);
+  background: var(--surface-3);
+}
+.film-detail .candy-btn:not(.is-primary, .is-hover-accent, .is-active, .is-selected, [data-shape="dot"]):is(:hover, :active) .candy-face :where(div, span) {
+  color: var(--text-muted);
+}
+
+/* is-hover-accent is the app's existing opt-in for "neutral at rest, accent on
+ * hover" (the titlebar wears it). Exempted above so the source buttons and the
+ * tab run keep lighting up while every other film control stays dark. */
+
+/* Cast / Crew as a wrapping run of fused photo+name pairs. */
+.film-credit-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: 760px;
+}
+.film-credit-list.has-photos {
+  /* stretch, not flex-start: a wrapped flex line hands every item the line's
+     height, so the name buttons line up along one bottom edge instead of each
+     sizing to its own text (a four-line character name made the row ragged the
+     moment the two halves stopped being welded). */
+  align-items: stretch;
+  gap: 8px;
+}
+
+/* === CANDY STACK ========================================================== *
+ * A vertical column of candy buttons, each a WHOLE button: own corners, own
+ * frame, own lip, own press. NOT the vertical twin of .candy-split -- that
+ * welds two halves into one unit, and welded vertically the pair reads as a
+ * single flat card rather than as buttons. Only the column and the lip-sized
+ * gap live here; everything else is stock .candy-btn. */
+.candy-stack {
+  /* ONE depth for the pair: the lip UNDER each half and the gap BETWEEN them are
+     the same value, so the upper half's lip always has exactly its own room and
+     a deeper shadow can never collide with the button below. Turn this, not the
+     two separately. --candy-tile-depth is the app's deepest stock lip. */
+  --stack-depth: var(--candy-tile-depth);
+  display: inline-flex;
+  flex-direction: column;
+  align-items: stretch;
+  /* TWO buttons, not one fused unit. Each half keeps its own frame, its own lip
+     and its own press, so each reads as a button -- fused flush they read as a
+     single flat card with a faint outline, which is what "doesnt look like an
+     actual button" meant (2026-09-12).
+     The gap exists because the LIP needs room: a candy button's depth is a
+     box-shadow and takes no layout space, so without a gap the upper half's lip
+     lands on top of the lower half. --candy-depth is the full-size lip token,
+     one step wider than the chip's own 5px and still under the 8px between
+     cards, so the pair holds together. Do NOT reach for --cbtn-depth here: it is
+     declared ON the buttons, so up here it is invalid and silently yields NO
+     gap (rowGap computed "normal" -- measured 2026-09-12). */
+  gap: var(--stack-depth);
+}
+.candy-stack > .candy-btn { --cbtn-depth: var(--stack-depth); }
+/* The two halves face each other with FLAT edges and turn their rounded corners
+   outward, so the pair still reads as one card even with the gap between them.
+   Radius is flattened on the facing side only -- the outer corners are stock. */
+.candy-stack > .candy-btn:not(:last-child) {
+  border-end-start-radius: 0;
+  border-end-end-radius: 0;
+}
+.candy-stack > .candy-btn:not(:first-child) {
+  border-start-start-radius: 0;
+  border-start-end-radius: 0;
+}
+
+/* Every credit pair is the SAME size, so the run reads as a grid of faces
+ * rather than a ragged run of name-width boxes. One width here is the only
+ * number: the photo takes its height from the portrait aspect below, and the
+ * name half takes its width from the stack. */
+.film-credit-list.has-photos > .candy-stack { width: 124px; }
+/* The NAME half takes the leftover height; the photo half does not grow because
+   its 2:3 aspect-ratio owns its box. So a tall name makes its own button taller,
+   not the picture above it. */
+.film-credit-list.has-photos > .candy-stack > .candy-btn:last-child { flex: 1; }
+
+/* The photo half. A headshot is 2:3, so the box is too -- stated once, with
+ * object-fit:cover so a file that ever arrives at another shape crops instead
+ * of breaking the row. The crop sits high because a headshot's subject is its
+ * face, not its centre. */
+/* Selector carries the shape too: the chip recipe sets padding through
+   `.candy-btn[data-shape="chip"] > .candy-face`, which out-specifies a plain
+   two-class rule -- so a bare `.film-credit-photo > .candy-face { padding: 0 }`
+   lost, and the headshot kept a 5px/10px gutter (measured 2026-09-12). */
+.candy-btn.film-credit-photo[data-shape="chip"] > .candy-face {
+  padding: 0;
+  overflow: hidden;
+  display: block;
+  aspect-ratio: 2 / 3;
+  /* Edge to edge INSIDE the frame. The gutter was the chip's 5px/10px padding,
+     not the frame -- the frame IS the candy button's edge, and removing it left
+     a bare photo that read as no button at all. */
+}
+.film-credit-photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 22%;
+}
+/* No headshot on file: the slot stays, holding a dash, so every pair keeps the
+ * same two-part shape and the row stays level. */
+.film-credit-nophoto {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--text-faint);
+}
+
+/* Name over character, not side by side. The base chip face is a nowrap single
+ * line, so both of those have to be undone here. */
+.film-credit-list.has-photos > .candy-stack > .candy-btn:last-child > .candy-face {
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 2px;
+  padding: 7px 8px;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+/* Stacked, so the separating middot has nothing to separate. */
+.film-credit-list.has-photos .film-credit-role::before { content: none; }
+
+/* === FILM BACKDROP ======================================================== *
+ * The wide TMDb scene still, painted behind the film header (poster, title,
+ * byline, controls). z-index 0 over the layer, -1 under it, so the whole header
+ * stays clickable. The image is dimmed hard and faded out at the bottom edge so
+ * the synopsis below starts on the page's own background with no seam. */
+/* No overflow:hidden here — the status menu unrolls out of this box. */
+.film-detail { position: relative; }
+/* Everything that is not the backdrop sits on its own layer above it. A
+   z-index:-1 backdrop would have dropped behind .film-detail's own ancestor
+   background instead, since this box paints none of its own. */
+/* The film header pads deep at the top so the still reads on its own before the
+   title starts. Both numbers below are DERIVED, not picked:
+   --film-backdrop-ratio  a TMDb still is 16:9, so its height is 9/16 of this
+                          box's width -- and a percentage padding resolves
+                          against that same width, so the two are the same span.
+   --film-backdrop-solid  the stop where the still stops being solid and starts
+                          dissolving. The vertical mask below reads the SAME var,
+                          so the title lands exactly on the start of the fade and
+                          moving the fade moves the title with it.
+   A pixel constant here (it was 234px) drifts the moment the window resizes. */
+.film-detail {
+  /* ONE knob for the whole film head -- title, byline, and the rating/genre/
+     runtime row all multiply their base size by it, so they grow together and
+     keep their relative weight instead of drifting apart as three numbers. */
+  --film-head: 1.3;
+  --film-backdrop-ratio: 56.25%;   /* 9 / 16 */
+  --film-backdrop-solid: 0.60;     /* unitless: the mask multiplies it by 100% */
+  padding: calc(var(--film-backdrop-ratio) * var(--film-backdrop-solid)) 28px 24px;
+}
+.film-detail > *:not(.film-backdrop) { position: relative; z-index: 1; }
+.film-detail > .film-backdrop {
+  position: absolute;
+  /* No height here: the <img> inside sets it, so the whole still is always
+     shown uncropped however wide the window gets. Pinned to the padding-box top,
+     which is why the film's deeper padding-top slides the CONTENT down over it
+     without moving the picture. */
+  inset: 0 0 auto 0;
+  z-index: 0;
+  pointer-events: none;
+  line-height: 0;
+  /* Fades out at the left, right and bottom edges so the still dissolves into
+     the page instead of ending on three hard cuts. Two mask layers intersected:
+     one horizontal, one vertical. The top edge stays hard -- it meets the
+     window chrome, not the page. */
+  -webkit-mask-image:
+    linear-gradient(to right, transparent 0%, #000 17%, #000 83%, transparent 100%),
+    linear-gradient(to bottom, #000 0%, #000 calc(var(--film-backdrop-solid) * 100%), transparent 100%);
+  mask-image:
+    linear-gradient(to right, transparent 0%, #000 17%, #000 83%, transparent 100%),
+    linear-gradient(to bottom, #000 0%, #000 calc(var(--film-backdrop-solid) * 100%), transparent 100%);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+  opacity: 0.7;
+}
+.film-detail > .film-backdrop > img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+/* An EVEN scrim over the photo -- masking alone still let bright frames wash out
+ * the title. Flat, not a left-to-right gradient: the gradient hid the left of
+ * the still and left the right clear, so a photo drawn at full width with no
+ * crop at all still READ as shoved to the right. */
+.film-detail > .film-backdrop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: color-mix(in oklch, var(--surface), transparent 45%);
 }
