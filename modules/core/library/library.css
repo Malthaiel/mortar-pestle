@@ -423,6 +423,29 @@
   justify-content: flex-start;
 }
 
+/* BAND — the film page's wall is --bg (L 0.160); the sidebar's is --surface
+ * (L 0.190). The candy recipe draws BOTH the frame and the under-lip by
+ * DARKENING --cbtn-band, so on --surface the frame lands at L 0.148 (a clear
+ * 0.042 below its wall) and on --bg it lands 0.012 below — invisible, while the
+ * lip's L 0.171 comes out LIGHTER than the wall and inverts the depth. Measured
+ * 2026-09-13 via the audit bridge; the face (L 0.245) was never the problem, it
+ * actually separates MORE here. Repointing the band at --border restores the
+ * frame/lip offsets without touching the face, so a film-page button is the
+ * same button the sidebar shows. Neutral controls only — is-primary and the
+ * accent states carry their own band.
+ *
+ * Scoped ON PURPOSE. The generalised version (every wall declaring its own
+ * colour, the recipe reading it) was built and reverted the same day: the
+ * sidebar paints its wall from an INLINE style, so a stylesheet-only sweep
+ * missed it and the sidebar fell back to the body's wall — heavier outline,
+ * measured 6.5 where it had been 4.2. Finishing it means labelling 188 more
+ * inline walls across 105 files and still relying on every future wall
+ * remembering to declare one. No other page has shown the symptom; when one
+ * does, scope it here the same way. */
+.film-detail .candy-btn:not(.is-primary, .is-active, .is-selected, [data-shape="dot"]) {
+  --cbtn-band: var(--border);
+}
+
 /* HOVER — user-directed 2026-09-12: on a film page ONLY the Download button
  * lights accent. Every neutral control (⋯, Reveal, the poster tile, the Seg
  * options) stays at its rest colours through hover and press. is-primary
@@ -430,7 +453,7 @@
  * accent at rest and are untouched, as are the rating dots, which carry their
  * fill as .is-filled rather than :hover. */
 .film-detail .candy-btn:not(.is-primary, .is-hover-accent, .is-active, .is-selected, [data-shape="dot"]):is(:hover, :active) {
-  --cbtn-band: var(--surface);
+  --cbtn-band: var(--border);
 }
 .film-detail .candy-btn:not(.is-primary, .is-hover-accent, .is-active, .is-selected, [data-shape="dot"]):is(:hover, :active) > .candy-face {
   color: var(--text-muted);
