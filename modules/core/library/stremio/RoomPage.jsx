@@ -21,7 +21,6 @@ import RoomHome from './RoomHome.jsx';
 import RoomLibrary from './RoomLibrary.jsx';
 import RoomBrowse from './RoomBrowse.jsx';
 import RoomTitle from './RoomTitle.jsx';
-import RoomTopBar from './RoomTopBar.jsx';
 import { room, roomHome } from './util.js';
 
 function replaceHash(newHash) {
@@ -66,7 +65,6 @@ export default function RoomPage({ accent, rest, kind = 'series' }) {
   const parts = (rest || '').split('/');
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-      <RoomTopBar accent={accent} kind={kind} />
       {routeContent({ accent, kind, rest, parts })}
     </div>
   );

@@ -2,7 +2,7 @@
 // domain, feeding BOTH the Library sidebar tree (the status-count rows) and that
 // domain's topbar. A module-level store (useSyncExternalStore) dedupes:
 // whichever surface mounts first starts the fetch; every subscriber re-renders on
-// updates. Lifted out of AnimeTopBar so the two subtrees (sidebar in
+// updates. Lifted out of the retired AnimeTopBar so the two subtrees (sidebar in
 // renderSecondary, topbar in AnimePage) can never disagree on counts.
 //
 // One store per domain, built by the same factory: Anime, TV Shows and Movies

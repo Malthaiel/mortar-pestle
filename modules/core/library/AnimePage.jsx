@@ -22,7 +22,6 @@ import AnimeDetail from './AnimeDetail.jsx';
 import AnimeCharacterPage from './AnimeCharacterPage.jsx';
 import AnimeVoiceActorPage from './AnimeVoiceActorPage.jsx';
 import BrowseGrid from './BrowseGrid.jsx';
-import AnimeTopBar from './AnimeTopBar.jsx';
 import { decodePath } from './paths.js';
 
 function replaceHash(newHash) {
@@ -36,8 +35,7 @@ function Redirect({ to }) {
   return null;
 }
 
-// Resolves `rest` to the page component. The persistent AnimeTopBar is added by
-// VideoPage around whatever this returns.
+// Resolves `rest` to the page component.
 function routeContent({ accent, rest, parts }) {
   // Legacy redirects from the old Downloaded / Browse tabs.
   if (parts[0] === 'anime') {
@@ -87,7 +85,6 @@ export default function AnimePage({ accent, rest }) {
   const parts = (rest || '').split('/');
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-      <AnimeTopBar accent={accent} rest={rest} />
       {routeContent({ accent, rest, parts })}
     </div>
   );

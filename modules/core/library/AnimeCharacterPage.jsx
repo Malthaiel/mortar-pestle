@@ -2,9 +2,8 @@
 // detail view (/tools/library/anime/character/<malId>). Pulls the character's bio, the
 // Japanese + English voice actors, and the anime it appears in from Jikan's
 // /characters/{id}/full in one call. The voice actors live HERE now (moved off
-// the anime page's character cards). Renders under the persistent AnimeTopBar;
-// a "← Back" affordance returns to the originating anime since the topbar has
-// no tile for character pages.
+// the anime page's character cards); a "← Back" affordance returns to the
+// originating anime.
 
 import { useEffect, useRef, useState } from 'react';
 import { videoApi } from './api.js';
