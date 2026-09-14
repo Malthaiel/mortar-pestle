@@ -1712,6 +1712,13 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
    white at rest and never moved. Rest colour is --text-muted now (the base
    .candy-face colour every other candy button rests at). */
 .candy-btn[data-shape="chip-field"]:hover:not(:focus-within) > .candy-face > .chip-field-input { color: #fff; }
+/* The hover flip above sets `color`, which the placeholder does NOT inherit —
+   ::placeholder's own rule wins — so an EMPTY chip-field stayed grey on hover
+   while a filled one went white (agent chat bar, 2026-09-13). Mirrors the
+   :focus-within placeholder rule below. */
+.candy-btn[data-shape="chip-field"]:hover:not(:focus-within) > .candy-face > .chip-field-input::placeholder {
+  color: color-mix(in oklch, #fff, transparent 35%);
+}
 .candy-btn[data-shape="chip-field"]:focus-within { --cbtn-band: var(--accent); }
 .candy-btn[data-shape="chip-field"]:focus-within > .candy-face { background: var(--accent); }
 .candy-btn[data-shape="chip-field"]:focus-within > .candy-face > .chip-field-input { color: #fff; }
@@ -2110,6 +2117,21 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
   transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 .candy-btn[data-shape="select"].is-compact { width: 100%; height: 28px; --corner-max: 14px; }
+/* is-fused — a select sitting as a DIRECT child of a .candy-split (CandySelect
+   `fuse`, ported from StatusDropdown's chip variant). Height comes from the run's
+   --cbtn-size so it matches the icon buttons it is welded to (the hard 27px above
+   left it 5px short), and the face rests at the same colour as its neighbours
+   instead of the brighter standalone-trigger --text. */
+.candy-btn[data-shape="select"].is-fused { height: var(--cbtn-size, 27px); }
+.candy-btn[data-shape="select"].is-fused > .candy-face { color: var(--text-muted); }
+/* A fused select is welded to .is-hover-accent icon buttons, so it flips to the
+   accent face on hover exactly like them (user-directed 2026-09-13) — the neutral
+   select hover below (band --surface, face --surface-3) reads dead beside them.
+   Mirrors the per-shape .is-hover-accent triples; (0,4,1) beats that rule's
+   (0,3,1). Gated :not(.is-active) like every other shape's version. */
+.candy-btn[data-shape="select"].is-fused:is(:hover, :active):not(.is-active) { --cbtn-band: var(--accent); }
+.candy-btn[data-shape="select"].is-fused:is(:hover, :active):not(.is-active) > .candy-face { color: #fff; background: var(--accent); }
+.candy-btn[data-shape="select"].is-fused:is(:hover, :active):not(.is-active) .candy-face :where(div, span) { color: #fff; }
 .candy-btn[data-shape="select"].is-compact > .candy-face { padding: 0 8px; font-size: 11px; }
 /* Inactive hover brightens the caret only — band + face stay neutral (no accent flip). */
 .candy-btn[data-shape="select"]:hover { --cbtn-band: var(--surface); }
@@ -3175,6 +3197,10 @@ button.candy-select.is-compact .candy-select-label { font-size: 11px; }
 }
 .candy-select-menu.is-down { top: calc(100% + 8px); }
 .candy-select-menu.is-up   { bottom: calc(100% + 8px); }
+/* A fused menu anchors to the .candy-split, so `min-width: 100%` would stretch it
+   to the WHOLE run. Size it to its own options and let the component's inline
+   `left` place it under its own trigger. */
+.candy-select-menu.is-fused { min-width: max-content; }
 .candy-select-menu[data-open="true"] { pointer-events: auto; }
 
 button.candy-select-option {
