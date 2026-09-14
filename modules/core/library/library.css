@@ -442,9 +442,12 @@
  * inline walls across 105 files and still relying on every future wall
  * remembering to declare one. No other page has shown the symptom; when one
  * does, scope it here the same way. */
-.film-detail .candy-btn:not(.is-primary, .is-active, .is-selected, [data-shape="dot"]) {
-  --cbtn-band: var(--border);
-}
+/* SUPERSEDED 2026-09-14 — the rest-state pin that lived here is gone. The global
+ * --cbtn-rest knob (styles.css :root) now carries a lifted --border for every
+ * button in the app, which is what this rule was reaching for locally; leaving it
+ * would have pinned the film page to the UNLIFTED --border and made it the only
+ * dark surface left. The hover pin below stays: it is about hover BEHAVIOUR
+ * (neutral, no accent), not about the resting colour. */
 
 /* HOVER — user-directed 2026-09-12: on a film page ONLY the Download button
  * lights accent. Every neutral control (⋯, Reveal, the poster tile, the Seg
@@ -453,11 +456,11 @@
  * accent at rest and are untouched, as are the rating dots, which carry their
  * fill as .is-filled rather than :hover. */
 .film-detail .candy-btn:not(.is-primary, .is-hover-accent, .is-active, .is-selected, [data-shape="dot"]):is(:hover, :active) {
-  --cbtn-band: var(--border);
+  --cbtn-band: var(--cbtn-rest);
 }
 .film-detail .candy-btn:not(.is-primary, .is-hover-accent, .is-active, .is-selected, [data-shape="dot"]):is(:hover, :active) > .candy-face {
   color: var(--text-muted);
-  background: var(--surface-3);
+  background: var(--cbtn-face);
 }
 .film-detail .candy-btn:not(.is-primary, .is-hover-accent, .is-active, .is-selected, [data-shape="dot"]):is(:hover, :active) .candy-face :where(div, span) {
   color: var(--text-muted);
@@ -572,3 +575,4 @@
   inset: 0;
   background: color-mix(in oklch, var(--surface), transparent 45%);
 }
+

@@ -82,6 +82,22 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
      :root via useSettings (--cbtn-press-dur). */
   --cbtn-press-dur: 70ms;
 
+  /* Candy REST colours — the two knobs every neutral candy button reads.
+     --cbtn-rest is the band (the recipe darkens it into the frame and the
+     under-lip); --cbtn-face is the ground the face paints. Nothing else sets a
+     resting candy colour: the 24 band pins and 17 face grounds that used to
+     name --surface / --surface-3 directly all point here, so one edit moves
+     every button in the app.
+
+     Light theme keeps the historical pair (--surface / --surface-3) so it is
+     byte-identical to before. The dark themes take a LIFT, user-directed
+     2026-09-14: +0.03 lightness, the distance --surface sits above --bg, so a
+     button standing on the app's lighter walls separates from them the way a
+     film-page button separates from its darker one. Derivation + the measured
+     before/after are in modules/core/library/library.css. */
+  --cbtn-rest: var(--surface);
+  --cbtn-face: var(--surface-3);
+
   --bg:           oklch(0.985 0.004 30);
   --surface:      #ffffff;
   --surface-2:    oklch(0.975 0.005 30);
@@ -232,6 +248,8 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
   --hover:        oklch(0.225 0.005 78);
   --border:       oklch(0.255 0.005 78);
   --border-2:     oklch(0.300 0.005 78);
+  --cbtn-rest:    oklch(from var(--border) calc(l + 0.03) c h);
+  --cbtn-face:    oklch(from var(--surface-3) calc(l + 0.03) c h);
   --border-soft:  oklch(0.235 0.005 78);
   --divider:      oklch(0.220 0.005 78);
   --text:         oklch(0.920 0.005 85);
@@ -546,25 +564,17 @@ body[data-design-pointer="markup"] *:not(input):not(textarea):not(select):not([d
 .dock-root[data-dock-edge-style="band"] {
   box-shadow: 0 -6px 18px rgba(0,0,0,0.10);
 }
-/* Dock icon face colour, driven by data-dock-icon-style={resolvedTheme} on
-   Dock (follows the color mode — no user picker). Scoped to the dock + to
-   inactive buttons so the .is-active accent fill is never touched. Both
-   variants swap the candy frame/shadow base to --dock-bg (so the depth reads
-   on the grey across rest/hover/active automatically — see
-   button.button-dock-icon) and set only the glyph colour (the FACE is the shared --surface-3 base:
-   every candy button in the app wears one resting colour, user-directed
-   2026-09-07). */
-.dock-root[data-dock-icon-style="light"] .candy-btn[data-shape="icon"]:not(.is-active) {
-  --cbtn-band: var(--dock-bg);
-}
+/* Dock icon GLYPH colour, driven by data-dock-icon-style={resolvedTheme} on
+   Dock (follows the color mode — no user picker). Scoped to inactive buttons so
+   the .is-active accent fill is never touched. The band and the face ground are
+   NOT set here any more: the dock used to pin the band to --dock-bg, which was
+   just another name for --surface, and both now come from the global --cbtn-rest
+   / --cbtn-face knobs (see :root) along with every other button in the app. */
 .dock-root[data-dock-icon-style="light"] .candy-btn[data-shape="icon"]:not(.is-active) > .candy-face {
   color: oklch(0.420 0.010 78);
 }
 .dock-root[data-dock-icon-style="light"] .candy-btn[data-shape="icon"]:not(.is-active):is([data-dock-hover], :hover) > .candy-face {
   color: oklch(0.280 0.010 78);
-}
-.dock-root[data-dock-icon-style="dark"] .candy-btn[data-shape="icon"]:not(.is-active) {
-  --cbtn-band: var(--dock-bg);
 }
 .dock-root[data-dock-icon-style="dark"] .candy-btn[data-shape="icon"]:not(.is-active) > .candy-face {
   color: oklch(0.780 0.010 78);
@@ -820,7 +830,7 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
  * data-shape = geometry only. Graduated from .candy-tile — see Decisions. */
 
 .candy-btn-legacy {
-  --cbtn-band: var(--surface);
+  --cbtn-band: var(--cbtn-rest);
   --cbtn-frame: 2px;
   /* Reset native form-control chrome. Required because the route content sits
      inside .page-tx, which keeps a persistent transform: scale(1) (pageCandy
@@ -847,7 +857,7 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-muted);
-  background: var(--surface-3);
+  background: var(--cbtn-face);
   border: var(--cbtn-frame) solid color-mix(in oklch, var(--cbtn-band), black 22%);
   border-radius: var(--radius-md);
   box-shadow:
@@ -982,8 +992,8 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
 }
 .candy-btn-legacy[data-shape="dot"]:hover:not(.is-filled),
 .candy-btn-legacy[data-shape="dot"]:active:not(.is-filled) {
-  --cbtn-band: var(--surface);
-  background: var(--surface-3);
+  --cbtn-band: var(--cbtn-rest);
+  background: var(--cbtn-face);
 }
 .candy-btn-legacy[data-shape="dot"].is-filled {
   --cbtn-band: var(--accent);
@@ -1003,13 +1013,13 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
     0 var(--candy-depth) 0 0 color-mix(in oklch, var(--surface), black 28%);
 }
 .candy-btn-legacy[data-shape="swatch"]:hover {
-  --cbtn-band: var(--surface);
+  --cbtn-band: var(--cbtn-rest);
   box-shadow:
     0 var(--candy-depth-hover-shadow) 0 -2px color-mix(in oklch, var(--surface), black 22%),
     0 var(--candy-depth-hover-shadow) 0 0 color-mix(in oklch, var(--surface), black 28%);
 }
 .candy-btn-legacy[data-shape="swatch"]:active {
-  --cbtn-band: var(--surface);
+  --cbtn-band: var(--cbtn-rest);
   box-shadow:
     0 0 0 -2px color-mix(in oklch, var(--surface), black 22%),
     0 0 0 0 color-mix(in oklch, var(--surface), black 28%);
@@ -1033,9 +1043,9 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
 }
 .candy-btn-legacy[data-shape="seg"]:hover,
 .candy-btn-legacy[data-shape="seg"]:active {
-  --cbtn-band: var(--surface);
+  --cbtn-band: var(--cbtn-rest);
   color: var(--text-muted);
-  background: var(--surface-3);
+  background: var(--cbtn-face);
   transform: none !important;
   box-shadow:
     0 var(--candy-depth) 0 -2px color-mix(in oklch, var(--surface), black 10%),
@@ -1055,7 +1065,7 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
   transition: background 140ms ease, color 140ms ease;
 }
 .candy-btn-legacy[data-shape="seg-option"]:hover {
-  --cbtn-band: var(--surface);
+  --cbtn-band: var(--cbtn-rest);
   color: var(--text);
   background: transparent;
   transform: none !important;
@@ -1216,7 +1226,7 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
  * Spec: Mortar & Pestle/Docs/Reference/Buttons.md. */
 
 .candy-btn {
-  --cbtn-band: var(--surface);
+  --cbtn-band: var(--cbtn-rest);
   --cbtn-frame: 2px;
   --cbtn-depth: var(--candy-depth);
   appearance: none;
@@ -1269,7 +1279,7 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: color-mix(in oklch, var(--text-2), var(--text-muted) 33%);
-  background: var(--surface-3);
+  background: var(--cbtn-face);
   border: var(--cbtn-frame) solid color-mix(in oklch, var(--cbtn-band), black 22%);
   border-radius: inherit;
   transition:
@@ -1310,6 +1320,11 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
 .candy-btn[data-shape="tile"]:not(.rail-tile):is(:hover, :active, .is-selected) .candy-face :where(div, span) {
   color: #fff !important;
 }
+
+/* Dev-tab Tube: the flowing water is an SVG stroke, so the rule above (which only
+   reaches div/span) can't flip it. Same face, same trigger, same #fff. */
+.tube-water { stroke: var(--accent); }
+.candy-btn:is(:hover, :active) .tube-water { stroke: #fff; }
 
 /* tile.rail-tile — THE rail tile: one self-contained panel in a reorderable
    stack. Three surfaces ride it (music player, planner dock, day-pane sections)
@@ -1360,7 +1375,7 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
    so the whole tile stays grabbable + pressable. */
 .candy-btn[data-shape="tile"].rail-tile
   :where(.music-tile-cover, .music-tile-rail, .candy-btn,
-         .planner-ring-button, .button-planner-calendar, button, a, input,
+         .planner-dial, button, a, input,
          textarea, [data-no-drag]) {
   pointer-events: auto;
 }
@@ -1370,7 +1385,15 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
    covers the ring's drag-to-set, where pointer-capture makes :has(:active)
    unreliable under WebKitGTK.) */
 .candy-btn[data-shape="tile"].rail-tile:active > .candy-face { transform: none; }
-.candy-btn[data-shape="tile"].rail-tile:active:not(:has(button:active, .music-tile-cover:active, .music-tile-rail:active, .planner-ring-button:active, .planner-ring-button.is-pressed, textarea:active, input:active, [data-no-drag]:active)) > .candy-face {
+/* ...but a JS-HELD press still sinks it. The planner dial holds .is-pressed on the
+   tile through its whole time-drag, and the dial carries data-no-drag - which is in
+   the exclusion list below, so the gate never re-enabled the slide and the widget
+   sat still while being held (user-reported 2026-09-06). Same weight as the reset
+   above, placed after it, so it wins on order. */
+.candy-btn[data-shape="tile"].rail-tile.is-pressed > .candy-face {
+  transform: translateY(var(--cbtn-depth));
+}
+.candy-btn[data-shape="tile"].rail-tile:active:not(:has(button:active, .music-tile-cover:active, .music-tile-rail:active, textarea:active, input:active, [data-no-drag]:active)) > .candy-face {
   transform: translateY(var(--cbtn-depth));
 }
 /* Dragging clone — DraggableSidebarList clones the slot + adds .is-dragging to
@@ -1431,6 +1454,17 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
   height: auto;
   flex: 1;
   min-height: 0;
+  /* The dial's near-black, declared ONCE. It is no longer the widget's face
+     (user-directed 2026-09-06, second pass): the widget wears the app's standard
+     candy colours like every other button. This paints the PLATE behind the dial's
+     rings only - drawn inside the SVG (DualRingRect's `plate` prop) so the accent
+     arcs stay readable when the face floods accent on hover. */
+  /* The dev-tab Tube's backing slab, adopted here 2026-09-09 (user-directed):
+     the clock's plate, the mouth between it and the calendar, and the calendar
+     panel itself all read this one var, so they change together. It is the app's
+     own --surface now rather than a hand-picked near-black, which means the slab
+     follows the theme instead of being a literal that drifts off it. */
+  --planner-face: var(--surface);
 }
 .candy-btn[data-shape="tile"].rail-tile.is-planner > .candy-face {
   display: flex;
@@ -1474,6 +1508,10 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
   background: var(--accent);
   color: #fff;
 }
+/* The planner widget takes the flood like everything else (user-directed
+   2026-09-06). It was pinned to its own near-black through every state from
+   2026-09-03; that pin is gone, and what keeps the dial readable under the flood
+   is the plate drawn behind its rings inside the SVG, not a pinned face. */
 /* Hover arbitration inside a panel tile — ONE thing lights at a time, and the
    innermost target wins. The pointer is inside the tile AND inside whatever
    control it rests on, so the tile has to ASK whether a child owns the hover:
@@ -1484,10 +1522,10 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
    floods reading, where the tile IS the button and the transport row goes
    neutral underneath it. User-directed 2026-09-01. */
 .candy-btn[data-shape="tile"].rail-tile.is-panel:is(:hover, :active):has(.candy-btn:hover) {
-  --cbtn-band: var(--surface);
+  --cbtn-band: var(--cbtn-rest);
 }
 .candy-btn[data-shape="tile"].rail-tile.is-panel:is(:hover, :active):has(.candy-btn:hover) > .candy-face {
-  background: var(--surface-3);
+  background: var(--cbtn-face);
   color: var(--text);
 }
 /* Planner Pack pane widgets ride the plain .rail-tile shape one-to-one (same
@@ -1515,7 +1553,7 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
 }
 /* Keep band + frame neutral in every state (override the base --cbtn-band flip). */
 .candy-btn[data-shape="swatch"]:is(:hover, :active, .is-active, .is-selected) {
-  --cbtn-band: var(--surface);
+  --cbtn-band: var(--cbtn-rest);
 }
 /* Accent ring on hover + selected — reads --accent (this swatch's own colour),
    rides on the face so it slides with the press. */
@@ -1595,7 +1633,7 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
    accent commit; on hover it takes the normal full-accent flip (:not(:hover)). */
 .candy-btn[data-shape="row"][data-variant="palette"] { margin-bottom: 9px; }
 .candy-btn[data-shape="row"][data-variant="palette"] > .candy-face { justify-content: space-between; }
-.candy-btn[data-shape="row"][data-variant="palette"].is-active:not(:hover) { --cbtn-band: var(--surface); }
+.candy-btn[data-shape="row"][data-variant="palette"].is-active:not(:hover) { --cbtn-band: var(--cbtn-rest); }
 .candy-btn[data-shape="row"][data-variant="palette"].is-active:not(:hover) > .candy-face {
   color: var(--text);
   background: color-mix(in oklch, var(--surface-3), var(--accent) 16%);
@@ -1644,7 +1682,7 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
   text-transform: none;
   text-align: left;
   color: var(--text);              /* readable value at rest (not the muted candy default) */
-  background: var(--surface-3);
+  background: var(--cbtn-face);
   cursor: text;
   outline: none;
 }
@@ -1765,7 +1803,7 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
    sit inside the tray's clip), just a pill face that goes transparent → accent.
    .candy-seg is the container companion to legacy .button-misc-seg. */
 .candy-seg {
-  --cbtn-band: var(--surface);
+  --cbtn-band: var(--cbtn-rest);
   --cbtn-depth: var(--candy-depth);
   display: inline-flex;
   align-items: center;
@@ -1834,9 +1872,9 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
   text-transform: none;
 }
 /* Inactive hover brightens text only — no accent fill (that reads as selected). */
-.candy-btn[data-shape="chip"]:hover:not(.is-active) { --cbtn-band: var(--surface); }
+.candy-btn[data-shape="chip"]:hover:not(.is-active) { --cbtn-band: var(--cbtn-rest); }
 .candy-btn[data-shape="chip"]:hover:not(.is-active) > .candy-face {
-  background: var(--surface-3);
+  background: var(--cbtn-face);
   color: var(--text);
 }
 /* Nested label spans (GroupHeader, TypePill) follow the brighten, not the base white-flip. */
@@ -1917,8 +1955,8 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
   font-family: var(--font-body); font-size: 15px; font-weight: 400;
   letter-spacing: 0; text-transform: none; line-height: 1;
 }
-.candy-btn[data-shape="icon"]:is([data-dock-hover], :hover):not(.is-active) { --cbtn-band: var(--surface); }
-.candy-btn[data-shape="icon"]:is([data-dock-hover], :hover):not(.is-active) > .candy-face { background: var(--surface-3); color: var(--text); }
+.candy-btn[data-shape="icon"]:is([data-dock-hover], :hover):not(.is-active) { --cbtn-band: var(--cbtn-rest); }
+.candy-btn[data-shape="icon"]:is([data-dock-hover], :hover):not(.is-active) > .candy-face { background: var(--cbtn-face); color: var(--text); }
 .candy-btn[data-shape="icon"]:is([data-dock-hover], :hover):not(.is-active) .candy-face :where(div, span) { color: var(--text); }
 
 /* Planner chip action buttons (✓ / ROUTE / ×) opt into accent-on-hover.
@@ -1946,8 +1984,8 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
   font-family: var(--font-body); font-size: 13px; font-weight: 400;
   letter-spacing: 0; text-transform: none; line-height: 1;
 }
-.candy-btn[data-shape="circle"]:hover:not(.is-active):not(.is-primary) { --cbtn-band: var(--surface); }
-.candy-btn[data-shape="circle"]:hover:not(.is-active):not(.is-primary) > .candy-face { background: var(--surface-3); color: var(--text); }
+.candy-btn[data-shape="circle"]:hover:not(.is-active):not(.is-primary) { --cbtn-band: var(--cbtn-rest); }
+.candy-btn[data-shape="circle"]:hover:not(.is-active):not(.is-primary) > .candy-face { background: var(--cbtn-face); color: var(--text); }
 .candy-btn[data-shape="circle"]:hover:not(.is-active):not(.is-primary) .candy-face :where(div, span) { color: var(--text); }
 /* .is-hover-accent on a circle — opt back INTO the base accent flood the circle
    rules above suppress (the titlebar controls; same recipe as the icon shape's
@@ -1970,9 +2008,9 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
    selection, not hover. Placed AFTER every shape block on purpose: it ties with
    the .is-hover-accent and .planner-uniform-btns opt-ins at (0,6,0), so source
    order is what decides. */
-.rail-tile .candy-btn:is(:hover, :active):not(.is-active):not(.is-primary) { --cbtn-band: var(--surface); }
+.rail-tile .candy-btn:is(:hover, :active):not(.is-active):not(.is-primary) { --cbtn-band: var(--cbtn-rest); }
 .rail-tile .candy-btn:is(:hover, :active):not(.is-active):not(.is-primary) > .candy-face {
-  background: var(--surface-3);
+  background: var(--cbtn-face);
   color: var(--text);
 }
 .rail-tile .candy-btn:is(:hover, :active):not(.is-active):not(.is-primary) .candy-face :where(div, span) { color: var(--text); }
@@ -2138,8 +2176,8 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
 .candy-btn[data-shape="select"].is-fused:is(:hover, :active):not(.is-active) .candy-face :where(div, span) { color: #fff; }
 .candy-btn[data-shape="select"].is-compact > .candy-face { padding: 0 8px; font-size: 11px; }
 /* Inactive hover brightens the caret only — band + face stay neutral (no accent flip). */
-.candy-btn[data-shape="select"]:hover { --cbtn-band: var(--surface); }
-.candy-btn[data-shape="select"]:hover > .candy-face { background: var(--surface-3); color: var(--text); }
+.candy-btn[data-shape="select"]:hover { --cbtn-band: var(--cbtn-rest); }
+.candy-btn[data-shape="select"]:hover > .candy-face { background: var(--cbtn-face); color: var(--text); }
 .candy-btn[data-shape="select"]:hover .candy-face :where(span) { color: var(--text); }
 
 /* dot — tiny rating circle (the two-layer form of the live `rating-dot`).
@@ -2158,8 +2196,8 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
   height: 100%;
 }
 /* Empty dot stays neutral in every state (override the base accent hover/active flip). */
-.candy-btn[data-shape="dot"]:not(.is-filled):is(:hover, :active) { --cbtn-band: var(--surface); }
-.candy-btn[data-shape="dot"]:not(.is-filled):is(:hover, :active) > .candy-face { background: var(--surface-3); }
+.candy-btn[data-shape="dot"]:not(.is-filled):is(:hover, :active) { --cbtn-band: var(--cbtn-rest); }
+.candy-btn[data-shape="dot"]:not(.is-filled):is(:hover, :active) > .candy-face { background: var(--cbtn-face); }
 /* Filled = accent band + face. */
 .candy-btn[data-shape="dot"].is-filled { --cbtn-band: var(--accent); }
 .candy-btn[data-shape="dot"].is-filled > .candy-face { background: var(--accent); }
@@ -2183,8 +2221,8 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
   text-transform: none;
   color: var(--text);
 }
-.candy-btn[data-shape="keycap"]:hover:not(.is-listening) { --cbtn-band: var(--surface); }
-.candy-btn[data-shape="keycap"]:hover:not(.is-listening) > .candy-face { background: var(--surface-3); color: var(--text); }
+.candy-btn[data-shape="keycap"]:hover:not(.is-listening) { --cbtn-band: var(--cbtn-rest); }
+.candy-btn[data-shape="keycap"]:hover:not(.is-listening) > .candy-face { background: var(--cbtn-face); color: var(--text); }
 /* Listening — accent face pulsing (key-capture state); reuses @keyframes keycap-pulse. */
 .candy-btn[data-shape="keycap"].is-listening { --cbtn-band: var(--accent); }
 .candy-btn[data-shape="keycap"].is-listening > .candy-face {
@@ -2249,8 +2287,8 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
 .candy-btn[data-shape="card"] .card-chevron { font-size: 14px; color: var(--text-muted); transition: transform 200ms ease; }
 .candy-btn[data-shape="card"].is-expanded .card-chevron { transform: rotate(180deg); }
 /* Neutral hover — brighten only; the accent stays in the left rail (no full flip). */
-.candy-btn[data-shape="card"]:hover { --cbtn-band: var(--surface); }
-.candy-btn[data-shape="card"]:hover > .candy-face { background: var(--surface-3); color: var(--text); }
+.candy-btn[data-shape="card"]:hover { --cbtn-band: var(--cbtn-rest); }
+.candy-btn[data-shape="card"]:hover > .candy-face { background: var(--cbtn-face); color: var(--text); }
 .candy-btn[data-shape="card"]:hover .candy-face :where(div, span) { color: var(--text); }
 
 /* track — full-width tracklist row (a <div role=button>, so it can hold nested
@@ -2277,8 +2315,8 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
   color: var(--text);
 }
 /* Neutral hover — brighten only (a list row; accent is reserved for .is-playing). */
-.candy-btn[data-shape="track"]:hover:not(.is-playing) { --cbtn-band: var(--surface); }
-.candy-btn[data-shape="track"]:hover:not(.is-playing) > .candy-face { background: var(--surface-3); color: var(--text); }
+.candy-btn[data-shape="track"]:hover:not(.is-playing) { --cbtn-band: var(--cbtn-rest); }
+.candy-btn[data-shape="track"]:hover:not(.is-playing) > .candy-face { background: var(--cbtn-face); color: var(--text); }
 .candy-btn[data-shape="track"]:hover:not(.is-playing) .candy-face :where(div, span) { color: var(--text); }
 /* Playing — accent face. */
 .candy-btn[data-shape="track"].is-playing { --cbtn-band: var(--accent); }
@@ -2334,7 +2372,7 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
 }
 /* Inactive hover/press — brighten the label only; band + face stay neutral
    (the press still slides; only the accent colour-flip is cancelled). */
-.candy-btn.sidebar-pill:is(:hover, :active):not(.is-active) { --cbtn-band: var(--surface); }
+.candy-btn.sidebar-pill:is(:hover, :active):not(.is-active) { --cbtn-band: var(--cbtn-rest); }
 .candy-btn.sidebar-pill:is(:hover, :active):not(.is-active) > .candy-face {
   background: var(--surface);
   color: var(--text);
@@ -2349,7 +2387,7 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
 }
 .candy-btn.sidebar-pill.is-active .candy-face :where(span) { color: var(--accent); }
 /* Muted-accent active (mutedAccent prop) — neutral surface-2 face, plain text. */
-.candy-btn.sidebar-pill.is-active.is-muted { --cbtn-band: var(--surface); }
+.candy-btn.sidebar-pill.is-active.is-muted { --cbtn-band: var(--cbtn-rest); }
 .candy-btn.sidebar-pill.is-active.is-muted > .candy-face {
   background: var(--surface-2);
   color: var(--text);
@@ -2391,10 +2429,10 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
    separate, brighter danger red. The standing-red above is fully retired inside
    the menu; is-danger stays semantic only. Scoped to data-variant="menu", so
    every current AND future menu danger item inherits it — no per-menu styling. */
-.candy-btn[data-shape="row"][data-variant="menu"].is-danger { --cbtn-band: var(--surface); }
+.candy-btn[data-shape="row"][data-variant="menu"].is-danger { --cbtn-band: var(--cbtn-rest); }
 .candy-btn[data-shape="row"][data-variant="menu"].is-danger > .candy-face {
   color: var(--text-muted);   /* core .candy-face rest colour — matches a normal row */
-  background: var(--surface-3);
+  background: var(--cbtn-face);
 }
 .candy-btn[data-shape="row"][data-variant="menu"].is-danger .candy-face :where(div, span) { color: var(--text-muted); }
 .candy-btn[data-shape="row"][data-variant="menu"].is-danger:is(:hover, :active, .is-active) { --cbtn-band: var(--accent); }
@@ -2508,59 +2546,26 @@ body[data-anim-button-depth="off"] .candy-btn:is(:active, .is-pressed, [data-can
  * handlers so the depression stays in sync when the pointer leaves the
  * surface mid-drag via pointer capture (CSS :active alone would release). */
 
-/* Rides the app-default TWO-LAYER candy recipe (.candy-btn base + .candy-face).
- * --cbtn-band paints the base's whole band from the dial's own near-black, so
- * the band + frame colours are derived, not restated. --cbtn-frame 3px keeps the
- * dial's slightly heavier bezel.
+/* The dial. Since 2026-09-06 it is NOT a button - the tile is the only button in
+ * this widget, and this is a plain region on its face. It keeps no frame, no band
+ * and no depth of its own; PlannerDock sets its size inline and positions it
+ * relative so the readout/controls overlay anchors here.
  *
- * Was legacy single-layer until 2026-08-10: hover translated the whole element
- * UP and press translated it down while zeroing the shadow, so the depth slab
- * read as rising. It also needed a counter-rule to undo its own hover lift when
- * an inner control was pressed. The two-layer base never moves, so hover is
- * colour-only and that whole class of drift is gone by construction — the
- * :hover:has(button:active) unlift rule died with it. */
-/* The dial's near-black, declared ONCE for both planner-dock surfaces that wear
-   it — the watchface shell and the CALENDAR strip below it (user-directed
-   2026-08-28: the two are to read as one material). Every rule below and in the
-   calendar block reads this var, so the literal exists in exactly one place. */
-.planner-ring-button,
-.button-planner-calendar { --planner-face: #141310; }
-
-.planner-ring-button {
-  --cbtn-band: var(--planner-face);
-  --cbtn-frame: 3px;
-  --cbtn-depth: var(--candy-depth);
-  border-radius: var(--radius-lg);
-  cursor: inherit;
+ * The dial's near-black is the WHOLE widget's face now (see .rail-tile.is-planner
+ * below), so nothing here paints a background - there is one surface. --planner-face
+ * still exists as the single place that literal lives.
+ *
+ * The face is pointer-transparent by default (the immovable base is the sole hit
+ * target). The dial is a drag-to-SET-time surface, so the SVG alone gets events
+ * back — NOT a blanket `> *`, which would override .planner-ring-inner-controls'
+ * deliberate pointer-events:none and block drag-to-set through the readout. */
+.planner-dial > svg { pointer-events: auto; }
+/* An inner control (Reset / START / Skip) owns its own press — the widget must not
+   sink under it. The tile's own :has() gate covers the CSS press; this covers the
+   JS-held one the dial drag sets. */
+.candy-btn[data-shape="tile"].rail-tile.is-pressed:has(.planner-ring-panel:active) > .candy-face {
+  transform: none;
 }
-.planner-ring-button > .candy-face {
-  /* position:relative so .planner-ring-inner-controls (absolute) anchors to the
-     FACE, not the base — otherwise the readout + transport buttons stay put while
-     the dial sinks under them. */
-  position: relative;
-  width: 100%;
-  height: 100%;
-  padding: 0;
-  background: var(--planner-face);
-}
-/* The face is pointer-transparent by default (the immovable base is the sole hit
-   target). The dial is a drag-to-SET-time surface, so the SVG alone gets events
-   back — NOT a blanket `> *`, which would override .planner-ring-inner-controls'
-   deliberate pointer-events:none and block drag-to-set through the readout. */
-.planner-ring-button > .candy-face > svg { pointer-events: auto; }
-/* NO accent highlight on this button, in any state (user-directed 2026-08-10).
-   The generic candy hover flips both the band and the face to accent; flipping
-   this face would erase the accent-coloured ring arcs drawn on it (the whole
-   reason the dial is near-black), and the band reads as a red bar under a black
-   dial. The face does not lighten on hover either (user-directed 2026-08-13):
-   the dial is a readout, and a surface that brightens under the pointer read as
-   the whole watchface switching on. Band AND face stay pinned to the dial's own
-   near-black in every state; the press depression is the only feedback. */
-.planner-ring-button:is(:hover, :active) { --cbtn-band: var(--planner-face); }
-.planner-ring-button:is(:hover, :active) > .candy-face { background: var(--planner-face); }
-/* An inner control (Reset / START / Skip) owns its own press — the dial must not
-   sink under it. Mirrors the rail-tile press-exclusion one level down. */
-.planner-ring-button:active:has(button:active) > .candy-face { transform: none; }
 
 /* The enclosing tile pins EVERY nested div/span to #fff at (0,4,0) (see .rail-tile
    … :where(div, span) above), and a candy button's own face IS a span nested in
@@ -2699,15 +2704,15 @@ body[data-anim-clock-ambient="off"] .planner-seg rect { transition: none; }
 }
 .planner-ring-panel > .candy-face > svg { position: relative; }
 
-.planner-ring-button:hover .planner-ring-controls { pointer-events: auto; }
+.planner-dial:hover .planner-ring-controls { pointer-events: auto; }
 
-.candy-btn[data-shape="tile"].rail-tile .planner-ring-button:hover
+.candy-btn[data-shape="tile"].rail-tile .planner-dial:hover
   .planner-ring-controls > .planner-ring-panel > .candy-face {
   background: color-mix(in srgb, var(--surface-3) var(--planner-ctrl-face, 32%), transparent);
   color: rgba(255, 255, 255, var(--planner-ctrl-ink, 0.62));
   transition-duration: 140ms;
 }
-.candy-btn[data-shape="tile"].rail-tile .planner-ring-button:hover
+.candy-btn[data-shape="tile"].rail-tile .planner-dial:hover
   .planner-ring-controls > .planner-ring-panel > .candy-face::before {
   opacity: 1;
   transition-duration: 140ms;
@@ -2718,7 +2723,7 @@ body[data-anim-clock-ambient="off"] .planner-seg rect { transition: none; }
    these rather than above them. The mark goes to white, and that is what makes
    the target unmistakable. Also covers :active, so no accent flood gets in: an
    accent face here would sit on top of the accent-coloured ring arcs. */
-.candy-btn[data-shape="tile"].rail-tile .planner-ring-button:hover
+.candy-btn[data-shape="tile"].rail-tile .planner-dial:hover
   .planner-ring-controls > .planner-ring-panel:is(:hover, :active) > .candy-face {
   background: color-mix(in srgb, var(--surface-3) var(--planner-ctrl-face-on, 68%), transparent);
   color: #fff;
@@ -2860,112 +2865,22 @@ body[data-anim-clock-ambient="off"] .planner-seg rect { transition: none; }
 .sidebar-pattern        { background-image: var(--sidebar-pattern-bg); }
 .sidebar-pattern-mirror { background-image: var(--sidebar-pattern-bg-mirror); }
 
-/* CALENDAR toggle — a plain candy button STRIP on the app-default two-layer
- * recipe (.candy-btn base + .candy-face), neutral surface palette, shallower
- * --candy-depth-small. The base's band + frame come free from the .candy-btn
- * defaults (--cbtn-band: var(--surface), --cbtn-frame: 2px), byte-identical to
- * the colours this used to hand-roll.
- *
- * TWO retired shapes are worth remembering, both user-directed 2026-08-10:
- *  1. It was legacy SINGLE-layer — the whole element translated down and its
- *     box-shadow collapsed to 0 on press, so the depth slab appeared to RISE
- *     rather than the button sinking into it. That is the tell of the retired
- *     one-layer system; the base never moves now, only the face slides.
- *  2. It was a FRAME that enclosed the entire day calendar, so opening the
- *     calendar grew the button into one giant pressable slab, and its press was
- *     gated on [data-collapsed="true"] — dead whenever the calendar was open, so
- *     half the clicks gave no feedback. It is now a fixed-footprint strip and the
- *     calendar is a sibling panel below it (.button-planner-calendar-body), which
- *     also means the press needs no :has() exclusion: nothing live is inside it. */
-.button-planner-calendar {
-  --candy-depth: var(--candy-depth-small);
-  --cbtn-depth: var(--candy-depth);
-  /* NO width:100% — .candy-btn is inline-flex, and 100% plus the inline 14px side
-     margins overflowed the dock by 28px (the button ran off the right edge). As a
-     stretch-aligned item in the dock's flex column it fills the row on its own,
-     margins subtracted. */
-  display: flex;
-  cursor: pointer;
-}
-/* The accent suppression that used to live here (pinned band + a 4%-white face
-   tint + var(--text) label, user-directed 2026-08-10) is GONE — user-directed
-   2026-08-28: this strip is to look and behave like every other candy button,
-   so it now inherits the shared § States recipe wholesale (band + face flip to
-   accent on hover/press, label to #fff) and the base .candy-face's surface-3.
-   Only the label's RESTING colour needs saying: the enclosing planner tile
-   forces every nested div/span to #fff (see .rail-tile … :where(div, span)
-   above, 0,4,0), which outranks both the base face colour and the shared hover
-   rule — so the strip's label was permanently white and could never flip. These
-   two re-state the standard muted→#fff pair at a specificity that clears it. */
-/* Rest colour = the dial's near-black, so the strip and the watchface above it
-   read as one material (user-directed 2026-08-28). :not(:hover):not(:active) is
-   load-bearing, NOT decoration: the shared accent flood
-   (.candy-btn:is(:hover, :active) > .candy-face) is 0,2,0, identical to what a
-   plain `.button-planner-calendar > .candy-face` would score — and this block
-   sits LATER in the file, so it would win the tie and silently kill the hover. */
-.button-planner-calendar:not(:hover):not(:active) { --cbtn-band: var(--planner-face); }
-.button-planner-calendar:not(:hover):not(:active) > .candy-face { background: var(--planner-face); }
+/* The day strip and its ribbon are GONE from CSS (2026-09-06): the strip is no
+ * longer a bar under the dial but the dial's OUTERMOST RING, drawn as strokes on
+ * the watchface's own path - see DualRingRect.jsx, "Ring 3". It carried
+ * .planner-day-strip, .day-ribbon, .day-ribbon-track, .day-ribbon-chip and
+ * .day-ribbon-now. Nothing replaces them here: an SVG stroke takes its colour
+ * inline, so the ribbon's track is var(--clock-stroke-bg) at the point it is
+ * drawn, which is the same neutral the other two rings already sit on. */
 
-/* NEITHER planner surface lights up under the pointer, in any state
-   (user-directed 2026-09-03). `.rail-tile .candy-btn:is(:hover, :active)` (~1968)
-   repaints every nested candy button's band and face at (0,3,0), which beat both
-   surfaces' own "stay near-black" pins at (0,2,0) and lit them. These restate the
-   pin at (0,7,0): the press depression, and the label going white, are the only
-   feedback left.
-
-   NOTE the tile flavour: the planner dock's tile is `.is-planner`, NOT `.is-panel`
-   (`modules/core/planner/index.jsx`). A first pass scoped this block to .is-panel
-   and matched NOTHING — it looked like a specificity problem and was a selector
-   that was never live. Check the flavour before blaming the weight. */
-.candy-btn[data-shape="tile"].rail-tile
-  .candy-btn:is(.planner-ring-button, .button-planner-calendar):is(:hover, :active) {
-  --cbtn-band: var(--planner-face);
-}
-.candy-btn[data-shape="tile"].rail-tile
-  .candy-btn:is(.planner-ring-button, .button-planner-calendar):is(:hover, :active) > .candy-face {
-  background: var(--planner-face);
-}
-
-.candy-btn[data-shape="tile"].rail-tile
-  .button-planner-calendar > .candy-face :where(div, span) { color: var(--text-muted); }
-.candy-btn[data-shape="tile"].rail-tile
-  .button-planner-calendar:is(:hover, :active) > .candy-face :where(div, span) { color: #fff; }
-
-/* The strip's face. Wears .candy-face AND this class on one span, so the base
- * recipe supplies frame + radius + press slide and this supplies the label layout.
- * Was a nested <button> back when the frame enclosed the calendar; the strip IS
- * the button now, so the element and its appearance/border/background resets are
- * gone. */
-.button-planner-calendar-header {
-  /* Label + chevron read as ONE centred pair (user-directed 2026-08-28) rather
-     than being pushed to opposite edges by space-between. */
-  justify-content: center;
-  gap: 8px;
-  width: 100%;
-  flex-shrink: 0;
-  /* Vertically centred against the VISUAL extent, not the face box. The depth
-     band under the face has no layout height, so a symmetric 6/6 renders 8 above
-     and 13 below (6 + half-leading + the 5px slab). Half the slab moves off the
-     bottom onto the top. Derived from the var, never restated: --candy-depth-small
-     is user-settable (body[data-small-depth] = 3/5/7/9) and a literal 2.5px would
-     silently decentre the moment he changes it. */
-  padding: calc(6px + var(--candy-depth) / 2) 12px calc(6px - var(--candy-depth) / 2);
-  font-size: 11px;
-  font-weight: 700;
-  font-family: var(--font-mono);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-
-/* Day calendar — its own recessed "screen", a SIBLING of the strip above rather
- * than content inside it. Carries the frame the strip used to provide: 2px border
- * in the same derived tone, matching radius, recessed --surface fill. Height
+/* Day calendar — rows on the widget's own face since the 2026-09-06 merge; it
+ * used to be a recessed --surface screen with its own 2px frame, back when the
+ * strip above it was a separate button. Height
  * animates (max-height) for the open/close slide; box-sizing:border-box so at
  * max-height:0 the border collapses with it instead of leaving a 4px seam.
- * pointer-events: the tile's .candy-face is pointer-transparent, and this panel is
- * no longer inside .button-planner-calendar (which the tile whitelists), so it has
- * to claim events itself or the whole calendar goes dead. */
+ * pointer-events: the tile's .candy-face is pointer-transparent and this panel is
+ * not in the tile's whitelist, so it has to claim events itself or the whole
+ * calendar goes dead. */
 /* OUTER = the clip. Carries NOTHING that has layout height of its own — no border,
    no padding, no top margin — so max-height is the only animated property and 0
    really reaches 0. Every earlier attempt failed here: a real border can't compress
@@ -2973,40 +2888,75 @@ body[data-anim-clock-ambient="off"] .planner-seg rect { transition: none; }
    single frame, which is what read as the snap at the end of the close.
    The bottom 12px is the gap below this module, identical open or shut, so it never
    animates. The top 12px lives on the INNER panel, inside this clip. */
-.button-planner-calendar-body {
+.planner-calendar-body {
   --candy-depth: var(--candy-depth-small);
   display: flex;
   flex-direction: column;
   min-height: 0;
-  margin: 0 14px 12px;
+  /* One even border round the whole widget, sides and bottom (2026-09-06). The
+     number is WIDGET_MARGIN in PlannerDock, published onto the dock root as a var
+     - it used to be typed here as well as there, and the dial's width calc had a
+     third copy. The fallback is the pre-2026-09-06 value, for any host that
+     renders this panel outside the dock. The stacking gaps inside stay 12. */
+  /* MEASURED off the clock's slab now (--planner-slab-inset, PlannerDock), not
+     typed: at WIDGET_MARGIN the calendar's slab sat 3px inside the clock's and the
+     two edges did not line up, which also left no grey showing round the
+     calendar's frame. Falls back to the old typed value. */
+  margin: 0 var(--planner-slab-inset, var(--planner-widget-margin, 14px))
+             var(--planner-slab-inset, var(--planner-widget-margin, 14px));
   overflow: hidden;
   pointer-events: auto;
-  transition: max-height 320ms cubic-bezier(0.32, 0.72, 0, 1);
+  /* 640ms, doubled from 320ms 2026-09-09 (user-directed) so the tube's pour is
+     easy to follow. This is the ONLY clock in that animation - the tube reads the
+     calendar's real height every frame - so retiming it here retimes the pour. */
+  transition: max-height 640ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 /* INNER = the recessed screen. Its margin-top is the button↔calendar gap, and being
    inside the clip it shrinks away with the height for free. flex:1 + min-height:0
    against the outer's max-height is what gives it a bounded box to scroll in.
    The frame is an INSET SHADOW, not a border, so it adds no height even here. */
-.button-planner-calendar-panel {
+.planner-calendar-panel {
   box-sizing: border-box;
   flex: 1 1 auto;
   min-height: 0;
-  margin-top: 12px;
-  background: var(--surface);
-  border-radius: var(--radius-md);
-  box-shadow: inset 0 0 0 2px color-mix(in oklch, var(--surface), black 22%);
-}
-/* Chevron rotates: right (collapsed) → down (expanded). Driven by an inline
- * rotate() in PlannerDock.jsx; the transition lives here so it can be gated. */
-.planner-calendar-toggle-chevron {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 14px;
-  height: 14px;
-  flex-shrink: 0;
-  transform-origin: 50% 50%;
-  transition: transform 200ms cubic-bezier(0.32, 0.72, 0, 1);
+  /* margin-top is INLINE (PlannerDock): the band between the clock's plate and
+     this panel is built from the dial's own RING_EDGE_GAP and RIBBON_W so it
+     matches the band above the plate, and neither number is typed twice. */
+  /* The clock's own plate colour (user-directed 2026-09-09): open, the calendar
+     reads as the same dark slab the clock sits on rather than as bare rows on the
+     widget's face. It replaced "no fill" from 2026-09-06, which was written while
+     the day strip was still a separate button above it.
+     The corner is the POURED FRAME's, published from PlannerDock, so the fill ends
+     exactly where the stroke is drawn instead of on the app's generic --radius-md
+     (kept as the fallback for any host rendering this panel outside the dock). */
+  background: var(--planner-face);
+  /* The calendar's own interior paints this too, so the open widget is ONE flat
+     slab from the clock's plate to the bottom row instead of two near-identical
+     greys meeting (user-directed 2026-09-09). CalendarPanel falls back to
+     --surface wherever it is rendered outside this panel. */
+  --cal-surface: var(--planner-face);
+  border-radius: var(--planner-pour-r, var(--radius-md));
+  overflow: hidden;
+  /* Clearance for the poured strip (Ribbon Pour, 2026-09-08). Once the calendar is
+     open the day strip has travelled down and landed as this panel's outline, its
+     stroke centred on the calendar body's edge - so without this the rows run
+     under it and the hour gutter gets clipped. The number is the strip's OWN
+     stroke width, published onto the dock root from RIBBON_W in PlannerDock; a
+     literal here would be a copy that goes wrong the moment the stroke is retuned.
+     The fallback covers any host rendering this panel outside the dock. Collapsed
+     the strip is home on the dial, so there is nothing to clear - the inline style
+     zeroes this on the same calendarCollapsed branch the overflow rides.
+     ALL FOUR SIDES take it since 2026-09-09. The top used to be exempt because the
+     frame's top stroke was centred on this box's own top edge - but the frame is
+     inset from the box by the slab's proud edge now, so the top crosses the rows
+     exactly like the other three. */
+  /* A transparent BORDER, not padding, and that is the whole point: this box
+     scrolls, and a scrollport clips its content at the PADDING edge - so with
+     padding the rows scrolled straight through the clearance and showed past the
+     frame's bottom stroke (photographed 2026-09-09). A border moves the clip in
+     with it, while the slab still paints across it (background-clip is border-box
+     by default), so the colour is unbroken and the rows stop at the frame. */
+  border: var(--planner-pour-clear, var(--planner-ribbon-w, 0px)) solid transparent;
 }
 
 /* ── Watchface bezel (static) ───────────────────────────────────────────── *
@@ -3976,6 +3926,8 @@ body[data-anim-button-depth="off"] { --candy-center-on: 0; }
   --hover:        oklch(0.215 0.005 78);
   --border:       oklch(0.245 0.005 78);
   --border-2:     oklch(0.300 0.005 78);
+  --cbtn-rest:    oklch(from var(--border) calc(l + 0.03) c h);
+  --cbtn-face:    oklch(from var(--surface-3) calc(l + 0.03) c h);
   --text:         oklch(0.960 0.005 85);
   --text-2:       oklch(0.760 0.008 84);
   --text-muted:   oklch(0.620 0.008 82);
@@ -4132,9 +4084,7 @@ body[data-anim-section-accordion="off"] [style*="chevronFlipDown"],
 body[data-anim-section-accordion="off"] [style*="chevronFlipUp"] {
   animation: none !important;
 }
-body[data-anim-section-accordion="off"] .button-planner-calendar-body,
-body[data-anim-section-accordion="off"] .button-planner-calendar,
-body[data-anim-section-accordion="off"] .planner-calendar-toggle-chevron {
+body[data-anim-section-accordion="off"] .planner-calendar-body {
   transition: none !important;
 }
 
@@ -4765,8 +4715,8 @@ button.cal-customdays__step:hover {
 .capture-hud > .candy-face { padding: calc(16px + var(--candy-depth-small) / 2) 16px; }
 .capture-hud .acts { display: flex; gap: 6px; }
 .capture-hud .acts > .candy-btn { pointer-events: auto; cursor: pointer; }
-.capture-hud:has(.acts > .candy-btn:hover) { --cbtn-band: var(--surface); }
-.capture-hud:has(.acts > .candy-btn:hover) > .candy-face { background: var(--surface-3); }
+.capture-hud:has(.acts > .candy-btn:hover) { --cbtn-band: var(--cbtn-rest); }
+.capture-hud:has(.acts > .candy-btn:hover) > .candy-face { background: var(--cbtn-face); }
 .capture-hud:active:has(.acts > .candy-btn:active) > .candy-face { transform: none !important; }
 /* Host-local screen-anchored toast (bottom-right), transient. */
 .overlay-toast { position: fixed; right: 16px; bottom: 16px; z-index: 10; pointer-events: none; }
@@ -4990,3 +4940,4 @@ button.cal-customdays__step:hover {
    "some look sharper than others". Only the CEILING is set here — --corner
    itself stays inherited, so the app-wide corner knob still drives this row. */
 .planner-cal-header .candy-btn[data-shape="circle"] { --corner-max: 14px; }
+
