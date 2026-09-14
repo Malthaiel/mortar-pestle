@@ -19,7 +19,7 @@ import { readdirSync } from 'node:fs';
 // selftest joins the baseline by existing. (The hardcoded `files` list in the syntax
 // step below is the cautionary counter-example — it has to be hand-grown, and these
 // eight selftests sat outside `verify` entirely until 2026-07-20 for exactly that reason.)
-const SELFTEST_DIRS = ['modules/core/game-wiki', 'modules/studio/broadcast'];
+const SELFTEST_DIRS = ['modules/core/deadlock', 'modules/studio/broadcast'];
 const selftests = SELFTEST_DIRS.flatMap((dir) =>
   readdirSync(dir)
     .filter((f) => f.endsWith('.selftest.mjs'))
