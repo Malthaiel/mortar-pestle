@@ -30,22 +30,29 @@
 // Styling: trigger = two-layer .candy-btn[data-shape="select"]; the overlay menu
 // keeps its own .candy-select-menu / .candy-select-option classes (no portal).
 
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 
 export default function CandySelect({
   value, options, onChange, title, placeholder = '',
-  direction = 'down', compact = false, disabled = false, chevron = true,
+  direction = 'down', compact = false, disabled = false, chevron = true, fuse = false,
 }) {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const ref = useRef(null);
+  const btnRef = useRef(null);
   const listRef = useRef(null);
+  // `fuse` mode only — the menu's left edge. Ported from StatusDropdown's chip
+  // variant: with no wrapper the menu anchors to the nearest positioned ancestor
+  // (the .candy-split at the call site), whose left edge is the FIRST control in
+  // the run, not this one. Read the real offset rather than assume they line up.
+  const [menuLeft, setMenuLeft] = useState(0);
   const typeahead = useRef({ str: '', t: 0 });
   const current = options.find(o => o.value === value);
 
   // On open, highlight the selected option (or the first); clear on close.
   useEffect(() => {
     if (!open) { setActiveIndex(-1); return; }
+    if (fuse && btnRef.current) setMenuLeft(btnRef.current.offsetLeft);
     const sel = options.findIndex(o => o.value === value);
     setActiveIndex(sel >= 0 ? sel : 0);
   }, [open]);
@@ -63,7 +70,10 @@ export default function CandySelect({
   // subtitle panel's — can't swallow it and leave the menu stuck open.
   useEffect(() => {
     if (!open) return;
-    const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    // `fuse` renders WITHOUT a wrapper (so the trigger can be a direct child of a
+    // .candy-split), so "inside" is the trigger or the menu, not one box.
+    const inside = (t) => [ref.current, btnRef.current, listRef.current].some(el => el && el.contains(t));
+    const onDown = (e) => { if (!inside(e.target)) setOpen(false); };
     const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
     window.addEventListener('mousedown', onDown, true);
     window.addEventListener('keydown', onKey);
@@ -109,12 +119,23 @@ export default function CandySelect({
   };
 
   const sfx = compact ? ' is-compact' : '';
+  // is-fused: honour the run's --cbtn-size for height and size the menu to its own
+  // content instead of the run's width (see styles.css § select). Scoped to this
+  // variant so no existing caller's geometry moves.
+  const fsx = fuse ? ' is-fused' : '';
 
+  // A fused trigger returns a FRAGMENT: .candy-split fuses only its DIRECT
+  // .candy-btn children, so a wrapper would leave this select unfused beside the
+  // buttons it is meant to read as one unit with. The call site's run must be
+  // position:relative for the absolute menu to anchor to it.
+  const Shell = fuse ? Fragment : 'div';
+  const shellProps = fuse ? {} : { ref, style: { position: 'relative' } };
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
+    <Shell {...shellProps}>
       <button
+        ref={btnRef}
         type="button"
-        className={'candy-btn' + sfx}
+        className={'candy-btn' + sfx + fsx}
         data-shape="select"
         data-own-press
         title={title}
@@ -138,9 +159,9 @@ export default function CandySelect({
       <div
         ref={listRef}
         role="listbox"
-        className={'candy-select-menu is-' + direction + sfx}
+        className={'candy-select-menu is-' + direction + sfx + fsx}
         data-open={open ? 'true' : 'false'}
-        style={{ maxHeight: open ? 320 : 0, opacity: open ? 1 : 0 }}
+        style={{ maxHeight: open ? 320 : 0, opacity: open ? 1 : 0, left: fuse ? menuLeft : undefined }}
       >
         <div style={{ padding: 4 }}>
           {options.map((o, i) => {
@@ -165,6 +186,6 @@ export default function CandySelect({
           })}
         </div>
       </div>
-    </div>
+    </Shell>
   );
 }

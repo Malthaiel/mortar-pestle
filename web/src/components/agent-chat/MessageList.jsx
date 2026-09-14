@@ -42,7 +42,7 @@ export default function MessageList({ messages, streaming, accent, error, emptyN
       style={{
         flex: 1, minHeight: 0,
         overflowY: 'auto',
-        padding: '14px 14px 6px',
+        padding: '6px 8px 4px',   // user-directed 2026-09-13: wider text rows, first message higher
         display: 'flex', flexDirection: 'column', gap: 12,
       }}
     >
@@ -66,7 +66,7 @@ function EmptyState({
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', gap: 10,
-      padding: '24px 8px 8px',
+      padding: '10px 4px 8px',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <AgentAvatar accent={accent} size={11}/>
@@ -77,7 +77,7 @@ function EmptyState({
       </div>
       <div style={{
         fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.55,
-        paddingLeft: 22, maxWidth: 320,
+        paddingLeft: 22,
       }}>
         {blurb}
       </div>

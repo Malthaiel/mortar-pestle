@@ -7,7 +7,7 @@
 // (tray-centric), and the RecipeTray (between MessageList and ChatInput) is where
 // its proposal is reviewed and applied. Recipes trigger via openConcierge
 // ({ recipe, target }) — from PageView's action OR the in-window file picker
-// (header button) — threaded one-shot through `recipeNonce`.
+// (left of the message box) — threaded one-shot through `recipeNonce`.
 
 import { useEffect, useMemo, useState } from 'react';
 import { useAgentChat } from '../../components/agent-chat/useAgentChat.js';
@@ -16,8 +16,9 @@ import { api } from '../../api.js';
 import AgentChatWindow from '../../components/agents/AgentChatWindow.jsx';
 import AgentAvatar from '../../components/agents/AgentAvatar.jsx';
 import MessageList from '../../components/agent-chat/MessageList.jsx';
-import ChatInput from '../../components/agent-chat/ChatInput.jsx';
+import ChatInput, { CHAT_BTN_SIZE } from '../../components/agent-chat/ChatInput.jsx';
 import RecipeTray from '../../components/agents/RecipeTray.jsx';
+import { ChipIconBtn } from '../../components/planner/ItemChips.jsx';
 import { getRecipe } from '../recipes/index.js';
 
 import { IconFileText } from '../../components/icons.jsx';
@@ -144,24 +145,6 @@ export default function ConciergeChatWindow({ settings, setSetting, accent, onCl
       subtitle="helper"
       closeTitle="Close (Esc)"
       onClose={onClose}
-      headerControls={
-        <button
-          type="button"
-          onClick={pickAndOrganize}
-          title="Organize a note (pick a file)"
-          style={{
-            width: 24, height: 24,
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            background: 'transparent', border: 'none',
-            color: 'var(--text-muted)', cursor: 'pointer', borderRadius: 6,
-            transition: 'background 100ms ease, color 100ms ease', flexShrink: 0,
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover)'; e.currentTarget.style.color = 'var(--text)'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}
-        >
-          <IconFileText size={14} />
-        </button>
-      }
     >
       <MessageList
         messages={messages}
@@ -170,7 +153,7 @@ export default function ConciergeChatWindow({ settings, setSetting, accent, onCl
         error={error}
         emptyName="Concierge"
         emptyTagline="app-wide helper"
-        emptyBlurb="Ask me anything, or organize a note — from its page, or the file button up top."
+        emptyBlurb="Ask me anything, or organize a note — from its page, or the file button by the message box."
       />
       {recipeState.phase !== 'idle' && (
         <RecipeTray
@@ -189,8 +172,15 @@ export default function ConciergeChatWindow({ settings, setSetting, accent, onCl
         seedText={seedText}
         seedNonce={seedNonce}
         onSeedConsumed={onSeedConsumed}
+        settings={settings}
+        setSetting={setSetting}
         placeholder="Ask Concierge"
         busyPlaceholder="Concierge is thinking"
+        leading={
+          <ChipIconBtn title="Organize a note (pick a file)" size={CHAT_BTN_SIZE} onClick={pickAndOrganize}>
+            <IconFileText size={13}/>
+          </ChipIconBtn>
+        }
       />
     </AgentChatWindow>
   );

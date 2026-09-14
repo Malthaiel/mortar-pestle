@@ -145,6 +145,8 @@ export default function AnalystChatWindow({ settings, setSetting, accent, onClos
         seedText={seedText}
         seedNonce={seedNonce}
         onSeedConsumed={onSeedConsumed}
+        settings={settings}
+        setSetting={setSetting}
         placeholder="Ask the Analyst"
         busyPlaceholder="Analyst is thinking"
       />

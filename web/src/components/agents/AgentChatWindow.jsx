@@ -105,7 +105,10 @@ function AgentChatHeader({ avatar, title, subtitle, onClose, closeTitle, dragHan
           )}
         </div>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      {/* .candy-center-row so the close button gets the shared candy lift: the
+          rule is `> .candy-btn`, and a plain wrapper div made the X read
+          depth/2 low against the band (photographed 2026-09-13). */}
+      <div className="candy-center-row" style={{ gap: 6 }}>
         {controls}
         <button
           type="button"

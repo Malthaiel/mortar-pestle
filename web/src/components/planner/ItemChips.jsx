@@ -336,18 +336,19 @@ export function NoteChip({ text, sourceDate, index, showDate = true }) {
 // held-accent rest state). `round` makes the delete × a circle; `active` holds
 // the accent fill for the checked ✓. `data-own-press` opts out of the global
 // :active scale; the mousedown stop keeps a click from starting the chip drag.
-export function ChipIconBtn({ title, onClick, round, active, children }) {
+export function ChipIconBtn({ title, onClick, round, active, disabled, size, children }) {
   return (
     <button
       type="button"
       title={title}
       aria-label={title}
+      disabled={disabled}
       data-own-press
       className={`candy-btn is-hover-accent${active ? ' is-active' : ''}`}
       data-shape="icon"
       onMouseDown={(e) => e.stopPropagation()}
       onClick={onClick}
-      style={{ flexShrink: 0, '--cbtn-size': '23px', '--corner-max': round ? '11.5px' : '12px', '--cbtn-depth': 'var(--candy-depth-small)' }}
+      style={{ flexShrink: 0, '--cbtn-size': size || '23px', '--corner-max': round ? '11.5px' : '12px', '--cbtn-depth': 'var(--candy-depth-small)' }}
     ><span className="candy-face">{children}</span></button>
   );
 }
