@@ -890,16 +890,22 @@ export default function DraggableSidebarList({
         lastW = w;
         if (stable < 3) { requestAnimationFrame(settle); return; }
         const rest = live.getBoundingClientRect();
+        // One measurement, both consumers: calcDropIndex reads dRef.current.slots,
+        // the clone's landing target reads dragState.slots. Refreshing only the
+        // first leaves the clone snapping to the expanded-button geometry — on a
+        // centre-justified row that is a visible jump the moment slot-snap takes over.
+        const restSlots = itemRefs.current.map(e => {
+          const r = e?.getBoundingClientRect();
+          return r ? { x: r.left, y: r.top } : { x: 0, y: 0 };
+        });
         if (dRef.current) {
-          dRef.current.slots = itemRefs.current.map(e => {
-            const r = e?.getBoundingClientRect();
-            return r ? { x: r.left, y: r.top } : { x: 0, y: 0 };
-          });
+          dRef.current.slots = restSlots;
           dRef.current.originRect = rest;
         }
         setDragState(prev => (prev && prev.idx === idx ? {
           ...prev,
           restRect: rest,
+          slots: restSlots,
           positions: itemRefs.current.map(e => e ? e.getBoundingClientRect()[startProp] : 0),
           heights:   itemRefs.current.map(e => e ? e.getBoundingClientRect()[sizeProp]  : 0),
         } : prev));
