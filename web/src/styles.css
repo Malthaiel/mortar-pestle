@@ -35,8 +35,12 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
   /* Height of the flush bottom dock. Single source of truth: the bar is sized
      to this, and AppShell reserves it app-wide via calc(100vh - --dock-height)
      so content / sidebars / the browser's native view all end at the dock's
-     top edge. 36px button + 8/10px padding + 1px top hairline = 55px. */
-  --dock-height: 55px;
+     top edge. 36px button + 8/11px padding + 1px top hairline = 56px.
+     56, not 55: the button PAINTS 41px tall (it sits 2.5px above its own box and
+     its depth shadow hangs ~4.5px below), so a 54px interior left 13px of slack —
+     an odd number, unsplittable, landing 7 above / 6 below and reading low. One
+     more pixel makes the slack even. Measured off the screen, not computed. */
+  --dock-height: 56px;
 
   /* Height of the custom titlebar that replaced the native Windows one.
      Single source of truth: .titlebar is sized to this, and AppShell subtracts
