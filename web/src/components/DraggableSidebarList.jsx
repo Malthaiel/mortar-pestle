@@ -90,7 +90,15 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
     // a rail of fixed slots, so the lifted one steps between those slots — up,
     // down, left, right — instead of floating free under the cursor. The mode is
     // part of what a grid IS, not a preference about it.
-    const mode = isGrid ? 'slot-snap' : (document.body?.getAttribute('data-anim-drag-tile-follow') || 'cursor');
+    //
+    // So is a horizontal strip — the dock, its only consumer (user-directed
+    // 2026-09-13: the dock drag must read as the playlist/micros drag). Its
+    // buttons are a fixed run of slots for the same reason, so the same rule
+    // applies. The setting keeps governing the vertical rails (right sidebar,
+    // overlay panel), which is what its own description already scopes it to.
+    const mode = (isGrid || isHorizontal)
+      ? 'slot-snap'
+      : (document.body?.getAttribute('data-anim-drag-tile-follow') || 'cursor');
     modeRef.current = mode;
 
     const clone = sourceElement.cloneNode(true);
@@ -108,11 +116,11 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
     clone.style.removeProperty('--drag-source-from-h');
     // The global press-hold (useTactileSound) marks the button data-candy-pressed
     // on pointerdown and keeps it there while the pointer is down — so a chip
-    // lifted by a HOLD is mid-press at lift, and cloneNode copies that. A grid's
-    // chip has to read exactly like its neighbours while it travels, so drop the
-    // press on the clone. (A rail tile keeps it: its pressed face during the drag
-    // is deliberate, and the drop sequence's invariant 2 eases it back up on the
-    // landing glide.)
+    // lifted by a HOLD is mid-press at lift, and cloneNode copies that. A grid
+    // chip — and a dock button — has to read exactly like its neighbours while it
+    // travels, so drop the press on the clone. (A VERTICAL rail tile keeps it: its
+    // pressed face during the drag is deliberate, and the drop sequence's
+    // invariant 2 eases it back up on the landing glide.)
     // The mark sits on the .candy-btn INSIDE this wrapper, not on the wrapper,
     // so strip it from the subtree (and from the root, for a bare-button item).
     // Stripped one FRAME after the clone paints, not before it: cleared up
@@ -175,6 +183,8 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
     // right sidebar worked. <body> has no transformed ancestor, so fixed ==
     // viewport again; theme vars live on :root/body so the clone still inherits them.
     document.body.appendChild(clone);
+    // Let the pressed face paint ONE frame, then release it (see releaseClonePress).
+    if (isGrid || isHorizontal) requestAnimationFrame(releaseClonePress);
     // Portalling to <body> leaves the surface's styling scope behind, so the chip
     // inside the clone loses the 2.5px lift the resting chip has and paints 3px
     // taller — it comes back up BELOW where it started (measured 2026-09-02: the
@@ -193,7 +203,6 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
         cloneBtn.style.top = `${br.top - originRect.top}px`;
         cloneBtn.style.height = `${br.height}px`;
       }
-      requestAnimationFrame(releaseClonePress);
     }
     cloneRef.current = clone;
 
@@ -287,6 +296,59 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
         rafId = requestAnimationFrame(loop);
       };
       rafId = requestAnimationFrame(loop);
+    } else if (mode === 'slot-snap' && isHorizontal) {
+      // The dock WIDENS the button under the pointer into icon+label, and drops
+      // that width again when a drag starts — as a 240ms animation. So at lift the
+      // whole row is still in motion and every rect taken above is of a layout
+      // that no longer exists a frame later: the clone was stamped at the wide
+      // size, kept it, and overlapped its neighbour while the real row slid back
+      // underneath (photographed 2026-09-13: grabbed button 123px → 97 → 36, its
+      // neighbours 668 → 681 → 712, the clone frozen at 123).
+      //
+      // So don't predict the settled size — MIRROR the source's live box every
+      // frame until it stops changing. The carried copy shrinks into its icon
+      // square exactly as the real slot does, and because both are left-anchored
+      // the glyph never moves. Slot-snap takes over once the row is still.
+      const srcInner = sourceElement.querySelector('.candy-btn');
+      const cloneInner = clone.querySelector('.candy-btn');
+      // The face's layout is SCOPED (the dock packs its glyph and label left and
+      // clips the overflow). Portalled to <body> that scope is gone, the hidden
+      // label claims its width again, and the glyph is shoved out of its own box
+      // — 37px left of the copy's left edge, measured 2026-09-13. Copy the live
+      // face's layout across rather than naming any of the rules.
+      const srcFace = sourceElement.querySelector('.candy-face');
+      const cloneFace = clone.querySelector('.candy-face');
+      if (srcFace && cloneFace) {
+        const cs = window.getComputedStyle(srcFace);
+        for (const k of ['justifyContent', 'alignItems', 'gap', 'padding', 'overflow']) {
+          cloneFace.style[k] = cs[k];
+        }
+      }
+      let stable = 0, lastW = -1;
+      const track = () => {
+        if (cancelled || releaseRef.current) return;
+        const r = sourceElement.getBoundingClientRect();
+        clone.style.width = `${r.width}px`;
+        // Pin the copy's own button to the real one's box. Portalled to <body> the
+        // clone loses the dock's scoped rules, which painted its glyph 37px
+        // outside its own left edge (measured: clone box 760.5, glyph 723.2).
+        if (srcInner && cloneInner) {
+          const ir = srcInner.getBoundingClientRect();
+          cloneInner.style.position = 'relative';
+          cloneInner.style.left = `${ir.left - r.left}px`;
+          cloneInner.style.top = `${ir.top - r.top}px`;
+          cloneInner.style.width = `${ir.width}px`;
+          cloneInner.style.height = `${ir.height}px`;
+        }
+        place(clone, r.left, r.top);
+        if (Math.abs(r.width - lastW) < 0.5) stable++; else stable = 0;
+        lastW = r.width;
+        if (stable < 3) { rafId = requestAnimationFrame(track); return; }
+        rafId = null;
+        void clone.offsetWidth;
+        clone.style.transition = `transform ${GLIDE}`;
+      };
+      rafId = requestAnimationFrame(track);
     } else if (mode === 'slot-snap') {
       // Force a reflow so the initial transform commits with transition: none,
       // then enable the 160ms transition for subsequent slot updates. Without
@@ -528,7 +590,7 @@ export default function DraggableSidebarList({
   const calcDropIndex = useCallback(() => {
     const draggedIdx = dRef.current?.idx;
     const els = itemRefs.current;
-    if (isGrid) {
+    if (isGrid || (isHorizontal && dRef.current?.slots)) {
       // NEAREST SLOT, not reading order. Every candidate drop lands the chip on
       // exactly one resting slot (measured at lift), so pick the slot whose
       // centre is closest to the cursor — the chip goes where the cursor IS.
@@ -554,8 +616,20 @@ export default function DraggableSidebarList({
       }
       // Inverse of gridLanding's mapping: dropIdx <= idx lands on slot dropIdx,
       // dropIdx > idx lands on dropIdx − 1. best === draggedIdx is the no-op.
+      //
+      // The no-op has TWO spellings — idx and idx + 1 — and on a margin-spaced
+      // run only the second one renders the hole at the source's own position
+      // (the first opens no gap anywhere, so the row closes up and everything
+      // past the source jumps a slot on the first pixel of movement). The grid
+      // slides its chips instead of opening margins, so it never had to care.
+      if (best === draggedIdx) return draggedIdx + 1;
       return best <= draggedIdx ? best : best + 1;
     }
+    // The scan below claims a slot once the cursor is SHIFT_THRESHOLD_FRACTION
+    // into it, counting from the left/top — which is not the same distance in
+    // both directions. Measured on the dock 2026-09-14: 36px of travel to step
+    // right, 58px to step left. Only the vertical rails still run it; the dock
+    // takes the nearest-slot branch above, where each direction is half a slot.
     const coord = mouseRef.current[axis];
     let firstNonSourceSeen = false;
     for (let i = 0; i < els.length; i++) {
@@ -570,7 +644,7 @@ export default function DraggableSidebarList({
       if (coord < threshold) return i;
     }
     return els.length;
-  }, [axis, sizeProp, startProp, isGrid]);
+  }, [axis, sizeProp, startProp, isGrid, isHorizontal]);
 
   // Edge-snap (opt-in via `snapZones`, horizontal only). On release, if the
   // cursor is within triggerPx of the bar's left edge, centre, or right edge,
@@ -770,7 +844,7 @@ export default function DraggableSidebarList({
     // Grid: every slot's resting origin, measured once at lift. The slide below
     // and the clone's landing target are both read off these — never predicted
     // from a column count or a chip width, which a wrap is free to change.
-    const slots = isGrid
+    const slots = (isGrid || isHorizontal)
       ? itemRefs.current.map(e => { const r = e?.getBoundingClientRect(); return r ? { x: r.left, y: r.top } : { x: 0, y: 0 }; })
       : null;
 
@@ -799,6 +873,39 @@ export default function DraggableSidebarList({
       slots,
     });
     playReorderPickup();
+
+    // …and read them AGAIN once the row stops moving. On the dock the grabbed
+    // button is wide (icon+label) at lift and animates back to its icon square,
+    // so every rect above belongs to a layout that is still collapsing. The drop
+    // gap and the slot math must use the settled numbers, not the lift-time ones
+    // — the same reason the clone mirrors the live box rather than freezing it.
+    // Pure re-measurement: nothing here is computed from the old values.
+    if (isHorizontal) {
+      let stable = 0, lastW = -1;
+      const settle = () => {
+        const live = itemRefs.current[idx];
+        if (!live || dRef.current?.idx !== idx) return;
+        const w = live.getBoundingClientRect().width;
+        if (Math.abs(w - lastW) < 0.5) stable++; else stable = 0;
+        lastW = w;
+        if (stable < 3) { requestAnimationFrame(settle); return; }
+        const rest = live.getBoundingClientRect();
+        if (dRef.current) {
+          dRef.current.slots = itemRefs.current.map(e => {
+            const r = e?.getBoundingClientRect();
+            return r ? { x: r.left, y: r.top } : { x: 0, y: 0 };
+          });
+          dRef.current.originRect = rest;
+        }
+        setDragState(prev => (prev && prev.idx === idx ? {
+          ...prev,
+          restRect: rest,
+          positions: itemRefs.current.map(e => e ? e.getBoundingClientRect()[startProp] : 0),
+          heights:   itemRefs.current.map(e => e ? e.getBoundingClientRect()[sizeProp]  : 0),
+        } : prev));
+      };
+      requestAnimationFrame(settle);
+    }
   }, [onDragActiveChange, startProp, sizeProp, isGrid, isHorizontal]);
 
   // Abort a drag/hold that will never see a pointerup: a release outside the OS
@@ -851,7 +958,11 @@ export default function DraggableSidebarList({
   // Destination gap matches the dragged item's actual size on the active axis
   // (+ one flex gap, which the inserted item brings in the final layout) so the
   // slot equals the item's true footprint and neighbours don't snap on drop.
-  const gapSize = (dragState?.originRect?.[sizeProp] ?? gapSizeProp) + (dragState?.flexGap ?? 0);
+  // restRect, when present, is the source re-measured after the row settled (see
+  // beginDrag) — the footprint the slot will actually have, not the one it had
+  // mid-collapse.
+  const gapSize = (dragState?.restRect?.[sizeProp] ?? dragState?.originRect?.[sizeProp] ?? gapSizeProp)
+    + (dragState?.flexGap ?? 0);
 
   // Grid: where each item sits while the drag is live. Removing the source from
   // the order shifts everything between it and the drop slot by exactly one
@@ -864,7 +975,7 @@ export default function DraggableSidebarList({
     return i;
   };
   // Where the DRAGGED chip itself lands: the slot the order leaves for it.
-  const gridLanding = (isGrid && dragState?.slots)
+  const gridLanding = ((isGrid || isHorizontal) && dragState?.slots)
     ? dragState.slots[Math.max(0, Math.min(dragState.slots.length - 1,
         dragState.dropIdx > dragState.idx ? dragState.dropIdx - 1 : dragState.dropIdx))]
     : null;
@@ -924,6 +1035,26 @@ export default function DraggableSidebarList({
           // position is snapped to a whole device pixel, so every shifted chip
           // settled by 1px when the offset came off at commit. The item already
           // carries `position: relative` below.
+          // Horizontal: the same idea as the grid's slide, but computed from the
+          // dragged item's own footprint instead of borrowing a neighbour's slot
+          // origin — so a run of MIXED widths (the dock's separators and flex
+          // spacers) comes out right where the borrow would not.
+          //
+          // Why not the margin pair the vertical rails use: that scheme opens the
+          // gap on one item and cancels it with a negative margin on the source,
+          // and the cancellation only holds while both animate in lockstep. Move
+          // fast and each new drop slot INTERRUPTS the previous transition, which
+          // restarts from wherever it was with a fresh full duration — the two no
+          // longer sum to a constant and every item downstream wobbles (reported
+          // 2026-09-14: "buttons that aren't even supposed to move start shaking").
+          // An independent per-item offset has nothing to cancel against: an
+          // interruption just redirects that one item.
+          let hDx = 0;
+          if (isHorizontal && dragState?.dragging && !isDragged) {
+            const F = gapSize;                       // the source's footprint + one gap
+            if (i > dragState.idx) hDx -= F;         // it left: everything after closes up
+            if (i >= dragState.dropIdx) hDx += F;    // it lands here: everything from here opens
+          }
           let gridDx = 0, gridDy = 0;
           if (isGrid && dragState?.dragging && dragState.slots && !isDragged) {
             const from = dragState.slots[i];
@@ -950,16 +1081,29 @@ export default function DraggableSidebarList({
                 // collapse keyframe + the drop-gap, or it lands instantly at t=0 and
                 // shoves neighbours by one gap on pickup (the pickup-snap bug).
                 transition: dragState?.dragging
-                  ? (isGrid ? `left ${GLIDE}, top ${GLIDE}` : `margin ${GLIDE}`)
+                  ? ((isGrid || isHorizontal) ? `left ${GLIDE}, top ${GLIDE}` : `margin ${GLIDE}`)
                   : 'none',
-                left: isGrid ? gridDx : undefined,
+                left: isGrid ? gridDx : (isHorizontal ? hDx : undefined),
                 top:  isGrid ? gridDy : undefined,
-                [marginStart]: isGrid ? undefined : (isDrop ? gapSize : 0),
+                [marginStart]: (isGrid || isHorizontal) ? undefined : (isDrop ? gapSize : 0),
                 // Source slot cancels one flex gap so its collapse doesn't leave a
                 // one-gap surplus where it lifted (siblings stay put on drop). Pairs
                 // with the +flexGap in gapSize above to keep the lift itself reflow-
                 // free. No-op when the container has no flex gap.
-                [marginEnd]:   isGrid ? undefined : (isDragged ? -(dragState?.flexGap ?? 0) : (isDropAfter ? gapSize : 0)),
+                // A HORIZONTAL source gives its whole footprint back, not just the
+                // flex gap: the `drag-source-collapse` keyframe below is HEIGHT-only,
+                // which does nothing to a row, so the source kept its full width while
+                // the drop gap opened — the run grew by one slot and the centre-
+                // justified dock bar spread ~18px each way on every lift (measured
+                // 2026-09-13: resting lefts 380/426/472, during-drag 362/408/454).
+                // −gapSize is exactly the width + gap the drop slot opens, so the row
+                // is the same width all through the drag.
+                // Horizontal keeps the source's space, exactly like the grid: the hole
+                // the eye follows is opened by the neighbours sliding, not by the row
+                // re-flowing around a collapsing slot — which is also what stops the
+                // centre-justified bar from spreading on every lift.
+                [marginEnd]:   (isGrid || isHorizontal) ? undefined
+                  : (isDragged ? -(dragState?.flexGap ?? 0) : (isDropAfter ? gapSize : 0)),
                 // Source slot: hide visually + provide the from-height for
                 // the keyframe collapse. `visibility: hidden` keeps the slot
                 // invisible during the collapse so its content doesn't clip-
@@ -972,14 +1116,14 @@ export default function DraggableSidebarList({
                 // Grid keeps the source's space (no collapse keyframe): the gap
                 // the eye follows is opened by the neighbours sliding, not by the
                 // container re-flowing around a shrinking hole.
-                ['--drag-source-from-h']: (isDragged && !isGrid)
+                ['--drag-source-from-h']: (isDragged && !isGrid && !isHorizontal)
                   ? `${dragState.originRect.height}px`
                   : undefined,
                 cursor: enabled ? 'grab' : undefined,
                 position: 'relative',
                 pointerEvents: isDragged ? 'none' : undefined,
               }}
-              data-dragsrc-collapsing={(isDragged && !isGrid) ? 'true' : undefined}
+              data-dragsrc-collapsing={(isDragged && !isGrid && !isHorizontal) ? 'true' : undefined}
             >
               {renderItem(item, i)}
             </div>
