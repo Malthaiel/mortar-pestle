@@ -203,10 +203,14 @@ export default function AppShell({ children, onOpenSettings, settingsOpen, accen
               className="sidebar-widget-list"
               items={rightSlots}
               keyOf={(slot) => slot.moduleId + ':' + slot.id}
-              // 10px breathing room above the first module (below the toggle-
-              // header divider). No inter-tile gap — tiles sit flush, so the
-              // un-animated flex gap can't "pop in" when a drop-glide ends.
-              style={{ flex: 1, minHeight: 0, paddingTop: 10 }}
+              // All three painted gaps read 13px: above the first tile, between
+              // tiles, below the last. A rail tile's box carries ~6px of dead
+              // space above its paint and ~7px below its depth band, so the
+              // container pads by the DIFFERENCE (7 / 6), not by 13 — measured
+              // off a PrintWindow capture at the tile border column, not
+              // computed from the box. No inter-tile gap — tiles sit flush, so
+              // the un-animated flex gap can't "pop in" when a drop-glide ends.
+              style={{ flex: 1, minHeight: 0, paddingTop: 7, paddingBottom: 6 }}
               getItemStyle={(slot) => {
                 const fw = slot.flexWeight;
                 return {
