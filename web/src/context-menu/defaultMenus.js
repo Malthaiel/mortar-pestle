@@ -223,7 +223,7 @@ export function buildLinkMenu(a) {
 // is present iff the action is allowed. Surfaces without `ops` (e.g. links) get
 // the read-only menu unchanged.
 // `root` names the mount `vaultPath` is relative to ('app' / 'pulse' / 'library' /
-// 'gamewiki'); omitted → the content vault. A surface showing another vault's rows
+// 'deadlock'); omitted → the content vault. A surface showing another vault's rows
 // (the Docs sidebar) MUST pass it, or every disk action resolves against content
 // and 404s.
 export function buildFileItemMenu({ vaultPath, isFolder, href, ops, root }) {

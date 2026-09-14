@@ -1,6 +1,6 @@
 // Personal VODs — the note file's body format. Pure ESM (no React, no @host).
 //
-// One match = ONE markdown file under `Deadlock/Coaching/Personal VODs/`, not a
+// One match = ONE markdown file under `Coaching/Personal VODs/`, not a
 // folder: these are solo games reviewed alone, so there is no transcript, no
 // report and no second participant to give a folder shape to.
 
@@ -8,7 +8,7 @@ import { fmt } from './vodTimer.js';
 
 export const NOTES_HEADING = '## Notes';
 
-// Tree paths in this app are EXTENSION-LESS (useGameWikiTree's childNodes
+// Tree paths in this app are EXTENSION-LESS (useDeadlockTree's childNodes
 // strips `.md`, and nav/live-target carry the stripped form), but the vault
 // commands take the real filename — useVaultTree's createNote appends `.md`
 // itself, Rust never does. Getting this wrong writes a file with no extension

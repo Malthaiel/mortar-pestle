@@ -22,7 +22,7 @@ use crate::commands::vault::VaultError;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LiveTarget {
-    /// Vault-relative path of the scrim `.md` (root `gamewiki`).
+    /// Vault-relative path of the scrim `.md` (root `deadlock`).
     pub scrim_path: String,
     /// 1-based match number within the scrim.
     pub match_n: u32,

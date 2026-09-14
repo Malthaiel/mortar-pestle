@@ -1,7 +1,7 @@
 {
-  "id": "game-wiki",
-  "name": "Game Wiki",
-  "description": "Multi-game reference wiki (Deadlock + future games) browsed from the separate app-managed GameWiki vault; read-only except the writable Deadlock coaching-scrim surface.",
+  "id": "deadlock",
+  "name": "Deadlock",
+  "description": "Deadlock reference knowledge browsed from the separate app-managed Deadlock vault; read-only except the writable coaching-scrim surface.",
   "version": "1.0.0",
   "entry": "./index.jsx",
   "slots": ["left-sidebar", "route"],
@@ -9,7 +9,7 @@
   "requires": [],
   "license": "MIT",
   "tier": "core",
-  "routeBase": "/game-wiki",
+  "routeBase": "/deadlock",
   "iconKey": "IconGamepad",
   "setupRequired": false
 }

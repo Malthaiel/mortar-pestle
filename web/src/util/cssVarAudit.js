@@ -2,7 +2,7 @@
 // style referencing `var(--x)` with NO fallback where `--x` doesn't resolve at
 // that element. CSS's failure mode is invisible — the ENTIRE declaration
 // (shorthand included) is dropped with no error, no log, no crash. Born from
-// the GameWikiRail toolbar band (2026-07-17): its `padding: 8px 8px calc(4px +
+// the DeadlockRail toolbar band (2026-07-17): its `padding: 8px 8px calc(4px +
 // var(--candy-depth-nav))` sat outside the wrapper declaring the var, so ALL
 // padding vanished and the tree ran ~18px tight vs the vault sidebar.
 //

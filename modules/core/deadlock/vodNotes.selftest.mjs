@@ -1,5 +1,5 @@
 // Node harness for vodNotes.js — run with:
-//   node modules/core/game-wiki/vodNotes.selftest.mjs
+//   node modules/core/deadlock/vodNotes.selftest.mjs
 
 import assert from 'node:assert/strict';
 import { newVodScaffold, appendNote, readNotes, NOTES_HEADING } from './vodNotes.js';

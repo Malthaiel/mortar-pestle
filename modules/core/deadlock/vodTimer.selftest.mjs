@@ -1,5 +1,5 @@
 // Node harness for vodTimer.js — run with:
-//   node modules/core/game-wiki/vodTimer.selftest.mjs
+//   node modules/core/deadlock/vodTimer.selftest.mjs
 //
 // The point of the anchor design is that elapsed survives a webview reload, so
 // the reload case is tested by throwing the module's in-memory nothing away and
@@ -38,7 +38,7 @@ try {
   assert.equal(isArmed(), false);
 
   // ── start + run ─────────────────────────────────────────────────────────
-  const TARGET = 'Deadlock/Coaching/Personal VODs/Lash 09-03-26';
+  const TARGET = 'Coaching/Personal VODs/Lash 09-03-26';
   start(TARGET);
   assert.equal(isArmed(), true);
   assert.equal(read().target, TARGET);
@@ -46,7 +46,7 @@ try {
   assert.equal(elapsedMs(), 30_000);
 
   // A second start must NOT wipe the match (stray F6 in-game).
-  start('Deadlock/Coaching/Personal VODs/Something Else');
+  start('Coaching/Personal VODs/Something Else');
   assert.equal(read().target, TARGET, 'a second start must not re-target');
   assert.equal(elapsedMs(), 30_000, 'a second start must not reset the clock');
 

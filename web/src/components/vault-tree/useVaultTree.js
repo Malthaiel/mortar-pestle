@@ -42,7 +42,7 @@ function persistSort(mode) {
 }
 
 // The six Obsidian-style sort modes (mode → menu label) sortNodes understands.
-// Lives beside sortNodes so non-vault trees (GameWiki) can reuse the pair
+// Lives beside sortNodes so non-vault trees (Deadlock) can reuse the pair
 // without importing the VaultTree component.
 export const VAULT_SORT_MODES = [
   ['name-asc', 'Name (A → Z)'],

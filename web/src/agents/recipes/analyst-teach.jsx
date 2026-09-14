@@ -1,5 +1,5 @@
 // The `analyst-teach` recipe: distill a coach-taught fact into the Analyst
-// brain (GameWiki vault) with a diff preview in the RecipeTray before any disk
+// brain (Deadlock vault) with a diff preview in the RecipeTray before any disk
 // write. Mirrors organize-md's lifecycle; the distiller contract + the
 // never-lose-information shrinkage guard live in analystBrain.js (shared with
 // Phase B's correct-report/learn recipes). Trigger: a "teach: …" chat message
@@ -14,13 +14,13 @@ import MarkdownDiff from '../../components/agents/MarkdownDiff.jsx';
 import {
   buildDistillerPrompt, parseDistillerOutput, distilledShrunk, replaceDistilled, addMishears,
   parseMishears, sectionOf, CONCEPTS_PATH, CORRECTIONS_PATH, LEXICON_PATH,
-} from '@modules/core/game-wiki/analystBrain.js';
+} from '@modules/core/deadlock/analystBrain.js';
 
 const label = (name, body) => `=== ${name} ===\n${String(body).trim() || '(empty)'}`;
 
 // Read the three brain pages (full markdown, for merge + write).
 export async function loadBrainPages() {
-  const read = async (p) => String((await api.getRawFileMeta(p, 'gamewiki')).content);
+  const read = async (p) => String((await api.getRawFileMeta(p, 'deadlock')).content);
   const [conceptsPage, correctionsPage, lexiconPage] = await Promise.all([
     read(CONCEPTS_PATH), read(CORRECTIONS_PATH), read(LEXICON_PATH),
   ]);
@@ -86,14 +86,14 @@ export function makeDistillRecipe({ id, label: recipeLabel, loadContext, logLine
       const stamp = new Date().toISOString().slice(0, 10);
       const logLine = `${stamp} — ${logLineOf(ctx)}`;
       if (proposal.concepts && proposal.concepts.trim() !== sectionOf(ctx.conceptsPage, 'Distilled')) {
-        await api.savePage(CONCEPTS_PATH, replaceDistilled(ctx.conceptsPage, proposal.concepts, logLine), null, 'gamewiki');
+        await api.savePage(CONCEPTS_PATH, replaceDistilled(ctx.conceptsPage, proposal.concepts, logLine), null, 'deadlock');
       }
       if (proposal.corrections && proposal.corrections.trim() !== sectionOf(ctx.correctionsPage, 'Distilled')) {
-        await api.savePage(CORRECTIONS_PATH, replaceDistilled(ctx.correctionsPage, proposal.corrections, logLine), null, 'gamewiki');
+        await api.savePage(CORRECTIONS_PATH, replaceDistilled(ctx.correctionsPage, proposal.corrections, logLine), null, 'deadlock');
       }
       const newLex = addMishears(ctx.lexiconPage, proposal.mishears);
       if (newLex !== ctx.lexiconPage) {
-        await api.savePage(LEXICON_PATH, newLex, null, 'gamewiki');
+        await api.savePage(LEXICON_PATH, newLex, null, 'deadlock');
       }
     },
   };

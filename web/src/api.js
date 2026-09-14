@@ -1310,7 +1310,7 @@ export const api = {
     return r.content;
   },
   // Like getRawFile but keeps { content, mime, mtime } — for editors that need the
-  // mtime for a write conflict guard (e.g. the GameWiki ScrimViewer).
+  // mtime for a write conflict guard (e.g. the Deadlock ScrimViewer).
   getRawFileMeta: (vaultRelativePath, root) => readCall('vault_read_file', { path: vaultRelativePath, root }),
   savePage: (vaultRelativePath, content, mtime, root) =>
     readCall('vault_write_file', { path: vaultRelativePath, content, mtime, root }),
@@ -1320,7 +1320,7 @@ export const api = {
   renamePath: (from, to, root) => readCall('vault_rename_path', { from, to, root }),
   deleteFolder: (path, root) => readCall('vault_delete_folder', { path, root }),
   // Raw one-level listing incl dotfiles (vault_get_folder hides dotfiles + only
-  // returns .md) — for the GameWiki scrim bundle rename/delete to find sidecars.
+  // returns .md) — for the Deadlock scrim bundle rename/delete to find sidecars.
   listFolderRaw: (path, root) => readCall('vault_list_folder_raw', { path, root }),
   toggleTaskAtLine: (path, line, root) => readCall('vault_toggle_task', { path, line, root }),
   resolveLink: (target, embed = false) => readCall('vault_resolve_link', { target, embed }),

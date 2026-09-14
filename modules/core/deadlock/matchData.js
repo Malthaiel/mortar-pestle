@@ -2,7 +2,7 @@
 //
 // deadlock_fetch_match (Rust) returns a match's full deadlock-api metadata verbatim.
 // We store that raw JSON in a dot-prefixed sibling file in the Scrim/ folder
-// (invisible to the read-only Game Wiki tree — the vault's scan_dir skips dotfiles,
+// (invisible to the read-only Deadlock tree — the vault's scan_dir skips dotfiles,
 // the dotfile lives in the existing Scrim/ folder for tree-hiding only — vault_write_file
 // now creates missing parent dirs, so this is a display choice, not a dir-creation limit)
 // and write a small human summary + a pointer into the scrim's ### Match Data. MatchViewPopup
@@ -40,7 +40,7 @@ export const sideName = (t) => (t in TEAM_NAMES ? TEAM_NAMES[t] : `Team ${t}`);
 const STEAMID64_BASE = 76561197960265728n;
 export const steamId64 = (accountId) => (accountId == null ? null : String(BigInt(accountId) + STEAMID64_BASE));
 
-// A scrim is a FOLDER (`…/Scrim/<base>/` — GameWiki Unification, 2026-07-16): Overview.md +
+// A scrim is a FOLDER (`…/Scrim/<base>/` — Deadlock Unification, 2026-07-16): Overview.md +
 // Matches/Match <n>.md + dot-sidecars scoped by the folder. Every sidecar consumer routes
 // through the two helpers below, so they accept ANY path inside the scrim — the folder
 // itself, Overview.md, or Matches/Match <n>.md — and normalize to the folder.

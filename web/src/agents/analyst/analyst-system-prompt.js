@@ -6,7 +6,7 @@
 // Rebuilt per send, so brain edits land on the next turn without a reopen.
 
 import { api } from '../../api.js';
-import { buildBrainContext } from '@modules/core/game-wiki/analystBrain.js';
+import { buildBrainContext } from '@modules/core/deadlock/analystBrain.js';
 
 export function makeAnalystSystem({ scrimPath = '', matchN = null } = {}) {
   return async ({ backend } = {}) => { // eslint-disable-line no-unused-vars
@@ -14,7 +14,7 @@ export function makeAnalystSystem({ scrimPath = '', matchN = null } = {}) {
     let matchBlock = '';
     if (scrimPath) {
       try {
-        const { content } = await api.getRawFileMeta(scrimPath, 'gamewiki');
+        const { content } = await api.getRawFileMeta(scrimPath, 'deadlock');
         const m = String(content).match(/^Coached Team:\s*(.+)$/m) || String(content).match(/^Team 1:\s*(.+)$/m);
         coachedTeam = m ? m[1].trim() : '';
       } catch { /* scrim page unreadable — chat still works unpointed */ }

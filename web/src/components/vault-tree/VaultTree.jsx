@@ -36,7 +36,7 @@ import NameInputModal from './NameInputModal.jsx';
 import ConfirmModal from '../ui/ConfirmModal.jsx';
 
 // The vault's six Obsidian-style sort modes now live beside sortNodes in
-// useVaultTree.js (shared with the GameWiki tree).
+// useVaultTree.js (shared with the Deadlock tree).
 
 function norm(s) { return (s || '').replace(/\.md$/, ''); }
 function baseName(vp) { return (vp || '').split('/').pop().replace(/\.md$/, ''); }

@@ -6,15 +6,15 @@
 //
 // Pure ESM (no React, no @host) so it stays standalone-harnessable.
 
-// Where scrims live in the GameWiki vault. Lives here rather than in
-// GameWikiTree so CoachPopup can read it without importing the tree that
+// Where scrims live in the Deadlock vault. Lives here rather than in
+// DeadlockTree so CoachPopup can read it without importing the tree that
 // renders it (a cycle: the tree mounts the popup).
-export const SCRIM_BASE = 'Deadlock/Coaching/Scrim';
+export const SCRIM_BASE = 'Coaching/Scrim';
 
 // Personal VODs — solo matches Malthaiel reviews alone. One match = ONE FILE
 // here, not a folder: there is no transcript, no coach and no report to give a
 // folder shape to, only the live notes he dictates during the game.
-export const VOD_BASE = 'Deadlock/Coaching/Personal VODs';
+export const VOD_BASE = 'Coaching/Personal VODs';
 
 // Filename-safe team name.
 const sanitizeTeam = (name) => String(name || '').replace(/[/\\:*?"<>|]/g, '').replace(/\s+/g, ' ').trim();

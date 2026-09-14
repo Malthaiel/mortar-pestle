@@ -1,5 +1,5 @@
 // Shared sticky page-title header for every .md viewer (Docs, vault PageView,
-// Game Wiki). Renders an optional breadcrumb + a title row with an optional
+// Deadlock). Renders an optional breadcrumb + a title row with an optional
 // last-updated chip. When `editable`, clicking the title turns it into an inline
 // rename input (Enter/blur commit → onRename(cleanName), Esc cancels; path
 // separators stripped, mirroring NameInputModal). Generalised + renamed from the

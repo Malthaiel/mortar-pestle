@@ -35,7 +35,7 @@ export default function CommsTranscriptView({ sidecarPath, roster = [], onReassi
   useEffect(() => {
     let cancelled = false;
     setState({ status: 'loading' });
-    api.getRawFileMeta(sidecarPath, 'gamewiki')
+    api.getRawFileMeta(sidecarPath, 'deadlock')
       .then((r) => {
         if (cancelled) return;
         try { JSON.parse(r.content); } catch { setState({ status: 'parse-error' }); return; }

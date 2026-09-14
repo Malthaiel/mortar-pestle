@@ -218,7 +218,7 @@ pub fn reveal_in_files(
         return Err(VaultError::Invalid("path required".into()));
     }
     // A relative path resolves against the named mount (content default, or
-    // app/pulse/library/gamewiki), exactly like `open_path` — so an App-vault row
+    // app/pulse/library/deadlock), exactly like `open_path` — so an App-vault row
     // (the Docs sidebar) reveals its real file instead of silently resolving
     // against the content vault. Absolute paths pass through.
     let abs = if path.starts_with('/') {
@@ -270,7 +270,7 @@ pub fn open_path(app: tauri::AppHandle, path: String, root: Option<String>) -> R
 /// Explorer does — so it pastes anywhere. The webview's `navigator.clipboard`
 /// only writes text, hence Rust. Same path resolution as `open_path` (relative
 /// resolves against the named mount), and the same containment check widened by
-/// the GameWiki vault, which `is_under_allowed_root` deliberately excludes.
+/// the Deadlock vault, which `is_under_allowed_root` deliberately excludes.
 #[tauri::command]
 pub fn copy_to_clipboard(path: String, root: Option<String>) -> Result<(), VaultError> {
     if path.is_empty() {
@@ -284,9 +284,9 @@ pub fn copy_to_clipboard(path: String, root: Option<String>) -> Result<(), Vault
     };
     let canonical = std::fs::canonicalize(&abs)
         .map_err(|_| VaultError::NotFound(format!("Path not found: {path}")))?;
-    let gamewiki = std::fs::canonicalize(crate::commands::vault::gamewiki_vault_root()).ok();
-    let in_gamewiki = gamewiki.map(|g| canonical.starts_with(&g)).unwrap_or(false);
-    if !is_under_allowed_root(&canonical) && !in_gamewiki {
+    let deadlock = std::fs::canonicalize(crate::commands::vault::deadlock_vault_root()).ok();
+    let in_deadlock = deadlock.map(|g| canonical.starts_with(&g)).unwrap_or(false);
+    if !is_under_allowed_root(&canonical) && !in_deadlock {
         return Err(VaultError::Invalid("path not under an allowed root".into()));
     }
     copy_item_to_clipboard(&canonical).map_err(|e| VaultError::Io(format!("clipboard: {e}")))

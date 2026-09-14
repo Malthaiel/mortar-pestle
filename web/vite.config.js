@@ -109,7 +109,7 @@ export default defineConfig({
       '@tauri-apps/api': path.resolve(__dirname, 'node_modules/@tauri-apps/api'),
       // Video Editor (studio) — module-side open()/save() pickers.
       '@tauri-apps/plugin-dialog': path.resolve(__dirname, 'node_modules/@tauri-apps/plugin-dialog'),
-      // Game Wiki module — markdown rendering. Same reason as above: module
+      // Deadlock module — markdown rendering. Same reason as above: module
       // files live outside web/, so bare imports must be pinned to
       // web/node_modules (subpaths resolve under the prefix).
       'react-markdown': path.resolve(__dirname, 'node_modules/react-markdown'),

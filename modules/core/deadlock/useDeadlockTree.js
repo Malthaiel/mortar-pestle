@@ -1,15 +1,15 @@
-// Game Wiki file tree — expand-state + lazy children for the read-only games tree.
-// A trimmed mirror of useVaultTree: top-level nodes are the GAMES (immediate
-// subfolders of the GameWiki vault root), each lazily expanded one disk level at a
-// time via vault_get_folder(root:'gamewiki'). No file ops, no sort, no manifest —
-// the gamewiki vault is read-only reference. Expand state persists to localStorage.
+// Deadlock file tree — expand-state + lazy children for the read-only tree.
+// A trimmed mirror of useVaultTree: top-level nodes are the vault root's own
+// folders and pages, each lazily expanded one disk level at a
+// time via vault_get_folder(root:'deadlock'). No file ops, no sort, no manifest —
+// the deadlock vault is read-only reference. Expand state persists to localStorage.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '@host/api.js';
 import { sortNodes } from '@host/components/vault-tree/useVaultTree.js';
 
-const LS_KEY = 'gamewiki:tree:expanded';
-const LS_SORT = 'gamewiki:tree:sort';
+const LS_KEY = 'deadlock:tree:expanded';
+const LS_SORT = 'deadlock:tree:sort';
 
 // Virtual scrim sub-folders: match groups (`Matches/Match N`, plus their Report
 // leaf's `/tldr` sub-key) expand like disk folders — same expanded Set, so
@@ -17,7 +17,7 @@ const LS_SORT = 'gamewiki:tree:sort';
 // fetch them (vault_get_folder would just 404 into an empty cache entry). The
 // Report|Coaching arm covers stale persisted keys from the retired scrim-level
 // virtual groups (pre match-folder tree) so a localStorage restore stays quiet.
-const VIRTUAL_RE = /^Deadlock\/Coaching\/Scrim\/[^/]+\/(Report|Coaching|Matches\/Match \d+(\/tldr)?)$/;
+const VIRTUAL_RE = /^Coaching\/Scrim\/[^/]+\/(Report|Coaching|Matches\/Match \d+(\/tldr)?)$/;
 
 function loadExpanded() {
   try {
@@ -31,7 +31,7 @@ function persist(set) { try { localStorage.setItem(LS_KEY, JSON.stringify([...se
 // Build child nodes from a vault_get_folder result — UNSORTED; childrenOf
 // applies the live sort mode (the vault's shared sortNodes) at read time so a
 // mode change re-orders cached folders without refetching. `parentPath` = the
-// full gamewiki-relative path of the folder being listed (file paths come back
+// full deadlock-relative path of the folder being listed (file paths come back
 // full). mtime/created ride along for the time sort modes.
 function childNodes(parentPath, res) {
   const folders = (res?.subfolders || []).map((sf) => ({
@@ -46,17 +46,17 @@ function childNodes(parentPath, res) {
   return [...folders, ...files];
 }
 
-// (slug, rel) for a full gamewiki path — slug = first segment (the game).
+// (slug, rel) for a full deadlock path — slug = first segment.
 function slugRel(fp) {
   if (!fp) return ['', ''];
   const [slug, ...rest] = fp.split('/');
   return [slug, rest.join('/')];
 }
 
-export function useGameWikiTree() {
+export function useDeadlockTree() {
   const [expanded, setExpanded] = useState(loadExpanded);
   const [cache, setCache] = useState({}); // vaultPath -> { loading, nodes }
-  const [games, setGames] = useState(null); // top-level games | null while loading
+  const [roots, setRoots] = useState(null); // top-level folders + pages | null while loading
   const [sortMode, setSortModeState] = useState(() => {
     try { return localStorage.getItem(LS_SORT) || 'name-asc'; } catch { return 'name-asc'; }
   });
@@ -72,7 +72,7 @@ export function useGameWikiTree() {
     setCache((c) => ({ ...c, [vaultPath]: { ...(c[vaultPath] || {}), loading: true } }));
     const [slug, rel] = slugRel(vaultPath);
     try {
-      const res = await api.getVaultFolder(slug, rel, 'gamewiki');
+      const res = await api.getVaultFolder(slug, rel, 'deadlock');
       setCache((c) => ({ ...c, [vaultPath]: { loading: false, nodes: childNodes(vaultPath, res) } }));
     } catch {
       setCache((c) => ({ ...c, [vaultPath]: { loading: false, nodes: [] } }));
@@ -91,13 +91,13 @@ export function useGameWikiTree() {
 
   const isOpen = useCallback((vp) => expanded.has(vp), [expanded]);
   // Sort applied at read time with the vault's shared sortNodes (scrim folders +
-  // Matches/ re-rank downstream in GameWikiTree regardless of mode).
+  // Matches/ re-rank downstream in DeadlockTree regardless of mode).
   const childrenOf = useCallback((vp) => {
     const e = cache[vp];
     return e?.nodes ? { ...e, nodes: sortNodes(e.nodes, sortMode) } : e;
   }, [cache, sortMode]);
   // Re-list a folder's children after a file op the hook didn't initiate (scrim
-  // bundle rename/delete/new from the GameWikiTree context menu). Drops the cache
+  // bundle rename/delete/new from the DeadlockTree context menu). Drops the cache
   // entry so the next render isn't stale; re-fetches if the folder is open.
   const refresh = useCallback((vaultPath) => {
     setCache((c) => { const next = { ...c }; delete next[vaultPath]; return next; });
@@ -123,13 +123,13 @@ export function useGameWikiTree() {
     });
   }, [fetchChildren]);
   const collapseAll = useCallback(() => setExpanded(() => { const n = new Set(); persist(n); return n; }), []);
-  // Expand-all = open the top-level games (children stay lazy — a recursive disk
+  // Expand-all = open the top-level folders (children stay lazy — a recursive disk
   // walk is the wrong cost for a reference vault). TreeToolbar's collapse toggle.
   const expandAll = useCallback(() => {
     setExpanded((prev) => {
       const next = new Set(prev);
-      for (const g of games || []) {
-        if (!next.has(g.vaultPath)) {
+      for (const g of roots || []) {
+        if (g.isFolder && !next.has(g.vaultPath)) {
           next.add(g.vaultPath);
           if (!cacheRef.current[g.vaultPath]) fetchChildren(g.vaultPath);
         }
@@ -137,16 +137,17 @@ export function useGameWikiTree() {
       persist(next);
       return next;
     });
-  }, [games, fetchChildren]);
+  }, [roots, fetchChildren]);
 
-  // Top-level games = immediate subfolders of the gamewiki root (slug '').
-  // Unsorted here; sorted at return by the live mode. refreshGames re-lists
+  // Top level = everything at the deadlock vault root (slug ''): folders AND
+  // loose pages, built through the same childNodes mapper as any other level.
+  // Unsorted here; sorted at return by the live mode. refreshRoots re-lists
   // after a root-level op (New folder).
-  const refreshGames = useCallback(() =>
-    api.getVaultFolder('', '', 'gamewiki').then((res) => {
-      setGames((res?.subfolders || []).map((sf) => ({ name: sf.name, vaultPath: sf.name, isFolder: true })));
-    }).catch(() => setGames((g) => g || [])), []);
-  useEffect(() => { refreshGames(); }, [refreshGames]);
+  const refreshRoots = useCallback(() =>
+    api.getVaultFolder('', '', 'deadlock').then((res) => {
+      setRoots(childNodes('', res));
+    }).catch(() => setRoots((r) => r || [])), []);
+  useEffect(() => { refreshRoots(); }, [refreshRoots]);
 
   // Materialize children for any open-but-uncached folder (localStorage restore).
   useEffect(() => {
@@ -154,8 +155,8 @@ export function useGameWikiTree() {
   }, [expanded, fetchChildren]);
 
   return {
-    games: games && sortNodes(games, sortMode),
-    isOpen, toggle, childrenOf, refresh, refreshGames, reveal, collapseAll, expandAll,
+    roots: roots && sortNodes(roots, sortMode),
+    isOpen, toggle, childrenOf, refresh, refreshRoots, reveal, collapseAll, expandAll,
     sortMode, setSortMode,
     anyExpanded: expanded.size > 0,
   };

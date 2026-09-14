@@ -1,4 +1,4 @@
-// analystBrain.js — Deadlock Analyst brain (Coaching/Analyst/ in the GameWiki vault). Pure ESM
+// analystBrain.js — Deadlock Analyst brain (Coaching/Analyst/ in the Deadlock vault). Pure ESM
 // (no React, no @host) like teamProgress.js: the caller passes the host `api` (getVaultFolder /
 // getRawFileMeta; writes go through api.savePage), so the logic round-trips through a Node
 // harness against the live vault (analystBrain.selftest.mjs).
@@ -8,7 +8,10 @@
 // CARRIES FORWARD the learned `## Mishears` rows (the Learn loop grows them; losing them on a
 // refresh would silently un-teach the Analyst — never lose information).
 
-export const ANALYST_DIR = 'Deadlock/Coaching/Analyst';
+// vault_get_folder takes (slug, rel) where slug is the first path segment.
+const gwFolder = (api, full) => { const [s, ...r] = String(full).split('/'); return api.getVaultFolder(s, r.join('/'), 'deadlock'); };
+
+export const ANALYST_DIR = 'Coaching/Analyst';
 export const LEXICON_PATH = `${ANALYST_DIR}/Lexicon.md`;
 
 // Fact/ subfolders that feed the lexicon: [section heading, vault-relative folder].
@@ -156,13 +159,13 @@ export function patchDigestStale(digestMd, ingestedDates = []) {
 // coaching_classify_match bridge (DI'd invoke, mirror generateReport) → full Patch Digest.md
 // markdown. No ingested patches → a valid "none yet" digest, never a throw (non-blocking).
 export async function buildPatchDigest(api, invoke, agents = {}, { count = 13, stamp = '' } = {}) {
-  const res = await api.getVaultFolder('Deadlock', PATCH_INGESTED_DIR, 'gamewiki').catch(() => null);
+  const res = await gwFolder(api, PATCH_INGESTED_DIR).catch(() => null);
   const dates = pageNames(res).sort((a, b) => b.localeCompare(a)).slice(0, count); // newest first
   if (!dates.length) return renderPatchDigest('', [], stamp);
   const parts = [];
   for (const d of dates) {
     try {
-      const { content } = await api.getRawFileMeta(`Deadlock/${PATCH_INGESTED_DIR}/${d}.md`, 'gamewiki');
+      const { content } = await api.getRawFileMeta(`${PATCH_INGESTED_DIR}/${d}.md`, 'deadlock');
       parts.push(`=== PATCH ${d} ===\n${String(content).slice(0, 80000)}`);
     } catch { /* unreadable patch page — skip */ }
   }
@@ -198,16 +201,16 @@ export async function buildPatchDigest(api, invoke, agents = {}, { count = 13, s
 }
 
 // Enumerate Fact/ + carry existing mishears → the full Lexicon.md markdown. Caller saves it:
-// api.savePage(LEXICON_PATH, md, null, 'gamewiki'). A missing Fact/ subfolder degrades to an
+// api.savePage(LEXICON_PATH, md, null, 'deadlock'). A missing Fact/ subfolder degrades to an
 // empty section (lexicon completeness is iterative, never blocking).
 export async function buildLexicon(api, stamp = '') {
   const sections = [];
   for (const [heading, rel] of LEXICON_SOURCES) {
-    const res = await api.getVaultFolder('Deadlock', rel, 'gamewiki').catch(() => null);
+    const res = await gwFolder(api, rel).catch(() => null);
     sections.push([heading, pageNames(res)]);
   }
   let mishears = [];
-  try { mishears = parseMishears((await api.getRawFileMeta(LEXICON_PATH, 'gamewiki')).content); } catch { /* fresh vault */ }
+  try { mishears = parseMishears((await api.getRawFileMeta(LEXICON_PATH, 'deadlock')).content); } catch { /* fresh vault */ }
   return renderLexicon(sections, mishears, stamp);
 }
 
@@ -238,17 +241,17 @@ export function sectionOf(md, heading) {
 export async function collectPriorTldrs(api, coachedTeam, max = 3) {
   const norm = (t) => String(t || '').toLowerCase().replace(/\s+/g, ' ').trim();
   if (!norm(coachedTeam)) return [];
-  const res = await api.getVaultFolder('Deadlock', 'Coaching/Scrim', 'gamewiki').catch(() => null);
+  const res = await gwFolder(api, 'Coaching/Scrim').catch(() => null);
   const folders = ((res && res.subfolders) || []).map((sf) => String(sf.name || '')).filter(Boolean).sort();
   const out = [];
   for (const base of folders) {
-    const dir = `Deadlock/Coaching/Scrim/${base}`;
+    const dir = `Coaching/Scrim/${base}`;
     let content;
-    try { content = String((await api.getRawFileMeta(`${dir}/Overview.md`, 'gamewiki')).content); } catch { continue; }
+    try { content = String((await api.getRawFileMeta(`${dir}/Overview.md`, 'deadlock')).content); } catch { continue; }
     const m = content.match(/^Coached Team:\s*(.+)$/m) || content.match(/^Team 1:\s*(.+)$/m);
     if (!m || norm(m[1]) !== norm(coachedTeam)) continue;
     try {
-      const rep = JSON.parse((await api.getRawFileMeta(`${dir}/.vodreport.json`, 'gamewiki')).content);
+      const rep = JSON.parse((await api.getRawFileMeta(`${dir}/.vodreport.json`, 'deadlock')).content);
       const take = (Array.isArray(rep?.sections) ? rep.sections : [])
         .find((s) => s?.id === 'vod-takeaways' || /^vod takeaways$/i.test(String(s?.heading || '').trim()));
       const text = String(take?.md || rep?.tldr || '').trim();
@@ -263,7 +266,7 @@ export async function collectPriorTldrs(api, coachedTeam, max = 3) {
 // optional-with-loud-placeholder so a missing brain file surfaces in the text AND in `warnings`
 // (Move 10 persists the section list in report meta) — the report never silently degrades.
 export async function buildBrainContext(api, { coachedTeam = '', priorTldrMax = 3 } = {}) {
-  const read = async (p) => { try { return String((await api.getRawFileMeta(p, 'gamewiki')).content); } catch { return null; } };
+  const read = async (p) => { try { return String((await api.getRawFileMeta(p, 'deadlock')).content); } catch { return null; } };
   const cap = (s, n = 20000) => (String(s).length > n ? `${String(s).slice(0, n)}\n[truncated at ${n} chars]` : String(s));
   const parts = [];
   const sections = [];
@@ -288,11 +291,11 @@ export async function buildBrainContext(api, { coachedTeam = '', priorTldrMax = 
 
   const team = String(coachedTeam || '').trim();
   if (team) {
-    const teamPage = await read(`Deadlock/Coaching/Teams/${team}.md`);
+    const teamPage = await read(`Coaching/Teams/${team}.md`);
     push('TEAM PAGE', teamPage && cap(teamPage), `Teams/${team}.md`);
     let progress = null;
     try {
-      const agg = JSON.parse(await read(`Deadlock/Coaching/Teams/.teamprogress.${team}.json`));
+      const agg = JSON.parse(await read(`Coaching/Teams/.teamprogress.${team}.json`));
       progress = JSON.stringify({
         scrimCount: agg.scrimCount, record: agg.record, recurring: agg.recurring,
         openHomework: (agg.homework || []).filter((h) => !h.done).map((h) => h.text),

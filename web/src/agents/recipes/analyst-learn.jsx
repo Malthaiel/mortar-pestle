@@ -7,7 +7,7 @@
 // openAnalyst({ recipe: 'analyst-learn', target: { scrimPath } }).
 
 import { api } from '../../api.js';
-import { scrimSidecarPath } from '@modules/core/game-wiki/matchData.js';
+import { scrimSidecarPath } from '@modules/core/deadlock/matchData.js';
 import { makeDistillRecipe, loadBrainPages } from './analyst-teach.jsx';
 
 const baseName = (p) => String(p).replace(/\.md$/, '').split('/').pop();
@@ -20,7 +20,7 @@ export const analystLearn = makeDistillRecipe({
     if (!scrimPath) throw { code: 'NO_MATCH', message: 'Open the Analyst from a report window (Ask Analyst) so it knows the scrim.' };
     let entries = [];
     try {
-      const j = JSON.parse(String((await api.getRawFileMeta(scrimSidecarPath(scrimPath, 'vodfeedback'), 'gamewiki')).content));
+      const j = JSON.parse(String((await api.getRawFileMeta(scrimSidecarPath(scrimPath, 'vodfeedback'), 'deadlock')).content));
       entries = Array.isArray(j.entries) ? j.entries : [];
     } catch { /* no feedback sidecar yet */ }
     if (!entries.length) throw { code: 'NO_FEEDBACK', message: 'No corrections recorded on this report yet — mark items Wrong / Edit / Note in the report window first.' };

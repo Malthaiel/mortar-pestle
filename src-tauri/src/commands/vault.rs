@@ -127,15 +127,15 @@ pub fn library_vault_root() -> String {
     crate::commands::vaults::library_vault_path().unwrap_or_else(vault_root)
 }
 
-/// GameWiki Vault root — the read-only, app-managed multi-game reference vault.
-/// Precedence: `AGENTIC_GAMEWIKI_VAULT_ROOT` env (tests) → the registered
-/// `role:gamewiki` vault → the content vault (fallback before
-/// `init_gamewiki_vault` registers it on first boot).
-pub fn gamewiki_vault_root() -> String {
-    if let Ok(v) = std::env::var("AGENTIC_GAMEWIKI_VAULT_ROOT") {
+/// Deadlock Vault root — the read-only, app-managed multi-game reference vault.
+/// Precedence: `AGENTIC_DEADLOCK_VAULT_ROOT` env (tests) → the registered
+/// `role:deadlock` vault → the content vault (fallback before
+/// `init_deadlock_vault` registers it on first boot).
+pub fn deadlock_vault_root() -> String {
+    if let Ok(v) = std::env::var("AGENTIC_DEADLOCK_VAULT_ROOT") {
         return v;
     }
-    crate::commands::vaults::gamewiki_vault_path().unwrap_or_else(vault_root)
+    crate::commands::vaults::deadlock_vault_path().unwrap_or_else(vault_root)
 }
 
 /// User-chosen captures-dir override (WI-2 — configurable recordings folder).
@@ -196,7 +196,7 @@ pub enum RootKind {
     App,
     Pulse,
     Library,
-    GameWiki,
+    Deadlock,
     /// Game Capture clip output dir (`captures_dir()`) — NOT a markdown vault;
     /// used so the recycle bin can resolve a clip's restore path back to where
     /// clips live (outside the Library on Windows). See decision #11.
@@ -210,7 +210,7 @@ impl RootKind {
             Some("app") => RootKind::App,
             Some("pulse") => RootKind::Pulse,
             Some("library") => RootKind::Library,
-            Some("gamewiki") => RootKind::GameWiki,
+            Some("deadlock") => RootKind::Deadlock,
             Some("captures") => RootKind::Captures,
             _ => RootKind::Content,
         }
@@ -222,7 +222,7 @@ impl RootKind {
             RootKind::App => app_vault_root(),
             RootKind::Pulse => pulse_vault_root(),
             RootKind::Library => library_vault_root(),
-            RootKind::GameWiki => gamewiki_vault_root(),
+            RootKind::Deadlock => deadlock_vault_root(),
             RootKind::Captures => captures_dir(),
         }
     }

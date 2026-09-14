@@ -1,19 +1,23 @@
-//! Comms-extraction job — the Rust-owned long half of Extract Comms / Extract
-//! VOD Comms (Deadlock Scrim Coaching, gate-blocker 2 "reattachable job").
+//! Comms job — the Rust-owned long half of the coaching write-out (CoachPopup's
+//! "Write it out", `kind: "writeout"`) and the older Extract Comms path.
 //!
-//! Why this exists: the extraction pipeline used to live entirely in ScrimViewer
-//! JS, driving per-step invokes over per-call Channels. A webview reload (the dev
-//! overlay reloads on every Shift+C show; a real user can close the overlay
-//! window) destroyed the orchestrator mid-flight while the STT engine kept
-//! transcribing unconsumed. This module moves the long half — extract WAVs →
-//! silence-probe the mic → load model → transcribe mic + comms → diarize — into a
-//! Rust task whose state lives in a process-lifetime cell (the
-//! `overlay::state::cell()` idiom), so it survives ANY webview teardown. The
-//! frontend re-attaches on mount via `comms_job_status`, follows live progress on
-//! the GLOBAL `comms-job-progress` event (the `stt_download_model` survive-unmount
-//! pattern), and consumes the finished raw results with the take-once
-//! `comms_job_take` — the fast, pure-JS post-processing (cluster matching, align,
-//! merge, vault writes) stays in ScrimViewer.
+//! Why this exists: the pipeline used to live in frontend JS, driving per-step
+//! invokes over per-call Channels. A webview reload (the dev overlay reloads on
+//! every Shift+C show; a Vite page reload; a real user closing the window)
+//! destroyed the orchestrator mid-flight while the STT engine kept transcribing
+//! unconsumed. This module moves the long half — extract WAVs → silence-probe
+//! the mic → load model → transcribe mic + comms → diarize — into a Rust task
+//! whose state lives in a process-lifetime cell (the `overlay::state::cell()`
+//! idiom), so it survives ANY webview teardown. The frontend re-attaches on
+//! mount via `comms_job_status` and follows live progress on the GLOBAL
+//! `comms-job-progress` event (the `stt_download_model` survive-unmount pattern).
+//!
+//! `kind: "writeout"` skips diarization and finishes on its own: it merges both
+//! tracks into speaker turns (`coach_transcript`, stamps offset by the trim
+//! start) and writes `<scrimPath>/00-transcript.md` itself, so no page has to be
+//! alive when it ends. Other kinds keep the take-once `comms_job_take` hand-off;
+//! its ScrimViewer consumer was deleted in the Scrim Teardown, so nothing calls
+//! it today.
 //!
 //! One job at a time: the engine is single-job anyway. Starting over a
 //! done-but-unconsumed job replaces it (the user moved on; WAV extraction is
@@ -179,6 +183,15 @@ struct JobParams {
     mic_track: Option<i32>,
     model: String,
     max_speakers: i32,
+    /// Trim handles, in seconds into the recording. `None`/`None` = the whole file,
+    /// which keeps the pre-trim cache key so existing extracted WAVs still hit.
+    start_secs: Option<f64>,
+    end_secs: Option<f64>,
+    /// `kind: "writeout"` only — the name the mic track is labelled with. NOT
+    /// optional to coach.py: it binds phase 2 with "the coach is the speaker
+    /// labelled <coach_label>, every other label is the Student", so a missing
+    /// one files the coach's own words as the student's.
+    coach_label: Option<String>,
 }
 
 /// `comms_job_start` — begin the Rust-owned extraction job. Errors when a job is
@@ -195,6 +208,9 @@ pub async fn comms_job_start(
     scrim_path: String,
     kind: String,
     match_n: Option<u32>,
+    start_secs: Option<f64>,
+    end_secs: Option<f64>,
+    coach_label: Option<String>,
 ) -> Result<(), String> {
     if video.is_empty() {
         return Err("recording path required".into());
@@ -220,7 +236,7 @@ pub async fn comms_job_start(
             result: None,
         });
     }
-    let params = JobParams { video, comms_track, mic_track, model, max_speakers };
+    let params = JobParams { video, comms_track, mic_track, model, max_speakers, start_secs, end_secs, coach_label };
     tauri::async_runtime::spawn(run_job(app, params));
     Ok(())
 }
@@ -333,23 +349,31 @@ async fn drive(app: &AppHandle, p: &JobParams) -> Result<CommsJobResult, String>
             Ok(())
         }
     };
-    // Phase labels differ per kind only cosmetically (match: mic/comms, vod: coach/team).
-    let vod = {
+    // Phase labels differ per kind only cosmetically (match: mic/comms, vod: coach/team,
+    // writeout: the coaching write-out, whose words the user reads in its own window).
+    let kind = {
         let g = lock();
-        g.as_ref().map(|j| j.kind == "vod").unwrap_or(false)
+        g.as_ref().map(|j| j.kind.clone()).unwrap_or_default()
     };
-    let (mic_label, comms_label) = if vod {
+    let vod = kind == "vod";
+    // The coaching write-out takes the SAME two-track pass but no diarization: the
+    // track split already says who spoke (mic = the coach, by construction), and
+    // sherpa put four real people into 26 clusters when it was asked anyway.
+    let writeout = kind == "writeout";
+    let (mic_label, comms_label) = if writeout {
+        ("Listening to you", "Listening to everyone else")
+    } else if vod {
         ("Transcribing coach", "Transcribing team")
     } else {
         ("Transcribing mic", "Transcribing comms")
     };
 
     // 1. Extract WAVs (cached by path+mtime+track on the coaching side).
-    set_progress(app, Some("Extracting audio"), None);
+    set_progress(app, Some(if writeout { "Pulling the two sounds apart" } else { "Extracting audio" }), None);
     let diarize_mode = p.comms_track.is_some();
     let mic_wav = if diarize_mode && p.mic_track.is_some() {
         Some(
-            crate::commands::coaching::coaching_extract_audio(p.video.clone(), p.mic_track, None, None)
+            crate::commands::coaching::coaching_extract_audio(p.video.clone(), p.mic_track, p.start_secs, p.end_secs)
                 .await
                 .map_err(vault_err)?,
         )
@@ -357,7 +381,7 @@ async fn drive(app: &AppHandle, p: &JobParams) -> Result<CommsJobResult, String>
         None
     };
     let comms_wav =
-        crate::commands::coaching::coaching_extract_audio(p.video.clone(), if diarize_mode { p.comms_track } else { None }, None, None)
+        crate::commands::coaching::coaching_extract_audio(p.video.clone(), if diarize_mode { p.comms_track } else { None }, p.start_secs, p.end_secs)
             .await
             .map_err(vault_err)?;
     bail()?;
@@ -375,7 +399,7 @@ async fn drive(app: &AppHandle, p: &JobParams) -> Result<CommsJobResult, String>
     bail()?;
 
     // 3. Load the whisper model (the engine does not auto-load).
-    set_progress(app, Some("Loading model"), None);
+    set_progress(app, Some(if writeout { "Getting the listener ready" } else { "Loading model" }), None);
     run_op(
         &client,
         "load_model",
@@ -403,7 +427,7 @@ async fn drive(app: &AppHandle, p: &JobParams) -> Result<CommsJobResult, String>
 
     // 6. Diarize the comms track (isolated-track mode only).
     let mut diarization: Option<DiarOut> = None;
-    if diarize_mode {
+    if diarize_mode && !writeout {
         // sherpa's diarize is one opaque C call — no progress events exist (the C API's
         // callback isn't bound by the Rust wrapper), so the label carries the ETA instead.
         set_progress(app, Some("Identifying speakers (takes a few minutes)"), None);
@@ -453,7 +477,89 @@ async fn drive(app: &AppHandle, p: &JobParams) -> Result<CommsJobResult, String>
         diarization = out;
     }
 
+    // 7. The write-out saves its own `00-transcript.md`. It used to be handed back
+    //    to the popup to merge and save; the popup is exactly the thing that may no
+    //    longer exist by now, which is the whole reason this job moved into Rust.
+    if writeout {
+        set_progress(app, Some("Saving"), None);
+        // A track that exists but holds the wrong thing yields silence, and silence
+        // would save a half-empty transcript that reads as a real one.
+        if mic_segments.is_empty() {
+            return Err("Nothing was said on your own sound track — is that the one your voice goes to?".into());
+        }
+        if comms_segments.is_empty() {
+            return Err("Nothing was said on the other sound track — is that the one everyone else goes to?".into());
+        }
+        let (folder, coach) = {
+            let g = lock();
+            let job = g.as_ref().ok_or_else(|| "job vanished".to_string())?;
+            (job.scrim_path.clone(), p.coach_label.clone().unwrap_or_else(|| "Coach".into()))
+        };
+        // ffmpeg hands back a wav that starts at zero, so a trimmed run shifts every
+        // stamp by the trim start — the transcript then points at the ORIGINAL
+        // recording, which is the file anyone scrubs to check a line.
+        let offset_ms = (p.start_secs.unwrap_or(0.0).max(0.0) * 1000.0).round() as u64;
+        let body = coach_transcript(&mic_segments, &comms_segments, &coach, offset_ms);
+        crate::commands::vault::vault_write_file(
+            format!("{folder}/00-transcript.md"),
+            body,
+            None,
+            Some("deadlock".into()),
+        )
+        .map_err(vault_err)?;
+    }
+
     Ok(CommsJobResult { mic_segments, comms_segments, comms_final_text, diarization, mic_skipped })
+}
+
+/// Everyone who is not the coach is one Student — METHOD-A §8a merges them, so
+/// telling them apart buys the pipeline nothing.
+const STUDENT_LABEL: &str = "Student";
+
+/// ms → `m:ss`, minutes uncapped. `\d+` in method.py's `TURN_RE`, so an hour-long
+/// review keeps counting up to `72:15` rather than restarting at `12:15`.
+fn stamp(ms: u64) -> String {
+    let total = ms / 1000;
+    format!("{}:{:02}", total / 60, total % 60)
+}
+
+/// The `00-transcript.md` body — a contract with
+/// `Citadel/Infrastructure/Scripts/coaching/method.py`, whose
+/// `TURN_RE = ^\s*\d+:\d{2}\s*$` counts turns by finding bare timestamp lines. A turn is
+/// EXACTLY three lines (timestamp, speaker, text) and nothing else may look like a
+/// timestamp. Ported from `coachTranscribe.js` + `mergeTranscripts`, whose selftest
+/// assertions are the `tests` module below verbatim.
+///
+/// The mic pass is the coach by construction (its track carries nothing else), so the
+/// speaker comes from the TRACK, never from voice matching — diarization put four real
+/// people into 26 clusters when it was asked to decide instead.
+fn coach_transcript(mic: &[SegOut], comms: &[SegOut], coach_label: &str, offset_ms: u64) -> String {
+    let mut rows: Vec<(u64, &str, &str)> = Vec::with_capacity(mic.len() + comms.len());
+    for s in mic {
+        rows.push((s.t0_ms + offset_ms, coach_label, s.text.as_str()));
+    }
+    for s in comms {
+        rows.push((s.t0_ms + offset_ms, STUDENT_LABEL, s.text.as_str()));
+    }
+    // Stable, so a tie keeps the mic line first — the JS `Array.sort` it replaces was
+    // stable over `[...mic, ...comms]` too.
+    rows.sort_by_key(|r| r.0);
+    let mut out = String::new();
+    for (t0, who, text) in rows {
+        // whisper emits blank segments for spans the VAD passed but the decoder found
+        // nothing in, and a wordless turn still counts as a turn to method.py.
+        let text = text.trim();
+        if text.is_empty() {
+            continue;
+        }
+        out.push_str(&stamp(t0));
+        out.push('\n');
+        out.push_str(who.trim());
+        out.push('\n');
+        out.push_str(text);
+        out.push('\n');
+    }
+    out
 }
 
 /// One transcription pass: stream `segment`/`progress` into the cell + the global
@@ -647,4 +753,89 @@ fn data_is_silent<R: std::io::Read>(r: &mut R, data_bytes: u64) -> bool {
         }
     }
     true
+}
+
+// ── The method.py format contract ────────────────────────────────────────────
+// These assertions ARE the contract, ported verbatim from the JS selftest they
+// replace (`coachTranscribe.selftest.mjs`): if one fails, a real coaching run
+// either miscounts its turns or silently truncates.
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn seg(t0_ms: u64, text: &str) -> SegOut {
+        SegOut { t0_ms, t1_ms: t0_ms + 500, text: text.to_string() }
+    }
+
+    /// method.py's own turn counter: `^\s*\d+:\d{2}\s*$`.
+    fn looks_like_a_stamp(line: &str) -> bool {
+        let l = line.trim();
+        let Some((m, s)) = l.split_once(':') else { return false };
+        !m.is_empty()
+            && m.chars().all(|c| c.is_ascii_digit())
+            && s.len() == 2
+            && s.chars().all(|c| c.is_ascii_digit())
+    }
+
+    #[test]
+    fn stamps_count_past_an_hour() {
+        assert_eq!(stamp(0), "0:00");
+        assert_eq!(stamp(6_000), "0:06");
+        assert_eq!(stamp(65_000), "1:05");
+        // Minutes do NOT wrap at 60.
+        assert_eq!(stamp(4_335_000), "72:15");
+    }
+
+    #[test]
+    fn interleaves_both_tracks_in_time_order() {
+        let mic = [
+            seg(0, "okay so what you want here is a fight you can leave"),
+            seg(6_000, "same mistake again"),
+        ];
+        let comms = [seg(4_000, "my builds are awful")];
+        let body = coach_transcript(&mic, &comms, "Malthaiel", 0);
+        let lines: Vec<&str> = body.lines().filter(|l| !l.is_empty()).collect();
+        assert_eq!(
+            lines,
+            vec![
+                "0:00", "Malthaiel", "okay so what you want here is a fight you can leave",
+                "0:04", "Student", "my builds are awful",
+                "0:06", "Malthaiel", "same mistake again",
+            ]
+        );
+        // Three lines per turn, exactly one of them a timestamp to method.py.
+        assert_eq!(lines.len() % 3, 0);
+        assert_eq!(lines.iter().filter(|l| looks_like_a_stamp(l)).count(), 3);
+    }
+
+    #[test]
+    fn drops_wordless_turns_and_trims() {
+        let mic = [seg(0, "my builds are awful"), seg(9_000, "   ")];
+        let comms = [seg(6_000, "  okay, general lesson then  ")];
+        let body = coach_transcript(&mic, &comms, "Speaker 1", 0);
+        let lines: Vec<&str> = body.lines().filter(|l| !l.is_empty()).collect();
+        assert_eq!(
+            lines,
+            vec!["0:00", "Speaker 1", "my builds are awful", "0:06", "Student", "okay, general lesson then"]
+        );
+    }
+
+    #[test]
+    fn no_segments_is_an_empty_body_not_a_stray_turn() {
+        assert_eq!(coach_transcript(&[], &[], "Malthaiel", 0), "");
+    }
+
+    /// A trimmed run must stamp against the ORIGINAL recording: the 2026-09-10 live
+    /// run over 30:00-35:00 wrote `4:53` where the recording says `34:53`.
+    #[test]
+    fn trimmed_run_stamps_point_at_the_original_recording() {
+        let mic = [seg(173_000, "same mistake again")];
+        let comms = [seg(2_000, "my builds are awful")];
+        let body = coach_transcript(&mic, &comms, "Malthaiel", 1_800_000);
+        let lines: Vec<&str> = body.lines().collect();
+        assert_eq!(
+            lines,
+            vec!["30:02", "Student", "my builds are awful", "32:53", "Malthaiel", "same mistake again"]
+        );
+    }
 }

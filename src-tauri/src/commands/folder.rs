@@ -430,7 +430,7 @@ pub fn vault_get_folder(
 
 /// Raw one-level directory listing for a vault-relative folder, including
 /// dotfiles (unlike `vault_get_folder`, which hides dotfiles + only returns
-/// `.md` pages). Used by the GameWiki scrim bundle rename/delete to find every
+/// `.md` pages). Used by the Deadlock scrim bundle rename/delete to find every
 /// sibling sidecar (`.matchdata.…`, `.vodreport.…`, …) keyed by a scrim's
 /// basename. Non-recursive; path safety rides on `resolve_in` (root containment).
 #[derive(Serialize)]

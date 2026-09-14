@@ -1,6 +1,6 @@
-// Scrim Overlay Panel — the GameWiki as a draggable candy panel in the Overlay
-// Host (GameWiki Unification Phase 5): the shared GameWikiRail tree in a
-// CollapsibleRail + the shared GameWikiPage pane, driven by LOCAL selection
+// Scrim Overlay Panel — the Deadlock as a draggable candy panel in the Overlay
+// Host (Deadlock Unification Phase 5): the shared DeadlockRail tree in a
+// CollapsibleRail + the shared DeadlockPage pane, driven by LOCAL selection
 // state (a navigate shim — no router exists in this webview). Non-scrim pages
 // render read-only (the overlay is a mini wiki browser). The header is a slow
 // seamless broadcast-HUD ticker; the whole band is the drag handle. Go Live /
@@ -14,11 +14,11 @@ import useOverlayPanelDrag from './useOverlayPanelDrag.js';
 import { invoke } from '../api.js';
 import { safeDecode } from '../router.js';
 import CollapsibleRail from '../components/ui/CollapsibleRail.jsx';
-import GameWikiRail, { RailHeaderPill } from '@modules/core/game-wiki/GameWikiRail.jsx';
+import DeadlockRail, { RailHeaderPill } from '@modules/core/deadlock/DeadlockRail.jsx';
 import { api } from '../api.js';
-import { VOD_BASE } from '@modules/core/game-wiki/scrimSchema.js';
-import { appendNote, vodFile } from '@modules/core/game-wiki/vodNotes.js';
-import * as vodTimer from '@modules/core/game-wiki/vodTimer.js';
+import { VOD_BASE } from '@modules/core/deadlock/scrimSchema.js';
+import { appendNote, vodFile } from '@modules/core/deadlock/vodNotes.js';
+import * as vodTimer from '@modules/core/deadlock/vodTimer.js';
 
 // Scrim Teardown (2026-07-26): the live-notes path is GONE. Overview.md, match
 // pages and the per-match stopwatch it read no longer exist, so the panel is a
@@ -27,9 +27,9 @@ import * as vodTimer from '@modules/core/game-wiki/vodTimer.js';
 // still owns the live cell, so Go Live from a future surface keeps working.
 const DICTATION_TARGET_KEY = 'overlay-dictation-target';
 
-// react-markdown rides in GameWikiPage (~100KB) — lazy-split off the overlay boot
+// react-markdown rides in DeadlockPage (~100KB) — lazy-split off the overlay boot
 // chunk, mirroring the main app's split (index.jsx).
-const GameWikiPage = lazy(() => import('@modules/core/game-wiki/GameWikiPage.jsx'));
+const DeadlockPage = lazy(() => import('@modules/core/deadlock/DeadlockPage.jsx'));
 
 // Panel presence — shared with ScrimOverlayLauncher via localStorage + a window
 // event (the OverlayBrowserPanel pattern). Default OPEN; hiding keeps the panel
@@ -85,11 +85,11 @@ export default function ScrimOverlayPanel() {
     return () => window.removeEventListener(OPEN_EVT, onChange);
   }, []);
 
-  // Local selection + nav shim (GameWikiRail/GameWikiPage call nav with
-  // '/game-wiki/<encoded path>' — decode into the sel string).
+  // Local selection + nav shim (DeadlockRail/DeadlockPage call nav with
+  // '/deadlock/<encoded path>' — decode into the sel string).
   const [sel, setSel] = useState(loadSel);
   const nav = useCallback((to) => {
-    const m = String(to || '').match(/^\/game-wiki(?:\/(.*))?$/);
+    const m = String(to || '').match(/^\/deadlock(?:\/(.*))?$/);
     const rest = m && m[1] ? safeDecode(m[1]) : '';
     setSel(rest);
     try { localStorage.setItem(SEL_KEY, rest); } catch { /* private mode */ }
@@ -227,8 +227,8 @@ export default function ScrimOverlayPanel() {
       pressMsRef.current = null;
       try {
         const file = vodFile(path);
-        const body = await api.getRawFile(file, 'gamewiki');
-        await api.savePage(file, appendNote(body, stamp, text), null, 'gamewiki');
+        const body = await api.getRawFile(file, 'deadlock');
+        await api.savePage(file, appendNote(body, stamp, text), null, 'deadlock');
         invoke('overlay_note_toast', { text: `${vodTimer.fmt(stamp)} — ${text}` }).catch(() => {});
       } catch (err) {
         // A dropped note is a defect, not an acceptable degradation — say so on
@@ -354,11 +354,11 @@ export default function ScrimOverlayPanel() {
               header={<RailHeaderPill label={scrimTitle || 'GAMEWIKI OVERLAY'}
                 title={railOpen ? 'Collapse rail' : 'Expand rail'} onClick={toggleRail} expanded={railOpen} />}
               containerStyle={{ borderRight: '1px solid var(--border)' }}>
-              <GameWikiRail route={{ page: 'game-wiki', rest: sel }} nav={nav} header={null} />
+              <DeadlockRail route={{ page: 'deadlock', rest: sel }} nav={nav} header={null} />
             </CollapsibleRail>
             <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
               <Suspense fallback={null}>
-                <GameWikiPage rest={sel} nav={nav} overlay />
+                <DeadlockPage rest={sel} nav={nav} overlay />
               </Suspense>
             </div>
           </div>

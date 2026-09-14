@@ -22,7 +22,7 @@
 //                                      inherit note A's position)
 //                 otherwise          → the active module id, so the four
 //                                      TreeSidebar consumers (Library, Docs,
-//                                      Broadcast, GameWiki) don't share one
+//                                      Broadcast, Deadlock) don't share one
 //                                      position through the shared shell
 //
 // Positions live in localStorage, not memory: the overlay's Shift+C HIDE runs

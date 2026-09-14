@@ -74,7 +74,7 @@ loadAll().then(() => {
     import('./util/spacingAudit.js').then((m) => m.startSpacingAudit());
     import('./util/dragAudit.js').then((m) => m.startDragAudit());
     // cssVarAudit: unresolved no-fallback var(--x) in inline styles (CSS drops
-    // the whole declaration silently — the GameWikiRail toolbar-padding class).
+    // the whole declaration silently — the DeadlockRail toolbar-padding class).
     import('./util/cssVarAudit.js').then((m) => m.startCssVarAudit());
     // rowAudit: the SIDE-BY-SIDE checker — heights, painted bottoms, gaps and
     // round-shape aspect WITHIN one visual row. The other two look past the

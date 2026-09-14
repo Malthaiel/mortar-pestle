@@ -110,7 +110,7 @@ fn migrate_sidebar_to_app_config(app: &tauri::AppHandle) {
 /// user's vaults, config, and cache. Strategy: atomic same-volume `rename` of
 /// each app-data dir (instant even for multi-GB Library data), then rewrite the
 /// absolute legacy-id paths baked into the top-level `*.json` configs — chiefly
-/// `vaults.json`, whose App/Pulse/Library/GameWiki mounts are stored as absolute
+/// `vaults.json`, whose App/Pulse/Library/Deadlock mounts are stored as absolute
 /// paths. Gated on the destination not existing, so it runs exactly once on the
 /// first post-rebrand launch and is a no-op on a fresh install. Best-effort: every
 /// error is logged and swallowed (a failed migrate degrades to a fresh-looking
@@ -164,7 +164,7 @@ fn migrate_legacy_identity_data(app: &tauri::AppHandle) {
 
     // 2. Repoint absolute legacy-id paths in the top-level *.json configs
     //    (non-recursive — vault content is left untouched). vaults.json's
-    //    App/Pulse/Library/GameWiki mounts are absolute and must be repointed.
+    //    App/Pulse/Library/Deadlock mounts are absolute and must be repointed.
     if let Ok(cfg_dir) = resolver.app_config_dir() {
         if let Ok(entries) = std::fs::read_dir(&cfg_dir) {
             for entry in entries.flatten() {

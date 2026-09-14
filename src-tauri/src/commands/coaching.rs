@@ -18,32 +18,32 @@ use tokio::io::AsyncBufReadExt;
 use crate::commands::vault::VaultError;
 use crate::parsers::video_transcode::{compute_hash_with_recipe, mtime_ms_for};
 
-/// Highlight a GameWiki-vault file in the OS file manager (the "open in folder"
+/// Highlight a Deadlock-vault file in the OS file manager (the "open in folder"
 /// button on the VOD Review Report). `reveal_in_files` (media.rs) can't be reused:
 /// it resolves relative paths against the *content* vault and its allowed-root gate
-/// excludes the GameWiki vault. This resolves `path` against the GameWiki vault root
+/// excludes the Deadlock vault. This resolves `path` against the Deadlock vault root
 /// and gates the canonical result under it (the arg is an app-built relative scrim
 /// path, not a user pick), then reveals via the opener plugin (same as reveal_in_files).
 #[tauri::command]
 pub fn coaching_reveal_path(app: tauri::AppHandle, path: String) -> Result<(), VaultError> {
-    let canonical = gamewiki_resolve(&path)?;
+    let canonical = deadlock_resolve(&path)?;
     app.opener()
         .reveal_item_in_dir(&canonical)
         .map_err(|e| VaultError::Io(e.to_string()))
 }
 
-/// Resolve a GameWiki-relative path to its canonical on-disk path, refusing
+/// Resolve a Deadlock-relative path to its canonical on-disk path, refusing
 /// anything that escapes the vault root.
-fn gamewiki_resolve(path: &str) -> Result<PathBuf, VaultError> {
+fn deadlock_resolve(path: &str) -> Result<PathBuf, VaultError> {
     if path.is_empty() {
         return Err(VaultError::Invalid("path required".into()));
     }
-    let root = std::fs::canonicalize(crate::commands::vault::gamewiki_vault_root())
-        .map_err(|e| VaultError::Io(format!("gamewiki root: {e}")))?;
+    let root = std::fs::canonicalize(crate::commands::vault::deadlock_vault_root())
+        .map_err(|e| VaultError::Io(format!("deadlock root: {e}")))?;
     let canonical = std::fs::canonicalize(root.join(path))
         .map_err(|_| VaultError::NotFound(format!("Path not found: {path}")))?;
     if !canonical.starts_with(&root) {
-        return Err(VaultError::Invalid("path not under the GameWiki vault".into()));
+        return Err(VaultError::Invalid("path not under the Deadlock vault".into()));
     }
     Ok(canonical)
 }

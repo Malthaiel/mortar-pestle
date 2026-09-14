@@ -8,11 +8,11 @@ import { pageNames, parseMishears, renderLexicon, buildLexicon, LEXICON_PATH, LE
 
 // pageNames: keeps .md basenames, drops dot-sidecars / Index / non-md, sorts
 const names = pageNames({ pages: [
-  { path: '/Deadlock/Fact/Heroes/Mirage.md' },
-  { path: 'Deadlock/Fact/Heroes/Abrams.md' },
-  { path: 'Deadlock/Fact/Heroes/.autoclass.junk.json' },
-  { path: 'Deadlock/Fact/Heroes/Index.md' },
-  { path: 'Deadlock/Fact/Heroes/notes.txt' },
+  { path: '/Fact/Heroes/Mirage.md' },
+  { path: 'Fact/Heroes/Abrams.md' },
+  { path: 'Fact/Heroes/.autoclass.junk.json' },
+  { path: 'Fact/Heroes/Index.md' },
+  { path: 'Fact/Heroes/notes.txt' },
 ] });
 assert.deepEqual(names, ['Abrams', 'Mirage']);
 assert.deepEqual(pageNames(null), []);
@@ -34,8 +34,8 @@ assert.deepEqual(parseDigested('no frontmatter'), []);
 assert.deepEqual(parseDigested(renderPatchDigest('', [])), []);
 
 // LIVE vault: fs-shim the two api calls buildLexicon uses
-const root = path.join(process.env.APPDATA || '', 'dev.malthaiel.mortar-pestle', 'GameWiki');
-assert.ok(fs.existsSync(path.join(root, 'Deadlock')), `GameWiki vault not found at ${root}`);
+const root = path.join(process.env.APPDATA || '', 'dev.malthaiel.mortar-pestle', 'Deadlock');
+assert.ok(fs.existsSync(path.join(root, 'Fact')), `Deadlock vault not found at ${root}`);
 const api = {
   getVaultFolder: async (slug, rel) => ({
     pages: fs.readdirSync(path.join(root, slug, rel)).map((f) => ({ path: `${slug}/${rel}/${f}` })),
@@ -49,7 +49,7 @@ assert.ok(!/^- \./m.test(live), 'dot-file leaked into lexicon');
 for (const [heading] of LEXICON_SOURCES) assert.ok(live.includes(`## ${heading}`), `missing section ${heading}`);
 const heroCount = (live.match(/^- /gm) || []).length;
 assert.ok(heroCount >= 40, `suspiciously small lexicon (${heroCount} entries)`);
-assert.ok(LEXICON_PATH === 'Deadlock/Coaching/Analyst/Lexicon.md');
+assert.ok(LEXICON_PATH === 'Coaching/Analyst/Lexicon.md');
 
 // buildPatchDigest with a fake invoke: prompt carries patch bodies, digest carries covered dates
 let seen = null;
@@ -68,20 +68,20 @@ assert.equal(sectionOf('nothing', 'Distilled'), '');
 
 // buildBrainContext over an in-memory fixture vault
 const fix = new Map([
-  ['Deadlock/Coaching/Analyst/Analyst.md', '---\nType: Deadlock-Analyst\n---\n## Charter\n\nBe elite.'],
-  ['Deadlock/Coaching/Analyst/Lexicon.md', '---\nType: Deadlock-Analyst\n---\n## Heroes\n\n- Mirage\n\n## Mishears\n\n| Heard | Canonical |\n|---|---|'],
-  ['Deadlock/Coaching/Analyst/Patch Digest.md', '---\nDigested: [2026-04-30]\n---\n## Digest\n\n- Mirage buffed (2026-04-30)'],
-  ['Deadlock/Coaching/Analyst/Concepts.md', '---\n---\n## Distilled\n\nScarabs win tempo.\n\n## Log\n'],
+  ['Coaching/Analyst/Analyst.md', '---\nType: Deadlock-Analyst\n---\n## Charter\n\nBe elite.'],
+  ['Coaching/Analyst/Lexicon.md', '---\nType: Deadlock-Analyst\n---\n## Heroes\n\n- Mirage\n\n## Mishears\n\n| Heard | Canonical |\n|---|---|'],
+  ['Coaching/Analyst/Patch Digest.md', '---\nDigested: [2026-04-30]\n---\n## Digest\n\n- Mirage buffed (2026-04-30)'],
+  ['Coaching/Analyst/Concepts.md', '---\n---\n## Distilled\n\nScarabs win tempo.\n\n## Log\n'],
   // Corrections.md deliberately ABSENT → loud placeholder
-  ['Deadlock/Coaching/Teams/Alpha.md', '# Alpha — Team Progress\nstuff'],
-  ['Deadlock/Coaching/Teams/.teamprogress.Alpha.json', JSON.stringify({ scrimCount: 2, record: { won: 1, lost: 1 }, recurring: [], homework: [{ text: 'ward river', done: false }, { text: 'done thing', done: true }], recurringLessons: [] })],
+  ['Coaching/Teams/Alpha.md', '# Alpha — Team Progress\nstuff'],
+  ['Coaching/Teams/.teamprogress.Alpha.json', JSON.stringify({ scrimCount: 2, record: { won: 1, lost: 1 }, recurring: [], homework: [{ text: 'ward river', done: false }, { text: 'done thing', done: true }], recurringLessons: [] })],
   // schema v2 scrims: folder per scrim, Overview.md + .vodreport.json inside
-  ['Deadlock/Coaching/Scrim/Alpha VS Beta (07-01-26)/Overview.md', '---\nCoached Team: Alpha\n---\nbody'],
-  ['Deadlock/Coaching/Scrim/Alpha VS Beta (07-01-26)/.vodreport.json', JSON.stringify({ tldr: 'Lost lanes, won fights.' })],
+  ['Coaching/Scrim/Alpha VS Beta (07-01-26)/Overview.md', '---\nCoached Team: Alpha\n---\nbody'],
+  ['Coaching/Scrim/Alpha VS Beta (07-01-26)/.vodreport.json', JSON.stringify({ tldr: 'Lost lanes, won fights.' })],
   // takeaways section preferred over tldr when both exist
-  ['Deadlock/Coaching/Scrim/Alpha VS Epsilon (07-10-26)/Overview.md', '---\nCoached Team: Alpha\n---\nbody'],
-  ['Deadlock/Coaching/Scrim/Alpha VS Epsilon (07-10-26)/.vodreport.json', JSON.stringify({ tldr: 'Stale digest.', sections: [{ id: 'vod-takeaways', heading: 'VOD Takeaways', md: '1. Group up.' }] })],
-  ['Deadlock/Coaching/Scrim/Gamma VS Delta (07-05-26)/Overview.md', '---\nCoached Team: Gamma\n---\nbody'],
+  ['Coaching/Scrim/Alpha VS Epsilon (07-10-26)/Overview.md', '---\nCoached Team: Alpha\n---\nbody'],
+  ['Coaching/Scrim/Alpha VS Epsilon (07-10-26)/.vodreport.json', JSON.stringify({ tldr: 'Stale digest.', sections: [{ id: 'vod-takeaways', heading: 'VOD Takeaways', md: '1. Group up.' }] })],
+  ['Coaching/Scrim/Gamma VS Delta (07-05-26)/Overview.md', '---\nCoached Team: Gamma\n---\nbody'],
 ]);
 const fixApi = {
   getRawFileMeta: async (p) => { if (!fix.has(p)) throw new Error('absent'); return { content: fix.get(p) }; },

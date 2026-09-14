@@ -17,7 +17,7 @@
 //! an externally-edited Pulse or App page. That silently disabled the
 //! availability push's republish-on-edit for its whole life.
 //!
-//! Library and GameWiki are deliberately NOT watched: nothing maps their paths
+//! Library and Deadlock are deliberately NOT watched: nothing maps their paths
 //! to an event, and they are large media trees where a recursive watch is real
 //! cost for no consumer.
 

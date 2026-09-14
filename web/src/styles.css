@@ -23,7 +23,7 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
   /* Nav-tree depth (tree rows + tree toolbars run 15% shallower). GLOBAL
      fallback: tree shells re-declare the same calc locally, but spacing math
      (treeKit GAP) references this var from wrappers OUTSIDE those shells —
-     an unresolvable var() silently voids the whole declaration (GameWikiRail
+     an unresolvable var() silently voids the whole declaration (DeadlockRail
      toolbar padding, 2026-07-17). Declared here so it resolves everywhere. */
   --candy-depth-nav: calc(var(--candy-depth) * 0.85);
 

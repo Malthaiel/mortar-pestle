@@ -1,16 +1,17 @@
-// Game Wiki sidebar tree — the games tree (top-level = games, expand into each
+// Deadlock sidebar tree — the vault tree (top-level = the vault root's own
+// folders and loose pages, expand into each
 // game's raw folder structure). Renders with the shared treeKit candy-pill
 // primitives so it's pixel-identical to the vault tree, backed by the lazy
-// useGameWikiTree hook.
+// useDeadlockTree hook.
 //
-// The gamewiki vault is read-only reference EXCEPT Deadlock/Coaching/Scrim,
+// The deadlock vault is read-only reference EXCEPT Coaching/Scrim,
 // where a scrim can be created, renamed and deleted. Scrim Teardown (2026-07-26):
 // a scrim is now a FOLDER AND NOTHING ELSE — the whole per-match shape (match
 // groups, report-section leaves, segments leaves, the sidecar listing that fed
 // them) came out with the report layer. A scrim folder renders through the same
 // generic TreeBody as any other folder, so a fresh one simply reads "empty".
 //
-// The tree hook + New Scrim modal live in GameWikiRail (the shared composition
+// The tree hook + New Scrim modal live in DeadlockRail (the shared composition
 // both surfaces mount); this component takes `tree` + `onNewScrim` as props.
 
 import { useState, useEffect } from 'react';
@@ -145,20 +146,20 @@ function TreeNode({ node, tree, accent, currentPath, openMenu, nav, onGear, icon
     <TreeRow label={node.name} selected={selected} accent={accent}
       leadIcon={icons.leadIcon(node.vaultPath)}
       onContextMenu={(e) => openMenu(e, node, !!vodOf(node.vaultPath))}
-      onClick={() => nav('/game-wiki/' + encodePagePath(node.vaultPath))}/>
+      onClick={() => nav('/deadlock/' + encodePagePath(node.vaultPath))}/>
   );
 }
 
-export default function GameWikiTree({ route, accent, tree, nav = navigate, onNewScrim }) {
+export default function DeadlockTree({ route, accent, tree, nav = navigate, onNewScrim }) {
   const { openContextMenu } = useContextMenu();
   const { settings } = useSettings();
   const anim = REVEAL[settings.vaultTreeReveal] || REVEAL.normal;
-  const currentPath = route?.page === 'game-wiki' ? (route.rest || '') : '';
+  const currentPath = route?.page === 'deadlock' ? (route.rest || '') : '';
   const [modal, setModal] = useState(null);
   // Which gear was clicked ({ kind:'scrim'|'match', scrim, match }), or null.
   const [coach, setCoach] = useState(null);
   // Right-click row icons (shared store + picker with the vault tree).
-  const icons = useTreeIcons('gamewiki:tree');
+  const icons = useTreeIcons('deadlock:tree');
   const [picker, setPicker] = useState(null);
 
   // The Personal VODs folder is the ONLY way in to "New VOD", and the only thing
@@ -166,12 +167,12 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
   // folder already being there. Scrim never hit this because its folder has
   // existed on disk since the scrim tooling shipped. Ensure it once on mount;
   // createFolder is not idempotent (it throws "Already exists"), so swallow.
-  useEffect(() => { api.createFolder(VOD_BASE, 'gamewiki').catch(() => {}); }, []);
+  useEffect(() => { api.createFolder(VOD_BASE, 'deadlock').catch(() => {}); }, []);
 
   // Open a finished match's notes. The filename is coach.py's deliverable
   // convention; navigating to the folder would land on an empty-folder blurb.
   const openNotes = (scrim, n) => nav(
-    '/game-wiki/' + encodePagePath(
+    '/deadlock/' + encodePagePath(
       `${SCRIM_BASE}/${scrim}/Match ${n}/Deadlock Coaching — ${scrim} Match ${n}`,
     ),
   );
@@ -181,17 +182,17 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
     // no menu, right-click IS the picker.
     const iconItem = { label: 'Change Icon', icon: IconBrush,
       onClick: () => setPicker({ at: { x: e.clientX, y: e.clientY }, key: node.vaultPath }) };
-    // File rows carry a vaultPath with `.md` stripped (useGameWikiTree), so put it
+    // File rows carry a vaultPath with `.md` stripped (useDeadlockTree), so put it
     // back for anything that touches the disk or the path 404s.
     const diskPath = node.isFolder ? node.vaultPath : `${node.vaultPath}.md`;
-    // Every row can be revealed. reveal_in_files excludes the gamewiki root —
-    // coaching_reveal_path is the gamewiki-rooted arm.
+    // Every row can be revealed. reveal_in_files excludes the deadlock root —
+    // coaching_reveal_path is the deadlock-rooted arm.
     const revealItem = { label: 'Reveal in Files', icon: IconFolder, onClick: () => {
       invoke('coaching_reveal_path', { path: diskPath }).catch(() => {});
     } };
     // The item itself on the clipboard (like Ctrl+C in Explorer); navigator.clipboard only does text.
     const copyFileItem = { label: node.isFolder ? 'Copy Folder' : 'Copy File', icon: IconCopy, onClick: () => {
-      invoke('copy_to_clipboard', { path: diskPath, root: 'gamewiki' }).catch(() => {});
+      invoke('copy_to_clipboard', { path: diskPath, root: 'deadlock' }).catch(() => {});
     } };
     // writeText rejects (async, so try/catch can't see it) when the window isn't focused.
     const copyItem = { label: 'Copy Path', icon: IconLink, onClick: () => { navigator.clipboard.writeText(node.vaultPath).catch(() => {}); } };
@@ -280,11 +281,11 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
     const oldFolder = `${SCRIM_BASE}/${oldBase}`;
     const newFolder = `${SCRIM_BASE}/${newBase}`;
     try {
-      await api.renamePath(oldFolder, newFolder, 'gamewiki');
+      await api.renamePath(oldFolder, newFolder, 'deadlock');
       await tree.refresh(SCRIM_BASE);
       setModal(null);
       if (currentPath === oldFolder || currentPath.startsWith(oldFolder + '/')) {
-        nav('/game-wiki/' + encodePagePath(newFolder + currentPath.slice(oldFolder.length)));
+        nav('/deadlock/' + encodePagePath(newFolder + currentPath.slice(oldFolder.length)));
       }
     } catch (e) {
       setModal({ kind: 'rename', base: oldBase, err: String(e?.message || e) });
@@ -311,11 +312,11 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
     const oldFolder = matchFolder(scrim, match);
     const newFolder = matchFolder(scrim, n);
     try {
-      await api.renamePath(oldFolder, newFolder, 'gamewiki');
+      await api.renamePath(oldFolder, newFolder, 'deadlock');
       await tree.refresh(`${SCRIM_BASE}/${scrim}`);
       setModal(null);
       if (currentPath === oldFolder || currentPath.startsWith(oldFolder + '/')) {
-        nav('/game-wiki/' + encodePagePath(newFolder + currentPath.slice(oldFolder.length)));
+        nav('/deadlock/' + encodePagePath(newFolder + currentPath.slice(oldFolder.length)));
       }
     } catch (e) {
       setModal({ kind: 'renumber', scrim, match, err: String(e?.message || e) });
@@ -325,10 +326,10 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
   const doDeleteMatch = async (scrim, match) => {
     const folder = matchFolder(scrim, match);
     try {
-      await api.deleteFolder(folder, 'gamewiki');
+      await api.deleteFolder(folder, 'deadlock');
       await tree.refresh(`${SCRIM_BASE}/${scrim}`);
       setModal(null);
-      if (currentPath === folder || currentPath.startsWith(folder + '/')) nav('/game-wiki');
+      if (currentPath === folder || currentPath.startsWith(folder + '/')) nav('/deadlock');
     } catch (e) {
       setModal({ kind: 'delete-match', scrim, match, err: String(e?.message || e) });
     }
@@ -342,11 +343,11 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
     const name = newVodName(label);
     const path = `${VOD_BASE}/${name}`;
     try {
-      await api.createFolder(VOD_BASE, 'gamewiki').catch(() => {});
-      await api.savePage(vodFile(path), newVodScaffold(name), null, 'gamewiki');
+      await api.createFolder(VOD_BASE, 'deadlock').catch(() => {});
+      await api.savePage(vodFile(path), newVodScaffold(name), null, 'deadlock');
       await tree.refresh(VOD_BASE);
       setModal(null);
-      nav('/game-wiki/' + encodePagePath(path));
+      nav('/deadlock/' + encodePagePath(path));
     } catch (e) {
       setModal({ kind: 'new-vod', err: String(e?.message || e) });
     }
@@ -358,10 +359,10 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
     const from = `${VOD_BASE}/${oldName}`;
     const to = `${VOD_BASE}/${next}`;
     try {
-      await api.renamePath(vodFile(from), vodFile(to), 'gamewiki');
+      await api.renamePath(vodFile(from), vodFile(to), 'deadlock');
       await tree.refresh(VOD_BASE);
       setModal(null);
-      if (currentPath === from) nav('/game-wiki/' + encodePagePath(to));
+      if (currentPath === from) nav('/deadlock/' + encodePagePath(to));
     } catch (e) {
       setModal({ kind: 'rename-vod', vod: oldName, err: String(e?.message || e) });
     }
@@ -370,10 +371,10 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
   const doDeleteVod = async (name) => {
     const path = `${VOD_BASE}/${name}`;
     try {
-      await api.deleteFile(vodFile(path), 'gamewiki');
+      await api.deleteFile(vodFile(path), 'deadlock');
       await tree.refresh(VOD_BASE);
       setModal(null);
-      if (currentPath === path) nav('/game-wiki');
+      if (currentPath === path) nav('/deadlock');
     } catch (e) {
       setModal({ kind: 'delete-vod', vod: name, err: String(e?.message || e) });
     }
@@ -382,10 +383,10 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
   const doDelete = async (base) => {
     const folder = `${SCRIM_BASE}/${base}`;
     try {
-      await api.deleteFolder(folder, 'gamewiki');
+      await api.deleteFolder(folder, 'deadlock');
       await tree.refresh(SCRIM_BASE);
       setModal(null);
-      if (currentPath === folder || currentPath.startsWith(folder + '/')) nav('/game-wiki');
+      if (currentPath === folder || currentPath.startsWith(folder + '/')) nav('/deadlock');
     } catch (e) {
       setModal({ kind: 'delete', base, err: String(e?.message || e) });
     }
@@ -402,9 +403,15 @@ export default function GameWikiTree({ route, accent, tree, nav = navigate, onNe
             flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden',
             display: 'flex', flexDirection: 'column', gap: GAP, padding: '0 8px',
           }}>
-            {tree.games == null && <div style={MUTED}>loading</div>}
-            {tree.games != null && tree.games.length === 0 && <div style={MUTED}>no games</div>}
-            {(tree.games || []).map((g) => {
+            {tree.roots == null && <div style={MUTED}>loading</div>}
+            {tree.roots != null && tree.roots.length === 0 && <div style={MUTED}>empty</div>}
+            {/* Root-level loose pages render through the shared TreeNode leaf row;
+                only folders take the header + Collapsible path. */}
+            {(tree.roots || []).map((g) => {
+              if (!g.isFolder) return (
+                <TreeNode key={g.vaultPath} node={g} tree={tree} accent={accent}
+                  currentPath={currentPath} openMenu={openMenu} nav={nav} onGear={setCoach} icons={icons}/>
+              );
               const open = tree.isOpen(g.vaultPath);
               const entry = tree.childrenOf(g.vaultPath);
               const mounted = open || !!entry;

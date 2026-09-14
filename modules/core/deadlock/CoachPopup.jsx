@@ -15,7 +15,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
-import { Channel } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { api, invoke } from '@host/api.js';
 import AppWindow from '@host/components/ui/AppWindow.jsx';
@@ -25,8 +24,6 @@ import { TextInput } from '@host/components/ui/Input.jsx';
 import { Slider } from '@host/components/ui/Slider.jsx';
 import useBroadcastState from '@modules/studio/broadcast/useBroadcastState.js';
 import { SCRIM_BASE } from './scrimSchema.js';
-import { mergeTranscripts } from './diarize.js';
-import { coachTranscribe } from './coachTranscribe.js';
 import { startCoachingRecord } from './coachRecord.js';
 
 const TRANSCRIPT = '00-transcript.md';
@@ -37,14 +34,6 @@ const TRANSCRIPT = '00-transcript.md';
 // Fetched on demand (574 MB, SHA-verified) the first time this runs.
 const COACH_MODEL = 'large-v3-turbo-q5_0';
 
-// Plain-words stages for the write-it-out pass, in the order they run.
-const STT_STAGES = [
-  'Pulling the two sounds apart',
-  'Getting the listener ready',
-  'Listening to you',
-  'Listening to everyone else',
-  'Saving',
-];
 
 // Which sound track holds what, numbered the way OBS labels them (from 1). The recording keeps
 // the mic and Discord on separate tracks, so who spoke is known by construction — no voice
@@ -60,7 +49,6 @@ const COMMS_TRACK = 3;  // Discord — everyone else
 
 // Everyone who is not the coach. METHOD-A §8a merges them into one Student anyway, so the
 // Discord pass needs no per-person labels — one cluster id, one name.
-const STUDENT = 'Student';
 
 // `coach.py` binds phase 2 with "the coach is the speaker labelled <coach_label>, every other
 // label is the Student", so this exact string has to appear in the transcript. It is read from
@@ -78,25 +66,6 @@ async function coachLabel() {
   }
 }
 
-// One streaming `stt_*` command as a promise. Every one of them ends in a `done` event,
-// and an `error` always arrives just before it — so the error is remembered and thrown
-// once `done` lands, rather than racing the terminator.
-function runStt(cmd, args, onEvent) {
-  return new Promise((resolve, reject) => {
-    let failed = null;
-    const ch = new Channel();
-    ch.onmessage = (ev) => {
-      if (ev?.kind === 'error') { failed = `${ev.code}: ${ev.message}`; return; }
-      if (ev?.kind === 'done') {
-        if (failed || !ev.ok) reject(new Error(failed || 'the voice engine stopped'));
-        else resolve();
-        return;
-      }
-      onEvent?.(ev);
-    };
-    invoke(cmd, { ...args, onEvent: ch }).catch(reject);
-  });
-}
 
 // Plain-words stage names. coach.py's own labels (Normalizer / Author / Auditor)
 // are METHOD-A vocabulary and mean nothing outside the method document.
@@ -189,6 +158,46 @@ function Details({ lines }) {
   );
 }
 
+// ── The write-it-out job ────────────────────────────────────────────────────
+// The job itself is in Rust — `comms_job.rs`, started with `kind: "writeout"`.
+// It used to run here as a promise chain in the popup, which lost everything the
+// moment the window unmounted; then it lost everything again on a page reload,
+// because a promise chain is still just JS in a webview. comms_job was built for
+// exactly this failure ("a webview reload destroyed the orchestrator mid-flight
+// while the STT engine kept transcribing unconsumed") and had no caller left after
+// the scrim surface was deleted, so the write-out drives THAT rather than a second
+// copy of it. Rust extracts both tracks, transcribes them, and writes
+// `00-transcript.md` itself — nothing here has to be alive for the run to land.
+//
+// Which sound track holds what, numbered the way OBS labels them (from 1). The recording keeps
+// the mic and Discord on separate tracks, so who spoke is known by construction — no voice
+// matching, no guessing. `comms_job_start` counts from 0, hence the -1 at the call.
+//
+// ponytail: still hard-coded, now on purpose in the other direction. Nothing inside the file
+// says which track is which (every stream is a nameless "OBS Audio Handler"). Job 4's Record
+// button pins exactly this layout on every press (coachRecord.js), so for anything the app
+// records these are true by construction — and they were already the layout of every recording
+// made in OBS before it, so both sources agree. A picker would be a picker over one answer.
+
+// Start the Rust job. `window_` is the trim; untouched handles mean the whole file,
+// and the whole file must keep the pre-trim cache key — otherwise every existing
+// extracted wav is orphaned on first run.
+async function startWriteOut(folder, picked, window_, matchN) {
+  return invoke('comms_job_start', {
+    video: picked,
+    micTrack: MIC_TRACK - 1,
+    commsTrack: COMMS_TRACK - 1,
+    model: COACH_MODEL,
+    maxSpeakers: 1,          // unused: the write-out never diarizes
+    scrimPath: folder,
+    kind: 'writeout',
+    matchN: matchN ?? null,
+    startSecs: window_?.start > 0 ? window_.start : null,
+    endSecs: window_?.end != null && window_.end < window_.duration ? window_.end : null,
+    coachLabel: await coachLabel(),
+  });
+}
+
 export default function CoachPopup({ target, onClose, accent, onFolderChange, onOpenNotes }) {
   const [job, setJob] = useState(null);
   const [transcript, setTranscript] = useState('checking'); // checking | present | missing
@@ -205,9 +214,6 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const [newMatch, setNewMatch] = useState('1');
-  // The write-it-out pass: null when idle, else { stage, pct }. Unlike the coaching run
-  // this lives in the window, so closing it throws the work away (the window says so).
-  const [stt, setStt] = useState(null);
   // The path Stop handed back, so the write-out never asks for a file. Lost on close —
   // the file picker is the fallback, and re-picking is one click.
   const [recorded, setRecorded] = useState(null);
@@ -223,6 +229,14 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
 
   const isMatch = target?.kind === 'match';
   const folder = isMatch ? matchFolder(target.scrim, target.match) : null;
+
+  // The write-it-out job's own snapshot — hydrated on mount and followed on the
+  // global event, the same re-attach the coaching run above uses. The cell is
+  // process-global and may hold a run for a different match, or a comms job that
+  // is not a write-out at all, so both are checked before it is shown here.
+  const [wo, setWo] = useState(null);
+  const mineWo = wo && wo.kind === 'writeout' && wo.scrimPath === folder ? wo : null;
+  const stt = mineWo?.status === 'running' ? mineWo : null;
 
   // Recording truth comes from the broadcast engine, not from here: closing this window
   // must not stop a session. `api` (the vault one) carries no `invoke`, so the hook —
@@ -268,11 +282,22 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
     if (!isMatch) return undefined;
     let cancelled = false;
     setTranscript('checking');
-    api.getRawFile(`${folder}/${TRANSCRIPT}`, 'gamewiki')
+    api.getRawFile(`${folder}/${TRANSCRIPT}`, 'deadlock')
       .then((c) => { if (!cancelled) setTranscript(c && c.trim() ? 'present' : 'missing'); })
       .catch(() => { if (!cancelled) setTranscript('missing'); });
     return () => { cancelled = true; };
-  }, [isMatch, folder]);
+  }, [isMatch, folder, !!stt]);
+
+  // Re-attach to the write-out on mount, then follow the global event.
+  useEffect(() => {
+    invoke('comms_job_status').then(setWo).catch(() => {});
+    const p = listen('comms-job-progress', (e) => setWo(e.payload || null));
+    return () => { p.then((f) => f()).catch(() => {}); };
+  }, []);
+
+  // It can fail long after this window was closed. When it IS open, put the
+  // message on screen as well — the toast is for the times it is not.
+  useEffect(() => { if (mineWo?.error) setErr(mineWo.error); }, [mineWo?.error]);
 
   const start = useCallback(async (opts = {}) => {
     setErr(null);
@@ -295,7 +320,7 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
     setBusy(true);
     setErr(null);
     try {
-      await api.createFolder(matchFolder(target.scrim, n), 'gamewiki');
+      await api.createFolder(matchFolder(target.scrim, n), 'deadlock');
       await onFolderChange?.();
       onClose();
     } catch (e) {
@@ -311,7 +336,7 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
   const doDelete = useCallback(async () => {
     setErr(null);
     try {
-      await api.deleteFolder(deleteTarget, 'gamewiki');
+      await api.deleteFolder(deleteTarget, 'deadlock');
       setConfirmDelete(false);
       onFolderChange?.();
       onClose();
@@ -352,31 +377,6 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
     }
   }, []);
 
-  // Listen to one sound track of the recording. `coaching_extract_audio` shells ffmpeg to pull
-  // that track out on its own, and the engine hears nothing but it — so every word it returns
-  // belongs to whoever that track records. The WAV is cached by file+track, so a second run
-  // over the same recording skips the pulling-apart.
-  //
-  // `clip` narrows the pull to one window of the recording. ffmpeg hands back a wav that
-  // starts at zero, so every stamp is shifted by the window's start — the transcript then
-  // points at the ORIGINAL recording, which is the file anyone scrubs to check a line.
-  const trackSegments = useCallback(async (video, obsTrack, stage, clip) => {
-    const wav = await invoke('coaching_extract_audio', {
-      video,
-      track: obsTrack - 1,
-      startSecs: clip?.start ?? null,
-      endSecs: clip?.end ?? null,
-    });
-    const offsetMs = (clip?.start || 0) * 1000;
-    const segments = [];
-    await runStt('stt_transcribe_file', { path: wav }, (ev) => {
-      if (ev.kind === 'progress') setStt({ stage, pct: ev.pct });
-      else if (ev.kind === 'segment' && ev.text) {
-        segments.push({ t0Ms: ev.t0Ms + offsetMs, t1Ms: ev.t1Ms + offsetMs, text: ev.text });
-      }
-    });
-    return segments;
-  }, []);
 
   // Step one of two: choose the recording and MEASURE it. The duration comes from the file
   // itself (`video_probe`) rather than being typed, so the handles below can only ever land
@@ -397,61 +397,18 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
     }
   }, []);
 
-  // Pick a recording and turn it into `00-transcript.md`. Two listening passes — your own
-  // track, then everyone else's — stitched back together in time order, written straight into
-  // the match folder, which flips this window to Ready.
-  //
-  // The `stt_*` commands are invoked directly rather than through `useStt`: SttProvider
-  // mounts only in the overlay window, and this popup is in the main one.
-  // `known` is the path a just-stopped recording handed back — given one, nothing is asked for.
-  const transcribeVideo = useCallback(async (picked, window) => {
+  // Hand the chosen recording to the module-scope job and get out of the way. The
+  // popup no longer owns the work — it only closes its own picker.
+  const transcribeVideo = useCallback(async (picked, window_) => {
     if (!picked) return;
-    // Untouched handles mean the whole file, and the whole file must keep the pre-trim
-    // cache key — otherwise every existing extracted wav is orphaned on first run.
-    const win = {
-      start: window?.start > 0 ? window.start : null,
-      end: window?.end != null && window.end < window.duration ? window.end : null,
-    };
     setErr(null);
+    setPending(null);
     try {
-      setStt({ stage: 0, pct: null });
-      const label = await coachLabel();
-
-      setStt({ stage: 1, pct: null });
-      await runStt('stt_load_model', { name: COACH_MODEL },
-        (ev) => { if (ev.kind === 'progress') setStt({ stage: 1, pct: ev.pct }); });
-
-      setStt({ stage: 2, pct: null });
-      const micSegments = await trackSegments(picked, MIC_TRACK, 2, win);
-      setStt({ stage: 3, pct: null });
-      const commsSegments = await trackSegments(picked, COMMS_TRACK, 3, win);
-
-      // A track that exists but holds the wrong thing yields silence, and silence would save a
-      // half-empty transcript that reads as a real one. Stop and say which track was empty.
-      if (!micSegments.length) {
-        throw new Error(`Nothing was said on track ${MIC_TRACK} — is that the one your voice goes to?`);
-      }
-      if (!commsSegments.length) {
-        throw new Error(`Nothing was said on track ${COMMS_TRACK} — is that the one everyone else goes to?`);
-      }
-
-      setStt({ stage: 4, pct: null });
-      const body = coachTranscribe(mergeTranscripts({
-        micSegments,
-        // One cluster for everybody else — the pipeline merges them anyway.
-        commsSegments: commsSegments.map((s) => ({ ...s, cluster: 0 })),
-        micSpeaker: label,
-        nameMap: { 0: STUDENT },
-      }));
-      await api.savePage(`${folder}/${TRANSCRIPT}`, body, null, 'gamewiki');
-      setPending(null);
-      setTranscript('present');
+      await startWriteOut(folder, picked, window_, target?.match);
     } catch (e) {
       setErr(String(e?.message || e));
-    } finally {
-      setStt(null);
     }
-  }, [folder, trackSegments]);
+  }, [folder, target]);
 
   const title = isMatch
     ? `Coaching notes — Match ${target.match}`
@@ -553,7 +510,7 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
             glances, and "is it stuck?" is the question it has to answer. Stages that report
             no progress (loading, saving) show the stage alone rather than a made-up 0%. */}
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
-          <div style={{ fontSize: 15 }}>{STT_STAGES[stt.stage]}</div>
+          <div style={{ fontSize: 15 }}>{stt.phase || 'Working'}</div>
           {stt.pct != null && (
             <div style={{
               fontSize: 15, opacity: 0.7,
@@ -566,9 +523,12 @@ export default function CoachPopup({ target, onClose, accent, onFolderChange, on
             style={{ '--accent': accent || 'var(--accent)', width: `${stt.pct == null ? 8 : Math.round(stt.pct)}%` }} />
         </div>
         <Note>
-          An hour of talking takes a good while — leave it be. Keep this window open: close it and
-          it stops and you would have to start again.
+          An hour of talking takes a good while — leave it be.
+          <br />You can close this window — it keeps going, and it is listed under Processes.
         </Note>
+        <Row>
+          <DangerOutlinedBtn onClick={() => invoke('comms_job_cancel').catch(() => {})}>Stop</DangerOutlinedBtn>
+        </Row>
       </>
     );
   } else if (myRecording) {

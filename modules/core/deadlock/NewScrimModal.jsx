@@ -1,6 +1,6 @@
 // New Scrim modal — the relocated home of the old ScrimListLanding Team 1 / Team 2
 // form, now triggered from a right-click "New Scrim" on the Scrim folder in
-// GameWikiTree. Dumb collector: hands { team1, team2 } to onSubmit; the parent owns
+// DeadlockTree. Dumb collector: hands { team1, team2 } to onSubmit; the parent owns
 // the create/uniq/navigate/refresh (it has the existing-scrim list + the tree hook).
 // Mirrors NameInputModal's shell (backdrop click / Esc = cancel).
 

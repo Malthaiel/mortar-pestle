@@ -50,7 +50,7 @@ function useTransparentRoot() {
 export default function OverlayHostView() {
   useTransparentRoot();
   // ONE context-menu engine for the whole host (was: none, so every tree right-click
-  // AND the GameWikiRail Sort dropdown hit useContextMenu's EMPTY fallback and silently
+  // AND the DeadlockRail Sort dropdown hit useContextMenu's EMPTY fallback and silently
   // no-op'd; the browser panel carried a private provider of its own). It wraps OUTSIDE
   // the transformed sheet below — the menu is position:fixed, which a CSS transform
   // would re-anchor. Chrome callbacks are inert here: the host has no command palette

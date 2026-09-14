@@ -5,7 +5,7 @@ export const ROUTES = [
   { path: '/planner',                     page: 'planner',        label: 'Planner',         accentKey: 'pulse' },
   { path: '/vault',                       page: 'vault',          label: 'Vault View',      accentKey: 'knowledge' },
   { path: '/graph',                       page: 'graph',          label: 'Graph',           accentKey: 'knowledge' },
-  { path: '/game-wiki',                   page: 'game-wiki',      label: 'Game Wiki',       accentKey: 'knowledge' },
+  { path: '/deadlock',                    page: 'deadlock',       label: 'Deadlock',        accentKey: 'knowledge' },
   { path: '/tools',                       page: 'tools',          label: 'Tools',           accentKey: 'tools' },
   { path: '/docs',                        page: 'docs',           label: 'Docs',            accentKey: 'knowledge' },
 ];
@@ -16,8 +16,8 @@ const PARAM_ROUTES = [
   { pattern: /^\/vault\/(folder)\/([^/]+)(?:\/(.*))?$/,                        page: 'vault', captures: ['type', 'sub', 'folderPath'] },
   { pattern: /^(?:\/vault)?\/(knowledge|infrastructure)\/([^/]+)(?:\/(.*))?$/, page: 'vault', captures: ['type', 'sub', 'folderPath'] },
   { pattern: /^(?:\/vault)?\/(knowledge|infrastructure)$/,                     page: 'vault', captures: ['type'] },
-  // Game Wiki — read-only multi-game reference reader (separate GameWiki vault).
-  { pattern: /^\/game-wiki\/(.+)$/,                page: 'game-wiki',      captures: ['rest'] },
+  // Deadlock — read-only reference reader (separate Deadlock vault).
+  { pattern: /^\/deadlock\/(.+)$/,                 page: 'deadlock',       captures: ['rest'] },
   { pattern: /^\/tools\/([^/]+)(?:\/(.*))?$/,          page: 'tools',          captures: ['sub', 'rest'] },
   { pattern: /^\/planner\/([^/]+)$/,               page: 'planner',        captures: ['sub'] },
   { pattern: /^\/docs\/([^/]+)(?:\/(.+))?$/,       page: 'docs',           captures: ['sub', 'rest'] },

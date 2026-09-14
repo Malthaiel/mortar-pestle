@@ -96,7 +96,7 @@ pub fn infra_root() -> String {
 static APP_VAULT: OnceLock<RwLock<Option<String>>> = OnceLock::new();
 static PULSE_VAULT: OnceLock<RwLock<Option<String>>> = OnceLock::new();
 static LIBRARY_VAULT: OnceLock<RwLock<Option<String>>> = OnceLock::new();
-static GAMEWIKI_VAULT: OnceLock<RwLock<Option<String>>> = OnceLock::new();
+static DEADLOCK_VAULT: OnceLock<RwLock<Option<String>>> = OnceLock::new();
 
 fn app_cell() -> &'static RwLock<Option<String>> {
     APP_VAULT.get_or_init(|| RwLock::new(None))
@@ -107,8 +107,8 @@ fn pulse_cell() -> &'static RwLock<Option<String>> {
 fn library_cell() -> &'static RwLock<Option<String>> {
     LIBRARY_VAULT.get_or_init(|| RwLock::new(None))
 }
-fn gamewiki_cell() -> &'static RwLock<Option<String>> {
-    GAMEWIKI_VAULT.get_or_init(|| RwLock::new(None))
+fn deadlock_cell() -> &'static RwLock<Option<String>> {
+    DEADLOCK_VAULT.get_or_init(|| RwLock::new(None))
 }
 
 /// Registered App Vault path, or `None` before it's registered.
@@ -144,9 +144,9 @@ pub fn pulse_vault_path() -> Option<String> {
 pub fn library_vault_path() -> Option<String> {
     library_cell().read().ok().and_then(|g| g.clone())
 }
-/// Registered GameWiki Vault path, or `None` before `init_gamewiki_vault` runs.
-pub fn gamewiki_vault_path() -> Option<String> {
-    gamewiki_cell().read().ok().and_then(|g| g.clone())
+/// Registered Deadlock Vault path, or `None` before `init_deadlock_vault` runs.
+pub fn deadlock_vault_path() -> Option<String> {
+    deadlock_cell().read().ok().and_then(|g| g.clone())
 }
 
 fn set_role_global(role: &str, path: &str) {
@@ -154,7 +154,7 @@ fn set_role_global(role: &str, path: &str) {
         "app" => app_cell(),
         "pulse" => pulse_cell(),
         "library" => library_cell(),
-        "gamewiki" => gamewiki_cell(),
+        "deadlock" => deadlock_cell(),
         _ => return,
     };
     if let Ok(mut g) = cell.write() {
@@ -244,7 +244,7 @@ pub struct VaultEntry {
     pub manifest_enabled: bool,
     /// Mount role: `content` (switchable user vault), `app` (Docs+Releases
     /// singleton), `pulse` (planner singleton), `library` (writable media
-    /// catalog), or `gamewiki` (read-only multi-game reference). Defaults to
+    /// catalog), or `deadlock` (read-only multi-game reference). Defaults to
     /// `content` for back-compat with v1 registries (no `role` field).
     #[serde(default = "default_role")]
     pub role: String,
@@ -378,8 +378,8 @@ pub fn init_active_vault(app: &AppHandle) {
     // Attach (creating on first boot) the writable Library vault.
     init_library_vault(app, &mut reg, &path);
 
-    // Attach (creating on first boot) the read-only GameWiki reference vault.
-    init_gamewiki_vault(app, &mut reg, &path);
+    // Attach (creating on first boot) the read-only Deadlock reference vault.
+    init_deadlock_vault(app, &mut reg, &path);
 
     match resolve_active(&reg) {
         Some(entry) => {
@@ -499,27 +499,27 @@ fn init_library_vault(app: &AppHandle, reg: &mut Registry, reg_path: &Path) {
     }
 }
 
-/// Attach the read-only GameWiki reference vault, CREATING it on first boot.
+/// Attach the read-only Deadlock reference vault, CREATING it on first boot.
 /// Mirrors `init_library_vault` (app-owned, scaffolded under the XDG *data* dir,
 /// refuses to clobber a non-empty non-vault dir) with two differences: manifests
 /// are ENABLED (the game wikis are densely wikilinked, so the graph/wikilink
 /// resolver needs an index), and the manifest is regenerated on EVERY boot — so
 /// content moved into the vault out-of-band (the Deadlock migration, `/patch-notes`,
 /// direct Obsidian edits) re-indexes on the next restart.
-fn init_gamewiki_vault(app: &AppHandle, reg: &mut Registry, reg_path: &Path) {
+fn init_deadlock_vault(app: &AppHandle, reg: &mut Registry, reg_path: &Path) {
     // Already registered on a prior boot — wire the live global + re-index.
-    if let Some(e) = reg.vaults.iter().find(|v| v.role == "gamewiki") {
-        set_role_global("gamewiki", &e.path);
+    if let Some(e) = reg.vaults.iter().find(|v| v.role == "deadlock") {
+        set_role_global("deadlock", &e.path);
         regen_manifest(e);
         return;
     }
-    // Resolve the dir: env override (tests) → <app_data_dir>/GameWiki.
-    let dir = match std::env::var("AGENTIC_GAMEWIKI_VAULT_ROOT") {
+    // Resolve the dir: env override (tests) → <app_data_dir>/Deadlock.
+    let dir = match std::env::var("AGENTIC_DEADLOCK_VAULT_ROOT") {
         Ok(v) => PathBuf::from(v),
         Err(_) => match app.path().app_data_dir() {
-            Ok(d) => d.join("GameWiki"),
+            Ok(d) => d.join("Deadlock"),
             Err(e) => {
-                eprintln!("gamewiki init: app_data_dir unavailable: {e}");
+                eprintln!("deadlock init: app_data_dir unavailable: {e}");
                 return;
             }
         },
@@ -531,13 +531,13 @@ fn init_gamewiki_vault(app: &AppHandle, reg: &mut Registry, reg_path: &Path) {
     if is_valid_vault(&dir_str).is_err() {
         if let Ok(mut entries) = fs::read_dir(&dir) {
             if entries.next().is_some() {
-                eprintln!("gamewiki init: {dir_str} is non-empty and not a vault — skipping");
+                eprintln!("deadlock init: {dir_str} is non-empty and not a vault — skipping");
                 return;
             }
         }
         for f in ["app.json", "appearance.json"] {
             if let Err(e) = atomic_write(&dir.join(".obsidian").join(f), b"{}\n") {
-                eprintln!("gamewiki init: scaffold {f} failed: {e:?}");
+                eprintln!("deadlock init: scaffold {f} failed: {e:?}");
                 return;
             }
         }
@@ -548,23 +548,23 @@ fn init_gamewiki_vault(app: &AppHandle, reg: &mut Registry, reg_path: &Path) {
     let canon = match is_valid_vault(&dir_str) {
         Ok(c) => c.to_string_lossy().into_owned(),
         Err(e) => {
-            eprintln!("gamewiki init: still invalid after scaffold: {e:?}");
+            eprintln!("deadlock init: still invalid after scaffold: {e:?}");
             return;
         }
     };
     let entry = VaultEntry {
         id: Uuid::new_v4().to_string(),
-        name: "GameWiki".into(),
+        name: "Deadlock".into(),
         path: canon.clone(),
         manifest_enabled: true, // densely wikilinked → manifest/graph ON
-        role: "gamewiki".into(),
+        role: "deadlock".into(),
         mapping: None,
     };
     regen_manifest(&entry);
-    set_role_global("gamewiki", &canon);
+    set_role_global("deadlock", &canon);
     reg.vaults.push(entry);
     if let Err(e) = persist_registry(reg_path, reg) {
-        eprintln!("gamewiki init: persist failed: {e:?}");
+        eprintln!("deadlock init: persist failed: {e:?}");
     }
 }
 
