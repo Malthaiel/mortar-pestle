@@ -183,13 +183,27 @@ export default function Dock({
   // so it applies before DraggableSidebarList's synchronous rect snapshots —
   // collapsing the hover-expand width so measurements use the rest size. Reuses
   // the existing .dock-root[data-dragging] CSS hook.
-  const setDragActive = useCallback((active) => {
+  const setDragActive = useCallback((active, pt) => {
     const root = dockRootRef.current;
     if (!root) return;
     if (active) root.dataset.dragging = 'true';
     else delete root.dataset.dragging;
     // Drop sticky hover so an icon can't stay expanded across a drag.
     if (hovered.current) { delete hovered.current.dataset.dockHover; hovered.current = null; }
+    // …and on RELEASE, resume from where the pointer actually is. The cursor is still
+    // sitting on an icon, but `hovered` was just nulled, so the user's next movement
+    // re-announces that icon: the hover-expand starts (36px → 93px), and because the bar
+    // is centre-justified the whole run slides 28.5px left — then straight back as the
+    // cursor clears the dock. Out and back, which reads as everything twitching after a
+    // drop (reported 2026-09-14). Park the icon under the pointer as already-hovered
+    // WITHOUT the expand attribute: onDockOver's identity guard skips it, so leaving is a
+    // plain collapse of nothing, while a handoff to a DIFFERENT icon still expands.
+    // elementFromPoint, not the dragged element — measure where the pointer is.
+    if (!active && pt) {
+      const hit = document.elementFromPoint(pt.x, pt.y);
+      const btn = hit?.closest?.('.candy-btn[data-shape="icon"]');
+      hovered.current = (btn && root.contains(btn)) ? btn : null;
+    }
   }, []);
 
   // ── Right-click menus: insertion + order mutations ────────────────────────

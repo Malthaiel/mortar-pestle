@@ -577,7 +577,9 @@ export default function DraggableSidebarList({
     itemRefs.current.forEach(el => { if (el) el.style.pointerEvents = ''; });
     dRef.current = null;
     setDragState(null);
-    onDragActiveChange?.(false);
+    // The release point rides along: a surface whose hover state was suspended for the
+    // drag needs to know where the pointer ACTUALLY is to resume, not assume "nowhere".
+    onDragActiveChange?.(false, mouseRef.current);
   }, [clearHold, clearDropAccent, onDragActiveChange]);
 
   useEffect(() => cleanup, [cleanup]);
@@ -797,7 +799,7 @@ export default function DraggableSidebarList({
             onReorder(from, to);
           }
         });
-        onDragActiveChange?.(false);
+        onDragActiveChange?.(false, mouseRef.current);
         accentTileUnderCursor();
       }, glideMs);
     }
@@ -881,14 +883,22 @@ export default function DraggableSidebarList({
     // — the same reason the clone mirrors the live box rather than freezing it.
     // Pure re-measurement: nothing here is computed from the old values.
     if (isHorizontal) {
-      let stable = 0, lastW = -1;
+      let stable = 0, lastW = -1, waited = 0;
       const settle = () => {
         const live = itemRefs.current[idx];
         if (!live || dRef.current?.idx !== idx) return;
         const w = live.getBoundingClientRect().width;
-        if (Math.abs(w - lastW) < 0.5) stable++; else stable = 0;
+        // EXACT equality, not a <0.5px tolerance. The collapse runs on
+        // cubic-bezier(.22,1,.36,1), which decelerates hard: its final frames move
+        // a tenth of a pixel at a time, so "barely changing" reads as "stopped"
+        // while the button is still 0.6px wide of rest. gapSize is built from this
+        // width, so every slide offset came out 46.6 instead of the 46.0 slot pitch
+        // — and at commit the row snapped back that 0.6px, a beat after the drop.
+        // (Measured 2026-09-14: items 4 and 5 jumped +46.6 at release.) A frame cap
+        // keeps a jittering sub-pixel layout from spinning here forever.
+        if (w === lastW) stable++; else stable = 0;
         lastW = w;
-        if (stable < 3) { requestAnimationFrame(settle); return; }
+        if (stable < 3 && ++waited < 60) { requestAnimationFrame(settle); return; }
         const rest = live.getBoundingClientRect();
         // One measurement, both consumers: calcDropIndex reads dRef.current.slots,
         // the clone's landing target reads dragState.slots. Refreshing only the
