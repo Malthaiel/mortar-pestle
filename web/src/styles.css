@@ -2744,10 +2744,18 @@ body[data-anim-clock-ambient="off"] .planner-seg rect { transition: none; }
  *
  * .aos-chat-window stays as the hook: useTactileSound excludes it from the
  * click sound. */
+/* Agent chat window chrome bands. The shared .ov-studio-head / bottom-bar fill
+ * is --surface plus a 5% --text tint; in the chat window that tint reads a step
+ * ABOVE the left sidebar (measured 31,30,27 vs the sidebar's 21,20,17,
+ * photographed 2026-09-14). User-directed: the bands are the sidebar colour
+ * exactly, so the --bg transcript well between them reads as the page floor.
+ * Scoped to .aos-chat-window — the overlay Studio/Settings panels keep the tint. */
+.aos-chat-window > .ov-studio-head { background: var(--surface); }
+
 .aos-chat-window > [data-aos-chat-input] {
   margin: 0 calc(-1 * var(--ov-gap)) calc(-1 * var(--ov-gap));
   padding: 10px var(--ov-gap);
-  background: color-mix(in oklch, var(--text) 5%, transparent);
+  background: var(--surface);   /* sidebar colour, per the band note above */
   border-top: 2px solid var(--border-2);     /* same weight + colour as the card frame */
   border-radius: 0 0 calc(var(--radius-md) - 2px) calc(var(--radius-md) - 2px);
 }

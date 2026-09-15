@@ -13,6 +13,8 @@ import { createPortal } from 'react-dom';
 import { useDragChat, DRAG_CHAT_WIDTH, DRAG_CHAT_HEIGHT } from '../agent-chat/useDragChat.js';
 
 import { IconX } from '../icons.jsx';
+import { ChipIconBtn } from '../planner/ItemChips.jsx';
+import { CHAT_BTN_SIZE } from '../agent-chat/ChatInput.jsx';
 export default function AgentChatWindow({
   settings,
   setSetting,
@@ -107,24 +109,17 @@ function AgentChatHeader({ avatar, title, subtitle, onClose, closeTitle, dragHan
       </div>
       {/* .candy-center-row so the close button gets the shared candy lift: the
           rule is `> .candy-btn`, and a plain wrapper div made the X read
-          depth/2 low against the band (photographed 2026-09-13). */}
+          depth/2 low against the band (photographed 2026-09-13). The lift is
+          depth-derived, so it stays centred at any size.
+
+          Close IS ChipIconBtn at CHAT_BTN_SIZE — the same component and the same
+          size token as the send button below it (user-directed 2026-09-14),
+          replacing a hand-rolled copy that duplicated its every attribute. */}
       <div className="candy-center-row" style={{ gap: 6 }}>
         {controls}
-        <button
-          type="button"
-          onClick={onClose}
-          title={closeTitle}
-          aria-label={closeTitle}
-          data-own-press
-          className="candy-btn"
-          data-shape="icon"
-          onMouseDown={(e) => e.stopPropagation()}
-          style={{ width: 24, height: 24, '--corner-max': '12px', flexShrink: 0 }}
-        >
-          <span className="candy-face" style={{ padding: 0 }}>
-            <IconX size={13} />
-          </span>
-        </button>
+        <ChipIconBtn title={closeTitle} size={CHAT_BTN_SIZE} onClick={onClose}>
+          <IconX size={13} />
+        </ChipIconBtn>
       </div>
     </div>
   );

@@ -42,7 +42,18 @@ export default function MessageList({ messages, streaming, accent, error, emptyN
       style={{
         flex: 1, minHeight: 0,
         overflowY: 'auto',
-        padding: '6px 8px 4px',   // user-directed 2026-09-13: wider text rows, first message higher
+        // user-directed 2026-09-14: the transcript floor is the page floor
+        // (--bg, what the library/movie pages sit on) so it reads darker than
+        // the header + message box, which stay --surface like the left sidebar.
+        // user-directed 2026-09-14: the transcript floor is the page floor
+        // (--bg, what the library/movie pages sit on), darker than the two
+        // chrome bands, which are the sidebar's --surface. Full-bleed via the
+        // same negative --ov-gap margin the bands use, so no --surface strips
+        // survive down its left/right edges; the bands' own 2px rules are the
+        // top/bottom seams, so the well adds none of its own.
+        background: 'var(--bg)',
+        margin: '0 calc(-1 * var(--ov-gap))',
+        padding: '6px calc(var(--ov-gap) + 8px) 4px',   // 8px inset preserved (user-directed 2026-09-13)
         display: 'flex', flexDirection: 'column', gap: 12,
       }}
     >
