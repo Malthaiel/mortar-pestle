@@ -5,11 +5,13 @@
 // Two clusters ride the strip (Titlebar Overhaul):
 //   left  — the brand button (logo + wordmark + version, jumps to Releases),
 //           then ONE fused .candy-split shell carrying Settings / Recycling bin
-//           / Processes / Downloads, all relocated out of the Dock so they no
-//           longer hover-expand into labelled pills; `title` carries the label
-//           instead.
-//   right — Notifications, the account button (avatar + display name in one
-//           candy chip), then the three window controls.
+//           / Processes / Downloads / Notifications, all relocated out of the
+//           Dock so they no longer hover-expand into labelled pills; `title`
+//           carries the label instead.
+//   right — a fused [Command palette | Agents] run, then a three-part run
+//           pairing the account button (avatar + display name in one candy
+//           chip) with Feedback and Help, then the three window controls. All
+//           four launchers left the Dock 2026-09-15.
 // Everything BETWEEN the clusters is bare strip carrying
 // `data-tauri-drag-region`, so Tauri owns dragging and double-click-to-maximize
 // with no pointer handlers here. Only the element with the attribute drags, so
@@ -26,7 +28,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { invoke } from '@tauri-apps/api/core';
-import { IconMinus, IconSquare, IconRestore, IconX, IconSettings, IconTrash, IconChart, IconDownload } from './icons.jsx';
+import {
+  IconMinus, IconSquare, IconRestore, IconX, IconSettings, IconTrash, IconChart,
+  IconDownload, IconCommand, IconHelp, IconMessageSquare,
+} from './icons.jsx';
 import { CircleChip } from './ui/Button.jsx';
 import { candyCenterOffset } from '../util/candy.js';
 import { Popover, useAnchoredRect } from './ui';
@@ -34,7 +39,8 @@ import NotificationBell from '../notifications/NotificationBell.jsx';
 import { useUpdateStatus } from '../hooks/useUpdateStatus.js';
 import { useProcesses } from '../processes/ProcessesProvider.jsx';
 import { useAllDownloads } from '../downloads/DownloadsProvider.jsx';
-import { navigate } from '../router.js';
+import { navigate, useHashRoute } from '../router.js';
+import DockAgentsButton from './dock/DockAgentsButton.jsx';
 import { makeFeedbackApi } from '@modules/core/feedback/feedbackApi.js';
 import { useSession } from '@modules/core/feedback/useSession.js';
 import UserAvatar from '@modules/core/feedback/UserAvatar.jsx';
@@ -91,6 +97,8 @@ export default function TitleBar({
   setRecycleBinOpen,
   setProcessesOpen,
   setDownloadsOpen, downloadsOpen,
+  setPaletteOpen, paletteOpen,
+  setHintsOpen, hintsOpen,
 }) {
   const [maximized, setMaximized] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -127,6 +135,12 @@ export default function TitleBar({
 
   const win = getCurrentWindow();
   const name = profile?.display_name || profile?.handle || '';
+
+  // Feedback is a ROUTE, not a panel, so its button reads the live route for
+  // its active state — the same predicate the module's own sidebar slot
+  // registers as `isActive` (modules/core/feedback/index.jsx).
+  const route = useHashRoute();
+  const feedbackActive = route.page === 'tools' && route.sub === 'feedback';
 
   // 'modules/feedback', NOT the slot's own tab id ('feedback-account'):
   // normalizeAddress validates the first segment against the drawer's static
@@ -216,37 +230,87 @@ export default function TitleBar({
               <Badge accent={accent}>{downloadCount > 99 ? '99+' : downloadCount}</Badge>
             )}
           </CircleChip>
+
+          {/* Notifications — the last of the old dock tools to fuse in
+              (2026-09-15). `variant="split"` is the bell's no-wrapper skin: it
+              renders a bare CircleChip as a DIRECT child so the run's rounding
+              rules still match it, and moves its unread pill inside .candy-face
+              in the Badge shape above, which stops AT the seam instead of
+              painting over Downloads. The toast fly-target is the button now. */}
+          <NotificationBell
+            variant="split"
+            label="Notifications"
+            onClick={() => setNotifOpen?.(o => !o)}
+            isActive={!!notifOpen}
+            accent={accent}
+          />
         </div>
       </div>
 
       <div className="titlebar-cluster">
-        <NotificationBell
-          variant="titlebar"
-          label="Notifications"
-          onClick={() => setNotifOpen?.(o => !o)}
-          isActive={!!notifOpen}
-          accent={accent}
-        />
+        {/* The launcher pair — one fused run, both of them jumps to somewhere
+            else in the app. */}
+        <div className="candy-split">
+          <CircleChip title="Command palette" size={BTN}
+            className={`is-hover-accent${paletteOpen ? ' is-active' : ''}`}
+            style={CENTER} onClick={() => setPaletteOpen?.(true)}>
+            <IconCommand size={16}/>
+          </CircleChip>
 
-        {/* Account button — the house candy `chip` shape, avatar left of the
-            display name in one frame. Signed out it reads "Sign in" and skips
-            the menu entirely, opening the modal on the first click. */}
-        <button
-          ref={avatarRef}
-          type="button"
-          data-own-press
-          data-titlebar-avatar
-          className="candy-btn titlebar-account is-hover-accent"
-          data-shape="chip"
-          style={{ height: BTN, ...CENTER }}
-          title={signedIn ? (name || 'Account') : 'Sign in'}
-          onClick={() => (signedIn ? setMenuOpen(o => !o) : setSignInOpen(true))}
-        >
-          <span className="candy-face">
-            <UserAvatar src={profile?.avatar_url} name={name} size={MARK}/>
-            {signedIn ? (name || 'Account') : 'Sign in'}
-          </span>
-        </button>
+          {/* Its own launcher popover comes with it out of the Dock — the
+              titlebar variant wears the CircleChip skin and drops the menu DOWN
+              instead of up off the bar. */}
+          <DockAgentsButton variant="titlebar" label="Agents" accent={accent}/>
+        </div>
+
+        {/* Account + Feedback + Help fuse into ONE three-part run
+            (user-directed 2026-09-15): all three are about the person using the
+            app, so they read as a set. .candy-split mixes shapes happily — its
+            --corner-max override is derived from --cbtn-size, which is exactly
+            why a `chip` and two `circle`s curve by the same amount once fused,
+            and the class was already written for any number of parts. */}
+        <div className="candy-split">
+          {/* Account button — the house candy `chip` shape, avatar left of the
+              display name in one frame. Signed out it reads "Sign in" and skips
+              the menu entirely, opening the modal on the first click. */}
+          <button
+            ref={avatarRef}
+            type="button"
+            data-own-press
+            data-titlebar-avatar
+            className="candy-btn titlebar-account is-hover-accent"
+            data-shape="chip"
+            style={{ height: BTN, ...CENTER }}
+            title={signedIn ? (name || 'Account') : 'Sign in'}
+            onClick={() => (signedIn ? setMenuOpen(o => !o) : setSignInOpen(true))}
+          >
+            <span className="candy-face">
+              <UserAvatar src={profile?.avatar_url} name={name} size={MARK}/>
+              {signedIn ? (name || 'Account') : 'Sign in'}
+            </span>
+          </button>
+
+          {/* Feedback is a ROUTE, not a panel. It had no entry in
+              dock-buttons.js to delete — the Dock synthesized it from the
+              module registry — so module-entries.js skips the module instead
+              and this is its only launcher. */}
+          <CircleChip title="Feedback" size={BTN}
+            className={`is-hover-accent${feedbackActive ? ' is-active' : ''}`}
+            style={CENTER} onClick={() => navigate('/tools/feedback')}>
+            <IconMessageSquare size={16}/>
+          </CircleChip>
+
+          {/* Help — a query mark, not the keyboard glyph it wore for one
+              afternoon. Today it opens the keyboard-shortcuts overlay and
+              nothing else, which is what `title` still says; the icon is the
+              wider promise, because this is where the rest of the help surface
+              is going to hang off (user-directed 2026-09-15). */}
+          <CircleChip title="Keyboard shortcuts" size={BTN}
+            className={`is-hover-accent${hintsOpen ? ' is-active' : ''}`}
+            style={CENTER} onClick={() => setHintsOpen?.(true)}>
+            <IconHelp size={16}/>
+          </CircleChip>
+        </div>
 
         <CircleChip title="Minimize" size={BTN} className="is-hover-accent" style={CENTER} onClick={() => win.minimize()}>
           <IconMinus size={14}/>

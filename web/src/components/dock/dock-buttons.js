@@ -6,10 +6,7 @@
 // state. Live-state buttons (Planner mini, Quick Capture popover) override
 // rendering via `render(ctx)` and gain wiring in sub-feature 5.
 
-import {
-  IconCommand, IconKeyboard, IconPlus,
-  IconCalendar, IconBookOpen, IconSparkles,
-} from '../icons.jsx';
+import { IconPlus, IconBookOpen } from '../icons.jsx';
 
 export const DOCK_BUTTONS = [
   // Tools
@@ -21,16 +18,13 @@ export const DOCK_BUTTONS = [
   // <TreeVaultSwitcher/>. Saved dock orders holding any of those old ids are
   // dropped automatically by effectiveOrder() in Dock.jsx, so no migration is
   // needed.
-  {
-    id: 'palette', group: 'tools', Icon: IconCommand, label: 'Command palette',
-    onClick: (ctx) => ctx.setPaletteOpen(true),
-    isActive: (ctx) => !!ctx.paletteOpen,
-  },
-  {
-    id: 'hints', group: 'tools', Icon: IconKeyboard, label: 'Keyboard shortcuts',
-    onClick: (ctx) => ctx.setHintsOpen(true),
-    isActive: (ctx) => !!ctx.hintsOpen,
-  },
+  //
+  // 'palette', 'hints' and 'design-mode' (Agents) took the same trip 2026-09-15,
+  // into TWO fused .candy-split runs in the titlebar's RIGHT cluster:
+  // [Palette | Agents] and [Keyboard shortcuts | Feedback]. Feedback had no
+  // entry here to delete — it is synthesized from the module registry, so
+  // module-entries.js skips it instead. That empties the 'tools' group entirely
+  // (quick-capture below is still hidden), leaving the Dock to pages + modules.
   // The built-in 'planner' button is GONE (2026-08-27). The planner module
   // registers a left-sidebar slot, so module-entries.js already synthesizes a
   // 'module:planner' dock button with the same IconLayoutGrid and the same
@@ -59,12 +53,5 @@ export const DOCK_BUTTONS = [
     visible: (ctx) => !!ctx.plannerTimer?.running,
     onClick: () => { /* sub-feature 5: pause/resume via api */ },
     // sub-feature 5 supplies a `render(ctx)` that mounts <PlannerMiniIndicator/>.
-  },
-  // Agents
-  {
-    // Rendered by Dock.jsx's renderBtn special-case → <DockAgentsButton/>, which
-    // owns the popover launcher (Atelier → Design Mode, Concierge → chat). Id kept
-    // as 'design-mode' to avoid a dock.order migration.
-    id: 'design-mode', group: 'dev', Icon: IconSparkles, label: 'Agents',
   },
 ];

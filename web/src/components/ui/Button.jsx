@@ -1,3 +1,5 @@
+import { forwardRef } from 'react';
+
 // Shared button primitives — candy-button (3D depth) family.
 // All button primitives here wire to the two-layer `.candy-btn`
 // (Primary/Outlined/Danger/HeaderChip/IconBtn/CircleChip). Per-instance
@@ -61,9 +63,16 @@ export function DangerOutlinedBtn({ children, onClick, disabled, small, chip, ti
 // `...rest` spreads onto the BUTTON element (aria-*, data-* hooks) — the
 // titlebar's Downloads chip carries [data-downloads-btn] that way, which is
 // what DownloadsPanel queries for its anchor rect and its outside-click exempt.
-export function CircleChip({ children, onClick, title, size = 30, className = '', style, type = 'button', ...rest }) {
+// forwardRef because a fused .candy-split run rounds its DIRECT .candy-btn
+// children — a wrapper <span> around a chip breaks the shell — so anything that
+// needs the node itself (the notification bell's toast fly-target, the Agents
+// popover's anchor rect) has to reach the button, not a box around it.
+export const CircleChip = forwardRef(function CircleChip(
+  { children, onClick, title, size = 30, className = '', style, type = 'button', ...rest }, ref,
+) {
   return (
     <button
+      ref={ref}
       type={type}
       onClick={onClick}
       title={title}
@@ -74,7 +83,7 @@ export function CircleChip({ children, onClick, title, size = 30, className = ''
       {...rest}
     ><span className="candy-face">{children}</span></button>
   );
-}
+});
 
 // Icon-only button. Variants: default (neutral), active, primary, playing.
 //   - default: surface-3 face, muted glyph → text on hover
