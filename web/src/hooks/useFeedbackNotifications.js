@@ -12,8 +12,11 @@ const TITLE = {
   official_reply: 'Official reply',
 };
 
-export function useFeedbackNotifications() {
+// `enabled` is false in a module pop-out window — one bridge per app, not per
+// window, or every feedback toast arrives twice (util/popout.js).
+export function useFeedbackNotifications(enabled = true) {
   useEffect(() => {
+    if (!enabled) return undefined;
     const p = listen('feedback:notify', ({ payload }) => {
       if (!payload) return;
       const post = payload.post?.title || 'a post';
@@ -33,5 +36,5 @@ export function useFeedbackNotifications() {
       );
     });
     return () => { p.then((un) => un && un()); };
-  }, []);
+  }, [enabled]);
 }

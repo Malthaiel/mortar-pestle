@@ -37,6 +37,7 @@ import { useHashRoute, navigate, safeDecode } from '../router.js';
 import { recordRoute, lastRoute, lastRouteFor, moduleKeyFor } from '../util/pageMemory.js';
 import { api } from '../api.js';
 import { DOCK_DEFAULT } from './useSettings.js';
+import { isPopoutWindow } from '../util/popout.js';
 
 const STORAGE_KEY = 'dock:active-module:v1';
 const SIDEBAR_EXPANDED_STORAGE_KEY = 'sidebar:expanded:v1';
@@ -55,6 +56,10 @@ function readPersisted() {
 }
 
 function writePersisted(value) {
+  // A module pop-out window shares this localStorage key with the main window.
+  // Without this guard, popping out Terminal rewrites which module the MAIN
+  // window boots into next launch. See util/popout.js.
+  if (isPopoutWindow()) return;
   try {
     if (value === null || value === undefined) {
       localStorage.removeItem(STORAGE_KEY);

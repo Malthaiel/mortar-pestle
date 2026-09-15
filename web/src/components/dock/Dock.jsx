@@ -9,12 +9,13 @@ import { useState, useRef, useCallback } from 'react';
 import { useHashRoute, navigate } from '../../router.js';
 import DockButton from './DockButton.jsx';
 import ModuleDockButton from './ModuleDockButton.jsx';
-import DockAgentsButton from './DockAgentsButton.jsx';
 import DraggableSidebarList from '../DraggableSidebarList.jsx';
 import { DOCK_BUTTONS } from './dock-buttons.js';
 import { DOCK_DEFAULT } from '../../hooks/useSettings.js';
 import { useModuleDockEntries } from './module-entries.js';
 import { useContextMenu } from '../../context-menu/useContextMenu.js';
+// TEMPORARY icon picker — removed once the icon set is baked in. See IconPicker.jsx.
+import { useIconOverrides, resolveIcon, changeIconItem } from '../IconPicker.jsx';
 import { DockSeparator, DockSpacer } from './DockDivider.jsx';
 import {
   isSpecial, isSpacerId, makeSpecialId, snapStrengthPx,
@@ -22,8 +23,9 @@ import {
 } from './dock-order.js';
 import {
   IconLayers, IconMaximize, IconLayoutGrid, IconReset,
-  IconX, IconMove, IconChevronLeft, IconChevronRight,
+  IconX, IconMove, IconChevronLeft, IconChevronRight, IconAppWindow,
 } from '../icons.jsx';
+import { openModulePopout, popoutWheelGesture } from '../../util/popout.js';
 
 // Compute the effective button order: prefer the saved order, append any new
 // IDs that were added after the user customized, and drop ids no longer known
@@ -56,13 +58,12 @@ function remapVaultDockIds(saved) {
 export default function Dock({
   settings,
   setSetting,
-  setPaletteOpen, paletteOpen,
-  setHintsOpen, hintsOpen,
   accent,
   resolvedTheme,
 }) {
   const route = useHashRoute();
   const { openContextMenu } = useContextMenu();
+  const iconOverrides = useIconOverrides();
   const [quickCaptureOpen, setQuickCaptureOpen] = useState(false);
   const dock = { ...DOCK_DEFAULT, ...(settings?.dock || {}) };
   const edgeStyle = dock.edgeStyle || DOCK_DEFAULT.edgeStyle;
@@ -92,8 +93,6 @@ export default function Dock({
 
   const ctx = {
     settings, setSetting, route, navigate, accent,
-    setPaletteOpen, paletteOpen,
-    setHintsOpen, hintsOpen,
     setQuickCaptureOpen, quickCaptureOpen,
     plannerTimer: null, // sub-feature 5 wires this
   };
@@ -127,19 +126,15 @@ export default function Dock({
   const firstSpacerIdx = visibleItems.findIndex(b => b.kind === 'spacer');
   const centerIndex = firstSpacerIdx >= 0 ? firstSpacerIdx + 1 : Math.floor(visibleItems.length / 2);
 
+  // The 'design-mode' (Agents) special-case that used to live here is gone
+  // 2026-09-15 — the launcher moved to the titlebar's right cluster, so
+  // <DockAgentsButton variant="titlebar"/> is mounted by TitleBar.jsx now and
+  // no dock id maps to it.
   const renderBtn = (b) => {
-    if (b.id === 'design-mode') return (
-      <DockAgentsButton
-        key={b.id}
-        label={b.label}
-        accent={accent}
-        onContextMenu={(e) => onItemContext(e, b.id)}
-      />
-    );
     return (
       <DockButton
         key={b.id}
-        Icon={b.Icon}
+        Icon={resolveIcon(iconOverrides, `dock:${b.id}`, b.Icon)}
         label={b.label}
         onClick={() => b.onClick?.(ctx)}
         isActive={b.isActive ? !!b.isActive(ctx) : false}
@@ -153,13 +148,16 @@ export default function Dock({
   const renderModuleBtn = (b) => (
     <ModuleDockButton
       key={b.id}
-      Icon={b.Icon}
+      Icon={resolveIcon(iconOverrides, `dock:${b.id}`, b.Icon)}
       label={b.label}
       onClick={() => b.onClick?.(ctx)}
       isActive={b.isActive ? !!b.isActive(ctx) : false}
       accent={accent}
       activeIndicator={activeIndicator}
       onContextMenu={(e) => onItemContext(e, b.id)}
+      // Scroll up over a module icon = open that module in its own window,
+      // scroll down = close it. Module buttons only — built-ins have no route.
+      onWheel={(e) => popoutWheelGesture(e, b)}
     />
   );
 
@@ -285,6 +283,15 @@ export default function Dock({
     if (isSpecial(id)) {
       items.push({ label: 'Remove', icon: IconX, danger: true, onClick: () => removeSpecial(id) });
     } else {
+      const entry = itemById.get(id);
+      if (entry?.moduleId && entry?.routeBase) {
+        items.push({
+          label: 'Open in New Window',
+          icon: IconAppWindow,
+          onClick: () => openModulePopout(entry.moduleId, entry.routeBase, entry.label),
+        }, { sep: true });
+      }
+      items.push(changeIconItem(`dock:${id}`, itemById.get(id)?.label || id));
       items.push({ label: 'Hide from Dock', icon: IconX, onClick: () => hideButton(id) });
       items.push({ label: 'Send to', icon: IconMove, children: [
         { label: 'Left',   icon: IconChevronLeft,  onClick: () => sendToZone(id, 'left') },

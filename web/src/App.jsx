@@ -40,6 +40,7 @@ import ProcessesModal from './processes/ProcessesModal.jsx';
 import DownloadsPanel from './downloads/DownloadsPanel.jsx';
 import DownloadsManager from './downloads/DownloadsManager.jsx';
 import { VaultProvider, useVaults } from './hooks/useVaults.jsx';
+import { isPopoutWindow, installPopoutGeometryMemory } from './util/popout.js';
 import OverlayHostView from './overlays/OverlayHostView.jsx';
 import OverlayToastView from './overlays/OverlayToastView.jsx';
 import PlayerControlsView from './overlays/PlayerControlsView.jsx';
@@ -53,6 +54,13 @@ function ComposedProviders({ children }) {
     children
   );
 }
+
+// A module pop-out window (label `popout-<moduleId>`) renders the SAME MainApp,
+// minus the Dock and minus the app-wide background helpers — those are
+// singletons and would fire once per open window. Read once: a window's label
+// never changes. See util/popout.js.
+const POPOUT = isPopoutWindow();
+if (POPOUT) installPopoutGeometryMemory();
 
 function readHash() {
   return typeof window !== 'undefined' ? (window.location.hash || '') : '';
@@ -106,8 +114,8 @@ function PlayerRouteDispatcher({ hash }) {
 function MainApp() {
   useGlobalTactileSound();
   useGlobalCandyPressHold();
-  useEventReminders();
-  useFeedbackNotifications();
+  useEventReminders(21, !POPOUT);
+  useFeedbackNotifications(!POPOUT);
   const route = useHashRoute();
   const routeSlots = useRouteSlots();
 
@@ -145,8 +153,8 @@ function MainApp() {
   const [processesOpen, setProcessesOpen] = useState(false);
   const accent = settings.accentColor;
   // Site Bridge, both directions. Off by default; reads nothing while off.
-  useSitePush(settings.sitePushEnabled === true);
-  useSiteBookings(settings.sitePushEnabled === true);
+  useSitePush(!POPOUT && settings.sitePushEnabled === true);
+  useSiteBookings(!POPOUT && settings.sitePushEnabled === true);
 
   // Visit tracking — records every route change to the recent-pages list,
   // surfaced in both the Cmd+K palette and the sidebar recently-visited
@@ -265,6 +273,10 @@ function MainApp() {
         setProcessesOpen={setProcessesOpen}
         setDownloadsOpen={setDownloadsOpen}
         downloadsOpen={downloadsOpen}
+        setPaletteOpen={setPaletteOpen}
+        paletteOpen={paletteOpen}
+        setHintsOpen={setHintsOpen}
+        hintsOpen={hintsOpen}
       />
       <AppShell
         onOpenSettings={() => setSettingsOpen(true)}
@@ -312,16 +324,14 @@ function MainApp() {
         retentionDays={settings.recycleBinRetentionDays}
         maxItems={settings.recycleBinMaxItems}
       />
-      <Dock
+      {/* No palette/hints props: those two buttons moved to the titlebar
+          2026-09-15, and nothing left in the dock registry reads them. */}
+      {!POPOUT && <Dock
         settings={settings}
         setSetting={setSetting}
-        setPaletteOpen={setPaletteOpen}
-        paletteOpen={paletteOpen}
-        setHintsOpen={setHintsOpen}
-        hintsOpen={hintsOpen}
         accent={accent}
         resolvedTheme={resolvedTheme}
-      />
+      />}
       <TransientToastLayer/>
       <NotificationPanel open={notifOpen} onClose={() => setNotifOpen(false)} accent={accent}/>
       <DownloadsPanel open={downloadsOpen} onClose={() => setDownloadsOpen(false)} accent="var(--text-muted)"

@@ -6,13 +6,15 @@
     "main",
     "overlay-host",
     "overlay-toast",
-    "player-controls-*"
+    "player-controls-*",
+    "popout-*"
   ],
   "webviews": [
     "main",
     "overlay-host",
     "overlay-toast",
-    "player-controls-*"
+    "player-controls-*",
+    "popout-*"
   ],
   "local": true,
   "permissions": [
@@ -28,6 +30,13 @@
     "core:window:allow-maximize",
     "core:window:allow-close",
     "core:window:allow-start-dragging",
+    "core:window:allow-unminimize",
+    "core:window:allow-set-focus",
+    "core:window:allow-outer-position",
+    "core:window:allow-inner-size",
+    "core:window:allow-scale-factor",
+    "core:window:allow-available-monitors",
+    "core:webview:allow-create-webview-window",
     "updater:default",
     "global-shortcut:default",
     "allow-ping",

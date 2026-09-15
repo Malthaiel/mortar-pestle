@@ -28,10 +28,13 @@ function offsetKey(base, days) {
   return keyForDate(d);
 }
 
-export function useEventReminders(days = 21) {
+// `enabled` is false in a module pop-out window — the scheduler is app-wide and
+// must fire once, not once per open window (util/popout.js).
+export function useEventReminders(days = 21, enabled = true) {
   const firedRef = useRef(loadFired());
 
   useEffect(() => {
+    if (!enabled) return undefined;
     let alive = true;
 
     async function scan() {
@@ -80,5 +83,5 @@ export function useEventReminders(days = 21) {
       if (name === 'today' || name === 'day') scan();
     });
     return () => { alive = false; clearInterval(timer); unsub(); };
-  }, [days]);
+  }, [days, enabled]);
 }
