@@ -40,7 +40,7 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
      its depth shadow hangs ~4.5px below), so a 54px interior left 13px of slack —
      an odd number, unsplittable, landing 7 above / 6 below and reading low. One
      more pixel makes the slack even. Measured off the screen, not computed. */
-  --dock-height: 56px;
+  --dock-height: 58px;
 
   /* Height of the custom titlebar that replaced the native Windows one.
      Single source of truth: .titlebar is sized to this, and AppShell subtracts
@@ -533,7 +533,7 @@ body[data-design-pointer="markup"] *:not(input):not(textarea):not(select):not([d
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  /* Side padding matches the 6px the clusters clear top and bottom (45px bar,
+  /* Side padding matches the 6px the clusters clear top and bottom (46px bar,
      33px painted chip) — the bar breathes the same in both axes. */
   padding: 0 6px;
   background: var(--titlebar-bg);

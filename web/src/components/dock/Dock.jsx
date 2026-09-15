@@ -319,7 +319,7 @@ export default function Dock({
           position: 'relative',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           width: '100%',
-          padding: '8px 6px',
+          padding: '8px',
           pointerEvents: 'auto',
           '--dock-expand-ms':   `${dock.expandMs ?? DOCK_DEFAULT.expandMs}ms`,
           '--dock-collapse-ms': `${dock.collapseMs ?? DOCK_DEFAULT.collapseMs}ms`,
@@ -335,7 +335,7 @@ export default function Dock({
           keyExtractor={(b) => b.id}
           getItemStyle={(b) => (b.kind === 'spacer' ? { flex: '1 1 0%', minWidth: 8 } : undefined)}
           snapZones={dock.edgeSnap ? { triggerPx: snapStrengthPx(dock.snapStrength), centerIndex } : null}
-          style={{ flex: '1 1 auto', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '0 6px' }}
+          style={{ flex: '1 1 auto', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '0 8px' }}
           renderItem={(b) => {
             if (b.kind === 'sep') return <DockSeparator id={b.id} onContextMenu={onItemContext} />;
             if (b.kind === 'spacer') return <DockSpacer id={b.id} onContextMenu={onItemContext} />;
