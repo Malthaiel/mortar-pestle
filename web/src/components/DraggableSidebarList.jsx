@@ -4,6 +4,40 @@ import { playReorderPickup, playReorderDrop } from '../hooks/useTactileSound.js'
 import { computeSlotY } from './dragMath.js';
 import { GLIDE, GLIDE_MS, GLIDE_TIMING } from '../util/motion.js';
 
+// Grow-to-contain writes min-height / padding-top straight onto the list element
+// — which is ALSO where React puts whatever styles the owner renders. So the
+// overrides cannot simply be blanked afterwards: blanking destroys the owner's own
+// values, and React will not rewrite a prop whose value has not changed. Measured
+// 2026-09-14: clearing to '' took AppShell's `paddingTop: 7` with it and left the
+// right rail computing 0px — the exact defect the clear was added to fix.
+//
+// So snapshot what was on the element BEFORE the first grow write, and put exactly
+// that back when the drag is over. Keyed by element, so nothing has to be threaded
+// through the lift/release component split.
+const growRest = new WeakMap();
+const GROW_PROPS = ['minHeight', 'paddingTop', 'transition'];
+function rememberGrowRest(el, card) {
+  if (!el || growRest.has(el)) return;
+  const snap = { card };
+  for (const k of GROW_PROPS) snap[k] = el.style[k];
+  snap.cardMarginTop = card ? card.style.marginTop : '';
+  snap.cardTransition = card ? card.style.transition : '';
+  growRest.set(el, snap);
+}
+function restoreGrowRest(el) {
+  if (!el) return;
+  const snap = growRest.get(el);
+  // No snapshot means the overrides predate this drag (a fossil from an older
+  // build); '' is the only honest target then.
+  for (const k of GROW_PROPS) el.style[k] = snap ? snap[k] : '';
+  const card = snap ? snap.card : el.parentElement;
+  if (card) {
+    card.style.marginTop = snap ? snap.cardMarginTop : '';
+    card.style.transition = snap ? snap.cardTransition : '';
+  }
+  growRest.delete(el);
+}
+
 // ── Drop-sequence invariants (the drop-flicker saga, 2026-07-01) ─────────────
 // The drop is a multi-frame pipeline: clone glides to slot (glideMs) → commit
 // (reorder + clone removal in one flushSync) → bridge (until the next real
@@ -241,6 +275,7 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
       // mirror of the bottom, with Studio always above the tile.
       growEl = (grow && !isHorizontal && cb) ? (containerRef?.current || null) : null;
       cardEl = growEl ? growEl.parentElement : null;
+      rememberGrowRest(growEl, cardEl);
       const baseH = cb ? cb.height : 0;
       growBaseRef.current = baseH;
       let curX = originRect.left;
@@ -365,8 +400,7 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
       cloneRef.current = null;
       // Drop the grow-to-contain overrides so the container + card return to rest
       // (only touched when we actually grew — never stomps a consumer's own styles).
-      if (growEl) { growEl.style.minHeight = ''; growEl.style.paddingTop = ''; growEl.style.transition = ''; }
-      if (cardEl) { cardEl.style.marginTop = ''; cardEl.style.transition = ''; }
+      if (growEl) restoreGrowRest(growEl);
     };
   }, [sourceElement, originRect.left, originRect.top, originRect.width, originRect.height, originDisplay, cursorRef, isHorizontal, isGrid]); // eslint-disable-line react-hooks/exhaustive-deps -- slotXY is the LIFT-time slot here; later slots ride the effect below
 
@@ -438,14 +472,25 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
     // shrink and the clone settle finish together (transition to the captured
     // resting px, not '' — an auto/none target won't animate).
     const gc = containerRef?.current;
-    if (gc && (gc.style.minHeight || gc.style.paddingTop)) {
+    // Only a drag that actually entered grow-to-contain has anything to unwind, and
+    // the snapshot is the only reliable marker that it did. The old guard tested
+    // `gc.style.minHeight || gc.style.paddingTop` instead — but React writes the
+    // owner's rendered styles INLINE, so AppShell's own `minHeight: 0` made the
+    // string '0px', which is truthy. That fired this branch on EVERY drop on the
+    // right widget rail, pinned padding-top to 0px and left it there for the life
+    // of the window: reordering the rail tiles silently ate 7px of the gap above
+    // the first tile (painted gaps read 6 / 13 / 13 instead of 13 / 13 / 13).
+    // Measured and reproduced 2026-09-14 with a synthetic drag.
+    if (gc && growRest.has(gc)) {
       const ease = `${glideMs}ms ${GLIDE_TIMING}`;
+      const snap = growRest.get(gc);
       gc.style.transition = `min-height ${ease}, padding-top ${ease}`;
-      if (gc.style.minHeight) gc.style.minHeight = `${growBaseRef.current}px`;
+      if (gc.style.minHeight !== snap.minHeight) gc.style.minHeight = `${growBaseRef.current}px`;
       const card = gc.parentElement;
-      if (gc.style.paddingTop) {
-        gc.style.paddingTop = '0px';
-        if (card) { card.style.transition = `margin-top ${ease}`; card.style.marginTop = '0px'; }
+      if (gc.style.paddingTop !== snap.paddingTop) {
+        // Glide back to what the owner renders, not to a hardcoded zero.
+        gc.style.paddingTop = snap.paddingTop || '0px';
+        if (card) { card.style.transition = `margin-top ${ease}`; card.style.marginTop = snap.cardMarginTop || '0px'; }
       }
       // ...then DROP the overrides once the glide is over, so the container goes
       // back to whatever its owner renders. Without this the inline values stay
@@ -460,12 +505,7 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
       // leave the styles stuck. A drag starting inside the same glideMs has its
       // own RAF rewriting these every frame, so a stray wipe self-corrects on the
       // next frame. Swap to a transitionend listener if that ever stops holding.
-      setTimeout(() => {
-        gc.style.minHeight = '';
-        gc.style.paddingTop = '';
-        gc.style.transition = '';
-        if (card) { card.style.marginTop = ''; card.style.transition = ''; }
-      }, glideMs);
+      setTimeout(() => restoreGrowRest(gc), glideMs);
     }
     return () => window.removeEventListener('pointermove', syncLit);
   }, [releasing, slotY, slotXY, originRect.left, originRect.top, isHorizontal, glideMs, containerRef, cursorRef]);

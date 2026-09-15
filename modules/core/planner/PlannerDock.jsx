@@ -778,7 +778,10 @@ export default function PlannerDock() {
       // the body), but it is read rather than restated: measured 2026-09-14 it
       // was 20.4px, and leaving it out put the music tile that far past the rail.
       const tail = slot.getBoundingClientRect().bottom - bodyRect.bottom;
-      const next = Math.max(120, Math.round(
+      // FLOOR, not round: every term is fractional, and rounding up by half a pixel
+      // pushes the calendar's painted frame a pixel down into the tile's dead band,
+      // which reads as an uneven gap to the next tile (12 against 13, seen 2026-09-14).
+      const next = Math.max(120, Math.floor(
         list.getBoundingClientRect().bottom - padBottom - bodyRect.top - below - tail,
       ));
       setAvail(prev => (prev === next ? prev : next));
