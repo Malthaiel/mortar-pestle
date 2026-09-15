@@ -442,11 +442,30 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
       const ease = `${glideMs}ms ${GLIDE_TIMING}`;
       gc.style.transition = `min-height ${ease}, padding-top ${ease}`;
       if (gc.style.minHeight) gc.style.minHeight = `${growBaseRef.current}px`;
+      const card = gc.parentElement;
       if (gc.style.paddingTop) {
         gc.style.paddingTop = '0px';
-        const card = gc.parentElement;
         if (card) { card.style.transition = `margin-top ${ease}`; card.style.marginTop = '0px'; }
       }
+      // ...then DROP the overrides once the glide is over, so the container goes
+      // back to whatever its owner renders. Without this the inline values stay
+      // forever: this branch is not gated on `grow`, so any rail that has grown
+      // once keeps `padding-top: 0px` and a pinned `min-height` for the life of
+      // the window. Found 2026-09-14 as a fossil on the right widget rail — it
+      // was overriding AppShell's paddingTop:7 and eating 7px of the gap above
+      // the first tile, which is why the three rail gaps read 6 / 13 / 7.
+      //
+      // ponytail: fire-and-forget timer, deliberately NOT cancelled on unmount —
+      // the clone unmounts AT the glide end, so cancelling there is what would
+      // leave the styles stuck. A drag starting inside the same glideMs has its
+      // own RAF rewriting these every frame, so a stray wipe self-corrects on the
+      // next frame. Swap to a transitionend listener if that ever stops holding.
+      setTimeout(() => {
+        gc.style.minHeight = '';
+        gc.style.paddingTop = '';
+        gc.style.transition = '';
+        if (card) { card.style.marginTop = ''; card.style.transition = ''; }
+      }, glideMs);
     }
     return () => window.removeEventListener('pointermove', syncLit);
   }, [releasing, slotY, slotXY, originRect.left, originRect.top, isHorizontal, glideMs, containerRef, cursorRef]);

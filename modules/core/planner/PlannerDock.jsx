@@ -752,25 +752,50 @@ export default function PlannerDock() {
     if (!dock || !body) return;
     const list = dock.closest('.sidebar-widget-list');
     if (!list) return;
+    // This slot: the list child that contains the dock.
+    let slot = dock;
+    while (slot && slot.parentElement !== list) slot = slot.parentElement;
+    // avail = the live gap between the calendar's own top edge and the bottom of
+    // the rail, less the tiles stacked below this one. Every term is read off a
+    // rect at the moment it is needed and NONE of them is the calendar's own
+    // height, so there is no feedback loop: the value is identical collapsed,
+    // open, and mid-animation.
+    //
+    // The previous formula subtracted Σ(all children) and added this body back to
+    // cancel its own term. That cancellation only held while nothing else moved,
+    // and the ResizeObserver watched only the container — which never resizes —
+    // so the music tile mounting never re-fired it. Measured 2026-09-14: a stale
+    // 1292px max-height inside a 764px rail (the same formula recomputed against
+    // that DOM gave 470), planner tile 1427px tall, music tile parked at y=1506
+    // with the rail ending at 844. Observing the siblings is what keeps it fresh.
     const recompute = () => {
-      const cs = getComputedStyle(list);
-      const padTop = parseFloat(cs.paddingTop) || 0;
-      const padBottom = parseFloat(cs.paddingBottom) || 0;
-      const rowGap = parseFloat(cs.rowGap) || 0;
-      const n = list.children.length;
-      let sum = 0;
-      for (const child of list.children) sum += child.offsetHeight;
-      // clientHeight includes the container's top/bottom padding, and flex
-      // row-gaps sit between tiles — both are space the calendar can't claim.
-      // Subtract them or avail over-counts and the calendar grows past its slot.
-      const chrome = padTop + padBottom + rowGap * Math.max(0, n - 1);
-      const next = Math.max(120, Math.round(list.clientHeight - chrome - sum + body.offsetHeight - 1));
+      const padBottom = parseFloat(getComputedStyle(list).paddingBottom) || 0;
+      let below = 0;
+      for (const child of list.children) if (child !== slot) below += child.offsetHeight;
+      const bodyRect = body.getBoundingClientRect();
+      // The tile's own chrome UNDER the calendar — its bottom padding and the
+      // candy depth band. It is a constant offset (both edges move together with
+      // the body), but it is read rather than restated: measured 2026-09-14 it
+      // was 20.4px, and leaving it out put the music tile that far past the rail.
+      const tail = slot.getBoundingClientRect().bottom - bodyRect.bottom;
+      const next = Math.max(120, Math.round(
+        list.getBoundingClientRect().bottom - padBottom - bodyRect.top - below - tail,
+      ));
       setAvail(prev => (prev === next ? prev : next));
     };
-    recompute();
     const ro = new ResizeObserver(recompute);
-    ro.observe(list);
-    return () => ro.disconnect();
+    const attach = () => {
+      ro.disconnect();
+      ro.observe(list);
+      for (const child of list.children) if (child !== slot) ro.observe(child);
+      recompute();
+    };
+    attach();
+    // A sibling tile MOUNTING is what went stale before, and a ResizeObserver
+    // cannot see a node it was never given — so re-attach on childList too.
+    const mo = new MutationObserver(attach);
+    mo.observe(list, { childList: true });
+    return () => { ro.disconnect(); mo.disconnect(); };
   }, [running, sessionStart, calendarCollapsed]);
 
   // Controls (Reset / Play-Pause / Skip-or-EndEarly). Built once and placed
