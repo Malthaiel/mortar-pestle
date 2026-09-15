@@ -25,7 +25,12 @@ async function loadManifest() {
   if (_loadPromise) return _loadPromise;
   _loadPromise = (async () => {
     try {
-      const result = await invoke('vault_read_file', { path: MANIFEST_PATH });
+      // root:'citadel' pins this to the REAL content vault instead of whichever
+      // vault is ACTIVE. The manifest only ever exists in Citadel, so opening
+      // Documents\Personal used to resolve it to a path that does not exist —
+      // NOT_FOUND, `data` stuck at null, and every manifest-backed surface (the
+      // Graph, page/orphan counts) silently reading zero with no error on screen.
+      const result = await invoke('vault_read_file', { path: MANIFEST_PATH, root: 'citadel' });
       const text = typeof result === 'string' ? result : result?.content;
       if (!text) throw new Error('Empty manifest response');
       if (text === _lastText && _cache) return _cache; // unchanged bytes → skip JSON.parse

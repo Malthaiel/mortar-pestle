@@ -201,6 +201,12 @@ pub enum RootKind {
     /// used so the recycle bin can resolve a clip's restore path back to where
     /// clips live (outside the Library on Windows). See decision #11.
     Captures,
+    /// The real Citadel content vault (`content_vault_root()`), regardless of
+    /// which vault is ACTIVE. For files that only ever live in Citadel — the
+    /// page manifest at `Infrastructure/.cache/vault_manifest.json`. Opening
+    /// `Documents\Personal` used to resolve those to a path that does not
+    /// exist, so the Graph and every manifest-backed stat silently read zero.
+    Citadel,
 }
 
 impl RootKind {
@@ -212,6 +218,7 @@ impl RootKind {
             Some("library") => RootKind::Library,
             Some("deadlock") => RootKind::Deadlock,
             Some("captures") => RootKind::Captures,
+            Some("citadel") => RootKind::Citadel,
             _ => RootKind::Content,
         }
     }
@@ -224,6 +231,7 @@ impl RootKind {
             RootKind::Library => library_vault_root(),
             RootKind::Deadlock => deadlock_vault_root(),
             RootKind::Captures => captures_dir(),
+            RootKind::Citadel => content_vault_root().to_string_lossy().into_owned(),
         }
     }
 }

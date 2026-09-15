@@ -16,9 +16,9 @@ import SidebarPill from '@host/components/SidebarPill.jsx';
 import './terminal.css';
 
 // TerminalRouter pulls @xterm/xterm (+addon, ~200KB) via TerminalPage /
-// SkillsPage — only needed on the /tools/terminal route. Lazy-split it off boot
-// (mirrors web/src/pages/GraphPage.jsx). The providers + sidebar + settings tab
-// above register at boot and carry no xterm.
+// SkillsPage — only needed on the /tools/terminal route. Lazy-split it off boot.
+// The providers + sidebar + settings tab above register at boot and carry no
+// xterm.
 const TerminalRouter = lazy(() => import('./TerminalRouter.jsx'));
 
 export default {

@@ -11,8 +11,8 @@ import { safeDecode } from '@host/router.js';
 import './deadlock.css';
 
 // react-markdown (+ remark-gfm, ~100KB) is only needed once a page is actually
-// viewed — lazy-split it off the boot chunk (mirrors web/src/pages/GraphPage.jsx's
-// pixi.js split). DeadlockTree stays eager (light secondary-sidebar tree).
+// viewed — lazy-split it off the boot chunk. DeadlockTree stays eager (light
+// secondary-sidebar tree).
 const DeadlockPage = lazy(() => import('./DeadlockPage.jsx'));
 
 // /deadlock → reader landing; /deadlock/<deadlock-relative path> → that page.

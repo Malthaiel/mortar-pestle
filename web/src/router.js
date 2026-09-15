@@ -4,7 +4,6 @@ export const ROUTES = [
   // accentKey stays 'pulse' — it names an accent-palette slot, not the module.
   { path: '/planner',                     page: 'planner',        label: 'Planner',         accentKey: 'pulse' },
   { path: '/vault',                       page: 'vault',          label: 'Vault View',      accentKey: 'knowledge' },
-  { path: '/graph',                       page: 'graph',          label: 'Graph',           accentKey: 'knowledge' },
   { path: '/deadlock',                    page: 'deadlock',       label: 'Deadlock',        accentKey: 'knowledge' },
   { path: '/tools',                       page: 'tools',          label: 'Tools',           accentKey: 'tools' },
   { path: '/docs',                        page: 'docs',           label: 'Docs',            accentKey: 'knowledge' },
