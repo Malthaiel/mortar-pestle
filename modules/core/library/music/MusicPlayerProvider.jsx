@@ -6,6 +6,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { mediaUrl, mediaHttpUrl, streamHttpUrl, awaitMediaBaseUrl, invoke } from '@host/api.js';
 import { musicApi } from './api.js';
+import { trackToQueueItem } from './util.js';
 
 const Ctx = createContext(null);
 
@@ -222,6 +223,12 @@ export function MusicPlayerProvider({ children }) {
     // names the precise failure class instead of generic "operation not
     // supported".
     const onError = () => {
+      // Tearing a stream down is `removeAttribute('src') + load()` (pausing a
+      // stream, or selecting nothing) — and a media element with no source ALWAYS
+      // errors, code 4, message "MEDIA_ELEMENT_ERROR: Format error". That is our
+      // own teardown talking, not a failed track, and toasting it named a song
+      // that had just played fine (user-reported 2026-09-16).
+      if (!a.getAttribute('src') && !a.currentSrc) return;
       const err = a.error;
       const codeMap = { 1: 'aborted', 2: 'network', 3: 'decode', 4: 'src not supported' };
       const cls = codeMap[err?.code] || `code ${err?.code}`;
@@ -279,23 +286,34 @@ export function MusicPlayerProvider({ children }) {
     const last = loadJSON(LS.last, null);
     if (!last || !last.albumPath) return;
     let cancelled = false;
-    musicApi.readAlbum(last.albumPath)
+    // A playlist row persists the PLAYLIST's path (trackToQueueItem falls back
+    // to pl.path when the row has no album card), and music_read_album answers
+    // a playlist path with a real card carrying ZERO tracks — so reading every
+    // last-played source as an album silently emptied the queue and blanked the
+    // player. Route on the path, and never let a trackless card clear the queue.
+    const isPlaylist = last.albumPath.startsWith('Music/Playlists/');
+    const read = isPlaylist
+      ? musicApi.readPlaylist(last.albumPath)
+      : musicApi.readAlbum(last.albumPath);
+    read
       .catch(() => null)
-      .then(album => {
-        if (cancelled || !album || !album.tracks) return;
-        const items = album.tracks.map(t => ({
-          albumPath:  album.albumPagePath || last.albumPath,
-          albumTitle: album.title,
-          albumImage: album.image,
-          artist:     album.artist,
-          n:          t.n,
-          title:      t.title,
-          audioPath:  t.audioPath,
-          available:  t.available,
-          streamable: !t.available,
-          wikilink:   t.wikilink,
-          duration:   t.duration,
-        }));
+      .then(card => {
+        if (cancelled || !card || !card.tracks || !card.tracks.length) return;
+        const items = isPlaylist
+          ? card.tracks.map(t => trackToQueueItem(t, { ...card, path: card.path || last.albumPath }))
+          : card.tracks.map(t => ({
+              albumPath:  card.albumPagePath || last.albumPath,
+              albumTitle: card.title,
+              albumImage: card.image,
+              artist:     card.artist,
+              n:          t.n,
+              title:      t.title,
+              audioPath:  t.audioPath,
+              available:  t.available,
+              streamable: !t.available,
+              wikilink:   t.wikilink,
+              duration:   t.duration,
+            }));
         const start = Math.min(Math.max(0, last.trackIndex || 0), items.length - 1);
         setQueue(items);
         setIndex(start);

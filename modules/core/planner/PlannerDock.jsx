@@ -1266,7 +1266,6 @@ function TimerWidget({
                 remainingMins={secsLeft / 60}
                 phase={phase}
                 running={running}
-                accent="var(--accent)"
                 plate="var(--planner-face)"
                 outerR={outerR}
                 svgInset={svgInset}
