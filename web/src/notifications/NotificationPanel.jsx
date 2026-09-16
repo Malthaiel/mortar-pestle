@@ -20,7 +20,11 @@ export default function NotificationPanel({ open, onClose, accent }) {
   const [clearing, setClearing] = useState(false);
   const pos = useAnchoredRect(() => getBellRect?.(), { open, width: PANEL_W, place: 'below' });
 
-  useEffect(() => { if (open) markAllRead(); }, [open, markAllRead]);
+  // `notifications` is a dep on purpose: one arriving while the panel is OPEN is
+  // already on screen, so it must not raise the bell's unread pip (photographed
+  // 2026-09-16 — the panel showed the item and the badge read 1 at the same
+  // time). markAllRead no-ops when nothing is unread, so the extra runs are free.
+  useEffect(() => { if (open) markAllRead(); }, [open, markAllRead, notifications]);
 
   if (!open || !pos) return null;
 

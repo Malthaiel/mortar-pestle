@@ -1331,6 +1331,20 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
 .tube-water { stroke: var(--accent); }
 .candy-btn:is(:hover, :active) .tube-water { stroke: #fff; }
 
+/* candy-badge — the unread pip/count pinned to a titlebar button (Settings update
+   dot, Processes, Downloads, Notifications). Colour lives here, not inline, for
+   the same reason .tube-water does: the moment its button lights accent — hover,
+   press, or its panel open — an accent pip on an accent face reads as a smudge
+   (photographed 2026-09-16). Lit, it inverts: white pill, accent number. */
+.candy-badge { background: var(--accent); color: #fff; }
+.candy-btn:is(:hover, :active, .is-active) .candy-badge {
+  background: #fff;
+  /* !important for the same reason § candy-tile uses it: the per-shape
+     .is-hover-accent triples flip every div/span inside .candy-face to #fff at
+     (0,6,0), which would paint the count white on its own white pill. */
+  color: var(--accent) !important;
+}
+
 /* tile.rail-tile — THE rail tile: one self-contained panel in a reorderable
    stack. Three surfaces ride it (music player, planner dock, day-pane sections)
    and every one of them is a Rail item. A 1:1 rename of the legacy

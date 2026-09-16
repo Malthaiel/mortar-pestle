@@ -32,7 +32,7 @@ import {
   IconMinus, IconSquare, IconRestore, IconX, IconSettings, IconTrash, IconChart,
   IconDownload, IconCommand, IconHelp, IconMessageSquare,
 } from './icons.jsx';
-import { CircleChip } from './ui/Button.jsx';
+import { CircleChip, Badge } from './ui/Button.jsx';
 import { candyCenterOffset } from '../util/candy.js';
 import { Popover, useAnchoredRect } from './ui';
 import NotificationBell from '../notifications/NotificationBell.jsx';
@@ -61,35 +61,8 @@ const MARK = 18;
 // candy button too, and the offset reads its own --cbtn-depth.
 const CENTER = candyCenterOffset();
 
-// Every badge on the strip is one shape — an accent pip pinned to its button's
-// top-right corner, ringed in --surface so it reads against any band. Passing
-// no children gives the bare 7px dot (Settings' update flag); a number gives
-// the wider count pill (Processes, Downloads).
-//
-// It rides INSIDE .candy-face on purpose. .candy-face is position:static, so
-// the badge anchors to the position:relative .candy-btn above it — which means
-// no wrapper <span> around the button. That matters now the four are fused:
-// .candy-split squares and overlaps its DIRECT .candy-btn children, and a
-// wrapper sitting between them would swallow the :first-child / :last-child
-// rounding rules and break the shell. Pinned at right:0 rather than -2 so it
-// stops AT the seam instead of spilling over its neighbour; zIndex lifts it
-// above the next half's overlapping frame either way.
-function Badge({ children, accent, title }) {
-  const dot = children == null;
-  return (
-    <span aria-hidden title={title} style={{
-      position: 'absolute', top: 0, right: 0,
-      minWidth: dot ? 7 : 13, height: dot ? 7 : 13,
-      padding: dot ? 0 : '0 3px',
-      borderRadius: dot ? '50%' : 7,
-      background: accent || 'var(--accent, #c0392b)', color: '#fff',
-      fontSize: 9, fontWeight: 700, lineHeight: '13px', textAlign: 'center',
-      boxShadow: '0 0 0 2px var(--surface)',
-      animation: dot ? 'newBadgePulse 2.5s ease-in-out infinite' : undefined,
-      pointerEvents: 'none', zIndex: 5,
-    }}>{children}</span>
-  );
-}
+// Badge (the accent pip/count on Settings, Processes, Downloads and the bell)
+// is a shared ui primitive — see components/ui/Button.jsx.
 
 export default function TitleBar({
   settings, accent,
@@ -194,12 +167,12 @@ export default function TitleBar({
 
             No wrapper <span>s: .candy-split's rounding rules match its DIRECT
             .candy-btn children, so the three badges live inside their buttons
-            now (see Badge above). */}
+            now (see Badge in ui/Button.jsx). */}
         <div className="candy-split">
           <CircleChip title="Settings" size={BTN} className="is-hover-accent"
             style={CENTER} onClick={() => setSettingsOpen?.(true)}>
             <IconSettings size={16}/>
-            {showUpdateDot && <Badge accent={accent} title="Update available — open Settings → System"/>}
+            {showUpdateDot && <Badge title="Update available — open Settings → System"/>}
           </CircleChip>
 
           <CircleChip title="Recycling bin" size={BTN} className="is-hover-accent"
@@ -216,7 +189,7 @@ export default function TitleBar({
             size={BTN} className="is-hover-accent"
             style={CENTER} onClick={() => setProcessesOpen?.(true)}>
             <IconChart size={16}/>
-            {runningCount > 0 && <Badge accent={accent}>{runningCount}</Badge>}
+            {runningCount > 0 && <Badge>{runningCount}</Badge>}
           </CircleChip>
 
           {/* Downloads — [data-downloads-btn] stays on the BUTTON so
@@ -228,7 +201,7 @@ export default function TitleBar({
             style={CENTER} onClick={() => setDownloadsOpen?.(o => !o)}>
             <IconDownload size={16}/>
             {downloadCount > 0 && (
-              <Badge accent={accent}>{downloadCount > 99 ? '99+' : downloadCount}</Badge>
+              <Badge>{downloadCount > 99 ? '99+' : downloadCount}</Badge>
             )}
           </CircleChip>
 
@@ -236,7 +209,7 @@ export default function TitleBar({
               (2026-09-15). `variant="split"` is the bell's no-wrapper skin: it
               renders a bare CircleChip as a DIRECT child so the run's rounding
               rules still match it, and moves its unread pill inside .candy-face
-              in the Badge shape above, which stops AT the seam instead of
+              in the shared Badge shape, which stops AT the seam instead of
               painting over Downloads. The toast fly-target is the button now. */}
           <NotificationBell
             variant="split"

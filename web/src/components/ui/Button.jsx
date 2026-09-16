@@ -137,3 +137,41 @@ export function HeaderChip({ children, onClick, href, title, target }) {
   }
   return <button type="button" data-own-press onClick={onClick} {...sharedProps}><span className="candy-face">{children}</span></button>;
 }
+
+// Every badge on the strip is one shape — an accent pip pinned to its button's
+// top-right corner, ringed in --surface so it reads against any band. Passing
+// no children gives the bare 7px dot (Settings' update flag); a number gives
+// the wider count pill (Processes, Downloads).
+//
+// It rides INSIDE .candy-face on purpose. .candy-face is position:static, so
+// the badge anchors to the position:relative .candy-btn above it — which means
+// no wrapper <span> around the button. That matters now the four are fused:
+// .candy-split squares and overlaps its DIRECT .candy-btn children, and a
+// wrapper sitting between them would swallow the :first-child / :last-child
+// rounding rules and break the shell. Pinned at right:0 rather than -2 so it
+// stops AT the seam instead of spilling over its neighbour; zIndex lifts it
+// above the next half's overlapping frame either way.
+//
+// Colour is the ONE thing this shape does not set inline: `.candy-badge` in
+// styles.css owns it, so the pip can invert to a white face when its button
+// lights accent. Inline would win over that rule and put accent on accent.
+// The two animations stay inline because the pulse-indicators gate matches on
+// the inline style text (`[style*="newBadgePulse"]`, `[style*="badgeTick"]`).
+export function Badge({ children, title, pulse }) {
+  const dot = children == null;
+  return (
+    <span aria-hidden={!pulse} aria-label={pulse} title={title} className="candy-badge" style={{
+      position: 'absolute', top: 0, right: 0,
+      minWidth: dot ? 7 : 13, height: dot ? 7 : 13,
+      padding: dot ? 0 : '0 3px', boxSizing: 'border-box',
+      borderRadius: dot ? '50%' : 7,
+      fontSize: 9, fontWeight: 700, lineHeight: '13px', textAlign: 'center',
+      fontFamily: dot ? undefined : 'var(--font-mono)',
+      boxShadow: '0 0 0 2px var(--surface)',
+      animation: dot
+        ? 'newBadgePulse 2.5s ease-in-out infinite'
+        : 'badgeTick 320ms cubic-bezier(0.34,1.56,0.64,1)',
+      pointerEvents: 'none', zIndex: 5,
+    }}>{children}</span>
+  );
+}

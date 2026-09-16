@@ -1,7 +1,7 @@
 // Shared UI primitive exports. Import from this barrel:
 //   import { PrimaryBtn, OutlinedBtn, Seg, FilterChip, ... } from '../components/ui';
 
-export { PrimaryBtn, OutlinedBtn, DangerOutlinedBtn, CircleChip, IconBtn, HeaderChip } from './Button.jsx';
+export { PrimaryBtn, OutlinedBtn, DangerOutlinedBtn, CircleChip, IconBtn, HeaderChip, Badge } from './Button.jsx';
 export { default as AppWindow } from './AppWindow.jsx';
 export { default as Popover, useAnchoredRect } from './Popover.jsx';
 export { default as Toast } from './Toast.jsx';

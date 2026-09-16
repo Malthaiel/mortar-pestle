@@ -10,14 +10,14 @@
 //                for the :first-child / :last-child rounding, so a wrapper
 //                <span> would swallow those rules and break the shell. The ref
 //                and the unread badge therefore ride the BUTTON, and the badge
-//                takes the run's in-face shape (see TitleBar's Badge) so it
+//                takes the run's in-face shape (the shared Badge in ui/Button.jsx) so it
 //                stops AT the seam instead of painting over its neighbour.
 //   'titlebar' — the pre-fusion standalone chip, wrapper and all.
 //   'dock'     — the original DockButton, kept for any future dock mount.
 
 import { useEffect, useRef, useState } from 'react';
 import DockButton from '../components/dock/DockButton.jsx';
-import { CircleChip } from '../components/ui/Button.jsx';
+import { CircleChip, Badge } from '../components/ui/Button.jsx';
 import { candyCenterOffset } from '../util/candy.js';
 import { IconBell } from '../components/icons.jsx';
 import { useNotifications } from './NotificationProvider.jsx';
@@ -71,20 +71,9 @@ export default function NotificationBell({ label, onClick, isActive, accent, onC
       >
         <IconBell size={16}/>
         {unreadCount > 0 && (
-          <span
-            key={tick}
-            aria-label={`${unreadCount} unread notifications`}
-            style={{
-              position: 'absolute', top: 0, right: 0, zIndex: 5,
-              minWidth: 13, height: 13, padding: '0 3px', boxSizing: 'border-box',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              borderRadius: 7, background: accent || 'var(--accent)', color: '#fff',
-              fontSize: 9, fontWeight: 700, fontFamily: 'var(--font-mono)', lineHeight: 1,
-              boxShadow: '0 0 0 2px var(--surface)',
-              pointerEvents: 'none',
-              animation: 'badgeTick 320ms cubic-bezier(0.34,1.56,0.64,1)',
-            }}
-          >{unreadCount > 99 ? '99+' : unreadCount}</span>
+          <Badge key={tick} pulse={`${unreadCount} unread notifications`}>
+            {unreadCount > 99 ? '99+' : unreadCount}
+          </Badge>
         )}
       </CircleChip>
     );
@@ -108,20 +97,9 @@ export default function NotificationBell({ label, onClick, isActive, accent, onC
         <DockButton Icon={IconBell} label={label} onClick={onClick} isActive={isActive} accent={accent} onContextMenu={onContextMenu} />
       )}
       {unreadCount > 0 && (
-        <span
-          key={tick}
-          aria-label={`${unreadCount} unread notifications`}
-          style={{
-            position: 'absolute', top: -3, right: -3, zIndex: 1,
-            minWidth: 16, height: 16, padding: '0 4px', boxSizing: 'border-box',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            borderRadius: 8, background: 'var(--accent)', color: '#fff',
-            fontSize: 9, fontWeight: 700, fontFamily: 'var(--font-mono)', lineHeight: 1,
-            border: `1.5px solid ${variant === 'titlebar' ? 'var(--surface)' : 'var(--dock-bg, oklch(0.190 0.005 78))'}`,
-            pointerEvents: 'none',
-            animation: 'badgeTick 320ms cubic-bezier(0.34,1.56,0.64,1)',
-          }}
-        >{unreadCount > 99 ? '99+' : unreadCount}</span>
+        <Badge key={tick} pulse={`${unreadCount} unread notifications`}>
+          {unreadCount > 99 ? '99+' : unreadCount}
+        </Badge>
       )}
     </span>
   );
