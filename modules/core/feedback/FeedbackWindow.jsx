@@ -29,7 +29,7 @@ export default function FeedbackWindow({ api }) {
   const close = () => { setOpen(false); setPostId(null); };
 
   return (
-    <AppWindow open={open} onClose={close} title="Feedback" width={1000} height="88vh"
+    <AppWindow open={open} onClose={close} title="Feedback" width={800} height="88vh"
       bodyStyle={{ padding: 0 }}>
       {postId
         ? <PostDetail fb={fb} postId={postId} onBack={() => setPostId(null)} />

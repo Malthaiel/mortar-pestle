@@ -73,7 +73,7 @@ export default function PostDetail({ fb, accent, postId, onBack }) {
   if (!post) return null;
 
   return (
-    <div style={{ padding: '24px 28px', maxWidth: 760, margin: '0 auto' }}>
+    <div style={{ padding: 20 }}>
       <FilterChip className="is-hover-accent" onClick={onBack}>← Board</FilterChip>
 
       {needsHandle && (

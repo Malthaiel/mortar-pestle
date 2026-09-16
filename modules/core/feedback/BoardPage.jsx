@@ -114,7 +114,7 @@ export default function BoardPage({ fb, accent, onOpen }) {
   };
 
   return (
-    <div style={{ padding: '24px 28px', maxWidth: 860, margin: '0 auto' }}>
+    <div style={{ padding: 20 }}>
       {needsHandle && (
         <div style={{
           fontSize: 13, color: 'var(--text)', marginBottom: 16, padding: '10px 14px',
@@ -126,6 +126,15 @@ export default function BoardPage({ fb, accent, onOpen }) {
       )}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+        {/* Standalone, not welded to the run. `fuse` is still what sizes it: it
+            takes the run's own height and lets the menu size to its content — and
+            a lone fused trigger is a Fragment, so this wrapper is what its
+            absolute menu anchors to. Every control on this row is therefore the
+            same height as a filter chip by construction, not by a copied number. */}
+        <div style={{ position: 'relative' }}>
+          <CandySelect value={sort} options={SORTS} onChange={setSort} title="Sort"
+            fuse chevron={false} shape="chip" className="is-hover-accent" />
+        </div>
         {/* position:relative — a fused CandySelect renders as a Fragment, so its
             absolute menu anchors to this run (see CandySelect's `fuse` note). */}
         <div className="candy-split">
@@ -136,19 +145,10 @@ export default function BoardPage({ fb, accent, onOpen }) {
             </FilterChip>
           ))}
         </div>
-        {/* Standalone, not welded to the run. `fuse` is still what sizes it: it
-            takes the run's own height and lets the menu size to its content — and
-            a lone fused trigger is a Fragment, so this wrapper is what its
-            absolute menu anchors to. Every control on this row is therefore the
-            same height as a filter chip by construction, not by a copied number. */}
-        <div style={{ position: 'relative' }}>
-          <CandySelect value={sort} options={SORTS} onChange={setSort} title="Sort"
-            fuse chevron={false} shape="chip" className="is-hover-accent" />
-        </div>
         <div style={{ flex: 1 }} />
-        {session?.signedIn
-          ? <FilterChip className="is-hover-accent" title="Manage in Settings → Feedback">@{session.profile?.handle || 'you'}</FilterChip>
-          : <FilterChip className="is-hover-accent" onClick={() => setShowSignIn(true)}>Sign in</FilterChip>}
+        {/* No sign-in / handle chip here (user-directed 2026-09-16): signing in is
+            prompted by SignInModal when you vote or post, and the handle lives in
+            Settings → Feedback. */}
         <FilterChip active accent={accent} onClick={newPost}>New post</FilterChip>
       </div>
 
