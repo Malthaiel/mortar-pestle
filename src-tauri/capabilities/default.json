@@ -317,6 +317,8 @@
     "allow-feedback-comment-delete-any",
     "allow-feedback-comment-official-reply",
     "allow-feedback-avatar-upload",
+    "allow-feedback-post-image-upload",
+    "allow-feedback-post-image-clear",
     "allow-site-push-busy",
     "allow-site-fetch-bookings",
     "allow-get-capture-state",

@@ -27,6 +27,10 @@
 //   disabled     disables the trigger
 //   chevron      show the ▾ indicator (default true) — false for triggers that
 //                read as a plain title (the overlay scrim picker)
+//   shape        data-shape for the trigger (default 'select') — pass 'chip' to
+//                make the trigger the same control as the chips it sits beside,
+//                so its font, padding and height come from theirs
+//   className    extra classes on the trigger (e.g. 'is-hover-accent')
 // Styling: trigger = two-layer .candy-btn[data-shape="select"]; the overlay menu
 // keeps its own .candy-select-menu / .candy-select-option classes (no portal).
 
@@ -35,6 +39,7 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 export default function CandySelect({
   value, options, onChange, title, placeholder = '',
   direction = 'down', compact = false, disabled = false, chevron = true, fuse = false,
+  shape = 'select', className = '',
 }) {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -135,8 +140,8 @@ export default function CandySelect({
       <button
         ref={btnRef}
         type="button"
-        className={'candy-btn' + sfx + fsx}
-        data-shape="select"
+        className={'candy-btn' + sfx + fsx + (className ? ' ' + className : '')}
+        data-shape={shape}
         data-own-press
         title={title}
         aria-label={title}
@@ -148,7 +153,9 @@ export default function CandySelect({
         onClick={() => !disabled && setOpen(o => !o)}
       >
         <span className="candy-face">
-          <span>{current ? current.label : placeholder}</span>
+          {/* inline-flex so a JSX label (leading icon + text) sits on the row's
+              centre line instead of the text baseline. No-op for plain strings. */}
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>{current ? current.label : placeholder}</span>
           {chevron && <span aria-hidden style={{
             transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
           }}>▾</span>}
@@ -179,7 +186,7 @@ export default function CandySelect({
                 onMouseEnter={() => setActiveIndex(i)}
                 onClick={() => pick(o.value)}
               >
-                <span style={{ flex: 1, textAlign: 'left' }}>{o.label}</span>
+                <span style={{ flex: 1, textAlign: 'left', display: 'inline-flex', alignItems: 'center', gap: 6 }}>{o.label}</span>
                 {isSel && <span aria-hidden style={{ fontSize: 11 }}>✓</span>}
               </button>
             );

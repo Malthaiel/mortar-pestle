@@ -978,6 +978,8 @@ pub fn run() {
             commands::feedback::feedback_comment_delete_any,
             commands::feedback::feedback_comment_official_reply,
             commands::feedback::feedback_avatar_upload,
+            commands::feedback::feedback_post_image_upload,
+            commands::feedback::feedback_post_image_clear,
             commands::site::site_push_busy,
             commands::site::site_fetch_bookings,
             commands::capture::get_capture_state,

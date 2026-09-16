@@ -57,5 +57,8 @@ export function makeFeedbackApi(api) {
     // avatars
     avatarUpload: (bytes, contentType) =>
       call(api, 'feedback_avatar_upload', { bytes, contentType }),
+    postImageUpload: (postId, bytes, contentType) =>
+      call(api, 'feedback_post_image_upload', { postId, bytes, contentType }),
+    postImageClear: (postId) => call(api, 'feedback_post_image_clear', { postId }),
   };
 }

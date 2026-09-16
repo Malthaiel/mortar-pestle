@@ -874,6 +874,79 @@ pub async fn feedback_avatar_upload(
     Ok(json!({ "avatarUrl": public_url }))
 }
 
+/// Attach an image to a post. Same pipeline as the avatar upload — decode,
+/// downscale, re-encode to PNG (which strips EXIF and any embedded metadata) —
+/// but kept at board size. The object is written under the caller's OWN storage
+/// prefix beside their avatar, so the existing per-user storage policy covers it
+/// and no new bucket is needed. RLS on `posts` is what limits the row update to
+/// the author.
+#[tauri::command]
+pub async fn feedback_post_image_upload(
+    post_id: String,
+    bytes: Vec<u8>,
+    content_type: String,
+) -> Result<Value, FeedbackError> {
+    let uid = current_uid()?;
+    if bytes.len() > 8 * 1024 * 1024 {
+        return Err(FeedbackError::Invalid("Image too large (max 8 MB)".into()));
+    }
+    if !matches!(
+        content_type.as_str(),
+        "image/png" | "image/jpeg" | "image/jpg" | "image/webp"
+    ) {
+        return Err(FeedbackError::Invalid("Only PNG, JPEG, or WebP images".into()));
+    }
+    let img = image::load_from_memory(&bytes)
+        .map_err(|e| FeedbackError::Invalid(format!("Not a valid image: {e}")))?;
+    let img = img.resize(1600, 1600, image::imageops::FilterType::Lanczos3);
+    let mut out: Vec<u8> = Vec::new();
+    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png)
+        .map_err(|e| FeedbackError::Upstream(format!("re-encode failed: {e}")))?;
+
+    let base = base_url()?;
+    let anon = anon_key()?;
+    let token = bearer(true)
+        .await?
+        .ok_or_else(|| FeedbackError::Auth("Not signed in".into()))?;
+    let object_path = format!("avatars/{uid}/post-{post_id}.png");
+    let resp = client()?
+        .post(format!("{base}/storage/v1/object/{object_path}"))
+        .header("apikey", anon.as_str())
+        .header("Authorization", format!("Bearer {token}"))
+        .header("Content-Type", "image/png")
+        .header("x-upsert", "true")
+        .body(out)
+        .send()
+        .await?;
+    handle_json(resp).await?;
+
+    let public_url = format!(
+        "{base}/storage/v1/object/public/{object_path}?v={}",
+        now_secs()
+    );
+    let pr = rest(Method::PATCH, &format!("posts?id=eq.{post_id}"), true)
+        .await?
+        .header("Prefer", "return=representation")
+        .json(&json!({ "image_url": public_url }))
+        .send()
+        .await?;
+    handle_json(pr).await?;
+    Ok(json!({ "imageUrl": public_url }))
+}
+
+/// Detach a post's image. The stored object is left in place (it is overwritten
+/// on the next upload to the same post).
+#[tauri::command]
+pub async fn feedback_post_image_clear(post_id: String) -> Result<Value, FeedbackError> {
+    let resp = rest(Method::PATCH, &format!("posts?id=eq.{post_id}"), true)
+        .await?
+        .json(&json!({ "image_url": Value::Null }))
+        .send()
+        .await?;
+    handle_json(resp).await?;
+    Ok(json!({ "ok": true }))
+}
+
 // ════════════════════════ background poll (in-app notifications) ════════════════════════
 // Mirrors `self_update::spawn_poll`: a 60s loop that surfaces new notifications as
 // toasts through the existing bell. Pauses when the window is unfocused and when

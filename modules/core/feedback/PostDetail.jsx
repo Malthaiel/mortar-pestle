@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
-import { PrimaryBtn, OutlinedBtn } from '@host/components/ui/Button.jsx';
+import { FilterChip } from '@host/components/ui/Pill.jsx';
 import SignInModal from './SignInModal.jsx';
 import { useSession } from './useSession.js';
 import VoteButton from './VoteButton.jsx';
-import StatusBadge from './StatusBadge.jsx';
+import PostIdentity from './PostIdentity.jsx';
+import MetaRun from './MetaRun.jsx';
 import UserAvatar from './UserAvatar.jsx';
 import DevControls from './DevControls.jsx';
 
-export default function PostDetail({ api, fb, accent, postId }) {
+export default function PostDetail({ fb, accent, postId, onBack }) {
   const { session, refresh: refreshSession, ensureHandle } = useSession(fb);
   const [post, setPost] = useState(null);
   const [comments, setComments] = useState([]);
@@ -73,7 +74,7 @@ export default function PostDetail({ api, fb, accent, postId }) {
 
   return (
     <div style={{ padding: '24px 28px', maxWidth: 760, margin: '0 auto' }}>
-      <OutlinedBtn small onClick={() => api.router.navigate('/tools/feedback')}>← Board</OutlinedBtn>
+      <FilterChip className="is-hover-accent" onClick={onBack}>← Board</FilterChip>
 
       {needsHandle && (
         <div style={{
@@ -85,23 +86,31 @@ export default function PostDetail({ api, fb, accent, postId }) {
         </div>
       )}
 
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginTop: 16 }}>
-        <VoteButton up={post.upvote_count ?? 0} down={post.downvote_count ?? 0} myVote={myVote} onVote={onVote} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 600, color: 'var(--text)' }}>{post.title}</h2>
-          <div style={{ display: 'flex', gap: 10, fontSize: 12, color: 'var(--text-muted)', marginTop: 6, flexWrap: 'wrap' }}>
-            <span style={{ textTransform: 'capitalize' }}>{post.category}</span><span>·</span>
-            <StatusBadge status={post.status} />
-            {post.author?.handle && (
-              <><span>·</span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                <UserAvatar name={post.author.handle} src={post.author.avatar_url} size={18} />@{post.author.handle}
-              </span></>
-            )}
-          </div>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 12, marginTop: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, alignSelf: 'stretch' }}>
+          <PostIdentity author={post.author} createdAt={post.created_at} />
+          <div style={{ flex: 1 }} />
+          <MetaRun category={post.category} status={post.status} commentCount={comments.length} />
+          <FilterChip className="is-hover-accent" active={following} accent={accent} onClick={onFollow}>{following ? 'Following' : 'Follow'}</FilterChip>
         </div>
-        <OutlinedBtn small onClick={onFollow}>{following ? 'Following' : 'Follow'}</OutlinedBtn>
+
+        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 600, color: 'var(--text)' }}>{post.title}</h2>
+
+        <VoteButton up={post.upvote_count ?? 0} down={post.downvote_count ?? 0} myVote={myVote} onVote={onVote} />
       </div>
+
+      {/* The post's picture. Full width here, so no flex sizing round to lose —
+          unlike the board card, where an in-flow image stole the text column's
+          width entirely. Same frame a candy chip wears, from the same tokens. */}
+      {post.image_url && (
+        <div style={{
+          marginTop: 16, aspectRatio: '16 / 9', overflow: 'hidden',
+          borderRadius: 'var(--radius-md)', background: 'var(--surface-3)',
+          border: '2px solid color-mix(in oklch, var(--cbtn-rest), black 22%)',
+        }}>
+          <img src={post.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+        </div>
+      )}
 
       {post.body && (
         <div style={{ marginTop: 16, fontSize: 14, lineHeight: 1.6, color: 'var(--text)', whiteSpace: 'pre-wrap' }}>
@@ -138,8 +147,8 @@ export default function PostDetail({ api, fb, accent, postId }) {
               fontSize: 13, fontFamily: 'var(--font-body)', color: 'var(--text)' }} />
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
             {session?.signedIn
-              ? <PrimaryBtn small onClick={submitComment} disabled={busy || !draft.trim()}>{busy ? 'Posting' : 'Comment'}</PrimaryBtn>
-              : <OutlinedBtn small onClick={() => setShowSignIn(true)}>Sign in to comment</OutlinedBtn>}
+              ? <FilterChip active accent={accent} disabled={busy || !draft.trim()} onClick={submitComment}>{busy ? 'Posting' : 'Comment'}</FilterChip>
+              : <FilterChip className="is-hover-accent" onClick={() => setShowSignIn(true)}>Sign in to comment</FilterChip>}
           </div>
         </div>
       </div>

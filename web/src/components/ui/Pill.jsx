@@ -43,7 +43,7 @@ export function Seg({ options, value, onChange, accent, disabled }) {
 }
 
 // Standalone pill toggle. Use when buttons aren't grouped (filter chips, etc.).
-export function FilterChip({ children, active, accent, onClick, disabled, title, maxWidth, type = 'button' }) {
+export function FilterChip({ children, active, accent, onClick, disabled, title, maxWidth, type = 'button', className = '' }) {
   return (
     <button
       type={type}
@@ -51,7 +51,7 @@ export function FilterChip({ children, active, accent, onClick, disabled, title,
       disabled={disabled}
       title={title}
       data-own-press
-      className={`candy-btn${active ? ' is-active' : ''}`}
+      className={`candy-btn${active ? ' is-active' : ''}${className ? ' ' + className : ''}`}
       data-shape="chip"
       style={{
         ...(accent ? { '--accent': accent } : {}),

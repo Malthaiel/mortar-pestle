@@ -5,11 +5,13 @@
 /* StatusBadge — read-only muted candy pill. The muted colour rides inline --cbtn-band
    (set per status) so the candy band + frame darken to match, and the face reads it;
    inert (no hover-flip), the same low-key treatment as .fb-avatar. */
-.fb-status { pointer-events: none; cursor: default; }
+/* line-height: these pills are <span>s, not <button>s, so they INHERIT the page's
+   line-height instead of taking the UA button default — which paints them 2.2px
+   taller than an identical chip beside them (measured 29.2 vs 27, 2026-09-15). */
+.fb-status { pointer-events: none; cursor: default; line-height: normal; }
 
 /* VoteButton — two candy buttons (UPVOTE / DOWNVOTE), word + count, no glyph; the
    caller's current vote lights via .is-active (accent face). */
-.fb-vote { display: inline-flex; gap: 6px; align-items: center; }
 .fb-vote-up > .candy-face,
 .fb-vote-down > .candy-face { gap: 7px; }
 .fb-vote-n { font-family: var(--font-mono); font-weight: 600; letter-spacing: 0; }

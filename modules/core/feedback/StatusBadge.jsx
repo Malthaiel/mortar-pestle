@@ -18,7 +18,7 @@ export default function StatusBadge({ status }) {
   return (
     <span
       className="candy-btn fb-status"
-      data-size="small"
+      data-shape="chip"
       style={{ '--cbtn-band': `color-mix(in oklch, ${s.hue} 48%, var(--surface-3))` }}
     >
       <span className="candy-face" style={{ background: 'var(--cbtn-band)', color: 'var(--text)' }}>

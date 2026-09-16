@@ -295,6 +295,8 @@ fn main() {
         "feedback_comment_delete_any",
         "feedback_comment_official_reply",
         "feedback_avatar_upload",
+        "feedback_post_image_upload",
+        "feedback_post_image_clear",
         "site_push_busy",
         "site_fetch_bookings",
         "get_capture_state",

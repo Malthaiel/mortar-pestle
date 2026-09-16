@@ -97,6 +97,9 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
      before/after are in modules/core/library/library.css. */
   --cbtn-rest: var(--surface);
   --cbtn-face: var(--surface-3);
+  /* The resting label colour, named so a shape that overrides `color` (select)
+     can hand it back instead of restating the mix in a second place. */
+  --cbtn-rest-text: color-mix(in oklch, var(--text-2), var(--text-muted) 33%);
 
   --bg:           oklch(0.985 0.004 30);
   --surface:      #ffffff;
@@ -1280,7 +1283,7 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: color-mix(in oklch, var(--text-2), var(--text-muted) 33%);
+  color: var(--cbtn-rest-text);
   background: var(--cbtn-face);
   border: var(--cbtn-frame) solid color-mix(in oklch, var(--cbtn-band), black 22%);
   border-radius: inherit;
@@ -2167,7 +2170,7 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
    left it 5px short), and the face rests at the same colour as its neighbours
    instead of the brighter standalone-trigger --text. */
 .candy-btn[data-shape="select"].is-fused { height: var(--cbtn-size, 27px); }
-.candy-btn[data-shape="select"].is-fused > .candy-face { color: var(--text-muted); }
+.candy-btn[data-shape="select"].is-fused > .candy-face { color: var(--cbtn-rest-text); }
 /* A fused select is welded to .is-hover-accent icon buttons, so it flips to the
    accent face on hover exactly like them (user-directed 2026-09-13) — the neutral
    select hover below (band --surface, face --surface-3) reads dead beside them.

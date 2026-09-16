@@ -39,7 +39,8 @@ import NotificationBell from '../notifications/NotificationBell.jsx';
 import { useUpdateStatus } from '../hooks/useUpdateStatus.js';
 import { useProcesses } from '../processes/ProcessesProvider.jsx';
 import { useAllDownloads } from '../downloads/DownloadsProvider.jsx';
-import { navigate, useHashRoute } from '../router.js';
+import { navigate } from '../router.js';
+import { sharedEvents } from '../module-sdk/index.js';
 import DockAgentsButton from './dock/DockAgentsButton.jsx';
 import { makeFeedbackApi } from '@modules/core/feedback/feedbackApi.js';
 import { useSession } from '@modules/core/feedback/useSession.js';
@@ -136,11 +137,11 @@ export default function TitleBar({
   const win = getCurrentWindow();
   const name = profile?.display_name || profile?.handle || '';
 
-  // Feedback is a ROUTE, not a panel, so its button reads the live route for
-  // its active state — the same predicate the module's own sidebar slot
-  // registers as `isActive` (modules/core/feedback/index.jsx).
-  const route = useHashRoute();
-  const feedbackActive = route.page === 'tools' && route.sub === 'feedback';
+  // Feedback is a POP-UP window, not a route, so its button reads the window's
+  // own open state: the overlay echoes `feedback:state` whenever it toggles
+  // (modules/core/feedback/FeedbackWindow.jsx).
+  const [feedbackActive, setFeedbackActive] = useState(false);
+  useEffect(() => sharedEvents.on('feedback:state', ({ open }) => setFeedbackActive(!!open)), []);
 
   // 'modules/feedback', NOT the slot's own tab id ('feedback-account'):
   // normalizeAddress validates the first segment against the drawer's static
@@ -290,13 +291,12 @@ export default function TitleBar({
             </span>
           </button>
 
-          {/* Feedback is a ROUTE, not a panel. It had no entry in
-              dock-buttons.js to delete — the Dock synthesized it from the
-              module registry — so module-entries.js skips the module instead
-              and this is its only launcher. */}
+          {/* Feedback is a POP-UP window (modules/core/feedback/FeedbackWindow.jsx),
+              not a route or a dock panel — this chip is its only launcher, and it
+              toggles by emitting on sharedEvents rather than navigating. */}
           <CircleChip title="Feedback" size={BTN}
             className={`is-hover-accent${feedbackActive ? ' is-active' : ''}`}
-            style={CENTER} onClick={() => navigate('/tools/feedback')}>
+            style={CENTER} onClick={() => sharedEvents.emit('feedback:open', {})}>
             <IconMessageSquare size={16}/>
           </CircleChip>
 
