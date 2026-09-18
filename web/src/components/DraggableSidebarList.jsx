@@ -90,8 +90,13 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
   // 45). Compositing alone isn't the culprit: the neighbours carry
   // translate3d(0,0,0), also a layer, at an INTEGER offset and never shift.
   // left/top is laid out, so it rounds exactly like the resting chip does.
+  // The dock (horizontal) takes left/top too: the centred bar puts its buttons on
+  // half pixels, and the transform smeared the held button across two (it read 1px
+  // bigger); rounding the transform instead left it 1px LOW until release
+  // (both photographed 2026-09-18). Laid out, it rounds like its neighbours.
+  const laidOut = isGrid || isHorizontal;
   const place = (el, x, y) => {
-    if (isGrid) { el.style.left = `${x}px`; el.style.top = `${y}px`; }
+    if (laidOut) { el.style.left = `${x}px`; el.style.top = `${y}px`; }
     else el.style.transform = `translate3d(${x}px, ${y}px, 0)`;
   };
   // Flipped true when the parent enters its release phase on drop. The
@@ -204,7 +209,7 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
       // Vertical: X anchors to source column (modules stay locked to rail).
       // Horizontal: Y anchors to source row (dock buttons stay on the bar).
       // Active-axis position depends on the drag mode.
-      transform: isGrid ? 'none' : `translate3d(${initialX}px, ${initialY}px, 0)`,
+      transform: laidOut ? 'none' : `translate3d(${initialX}px, ${initialY}px, 0)`,
     });
     place(clone, initialX, initialY);
     // Portal the clone to <body> rather than the in-tree host. The clone is
@@ -227,7 +232,10 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
     // is a scoped RULE, not a variable. Rather than chase which rule, pin the
     // clone's chip to the geometry the real one actually has — read off the live
     // resting element at lift, so it stays right whatever the scope does.
-    // (Grid only: the dock and sidebar clones are signed off as they are.)
+    // Grid only here; the dock pins its button in the slot-snap tracking branch
+    // below. EVERY clone loses its surface's scoped rules — that cost the dock a
+    // dim glyph and a half-pixel smear (2026-09-18) after this line had called the
+    // dock "signed off". When a dragged item looks different, check scope first.
     if (isGrid) {
       const srcBtn = sourceElement.querySelector('.candy-btn');
       const cloneBtn = clone.querySelector('.candy-btn');
@@ -381,7 +389,7 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
         if (stable < 3) { rafId = requestAnimationFrame(track); return; }
         rafId = null;
         void clone.offsetWidth;
-        clone.style.transition = `transform ${GLIDE}`;
+        clone.style.transition = `left ${GLIDE}, top ${GLIDE}`;
       };
       rafId = requestAnimationFrame(track);
     } else if (mode === 'slot-snap') {
@@ -390,7 +398,7 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
       // the reflow, the browser may batch the transition switch with the initial
       // transform and animate from (0, 0) to the first slot on mount.
       void clone.offsetWidth;
-      clone.style.transition = isGrid ? `left ${GLIDE}, top ${GLIDE}` : `transform ${GLIDE}`;
+      clone.style.transition = laidOut ? `left ${GLIDE}, top ${GLIDE}` : `transform ${GLIDE}`;
     }
 
     return () => {
@@ -436,7 +444,7 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
     // transform delta is computed. Same pattern the slot-snap init uses at
     // mount (search for `void clone.offsetWidth`).
     const glide = `${glideMs}ms ${GLIDE_TIMING}`;
-    clone.style.transition = isGrid ? `left ${glide}, top ${glide}` : `transform ${glide}`;
+    clone.style.transition = laidOut ? `left ${glide}, top ${glide}` : `transform ${glide}`;
     void clone.offsetWidth;
     place(clone, cx, cy);
     // Swap is-dragging → is-drop-accent for the glide. The bridge class carries

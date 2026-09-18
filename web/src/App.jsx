@@ -330,7 +330,6 @@ function MainApp() {
         settings={settings}
         setSetting={setSetting}
         accent={accent}
-        resolvedTheme={resolvedTheme}
       />}
       <TransientToastLayer/>
       <NotificationPanel open={notifOpen} onClose={() => setNotifOpen(false)} accent={accent}/>

@@ -154,7 +154,7 @@ export const AGENTS_DEFAULT = {
 // ('flush' top hairline | 'band' soft upward shadow). The fill is fixed
 // charcoal across every theme (the Dock color picker + graphite/slate were
 // removed). Icon face colour follows the resolved color mode (light chips in
-// light mode, dark in dark) via data-dock-icon-style={resolvedTheme} on Dock
+// light mode, dark in dark) via :root[data-theme] + .dock-btn in styles.css
 // — no user picker. `order` is the
 // drag-persisted button order (empty array = declaration order).
 // `expandMs` / `collapseMs` are the dock hover-expand grow / shrink durations

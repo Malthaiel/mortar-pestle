@@ -59,7 +59,6 @@ export default function Dock({
   settings,
   setSetting,
   accent,
-  resolvedTheme,
 }) {
   const route = useHashRoute();
   const { openContextMenu } = useContextMenu();
@@ -317,7 +316,6 @@ export default function Dock({
         ref={dockRootRef}
         className="dock-root"
         data-dock-edge-style={edgeStyle}
-        data-dock-icon-style={resolvedTheme}
         data-quick-capture-open={quickCaptureOpen ? 'true' : undefined}
         onMouseLeave={onDockLeave}
         onMouseOver={onDockOver}

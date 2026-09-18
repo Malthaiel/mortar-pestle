@@ -569,22 +569,24 @@ body[data-design-pointer="markup"] *:not(input):not(textarea):not(select):not([d
 .dock-root[data-dock-edge-style="band"] {
   box-shadow: 0 -6px 18px rgba(0,0,0,0.10);
 }
-/* Dock icon GLYPH colour, driven by data-dock-icon-style={resolvedTheme} on
-   Dock (follows the color mode — no user picker). Scoped to inactive buttons so
+/* Dock icon GLYPH colour, keyed on :root[data-theme] and the dock-only .dock-btn
+   class, NOT on .dock-root: the drag clone is portalled to <body>, outside the
+   dock, and a .dock-root-scoped rule left the held button's icon dim (measured
+   151 vs 182 luma, 2026-09-18). Follows the color mode — no user picker. Scoped to inactive buttons so
    the .is-active accent fill is never touched. The band and the face ground are
    NOT set here any more: the dock used to pin the band to --dock-bg, which was
    just another name for --surface, and both now come from the global --cbtn-rest
    / --cbtn-face knobs (see :root) along with every other button in the app. */
-.dock-root[data-dock-icon-style="light"] .candy-btn[data-shape="icon"]:not(.is-active) > .candy-face {
+:root[data-theme="light"] .candy-btn.dock-btn:not(.is-active) > .candy-face {
   color: oklch(0.420 0.010 78);
 }
-.dock-root[data-dock-icon-style="light"] .candy-btn[data-shape="icon"]:not(.is-active):is([data-dock-hover], :hover) > .candy-face {
+:root[data-theme="light"] .candy-btn.dock-btn:not(.is-active):is([data-dock-hover], :hover) > .candy-face {
   color: oklch(0.280 0.010 78);
 }
-.dock-root[data-dock-icon-style="dark"] .candy-btn[data-shape="icon"]:not(.is-active) > .candy-face {
+:root[data-theme="dark"] .candy-btn.dock-btn:not(.is-active) > .candy-face {
   color: oklch(0.780 0.010 78);
 }
-.dock-root[data-dock-icon-style="dark"] .candy-btn[data-shape="icon"]:not(.is-active):is([data-dock-hover], :hover) > .candy-face {
+:root[data-theme="dark"] .candy-btn.dock-btn:not(.is-active):is([data-dock-hover], :hover) > .candy-face {
   color: oklch(0.920 0.010 78);
 }
 @keyframes march       { to { stroke-dashoffset: -10; } }
