@@ -1784,6 +1784,20 @@ export function subscribeBrowserTabsRequest(handler) {
   return () => { p.then(fn => fn()).catch(() => {}); };
 }
 
+// Deadlock page written from another window (Personal VODs). The vault watcher
+// deliberately skips the Deadlock root (watcher.rs), so a page open in one window
+// never hears that another wrote to it — the dictation sink lives in the overlay
+// host while the reader lives in the main window, and vice versa for After Notes.
+// Same shape as the browser tab-store sync above: emit the relpath, re-read if it
+// is the page on screen.
+export function emitDeadlockFileWritten(path) {
+  return tauriEmit('deadlock-file-written', { path });
+}
+export function subscribeDeadlockFileWritten(handler) {
+  const p = tauriListen('deadlock-file-written', evt => handler(evt.payload?.path || null));
+  return () => { p.then(fn => fn()).catch(() => {}); };
+}
+
 // Overlay-attached browser tab (Browser Overlay Panel). Rust emits
 // `overlay-browser-attached {tabId}` when a tab's live webview reparents into
 // the overlay host, and `overlay-browser-detached {}` when it returns home;

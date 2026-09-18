@@ -4,8 +4,8 @@ import { useSettings } from '../hooks/useSettings.js';
 import { KEYBINDS_DEFAULT } from '../keybinds/registry.js';
 import { toAccelerator } from '../keybinds/format.js';
 
-// Pushes the three Personal-VOD match-timer binds (Settings ▸ Keybinds ▸
-// Coaching) down to Rust's global_shortcut plugin. Renders nothing.
+// Pushes the two Personal-VOD recording binds (Settings ▸ Keybinds ▸ Coaching)
+// down to Rust's global_shortcut plugin. Renders nothing.
 //
 // It is the third instance of the same pattern as CaptureHotkeyBridge and
 // SttProvider's scrim-key effect, and for the same reason: the registration
@@ -18,7 +18,6 @@ import { toAccelerator } from '../keybinds/format.js';
 // focus when they are pressed.
 const IDS = [
   ['start', 'vod.timer-start'],
-  ['pause', 'vod.timer-pause'],
   ['end', 'vod.timer-end'],
 ];
 

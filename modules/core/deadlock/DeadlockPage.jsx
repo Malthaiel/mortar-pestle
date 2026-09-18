@@ -21,12 +21,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { api } from '@host/api.js';
+import { api, emitDeadlockFileWritten, subscribeDeadlockFileWritten } from '@host/api.js';
 import { navigate } from '@host/router.js';
 import { encodePagePath } from '@host/components/SidebarBrowser.jsx';
 import PageTitleHeader from '@host/components/PageTitleHeader.jsx';
 import { getDeadlockIndex, resolveTarget } from './deadlockIndex.js';
 import { SCRIM_BASE } from './DeadlockTree.jsx';
+import { VOD_BASE } from './scrimSchema.js';
+import { appendAfterNote, vodFile } from './vodNotes.js';
 
 // Drop a leading YAML frontmatter block (the Rust reader strips it too).
 function stripFrontmatter(src) {
@@ -83,6 +85,67 @@ const mdComponents = (nav) => ({
   },
 });
 
+// A Personal VOD note file: a direct child of VOD_BASE, no deeper. Same test as
+// the overlay panel's — the two surfaces agree on what a VOD is.
+const isVodPath = (p) => {
+  if (!p || !p.startsWith(VOD_BASE + '/')) return false;
+  const rest = p.slice(VOD_BASE.length + 1);
+  return !!rest && !rest.includes('/');
+};
+
+// The out-of-game note box. Lives under the reader on a VOD page, in BOTH the
+// main app and the overlay — one component, because both surfaces mount this
+// same pane.
+//
+// Notes typed here carry no timestamp: nothing is recording, so there is no
+// clock to stamp them against, and an invented stamp would be indistinguishable
+// from a real one when reviewing the clip.
+function AfterNoteBox({ file, onSaved }) {
+  const [draft, setDraft] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const submit = async () => {
+    const text = draft.trim();
+    if (!text || busy) return;
+    setBusy(true); setErr(null);
+    // Re-read before writing: the dictation sink appends to this same file from
+    // the overlay while the page sits open, and writing back the copy this pane
+    // loaded would silently delete whatever landed since.
+    try {
+      const fresh = await api.getRawFile(file, 'deadlock');
+      const next = appendAfterNote(fresh, text);
+      await api.savePage(file, next, null, 'deadlock');
+      emitDeadlockFileWritten(file).catch(() => {});
+      setDraft('');
+      onSaved(next);
+    } catch (e) {
+      setErr(String(e?.message || e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {err && <div style={{ fontSize: 12.5, color: 'var(--error)' }}>{err}</div>}
+      <div className="candy-center-row" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div className="candy-btn" data-shape="field" style={{ flex: 1, minWidth: 0 }}>
+          <input className="candy-face" placeholder="Note to add after the match" value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); submit(); } }} />
+        </div>
+        {/* No disabled state: submit already no-ops on an empty box, and a
+            greyed candy button reads as broken rather than as "type first". */}
+        <button type="button" className="candy-btn" data-size="small"
+          title="Add this to After Notes" onClick={submit}>
+          <span className="candy-face">Add</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function Shell({ children, accent, header }) {
   return (
     <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
@@ -116,6 +179,19 @@ export default function DeadlockPage({ rest, accent, nav = navigate, overlay = f
       .catch((e) => { if (!cancelled) setErr(String(e?.message || e)); });
     return () => { cancelled = true; };
   }, [rest, isScrimFolder, isScrimLanding]);
+
+  // Another WINDOW wrote the page under us — the overlay's dictation sink writes
+  // while the reader sits open here, and this same pane in the overlay host goes
+  // stale when an After Note is typed in the main window. The vault watcher does
+  // not cover the Deadlock root, so the writer announces the path itself.
+  useEffect(() => {
+    if (!rest) return undefined;
+    const want = rest + '.md';
+    return subscribeDeadlockFileWritten((path) => {
+      if (path !== want) return;
+      api.getRawFile(want, 'deadlock').then(setRaw).catch(() => { /* keep what is on screen */ });
+    });
+  }, [rest]);
 
   const body = useMemo(
     () => (raw == null ? '' : transformWikilinks(stripFrontmatter(raw), index)),
@@ -152,6 +228,7 @@ export default function DeadlockPage({ rest, accent, nav = navigate, overlay = f
   return (
     <Shell accent={accent} header={<PageTitleHeader title={pageTitle} accent={accent} />}>
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents(nav)}>{body}</ReactMarkdown>
+      {isVodPath(rest) && <AfterNoteBox file={vodFile(rest)} onSaved={setRaw} />}
     </Shell>
   );
 }

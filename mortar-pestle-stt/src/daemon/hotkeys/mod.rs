@@ -45,10 +45,10 @@ pub fn spawn(_ctx: ControlContext, _rebind_rx: mpsc::UnboundedReceiver<()>) {}
 /// (Linux binds live in the portal), so the `set_scrim_key` socket verb needs no
 /// `cfg` at its call site.
 #[cfg(target_os = "windows")]
-pub fn set_scrim_key(ctx: &ControlContext, vk: u32) {
-    winhook::set_scrim_vk(vk);
+pub fn set_scrim_key(ctx: &ControlContext, vk: u32, mods: u32) {
+    winhook::set_scrim_vk(vk, mods);
     winhook::republish(ctx);
 }
 
 #[cfg(not(target_os = "windows"))]
-pub fn set_scrim_key(_ctx: &ControlContext, _vk: u32) {}
+pub fn set_scrim_key(_ctx: &ControlContext, _vk: u32, _mods: u32) {}

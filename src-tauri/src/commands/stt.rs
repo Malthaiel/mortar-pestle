@@ -489,7 +489,8 @@ pub async fn stt_stop_dictation() -> Result<(), String> {
 }
 
 /// `stt_set_scrim_key` — bind the SCRIM push-to-talk key (socket op `set_scrim_key`,
-/// `{vk}` = a Win32 virtual-key code; `0` unbinds). The scrim bind is the second
+/// `{vk, mods}` = a Win32 virtual-key code plus the MOD_* modifier mask
+/// (1 ctrl / 2 alt / 4 shift; `0` = a bare key); a `vk` of `0` unbinds). The scrim bind is the second
 /// hold-to-talk trigger: its transcript becomes a timestamped note on the live scrim,
 /// while the fixed F8 bind types into the focused window. Windows-only in effect —
 /// the engine no-ops it elsewhere (Linux binds live in the portal).
@@ -497,10 +498,10 @@ pub async fn stt_stop_dictation() -> Result<(), String> {
 /// The frontend calls this on every change AND on connect (the daemon holds the bind
 /// in memory only, so it must be re-sent after any engine restart).
 #[tauri::command]
-pub async fn stt_set_scrim_key(vk: u32) -> Result<(), String> {
+pub async fn stt_set_scrim_key(vk: u32, mods: Option<u32>) -> Result<(), String> {
     let client = require_client()?;
     client
-        .request("set_scrim_key", serde_json::json!({ "vk": vk }))
+        .request("set_scrim_key", serde_json::json!({ "vk": vk, "mods": mods.unwrap_or(0) }))
         .await
         .map_err(|e| e.to_string())?;
     Ok(())

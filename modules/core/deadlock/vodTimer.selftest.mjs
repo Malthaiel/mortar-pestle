@@ -16,10 +16,12 @@ globalThis.localStorage = {
   removeItem: (k) => void mem.delete(k),
 };
 
-const { start, pauseResume, end, elapsedMs, fmt, isArmed, read } = await import('./vodTimer.js');
+const { start, anchor, end, elapsedMs, fmt, isArmed, read } = await import('./vodTimer.js');
 
-// Deterministic clock.
-let now = 1_000_000;
+// Deterministic clock. A REAL epoch value, not a small counter: the module
+// refuses a stamp from before 2020 (the engine reports 0 while idle), so a toy
+// clock would see every anchor rejected.
+let now = 1_800_000_000_000;
 const realNow = Date.now;
 Date.now = () => now;
 
@@ -34,39 +36,55 @@ try {
   // ── idle ────────────────────────────────────────────────────────────────
   assert.equal(isArmed(), false);
   assert.equal(elapsedMs(), 0);
-  start(''); // no target = no-op
+  start('', now); // no target = no-op
   assert.equal(isArmed(), false);
 
-  // ── start + run ─────────────────────────────────────────────────────────
+  // ── start anchors on the RECORDER's instant, not on now ──────────────────
   const TARGET = 'Coaching/Personal VODs/Lash 09-03-26';
-  start(TARGET);
+  start(TARGET, now - 5_000); // engine says it began 5 s ago
   assert.equal(isArmed(), true);
   assert.equal(read().target, TARGET);
+  assert.equal(elapsedMs(), 5_000, 'elapsed counts from the engine start, not the arm');
   now += 30_000;
-  assert.equal(elapsedMs(), 30_000);
+  assert.equal(elapsedMs(), 35_000);
 
   // A second start must NOT wipe the match (stray F6 in-game).
-  start('Coaching/Personal VODs/Something Else');
+  start('Coaching/Personal VODs/Something Else', now);
   assert.equal(read().target, TARGET, 'a second start must not re-target');
-  assert.equal(elapsedMs(), 30_000, 'a second start must not reset the clock');
-
-  // ── pause banks, and time passing while paused is NOT counted ────────────
-  pauseResume();
-  assert.equal(read().running, false);
-  now += 60_000;
-  assert.equal(elapsedMs(), 30_000, 'paused time must not accrue');
-
-  // ── resume keeps the banked time ────────────────────────────────────────
-  pauseResume();
-  assert.equal(read().running, true);
-  now += 10_000;
-  assert.equal(elapsedMs(), 40_000);
+  assert.equal(elapsedMs(), 35_000, 'a second start must not reset the clock');
 
   // ── reload survival: the store is the only state ─────────────────────────
-  const fresh = await import(`./vodTimer.js?reload=${Date.now()}`);
+  const fresh = await import(`./vodTimer.js?reload=${now}`);
   now += 5_000;
-  assert.equal(fresh.elapsedMs(), 45_000, 'elapsed must survive a webview reload');
+  assert.equal(fresh.elapsedMs(), 40_000, 'elapsed must survive a webview reload');
   assert.equal(fresh.read().target, TARGET);
+
+  // ── a missing engine stamp degrades to now rather than to NaN ────────────
+  end();
+  start(TARGET); // no startedMs
+  assert.equal(elapsedMs(), 0);
+  now += 3_000;
+  assert.equal(elapsedMs(), 3_000);
+
+  // The engine reports 0 while idle and for a beat after start_clip (state
+  // `starting`) — anchoring on it would read 57 years, so both the arm and the
+  // re-anchor must refuse it.
+  end();
+  start(TARGET, 0);
+  assert.equal(elapsedMs(), 0, 'a zero stamp must not anchor at the epoch');
+  anchor(0);
+  assert.equal(elapsedMs(), 0, 'a zero re-anchor is ignored');
+  const trueStart = now - 12_000;
+  anchor(trueStart);
+  assert.equal(elapsedMs(), 12_000, 'the real stamp lands when it arrives');
+  anchor(trueStart);
+  assert.equal(elapsedMs(), 12_000, 're-anchoring on the same stamp is a no-op');
+
+  // An anchor with nothing armed changes nothing.
+  end();
+  anchor(now - 9_000);
+  assert.equal(isArmed(), false);
+  assert.equal(elapsedMs(), 0);
 
   // ── a corrupt blob degrades to idle rather than throwing ─────────────────
   mem.set('vod-timer', '{not json');
@@ -74,7 +92,7 @@ try {
   assert.equal(elapsedMs(), 0);
 
   // ── end disarms ─────────────────────────────────────────────────────────
-  start(TARGET);
+  start(TARGET, now);
   now += 1_000;
   end();
   assert.equal(isArmed(), false);

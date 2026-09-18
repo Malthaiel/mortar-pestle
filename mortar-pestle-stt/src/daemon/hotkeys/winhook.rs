@@ -29,6 +29,7 @@ use crate::protocol::{Event, HotkeysSnapshot, Shortcut};
 use windows_sys::Win32::Foundation::{LPARAM, LRESULT, WPARAM};
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::System::Threading::GetCurrentThreadId;
+use windows_sys::Win32::UI::Input::KeyboardAndMouse::GetAsyncKeyState;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CallNextHookEx, DispatchMessageW, GetMessageW, PostThreadMessageW, SetWindowsHookExW,
     TranslateMessage, UnhookWindowsHookEx, KBDLLHOOKSTRUCT, MSG, WH_KEYBOARD_LL, WM_KEYDOWN,
@@ -61,16 +62,72 @@ const DICTATE_SCRIM_ID: &str = "dictate_scrim";
 /// the only one safe inside a low-level hook callback.
 static SCRIM_VK: AtomicU32 = AtomicU32::new(0x78);
 
-/// Set the scrim-note key (a Win32 virtual-key code; `0` unbinds). Called from the
-/// socket `set_scrim_key` handler.
-pub fn set_scrim_vk(vk: u32) {
+// Modifier mask for the scrim chord — the same MOD_* values and the same
+// GetAsyncKeyState gate the capture daemon's overlay chord already uses
+// (mortar-pestle-capture winhook.rs). Mirrored rather than reinvented so the two
+// hooks agree on what "Alt+X" means.
+const MOD_CTRL: u32 = 1;
+const MOD_ALT: u32 = 2;
+const MOD_SHIFT: u32 = 4;
+
+const VK_SHIFT: i32 = 0x10;
+const VK_CONTROL: i32 = 0x11;
+const VK_MENU: i32 = 0x12; // Alt
+
+/// Modifiers the scrim chord requires (MOD_* mask; 0 = a bare key, the old
+/// behaviour). Without this a chord bind degraded to its bare key — Alt+Space
+/// would have fired on every jump.
+static SCRIM_MODS: AtomicU32 = AtomicU32::new(0);
+
+/// Set the scrim-note chord (a Win32 virtual-key code; `0` unbinds) plus the
+/// modifiers it requires. Called from the socket `set_scrim_key` handler.
+pub fn set_scrim_vk(vk: u32, mods: u32) {
     SCRIM_VK.store(vk, Ordering::Release);
-    log::info!("winhook: scrim key set to VK={vk:#x}");
+    SCRIM_MODS.store(mods, Ordering::Release);
+    log::info!("winhook: scrim key set to {}", scrim_label());
 }
 
 /// The current scrim-note key (`0` = unbound) — read by `publish_snapshot`.
 pub fn scrim_vk() -> u32 {
     SCRIM_VK.load(Ordering::Acquire)
+}
+
+/// `true` iff `vk` is currently down (GetAsyncKeyState high bit 0x8000).
+#[inline]
+fn key_down(vk: i32) -> bool {
+    (unsafe { GetAsyncKeyState(vk) } as u16 & 0x8000) != 0
+}
+
+/// `true` iff every modifier the live scrim chord requires is held. Extra
+/// modifiers are tolerated, matching the capture daemon's gate.
+#[inline]
+fn scrim_mods_down() -> bool {
+    let mods = SCRIM_MODS.load(Ordering::Acquire);
+    (mods & MOD_CTRL == 0 || key_down(VK_CONTROL))
+        && (mods & MOD_ALT == 0 || key_down(VK_MENU))
+        && (mods & MOD_SHIFT == 0 || key_down(VK_SHIFT))
+}
+
+/// The live chord as text (`Alt+Space (hold)`), for the settings readout — never a
+/// restated constant.
+fn scrim_label() -> String {
+    let vk = scrim_vk();
+    if vk == 0 {
+        return "unbound".to_owned();
+    }
+    let mods = SCRIM_MODS.load(Ordering::Acquire);
+    let mut out = String::new();
+    if mods & MOD_CTRL != 0 {
+        out.push_str("Ctrl+");
+    }
+    if mods & MOD_ALT != 0 {
+        out.push_str("Alt+");
+    }
+    if mods & MOD_SHIFT != 0 {
+        out.push_str("Shift+");
+    }
+    out.push_str(&vk_label(vk));
+    out
 }
 
 /// Which bind produced an edge — the drainer starts the matching dictation source.
@@ -159,6 +216,9 @@ unsafe extern "system" fn hook_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -
         let bind = if kb.vkCode == DICTATE_VK {
             Some((Bind::Dictate, &KEY_DOWN))
         } else if scrim_vk != 0 && kb.vkCode == scrim_vk {
+            // The modifier gate is checked on the PRESS branch only (below): a
+            // release must fire even if the modifier was let go first, or the
+            // latch strands and the mic never stops.
             Some((Bind::Scrim, &SCRIM_KEY_DOWN))
         } else {
             None
@@ -166,7 +226,11 @@ unsafe extern "system" fn hook_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -
         if let Some((bind, latch)) = bind {
             match wparam as u32 {
                 WM_KEYDOWN | WM_SYSKEYDOWN => {
-                    if !latch.swap(true, Ordering::AcqRel) {
+                    // A chord bind only opens the mic while its modifiers are
+                    // held; a bare bind (mask 0) passes this unconditionally.
+                    if matches!(bind, Bind::Scrim) && !scrim_mods_down() {
+                        // fall through to CallNextHookEx — not our press
+                    } else if !latch.swap(true, Ordering::AcqRel) {
                         if let Some(tx) = EDGE_TX.get() {
                             let _ = tx.send((bind, true));
                         }
@@ -251,6 +315,7 @@ fn vk_label(vk: u32) -> String {
     match vk {
         0x70..=0x87 => format!("F{}", vk - 0x6F), // VK_F1 = 0x70 … VK_F24 = 0x87
         0x30..=0x39 | 0x41..=0x5A => ((vk as u8) as char).to_string(), // 0-9, A-Z
+        0x20 => "Space".to_owned(),
         other => format!("VK {other:#04x}"),
     }
 }
@@ -280,7 +345,7 @@ fn publish_snapshot(ctx: &ControlContext) {
                 description: "Push-to-talk scrim note".to_owned(),
                 trigger_description: match scrim_vk() {
                     0 => "unbound".to_owned(),
-                    vk => format!("{} (hold)", vk_label(vk)),
+                    _ => format!("{} (hold)", scrim_label()),
                 },
                 reserved: false,
             },

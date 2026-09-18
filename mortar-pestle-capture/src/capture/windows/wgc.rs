@@ -85,6 +85,22 @@ impl WgcCapture {
         let session = pool
             .CreateCaptureSession(&item)
             .map_err(|e| format!("CreateCaptureSession: {e}"))?;
+
+        // Kill the yellow "this window is being captured" ring Windows paints
+        // around the captured window. It is a COMPOSITOR overlay, not pixels —
+        // it never reaches the encoded frames, only Malthaiel's screen mid-match,
+        // which is exactly where it is least wanted.
+        //
+        // Not fatal if refused: `IGraphicsCaptureSession3` is Win11-only and some
+        // builds gate the borderless capability behind a capability request, in
+        // which case the capture still runs and the ring stays. Log it rather
+        // than failing a recording over a decoration.
+        if let Err(e) = session.SetIsBorderRequired(false) {
+            log::warn!("wgc: SetIsBorderRequired(false) refused ({e}) — the capture ring stays on screen");
+        } else {
+            log::info!("wgc: capture border disabled");
+        }
+
         session.StartCapture().map_err(|e| format!("StartCapture: {e}"))?;
 
         Ok(Self {

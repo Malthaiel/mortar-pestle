@@ -7,6 +7,10 @@
 import { fmt } from './vodTimer.js';
 
 export const NOTES_HEADING = '## Notes';
+// The out-of-game list. Notes typed after the match carry no match time — there
+// is no recording running to stamp them against, and a fake stamp would be
+// indistinguishable from a real one in the reader.
+export const AFTER_HEADING = '## After Notes';
 
 // Tree paths in this app are EXTENSION-LESS (useDeadlockTree's childNodes
 // strips `.md`, and nav/live-target carry the stripped form), but the vault
@@ -31,9 +35,12 @@ export function newVodScaffold(name, today = new Date()) {
     'Status: unreviewed',
     '---',
     '',
-    `Live notes taken during **${name}**. Timestamps are the match timer, synced by hand to the in-game clock at the start.`,
+    `Live notes taken during **${name}**. Timestamps are the recording clock — 0:00 is the first frame of the clip.`,
     '',
     NOTES_HEADING,
+    '',
+    '',
+    AFTER_HEADING,
     '',
     '',
   ].join('\n');
@@ -68,6 +75,46 @@ export function appendNote(body, stampMs, text) {
   const trimmed = section.replace(/\s+$/, '');
   const head = trimmed === '' ? '\n' : trimmed;
   return `${src.slice(0, i)}${NOTES_HEADING}${head}\n${line}\n${rest || ''}`;
+}
+
+// Append an untimed note under `## After Notes`. Same contract as appendNote:
+// the heading is CREATED at the END of the file if a hand-edit lost it, because
+// losing a note is the one failure this file exists to prevent.
+export function appendAfterNote(body, text) {
+  const clean = String(text || '').trim();
+  if (!clean) return body;
+  const line = `- ${clean}`;
+  const src = String(body || '');
+
+  const i = src.indexOf(AFTER_HEADING);
+  if (i === -1) {
+    const sep = src.endsWith('\n') ? '' : '\n';
+    return `${src}${sep}\n${AFTER_HEADING}\n\n${line}\n`;
+  }
+  const after = src.slice(i + AFTER_HEADING.length);
+  const nextH = after.search(/\n## /);
+  const section = nextH === -1 ? after : after.slice(0, nextH);
+  const rest = nextH === -1 ? '' : after.slice(nextH);
+  const trimmed = section.replace(/\s+$/, '');
+  const head = trimmed === '' ? '\n' : trimmed;
+  return `${src.slice(0, i)}${AFTER_HEADING}${head}\n${line}\n${rest || ''}`;
+}
+
+// Record the saved clip on the note. Frontmatter, not the body: it is metadata
+// about the file, and the reader strips frontmatter so it stays out of the way.
+// An existing `Video:` is REPLACED (a re-record of the same match supersedes it),
+// and a file that somehow lost its frontmatter gets one rather than silently
+// dropping the path.
+export function setVodVideo(body, path) {
+  const clean = String(path || '').trim();
+  const src = String(body || '');
+  if (!clean) return src;
+  const m = src.match(/^---\n([\s\S]*?)\n---/);
+  if (!m) return `---\nVideo: ${clean}\n---\n\n${src}`;
+  const fm = /^Video:.*$/m.test(m[1])
+    ? m[1].replace(/^Video:.*$/m, `Video: ${clean}`)
+    : `${m[1]}\nVideo: ${clean}`;
+  return `---\n${fm}\n---${src.slice(m[0].length)}`;
 }
 
 // Every note bullet in a body, oldest first — `[{ stamp, text }]`. The panel

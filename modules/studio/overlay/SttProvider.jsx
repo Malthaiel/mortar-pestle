@@ -23,8 +23,7 @@ const SttCtx = createContext(null);
 export const useStt = () => useContext(SttCtx);
 
 // Win32 virtual-key for a keybind-registry chord key, or 0 when it can't be
-// expressed as one (the daemon's hook matches a single plain key, so chords and
-// exotic keys are simply unbound rather than silently half-working).
+// expressed as one (unbound rather than silently half-working).
 // VK_F1 = 0x70 … VK_F24 = 0x87; letters/digits are their ASCII uppercase codes.
 export function vkFromBindingKey(key) {
   if (typeof key !== 'string') return 0;
@@ -32,7 +31,22 @@ export function vkFromBindingKey(key) {
   const fn = /^f([1-9]|1\d|2[0-4])$/.exec(k);
   if (fn) return 0x6F + Number(fn[1]);
   if (/^[a-z0-9]$/.test(k)) return k.toUpperCase().charCodeAt(0);
+  if (k === 'space' || k === ' ') return 0x20; // VK_SPACE
   return 0;
+}
+
+// The daemon's MOD_* mask (1 ctrl / 2 alt / 4 shift) — the same one the capture
+// daemon's overlay chord uses. `meta` folds into ctrl: the hook has no Windows-key
+// arm, and CommandOrControl is Control on this platform.
+//
+// The scrim bind is a CHORD for two reasons: a bare key that doubles as a game
+// action is unusable, and Alt+Space is Windows' own window-menu shortcut — the
+// hook never swallows a key, so that one reached the OS too. Alt+X does not.
+export function modsFromBinding(binding) {
+  const mods = binding?.modifiers || [];
+  return (mods.includes('ctrl') || mods.includes('meta') ? 1 : 0)
+    | (mods.includes('alt') ? 2 : 0)
+    | (mods.includes('shift') ? 4 : 0);
 }
 
 function notify({ title, message, accent = 'var(--accent)', iconKey = 'bell', type = 'info', duration = 3000 }) {
@@ -157,11 +171,13 @@ export default function SttProvider({ api, children }) {
   // memory only, so this re-sends on every engine (re)start as well as on rebind —
   // otherwise a supervisor restart silently drops the scrim key. A chord or an
   // unmappable key sends 0, which unbinds rather than half-working.
-  const scrimVk = vkFromBindingKey(settings?.keybinds?.['stt.scrim-note']?.key);
+  const scrimBind = settings?.keybinds?.['stt.scrim-note'];
+  const scrimVk = vkFromBindingKey(scrimBind?.key);
+  const scrimMods = modsFromBinding(scrimBind);
   useEffect(() => {
     if (engine?.state !== 'running') return;
-    api.invoke('stt_set_scrim_key', { vk: scrimVk }).catch(() => { /* engine down; re-sent on next start */ });
-  }, [engine?.state, scrimVk, api]);
+    api.invoke('stt_set_scrim_key', { vk: scrimVk, mods: scrimMods }).catch(() => { /* engine down; re-sent on next start */ });
+  }, [engine?.state, scrimVk, scrimMods, api]);
   const hotkeyDictatingRef = useRef(false);
   useEffect(() => {
     const subs = [

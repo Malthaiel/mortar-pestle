@@ -42,37 +42,31 @@ export const KEYBIND_REGISTRY = [
   // GLOBAL push-to-talk, not an in-app chord: this row is edited here but is
   // enforced by the STT daemon's system-wide keyboard hook, so it fires even when
   // Mortar & Pestle is unfocused. SttProvider watches it and pushes the matching
-  // Win32 virtual-key to the daemon. Modifiers are ignored (the hook matches ONE
-  // plain key), so keep the default modifier-less. The sibling F8 dictate bind is
+  // Win32 virtual-key AND a MOD_* modifier mask to the daemon (the hook gates the
+  // press on GetAsyncKeyState, as the capture overlay chord does). The sibling F8 dictate bind is
   // fixed in the daemon and deliberately absent — there is nothing to edit.
   {
     id: 'stt.scrim-note',
     group: 'Voice',
     label: 'Hold to dictate a note onto the live scrim',
-    default: { kind: 'chord', key: 'f9', modifiers: [] },
+    default: { kind: 'chord', key: 'X', modifiers: ['alt'] },
   },
   // Personal VODs match timer. Like `stt.scrim-note` above these are edited here
   // but NOT enforced here — they matter only while Deadlock has focus, where a
   // DOM listener is deaf, so `VodTimerBridge` pushes them to Rust's
   // `global_shortcut` plugin (OS-level RegisterHotKey). Never call
   // useKeybindAction on these ids or an in-app press fires the action twice.
-  // Defaults dodge F8/F9 (the fixed dictate bind + the scrim-note hold).
+  // Defaults dodge F8 (the fixed dictate bind) and Alt+X (the scrim-note hold).
   {
     id: 'vod.timer-start',
     group: 'Coaching',
-    label: 'Start the match timer (works in-game)',
+    label: 'Start recording this VOD (works in-game)',
     default: { kind: 'chord', key: 'f6', modifiers: [] },
-  },
-  {
-    id: 'vod.timer-pause',
-    group: 'Coaching',
-    label: 'Pause / resume the match timer (works in-game)',
-    default: { kind: 'chord', key: 'f7', modifiers: [] },
   },
   {
     id: 'vod.timer-end',
     group: 'Coaching',
-    label: 'End the match timer (works in-game)',
+    label: 'Stop recording and save (works in-game)',
     default: { kind: 'chord', key: 'f10', modifiers: [] },
   },
   {

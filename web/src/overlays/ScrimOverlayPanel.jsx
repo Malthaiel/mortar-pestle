@@ -11,13 +11,13 @@
 import { lazy, Suspense, useState, useEffect, useRef, useCallback } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import useOverlayPanelDrag from './useOverlayPanelDrag.js';
-import { invoke } from '../api.js';
+import { invoke, emitDeadlockFileWritten, subscribeDeadlockFileWritten } from '../api.js';
 import { safeDecode } from '../router.js';
 import CollapsibleRail from '../components/ui/CollapsibleRail.jsx';
 import DeadlockRail, { RailHeaderPill } from '@modules/core/deadlock/DeadlockRail.jsx';
 import { api } from '../api.js';
 import { VOD_BASE } from '@modules/core/deadlock/scrimSchema.js';
-import { appendNote, vodFile } from '@modules/core/deadlock/vodNotes.js';
+import { appendNote, setVodVideo, vodFile } from '@modules/core/deadlock/vodNotes.js';
 import * as vodTimer from '@modules/core/deadlock/vodTimer.js';
 
 // Scrim Teardown (2026-07-26): the live-notes path is GONE. Overview.md, match
@@ -151,35 +151,113 @@ export default function ScrimOverlayPanel() {
   // the tick only exists to repaint, never to count.
   const [, setTick] = useState(0);
   useEffect(() => {
-    if (!timer.running) return undefined;
+    if (!armedPath) return undefined;
     const id = setInterval(() => setTick((n) => n + 1), 1000);
     return () => clearInterval(id);
-  }, [timer.running]);
+  }, [armedPath]);
 
-  // Arming a VOD IS starting the timer (user call): one action, and End is the
-  // only way a stray hold-to-talk stops writing into a finished match.
-  const armVod = useCallback((path) => {
+  // Arming a VOD IS starting the RECORDING (user call): one action, and End is
+  // the only way a stray hold-to-talk stops writing into a finished match.
+  //
+  // The recorder is started FIRST and the clock is anchored on the instant it
+  // reports — `started_at_unix_ms`, not a `Date.now()` taken here — so a note's
+  // stamp and the video's playhead are the same number by construction. If the
+  // engine refuses (not running, no game, taken device), NOTHING arms: a clock
+  // running with no video behind it is worse than no clock, because every note
+  // it stamps points at a file that will never exist.
+  const armVod = useCallback(async (path) => {
     if (!path) return;
-    setTimer(vodTimer.start(path));
+    let snap = null;
+    try {
+      snap = await invoke('capture_start');
+    } catch (err) {
+      invoke('overlay_note_toast', { text: `Recording NOT started: ${String(err?.message || err)}` }).catch(() => {});
+      return;
+    }
+    if (!snap) {
+      invoke('overlay_note_toast', { text: 'Recorder is not running — nothing started' }).catch(() => {});
+      return;
+    }
+    setTimer(vodTimer.start(path, snap.started_at_unix_ms));
     invoke('overlay_go_live', { target: { scrimPath: path, matchN: 0, coachedTeam: null } }).catch(() => {});
   }, []);
+
+  // The file the next `capture-saved` belongs to. Set at End, because by the
+  // time the clip lands (poster + remux run off-thread) the timer is already
+  // disarmed and there is nothing left to ask which match it was.
+  const savingForRef = useRef(null);
+
   const endVod = useCallback(() => {
+    const t = vodTimer.read();
+    if (t.target) savingForRef.current = t.target;
+    invoke('capture_stop').catch((err) => {
+      invoke('overlay_note_toast', { text: `Recording stop failed: ${String(err?.message || err)}` }).catch(() => {});
+    });
     setTimer(vodTimer.end());
     invoke('overlay_go_offline').catch(() => {});
   }, []);
 
-  // Re-publish the armed VOD on mount. The Rust cell survives a webview reload,
-  // but the scrim effect above republishes ITS persisted target, so without this
-  // a Shift+C mid-match would silently repoint dictation at a dead scrim.
+  // Re-publish the armed VOD on mount, and RE-READ the recorder rather than
+  // trusting the stored anchor. The Rust cell survives a webview reload, but the
+  // scrim effect above republishes ITS persisted target, so without this a
+  // Shift+C mid-match would silently repoint dictation at a dead scrim — and a
+  // recording that died while the webview was gone would leave a clock counting
+  // a match nothing is filming.
   useEffect(() => {
     const t = vodTimer.read();
-    if (t.target) {
-      invoke('overlay_go_live', { target: { scrimPath: t.target, matchN: 0, coachedTeam: null } }).catch(() => {});
-    }
+    if (!t.target) return;
+    invoke('overlay_go_live', { target: { scrimPath: t.target, matchN: 0, coachedTeam: null } }).catch(() => {});
+    invoke('get_capture_state').then((snap) => {
+      const recording = snap?.state === 'recording' || snap?.recording === true;
+      if (!recording) { setTimer(vodTimer.end()); invoke('overlay_go_offline').catch(() => {}); return; }
+      setTimer(vodTimer.anchor(snap.started_at_unix_ms));
+    }).catch(() => {});
   }, []);
 
-  // The global timer keys (Rust `global_shortcut` → `vod-timer-key`). They fire
-  // while Deadlock has focus, which is the whole reason they are not DOM chords.
+  // The recorder is the clock's truth in BOTH directions: it publishes the real
+  // start instant once it leaves `starting`, and it can stop on its own (disk
+  // full, game closed, encoder lost). Follow it either way — a clock that keeps
+  // counting after the camera stopped is the lie this listener exists to stop.
+  useEffect(() => {
+    const sub = listen('capture-state', (e) => {
+      const snap = e.payload;
+      if (!vodTimer.isArmed()) return;
+      const recording = snap?.state === 'recording' || snap?.recording === true;
+      if (recording) { setTimer(vodTimer.anchor(snap.started_at_unix_ms)); return; }
+      if (snap?.state === 'starting' || snap?.state === 'finalizing') return; // mid-transition
+      savingForRef.current = vodTimer.read().target;
+      setTimer(vodTimer.end());
+      invoke('overlay_go_offline').catch(() => {});
+      invoke('overlay_note_toast', { text: 'Recording stopped — match timer ended' }).catch(() => {});
+    });
+    return () => { sub.then((un) => un()).catch(() => {}); };
+  }, []);
+
+  // The clip landed: write its path onto the note it belongs to, so the notes
+  // and the video find each other months later. One clip per End — the ref is
+  // spent immediately so an unrelated later save can't overwrite the link.
+  useEffect(() => {
+    const sub = listen('capture-saved', async (e) => {
+      const path = savingForRef.current;
+      const file = e.payload?.path;
+      if (!path || !file) return;
+      savingForRef.current = null;
+      try {
+        const md = vodFile(path);
+        const body = await api.getRawFile(md, 'deadlock');
+        await api.savePage(md, setVodVideo(body, file), null, 'deadlock');
+      } catch (err) {
+        invoke('overlay_note_toast', { text: `Clip saved, but the note link failed: ${String(err?.message || err)}` }).catch(() => {});
+      }
+    });
+    return () => { sub.then((un) => un()).catch(() => {}); };
+  }, []);
+
+  // The two global timer keys (Rust `global_shortcut` → `vod-timer-key`). They
+  // fire while Deadlock has focus, which is the whole reason they are not DOM
+  // chords. Start/End ONLY — pause went with the hand-rolled stopwatch: the
+  // recorder has no pause, so a paused clock would desync from the video it is
+  // supposed to index.
   useEffect(() => {
     const sub = listen('vod-timer-key', (e) => {
       const action = e.payload?.action;
@@ -192,8 +270,6 @@ export default function ScrimOverlayPanel() {
           return;
         }
         armVod(path);
-      } else if (action === 'pause') {
-        setTimer(vodTimer.pauseResume());
       } else if (action === 'end') {
         endVod();
       }
@@ -229,6 +305,9 @@ export default function ScrimOverlayPanel() {
         const file = vodFile(path);
         const body = await api.getRawFile(file, 'deadlock');
         await api.savePage(file, appendNote(body, stamp, text), null, 'deadlock');
+        // The reader lives in the OTHER window and the Deadlock root is unwatched,
+        // so tell it by hand or the note stays invisible until he navigates away.
+        emitDeadlockFileWritten(file).catch(() => {});
         invoke('overlay_note_toast', { text: `${vodTimer.fmt(stamp)} — ${text}` }).catch(() => {});
       } catch (err) {
         // A dropped note is a defect, not an acceptable degradation — say so on
@@ -284,13 +363,11 @@ export default function ScrimOverlayPanel() {
   // loop. The MATCH n / elapsed items went with the match pages that fed them.
   const tickerItems = [{ text: 'GAMEWIKI OVERLAY', bright: true }];
   if (scrimTitle) tickerItems.push({ text: scrimTitle, bright: true });
-  // The match clock rides the ticker rather than getting its own row: it is
-  // read at a glance mid-game, and the band is already the thing the eye lands
-  // on. `fmt` is the single source of the m:ss shape (the saved note uses it too).
-  if (armedPath) {
-    tickerItems.push({ text: titleOf(armedPath.split('/').pop()), bright: true });
-    tickerItems.push({ text: `${vodTimer.fmt(vodTimer.elapsedMs(timer))}${timer.running ? '' : ' PAUSED'}`, bright: true });
-  }
+  // The match clock does NOT ride the ticker: a number you read at a glance
+  // mid-game cannot be on a 45-second scroll. It sits still in the VOD bar
+  // below, which is also why the Start control moved out of this band — the
+  // band is the drag handle, and a button on a moving handle is a mis-drag
+  // waiting to happen.
   const renderTickerGroup = (keyPrefix) => tickerItems.map((it, i) => (
     <span className="ov-scrim-ticker-group" key={`${keyPrefix}-${i}`}>
       <span className="ov-scrim-ticker-sep" aria-hidden="true">●</span>
@@ -311,33 +388,6 @@ export default function ScrimOverlayPanel() {
           </div>
           {/* End Live — only while a scrim IS live; the scrim push-to-talk bind
               routes to it until this clears. */}
-          {/* Personal VOD timer. Shown when a VOD is open OR one is armed, so
-              the End control cannot go out of reach by browsing elsewhere. */}
-          {(selVod || armedPath) && (
-            <>
-              {!armedPath && (
-                <button type="button" data-no-drag className="candy-btn" data-size="small"
-                  title="Start the match timer and send voice notes to this VOD"
-                  onClick={() => armVod(selVod)}>
-                  <span className="candy-face">Start</span>
-                </button>
-              )}
-              {armedPath && (
-                <>
-                  <button type="button" data-no-drag className="candy-btn" data-size="small"
-                    title={timer.running ? 'Pause the match timer' : 'Resume the match timer'}
-                    onClick={() => setTimer(vodTimer.pauseResume())}>
-                    <span className="candy-face">{timer.running ? 'Pause' : 'Resume'}</span>
-                  </button>
-                  <button type="button" data-no-drag className="candy-btn" data-size="small"
-                    title="End the match timer and stop sending voice notes"
-                    onClick={endVod}>
-                    <span className="candy-face">End</span>
-                  </button>
-                </>
-              )}
-            </>
-          )}
           {live && !armedPath && (
             <button type="button" data-no-drag className="candy-btn" data-size="small"
               title="Stop routing scrim voice notes to this match"
@@ -346,6 +396,39 @@ export default function ScrimOverlayPanel() {
             </button>
           )}
         </div>
+
+        {/* Personal VOD bar — a STILL row under the moving band: clock hard
+            left, the one recording control hard right. Shown when a VOD is open
+            OR one is armed, so End cannot go out of reach by browsing away. */}
+        {(selVod || armedPath) && (
+          // The body below cancels the panel's own 8px gap with a negative
+          // margin, so this row would sit flush against it and the Start
+          // button's depth shadow would paint into the tree. Put the panel's
+          // gap BACK with its own token rather than inventing a number —
+          // measured, the band then clears by 4.0px against the header's 4.3px
+          // above, so the bar reads evenly spaced between the two.
+          <div className="candy-center-row" style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, marginBottom: 'var(--ov-gap)' }}>
+            <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700, fontSize: 15 }}>
+              {vodTimer.fmt(vodTimer.elapsedMs(timer))}
+            </span>
+            <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', opacity: 0.7, fontSize: 12 }}>
+              {titleOf((armedPath || selVod).split('/').pop())}
+            </span>
+            {!armedPath ? (
+              <button type="button" className="candy-btn" data-size="small"
+                title="Start recording and send voice notes to this VOD"
+                onClick={() => armVod(selVod)}>
+                <span className="candy-face">Start</span>
+              </button>
+            ) : (
+              <button type="button" className="candy-btn" data-size="small"
+                title="Stop the recording and stop sending voice notes"
+                onClick={endVod}>
+                <span className="candy-face">End</span>
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Body — shared tree rail + shared page pane, local selection. */}
         <div className="ov-scrim-body" style={height != null ? { flex: 1 } : undefined}>

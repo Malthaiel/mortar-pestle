@@ -463,9 +463,12 @@ fn dispatch(ctx: &ControlContext, conn_id: u64, req: Request) -> Response {
         // Echoes the refreshed snapshot so the caller sees the new trigger immediately.
         "set_scrim_key" => {
             let vk = req.args.get("vk").and_then(|v| v.as_u64());
+            // `mods` is the MOD_* mask (1 ctrl / 2 alt / 4 shift); absent = a bare
+            // key, which is what every caller sent before chords existed.
+            let mods = req.args.get("mods").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
             match vk {
                 Some(vk) if vk <= u32::MAX as u64 => {
-                    crate::daemon::hotkeys::set_scrim_key(ctx, vk as u32);
+                    crate::daemon::hotkeys::set_scrim_key(ctx, vk as u32, mods);
                     let hotkeys = serde_json::to_value(ctx.hotkeys_snapshot()).unwrap_or(Value::Null);
                     Response { id: req.id, ok: true, data: Some(json!({ "hotkeys": hotkeys })), error: None }
                 }

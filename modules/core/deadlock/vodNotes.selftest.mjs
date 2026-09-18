@@ -2,7 +2,10 @@
 //   node modules/core/deadlock/vodNotes.selftest.mjs
 
 import assert from 'node:assert/strict';
-import { newVodScaffold, appendNote, readNotes, NOTES_HEADING } from './vodNotes.js';
+import {
+  newVodScaffold, appendNote, appendAfterNote, setVodVideo, readNotes,
+  NOTES_HEADING, AFTER_HEADING,
+} from './vodNotes.js';
 
 // ── scaffold ───────────────────────────────────────────────────────────────
 const scaffold = newVodScaffold('Lash 09-03-26', new Date(2026, 8, 3));
@@ -55,5 +58,38 @@ assert.ok(
 
 // ── minutes uncapped, end to end ───────────────────────────────────────────
 assert.ok(appendNote(scaffold, 70 * 60_000 + 4_000, 'late game').includes('**70:04**'));
+
+// ── After Notes: untimed, and it never eats the timed list ─────────────────
+assert.ok(scaffold.includes(AFTER_HEADING), 'scaffold ships both headings');
+assert.ok(scaffold.indexOf(NOTES_HEADING) < scaffold.indexOf(AFTER_HEADING), 'timed list first');
+
+let after = appendAfterNote(body, '  ward mid earlier  ');
+after = appendAfterNote(after, 'ask about the third item');
+assert.ok(after.includes('- ward mid earlier'), 'trimmed, no stamp');
+assert.ok(/- ward mid earlier\n- ask about the third item/.test(after), 'bullets stay contiguous');
+assert.equal(readNotes(after).length, 2, 'untimed notes are not counted as timed ones');
+assert.equal(appendAfterNote(after, '   '), after, 'an empty box writes nothing');
+
+// A timed note appended afterwards still lands in the TIMED section.
+const mixed = appendNote(after, 180_000, 'third');
+assert.ok(
+  mixed.indexOf('- **3:00** — third') < mixed.indexOf(AFTER_HEADING),
+  'a live note never lands in After Notes',
+);
+
+// A hand-edited file that lost the heading still keeps the note.
+const headlessAfter = appendAfterNote('bare prose', 'kept anyway');
+assert.ok(headlessAfter.includes(AFTER_HEADING) && headlessAfter.includes('- kept anyway'));
+
+// ── the clip path rides in the frontmatter ─────────────────────────────────
+const withVid = setVodVideo(scaffold, 'C:\\clips\\lash.mp4');
+assert.ok(withVid.includes('Video: C:\\clips\\lash.mp4'), 'path is written');
+assert.ok(withVid.includes('Type: personal-vod'), 'existing keys survive');
+assert.ok(withVid.includes(NOTES_HEADING), 'the body survives');
+const reVid = setVodVideo(withVid, 'C:\\clips\\lash-2.mp4');
+assert.equal((reVid.match(/^Video:/gm) || []).length, 1, 're-record replaces, never doubles');
+assert.ok(reVid.includes('Video: C:\\clips\\lash-2.mp4'));
+assert.equal(setVodVideo(scaffold, ''), scaffold, 'no path = no edit');
+assert.ok(setVodVideo('bare prose', 'x.mp4').startsWith('---\nVideo: x.mp4\n---'), 'frontmatter created');
 
 console.log('vodNotes selftest: PASS');

@@ -1,20 +1,20 @@
-// Personal VODs — the match stopwatch. Pure ESM (no React, no @host) so the
-// node harness can drive it.
+// Personal VODs — the match clock. Pure ESM (no React, no @host) so the node
+// harness can drive it.
 //
-// ANCHOR, NEVER A TICK COUNT. The state stored is a wall-clock ANCHOR
-// (`startedMs`) plus the milliseconds banked across earlier pauses
-// (`accumMs`); elapsed is DERIVED at read time. The overlay-host webview
+// THE RECORDER OWNS THE CLOCK. `startedMs` is the capture engine's own
+// `started_at_unix_ms`, handed in by whoever started the recording — never
+// `Date.now()` taken here. Elapsed is DERIVED at read time from that anchor, so
+// a note's timestamp and the video's playhead are the same number by
+// construction rather than by two counters agreeing. The overlay-host webview
 // reloads on every Shift+C in dev, and any counter incremented by a setInterval
-// would silently lose whatever time passed while it was gone — the exact class
-// of bug the "measure, never predict" rule exists for. Nothing here is ever
-// mirrored in Rust: Rust owns the keys, this owns the clock, one truth each.
+// would silently lose whatever time passed while it was gone.
 //
-// Malthaiel syncs the clock to the in-game timer by hand — the app never tries
-// to read the game.
+// Nothing here is mirrored in Rust: Rust owns the keys, the capture engine owns
+// the start instant, this owns only the file the notes go to.
 
 const KEY = 'vod-timer';
 
-const IDLE = { target: null, startedMs: null, accumMs: 0, running: false };
+const IDLE = { target: null, startedMs: null };
 
 function store() {
   try { return globalThis.localStorage || null; } catch { return null; }
@@ -31,8 +31,6 @@ export function read() {
     return {
       target: typeof v.target === 'string' && v.target ? v.target : null,
       startedMs: Number.isFinite(v.startedMs) ? v.startedMs : null,
-      accumMs: Number.isFinite(v.accumMs) && v.accumMs >= 0 ? v.accumMs : 0,
-      running: !!v.running,
     };
   } catch {
     return { ...IDLE };
@@ -45,45 +43,55 @@ function write(next) {
   return next;
 }
 
+// The engine reports `started_at_unix_ms: 0` while idle and for a beat after
+// `start_clip` (state `starting`), and 0 is a perfectly finite number — anchored
+// on it the clock would read 57 years. Nothing before 2020 is a real start.
+const okStamp = (ms) => Number.isFinite(ms) && ms > 1_577_836_800_000;
+
 /// True once a VOD is armed — the note sink and the header clock both gate on this.
 export function isArmed(state = read()) {
   return !!state.target;
 }
 
-// Arm `target` and run from zero.
+// Arm `target` against the recorder's start instant.
+//
+// `startedMs` MUST come from the capture snapshot (`started_at_unix_ms`); it
+// falls back to now only when the engine omitted it, which is a degraded clock,
+// not the design.
 //
 // A second start while already armed is IGNORED on purpose: these keys fire
 // while the game has focus, and a stray F6 twenty minutes in would otherwise
 // wipe the match with no undo. End is the only way back to zero.
-export function start(target) {
+export function start(target, startedMs) {
   if (!target) return read();
   const cur = read();
   if (isArmed(cur)) return cur;
-  return write({ target, startedMs: Date.now(), accumMs: 0, running: true });
+  return write({ target, startedMs: okStamp(startedMs) ? startedMs : Date.now() });
 }
 
-// One key does both directions (the row is labelled "Pause / resume") — with
-// three keys total there is nowhere else for resume to live.
-export function pauseResume() {
+// Re-anchor an already-armed clock on the engine's real start instant.
+//
+// `start_clip` can ack while the engine is still in `starting`, with no
+// `started_at_unix_ms` yet — the arm then holds a best-effort anchor. The next
+// snapshot carries the true one, and this replaces it. Correcting a live clock
+// beats leaving the notes a second or two off the video for the whole match.
+export function anchor(startedMs) {
   const cur = read();
-  if (!isArmed(cur)) return cur;
-  if (cur.running) {
-    const banked = cur.accumMs + Math.max(0, Date.now() - (cur.startedMs ?? Date.now()));
-    return write({ ...cur, startedMs: null, accumMs: banked, running: false });
-  }
-  return write({ ...cur, startedMs: Date.now(), running: true });
+  if (!isArmed(cur) || !okStamp(startedMs)) return cur;
+  if (cur.startedMs === startedMs) return cur;
+  return write({ ...cur, startedMs });
 }
 
-// Disarm completely. The caller also clears the Rust live target, so a stray
-// hold-to-talk after the match cannot write into a finished VOD.
+// Disarm completely. The caller also stops the recording and clears the Rust
+// live target, so a stray hold-to-talk after the match cannot write into a
+// finished VOD.
 export function end() {
   return write({ ...IDLE });
 }
 
 export function elapsedMs(state = read()) {
   if (!isArmed(state)) return 0;
-  const live = state.running ? Math.max(0, Date.now() - (state.startedMs ?? Date.now())) : 0;
-  return state.accumMs + live;
+  return Math.max(0, Date.now() - (state.startedMs ?? Date.now()));
 }
 
 // `m:ss` with minutes UNCAPPED — a 70-minute Deadlock match reads 70:04, not
