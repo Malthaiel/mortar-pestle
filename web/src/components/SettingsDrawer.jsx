@@ -153,7 +153,7 @@ function isEditableTarget(target) {
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable;
 }
 
-export default function SettingsDrawer({ open, onClose, settings, setSetting, setPreviewAccent, resetSettings, accent, resolvedTheme, initialAddress }) {
+export default function SettingsDrawer({ open, onClose, settings, setSetting, setPreviewAccent, resetSettings, accent, initialAddress }) {
   // Drawer-level navigation address: { tab, page, section }. Sub-tab strips
   // and module pages are controlled from here so deep links, search jumps,
   // and the context-aware open all land on exact surfaces.
@@ -455,7 +455,7 @@ export default function SettingsDrawer({ open, onClose, settings, setSetting, se
               />
             ) : (
               <>
-                {activeTab === 'appearance' && <AppearanceTab settings={settings} setSetting={setSetting} setPreviewAccent={setPreviewAccent} accent={accent} resolvedTheme={resolvedTheme}/>}
+                {activeTab === 'appearance' && <AppearanceTab settings={settings} setSetting={setSetting} setPreviewAccent={setPreviewAccent} accent={accent}/>}
                 {activeTab === 'sounds'     && <SoundsTab     settings={settings} setSetting={setSetting} accent={accent}/>}
                 {activeTab === 'navigation' && <NavigationTab settings={settings} setSetting={setSetting} accent={accent} section={addr.section} onSectionChange={(id) => navigateTo({ tab: 'navigation', section: id })}/>}
                 {activeTab === 'modules' && (addr.page && (manifests[addr.page] || pagesByModuleId[addr.page])
@@ -646,7 +646,7 @@ function SearchResultsView({ results, selected, breadcrumbFor, accent, onHover, 
 
 // DownloadsTab moved into settings/SystemTab.jsx (System → Downloads sub-tab).
 
-function AppearanceTab({ settings, setSetting, setPreviewAccent, accent, resolvedTheme }) {
+function AppearanceTab({ settings, setSetting, setPreviewAccent, accent }) {
   // Motion master + preset, relocated from the retired Animations tab. The
   // preset writes the whole animations bag; the master reads on if any animation
   // is on, and toggling it flips the full ↔ quiet presets (mirrors the old tab).
@@ -661,23 +661,9 @@ function AppearanceTab({ settings, setSetting, setPreviewAccent, accent, resolve
   };
   return (
     <>
-      <SectionBand title="Color mode">
-        <Row label="Mode" anchor="set-themeMode">
-          <Seg
-            value={settings.themeMode}
-            options={[
-              { value: 'light',  label: 'Light' },
-              { value: 'dark',   label: 'Dark' },
-              { value: 'system', label: 'System' },
-            ]}
-            onChange={v => setSetting('themeMode', v)}
-            accent={accent}
-          />
-        </Row>
-      </SectionBand>
       <SectionBand title="Themes" anchor="set-themePreset">
         <StackedRow label="Preset">
-          <ThemePicker settings={settings} setSetting={setSetting} setPreviewAccent={setPreviewAccent} resolvedTheme={resolvedTheme} />
+          <ThemePicker settings={settings} setSetting={setSetting} setPreviewAccent={setPreviewAccent} />
         </StackedRow>
       </SectionBand>
       <SectionBand title="Accent" anchor="set-accentColor">

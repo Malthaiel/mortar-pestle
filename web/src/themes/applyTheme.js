@@ -10,9 +10,9 @@
 // when switching to one that omits it.
 import { THEME_TOKEN_KEYS } from './registry.js';
 
-export function paintTheme(root, theme, resolvedTheme) {
+export function paintTheme(root, theme) {
   if (!root) return;
-  const overrides = (theme && theme[resolvedTheme]) || null;
+  const overrides = (theme && theme.tokens) || null;
   for (const k of THEME_TOKEN_KEYS) {
     if (overrides && overrides[k] != null) root.style.setProperty(k, overrides[k]);
     else root.style.removeProperty(k);

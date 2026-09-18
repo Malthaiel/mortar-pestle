@@ -153,9 +153,8 @@ export const AGENTS_DEFAULT = {
 // bottom, always visible. `edgeStyle` picks the bottom-bar edge depth
 // ('flush' top hairline | 'band' soft upward shadow). The fill is fixed
 // charcoal across every theme (the Dock color picker + graphite/slate were
-// removed). Icon face colour follows the resolved color mode (light chips in
-// light mode, dark in dark) via :root[data-theme] + .dock-btn in styles.css
-// — no user picker. `order` is the
+// removed). Icon face colour is fixed via .dock-btn in styles.css — no user
+// picker. `order` is the
 // drag-persisted button order (empty array = declaration order).
 // `expandMs` / `collapseMs` are the dock hover-expand grow / shrink durations
 // (ms), published as --dock-expand-ms / --dock-collapse-ms and consumed by the
@@ -230,7 +229,6 @@ export const SETTINGS_DEFAULTS = {
   // Default OFF — a streak that silently breaks is demotivating ("loss is silent"),
   // so it's opt-in. Read by FitnessSection via computeFitnessStreak.
   showFitnessStreak: false,
-  themeMode: 'dark',
   // Active Community Themes preset id (themes/registry.js). 'monastic' = the
   // built-in default (null override maps → styles.css base stands). While a
   // community (non-monastic) preset is active, accent collapses to the single
@@ -611,20 +609,6 @@ export function resolveActiveAccent(settings) {
     || FALLBACK_ACCENT;
 }
 
-function useResolvedTheme(themeMode) {
-  const getMatch = () => window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
-  const [systemDark, setSystemDark] = useState(getMatch);
-  useEffect(() => {
-    const mq = window.matchMedia?.('(prefers-color-scheme: dark)');
-    if (!mq) return;
-    const handler = e => setSystemDark(e.matches);
-    mq.addEventListener?.('change', handler);
-    return () => mq.removeEventListener?.('change', handler);
-  }, []);
-  if (themeMode === 'system') return systemDark ? 'dark' : 'light';
-  return themeMode;
-}
-
 export function useSettings(pageKey = 'pulse') {
   const [globalSettings, setGlobalSettings] = useState(() => loadGlobalSettings());
   const [accent, setAccentState] = useState(() => resolveActiveAccent(globalSettings));
@@ -754,11 +738,8 @@ export function useSettings(pageKey = 'pulse') {
     // (themeAccent returns to its Monastic default), so no explicit reset here.
   }, []);
 
-  const resolvedTheme = useResolvedTheme(globalSettings.themeMode);
-
   useEffect(() => {
     const root = document.documentElement;
-    root.dataset.theme = resolvedTheme;
     // Expose the active preset so theme-conditional CSS (e.g. the dock reskin)
     // can target community themes without JS. Always set, including 'monastic'.
     root.dataset.themePreset = globalSettings.themePreset || DEFAULT_THEME_ID;
@@ -781,12 +762,11 @@ export function useSettings(pageKey = 'pulse') {
     // Paint accent from live settings (sync) rather than the `accent` state
     // (which lags a tick) so committing a theme can't flash the old accent.
     root.style.setProperty('--accent', resolveActiveAccent(globalSettings));
-    // Layer the active preset's colour-token overrides on top of the CSS base,
-    // keyed off the resolved light/dark variant. Monastic = null maps → every
-    // key is removed and the styles.css `:root` base re-shows. Reusing this one
-    // effect means the light↔dark toggle auto-re-picks the correct variant.
-    paintTheme(root, THEME_BY_ID[globalSettings.themePreset] || THEME_BY_ID[DEFAULT_THEME_ID], resolvedTheme);
-  }, [resolvedTheme, globalSettings.density, globalSettings.radiusScale,
+    // Layer the active preset's colour-token overrides on top of the CSS base.
+    // Monastic = null map → every key is removed and the styles.css `:root`
+    // base re-shows.
+    paintTheme(root, THEME_BY_ID[globalSettings.themePreset] || THEME_BY_ID[DEFAULT_THEME_ID]);
+  }, [globalSettings.density, globalSettings.radiusScale,
       globalSettings.themePreset, globalSettings.themeAccent]);
 
   // Push per-animation toggles onto body data-attrs so the matching CSS
@@ -874,7 +854,7 @@ export function useSettings(pageKey = 'pulse') {
     () => ({ ...globalSettings, accentColor: previewAccent ?? accent }),
     [globalSettings, previewAccent, accent],
   );
-  return { settings, setSetting, setPreviewAccent, resetSettings, resolvedTheme };
+  return { settings, setSetting, setPreviewAccent, resetSettings };
 }
 
 // Module-namespaced settings hook. Reads/writes settings.modules.<moduleId>.<key>

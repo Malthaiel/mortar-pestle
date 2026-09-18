@@ -27,7 +27,7 @@ const ROWS = [
   { key: 'section-accordion',      label: 'Section accordion',       description: 'Expand/collapse settle for sidebar sections and the chevron flip rotation that accompanies it.' },
   { key: 'pulse-indicators',       label: 'Pulse indicators',        description: 'Active-pill left-bar pulse, "new" badge pulse, conflict-toast spring.' },
   { key: 'drag-tile-follow',       label: 'Drag tile follow',        description: 'Clone motion during sidebar module reorder. Off: parks at origin. Cursor: tile stays at its rail position on pickup and translates by the cursor delta as you drag — the grab point stays under your cursor with no snap-to-center. Slot snap: snaps to current drop slot in 160ms with a subtle scale settle and soft snap thock.' },
-  { key: 'theme-transition',       label: 'Theme color transition',  description: 'Smooth 120ms color cross-fade when switching between light and dark themes. Without this, the theme switch is instant.' },
+  { key: 'theme-transition',       label: 'Theme color transition',  description: 'Smooth 120ms color cross-fade when switching colour themes. Without this, the theme switch is instant.' },
   { key: 'planner-day-slide',      label: 'Planner day slide',       description: 'Directional slide when the Planner day pane changes day — past days enter from the left, future days from the right.' },
   { key: 'counter-tick',           label: 'Section counter tick',    description: 'The Planner day pane’s section counters (events / tasks / notes) count up to new values instead of snapping.' },
   { key: 'task-celebration',       label: 'Task celebration',        description: 'Confetti burst and a short chime when you check off the last open task of today in the Planner.' },

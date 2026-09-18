@@ -22,7 +22,7 @@ import { candyCenterOffset } from '../util/candy.js';
 import { IconBell } from '../components/icons.jsx';
 import { useNotifications } from './NotificationProvider.jsx';
 
-export default function NotificationBell({ label, onClick, isActive, accent, onContextMenu, variant = 'dock' }) {
+export default function NotificationBell({ label, tipDesc, onClick, isActive, accent, onContextMenu, variant = 'dock' }) {
   const { unreadCount, registerBell, absorbKey } = useNotifications();
   const wrapRef = useRef(null);
   const prevCount = useRef(unreadCount);
@@ -61,6 +61,7 @@ export default function NotificationBell({ label, onClick, isActive, accent, onC
         ref={wrapRef}
         data-notif-bell
         title={label}
+        data-tip-desc={tipDesc}
         onClick={onClick}
         size={28}
         className={`is-hover-accent${isActive ? ' is-active' : ''}`}

@@ -46,7 +46,8 @@ export function specificLabel(el) {
   if (name) return name;
   const aria = el.getAttribute('aria-label');
   if (aria && aria.trim()) return aria.trim();
-  const title = el.getAttribute('title');
+  // util/tooltips.js moves a hovered element's title into data-tip.
+  const title = el.getAttribute('title') || el.dataset?.tip;
   if (title && title.trim()) return title.trim();
   const cls = meaningfulClass(el);
   if (cls) return titleCase(cls);

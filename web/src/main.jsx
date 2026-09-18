@@ -5,6 +5,7 @@ import { LazyErrorBoundary, FatalCard } from './components/LazyErrorBoundary.jsx
 import { loadAll } from './module-loader.js';
 import { initSmoothWheel } from './util/smoothWheel.js';
 import { installScrollMemory } from './util/scrollMemory.js';
+import { installTooltips } from './util/tooltips.js';
 import './pages/docs/register.jsx';   // side effect: registerPageSidebar('docs', …)
 import './fonts.css';
 import './styles.css';
@@ -43,6 +44,8 @@ loadAll().then(() => {
   // Every scroll box in the app remembers where it was left. Delegated, so no
   // surface has to opt in — see util/scrollMemory.js.
   installScrollMemory();
+  // Every title="…" shows the app tooltip, in every window — see util/tooltips.js.
+  installTooltips();
   createRoot(document.getElementById('root')).render(
     <StrictMode>
       <LazyErrorBoundary full tag="[root]" label="Mortar & Pestle">

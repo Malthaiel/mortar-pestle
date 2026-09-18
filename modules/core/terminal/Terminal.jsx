@@ -99,7 +99,7 @@ export default function Terminal({ tabId, visible }) {
   // Re-measure the app's colours whenever the theme could have moved. xterm
   // accepts a new theme object without a remount, so the PTY keeps running.
   // Two signals, because a theme change can arrive either way: the <html>
-  // data-theme / data-theme-preset attributes, and useSettings' global settings
+  // data-theme-preset attribute, and useSettings' global settings
   // broadcast (an accent or preset commit that repaints tokens in place).
   useEffect(() => {
     const containerEl = containerRef.current;
@@ -112,7 +112,7 @@ export default function Terminal({ tabId, visible }) {
     const mo = new MutationObserver(repaint);
     mo.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ['data-theme', 'data-theme-preset'],
+      attributeFilter: ['data-theme-preset'],
     });
     window.addEventListener('focus-global-settings-changed', repaint);
     return () => {

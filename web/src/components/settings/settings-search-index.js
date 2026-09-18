@@ -50,7 +50,7 @@ const ANIM_TOGGLES = [
   ['section-accordion',      'Section accordion',      ['collapse', 'expand', 'chevron'],       'navigation'],
   ['pulse-indicators',       'Pulse indicators',       ['badge', 'dot', 'glow'],                'navigation'],
   ['drag-tile-follow',       'Drag tile follow',       ['reorder', 'clone', 'cursor'],          'navigation'],
-  ['theme-transition',       'Theme color transition', ['crossfade', 'dark', 'light'],          'appearance'],
+  ['theme-transition',       'Theme color transition', ['crossfade', 'theme', 'preset'],       'appearance'],
   ['planner-day-slide',      'Planner day slide',      ['planner', 'slide', 'day', 'pivot'],    'planner'],
   ['counter-tick',           'Section counter tick',   ['planner', 'counter', 'count', 'tick'], 'planner'],
   ['task-celebration',       'Task celebration',       ['confetti', 'chime', 'task', 'done'],   'planner'],
@@ -73,9 +73,6 @@ const animBool = (settings, key) => {
 
 export const SETTINGS_SEARCH_INDEX = [
   // ── Appearance ──────────────────────────────────────────────────────────
-  { id: 'appearance.mode', label: 'Color mode', tabId: 'appearance', anchor: 'set-themeMode',
-    keywords: ['theme', 'dark', 'light', 'system'], description: 'Light / Dark / System.',
-    settingsKey: 'themeMode' },
   { id: 'appearance.accent', label: 'Accent color', tabId: 'appearance', anchor: 'set-accentColor',
     keywords: ['color', 'tint', 'custom', 'hex', 'preset'],
     description: 'The global accent used across chrome.', settingsKey: 'accentColor' },

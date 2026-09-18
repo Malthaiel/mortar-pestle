@@ -2,7 +2,7 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body, #root { width: 100%; height: 100%; overflow: hidden; }
 
-/* Theme tokens · Light */
+/* Theme tokens. The app is dark-only (light mode removed 2026-09-18). */
 :root {
   /* Candy button rest depth. Two categories — large (pills / rectangles)
      and small (circles / small squares). Each is independently picker-
@@ -50,7 +50,7 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
   /* Titlebar fill. Tracks --surface so the four chrome edges (titlebar, dock,
      left rail, right rail) read as one continuous frame around the content
      (user-directed 2026-09-07). --dock-bg does the same; kept as its own token
-     because --dock-bg is declared on .dock-root, not :root. NOTE the dark-theme
+     because --dock-bg is declared on .dock-root, not :root. NOTE the
      surface scale runs LIGHTER as the number rises (--surface 0.190 → -2 0.215
      → -3 0.245). */
   --titlebar-bg: var(--surface);
@@ -89,33 +89,32 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
      name --surface / --surface-3 directly all point here, so one edit moves
      every button in the app.
 
-     Light theme keeps the historical pair (--surface / --surface-3) so it is
-     byte-identical to before. The dark themes take a LIFT, user-directed
-     2026-09-14: +0.03 lightness, the distance --surface sits above --bg, so a
+     Both take a LIFT, user-directed 2026-09-14: +0.03 lightness over --border /
+     --surface-3, the distance --surface sits above --bg, so a
      button standing on the app's lighter walls separates from them the way a
      film-page button separates from its darker one. Derivation + the measured
      before/after are in modules/core/library/library.css. */
-  --cbtn-rest: var(--surface);
-  --cbtn-face: var(--surface-3);
+  --cbtn-rest:    oklch(from var(--border) calc(l + 0.03) c h);
+  --cbtn-face:    oklch(from var(--surface-3) calc(l + 0.03) c h);
   /* The resting label colour, named so a shape that overrides `color` (select)
      can hand it back instead of restating the mix in a second place. */
   --cbtn-rest-text: color-mix(in oklch, var(--text-2), var(--text-muted) 33%);
 
-  --bg:           oklch(0.985 0.004 30);
-  --surface:      #ffffff;
-  --surface-2:    oklch(0.975 0.005 30);
-  --surface-3:    oklch(0.96  0.005 30);
-  --hover:        oklch(0.99  0.002 30);
-  --border:       oklch(0.92  0.005 30);
-  --border-2:     oklch(0.88  0.005 30);
-  --border-soft:  oklch(0.93  0.005 30);
-  --divider:      oklch(0.96  0.003 30);
-  --text:         oklch(0.18  0.01  30);
-  --text-2:       oklch(0.35  0.01  30);
-  --text-muted:   oklch(0.55  0.01  30);
-  --text-faint:   oklch(0.70  0.01  30);
-  --shadow-card:  0 8px 40px rgba(0,0,0,0.18);
-  --shadow-fab:   0 2px 8px rgba(0,0,0,0.07);
+  --bg:           oklch(0.160 0.005 78);
+  --surface:      oklch(0.190 0.005 78);
+  --surface-2:    oklch(0.215 0.005 78);
+  --surface-3:    oklch(0.245 0.005 78);
+  --hover:        oklch(0.225 0.005 78);
+  --border:       oklch(0.255 0.005 78);
+  --border-2:     oklch(0.300 0.005 78);
+  --border-soft:  oklch(0.235 0.005 78);
+  --divider:      oklch(0.220 0.005 78);
+  --text:         oklch(0.920 0.005 85);
+  --text-2:       oklch(0.740 0.008 84);
+  --text-muted:   oklch(0.560 0.008 82);
+  --text-faint:   oklch(0.400 0.005 78);
+  --shadow-card:  0 12px 48px rgba(0,0,0,0.60);
+  --shadow-fab:   0 2px 10px rgba(0,0,0,0.40);
 
   /* The app's two fonts. There is no picker and no third variable — every sans
      surface is --font-body, every mono surface is --font-mono. The former
@@ -157,112 +156,8 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
   --ov-gap:       8px;
   --cal-radius:   var(--radius-md);    /* planner hour-box corner radius; matches --radius-md/block radius so a full-hour block sits flush in its box */
 
-  /* 3D Button tokens · Light. Per-role face/base/text for the .btn3d utility.
+  /* 3D Button tokens. Per-role face/base/text for the .btn3d utility.
      See Decisions/2026-05-26 3D Button Depth as Tactile Language. */
-  --btn3d-primary-face   : var(--accent, oklch(0.55 0.16 25));
-  --btn3d-primary-base   : color-mix(in oklch, var(--accent, oklch(0.55 0.16 25)), black 18%);
-  --btn3d-primary-text   : #ffffff;
-  --btn3d-outlined-face  : transparent;
-  --btn3d-outlined-base  : var(--border-2);
-  --btn3d-outlined-text  : var(--text-muted);
-  --btn3d-danger-face    : oklch(0.55 0.16 25);
-  --btn3d-danger-base    : oklch(0.42 0.16 25);
-  --btn3d-danger-text    : #ffffff;
-  --btn3d-icon-face      : var(--surface);
-  --btn3d-icon-base      : var(--border-2);
-  --btn3d-icon-text      : var(--text);
-  --btn3d-chip-face      : transparent;
-  --btn3d-chip-base      : color-mix(in oklch, var(--accent, oklch(0.55 0.16 25)) 22%, var(--surface-2));
-  --btn3d-chip-text      : var(--text);
-  --btn3d-sidebar-face   : var(--surface);
-  --btn3d-sidebar-base   : color-mix(in oklch, var(--accent, oklch(0.55 0.16 25)) 28%, var(--border));
-  --btn3d-sidebar-text   : var(--text);
-  --btn3d-dock-face      : var(--surface);
-  --btn3d-dock-base      : var(--border-2);
-  --btn3d-dock-text      : var(--text);
-  --btn3d-edge           : var(--accent, oklch(0.55 0.16 25));
-
-  /* 3D Button depth size tokens (theme-agnostic; kept in light :root). */
-  --btn3d-depth-lg : 0.40em;
-  --btn3d-depth-md : 0.32em;
-  --btn3d-depth-sm : 0.25em;
-  --btn3d-depth-xs : 0.18em;
-
-  /* Clock tokens · Light. Structural/neutral colors used by every watchface.
-     Phase-aware accent + dim colors are set per-mount as inline --clock-phase-*
-     styles on the dial wrapper (see DualRingRect.jsx). */
-  --clock-tick-major:    oklch(0.55  0.01  30);
-  --clock-tick-minor:    oklch(0.78  0.01  30);
-  --clock-wedge-dark:    color-mix(in oklch, var(--accent, oklch(0.55 0.16 25)), black 40%);
-  --clock-stroke-bg:     var(--border);  /* == old oklch(0.92 0.005 30); derives so themes follow */
-  --clock-pivot-back:    oklch(0.92  0.06  25);
-  --clock-pivot-front:   oklch(0.97  0.01  30);
-  --clock-pivot-shadow:  rgba(58,13,13,0.40);
-  --clock-hand-shadow:   rgba(0,0,0,0.20);
-
-  /* Calendar · Light. The now-marker used to own a STRUCTURAL red (--cal-now),
-     deliberately NOT accent-derived; user-directed 2026-08-28 it wears the
-     accent like every other live indicator, so the name is gone and both call
-     sites in CalendarPanel.jsx read var(--accent) directly. --on-accent is for
-     text/icons sitting on an accent fill; theme-agnostic (defined here only,
-     dark inherits). */
-  --on-accent:       #ffffff;
-  /* Hour gridline (day/week time-grid). Light tracks --border; dark overrides
-     brighter so lines read on the dark surface + today tint. */
-  --cal-hour-line:   var(--border);
-
-  /* Status · error (validation text). DESIGN.md lists success/warning/error;
-     only --error is defined so far. Tuned to the de-facto app error red
-     (formerly raw #d97070 at every consumer; mode-invariant like the hex was). */
-  --error:           oklch(0.666 0.132 21.2);
-
-  /* Named hue palette — the app's ONE set of non-accent colors, and the default any surface reaches
-     for when it must tell several KINDS apart (Feedback roadmap statuses, avatar circles, VOD report
-     stamp sources). Draw from here instead of inventing a hex, so a colour retunes in one place.
-     Theme-agnostic on purpose (defined here only; dark inherits) — these are identity colours, not
-     surface colours, and a hue that shifts between themes stops being an identity. NOT a stoplight:
-     good/bad/progress state still follows § No glowing + neutral status palette in DESIGN.md. */
-  --hue-slate:  #8a8f98;
-  --hue-amber:  #d6a445;
-  --hue-violet: #9b7fd4;
-  --hue-green:  #5bb98c;
-  --hue-teal:   #3aa6a0;
-  --hue-rose:   #c96a8a;
-  --hue-indigo: #7f86d4;
-
-  /* Deadlock team sides (Match Data render): 0 = Amber Hand, 1 = Sapphire Flame.
-     Drives box-score accents, time-series chart lines and the spatial heatmaps. */
-  --team-amber:    oklch(0.72 0.15 75);
-  --team-sapphire: oklch(0.60 0.15 250);
-
-  /* Markup-mode affordance tier — one notch above the modal ceiling (nested
-     Planner sub-modals at 10000) so the selection outline + name badge float
-     over every popup. Intentionally above Break/Confetti/WhatsNew too; those are
-     transient and already sit below the 10000 sub-modals. */
-  --z-design: 10001;
-}
-
-/* Theme tokens · Dark (Monastic) */
-:root[data-theme='dark'] {
-  --bg:           oklch(0.160 0.005 78);
-  --surface:      oklch(0.190 0.005 78);
-  --surface-2:    oklch(0.215 0.005 78);
-  --surface-3:    oklch(0.245 0.005 78);
-  --hover:        oklch(0.225 0.005 78);
-  --border:       oklch(0.255 0.005 78);
-  --border-2:     oklch(0.300 0.005 78);
-  --cbtn-rest:    oklch(from var(--border) calc(l + 0.03) c h);
-  --cbtn-face:    oklch(from var(--surface-3) calc(l + 0.03) c h);
-  --border-soft:  oklch(0.235 0.005 78);
-  --divider:      oklch(0.220 0.005 78);
-  --text:         oklch(0.920 0.005 85);
-  --text-2:       oklch(0.740 0.008 84);
-  --text-muted:   oklch(0.560 0.008 82);
-  --text-faint:   oklch(0.400 0.005 78);
-  --shadow-card:  0 12px 48px rgba(0,0,0,0.60);
-  --shadow-fab:   0 2px 10px rgba(0,0,0,0.40);
-
-  /* 3D Button tokens · Dark */
   --btn3d-primary-face   : var(--accent, oklch(0.55 0.16 25));
   --btn3d-primary-base   : color-mix(in oklch, var(--accent, oklch(0.55 0.16 25)), black 25%);
   --btn3d-primary-text   : #ffffff;
@@ -286,7 +181,15 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
   --btn3d-dock-text      : var(--text);
   --btn3d-edge           : var(--accent, oklch(0.55 0.16 25));
 
-  /* Clock tokens · Dark */
+  /* 3D Button depth size tokens (theme-agnostic). */
+  --btn3d-depth-lg : 0.40em;
+  --btn3d-depth-md : 0.32em;
+  --btn3d-depth-sm : 0.25em;
+  --btn3d-depth-xs : 0.18em;
+
+  /* Clock tokens. Structural/neutral colors used by every watchface.
+     Phase-aware accent + dim colors are set per-mount as inline --clock-phase-*
+     styles on the dial wrapper (see DualRingRect.jsx). */
   --clock-tick-major:    oklch(0.70  0.008 78);
   --clock-tick-minor:    oklch(0.40  0.005 78);
   --clock-wedge-dark:    color-mix(in oklch, var(--accent, oklch(0.55 0.16 25)), black 40%);
@@ -296,12 +199,44 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
   --clock-pivot-shadow:  rgba(58,13,13,0.75);
   --clock-hand-shadow:   rgba(0,0,0,0.55);
 
-  /* Calendar · Dark. (The now-marker's own red lived here; it wears the accent
-     now — see the light block.) */
+  /* Calendar. The now-marker used to own a STRUCTURAL red (--cal-now),
+     deliberately NOT accent-derived; user-directed 2026-08-28 it wears the
+     accent like every other live indicator, so the name is gone and both call
+     sites in CalendarPanel.jsx read var(--accent) directly. --on-accent is for
+     text/icons sitting on an accent fill; theme-agnostic. */
+  --on-accent:       #ffffff;
+  /* Hour gridline (day/week time-grid). */
   --cal-hour-line: oklch(0.42 0.005 78);  /* brighter than --border (0.255) so hour lines read on dark */
+
+  /* Status · error (validation text). DESIGN.md lists success/warning/error;
+     only --error is defined so far. Tuned to the de-facto app error red
+     (formerly raw #d97070 at every consumer; mode-invariant like the hex was). */
   --error:    oklch(0.666 0.132 21.2);
+
+  /* Named hue palette — the app's ONE set of non-accent colors, and the default any surface reaches
+     for when it must tell several KINDS apart (Feedback roadmap statuses, avatar circles, VOD report
+     stamp sources). Draw from here instead of inventing a hex, so a colour retunes in one place.
+     Theme-agnostic on purpose — these are identity colours, not
+     surface colours, and a hue that shifts between themes stops being an identity. NOT a stoplight:
+     good/bad/progress state still follows § No glowing + neutral status palette in DESIGN.md. */
+  --hue-slate:  #8a8f98;
+  --hue-amber:  #d6a445;
+  --hue-violet: #9b7fd4;
+  --hue-green:  #5bb98c;
+  --hue-teal:   #3aa6a0;
+  --hue-rose:   #c96a8a;
+  --hue-indigo: #7f86d4;
+
+  /* Deadlock team sides (Match Data render): 0 = Amber Hand, 1 = Sapphire Flame.
+     Drives box-score accents, time-series chart lines and the spatial heatmaps. */
   --team-amber:    oklch(0.78 0.15 75);   /* brighter on the dark bg */
   --team-sapphire: oklch(0.68 0.15 250);
+
+  /* Markup-mode affordance tier — one notch above the modal ceiling (nested
+     Planner sub-modals at 10000) so the selection outline + name badge float
+     over every popup. Intentionally above Break/Confetti/WhatsNew too; those are
+     transient and already sit below the 10000 sub-modals. */
+  --z-design: 10001;
 }
 
 body {
@@ -569,24 +504,18 @@ body[data-design-pointer="markup"] *:not(input):not(textarea):not(select):not([d
 .dock-root[data-dock-edge-style="band"] {
   box-shadow: 0 -6px 18px rgba(0,0,0,0.10);
 }
-/* Dock icon GLYPH colour, keyed on :root[data-theme] and the dock-only .dock-btn
+/* Dock icon GLYPH colour, keyed on the dock-only .dock-btn
    class, NOT on .dock-root: the drag clone is portalled to <body>, outside the
    dock, and a .dock-root-scoped rule left the held button's icon dim (measured
-   151 vs 182 luma, 2026-09-18). Follows the color mode — no user picker. Scoped to inactive buttons so
+   151 vs 182 luma, 2026-09-18). No user picker. Scoped to inactive buttons so
    the .is-active accent fill is never touched. The band and the face ground are
    NOT set here any more: the dock used to pin the band to --dock-bg, which was
    just another name for --surface, and both now come from the global --cbtn-rest
    / --cbtn-face knobs (see :root) along with every other button in the app. */
-:root[data-theme="light"] .candy-btn.dock-btn:not(.is-active) > .candy-face {
-  color: oklch(0.420 0.010 78);
-}
-:root[data-theme="light"] .candy-btn.dock-btn:not(.is-active):is([data-dock-hover], :hover) > .candy-face {
-  color: oklch(0.280 0.010 78);
-}
-:root[data-theme="dark"] .candy-btn.dock-btn:not(.is-active) > .candy-face {
+:root .candy-btn.dock-btn:not(.is-active) > .candy-face {
   color: oklch(0.780 0.010 78);
 }
-:root[data-theme="dark"] .candy-btn.dock-btn:not(.is-active):is([data-dock-hover], :hover) > .candy-face {
+:root .candy-btn.dock-btn:not(.is-active):is([data-dock-hover], :hover) > .candy-face {
   color: oklch(0.920 0.010 78);
 }
 @keyframes march       { to { stroke-dashoffset: -10; } }
@@ -1342,8 +1271,8 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
 .candy-btn:is(:hover, :active, .is-active) .candy-badge {
   background: #fff;
   /* !important for the same reason § candy-tile uses it: the per-shape
-     .is-hover-accent triples flip every div/span inside .candy-face to #fff at
-     (0,6,0), which would paint the count white on its own white pill. */
+     base flood flips every div/span inside .candy-face to #fff, which would
+     paint the count white on its own white pill. */
   color: var(--accent) !important;
 }
 
@@ -1644,7 +1573,7 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
    for data-variant="menu" in § is-danger below). */
 .candy-btn[data-shape="row"][data-variant="menu"] > .candy-face {
   justify-content: space-between;
-  padding: 7px 10px;
+  padding: 4px 10px;  /* 26px rows, user-directed 2026-09-18 (was 7px = 32) */
   font-size: 12px;
 }
 
@@ -1851,11 +1780,6 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
 }
 /* Flat — options never press-slide (they'd slip out of the tray's clip). */
 .candy-btn[data-shape="seg-option"]:active > .candy-face { transform: none; }
-/* Inactive hover darkens text only — no accent fill (that reads as selection). */
-.candy-btn[data-shape="seg-option"]:hover:not(.is-active) > .candy-face {
-  background: transparent;
-  color: var(--text);
-}
 
 /* chip — small mono pill: filter toggles (FilterChip) + header-action chips
    (HeaderChip). The legacy button-misc-chip reshaped to two layers — a raised
@@ -1871,7 +1795,7 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
    until 2026-08-03 and silently inherited the full 7px --candy-depth, so every
    chip in the app carried 2px more visual mass than its neighbours and sat 1px
    higher (candyCenterOffset lifts by half the button's OWN depth). The lip is a
-   box-shadow drawn OUTSIDE layout, so matching heights could never fix it. */
+   box-shadow drawn OUTSIDE layout, so matching heights could never fix it. (SUPERSEDED 2026-09-18: every candy shape now takes the base accent flood on hover, user-directed; only .rail-tile nested controls stay neutral.) */
 .candy-btn[data-shape="chip"] {
   --corner-max: 14px;  /* 28px tall */
   --cbtn-depth: var(--candy-depth-small);
@@ -1892,24 +1816,6 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
   letter-spacing: 0.04em;
   text-transform: none;
 }
-/* Inactive hover brightens text only — no accent fill (that reads as selected). */
-.candy-btn[data-shape="chip"]:hover:not(.is-active) { --cbtn-band: var(--cbtn-rest); }
-.candy-btn[data-shape="chip"]:hover:not(.is-active) > .candy-face {
-  background: var(--cbtn-face);
-  color: var(--text);
-}
-/* Nested label spans (GroupHeader, TypePill) follow the brighten, not the base white-flip. */
-.candy-btn[data-shape="chip"]:hover:not(.is-active) .candy-face :where(div, span) { color: var(--text); }
-/* .is-hover-accent on a chip — opt back INTO the base accent flood the two
-   brighten-only rules above suppress (the titlebar account button; same recipe
-   as the icon and circle shapes' copies). Must sit AFTER the neutral hover
-   block: equal specificity, so source order decides. */
-.candy-btn[data-shape="chip"].is-hover-accent:is(:hover, :active):not(.is-active),
-.planner-uniform-btns .candy-btn[data-shape="chip"]:is(:hover, :active):not(.is-active) { --cbtn-band: var(--accent); }
-.candy-btn[data-shape="chip"].is-hover-accent:is(:hover, :active):not(.is-active) > .candy-face,
-.planner-uniform-btns .candy-btn[data-shape="chip"]:is(:hover, :active):not(.is-active) > .candy-face { color: #fff; background: var(--accent); }
-.candy-btn[data-shape="chip"].is-hover-accent:is(:hover, :active):not(.is-active) .candy-face :where(div, span),
-.planner-uniform-btns .candy-btn[data-shape="chip"]:is(:hover, :active):not(.is-active) .candy-face :where(div, span) { color: #fff; }
 
 /* The six titlebar tool/window controls are `circle`-shaped CircleChips, but on
    this strip they wear the account button's soft square corner instead of the
@@ -1963,7 +1869,7 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
    candy at rest; like chip/seg, inactive hover only BRIGHTENS the glyph (no
    accent flip — the dock's hover-expand is the hover affordance; accent is the
    .is-active "current tool" / toggle-on state). Callers set their own size
-   inline (DockButton 36, MusicTile 40·--tile-px). */
+   inline (DockButton 36, MusicTile 40·--tile-px). (SUPERSEDED 2026-09-18: every candy shape now takes the base accent flood on hover, user-directed; only .rail-tile nested controls stay neutral.) */
 /* Size via --cbtn-size, NOT a hard width/height pair written by each caller: a
    size on the tag beats every stylesheet rule, so a window that wants one height
    for all its controls could never win (the Planner shipped a 24px rule that lost
@@ -1976,27 +1882,12 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
   font-family: var(--font-body); font-size: 15px; font-weight: 400;
   letter-spacing: 0; text-transform: none; line-height: 1;
 }
-.candy-btn[data-shape="icon"]:is([data-dock-hover], :hover):not(.is-active) { --cbtn-band: var(--cbtn-rest); }
-.candy-btn[data-shape="icon"]:is([data-dock-hover], :hover):not(.is-active) > .candy-face { background: var(--cbtn-face); color: var(--text); }
-.candy-btn[data-shape="icon"]:is([data-dock-hover], :hover):not(.is-active) .candy-face :where(div, span) { color: var(--text); }
-
-/* Planner chip action buttons (✓ / ROUTE / ×) opt into accent-on-hover.
-   The icon shape's default hover is neutral-brighten (above); this opt-in
-   modifier flips the face to accent on hover/press. Gated :not(.is-active)
-   so the checked ✓ keeps its held-accent state (1978-1981). Specificity (0,6,0)
-   beats the icon override (0,5,0). */
-.candy-btn[data-shape="icon"].is-hover-accent:is(:hover, :active):not(.is-active),
-.planner-uniform-btns .candy-btn[data-shape="icon"]:is(:hover, :active):not(.is-active) { --cbtn-band: var(--accent); }
-.candy-btn[data-shape="icon"].is-hover-accent:is(:hover, :active):not(.is-active) > .candy-face,
-.planner-uniform-btns .candy-btn[data-shape="icon"]:is(:hover, :active):not(.is-active) > .candy-face { color: #fff; background: var(--accent); }
-.candy-btn[data-shape="icon"].is-hover-accent:is(:hover, :active):not(.is-active) .candy-face :where(div, span),
-.planner-uniform-btns .candy-btn[data-shape="icon"]:is(:hover, :active):not(.is-active) .candy-face :where(div, span) { color: #fff; }
 
 /* circle — round icon-only button: music controls (button-music-transport/tool/
    primary) + Planner reset/skip (button-planner-circle). Round; same brighten-
    only hover as icon. .is-active flips accent (Shuffle/Repeat/Queue toggles);
    .is-primary holds accent at rest (the always-on Play). Sizes vary per caller,
-   set inline (IconBtn 28, transport 28, tool 24, primary 38, planner 26). */
+   set inline (IconBtn 28, transport 28, tool 24, primary 38, planner 26). (SUPERSEDED 2026-09-18: every candy shape now takes the base accent flood on hover, user-directed; only .rail-tile nested controls stay neutral.) */
 /* Sizes vary per caller and arrive on --cbtn-size (see the icon shape above for
    why it is a variable and not a written width/height pair). */
 .candy-btn[data-shape="circle"] { width: var(--cbtn-size, 28px); height: var(--cbtn-size, 28px); --corner-max: calc(var(--cbtn-size, 28px) / 2); --cbtn-depth: var(--candy-depth-small); }
@@ -2005,19 +1896,6 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
   font-family: var(--font-body); font-size: 13px; font-weight: 400;
   letter-spacing: 0; text-transform: none; line-height: 1;
 }
-.candy-btn[data-shape="circle"]:hover:not(.is-active):not(.is-primary) { --cbtn-band: var(--cbtn-rest); }
-.candy-btn[data-shape="circle"]:hover:not(.is-active):not(.is-primary) > .candy-face { background: var(--cbtn-face); color: var(--text); }
-.candy-btn[data-shape="circle"]:hover:not(.is-active):not(.is-primary) .candy-face :where(div, span) { color: var(--text); }
-/* .is-hover-accent on a circle — opt back INTO the base accent flood the circle
-   rules above suppress (the titlebar controls; same recipe as the icon shape's
-   copy at § icon). Must sit AFTER the neutral hover block: equal specificity, so
-   source order decides. */
-.candy-btn[data-shape="circle"].is-hover-accent:is(:hover, :active):not(.is-active),
-.planner-uniform-btns .candy-btn[data-shape="circle"]:is(:hover, :active):not(.is-active) { --cbtn-band: var(--accent); }
-.candy-btn[data-shape="circle"].is-hover-accent:is(:hover, :active):not(.is-active) > .candy-face,
-.planner-uniform-btns .candy-btn[data-shape="circle"]:is(:hover, :active):not(.is-active) > .candy-face { color: #fff; background: var(--accent); }
-.candy-btn[data-shape="circle"].is-hover-accent:is(:hover, :active):not(.is-active) .candy-face :where(div, span),
-.planner-uniform-btns .candy-btn[data-shape="circle"]:is(:hover, :active):not(.is-active) .candy-face :where(div, span) { color: #fff; }
 
 /* Nested controls inside a rail tile hover NEUTRAL, never accent. The TILE owns
    the accent flood (it is the button); a red control on a red face vanishes, and
@@ -2027,8 +1905,8 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
    scope and the Overlay Studio panel's plain buttons took the base flood.
    Held states (.is-active / .is-primary) keep their standing accent — that is
    selection, not hover. Placed AFTER every shape block on purpose: it ties with
-   the .is-hover-accent and .planner-uniform-btns opt-ins at (0,6,0), so source
-   order is what decides. */
+   the old per-shape opt-ins (deleted 2026-09-18); it now simply outranks the
+   base flood. */
 .rail-tile .candy-btn:is(:hover, :active):not(.is-active):not(.is-primary) { --cbtn-band: var(--cbtn-rest); }
 .rail-tile .candy-btn:is(:hover, :active):not(.is-active):not(.is-primary) > .candy-face {
   background: var(--cbtn-face);
@@ -2152,9 +2030,9 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
 /* select — dropdown trigger (CandySelect.jsx). Neutral candy control like
    chip/icon: no accent flip (a dropdown trigger turning accent-red reads wrong,
    and legacy .candy-select never colour-shifted on hover — it only lifted, which
-   the immovable base drops). Inactive hover only brightens the muted caret to
-   --text. The label + caret ride in the face; the overlay menu keeps its own
-   .candy-select-menu / -option classes (no portal — see the component header).
+   the immovable base drops) - SUPERSEDED 2026-09-18: hover flips to the accent
+   face (below). No caret; the label rests at --cbtn-rest-text like the menu's
+   own rows and the sidebar buttons. The menu is the context menu.
    27px / small depth / mono 12px label, normal case; .is-compact fills its row
    at 28px for the subtitle panel. */
 .candy-btn[data-shape="select"] {
@@ -2169,37 +2047,22 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
   font-weight: 600;
   letter-spacing: 0;
   text-transform: none;
-  color: var(--text);
+  color: var(--cbtn-rest-text);
   white-space: nowrap;
-}
-/* Caret = the aria-hidden glyph: pushed right, muted, rotates open via inline transform. */
-.candy-btn[data-shape="select"] .candy-face [aria-hidden] {
-  margin-left: auto;
-  font-size: 9px;
-  color: var(--text-muted);
-  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 .candy-btn[data-shape="select"].is-compact { width: 100%; height: 28px; --corner-max: 14px; }
 /* is-fused — a select sitting as a DIRECT child of a .candy-split (CandySelect
    `fuse`, ported from StatusDropdown's chip variant). Height comes from the run's
    --cbtn-size so it matches the icon buttons it is welded to (the hard 27px above
-   left it 5px short), and the face rests at the same colour as its neighbours
-   instead of the brighter standalone-trigger --text. */
+   left it 5px short). */
 .candy-btn[data-shape="select"].is-fused { height: var(--cbtn-size, 27px); }
-.candy-btn[data-shape="select"].is-fused > .candy-face { color: var(--cbtn-rest-text); }
-/* A fused select is welded to .is-hover-accent icon buttons, so it flips to the
-   accent face on hover exactly like them (user-directed 2026-09-13) — the neutral
-   select hover below (band --surface, face --surface-3) reads dead beside them.
-   Mirrors the per-shape .is-hover-accent triples; (0,4,1) beats that rule's
-   (0,3,1). Gated :not(.is-active) like every other shape's version. */
-.candy-btn[data-shape="select"].is-fused:is(:hover, :active):not(.is-active) { --cbtn-band: var(--accent); }
-.candy-btn[data-shape="select"].is-fused:is(:hover, :active):not(.is-active) > .candy-face { color: #fff; background: var(--accent); }
-.candy-btn[data-shape="select"].is-fused:is(:hover, :active):not(.is-active) .candy-face :where(div, span) { color: #fff; }
+/* Every select flips to the accent face on hover, like the menu rows it opens and
+   the sidebar buttons (user-directed 2026-09-18; was fused-only since 2026-09-13,
+   standalone selects stayed neutral). Gated :not(.is-active) like every shape. */
+.candy-btn[data-shape="select"]:is(:hover, :active):not(.is-active) { --cbtn-band: var(--accent); }
+.candy-btn[data-shape="select"]:is(:hover, :active):not(.is-active) > .candy-face { color: #fff; background: var(--accent); }
+.candy-btn[data-shape="select"]:is(:hover, :active):not(.is-active) .candy-face :where(div, span) { color: #fff; }
 .candy-btn[data-shape="select"].is-compact > .candy-face { padding: 0 8px; font-size: 11px; }
-/* Inactive hover brightens the caret only — band + face stay neutral (no accent flip). */
-.candy-btn[data-shape="select"]:hover { --cbtn-band: var(--cbtn-rest); }
-.candy-btn[data-shape="select"]:hover > .candy-face { background: var(--cbtn-face); color: var(--text); }
-.candy-btn[data-shape="select"]:hover .candy-face :where(span) { color: var(--text); }
 
 /* dot — tiny rating circle (the two-layer form of the live `rating-dot`).
    Semantic like swatch: neutral empty / accent .is-filled, with NO hover flip —
@@ -2289,7 +2152,7 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
    Neutral hover like the rest of the family — the accent lives in the left rail,
    not a hover flip (apt for an accordion header; matches the intended
    button-misc-card, whose hover only lifted). .is-expanded rotates the chevron.
-   Doc-only shape (legacy button-misc-card / "Releases-style" never shipped). */
+   Doc-only shape (legacy button-misc-card / "Releases-style" never shipped). (SUPERSEDED 2026-09-18: every candy shape now takes the base accent flood on hover, user-directed; only .rail-tile nested controls stay neutral.) */
 .candy-btn[data-shape="card"] { width: 100%; --corner-max: 20px; }  /* tall surface — capped, not half-height */
 .candy-btn[data-shape="card"] > .candy-face {
   justify-content: space-between;
@@ -2307,10 +2170,6 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
 .candy-btn[data-shape="card"] .card-sub { font-size: 11px; font-family: var(--font-mono); color: var(--text-muted); margin-top: 2px; }
 .candy-btn[data-shape="card"] .card-chevron { font-size: 14px; color: var(--text-muted); transition: transform 200ms ease; }
 .candy-btn[data-shape="card"].is-expanded .card-chevron { transform: rotate(180deg); }
-/* Neutral hover — brighten only; the accent stays in the left rail (no full flip). */
-.candy-btn[data-shape="card"]:hover { --cbtn-band: var(--cbtn-rest); }
-.candy-btn[data-shape="card"]:hover > .candy-face { background: var(--cbtn-face); color: var(--text); }
-.candy-btn[data-shape="card"]:hover .candy-face :where(div, span) { color: var(--text); }
 
 /* track — full-width tracklist row (a <div role=button>, so it can hold nested
    action buttons). The two-layer form of .music-track-candy (album tracklists,
@@ -2318,7 +2177,7 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
    reserved for .is-playing, which flips the accent face); .is-unavailable dims.
    The face is pointer-events:none — nested row buttons re-enable pointer-events
    on themselves; absolute children (progress sliver) sit on the base, not the
-   face. */
+   face. (SUPERSEDED 2026-09-18: every candy shape now takes the base accent flood on hover, user-directed; only .rail-tile nested controls stay neutral.) */
 .candy-btn[data-shape="track"] {
   --cbtn-depth: var(--candy-depth-small);
   width: 100%;
@@ -2335,10 +2194,6 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
   text-align: left;
   color: var(--text);
 }
-/* Neutral hover — brighten only (a list row; accent is reserved for .is-playing). */
-.candy-btn[data-shape="track"]:hover:not(.is-playing) { --cbtn-band: var(--cbtn-rest); }
-.candy-btn[data-shape="track"]:hover:not(.is-playing) > .candy-face { background: var(--cbtn-face); color: var(--text); }
-.candy-btn[data-shape="track"]:hover:not(.is-playing) .candy-face :where(div, span) { color: var(--text); }
 /* Playing — accent face. */
 .candy-btn[data-shape="track"].is-playing { --cbtn-band: var(--accent); }
 .candy-btn[data-shape="track"].is-playing > .candy-face { color: #fff; background: var(--accent); }
@@ -2391,14 +2246,6 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
   letter-spacing: -0.005em;
   text-transform: none;
 }
-/* Inactive hover/press — brighten the label only; band + face stay neutral
-   (the press still slides; only the accent colour-flip is cancelled). */
-.candy-btn.sidebar-pill:is(:hover, :active):not(.is-active) { --cbtn-band: var(--cbtn-rest); }
-.candy-btn.sidebar-pill:is(:hover, :active):not(.is-active) > .candy-face {
-  background: var(--surface);
-  color: var(--text);
-}
-.candy-btn.sidebar-pill:is(:hover, :active):not(.is-active) .candy-face :where(span) { color: var(--text); }
 /* Active — SUBTLE accent tint (soft face + accent label), held through hover;
    only a real press slides the face. */
 .candy-btn.sidebar-pill.is-active { --cbtn-band: color-mix(in oklch, var(--accent) 32%, var(--border)); }
@@ -2469,8 +2316,8 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
 .candy-btn[data-size="chip"]  > .candy-face { padding: 6px 14px; font-size: 10px; }
 
 /* Hover / press — colour flip via --cbtn-band; NO movement on the base. */
-.candy-btn:is(:hover, :active) { --cbtn-band: var(--accent); }
-.candy-btn:is(:hover, :active) > .candy-face { color: #fff; background: var(--accent); }
+.candy-btn:is(:hover, :active, [data-dock-hover]) { --cbtn-band: var(--accent); }
+.candy-btn:is(:hover, :active, [data-dock-hover]) > .candy-face { color: #fff; background: var(--accent); }
 /* Press — only the face slides down --cbtn-depth, over the immovable base.
    data-candy-pressed is JS-held past mouseup (useGlobalCandyPressHold) so the
    150ms ease-down completes to full depth on a quick click; :active alone
@@ -2501,7 +2348,7 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
 /* .is-danger is deliberately NOT in this list any more: it no longer paints a
    filled band (see § is-danger), so forcing white on its children would leave a
    Delete button reading white-on-grey at rest. */
-.candy-btn:is(:hover, :active, .is-active, .is-selected, .is-primary) .candy-face :where(div, span) { color: #fff; }
+.candy-btn:is(:hover, :active, [data-dock-hover], .is-active, .is-selected, .is-primary) .candy-face :where(div, span) { color: #fff; }
 
 /* While a DraggableSidebarList reorder is in flight ([data-dragging] on the list
    container), kill pointer events on every sibling control so no other tile lights
@@ -2855,12 +2702,11 @@ body[data-anim-clock-ambient="off"] .planner-seg rect { transition: none; }
  * here. The -mirror var flips the gradient angle/origin for a symmetric frame,
  * so the old ::before + scaleX + isolation apparatus is gone. Soft stops (a px
  * ramp, not a hard 1px edge) keep lines from aliasing on the device-pixel grid.
- * --sidebar-line carries the faint, theme-flipped colour; tune its alpha and
+ * --sidebar-line carries the faint colour; tune its alpha and
  * the motif periods by reaction against a screenshot. */
 
-/* Faint line colour, theme-flipped — dark needs a touch more to read. */
-:root                    { --sidebar-line: oklch(0.52 0.012 30 / 0.085); }
-:root[data-theme='dark'] { --sidebar-line: oklch(0.66 0.008 82 / 0.10); }
+/* Faint line colour. */
+:root { --sidebar-line: oklch(0.66 0.008 82 / 0.10); }
 
 /* Motif geometry as reusable vars (right + mirrored-left). var(--sidebar-line)
  * resolves lazily at the using element, so swatches can boost it locally. */
@@ -2995,109 +2841,13 @@ body[data-anim-clock-ambient="off"] .planner-seg rect { transition: none; }
  * was removed at the user's request. */
 
 /* ── Media module candy surfaces ────────────────────────────────────────── *
- * Shared status dropdown (trigger + overlay menu — used by music & video) plus
- * the music-only Personal rating dots and candy tracklist rows. Accent mixes
+ * The music-only Personal rating dots and candy tracklist rows. Accent mixes
  * resolve against a local `--accent` set inline by each component, so they
  * track the album / global accent. */
 
-/* Status dropdown trigger — neutral grey candy button, 36px to match the
-   action row; full press-down on :active. */
-button.status-candy {
-  touch-action: manipulation;
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 36px;
-  padding: 0 14px;
-  cursor: pointer;
-  outline: none;
-  color: var(--text);
-  background: var(--surface-3);
-  border: 2px solid color-mix(in oklch, var(--surface), black 22%);
-  border-radius: var(--radius-md);
-  box-shadow:
-    0 var(--candy-depth) 0 -2px color-mix(in oklch, var(--surface), black 10%),
-    0 var(--candy-depth) 0 0 color-mix(in oklch, var(--surface), black 22%);
-  transition:
-    transform var(--cbtn-press-dur, 150ms) cubic-bezier(0, 0, 0.58, 1),
-    box-shadow 150ms cubic-bezier(0, 0, 0.58, 1);
-}
-button.status-candy:hover {
-  transform: translate(0, var(--candy-depth-hover-transform));
-  box-shadow:
-    0 var(--candy-depth-hover-shadow) 0 -2px color-mix(in oklch, var(--surface), black 10%),
-    0 var(--candy-depth-hover-shadow) 0 0 color-mix(in oklch, var(--surface), black 22%);
-}
-button.status-candy:active {
-  transform: translate(0, var(--candy-depth)) !important;
-  box-shadow:
-    0 0 0 -2px color-mix(in oklch, var(--surface), black 10%),
-    0 0 0 0 color-mix(in oklch, var(--surface), black 22%);
-}
-button.status-candy:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-/* Overlay menu — absolute under the trigger, height-clip unroll downward. */
-.status-candy-menu {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
-  min-width: 100%;
-  z-index: 30;
-  overflow: hidden;
-  pointer-events: none;
-  background: var(--surface-3);
-  border: 1px solid color-mix(in oklch, var(--surface), black 22%);
-  border-radius: calc(var(--corner) * 20px);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.40);
-  transition:
-    max-height 180ms cubic-bezier(0.16, 1, 0.3, 1),
-    opacity 140ms ease;
-}
-.status-candy-menu[data-open="true"] {
-  pointer-events: auto;
-}
-button.status-candy-option {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 9px 12px;
-  cursor: pointer;
-  outline: none;
-  border: none;
-  border-radius: calc(var(--corner) * 14px);
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 11px;
-  font-family: var(--font-mono);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  transition: background 100ms ease, color 100ms ease;
-}
-button.status-candy-option:hover {
-  background: var(--hover);
-  color: var(--text);
-}
-/* Keyboard highlight — mirrors :hover; placed before .is-selected so a
-   selected+active option keeps its accent text (source-order tiebreak). */
-button.status-candy-option.is-active {
-  background: var(--hover);
-  color: var(--text);
-}
-button.status-candy-option.is-selected {
-  color: var(--accent);
-}
-
 /* Candy select — generic <select> replacement (video speed / track / chapters,
-   subtitle panel). Same candy band as .status-candy; supports an UPWARD menu
-   (the control deck sits at screen bottom) and a COMPACT size (the cramped
-   subtitle panel). The menu is absolute WITHIN the component — never portal it,
-   or it vanishes when the player goes fullscreen on its own subtree. */
+   subtitle panel), and a COMPACT size (the cramped subtitle panel). CandySelect's
+   menu is the context menu (Unified Dropdown). */
 button.candy-select {
   /* Match the transport buttons' small depth (see the shared override ~line 686)
      so the 3D block reads the same height — both are 27px border-box; only the
@@ -3161,52 +2911,6 @@ button.candy-select.is-compact .candy-select-label { font-size: 11px; }
   color: var(--text-muted);
   transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
 }
-
-/* Overlay menu — absolute; height-clip unroll. Up OR down variant. */
-.candy-select-menu {
-  position: absolute;
-  left: 0;
-  min-width: 100%;
-  z-index: 40;
-  overflow: hidden;
-  pointer-events: none;
-  background: var(--surface-3);
-  border: 1px solid color-mix(in oklch, var(--surface), black 22%);
-  border-radius: calc(var(--corner) * 20px);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.40);
-  transition:
-    max-height 180ms cubic-bezier(0.16, 1, 0.3, 1),
-    opacity 140ms ease;
-}
-.candy-select-menu.is-down { top: calc(100% + 8px); }
-.candy-select-menu.is-up   { bottom: calc(100% + 8px); }
-/* A fused menu anchors to the .candy-split, so `min-width: 100%` would stretch it
-   to the WHOLE run. Size it to its own options and let the component's inline
-   `left` place it under its own trigger. */
-.candy-select-menu.is-fused { min-width: max-content; }
-.candy-select-menu[data-open="true"] { pointer-events: auto; }
-
-button.candy-select-option {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 8px 12px;
-  cursor: pointer;
-  outline: none;
-  border: none;
-  border-radius: calc(var(--corner) * 14px);
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 12px;
-  font-family: var(--font-mono);
-  white-space: nowrap;
-  transition: background 100ms ease, color 100ms ease;
-}
-button.candy-select-option:hover { background: var(--hover); color: var(--text); }
-button.candy-select-option.is-selected { color: var(--accent); }
-button.candy-select-option.is-active { background: var(--hover); }
-.candy-select-menu.is-compact button.candy-select-option { padding: 6px 10px; font-size: 11px; }
 
 /* Personal rating dots — small candy circles, shared by the music + video modules. Filled = accent face. */
 button.rating-dot {

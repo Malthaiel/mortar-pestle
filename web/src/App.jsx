@@ -140,7 +140,7 @@ function MainApp() {
     }
     prevPath.current = currentPath;
   }, [route.path]);
-  const { settings, setSetting, setPreviewAccent, resetSettings, resolvedTheme } = useSettings(route.accentKey);
+  const { settings, setSetting, setPreviewAccent, resetSettings } = useSettings(route.accentKey);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -296,7 +296,6 @@ function MainApp() {
         setSetting={setSetting}
         resetSettings={resetSettings}
         accent={accent}
-        resolvedTheme={resolvedTheme}
         setPreviewAccent={setPreviewAccent}
       />
       <CommandPalette

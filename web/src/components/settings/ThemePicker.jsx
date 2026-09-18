@@ -20,7 +20,7 @@ import { candyGap } from '../../util/candy.js';
 
 const PREVIEW_DELAY = 120;
 
-export default function ThemePicker({ settings, setSetting, setPreviewAccent, resolvedTheme }) {
+export default function ThemePicker({ settings, setSetting, setPreviewAccent }) {
   const committedId = settings.themePreset || DEFAULT_THEME_ID;
   // True committed accent, independent of any live hover preview (resolveActiveAccent
   // reads themeAccent/themePreset, which preview never mutates) — a stable revert
@@ -37,10 +37,10 @@ export default function ThemePicker({ settings, setSetting, setPreviewAccent, re
   // (committed truth), never a captured snapshot.
   const repaintCommitted = useCallback(() => {
     const root = document.documentElement;
-    paintTheme(root, THEME_BY_ID[committedId] || THEME_BY_ID[DEFAULT_THEME_ID], resolvedTheme);
+    paintTheme(root, THEME_BY_ID[committedId] || THEME_BY_ID[DEFAULT_THEME_ID]);
     paintAccent(root, committedAccent);   // CSS var(--accent) consumers
     setPreviewAccent(null);               // JS-prop consumers → back to committed
-  }, [committedId, committedAccent, resolvedTheme, setPreviewAccent]);
+  }, [committedId, committedAccent, setPreviewAccent]);
 
   const onEnter = (id) => {
     clearTimer();
@@ -51,7 +51,7 @@ export default function ThemePicker({ settings, setSetting, setPreviewAccent, re
       // evaluating. Monastic now carries its own defaultAccent (red), so every
       // card previews a real accent.
       const a = (t && t.defaultAccent) || committedAccent;
-      paintTheme(root, t, resolvedTheme);
+      paintTheme(root, t);
       paintAccent(root, a);        // CSS var(--accent) consumers
       setPreviewAccent(a);         // JS-prop accent consumers (whole app tree)
       setPreviewId(id);
@@ -73,7 +73,7 @@ export default function ThemePicker({ settings, setSetting, setPreviewAccent, re
     // (possibly overridden) accent.
     const nextAccent = switching ? (THEME_BY_ID[target]?.defaultAccent || committedAccent) : committedAccent;
     const root = document.documentElement;
-    paintTheme(root, THEME_BY_ID[target] || THEME_BY_ID[DEFAULT_THEME_ID], resolvedTheme);
+    paintTheme(root, THEME_BY_ID[target] || THEME_BY_ID[DEFAULT_THEME_ID]);
     paintAccent(root, nextAccent);     // CSS var(--accent) consumers → final state now
     setPreviewAccent(nextAccent);      // JS-prop consumers → bridge until committed catches up
     setSetting('themePreset', target); // persists; apply effect repaints to the same DOM (no flash)
@@ -104,7 +104,6 @@ export default function ThemePicker({ settings, setSetting, setPreviewAccent, re
         <ThemeCard
           key={t.id}
           theme={t}
-          resolvedTheme={resolvedTheme}
           committedAccent={committedAccent}
           onEnter={() => onEnter(t.id)}
           onPick={() => onPick(t.id)}
@@ -114,8 +113,8 @@ export default function ThemePicker({ settings, setSetting, setPreviewAccent, re
   );
 }
 
-function ThemeCard({ theme, resolvedTheme, committedAccent, onEnter, onPick }) {
-  const sw = theme.swatches[resolvedTheme] || theme.swatches.light;
+function ThemeCard({ theme, committedAccent, onEnter, onPick }) {
+  const sw = theme.swatch;
   const cardAccent = theme.defaultAccent || committedAccent;
   // All-span markup (no <div> inside <button>): the mock chips are spans styled
   // as blocks/flex. The tile shape flips :where(div,span) text to white on

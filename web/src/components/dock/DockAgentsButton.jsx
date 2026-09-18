@@ -22,7 +22,7 @@ import { listAgents } from '../../agents/agents-registry.js';
 import { openConcierge } from '../../agents/concierge/ConciergeProvider.jsx';
 import { openAnalyst } from '../../agents/analyst/AnalystProvider.jsx';
 
-export default function DockAgentsButton({ label, accent, onContextMenu, variant = 'dock' }) {
+export default function DockAgentsButton({ label, tipDesc, accent, onContextMenu, variant = 'dock' }) {
   const [open, setOpen] = useState(false);
   const [rect, setRect] = useState(null);
   const wrapRef = useRef(null);
@@ -67,6 +67,7 @@ export default function DockAgentsButton({ label, accent, onContextMenu, variant
     <CircleChip
       ref={wrapRef}
       title={label}
+      data-tip-desc={tipDesc}
       onClick={toggle}
       size={28}
       className={`is-hover-accent${open ? ' is-active' : ''}`}

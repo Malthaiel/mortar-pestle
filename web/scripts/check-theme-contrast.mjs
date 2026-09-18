@@ -1,9 +1,9 @@
 // Community Themes contrast gate — verifies every shipped preset clears WCAG AA
-// for its text-on-surface pairs (and accent-vs-white) in BOTH light and dark,
-// so contrast is checked at build time, not eyeballed. Dep-free: it parses the
-// registry's OKLch token maps directly and converts OKLch → linear sRGB → WCAG
-// relative luminance inline. Monastic (null maps) is read from styles.css so all
-// three themes go through the same gate.
+// for its text-on-surface pairs (and accent-vs-white), so contrast is checked at
+// build time, not eyeballed. Dep-free: it parses the registry's OKLch token map
+// directly and converts OKLch → linear sRGB → WCAG relative luminance inline.
+// Monastic (null map) is read from styles.css so all three themes go through the
+// same gate.
 //
 //   node scripts/check-theme-contrast.mjs      (or: npm run check-themes)
 //
@@ -71,13 +71,8 @@ function parseBlock(css, selector) {
   for (const m of body.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) map[m[1]] = m[2].trim();
   return map;
 }
-function monasticMaps() {
-  const css = readFileSync(STYLES, 'utf8');
-  return {
-    light: parseBlock(css, ':root {'),
-    dark: parseBlock(css, ":root[data-theme='dark']"),
-    defaultAccent: null,
-  };
+function monasticMap() {
+  return parseBlock(readFileSync(STYLES, 'utf8'), ':root {');
 }
 
 // ── Pairs to check ───────────────────────────────────────────────────────────
@@ -90,9 +85,8 @@ const TEXT_PAIRS = [
 ];
 const ON_ACCENT = '#ffffff'; // --on-accent, theme-agnostic
 
-function checkVariant(name, variant, map, defaultAccent) {
+function checkTheme(name, map, defaultAccent) {
   const rows = [];
-  // dark maps for Monastic inherit light tokens not overridden in the dark block.
   const resolve = key => map[key];
   for (const pair of TEXT_PAIRS) {
     const fgY = colorToY(resolve(pair.fg));
@@ -109,24 +103,13 @@ function checkVariant(name, variant, map, defaultAccent) {
     const ratio = contrast(colorToY(defaultAccent), hexToY(ON_ACCENT));
     rows.push({ label: `accent on ${ON_ACCENT}`, ratio, min: 4.5, level: 'fail', ok: ratio >= 4.5 });
   }
-  return { name: `${name} · ${variant}`, rows };
+  return { name, rows };
 }
 
 // ── Run ──────────────────────────────────────────────────────────────────────
-const monastic = monasticMaps();
-// Monastic dark inherits any token the dark block doesn't redeclare.
-const monasticDark = { ...monastic.light, ...monastic.dark };
-
-const groups = [];
-for (const t of THEMES) {
-  if (t.id === 'monastic') {
-    groups.push(checkVariant(t.name, 'light', monastic.light, null));
-    groups.push(checkVariant(t.name, 'dark', monasticDark, null));
-  } else {
-    groups.push(checkVariant(t.name, 'light', t.light, t.defaultAccent));
-    groups.push(checkVariant(t.name, 'dark', t.dark, t.defaultAccent));
-  }
-}
+const groups = THEMES.map(t => (t.id === 'monastic'
+  ? checkTheme(t.name, monasticMap(), null)
+  : checkTheme(t.name, t.tokens, t.defaultAccent)));
 
 let failed = 0, warned = 0;
 for (const g of groups) {
@@ -139,5 +122,5 @@ for (const g of groups) {
   }
 }
 
-console.log(`\n${failed === 0 ? '✓' : '✗'} ${failed} fail, ${warned} warn across ${groups.length} theme/variant combos`);
+console.log(`\n${failed === 0 ? '✓' : '✗'} ${failed} fail, ${warned} warn across ${groups.length} themes`);
 process.exit(failed === 0 ? 0 : 1);
