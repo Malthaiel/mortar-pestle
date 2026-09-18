@@ -76,12 +76,22 @@ const STATE_THROTTLE = 60;
 // reachable inside its bounds.
 const SHIFT_THRESHOLD_FRACTION = 0.2;
 
+// Drop the press marks the clone copied from its source (the global press-hold's
+// data-candy-pressed, a JS-held .is-pressed). They sit on the .candy-btn INSIDE
+// the wrapper, so strip the subtree (and the root, for a bare-button item). The
+// source's own mark is released by its pointerup; nothing ever releases the copy's.
+function releasePress(root) {
+  for (const el of [root, ...root.querySelectorAll('[data-candy-pressed], .is-pressed')]) {
+    el.removeAttribute('data-candy-pressed');
+    el.classList.remove('is-pressed');
+  }
+}
+
 function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, slotY, slotXY = null, isHorizontal = false, isGrid = false, releasing = false, glideMs = 160, containerRef, grow = false }) {
   const hostRef = useRef(null);
   const cloneRef = useRef(null);
   const modeRef = useRef('slot-snap');
-  // Where the clone is written. Grid uses left/top; every other consumer keeps
-  // the transform it shipped with.
+  // Where the clone is written: left/top, for EVERY consumer (never a transform).
   //
   // A transform puts the clone on its own compositing layer, and a layer at a
   // FRACTIONAL y gets snapped to a whole device pixel. The chips rest at 341.2,
@@ -94,11 +104,8 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
   // half pixels, and the transform smeared the held button across two (it read 1px
   // bigger); rounding the transform instead left it 1px LOW until release
   // (both photographed 2026-09-18). Laid out, it rounds like its neighbours.
-  const laidOut = isGrid || isHorizontal;
-  const place = (el, x, y) => {
-    if (laidOut) { el.style.left = `${x}px`; el.style.top = `${y}px`; }
-    else el.style.transform = `translate3d(${x}px, ${y}px, 0)`;
-  };
+  // The vertical rails followed the same day, before anyone saw it there.
+  const place = (el, x, y) => { el.style.left = `${x}px`; el.style.top = `${y}px`; };
   // Flipped true when the parent enters its release phase on drop. The
   // cursor-mode RAF reads this each frame and bails so its writes don't
   // fight the CSS transition that animates the clone into its final slot.
@@ -158,20 +165,13 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
     // lifted by a HOLD is mid-press at lift, and cloneNode copies that. A grid
     // chip — and a dock button — has to read exactly like its neighbours while it
     // travels, so drop the press on the clone. (A VERTICAL rail tile keeps it: its
-    // pressed face during the drag is deliberate, and the drop sequence's
-    // invariant 2 eases it back up on the landing glide.)
-    // The mark sits on the .candy-btn INSIDE this wrapper, not on the wrapper,
-    // so strip it from the subtree (and from the root, for a bare-button item).
+    // pressed face during the drag is deliberate; the release effect below drops
+    // it at the landing glide.)
     // Stripped one FRAME after the clone paints, not before it: cleared up
     // front there is no pressed state to transition FROM, so the face teleports
     // up at lift. Painting pressed once lets .candy-face's own 150ms ease-out
     // carry it back up while the chip travels.
-    const releaseClonePress = () => {
-      for (const el of [clone, ...clone.querySelectorAll('[data-candy-pressed], .is-pressed')]) {
-        el.removeAttribute('data-candy-pressed');
-        el.classList.remove('is-pressed');
-      }
-    };
+    const releaseClonePress = () => releasePress(clone);
     // Mark the clone so per-tile CSS can keep the press-depth look during
     // drag (the original element loses :active the moment the clone takes
     // over the pointer). E.g. `.rail-tile.is-dragging` collapses
@@ -209,7 +209,7 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
       // Vertical: X anchors to source column (modules stay locked to rail).
       // Horizontal: Y anchors to source row (dock buttons stay on the bar).
       // Active-axis position depends on the drag mode.
-      transform: laidOut ? 'none' : `translate3d(${initialX}px, ${initialY}px, 0)`,
+      transform: 'none',
     });
     place(clone, initialX, initialY);
     // Portal the clone to <body> rather than the in-tree host. The clone is
@@ -335,7 +335,7 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
           growEl.style.paddingTop = overTop > 0 ? `${overTop}px` : '';
           if (cardEl) cardEl.style.marginTop = overTop > 0 ? `${-overTop}px` : '';
         }
-        clone.style.transform = `translate3d(${curX}px, ${curY}px, 0)`;
+        place(clone, curX, curY);
         rafId = requestAnimationFrame(loop);
       };
       rafId = requestAnimationFrame(loop);
@@ -398,7 +398,7 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
       // the reflow, the browser may batch the transition switch with the initial
       // transform and animate from (0, 0) to the first slot on mount.
       void clone.offsetWidth;
-      clone.style.transition = laidOut ? `left ${GLIDE}, top ${GLIDE}` : `transform ${GLIDE}`;
+      clone.style.transition = `left ${GLIDE}, top ${GLIDE}`;
     }
 
     return () => {
@@ -444,7 +444,7 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
     // transform delta is computed. Same pattern the slot-snap init uses at
     // mount (search for `void clone.offsetWidth`).
     const glide = `${glideMs}ms ${GLIDE_TIMING}`;
-    clone.style.transition = laidOut ? `left ${glide}, top ${glide}` : `transform ${glide}`;
+    clone.style.transition = `left ${glide}, top ${glide}`;
     void clone.offsetWidth;
     place(clone, cx, cy);
     // Swap is-dragging → is-drop-accent for the glide. The bridge class carries
@@ -457,6 +457,10 @@ function PlainDragTile({ sourceElement, originRect, originDisplay, cursorRef, sl
     // state: accent yes, press no. (Its CSS keeps the transform transition
     // alive and only strips the colour transitions — see styles.css.)
     clone.classList.remove('is-dragging');
+    // A vertical rail tile's clone still carries the press it was lifted with, and
+    // the base [data-candy-pressed] rule held the face down through the whole glide
+    // until the source swapped in at rest: a one-frame snap (filmed 2026-09-18).
+    releasePress(clone);
     // …and only while the cursor is actually ON the clone. The glide used to keep
     // the accent unconditionally, so dropping and moving away left an accent chip
     // flying to its slot with the pointer nowhere near it — a fixed 267ms of glow
