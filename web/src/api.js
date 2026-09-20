@@ -279,6 +279,27 @@ function buildDailyLogSkeleton(ds, upcomingBullet) {
 
 // Append an event bullet to an existing daily log's ## Upcoming section,
 // creating the section (after ## Quick Notes / before ## Sessions) if absent.
+// Swap one event bullet in a day's log for `replacement` (a formatted bullet,
+// possibly multi-line), or drop it when `replacement` is null. Matched on the
+// verbatim source line rather than an index: the file may have been rewritten
+// since the parse, and an exact-text miss is a safe refusal where a stale index
+// would silently edit the wrong event.
+async function rewriteEventBullet(ds, src, replacement) {
+  const path = `Pulse/Daily Logs/${ds}.md`;
+  const r = await readCall('vault_read_file', { path });
+  const lines = r.content.split('\n');
+  const i = lines.indexOf(src.line);
+  if (i === -1) {
+    const e = new Error('That event is no longer in the day’s log.');
+    e.code = 'NOT_FOUND';
+    throw e;
+  }
+  const span = src.noteLine && lines[i + 1] === src.noteLine ? 2 : 1;
+  lines.splice(i, span, ...(replacement ? replacement.split('\n') : []));
+  const w = await readCall('vault_write_file', { path, content: lines.join('\n'), mtime: r.mtime ?? null });
+  return { mtime: w?.mtime ?? null };
+}
+
 function insertIntoUpcoming(content, bullet) {
   const lines = content.split('\n');
   let h = -1;
@@ -1576,6 +1597,21 @@ export const api = {
       }
       return { mtime: w?.mtime ?? null, created };
     },
+
+    // Edit one event in place. `src` is the parsed event straight off
+    // parseUpcomingSection — its `line` / `noteLine` are the identity (events
+    // have no id). Moving an event to another DAY is a remove + add, because
+    // the bullet has to change files.
+    update: async (ds, src, fields) => {
+      const newDs = fields.ds || ds;
+      if (newDs !== ds) {
+        await rewriteEventBullet(ds, src, null);
+        return api.events.add(newDs, fields);
+      }
+      return rewriteEventBullet(ds, src, formatEventBullet({ ds: newDs, ...fields }));
+    },
+
+    remove: (ds, src) => rewriteEventBullet(ds, src, null),
   },
 
   dailyFrame: {

@@ -4,6 +4,10 @@ import { IconBtn, HeaderChip, Seg, FilterChip } from '@host/components/ui/index.
 import { fmtHHMMString, fmtHHMMFromHM, fmtClockCompact, fmtHourLabel } from '@host/util/time.js';
 import { useContextMenu } from '@host/context-menu/useContextMenu.js';
 import NewEventModal from '@host/components/planner/NewEventModal.jsx';
+import { useUpcomingWindow } from '@host/hooks/useUpcomingWindow.js';
+import { useEventTypes } from '@host/hooks/useEventTypes.js';
+import { colorForType } from '@host/util/events.js';
+import { subscribeEvents } from '@host/api.js';
 import { descFromSession, descFromPlan, isEligibleForPull } from './blockPull.js';
 import { GLIDE_MS } from '@host/util/motion.js';
 
@@ -520,7 +524,10 @@ function DraftBlock({ draft, hourHeight, accent, timeFormat24h, onNameChange, on
   );
 }
 
-function SessionBlock({ session, hourHeight, accent, onDelete, onDuplicate, onResize, onMove, onFrameMove, onRename, onEditingChange, onSelect, onFrameReset, isActive, timeFormat24h, lane = 0, lanes = 1, frameEditMode = false, onFrameRetime, onFrameResize, onFrameDelete, onFrameDeleteToday, onFrameRename, onFrameShift, desc, onBlockTap, pullState = null, onPullToggle, entranceDelay = null }) {
+// readOnly: a block that only reports its click (calendar events). Same
+// face as a real session by construction — no drag, resize, rename,
+// delete button or context menu, so nothing can write through it.
+function SessionBlock({ session, hourHeight, accent, readOnly = false, onDelete, onDuplicate, onResize, onMove, onFrameMove, onRename, onEditingChange, onSelect, onFrameReset, isActive, timeFormat24h, lane = 0, lanes = 1, frameEditMode = false, onFrameRetime, onFrameResize, onFrameDelete, onFrameDeleteToday, onFrameRename, onFrameShift, desc, onBlockTap, pullState = null, onPullToggle, entranceDelay = null }) {
   const isFrame = !!session.meta?.isFrame;
   const isOverridden = !!session.meta?.isOverridden;
   // A split segment of a midnight-wrapping frame (meta.segment 'head'|'tail').
@@ -535,16 +542,16 @@ function SessionBlock({ session, hourHeight, accent, onDelete, onDuplicate, onRe
     const items = [];
     if (isFrame) {
       if (frameEditMode) {
-        items.push({ label: 'Edit name', icon: IconNotes, onClick: () => startEdit() });
-        items.push({ label: 'Delete frame', icon: IconX, danger: true, onClick: () => onFrameDelete?.(session.dateKey, session.meta?.frameId) });
+        items.push({ label: 'Edit Name', icon: IconNotes, onClick: () => startEdit() });
+        items.push({ label: 'Delete Frame', icon: IconX, danger: true, onClick: () => onFrameDelete?.(session.dateKey, session.meta?.frameId) });
       } else {
         if (isOverridden && onFrameReset) {
-          items.push({ label: 'Reset override', icon: IconReset, onClick: () => onFrameReset(session.dateKey, session.meta?.frameId) });
+          items.push({ label: 'Reset Override', icon: IconReset, onClick: () => onFrameReset(session.dateKey, session.meta?.frameId) });
         }
-        items.push({ label: 'Delete for today', icon: IconX, danger: true, onClick: () => onFrameDeleteToday?.(session.dateKey, session.meta?.frameId) });
+        items.push({ label: 'Delete Today', icon: IconX, danger: true, onClick: () => onFrameDeleteToday?.(session.dateKey, session.meta?.frameId) });
       }
     } else {
-      items.push({ label: 'Edit name', icon: IconNotes, onClick: () => startEdit() });
+      items.push({ label: 'Edit Name', icon: IconNotes, onClick: () => startEdit() });
       items.push({ label: 'Duplicate', icon: IconLayers, onClick: () => duplicateSession() });
       items.push({ label: 'Delete', icon: IconX, danger: true, onClick: () => onDelete?.(session.id) });
     }
@@ -690,8 +697,9 @@ function SessionBlock({ session, hourHeight, accent, onDelete, onDuplicate, onRe
       data-frame-block={isFrame ? 'on' : undefined}
       onMouseEnter={() => { if (!pullState) setHovered(true); }}
       onMouseLeave={() => { if (!resizing && !moving) setHovered(false); }}
-      onPointerDown={pullState || (isWrapSegment && !frameEditMode) ? (e) => { e.stopPropagation(); } : onPointerDown}
+      onPointerDown={readOnly || pullState || (isWrapSegment && !frameEditMode) ? (e) => { e.stopPropagation(); } : onPointerDown}
       onClick={(e) => {
+        if (readOnly) { e.stopPropagation(); onSelect?.(session); return; }
         // Pull-selection mode: clicks toggle membership, nothing else. With a
         // dock onBlockTap the popover owns the click (frames included);
         // legacy select elsewhere (planner / Pulse calendar).
@@ -714,8 +722,8 @@ function SessionBlock({ session, hourHeight, accent, onDelete, onDuplicate, onRe
         }
         if (!isFrame) onSelect?.(session);
       }}
-      onDoubleClick={pullState || (isFrame && !frameEditMode) ? undefined : () => startEdit()}
-      onContextMenu={pullState ? (e) => { e.preventDefault(); e.stopPropagation(); } : onSessionContextMenu}
+      onDoubleClick={readOnly || pullState || (isFrame && !frameEditMode) ? undefined : () => startEdit()}
+      onContextMenu={readOnly || pullState ? (e) => { e.preventDefault(); e.stopPropagation(); } : onSessionContextMenu}
       style={{
         position: 'absolute',
         ...entranceStyle,
@@ -732,9 +740,11 @@ function SessionBlock({ session, hourHeight, accent, onDelete, onDuplicate, onRe
           : `color-mix(in oklch, ${accent} 92%, var(--surface-3))`,
         border: `1px solid color-mix(in oklch, ${accent} ${isActive ? 100 : 70}%, black)`,
         borderRadius: 'var(--radius-md)', overflow: 'hidden',
-        cursor: pullState
-          ? (pullState === 'eligible' || pullState === 'selected' ? 'pointer' : 'default')
-          : (moving ? 'grabbing' : 'grab'),
+        cursor: readOnly
+          ? 'pointer'
+          : pullState
+            ? (pullState === 'eligible' || pullState === 'selected' ? 'pointer' : 'default')
+            : (moving ? 'grabbing' : 'grab'),
         display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'stretch',
         gap: 1, paddingLeft: 8, paddingRight: 6, paddingTop: 3, paddingBottom: 3,
         userSelect: 'none',
@@ -802,7 +812,7 @@ function SessionBlock({ session, hourHeight, accent, onDelete, onDuplicate, onRe
           <IconRepeat size={11}/>
         </div>
       )}
-      {hovered && (
+      {hovered && !readOnly && (
         <button data-resize="true" onClick={e => {
           e.stopPropagation();
           if (!session.meta?.isFrame) { onDelete?.(session.id); return; }
@@ -840,7 +850,7 @@ function SessionBlock({ session, hourHeight, accent, onDelete, onDuplicate, onRe
           ↺
         </button>
       )}
-      {hovered && !editing && !session.meta?.segment && (
+      {hovered && !readOnly && !editing && !session.meta?.segment && (
         <>
           <div data-resize="true" data-no-drag onPointerDown={(e) => onResizeStart('top', e)} style={{
             position: 'absolute', top: 0, left: 0, right: 0, height: 6,
@@ -960,6 +970,53 @@ export default function CalendarPanel({
   timeFormatRef.current = timeFormat24h;
   const { openContextMenu } = useContextMenu();
   const [eventModal, setEventModal] = useState(null);
+
+  // Events from each visible day's `## Upcoming` section. Visible days are
+  // contiguous, so the forward window covers exactly what's on screen; month
+  // view paints no blocks at all, so it asks for nothing. useUpcomingWindow
+  // skips its own vault subscription when handed a start day, hence evTick.
+  const { types: eventTypes } = useEventTypes();
+  const [evTick, setEvTick] = useState(0);
+  useEffect(() => {
+    const unsub = subscribeEvents((name) => {
+      if (name === 'today' || name === 'day' || name === 'manifest') setEvTick(t => t + 1);
+    });
+    return () => unsub();
+  }, []);
+  const { groups: eventGroups } = useUpcomingWindow(
+    viewMode === 'month' ? 0 : Math.max(0, visibleDays.length - 1),
+    dateKey(visibleDays[0]),
+    evTick,
+  );
+  // ds → grid-ready blocks. All-day and untimed events have no position and
+  // stay in the day pane's list; an event with no end reads as 30 minutes.
+  const eventsByDay = useMemo(() => {
+    const map = {};
+    if (viewMode === 'month') return map;
+    for (const g of eventGroups) {
+      const blocks = [];
+      for (const ev of g.events) {
+        if (!ev.start) continue;
+        const [sh, sm] = ev.start.split(':').map(Number);
+        if (Number.isNaN(sh) || Number.isNaN(sm)) continue;
+        const startMins = sh * 60 + sm;
+        let endMins = startMins + 30;
+        if (ev.end) {
+          const [eh, em] = ev.end.split(':').map(Number);
+          if (!Number.isNaN(eh) && !Number.isNaN(em)) endMins = eh * 60 + em;
+        }
+        endMins = Math.min(24 * 60, Math.max(startMins + 15, endMins));
+        blocks.push({
+          id: `ev:${g.ds}:${ev.line}`, dateKey: g.ds,
+          start: hm(startMins), end: hm(endMins),
+          task: ev.title, typeName: ev.typeName,
+          _kind: 'event', _ev: ev,
+        });
+      }
+      if (blocks.length) map[g.ds] = blocks;
+    }
+    return map;
+  }, [eventGroups, viewMode]);
 
   useEffect(() => {
     let timeoutId;
@@ -1109,11 +1166,11 @@ export default function CalendarPanel({
     let s = Math.max(0, Math.min(24 * 60, Math.round(((e.clientY - rect.top) * minsPerPx) / 15) * 15));
     s = Math.min(s, 24 * 60 - 30);
     openContextMenu(e, [
-      { label: 'New session here', icon: IconPlus, onClick: () => {
+      { label: 'New Session', icon: IconPlus, onClick: () => {
         editingActiveRef.current = true;
         setDraft({ ds, startMins: s, endMins: s + 30, phase: 'editing', name: '' });
       } },
-      { label: 'New event', icon: IconCalendar, onClick: () => {
+      { label: 'New Event', icon: IconCalendar, onClick: () => {
         setEventModal({ open: true, ds, start: hm(s) });
       } },
     ], { accent });
@@ -1166,7 +1223,7 @@ export default function CalendarPanel({
   const nowOffset = ((today.getHours() * 60 + today.getMinutes()) / 60) * hourHeight;
 
   return (
-    <div className="flex-col" style={{ height: '100%', background: 'var(--surface)' }}>
+    <div className="flex-col" style={{ height: '100%', background: 'var(--cal-surface, var(--surface))' }}>
       {!hideHeader && (
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8,
@@ -1288,7 +1345,9 @@ export default function CalendarPanel({
                         opacity: isPastHour ? 0.4 : 1,
                         letterSpacing: '0.02em',
                         marginTop: -7, padding: '0 3px',
-                        background: 'var(--surface)',
+                        // Punches the hour line out behind the label, so it has to
+                        // be whatever is actually backing the calendar.
+                        background: 'var(--cal-surface, var(--surface))',
                       }}>
                         {fmtHourLabel(h, timeFormat24h)}
                       </span>
@@ -1300,13 +1359,18 @@ export default function CalendarPanel({
                 <div style={{
                   position: 'absolute', left: 0, right: 0,
                   top: nowOffset,
-                  display: 'flex', justifyContent: 'flex-end', paddingRight: 0,
+                  display: 'flex', justifyContent: 'center',
                   transform: 'translateY(-50%)', pointerEvents: 'none', zIndex: 25,
                 }}>
+                  {/* Centred in the 44px gutter with even space either side
+                      (was flex-end, hugging the grid). fontSize matches the
+                      hour labels above; the radius rides the app-wide corner
+                      knob at half the badge's ~13px height, so knob=1 is a true
+                      pill and knob=0 is square, like every candy control. */}
                   <span style={{
-                    fontSize: 9, fontFamily: 'var(--font-mono)', fontWeight: 700, whiteSpace: 'nowrap',
-                    color: 'var(--on-accent)', background: 'var(--cal-now)',
-                    padding: '1px 4px', borderRadius: 'var(--radius-sm) 0 0 var(--radius-sm)', lineHeight: 1.1,
+                    fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 700, whiteSpace: 'nowrap',
+                    color: 'var(--on-accent)', background: 'var(--accent)',
+                    padding: '1px 4px', borderRadius: 'calc(var(--corner) * 7px)', lineHeight: 1.1,
                     letterSpacing: '0.02em',
                   }}>
                     {fmtClockCompact(today.getHours(), today.getMinutes(), timeFormat24h)}
@@ -1320,7 +1384,9 @@ export default function CalendarPanel({
               const ds = dateKey(d);
               const isToday = isSameDay(d, today);
               const daySessions = sessionsByDay[ds] || [];
-              const packedSessions = packDaySessions(daySessions);
+              // Events share the session lane set so an overlap splits the
+              // column instead of hiding one of them.
+              const packedSessions = packDaySessions([...daySessions, ...(eventsByDay[ds] || [])]);
               const dayPlanBlocks = isToday ? planBlocks : [];
 
               return (
@@ -1358,6 +1424,19 @@ export default function CalendarPanel({
                     );
                   })}
                   {packedSessions.map(s => {
+                    if (s._kind === 'event') {
+                      // Same component as a real session (user-directed: an
+                      // event block must look 1-1 identical), readOnly so it
+                      // only reports its click.
+                      return (
+                        <SessionBlock key={`e-${ds}-${s._ev.line}`} session={s} readOnly
+                          hourHeight={hourHeight}
+                          accent={colorForType(eventTypes, s.typeName)}
+                          timeFormat24h={timeFormat24h}
+                          lane={s._lane} lanes={s._lanes}
+                          onSelect={() => { if (!pullSelect) setEventModal({ open: true, editing: { ds, ev: s._ev } }); }}/>
+                      );
+                    }
                     const sDesc = descFromSession(s);
                     return (
                       <SessionBlock key={`${s.id}-${s.start}-${s.end}`} session={s}
@@ -1400,7 +1479,7 @@ export default function CalendarPanel({
                     }}>
                       <div style={{
                         position: 'absolute', left: -2, right: 0, top: -1,
-                        height: isToday ? 2 : 1.5, background: 'var(--cal-now)',
+                        height: isToday ? 2 : 1.5, background: 'var(--accent)',
                         opacity: isToday ? 1 : 0.32,
                       }}/>
                     </div>
@@ -1427,9 +1506,10 @@ export default function CalendarPanel({
           open={eventModal.open}
           initialDs={eventModal.ds}
           initialStart={eventModal.start}
+          editing={eventModal.editing || null}
           accent={accent}
           onClose={() => setEventModal(null)}
-          onCreated={() => {}}
+          onCreated={() => setEvTick(t => t + 1)}
         />
       )}
     </div>

@@ -13,13 +13,23 @@ import { candyGap } from '../../util/candy.js';
 import { AccentGrid } from '../ui/AccentPicker.jsx';
 import { IconX, IconLink } from '../icons.jsx';
 import MiniMonthPicker from './MiniMonthPicker.jsx';
-import { PrimaryBtn, OutlinedBtn } from '../ui/index.js';
+import { PrimaryBtn, OutlinedBtn, DangerOutlinedBtn } from '../ui/index.js';
+
+function saveError(e) {
+  if (e?.code === 'CONFLICT') return 'That day’s log changed externally — close and retry.';
+  if (e?.code === 'NOT_FOUND') return 'That event is no longer in the day’s log — close and reopen.';
+  return e?.message || 'Failed to save the event.';
+}
 
 function slugify(s) {
   return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'type';
 }
 
-export default function NewEventModal({ open, onClose, onCreated, accent = 'var(--accent)', initialDs = null, initialStart = null }) {
+// `editing` turns this into the EDIT popup for an existing event: pass
+// `{ ds, ev }` where ev is a parsed event off parseUpcomingSection. Same form,
+// same fields — only the seeding, the save call, the title and the extra
+// Delete button differ, which is why there is no second modal.
+export default function NewEventModal({ open, onClose, onCreated, accent = 'var(--accent)', initialDs = null, initialStart = null, editing = null }) {
   const { types, addType, removeType } = useEventTypes();
   const [ds, setDs] = useState(() => initialDs || keyForDate(new Date()));
   const [typeId, setTypeId] = useState(null);
@@ -37,24 +47,36 @@ export default function NewEventModal({ open, onClose, onCreated, accent = 'var(
   const [showNewType, setShowNewType] = useState(false);
   const [editTypes, setEditTypes] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [newTypeName, setNewTypeName] = useState('');
   const [newTypeColor, setNewTypeColor] = useState('#5d3a4a');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
 
-  // Seed selected type once types are available.
+  // Seed selected type once types are available. An edited event names its type
+  // in prose, so match by name and fall back to the first type if it was since
+  // deleted.
   useEffect(() => {
-    if (typeId == null && types.length) setTypeId(types[0].id);
-  }, [types, typeId]);
+    if (typeId == null && types.length) {
+      const want = editing?.ev?.typeName;
+      setTypeId((want && types.find(t => t.name === want)?.id) || types[0].id);
+    }
+  }, [types, typeId, editing]);
 
-  // Reset transient fields each time the modal opens.
+  // Reset transient fields each time the modal opens — from the edited event
+  // when there is one, otherwise blank.
   useEffect(() => {
     if (!open) return;
-    setDs(initialDs || keyForDate(new Date()));
-    setStart(initialStart || '09:00'); setEnd(''); setAllDay(false); setTitle(''); setNote('');
-    setReminderLead(null); setMinIdx(0); setDayIdx(0);
-    setLink(null); setLinkQuery(''); setLinkResults([]);
-    setShowNewType(false); setEditTypes(false); setConfirmDeleteId(null); setNewTypeName(''); setErr(null); setBusy(false);
+    const ev = editing?.ev || null;
+    setDs(editing?.ds || initialDs || keyForDate(new Date()));
+    setTypeId(null);
+    setStart(ev ? (ev.start || '09:00') : (initialStart || '09:00'));
+    setEnd(ev?.end || ''); setAllDay(!!ev && !ev.start);
+    setTitle(ev?.title || ''); setNote(ev?.note || '');
+    setReminderLead(ev?.reminderLead || null); setMinIdx(0); setDayIdx(0);
+    setLink(ev?.link || null); setLinkQuery(''); setLinkResults([]);
+    setShowNewType(false); setEditTypes(false); setConfirmDeleteId(null); setNewTypeName('');
+    setConfirmDelete(false); setErr(null); setBusy(false);
   }, [open]);
 
   // Capture-phase Esc so it closes this popup without bubbling to the Planner's
@@ -118,7 +140,7 @@ export default function NewEventModal({ open, onClose, onCreated, accent = 'var(
     setBusy(true); setErr(null);
     try {
       const typeName = types.find(t => t.id === typeId)?.name || null;
-      const r = await api.events.add(ds, {
+      const fields = {
         start: allDay ? null : start,
         end: allDay ? null : (end || null),
         allDay,
@@ -127,10 +149,13 @@ export default function NewEventModal({ open, onClose, onCreated, accent = 'var(
         reminderLead: allDay ? null : reminderLead,
         link: link || null,
         note: note.trim() || null,
-      });
+      };
+      const r = editing
+        ? await api.events.update(editing.ds, editing.ev, { ...fields, ds })
+        : await api.events.add(ds, fields);
       window.dispatchEvent(new CustomEvent('agentic:notify', { detail: {
         type: 'info',
-        title: r?.created ? 'Event scheduled (new day created)' : 'Event scheduled',
+        title: editing ? 'Event updated' : (r?.created ? 'Event scheduled (new day created)' : 'Event scheduled'),
         message: `${typeName ? typeName + ': ' : ''}${title.trim()}`,
         iconKey: 'bell',
         duration: 4000,
@@ -138,9 +163,24 @@ export default function NewEventModal({ open, onClose, onCreated, accent = 'var(
       onCreated?.();
       onClose();
     } catch (e) {
-      setErr(e?.code === 'CONFLICT'
-        ? 'That day’s log changed externally — close and retry.'
-        : (e?.message || 'Failed to save the event.'));
+      setErr(saveError(e));
+      setBusy(false);
+    }
+  };
+
+  // Two-click delete — the first click arms the button, the second commits.
+  // Same pattern the type pills already use; no confirm dialog for one bullet.
+  const removeEvent = async () => {
+    setBusy(true); setErr(null);
+    try {
+      await api.events.remove(editing.ds, editing.ev);
+      window.dispatchEvent(new CustomEvent('agentic:notify', { detail: {
+        type: 'info', title: 'Event deleted', message: editing.ev.title || '', iconKey: 'bell', duration: 4000,
+      } }));
+      onCreated?.();
+      onClose();
+    } catch (e) {
+      setErr(saveError(e));
       setBusy(false);
     }
   };
@@ -153,7 +193,7 @@ export default function NewEventModal({ open, onClose, onCreated, accent = 'var(
       <div onClick={() => { if (!busy) onClose(); }} className="candy-backdrop"/>
       <div
         className="candy-modal planner-uniform-btns" data-uniform-height="--planner-btn-h"
-        role="dialog" aria-modal="true" aria-label="New Event"
+        role="dialog" aria-modal="true" aria-label={editing ? 'Edit Event' : 'New Event'}
         onClick={e => e.stopPropagation()}
         style={{
           position: 'relative', width: 'min(620px, 94vw)', maxHeight: '88vh',
@@ -165,7 +205,7 @@ export default function NewEventModal({ open, onClose, onCreated, accent = 'var(
           padding: '16px 20px 12px', borderBottom: '1px solid var(--border-soft)',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0,
         }}>
-          <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--text)' }}>New Event</div>
+          <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--text)' }}>{editing ? 'Edit Event' : 'New Event'}</div>
           <button type="button" data-own-press className="candy-btn" data-shape="chip" onClick={() => { if (!busy) onClose(); }}
             aria-label="Close"><span className="candy-face"><IconX/></span></button>
         </div>
@@ -332,12 +372,21 @@ export default function NewEventModal({ open, onClose, onCreated, accent = 'var(
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexShrink: 0,
         }}>
           <div style={{ fontSize: 11, color: err ? 'var(--text)' : 'var(--text-faint)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {err || `Scheduling for ${ds}`}
+            {err || (editing ? `Editing the ${ds} log` : `Scheduling for ${ds}`)}
           </div>
           <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            {editing && (
+              <DangerOutlinedBtn
+                small
+                disabled={busy}
+                onClick={() => (confirmDelete ? removeEvent() : setConfirmDelete(true))}
+              >
+                {confirmDelete ? 'Confirm delete' : 'Delete'}
+              </DangerOutlinedBtn>
+            )}
             <OutlinedBtn small onClick={() => { if (!busy) onClose(); }}>Cancel</OutlinedBtn>
             <PrimaryBtn small onClick={submit} disabled={busy} accent={accent}>
-              {busy ? 'Saving' : 'Create event'}
+              {busy ? 'Saving' : (editing ? 'Save changes' : 'Create event')}
             </PrimaryBtn>
           </div>
         </div>

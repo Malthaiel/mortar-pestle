@@ -143,9 +143,19 @@ export function parseUpcomingSection(text) {
     if (/^- /.test(rawLines[i])) {
       const next = rawLines[i + 1];
       const noteLine = next && /^\s{2,}-\s+/.test(next) ? next : null;
-      events.push(parseEventBullet(rawLines[i], noteLine));
+      // Events carry no id — the bullet text IS the identity. Keep the source
+      // lines verbatim so an edit/delete can find this exact line in the file.
+      events.push({ ...parseEventBullet(rawLines[i], noteLine), line: rawLines[i], noteLine });
       if (noteLine) i++;
     }
   }
   return events;
+}
+
+// Event type → its configured colour. Types are matched case-insensitively by
+// name because the bullet stores the type as prose, not an id.
+export function colorForType(types, typeName) {
+  if (!typeName) return 'var(--text-faint)';
+  const t = (types || []).find(x => x.name.toLowerCase() === typeName.toLowerCase());
+  return t?.color || 'var(--text-faint)';
 }
