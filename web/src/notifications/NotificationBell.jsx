@@ -64,7 +64,7 @@ export default function NotificationBell({ label, tipDesc, onClick, isActive, ac
         data-tip-desc={tipDesc}
         onClick={onClick}
         size={28}
-        className={`is-hover-accent${isActive ? ' is-active' : ''}`}
+        className={isActive ? 'is-active' : ''}
         style={{
           ...lift,
           animation: absorbing ? 'bellAbsorb 380ms cubic-bezier(0.34,1.56,0.64,1)' : undefined,
@@ -91,7 +91,7 @@ export default function NotificationBell({ label, tipDesc, onClick, isActive, ac
       }}
     >
       {variant === 'titlebar' ? (
-        <CircleChip title={label} onClick={onClick} size={28} className="is-hover-accent">
+        <CircleChip title={label} onClick={onClick} size={28}>
           <IconBell size={16}/>
         </CircleChip>
       ) : (

@@ -74,7 +74,7 @@ export default function PostDetail({ fb, accent, postId, onBack }) {
 
   return (
     <div style={{ padding: 20 }}>
-      <FilterChip className="is-hover-accent" onClick={onBack}>← Board</FilterChip>
+      <FilterChip onClick={onBack}>← Board</FilterChip>
 
       {needsHandle && (
         <div style={{
@@ -91,7 +91,7 @@ export default function PostDetail({ fb, accent, postId, onBack }) {
           <PostIdentity author={post.author} createdAt={post.created_at} />
           <div style={{ flex: 1 }} />
           <MetaRun category={post.category} status={post.status} commentCount={comments.length} />
-          <FilterChip className="is-hover-accent" active={following} accent={accent} onClick={onFollow}>{following ? 'Following' : 'Follow'}</FilterChip>
+          <FilterChip active={following} accent={accent} onClick={onFollow}>{following ? 'Following' : 'Follow'}</FilterChip>
         </div>
 
         <h2 style={{ margin: 0, fontSize: 22, fontWeight: 600, color: 'var(--text)' }}>{post.title}</h2>
@@ -148,7 +148,7 @@ export default function PostDetail({ fb, accent, postId, onBack }) {
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
             {session?.signedIn
               ? <FilterChip active accent={accent} disabled={busy || !draft.trim()} onClick={submitComment}>{busy ? 'Posting' : 'Comment'}</FilterChip>
-              : <FilterChip className="is-hover-accent" onClick={() => setShowSignIn(true)}>Sign in to comment</FilterChip>}
+              : <FilterChip onClick={() => setShowSignIn(true)}>Sign in to comment</FilterChip>}
           </div>
         </div>
       </div>

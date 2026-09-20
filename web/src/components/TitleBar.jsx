@@ -17,9 +17,9 @@
 // with no pointer handlers here. Only the element with the attribute drags, so
 // every button stays clickable.
 //
-// The window controls are candy `CircleChip`s with `is-hover-accent` — the same
-// accent flood the settings tabs take on hover. Close has NO red state; it flips
-// accent like its neighbours.
+// The window controls are candy `CircleChip`s. They flood accent on hover like
+// every candy button does by default (2026-09-18) — the `is-hover-accent` opt-in
+// they used to carry is gone. Close has NO red state; it flips accent too.
 //
 // The four `core:window:` permissions this needs (minimize / toggle-maximize /
 // close / start-dragging) are listed in capabilities/default.json; without
@@ -140,7 +140,7 @@ export default function TitleBar({
         <button
           type="button"
           data-own-press
-          className="candy-btn titlebar-brand is-hover-accent"
+          className="candy-btn titlebar-brand"
           data-shape="chip"
           style={{ height: BTN, ...CENTER }}
           title={`Mortar & Pestle v${VERSION} — open Releases`}
@@ -170,13 +170,13 @@ export default function TitleBar({
             .candy-btn children, so the three badges live inside their buttons
             now (see Badge in ui/Button.jsx). */}
         <div className="candy-split">
-          <CircleChip title="Settings" data-tip-desc="Theme, sounds, keys and more" size={BTN} className="is-hover-accent"
+          <CircleChip title="Settings" data-tip-desc="Theme, sounds, keys and more" size={BTN}
             style={CENTER} onClick={() => setSettingsOpen?.(true)}>
             <IconSettings size={16}/>
             {showUpdateDot && <Badge title="Update available — open Settings → System"/>}
           </CircleChip>
 
-          <CircleChip title="Recycling bin" data-tip-desc="Bring back things you deleted" size={BTN} className="is-hover-accent"
+          <CircleChip title="Recycling bin" data-tip-desc="Bring back things you deleted" size={BTN}
             style={CENTER} onClick={() => setRecycleBinOpen?.(true)}>
             <IconTrash size={16}/>
           </CircleChip>
@@ -187,7 +187,7 @@ export default function TitleBar({
               Settings gear the two were a matched pair of cogs. The gap in the
               old un-fused cluster was all that hid it. */}
           <CircleChip title={runningCount ? `Processes — ${runningCount} running` : 'Processes'} data-tip-desc="Jobs working in the background"
-            size={BTN} className="is-hover-accent"
+            size={BTN}
             style={CENTER} onClick={() => setProcessesOpen?.(true)}>
             <IconChart size={16}/>
             {runningCount > 0 && <Badge>{runningCount}</Badge>}
@@ -198,7 +198,7 @@ export default function TitleBar({
               guard still exempts the trigger. The panel drops DOWN from here
               now instead of rising off the dock. */}
           <CircleChip title={downloadCount ? `Downloads — ${downloadCount} active` : 'Downloads'} data-tip-desc="Files coming in, and ones already done"
-            size={BTN} className={`is-hover-accent${downloadsOpen ? ' is-active' : ''}`} data-downloads-btn
+            size={BTN} className={downloadsOpen ? 'is-active' : ''} data-downloads-btn
             style={CENTER} onClick={() => setDownloadsOpen?.(o => !o)}>
             <IconDownload size={16}/>
             {downloadCount > 0 && (
@@ -228,7 +228,7 @@ export default function TitleBar({
             else in the app. */}
         <div className="candy-split">
           <CircleChip title="Command palette" data-tip-desc="Jump to anything by typing" data-tip-keybind="command-palette.toggle" size={BTN}
-            className={`is-hover-accent${paletteOpen ? ' is-active' : ''}`}
+            className={paletteOpen ? 'is-active' : ''}
             style={CENTER} onClick={() => setPaletteOpen?.(true)}>
             <IconCommand size={16}/>
           </CircleChip>
@@ -254,7 +254,7 @@ export default function TitleBar({
             type="button"
             data-own-press
             data-titlebar-avatar
-            className="candy-btn titlebar-account is-hover-accent"
+            className="candy-btn titlebar-account"
             data-shape="chip"
             style={{ height: BTN, ...CENTER }}
             title={signedIn ? (name || 'Account') : 'Sign in'}
@@ -271,7 +271,7 @@ export default function TitleBar({
               not a route or a dock panel — this chip is its only launcher, and it
               toggles by emitting on sharedEvents rather than navigating. */}
           <CircleChip title="Feedback" data-tip-desc="Report a bug or ask for something" size={BTN}
-            className={`is-hover-accent${feedbackActive ? ' is-active' : ''}`}
+            className={feedbackActive ? 'is-active' : ''}
             style={CENTER} onClick={() => sharedEvents.emit('feedback:open', {})}>
             <IconMessageSquare size={16}/>
           </CircleChip>
@@ -282,24 +282,23 @@ export default function TitleBar({
               wider promise, because this is where the rest of the help surface
               is going to hang off (user-directed 2026-09-15). */}
           <CircleChip title="Keyboard shortcuts" data-tip-desc="Every key the app listens for" data-tip-keybind="hints.toggle" size={BTN}
-            className={`is-hover-accent${hintsOpen ? ' is-active' : ''}`}
+            className={hintsOpen ? 'is-active' : ''}
             style={CENTER} onClick={() => setHintsOpen?.(true)}>
             <IconHelp size={16}/>
           </CircleChip>
         </div>
 
-        <CircleChip title="Minimize" data-tip-desc="Tuck the window out of the way" size={BTN} className="is-hover-accent" style={CENTER} onClick={() => win.minimize()}>
+        <CircleChip title="Minimize" data-tip-desc="Tuck the window out of the way" size={BTN} style={CENTER} onClick={() => win.minimize()}>
           <IconMinus size={14}/>
         </CircleChip>
         <CircleChip
           title={maximized ? 'Restore' : 'Maximize'}
           data-tip-desc={maximized ? 'Back to the smaller size' : 'Fill the whole screen'}
           size={BTN}
-          className="is-hover-accent"
           style={CENTER}
           onClick={() => win.toggleMaximize()}
         >{maximized ? <IconRestore size={14}/> : <IconSquare size={14}/>}</CircleChip>
-        <CircleChip title="Close" data-tip-desc="Close Mortar & Pestle" size={BTN} className="is-hover-accent" style={CENTER} onClick={() => win.close()}>
+        <CircleChip title="Close" data-tip-desc="Close Mortar & Pestle" size={BTN} style={CENTER} onClick={() => win.close()}>
           <IconX size={14}/>
         </CircleChip>
       </div>

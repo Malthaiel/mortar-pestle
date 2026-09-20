@@ -116,16 +116,15 @@ function MetaChip({ kind, value, accent }) {
 
 // External-source button — IMDb, Letterboxd, TMDb. 26px on a film to match the
 // Download button, which is the size every control on that page shares. A film
-// draws them NEUTRAL and lights accent on hover via the shared `is-hover-accent`
-// opt-in (the titlebar's own class, chip-scoped); every other domain keeps the
-// standing-accent is-primary it always had.
+// draws them NEUTRAL (accent on hover, like every candy button); every other
+// domain keeps the standing-accent is-primary it always had.
 function SourceBtn({ label, url, filmLayout }) {
   return (
     <button
       onClick={() => { window.location.hash = '/tools/browser/' + encodeURIComponent(url); }}
       title={`Open this title on ${label} in the in-app browser`}
       data-shape={filmLayout ? 'chip' : undefined}
-      className={filmLayout ? 'candy-btn is-hover-accent' : 'candy-btn is-primary'}
+      className={filmLayout ? 'candy-btn' : 'candy-btn is-primary'}
       style={{ height: filmLayout ? 26 : 30 }}
     ><span className="candy-face" style={{ fontSize: 11 }}>{label}</span></button>
   );

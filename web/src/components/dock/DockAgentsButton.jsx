@@ -70,7 +70,7 @@ export default function DockAgentsButton({ label, tipDesc, accent, onContextMenu
       data-tip-desc={tipDesc}
       onClick={toggle}
       size={28}
-      className={`is-hover-accent${open ? ' is-active' : ''}`}
+      className={open ? 'is-active' : ''}
       style={candyCenterOffset()}
       onContextMenu={onContextMenu}
     ><IconSparkles size={16}/></CircleChip>

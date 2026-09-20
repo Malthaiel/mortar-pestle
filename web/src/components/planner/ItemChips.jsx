@@ -328,12 +328,7 @@ export function NoteChip({ text, sourceDate, index, showDate = true }) {
 }
 
 // Out-of-chip icon action button for a Planner row (✓ / ROUTE / ×). Uses
-// data-shape="icon"; the icon shape's hover is neutral-brighten by design
-// (styles.css:1686-1688, specificity beats the generic accent rule 2030 — the
-// dock's hover-expand is the affordance, accent is the .is-active state), so
-// `is-hover-accent` opts these three buttons INTO an accent fill on hover
-// (styles.css override, gated :not(.is-active) so the checked ✓ keeps its
-// held-accent rest state). `round` makes the delete × a circle; `active` holds
+// data-shape="icon", which lights accent on hover like every candy button. `round` makes the delete × a circle; `active` holds
 // the accent fill for the checked ✓. `data-own-press` opts out of the global
 // :active scale; the mousedown stop keeps a click from starting the chip drag.
 export function ChipIconBtn({ title, onClick, round, active, disabled, size, children }) {
@@ -344,7 +339,7 @@ export function ChipIconBtn({ title, onClick, round, active, disabled, size, chi
       aria-label={title}
       disabled={disabled}
       data-own-press
-      className={`candy-btn is-hover-accent${active ? ' is-active' : ''}`}
+      className={`candy-btn${active ? ' is-active' : ''}`}
       data-shape="icon"
       onMouseDown={(e) => e.stopPropagation()}
       onClick={onClick}

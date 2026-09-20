@@ -58,8 +58,7 @@ export function DangerOutlinedBtn({ children, onClick, disabled, small, chip, ti
 
 // Outlined circle icon — Planner Reset/Skip + similar. Uses the
 // planner-circle treatment (neutral surface-3 face + dark frame).
-// `className` appends extra candy modifiers — e.g. `is-hover-accent`, which opts
-// the circle back into the base accent-flood hover (the titlebar controls).
+// `className` appends extra candy modifiers.
 // `...rest` spreads onto the BUTTON element (aria-*, data-* hooks) — the
 // titlebar's Downloads chip carries [data-downloads-btn] that way, which is
 // what DownloadsPanel queries for its anchor rect and its outside-click exempt.
