@@ -1,14 +1,23 @@
 /* The app-wide tooltip (util/tooltips.js). Picked 2026-09-18 from the idea page:
-   a tag with mono capitals in the resting candy-button grey (--cbtn-face) —
-   the accent fill vanished on the accent sidebar bars under the titlebar — and
-   deliberately NO button chrome: no depth lip, no dark frame. It can't be
-   pressed, so it must not look pressable. */
+   a tag with mono capitals. It shipped in the resting candy-button grey because
+   an accent fill vanished on the accent sidebar bars under the titlebar; user
+   re-directed it to the LIT candy-button accent on 2026-09-18 with that trade
+   stated, so the bars stay a known overlap, not a surprise. Frame only — no
+   depth lip: it can't be pressed, so it must not look pressable. */
 
 .tooltip {
   position: fixed; left: 0; top: 0; z-index: 100000;
   pointer-events: none; box-sizing: border-box;
   max-width: 260px; padding: 6px 10px;
-  background: var(--cbtn-face); color: var(--text);
+  /* Painted as a LIT candy button (user-directed 2026-09-18): --cbtn-band goes
+     accent, and the face + frame are the same two declarations .candy-face makes
+     at :hover, so a theme accent change moves all three together. The frame ONLY
+     — no under-lip — it can't be pressed, so it must not look pressable. */
+  --cbtn-band: var(--accent);
+  --cbtn-frame: 2px;
+  background: var(--cbtn-band);
+  color: #fff;
+  border: var(--cbtn-frame) solid color-mix(in oklch, var(--cbtn-band), black 22%);
   border-radius: calc(var(--corner) * 12px);
   font: 600 10.5px/1.3 var(--font-mono);
   letter-spacing: .08em; text-transform: uppercase;
@@ -21,6 +30,44 @@
 .tooltip.is-shown { opacity: 1; visibility: visible; transform: none; transition-delay: 0s; }
 /* Quick hop: already showing, so glide to the next element instead of popping. */
 .tooltip.is-hop { transition: left 110ms ease, top 110ms ease, opacity 0s, transform 0s, visibility 0s; }
+
+/* Portraits (data-tip-img / -img2), each with its own caption under it. Fixed
+   box: the tip must measure the same before and after the photo arrives, or the
+   first hover places it wrong.
+   ONE constant sets every gap a portrait can see — the tip's own padding on all
+   four sides, the space between the pair, and the drop to the caption — so the
+   four sides are equal by construction rather than by four numbers agreeing.
+   The tip then takes the strip's own width (max-content); the caption is capped
+   to the portrait, so a long name wraps under its face instead of widening the
+   whole tag. */
+.tooltip:has(.tooltip-imgs) {
+  --tip-pad: 8px;
+  max-width: max-content;
+  padding: var(--tip-pad);
+  /* Column + gap so the ONE constant also sets every stacked gap inside — strip
+     to caption, caption to the description line. The arrow is absolute, so it
+     takes no slot here. */
+  display: flex;
+  flex-direction: column;
+  gap: var(--tip-pad);
+}
+.tooltip:has(.tooltip-imgs) .tooltip-desc { margin-top: 0; }
+.tooltip-imgs { display: flex; gap: var(--tip-pad); }
+.tooltip-fig { display: flex; flex-direction: column; gap: var(--tip-pad); width: 120px; }
+/* Inherits the tag's own mono capitals — a caption is the same kind of label as
+   the text row it replaces, so it introduces no second typeface. */
+.tooltip-cap { text-align: center; }
+
+.tooltip-img {
+  display: block; width: 120px; height: 180px;
+  object-fit: cover; object-position: 50% 15%;
+  border-radius: calc(var(--corner) * 8px);
+  background: var(--surface-2);
+  /* Same frame as the tag itself, so the portrait reads as a smaller pane of the
+     same object. Global box-sizing is border-box, so the box stays 120x180 and
+     the frame eats into the photo rather than growing the tip. */
+  border: var(--cbtn-frame) solid color-mix(in oklch, var(--cbtn-band), black 22%);
+}
 
 .tooltip-row { position: relative; display: flex; align-items: center; gap: 10px; }
 .tooltip-name { flex: 1; }
@@ -36,12 +83,16 @@
   border: 1px solid color-mix(in oklch, currentColor 24%, transparent);
 }
 
+/* The point stays UNFRAMED though the box is framed. Photographed 2026-09-18: a
+   3px border on the two outward faces of a small rotated square covers nearly
+   all of the half that sticks out, so the point paints as a dark V rather than
+   the tag's own corner. Bare, it reads as one filled tip. */
 .tooltip-arrow {
-  position: absolute; width: 9px; height: 9px; margin-left: -4.5px;
+  position: absolute; width: 12px; height: 12px; margin-left: -6px;
   background: inherit; transform: rotate(45deg);
 }
-.tooltip[data-place='below'] .tooltip-arrow { top: -4px; }
-.tooltip[data-place='above'] .tooltip-arrow { bottom: -4px; }
+.tooltip[data-place='below'] .tooltip-arrow { top: -6px; }
+.tooltip[data-place='above'] .tooltip-arrow { bottom: -6px; }
 
 @media (prefers-reduced-motion: reduce) {
   .tooltip { transform: none; transition: opacity 120ms ease, visibility 0s linear 130ms; }

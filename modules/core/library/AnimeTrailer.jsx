@@ -4,6 +4,19 @@
 // ({ youtubeId, url, image }) arrives already resolved. Renders nothing without
 // a URL to open.
 
+// A card's `Trailer:` frontmatter is a plain YouTube URL string (written by
+// tv_library.rs); the live MAL detail hands over a resolved object instead.
+// Normalise here, beside the only consumer, so both callers pass the same shape.
+// ponytail: YouTube only — that is the only host either source emits.
+export function normalizeTrailer(trailer) {
+  if (!trailer) return null;
+  if (typeof trailer === 'object') return trailer.url ? trailer : null;
+  const m = String(trailer).match(/(?:[?&]v=|youtu\.be\/)([\w-]{6,})/);
+  return m
+    ? { youtubeId: m[1], url: String(trailer), image: `https://img.youtube.com/vi/${m[1]}/hqdefault.jpg` }
+    : null;
+}
+
 export default function AnimeTrailer({ trailer, accent, fill }) {
   if (!trailer || !trailer.url) return null;
 

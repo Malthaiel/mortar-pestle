@@ -11,6 +11,12 @@
 //   data-tip-keybind="<id>"    a keybind registry id; the CURRENT binding is read
 //                              at show time, so a rebind in Settings shows at once
 //   data-tip-key="…"           a literal key label, for keys outside the registry
+//   data-tip-img="<url>"       a portrait above the text (cast/crew headshots)
+//   data-tip-img2="<url>"      a second portrait beside it (the character played)
+//   data-tip-cap="…"           a caption UNDER the first portrait (the person)
+//   data-tip-cap2="…"          a caption under the second one (the character).
+//                              Any caption replaces the text row — the names are
+//                              already under their own faces.
 //
 // Harvest: on hover the `title` moves to `data-tip` and is removed, which kills
 // the native box before its own timer fires; on leave it goes straight back. So
@@ -84,7 +90,41 @@ function fill(el) {
     kbd.textContent = key;
     row.append(kbd);
   }
-  tip.append(arrow, row);
+  tip.append(arrow);
+  // The boxes are sized by CSS, not by the files, so place() measures the right
+  // height on the first hover — before the images have loaded.
+  // Pair each picture with its caption BEFORE dropping the blanks: a chip can
+  // have a character picture and no actor photo, and filtering first would slide
+  // the actor's name under the character's face.
+  const shots = [
+    [el.dataset.tipImg, el.dataset.tipCap],
+    [el.dataset.tipImg2, el.dataset.tipCap2],
+  ].filter(([src]) => src);
+  if (shots.length) {
+    const strip = document.createElement('div');
+    strip.className = 'tooltip-imgs';
+    for (const [src, cap] of shots) {
+      const fig = document.createElement('figure');
+      fig.className = 'tooltip-fig';
+      const img = document.createElement('img');
+      img.className = 'tooltip-img';
+      img.src = src;
+      img.alt = '';
+      fig.append(img);
+      if (cap) {
+        const c = document.createElement('figcaption');
+        c.className = 'tooltip-cap';
+        c.textContent = cap;
+        fig.append(c);
+      }
+      strip.append(fig);
+    }
+    tip.append(strip);
+  }
+  // A captioned tip already says every name under its own face, so the text row
+  // would only repeat it. ponytail: the kbd path and the captioned path never
+  // meet (a keybound control has no portraits), so one flag covers both.
+  if (!shots.some(([, cap]) => cap)) tip.append(row);
   if (el.dataset.tipDesc) {
     const desc = document.createElement('span');
     desc.className = 'tooltip-desc';

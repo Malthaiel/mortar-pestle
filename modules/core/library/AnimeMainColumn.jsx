@@ -19,6 +19,8 @@ import AnimeTrailer, { normalizeTrailer } from './AnimeTrailer.jsx';
 import { prettyDate } from './AnimeDetailHeader.jsx';
 import { usePersistedState } from '@host/components/vault-tree/useTreeExpansion.js';
 import { EyebrowHeading } from '@host/components/ui/Eyebrow.jsx';
+import { useState } from 'react';
+import { characterImage } from '@host/util/characterImage.js';
 
 // Body prose colour — the synopsis tone every other film text now matches.
 export const BODY_COLOR = 'color-mix(in oklch, var(--text-2), var(--text-muted) 33%)';
@@ -29,16 +31,40 @@ export const BODY_COLOR = 'color-mix(in oklch, var(--text-2), var(--text-muted) 
 function splitCredit(entry, sep) {
   const i = entry.lastIndexOf(sep);
   if (i < 0) return { name: entry, role: '' };
-  return { name: entry.slice(0, i).trim(), role: entry.slice(i + sep.length).trim() };
+  return { name: entry.slice(0, i).trim(), role: role(entry.slice(i + sep.length)) };
 }
+
+// TMDb tags an animated film's every character "(voice)" -- true of the whole
+// cast, so it tells the reader nothing and doubles the length of every chip.
+const role = (s) => s.trim().replace(/\s*\(voice\)/gi, '');
 
 // One chip: a bold thing, and the quieter thing about it. Cast uses it for
 // name/character, Crew for name/job, Releases for country/certificate -- one
 // shape, so those three lists can never drift apart visually.
-function Chip({ name, role }) {
+// `character` carries what the tooltip needs to go looking for a picture OF the
+// character: the film and its studio. Absent (crew, releases, live action) the
+// chip is exactly what it was -- one photo or none.
+function Chip({ name, role, img, character }) {
+  const [charImg, setCharImg] = useState(null);
+  // Asked for on hover, not up front: a cast list is 20 names and a page visit
+  // touches two of them. The wait before a tooltip shows usually covers the
+  // round trip, and every answer is cached, so a second hover is instant.
+  const look = () => {
+    if (!character || !role || charImg) return;
+    characterImage(character.film, character.studios, role).then(src => src && setCharImg(src));
+  };
+  // Each face carries its own name under it in the tooltip. With only the actor's
+  // photo the role has nowhere to sit, so it drops to the description line rather
+  // than being lost.
   return (
-    <span className="candy-btn is-hover-accent" data-shape="chip"
-      title={role ? `${name} — ${role}` : name}>
+    <span className="candy-btn" data-shape="chip"
+      title={role ? `${name} — ${role}` : name}
+      onPointerEnter={character ? look : undefined}
+      data-tip-img={img || undefined}
+      data-tip-img2={charImg || undefined}
+      data-tip-cap={img ? name : undefined}
+      data-tip-cap2={charImg ? role : undefined}
+      data-tip-desc={img && !charImg && role ? role : undefined}>
       <span className="candy-face">
         {name}
         {role && <span className="film-credit-role">{role}</span>}
@@ -47,14 +73,22 @@ function Chip({ name, role }) {
   );
 }
 
-// Cast / Crew as plain chips: name, plus the role beside it. Headshots were
-// tried and reverted -- text only.
-function CreditList({ entries, sep }) {
-  const rows = (entries || []).filter(Boolean).map(e => splitCredit(e, sep));
+// Cast / Crew as plain chips: name, plus the role beside it. Headshots INLINE
+// were tried and reverted (2026-09-12) -- the list stays text. The stored
+// portrait rides the hover tooltip instead: `images` is TMDb's list, index-aligned
+// with `entries` and blank where TMDb has no photo.
+function CreditList({ entries, sep, images, character }) {
+  // Pair each entry with its photo BEFORE dropping blanks, or one empty name
+  // shifts every portrait after it onto the wrong person.
+  const rows = (entries || [])
+    .map((e, i) => (e ? { ...splitCredit(e, sep), img: (images || [])[i] } : null))
+    .filter(Boolean);
   if (!rows.length) return null;
   return (
     <div className="film-credit-list">
-      {rows.map((r, i) => <Chip key={`${r.name}-${i}`} name={r.name} role={r.role} />)}
+      {rows.map((r, i) => (
+        <Chip key={`${r.name}-${i}`} name={r.name} role={r.role} img={r.img} character={character} />
+      ))}
     </div>
   );
 }
@@ -123,8 +157,15 @@ function EmptyTab({ children }) {
 
 function FilmColumn({ tabActions,
   accent, synopsis, cast, crew, castImages, crewImages, writer, studios, countries, releases, budget, boxOffice, trailer,
+  filmTitle, genres,
 }) {
   const [tab, setTab] = usePersistedState('library:filmTab', 'Cast');
+  // Only animated films go looking for a character's face. In live action the
+  // "character" picture a wiki returns is usually another photo of the same
+  // actor, which says nothing and costs a request.
+  const animated = (genres || []).some(g => /animation/i.test(g))
+    ? { film: filmTitle, studios }
+    : null;
   const trailerObj = normalizeTrailer(trailer);
   const active = FILM_TABS.includes(tab) ? tab : 'Cast';
   const details = [
@@ -154,7 +195,7 @@ function FilmColumn({ tabActions,
               type="button"
               data-own-press
               data-shape="chip"
-              className={'candy-btn is-hover-accent' + (t === active ? ' is-active' : '')}
+              className={'candy-btn' + (t === active ? ' is-active' : '')}
               onClick={() => setTab(t)}
             ><span className="candy-face">{t}</span></button>
           ))}
@@ -163,11 +204,11 @@ function FilmColumn({ tabActions,
       </div>
       <div>
         {active === 'Cast' && ((cast || []).length
-          ? <CreditList entries={cast} sep=" as " />
+          ? <CreditList entries={cast} sep=" as " images={castImages} character={animated} />
           : <EmptyTab>No cast listed.</EmptyTab>)}
         {active === 'Crew' && (
           <>
-            <CreditList entries={crew} sep=" — " />
+            <CreditList entries={crew} sep=" — " images={crewImages} />
             {/* Writers arrive as bare names with no job attached, so they ride
                 below the jobbed crew rather than pretending to one. */}
             {list(writer) && (
@@ -215,12 +256,13 @@ function TextSection({ title, body }) {
 export default function AnimeMainColumn({
   malId, accent, synopsis, background, openings, endings,
   cast, crew, castImages, crewImages, filmLayout, tabActions, writer, studios, country, releases, budget, boxOffice, trailer,
+  filmTitle, genres,
 }) {
   if (filmLayout) {
     return (
       <FilmColumn tabActions={tabActions}
         accent={accent} synopsis={synopsis} cast={cast} crew={crew} writer={writer}
-        castImages={castImages} crewImages={crewImages}
+        castImages={castImages} crewImages={crewImages} filmTitle={filmTitle} genres={genres}
         studios={studios} countries={country} releases={releases} budget={budget} boxOffice={boxOffice}
         trailer={trailer}
       />
