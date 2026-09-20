@@ -7,10 +7,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { musicApi, subscribeManifest } from './api.js';
 import { useMusicPlayer } from './MusicPlayerProvider.jsx';
 import CoverArtCard from './CoverArtCard.jsx';
-import { Seg } from '@host/components/ui/index.js';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
 import {
-  IconLayers,
+  IconLayers, IconDownload, IconGlobe,
+  IconNotes, IconMusic, IconLayoutGrid,
   IconCalendar, IconStar, IconMic, IconTag, IconTypeText, IconSort,
 } from '@host/components/icons.jsx';
 import { statusLabel, STATUS_ICON } from '@host/util/media-status.js';
@@ -54,11 +54,30 @@ const activeSortDim = (sortDim) =>
 
 const SORT_LS_KEY = 'tools:musicSort';
 const VIEW_LS_KEY = 'tools:musicPaneView';
+// Every part of both runs leads with its mark — the two CandySelects wear the
+// current option's icon for free, so these three carry one too or the line reads
+// half-marked (user-directed 2026-09-20).
 const VIEW_OPTIONS = [
-  { value: 'playlists', label: 'Playlists' },
-  { value: 'albums', label: 'Albums' },
-  { value: 'both', label: 'Both' },
+  { value: 'playlists', label: 'Playlists', Icon: IconNotes },
+  { value: 'albums',    label: 'Albums',    Icon: IconMusic },
+  { value: 'both',      label: 'Both',      Icon: IconLayoutGrid },
 ];
+
+// The downloaded/not half of the Status dropdown. An album counts as downloaded
+// when it has at least one track on disk — the SAME measure useMusicStats counts
+// with, read off the album, never restated as a flag of our own.
+const DL_OPTIONS = [
+  { value: 'dl:yes', label: 'Downloaded',     icon: IconDownload },
+  { value: 'dl:no',  label: 'Not Downloaded', icon: IconGlobe },
+];
+const isDownloaded = (a) => (a.tracksPresent || 0) > 0;
+
+// Height of every fused part, one constant for both runs (.candy-split derives
+// corner, seam, overlap and part height from it — see styles.css § candy-split).
+const RUN_SIZE = '27px';
+// The field is the SAME height as the five buttons under it (user-directed
+// 2026-09-20), so it takes RUN_SIZE too rather than a second number that could
+// drift from it.
 
 export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
   const [albums, setAlbums] = useState(null);
@@ -76,6 +95,8 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
   });
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState(null); // null = all
+  // Second, INDEPENDENT pick in the same dropdown: null = both kinds shown.
+  const [dlFilter, setDlFilter] = useState(null);           // null | 'dl:yes' | 'dl:no'
   const [view, setView] = useState(() => {
     try { return VIEW_OPTIONS.some(o => o.value === localStorage.getItem(VIEW_LS_KEY)) ? localStorage.getItem(VIEW_LS_KEY) : 'both'; } catch { return 'both'; }
   });
@@ -146,6 +167,7 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
       (a.artist || '').toLowerCase().includes(q)
     );
     if (statusFilter) out = out.filter(a => a.status === statusFilter);
+    if (dlFilter) out = out.filter(a => isDownloaded(a) === (dlFilter === 'dl:yes'));
     // Custom leaves the order alone so useRailOrder below can impose the saved
     // one. Status/query still filter — one order covers every filter, and
     // applyOrder tolerates the ids a filter hides.
@@ -159,7 +181,7 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
       return 0;
     };
     return [...out].sort(cmp);
-  }, [albums, query, statusFilter, sortDim, sortDir]);
+  }, [albums, query, statusFilter, dlFilter, sortDim, sortDir]);
 
   const onPlay = async (album) => {
     try {
@@ -215,35 +237,44 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
         borderBottom: '1px solid var(--border)',
         flexShrink: 0,
       }}>
-        <Seg options={VIEW_OPTIONS} value={view} onChange={setView} accent={accent}/>
-
-        <input
-          type="text" value={query}
-          placeholder={view === 'playlists' ? 'Search playlists' : 'Search title or artist'}
-          onChange={(e) => setQuery(e.target.value)}
-          style={{
-            padding: '7px 10px',
-            background: 'var(--surface-2)',
-            border: '1px solid var(--border)', borderRadius: 'var(--radius-md)',
-            color: 'var(--text)', fontSize: 12,
-            outline: 'none',
-          }}
-        />
-
-        {showAlbums && (
-          <div style={{ display: 'flex', gap: 8 }}>
-            <CandySelect
-              value={statusFilter || ''}
-              options={[
-                { value: '', label: 'All Status', icon: ALL_STATUS_ICON },
-                ...statuses.map(s => ({ value: s, label: statusLabel(s), icon: STATUS_ICON[s] })),
-              ]}
-              onChange={(v) => setStatusFilter(v || null)}
-              title="Filter by status"
+        {/* The agent chat's type box, 1-1 (user-directed 2026-09-20): the field
+            IS a candy button — chip-field + .candy-face + a bare
+            .chip-field-input — so it wears the same frame, band and hover flip
+            as the two runs under it instead of reading as a foreign input.
+            Same markup as ChatInput.jsx; --cbtn-size is the one height knob. */}
+        {/* A one-part .candy-split: the run's own rule pins every child to
+            --cbtn-size, which is how the five buttons below get their height —
+            reusing it here means ONE number drives all six and no new CSS.
+            A lone child keeps both outer ends round (the squaring rules are
+            :not(:first-child) / :not(:last-child)). */}
+        <span className="candy-split" style={{ '--cbtn-size': RUN_SIZE, display: 'flex' }}>
+        <span className="candy-btn" data-shape="chip-field" style={{ width: '100%' }}>
+          <span className="candy-face">
+            <input
+              className="chip-field-input"
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={view === 'playlists' ? 'Search playlists' : 'Search title or artist'}
             />
+          </span>
+        </span>
+        </span>
+
+        {/* Two fused runs on one line: Sort | Status, then the view picker.
+            The first run stays DRAWN but inert under Playlists — neither knob
+            means anything without albums on screen, and hiding two of the four
+            would reflow the whole bar on every view change (user-directed
+            2026-09-20). Inert, never faded: a .55 opacity erases a small candy
+            button. */}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+          <div className="candy-split is-plain-label"
+               style={{ '--cbtn-size': RUN_SIZE,
+                        pointerEvents: showAlbums ? undefined : 'none' }}>
             {/* Picking the active dimension again flips its direction, exactly
                 as the old pills did — CandySelect fires onChange on a re-pick. */}
             <CandySelect
+              fuse shape="chip" accent={accent}
               value={sortDim}
               options={SORT_DIMENSIONS.map(d => ({
                 value: d.key,
@@ -253,8 +284,43 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
               onChange={(k) => onPillClick(activeSortDim(k))}
               title="Sort albums"
             />
+            {/* ONE dropdown, TWO independent picks (user-directed 2026-09-20):
+                a status AND a downloaded state. Neither download row picked =
+                both kinds shown. The array `value` is what lets both rows tick
+                and both marks reach the trigger. */}
+            <CandySelect
+              fuse shape="chip" accent={accent}
+              value={[statusFilter, dlFilter].filter(Boolean)}
+              options={[
+                { header: 'Status' },
+                ...statuses.map(s => ({ value: s, label: statusLabel(s), icon: STATUS_ICON[s] })),
+                { divider: true },
+                { header: 'Files' },
+                ...DL_OPTIONS,
+              ]}
+              icon={ALL_STATUS_ICON}
+              placeholder="All Status"
+              onChange={(v) => v.startsWith('dl:')
+                ? setDlFilter(cur => cur === v ? null : v)
+                : setStatusFilter(cur => cur === v ? null : v)}
+              title="Filter by status and downloaded state"
+            />
           </div>
-        )}
+
+          <div className="candy-split is-plain-label" style={{ '--cbtn-size': RUN_SIZE }}>
+            {VIEW_OPTIONS.map(o => (
+              <button key={o.value} type="button" data-own-press
+                      className={'candy-btn' + (view === o.value ? ' is-active' : '')}
+                      data-shape="chip"
+                      style={accent ? { '--accent': accent } : undefined}
+                      onClick={() => setView(o.value)}>
+                {/* .candy-face is already inline-flex with a 6px gap — a leading
+                    icon needs no wrapper and no new prop. */}
+                <span className="candy-face"><o.Icon size={12}/>{o.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Body — playlist tiles and/or the album grid */}

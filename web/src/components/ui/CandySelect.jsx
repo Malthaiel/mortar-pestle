@@ -7,7 +7,9 @@
 // flips above the trigger on its own, measured -- there is no direction prop.
 //
 // Props:
-//   value        current value (matched against options for the trigger label)
+//   value        current value (matched against options for the trigger label).
+//                An ARRAY picks several at once: first match labels the trigger,
+//                the rest ride after it as icons. Header/divider rows pass through.
 //   options      [{ value, label, icon?, dot? }] -- `icon` is the row's icon, and
 //                the trigger wears the CURRENT option's one before its label, so
 //                button and menu row read as the same thing (user-directed
@@ -35,16 +37,27 @@ export default function CandySelect({
   compact = false, disabled = false, fuse = false,
   shape = 'select', className = '',
 }) {
-  const current = options.find(o => o.value === value);
+  // `value` may be an ARRAY: several independent picks in one menu (a status AND
+  // a downloaded/not state, say). The FIRST match in option order drives the
+  // label; the rest ride after it as bare icons, so the trigger stays short in a
+  // narrow column. Array mode never synthesises '' — the consumer owns the
+  // toggle, because '' cannot say WHICH of the two groups it clears.
+  const multi = Array.isArray(value);
+  const picked = multi ? options.filter(o => value.includes(o.value)) : [];
+  const isPicked = (o) => multi ? value.includes(o.value) : o.value === value;
+  const current = multi ? picked[0] : options.find(o => o.value === value);
+  const extras = multi ? picked.slice(1) : [];
   // The trigger wears the row's own icon, else the list's shared one — the button
   // and the menu row it mirrors always show the same mark (user-directed 2026-09-18).
   const CurIcon = current?.icon || icon;
-  const menu = useMenuTrigger(() => options.map(o => ({
-    label: o.label,
-    icon: o.icon || icon,
-    checked: o.value === value,
-    onClick: () => onChange(clearable && o.value === value ? '' : o.value),
-  })), accent ? { accent } : undefined);
+  const menu = useMenuTrigger(() => options.map(o => (
+    o.header || o.divider ? o : {
+      label: o.label,
+      icon: o.icon || icon,
+      checked: isPicked(o),
+      onClick: () => onChange(clearable && !multi && isPicked(o) ? '' : o.value),
+    }
+  )), accent ? { accent } : undefined);
 
   // is-fused: honour the run's --cbtn-size for height (see styles.css § select).
   const cls = 'candy-btn' + (compact ? ' is-compact' : '') + (fuse ? ' is-fused' : '') + (className ? ' ' + className : '');
@@ -75,6 +88,7 @@ export default function CandySelect({
             }}/>
           )}
           {current ? current.label : placeholder}
+          {extras.map(o => o.icon ? <o.icon key={o.value} size={12}/> : null)}
         </span>
       </span>
     </button>

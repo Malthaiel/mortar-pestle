@@ -1,11 +1,11 @@
 // Library left sidebar — now the shared candy tree (TreeSidebar), matching the
-// vault. The two media types are collapsible folder pills (Anime · Music), each
-// holding a nested "Library" folder of status-count rows (LABEL · count) that
-// route to the existing filtered library grids; Total, Downloaded / Not Downloaded
-// ride inside it alongside the statuses, while Homepage stays directly under the
-// media pill. Counts come from the shared useAnimeStats /
-// useMusicStats stores (the same aggregation the topbars now read). All folders
-// collapsed by default.
+// vault. Each media type is a collapsible folder pill (Anime · TV · Movies ·
+// Music). The three video types hold a nested "Library" folder of status-count
+// rows (LABEL · count) routing to the filtered grids; Total, Downloaded / Not
+// Downloaded ride inside it alongside the statuses. Music holds Homepage alone —
+// its Library folder was deleted 2026-09-20, the album column's Status dropdown
+// filters by status AND downloaded state now. Counts come from useAnimeStats.
+// All folders collapsed by default.
 // Toolbar: Collapse/Expand all, Reveal current, Reveal in files (the active media
 // type's folder under the Library vault).
 
@@ -15,7 +15,6 @@ import TreeSidebar from '@host/components/vault-tree/TreeSidebar.jsx';
 import { useTreeExpansion } from '@host/components/vault-tree/useTreeExpansion.js';
 import { openInFiles } from '@host/components/vault-tree/revealInFiles.js';
 import { useAnimeStats, useTvStats, useMovieStats } from './useAnimeStats.js';
-import { useMusicStats } from './music/useMusicStats.js';
 
 const ANIME = '/tools/library/anime';
 const TV = '/tools/library/tv';
@@ -69,20 +68,6 @@ function movieRows(s) {
     { label: 'Not Downloaded', path: `${MOVIES}/library/Not-Downloaded`, count: s.total - s.downloaded },
   ];
 }
-function musicRows(s) {
-  return [
-    // Short names match the music folds and StatusDropdown (media-status.js
-    // STATUS_LABEL) — user-directed 2026-09-11, "everywhere on screen". The
-    // PATHS still carry the schema verbs; only the drawn word is short.
-    { label: 'Currently',      path: `${MUSIC}/library/Currently-Listening`, count: s.byStatus['Currently-Listening'] || 0 },
-    { label: 'Listened',       path: `${MUSIC}/library/Listened`,            count: s.byStatus['Listened'] || 0 },
-    { label: 'Planned',        path: `${MUSIC}/library/Plan-to-Listen`,      count: s.byStatus['Plan-to-Listen'] || 0 },
-    { label: 'Dropped',        path: `${MUSIC}/library/Dropped`,             count: s.byStatus['Dropped'] || 0 },
-    { label: 'Total',          path: `${MUSIC}/library`,                     count: s.total },
-    { label: 'Downloaded',     path: `${MUSIC}/library/Downloaded`,          count: s.downloaded },
-    { label: 'Not Downloaded', path: `${MUSIC}/library/Not-Downloaded`,      count: s.total - s.downloaded },
-  ];
-}
 
 // The "· count" that rides after the label (preserves the hug-width pill style).
 function Count({ value }) {
@@ -93,12 +78,11 @@ export default function LibraryNav({ route, accent }) {
   const anime = useAnimeStats();
   const tv = useTvStats();
   const movies = useMovieStats();
-  const music = useMusicStats();
   const exp = useTreeExpansion('library:tree:expanded', []); // every folder collapsed by default
 
   const currentPath = '/tools/library/' + (route?.rest || '');
   const seg = (route?.rest || '').split('/')[0];
-  const loading = anime.loading || tv.loading || movies.loading || music.loading;
+  const loading = anime.loading || tv.loading || movies.loading;
 
   const nodes = useMemo(() => {
     const toNode = (r) => ({
@@ -117,23 +101,26 @@ export default function LibraryNav({ route, accent }) {
         children: [...tvTopRows.map(toNode), libFolder('tv:library', tvRows(tv))] },
       { id: 'movies', label: 'Movies', isFolder: true,
         children: [...movieTopRows.map(toNode), libFolder('movies:library', movieRows(movies))] },
+      // Music has no Library folder: its status / Downloaded rows were a second
+      // door to the filters the album column's own Status dropdown now owns
+      // (user-directed 2026-09-20). Homepage only.
       { id: 'music', label: 'Music', isFolder: true,
-        children: [...musicTopRows.map(toNode), libFolder('music:library', musicRows(music))] },
+        children: musicTopRows.map(toNode) },
     ];
-  }, [anime, tv, movies, music, currentPath, loading]);
+  }, [anime, tv, movies, currentPath, loading]);
 
   const controller = {
     isOpen: exp.isOpen,
     toggle: exp.toggle,
     anyExpanded: exp.anyExpanded,
-    expandAll: () => exp.expandAll(['anime', 'anime:library', 'tv', 'tv:library', 'movies', 'movies:library', 'music', 'music:library']),
+    expandAll: () => exp.expandAll(['anime', 'anime:library', 'tv', 'tv:library', 'movies', 'movies:library', 'music']),
     collapseAll: exp.collapseAll,
     canReveal: true,
     revealCurrent: () => {
       const media = seg === 'music' ? 'music' : seg === 'tv' ? 'tv' : seg === 'movies' ? 'movies' : 'anime';
       // Open the media pill AND its nested Library folder — the active row lives
       // inside the latter for every filtered grid.
-      exp.reveal([media, `${media}:library`]);
+      exp.reveal(media === 'music' ? [media] : [media, `${media}:library`]);
       setTimeout(() => {
         const el = document.querySelector('[data-current-file="true"]');
         if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });

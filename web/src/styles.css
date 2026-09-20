@@ -99,6 +99,12 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
   /* The resting label colour, named so a shape that overrides `color` (select)
      can hand it back instead of restating the mix in a second place. */
   --cbtn-rest-text: color-mix(in oklch, var(--text-2), var(--text-muted) 33%);
+  /* The chip label's type size. On :root, not on the chip face, because a
+     chip-field's <input> is a different subtree and would otherwise have to
+     restate the number — which is how the field ended up 2.5px bigger than
+     every button beside it (user-directed 2026-09-20). One value, both
+     rules, so they can never drift apart again. */
+  --chip-label-size: 10.5px;
 
   --bg:           oklch(0.160 0.005 78);
   --surface:      oklch(0.190 0.005 78);
@@ -1300,7 +1306,9 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
   background: transparent;
   padding: 1px 4px;
   font-family: var(--font-body);  /* prose notes — override field's mono */
-  font-size: 13px;
+  /* Same type size as the chips a field sits beside (user-directed 2026-09-20,
+     global on purpose — the agent chat's box moves with it). */
+  font-size: var(--chip-label-size);
   font-weight: 600;
   letter-spacing: 0;
   text-transform: none;
@@ -1309,7 +1317,12 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
   color: var(--text-muted);
   cursor: text;
 }
-.candy-btn[data-shape="chip-field"] > .candy-face > .chip-field-input::placeholder { color: var(--text-faint); }
+/* The placeholder rests at the SAME colour as every candy button's label
+   (--cbtn-rest-text), not the fainter --text-faint it used to wear: a field
+   welded into a run of buttons that reads as two voices. User-directed
+   2026-09-20, and deliberately global - the agent chat's "Ask Concierge"
+   moves with it. */
+.candy-btn[data-shape="chip-field"] > .candy-face > .chip-field-input::placeholder { color: var(--cbtn-rest-text); }
 /* Selected = focused: hold the accent fill exactly like `field` (the band + face
    go accent, the value flips white). */
 /* Hover mirrors the focus recipe below — the row shape's "neutral at rest,
@@ -1425,7 +1438,7 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
      than restate the number and fork it. */
   --chip-pad-x: 10px;
   padding: 5px var(--chip-pad-x);
-  font-size: 10.5px;
+  font-size: var(--chip-label-size);
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: none;
@@ -2054,6 +2067,107 @@ body[data-anim-button-depth="off"] .candy-btn:is(:active, .is-pressed, [data-can
 }
 .planner-ring-inner-controls > * { grid-area: 1 / 1; }
 
+/* THE BLOCK. The dial interior is one solid piece with the clock on the face
+ * turned toward you and the three controls lying on its underside; a hover rolls
+ * it a QUARTER turn and stands them up. This is copied from the pen at
+ * codepen.io/kevinfan23/details/BKbWxP (user-directed 2026-09-20). Two earlier
+ * reconstructions - a canonical 180deg two-face card flip, then a hand-built
+ * six-face cuboid - were both rejected on sight as paper rather than an object.
+ * The difference is the quarter turn and the real depth: 180deg has no thickness
+ * to show, 90deg rolls a brick onto its next side.
+ *
+ * NO PERSPECTIVE, deliberately. The pen writes `perspective: 1000` with no unit,
+ * which is invalid and dropped, so the pen renders with no camera at all and the
+ * far edge stays exactly as wide as the near one. That is the look that was
+ * approved; adding a camera here would stop this being a copy.
+ *
+ * The flipper CANNOT be .planner-ring-controls - that element clips itself to the
+ * ring's inner corner, and ANY overflow other than visible force-flattens
+ * transform-style. Its clip stays exactly where it is, one level down inside the
+ * moving face, where flattening its own children is what we want anyway.
+ *
+ * --dial-depth is written inline by PlannerDock off the interior's measured
+ * height. It is the block's depth AND the height the control face stands up at,
+ * because that face is the underside and an underside is only as tall as the
+ * block is deep. Pull --dial-depth-k below 1 and the controls arrive as a
+ * centred strip with dial plate above and below them. */
+.planner-dial-block {
+  position: absolute;
+  /* CLIPPED TO THE TUBE'S INNER CORNER. Mid-roll a solid block is always TALLER
+     than the box it turns in - its projected height peaks at the diagonal of its
+     height and depth, which is over the box for any depth above zero - so some
+     overhang is unavoidable by construction and only its size is a choice
+     (user-directed 2026-09-20: "the top and bottom of the inner ring gets covered
+     by the 3d object"). Safe here: this element declares no transform-style of its
+     own, so clipping it cannot flatten the 3D context, which lives one level down
+     on .planner-dial-flip-inner. The radius comes from the same corner rule as
+     everything else on this dial, fed the block's own measured inset. */
+  overflow: hidden;
+  border-radius: var(--block-radius, 12px);
+  /* ONE writer for the block's material, read by both faces AND the three control
+     panels that ride on one of them, so the block is a single piece rather than a
+     lit face with a dark slab painted over it - which is exactly what the first
+     lift attempt looked like. A MIX of the plate rather than its own token, so it
+     tracks the dial through a theme change. The amount is a Dev-panel knob. */
+  --dial-block: color-mix(in oklch, var(--planner-face), white var(--dial-lift, 5%));
+}
+.planner-dial-flip-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  /* The hinge runs through the block's MIDDLE, not an edge - that is what makes
+     it roll rather than swing like a door. (The pen writes `100% 22.5px` on a
+     45px button; the x is irrelevant to a rotateX and 22.5 is half the height.) */
+  transform-origin: 50% 50%;
+  /* The pen's own clock and curve, kept over the house 260ms because the pen is
+     what was approved (user-directed 2026-09-20). */
+  transition: transform var(--dial-roll, 500ms) ease-in-out;
+}
+.planner-dial-flip-face {
+  position: absolute;
+  left: 0;
+  right: 0;
+  backface-visibility: hidden;
+  /* Both faces wear the dial's own plate LIFTED a few percent toward white
+     (user-directed 2026-09-20: "make the 3d object a bit lighter so that the flip
+     is more visible"). Painted at the plate exactly, a dark block turning against
+     a dark dial had almost no edge to read the motion off. The lift is a knob on
+     the Dev-tab panel, not a typed colour - tune it on screen and bake the number
+     in. It stays a MIX of the plate rather than a separate token so it tracks the
+     dial through a theme change. */
+  background: var(--dial-block);
+  /* A face is a grid so its one child FILLS it. The readout and the control row
+     used to be grid items of .planner-ring-inner-controls and were stretched by
+     it; moved onto the faces they became plain children of an absolutely
+     positioned box, and the control row promptly collapsed to the height of a
+     glyph (measured 34px inside a 67px face) because .planner-ring-panel's
+     height: 100% had nothing to resolve against. */
+  display: grid;
+}
+.planner-dial-flip-face.front {
+  top: 0;
+  bottom: 0;
+  transform: translateZ(calc(var(--dial-depth) / 2));
+}
+/* Laid flat on the block's underside, face down, so the quarter turn brings it
+   up the right way round. Its own height IS the block's depth. */
+.planner-dial-flip-face.back {
+  top: 50%;
+  height: var(--dial-depth);
+  margin-top: calc(var(--dial-depth) / -2);
+  transform: rotateX(90deg) rotateZ(180deg) rotateY(180deg)
+             translateZ(calc(var(--dial-depth) / 2));
+}
+.planner-dial:hover .planner-dial-flip-inner { transform: rotateX(90deg); }
+/* Dragging the dial SETS the duration, so the minutes have to stay up while you
+   do it - a held press rolls the clock back regardless of hover. .is-pressed is
+   already put on the enclosing rail tile by setDialPressed from DualRingRect's
+   real drag, so this costs no new JS. */
+.candy-btn[data-shape="tile"].rail-tile.is-pressed .planner-dial-flip-inner {
+  transform: none;
+}
+
 /* The readout is a DRAWN seven-segment display (SegmentReadout.jsx), not text -
  * chosen 2026-09-03 over milled type, a split-flap and a drain-fill, all four
  * mocked side by side first. Nothing here sizes it: the component is handed the
@@ -2119,14 +2233,15 @@ body[data-anim-clock-ambient="off"] .planner-seg rect { transition: none; }
   --corner-max: 0px;
   box-shadow: none;
 }
-/* The face and the MARK fade on separate legs. A single opacity on the button
-   dims the icon exactly as hard as the face behind it, and at 0.30 the two
-   unhovered glyphs were invisible (photographed 2026-09-03) — the panels read as
-   blank grey boxes. The face stays translucent so the readout shows through it;
-   the mark rides its own alpha. Two knobs because they are two jobs.
+/* The panels are the block's underside now, a SOLID face - so the whole
+   see-through compromise that used to live here is gone with it: the transparent
+   resting face, the separate face/ink fade legs, the dark backing disc under each
+   glyph, and the --planner-ctrl-face / --planner-ctrl-ink / --planner-ctrl-face-on
+   knobs, which never had a writer anywhere. A glyph on an opaque plate is legible
+   with no help, and the ROLL is the reveal now.
 
    EVERY rule below carries the full tile prefix. The enclosing rail-tile paints
-   `.candy-face :where(div, span)` at (0,3,0) — and (0,4,0) in its .is-panel form —
+   `.candy-face :where(div, span)` at (0,3,0) - and (0,4,0) in its .is-panel form -
    and a candy button's own face IS a span nested in that tile, so a bare
    `.planner-ring-panel > .candy-face` at (0,2,0) LOSES and the glyphs stay painted
    at rest. That is the regression that put all three marks on the dial with the
@@ -2139,51 +2254,21 @@ body[data-anim-clock-ambient="off"] .planner-seg rect { transition: none; }
   height: 100%;
   padding: 0;
   border: 0;
-  background: transparent;
-  color: transparent;
-  transition: background-color 160ms ease, color 160ms ease;
+  background: var(--dial-block);
+  color: var(--cbtn-rest-text);
+  transition: background-color 140ms ease, color 140ms ease;
 }
-/* Each glyph sits on a dark disc so it stays legible over the readout behind it
-   (user-directed 2026-09-03). Sized off the panel's own height, not a constant,
-   so it tracks the dial. The mark rides above it. */
-.candy-btn[data-shape="tile"].rail-tile
-  .planner-ring-controls > .planner-ring-panel > .candy-face::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  height: 62%;
-  aspect-ratio: 1;
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.62);
-  opacity: 0;
-  transition: opacity 160ms ease;
-}
-.planner-ring-panel > .candy-face > svg { position: relative; }
 
 .planner-dial:hover .planner-ring-controls { pointer-events: auto; }
 
-.candy-btn[data-shape="tile"].rail-tile .planner-dial:hover
-  .planner-ring-controls > .planner-ring-panel > .candy-face {
-  background: color-mix(in srgb, var(--surface-3) var(--planner-ctrl-face, 32%), transparent);
-  color: rgba(255, 255, 255, var(--planner-ctrl-ink, 0.62));
-  transition-duration: 140ms;
-}
-.candy-btn[data-shape="tile"].rail-tile .planner-dial:hover
-  .planner-ring-controls > .planner-ring-panel > .candy-face::before {
-  opacity: 1;
-  transition-duration: 140ms;
-}
-/* The panel under the pointer comes up; its two siblings stay faint. Its face
-   stops SHORT of opaque on purpose — the readout has to stay legible even under
-   the panel being pointed at, which is the whole reason the digits live behind
-   these rather than above them. The mark goes to white, and that is what makes
-   the target unmistakable. Also covers :active, so no accent flood gets in: an
-   accent face here would sit on top of the accent-coloured ring arcs. */
-.candy-btn[data-shape="tile"].rail-tile .planner-dial:hover
+/* The panel under the pointer does the flip every other candy button in the app
+   does - grey at rest, accent under the pointer. The rules this replaces dodged
+   accent deliberately, because a part-transparent face let the accent-coloured
+   ring arcs show straight through it. The face is opaque now, so that reason went
+   out with the transparency. */
+.candy-btn[data-shape="tile"].rail-tile
   .planner-ring-controls > .planner-ring-panel:is(:hover, :active) > .candy-face {
-  background: color-mix(in srgb, var(--surface-3) var(--planner-ctrl-face-on, 68%), transparent);
+  background: var(--accent);
   color: #fff;
 }
 
