@@ -49,3 +49,7 @@ tauri-signing-key*
 Thumbs.db
 Desktop.ini
 *.swp
+
+# Python bytecode (src-tauri/scripts).
+__pycache__/
+*.pyc

@@ -16,6 +16,7 @@ export default function ConfirmModal({
   onConfirm,
   onCancel,
   danger = false,
+  width = 360,
   children,
 }) {
   useEffect(() => {
@@ -46,7 +47,7 @@ export default function ConfirmModal({
         onClick={(e) => e.stopPropagation()}
         className="candy-section"
         style={{
-          width: 360, maxWidth: '90vw',
+          width, maxWidth: '90vw',
           padding: '18px 20px',
           display: 'flex', flexDirection: 'column', gap: 12,
         }}
