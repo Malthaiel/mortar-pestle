@@ -1,44 +1,52 @@
 import { GLIDE_MS } from './motion.js';
-// DEV drop-sequence auditor — the MOTION counterpart to candyCenterAudit
-// (optical centering) and spacingAudit (vertical rhythm). Those two measure
-// static layout; this one drives ONE real reorder on a DraggableSidebarList
-// with synthetic pointer events and measures the drop invariants numerically
-// (the invariant list lives at the top of DraggableSidebarList.jsx — each was
-// broken once, found by eyeball, in the 2026-07-01 drop-flicker saga):
+// DEV drop auditor — the MOTION counterpart to candyCenterAudit (optical
+// centering) and spacingAudit (vertical rhythm). Those two measure static
+// layout; this one drives ONE real reorder on a DraggableSidebarList with
+// synthetic pointer events and measures the only thing the drop has to get
+// right:
 //
-//   settleDelta   — px between the clone's last gliding frame and the landed
-//                   tile's rect: >1px = the clone glided to the wrong slot
-//                   (the one-flex-gap bug reads as settleDelta ≈ gap).
-//   bridgeOnTile  — .is-drop-accent landed on the under-cursor tile at commit
-//                   (the accent-continuity bridge; :hover can't cover it).
-//   faceTransition— computed transition-property of the bridged face: must be
-//                   'transform' only (colour fades = the original flicker).
-//   pressRelease  — the clone's face translateY series through the glide:
-//                   starts pressed (≈ depth), eases to 0; any single frame
-//                   jump > 60% of depth = the snap bug.
+//   NOTHING MOVES AFTER THE FINGER COMES UP.
 //
-// Synthetic pointer events drive the drag fine (it's pointer-listener based);
-// only :hover itself can't be faked — which is exactly why the bridge class
-// exists and why this audit asserts the class, not the pseudo-state.
+// It samples every item's rect at rest, then repeatedly for a full glide plus
+// a margin after release, and asserts three things:
+//
+//   still   — every post-glide sample is IDENTICAL to the one before it.
+//             Exact equality, not a tolerance: the glide runs on
+//             cubic-bezier(.22,1,.36,1), which decelerates so hard its last
+//             frames move a tenth of a pixel at a time. A sub-0.5px tolerance
+//             reads that as "finished" and passes a drop that is still 0.6px
+//             short (measured 2026-09-14).
+//   landed  — each item's final rect is one of the rects the list had BEFORE
+//             the drag. The new arrangement must be a permutation of the
+//             resting slots, so a landed rect matching no resting slot means
+//             the list settled somewhere it was never supposed to be.
+//   clean   — no inline transform / transition / z-index survives the drop. A
+//             lingering transform keeps the element on its own compositing
+//             layer, where a fractional position snaps to a whole device pixel
+//             and it paints 1px off its neighbours.
+//
+// This replaced (2026-09-19) an auditor that checked a PREDICTED landing
+// coordinate against reality — settleDelta, the accent bridge, the clone's
+// press-release curve. All three described machinery that no longer exists:
+// there is no clone, no prediction and no bridge, because the dragged item is
+// the real one and never leaves the DOM. See Plans/Drag Reorder Rewrite.md.
+//
+// Synthetic pointer events drive the gesture fine (it is pointer-listener
+// based), but they do NOT reproduce a real finger: a real press flushes React
+// state between listeners where dispatchEvent does not. A green run here is a
+// floor, never a substitute for a filmed take.
 //
 // Run `dragAudit()` in any webview console (overlay host included). Default =
-// no-op drop of the first tile on the first [data-drag-list] — list order is
-// untouched; the pickup/drop thocks will sound. dragAudit(sel|el, {from, to})
-// drives a real move (to = original-index insert-before slot, N = past end —
-// note that DOES commit the reorder). Never shipped to prod: imported only
-// behind import.meta.env.DEV in main.jsx.
+// no-op drop of the first item on the first [data-drag-list] — the order is
+// untouched; the pickup/drop thocks will sound. dragAudit(sel|el, { from, to })
+// drives a real move, and that DOES commit the reorder. Never shipped to prod:
+// imported only behind import.meta.env.DEV in main.jsx.
 
-const HOLD_WAIT = 220;   // > the 180ms hold so pickup arms for every consumer (incl. dock)
-const TOL = 1.0;         // px — sub-pixel rounding
+const HOLD_WAIT = 220;   // > the 180ms hold, so pickup arms for every consumer
+const SETTLE_PAD = 400;  // watch this long past the glide for a late twitch
+const SAMPLE_MS = 25;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const frame = () => new Promise((r) => requestAnimationFrame(r));
-
-const faceY = (face) => {
-  const t = getComputedStyle(face).transform;
-  if (!t || t === 'none') return 0;
-  return new DOMMatrixReadOnly(t).m42;
-};
 
 function firePointer(type, target, { x, y }) {
   target.dispatchEvent(new PointerEvent(type, {
@@ -53,34 +61,41 @@ function firePointer(type, target, { x, y }) {
   }));
 }
 
+// Rects as integers of milli-pixels, so two samples compare for EXACT equality
+// without float noise from getBoundingClientRect's own arithmetic. 1e-3 px is
+// far below anything that can paint.
+const snap = (list) => [...list.children].map((el) => {
+  const r = el.getBoundingClientRect();
+  return [Math.round(r.left * 1000), Math.round(r.top * 1000), Math.round(r.width * 1000), Math.round(r.height * 1000)];
+});
+const same = (a, b) => a.length === b.length && a.every((r, i) => r.every((v, j) => v === b[i][j]));
+const px = (v) => (v / 1000).toFixed(2);
+
 export async function dragAudit(target = '[data-drag-list]', { from = 0, to = null, quiet = false } = {}) {
   const list = typeof target === 'string' ? document.querySelector(target) : target;
   if (!list) { console.warn('[dragAudit] no [data-drag-list] found'); return null; }
-  const items = [...list.children];
-  const src = items[from];
+  const src = list.children[from];
   if (!src) { console.warn(`[dragAudit] no item at index ${from}`); return null; }
 
   const horizontal = getComputedStyle(list).flexDirection.startsWith('row');
-  // One glide app-wide; the 'drag-drop-glide' bucket this used to read was
-  // deleted 2026-08-13.
-  const glideMs = GLIDE_MS;
+  const rest = snap(list);
 
   const r = src.getBoundingClientRect();
   const start = { x: r.left + Math.min(24, r.width / 2), y: r.top + Math.min(24, r.height / 2) };
-  // Destination: a real slot's centre, or (no-op default) a nudge within the
-  // source's own band — past the 10px move threshold, before the next slot's
-  // shift threshold — so the reorder resolves to "insert before source + 1".
+  // Destination: a real slot's centre, or (no-op default) a nudge inside the
+  // source's own band — past the 10px move threshold, short of the next slot.
   const dest = to == null
     ? { x: start.x + (horizontal ? 14 : 0), y: start.y + (horizontal ? 0 : 14) }
-    : (() => { const t = items[Math.min(to, items.length - 1)].getBoundingClientRect(); return { x: t.left + t.width / 2, y: t.top + t.height / 2 }; })();
+    : (() => {
+        const t = list.children[Math.min(to, list.children.length - 1)].getBoundingClientRect();
+        return { x: t.left + t.width / 2, y: t.top + t.height / 2 };
+      })();
 
-  const samples = [];
-  let clone = null;
+  const flags = [];
+  const after = [];
   try {
     firePointer('pointerdown', src, start);
-    await sleep(HOLD_WAIT); // arm pickup (hold-timer path works for every consumer)
-    // Step to the destination slowly enough that the 60ms-throttled dropIdx
-    // updates commit along the way.
+    await sleep(HOLD_WAIT);
     for (let i = 1; i <= 4; i++) {
       firePointer('pointermove', window, {
         x: start.x + ((dest.x - start.x) * i) / 4,
@@ -88,77 +103,84 @@ export async function dragAudit(target = '[data-drag-list]', { from = 0, to = nu
       });
       await sleep(80);
     }
-    clone = document.querySelector('body > .is-dragging');
-    const cloneFace = clone?.querySelector('.candy-face') || null;
-
-    // Frame sampler — runs from just before release until the clone leaves the
-    // DOM (commit): clone rect (glide target), face translateY (press release),
-    // bridge class (accent continuity through the glide).
-    const sampler = (async () => {
-      const deadline = performance.now() + glideMs + 800;
-      while (clone?.isConnected && performance.now() < deadline) {
-        const cr = clone.getBoundingClientRect();
-        samples.push({
-          top: cr.top,
-          left: cr.left,
-          faceY: cloneFace ? faceY(cloneFace) : 0,
-          bridged: clone.classList.contains('is-drop-accent'),
-        });
-        await frame();
-      }
-    })();
-
     firePointer('pointerup', window, dest);
-    await sampler;
-    await sleep(60); // let the post-commit paint settle before measuring
-  } finally {
-    // If anything threw mid-drag, make sure the component isn't left dragging.
+
+    const total = GLIDE_MS + SETTLE_PAD;
+    const t0 = performance.now();
+    while (performance.now() - t0 < total) {
+      await sleep(SAMPLE_MS);
+      after.push({ t: Math.round(performance.now() - t0), rects: snap(list) });
+    }
+  } catch (e) {
+    // Never leave the component mid-drag if something threw.
     firePointer('pointerup', window, dest);
+    console.warn('[dragAudit] threw mid-run', e);
+    return null;
   }
 
-  // ── Measure ────────────────────────────────────────────────────────────────
-  const bridgedWrapper = list.querySelector(':scope > .is-drop-accent');
-  const landed = bridgedWrapper || src; // no-op default lands the source itself
-  const lr = landed.getBoundingClientRect();
-  const last = samples[samples.length - 1] || null;
-  const axis = horizontal ? 'left' : 'top';
-  const settleDelta = glideMs === 0 || !last ? null : Math.abs(last[axis] - lr[axis]);
-
-  const depth = samples.reduce((m, s) => Math.max(m, s.faceY), 0);
-  let maxFrameSnap = 0;
-  for (let i = 1; i < samples.length; i++) {
-    maxFrameSnap = Math.max(maxFrameSnap, Math.abs(samples[i].faceY - samples[i - 1].faceY));
+  // ── still: nothing moves once the glide's window has closed ──────────────
+  // One sample period of slack past GLIDE_MS, so the final commit frame is not
+  // itself counted as movement.
+  const settled = after.filter((s) => s.t >= GLIDE_MS + 2 * SAMPLE_MS);
+  let movedAfterDrop = null;
+  for (let i = 1; i < settled.length; i++) {
+    if (same(settled[i - 1].rects, settled[i].rects)) continue;
+    const a = settled[i - 1].rects;
+    const b = settled[i].rects;
+    const k = a.findIndex((rr, j) => rr.some((v, q) => v !== b[j][q]));
+    movedAfterDrop = { t: settled[i].t, item: k, was: a[k], now: b[k] };
+    break;
   }
-  const releaseSamples = samples.filter((s) => s.bridged);
-  const face = landed.querySelector('.candy-face');
-  const faceTransition = bridgedWrapper && face ? getComputedStyle(face).transitionProperty : null;
-
-  const flags = [];
-  if (glideMs > 0) {
-    if (!bridgedWrapper) flags.push('NO BRIDGE: no .is-drop-accent on any tile at commit — accent blinks (cursor-off-tile drop is the one legit case)');
-    if (settleDelta != null && settleDelta > TOL) flags.push(`SETTLE OFF ${settleDelta.toFixed(1)}px: clone glided to the wrong spot (one-flex-gap bug ≈ container gap)`);
-    if (depth > 2 && releaseSamples.length && maxFrameSnap > depth * 0.6) flags.push(`PRESS SNAP: face jumped ${maxFrameSnap.toFixed(1)}px of ${depth.toFixed(1)}px depth in one frame (should ease over --cbtn-press-dur)`);
-    if (depth > 2 && releaseSamples.length && Math.abs(releaseSamples[releaseSamples.length - 1].faceY) > TOL) flags.push('PRESS NOT RELEASED: face still pressed at commit');
-    if (releaseSamples.length === 0) flags.push('NO GLIDE BRIDGE: clone never carried .is-drop-accent during the glide (accent gap mid-glide)');
+  if (movedAfterDrop) {
+    const m = movedAfterDrop;
+    flags.push(`MOVED AFTER THE DROP: item ${m.item} changed at t+${m.t}ms — `
+      + `left ${px(m.was[0])}→${px(m.now[0])}, top ${px(m.was[1])}→${px(m.now[1])}. `
+      + 'The glide is over by then; nothing should still be in flight.');
   }
-  if (bridgedWrapper && faceTransition && faceTransition !== 'transform') {
-    flags.push(`FACE TRANSITION '${faceTransition}': bridge must transition transform ONLY (colour in the list = the fade flicker)`);
+
+  // ── landed: every final rect is one of the resting slots ─────────────────
+  const final = after.length ? after[after.length - 1].rects : [];
+  const offSlot = [];
+  if (final.length !== rest.length) {
+    flags.push(`ITEM COUNT CHANGED: ${rest.length} → ${final.length} — the drag added or lost a slot.`);
+  } else {
+    for (let i = 0; i < final.length; i++) {
+      if (!rest.some((rr) => rr.every((v, j) => v === final[i][j]))) offSlot.push(i);
+    }
+    if (offSlot.length) {
+      flags.push(`OFF-SLOT LANDING: item${offSlot.length > 1 ? 's' : ''} ${offSlot.join(', ')} settled at a rect `
+        + 'matching no resting slot — the arrangement must be a permutation of the slots the list had before the drag.');
+    }
+  }
+
+  // ── clean: the drag hands every element back to the stylesheet ───────────
+  const fossils = [...list.children].filter((el) => el.style.transform || el.style.transition || el.style.zIndex).length;
+  if (fossils) {
+    flags.push(`${fossils} item(s) still carry an inline transform / transition / z-index after the drop. `
+      + 'A lingering transform keeps the element on its own compositing layer, where a fractional position '
+      + 'snaps to a whole device pixel and it paints 1px off its neighbours.');
+  }
+  if (list.hasAttribute('data-dragging')) flags.push('data-dragging still set on the list after the drop.');
+  if (list.hasAttribute('data-dl-grow-list') || list.parentElement?.hasAttribute('data-dl-grow-card')) {
+    flags.push('grow-to-contain attributes survived the drop — the container will stay stretched.');
   }
 
   const report = {
     list: list.className || '[data-drag-list]',
-    glideMs,
-    frames: samples.length,
-    settleDelta,
-    depth,
-    maxFrameSnap,
-    bridgeOnTile: !!bridgedWrapper,
-    faceTransition,
+    direction: horizontal ? 'row' : 'column',
+    items: rest.length,
+    glideMs: GLIDE_MS,
+    samples: after.length,
+    settledSamples: settled.length,
+    movedAfterDrop,
+    offSlot,
+    inlineFossils: fossils,
     flags,
     pass: flags.length === 0,
   };
   if (!quiet) {
-    console.log(`[dragAudit] ${report.pass ? 'PASS' : 'FAIL'} — settleΔ ${settleDelta == null ? 'n/a' : settleDelta.toFixed(2) + 'px'}, press depth ${depth.toFixed(1)}px, max frame jump ${maxFrameSnap.toFixed(1)}px, bridge ${report.bridgeOnTile}, faceTransition ${faceTransition}`);
+    console.log(`[dragAudit] ${report.pass ? 'PASS' : 'FAIL'} — ${rest.length} items, ${settled.length} post-glide samples, `
+      + `${movedAfterDrop ? 'MOVED after drop' : 'still after drop'}, ${offSlot.length} off-slot, ${fossils} inline fossils`);
     for (const f of flags) console.warn('[dragAudit] ' + f);
   }
   return report;

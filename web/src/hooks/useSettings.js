@@ -37,10 +37,14 @@ export const ANIMATION_KEYS = [
 export const ANIMATION_KEY_CONFIG = {
   'drag-tile-follow': {
     // 'cursor' (the picked-up tile follows the pointer) is the app default — the
-    // clearest "I grabbed this" affordance. 'slot-snap' parks the clone at origin
-    // and only hops between slots, which reads as "nothing lifts" in short lists.
+    // clearest "I grabbed this" affordance. 'slot-snap' leaves the tile in the
+    // run and hops it between slots, which grid + horizontal surfaces force
+    // regardless. A third value 'off' was dropped 2026-09-19: it described where
+    // the drag CLONE parked, and there is no clone any more. A stored 'off'
+    // needs no migration — DraggableSidebarList reads anything that is not
+    // 'slot-snap' as 'cursor'.
     default: 'cursor',
-    values: ['off', 'cursor', 'slot-snap'],
+    values: ['cursor', 'slot-snap'],
   },
 };
 

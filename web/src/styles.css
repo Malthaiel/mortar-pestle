@@ -926,9 +926,6 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
   height: 100%;
   padding: 0;                                 /* the inner flex column owns padding */
 }
-/* Band accent for the post-drop bridge (the still cursor can't trigger the base
-   .candy-btn:hover flip at ~2039). */
-.is-drop-accent .candy-btn[data-shape="tile"].rail-tile { --cbtn-band: var(--accent); }
 /* Face is pointer-transparent (base default) so the immovable base is the sole
    drag + press target. Re-enable pointer events on the interactive children;
    the chrome (title / artist / waveform gaps) keeps falling through to the base
@@ -970,19 +967,19 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
   color: #fff;
   background: var(--accent);
 }
-/* A dragged Cluster item keeps the accent it was hovering. The clone is
-   portalled to <body> with pointer-events:none, so :hover can never reach it and
-   the item went grey the moment it lifted. Colour ONLY — no face slide: the press
-   is released one frame after lift (DraggableSidebarList) so the face eases back
-   up, and re-pressing it here would cancel that. .is-drop-accent carries the same
-   colour through the landing glide, so the drop doesn't blink grey.
+/* A dragged Cluster item keeps the accent it was hovering. The wrapper is
+   pointer-events:none for the gesture so :hover cannot reach it, and the item
+   went grey the moment it lifted. Colour ONLY — no face slide: the press is
+   released one frame after lift (DraggableSidebarList) so the face eases back
+   up, and re-pressing it here would cancel that. The class comes off at the
+   start of the drop glide, by which point the real :hover has the item again.
 
    Two shapes, one rule: a CHIP (the Health micros) and a cover TILE that is not a
    rail-tile (the Music left column's albums + playlists, added 2026-09-04). The
    :not(.rail-tile) matters — a real rail-tile has its own rule above that ALSO
    slides the face, which is right for the player tile and wrong here. */
-:is(.is-dragging, .is-drop-accent) .candy-btn:is([data-shape="chip"], [data-shape="tile"]:not(.rail-tile)) { --cbtn-band: var(--accent); }
-:is(.is-dragging, .is-drop-accent) .candy-btn:is([data-shape="chip"], [data-shape="tile"]:not(.rail-tile)) > .candy-face {
+.is-dragging .candy-btn:is([data-shape="chip"], [data-shape="tile"]:not(.rail-tile)) { --cbtn-band: var(--accent); }
+.is-dragging .candy-btn:is([data-shape="chip"], [data-shape="tile"]:not(.rail-tile)) > .candy-face {
   color: #fff;
   background: var(--accent);
 }
@@ -996,13 +993,11 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
    the meter bars and the played fill go solid white. :hover covers the
    child-press case (pointer stays on the tile). */
 .candy-btn[data-shape="tile"].rail-tile:is(:hover, :active) .music-tile-rail,
-.is-dragging .candy-btn[data-shape="tile"].rail-tile .music-tile-rail,
-.is-drop-accent .candy-btn[data-shape="tile"].rail-tile .music-tile-rail {
+.is-dragging .candy-btn[data-shape="tile"].rail-tile .music-tile-rail {
   background: color-mix(in oklch, white, transparent 65%);
 }
 .candy-btn[data-shape="tile"].rail-tile:is(:hover, :active) :is(.music-tile-meter-bar, .music-tile-rail-fill),
-.is-dragging .candy-btn[data-shape="tile"].rail-tile :is(.music-tile-meter-bar, .music-tile-rail-fill),
-.is-drop-accent .candy-btn[data-shape="tile"].rail-tile :is(.music-tile-meter-bar, .music-tile-rail-fill) {
+.is-dragging .candy-btn[data-shape="tile"].rail-tile :is(.music-tile-meter-bar, .music-tile-rail-fill) {
   background: white;
 }
 /* Music-tile depth setting (Settings -> Animations) — "small" pins the fixed
@@ -1068,8 +1063,7 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
    a resting face background at the SAME (0,5,0) specificity, so whichever comes
    last wins. It lived above them until 2026-08-29 and .is-panel silently ate it
    — the day rail simply never lit up. */
-.candy-btn[data-shape="tile"].rail-tile:is(:hover, :active) > .candy-face,
-.is-drop-accent .candy-btn[data-shape="tile"].rail-tile > .candy-face {
+.candy-btn[data-shape="tile"].rail-tile:is(:hover, :active) > .candy-face {
   background: var(--accent);
   color: #fff;
 }
@@ -1916,9 +1910,9 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
    its accent-hover wash mid-drag (hovering a tile's nested button bubbles :hover to
    the tile too, so suppressing the tiles alone isn't enough). !important beats the
    resting `pointer-events: auto` re-enable on tile children. Drop targeting is
-   coord-based (calcDropIndex) so nothing breaks, and the picked-up clone is
-   portaled to <body> outside the container — it keeps its .is-dragging accent. The
-   opening slot-gap stays the drop-target indicator. */
+   coord-based so nothing breaks, and the dragged item — the real one, still in
+   the list — is excluded by :not(.is-dragging) so it keeps its accent. The slot
+   the neighbours open stays the drop-target indicator. */
 [data-dragging] :where(.candy-btn, button, a, input, textarea, [data-no-drag]):not(.is-dragging) {
   pointer-events: none !important;
 }
@@ -1930,32 +1924,26 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
    (DraggableSidebarList's items.map) and nothing else can beat one. */
 [data-drag-list][data-dragging], [data-drag-list][data-dragging] * { cursor: grabbing !important; }
 
-/* Post-drop accent bridge (.is-drop-accent — DraggableSidebarList tags the
-   wrapper of the tile under the cursor at drop-commit, and swaps the drag
-   clone onto this class at glide start). The face's 150ms background/border-
-   color transition and the base's 150ms box-shadow (band) transition would
-   FADE the restored accent in from resting grey — that fade IS the "accent
-   blinks off then back on" drop flicker; the bridge class alone can't fix it
-   because the first painted frame still starts at grey. So while bridged,
-   colour has NO transition (omitted from the list = instant). transform is
-   the one property that KEEPS its transition: the clone relies on it to ease
-   its face back up (press release) during the glide — a blanket transition:
-   none here made the release an instant snap. Cleared on the next real
-   pointermove, when :hover takes over with identical computed values
-   (accent), so the class removal itself repaints nothing. */
-/* .is-drop-glide (the third state — accent WITHHELD, worn by the flying clone
-   whenever the cursor is not over it) is deliberately NOT on this list. It is the
-   state the accent LEAVES through, and stripping its colour transition made the
-   accent vanish in one frame at release; user-directed 2026-09-04, it drains on
-   the app-wide 150ms fade like every other candy button. The base rules already
-   carry the press-release transform, so nothing is lost by letting them govern. */
-:is(.is-drop-accent) :is(.candy-btn, .candy-face),
-/* … and the nested label/value spans, which carry their OWN `transition: color`
-   (see the :where rule above). Left out, the face snapped to accent while the
-   text faded grey→white behind it — a flicker on the TEXT only, with the accent
-   itself perfectly steady. (0,2,0) beats that rule's (0,1,0). */
-:is(.is-drop-accent) .candy-face :where(div, span) {
-  transition: transform var(--cbtn-press-dur, 150ms) cubic-bezier(0, 0, 0.58, 1);
+/* Grow-to-contain (the overlay Studio panel). Dragging a tile past a panel edge
+   stretches the panel to keep the tile inside, with exponential resistance
+   computed in JS. The amounts arrive as custom properties on the CARD and are
+   consumed here rather than written to style.minHeight / style.paddingTop
+   directly: React owns those same inline slots for whatever the panel's owner
+   renders, and writing them is what once left the right widget rail pinned at
+   padding-top: 0 for the life of the window (it ate 7px of the gap above the
+   first tile). !important is what lets a stylesheet rule beat the owner's inline
+   value, and removing the attribute restores rest with no snapshot to put back. */
+[data-drag-list][data-dl-grow-list] {
+  padding-top: calc(var(--dl-rest-pt, 0px) + var(--dl-grow-top, 0px)) !important;
+  min-height: calc(var(--dl-rest-h, 0px) + var(--dl-grow-bottom, 0px)) !important;
+  transition: padding-top var(--dl-grow-ease, 0s), min-height var(--dl-grow-ease, 0s);
+}
+/* The card is the list's PARENT, so the rule above cannot reach it. Pulling it up
+   by exactly what the list is padded keeps the tiles and the card's bottom edge
+   still while only its TOP edge rises. */
+[data-dl-grow-card] {
+  margin-top: calc(var(--dl-rest-mt, 0px) - var(--dl-grow-top, 0px)) !important;
+  transition: margin-top var(--dl-grow-ease, 0s);
 }
 
 /* Animation gating for the two-layer system.
@@ -2185,22 +2173,6 @@ body[data-anim-clock-ambient="off"] .planner-seg rect { transition: none; }
   background: var(--surface);   /* sidebar colour, per the band note above */
   border-top: 2px solid var(--border-2);     /* same weight + colour as the card frame */
   border-radius: 0 0 calc(var(--radius-md) - 2px) calc(var(--radius-md) - 2px);
-}
-
-/* Source slot collapse animation. When DraggableSidebarList lifts a tile,
- * the original slot stays in the flow but visibility:hidden + this keyframe
- * shrinks its height from the captured originRect down to 0 over 160ms.
- * Flex-weighted siblings (planner at flexWeight:2) grow smoothly into the
- * freed space instead of snapping. The `--drag-source-from-h` inline custom
- * property is set per-slot to its origin height; without it the from-value
- * is `auto` and browsers don't animate auto→0. */
-@keyframes drag-source-collapse {
-  from { height: var(--drag-source-from-h); }
-  to   { height: 0; }
-}
-[data-dragsrc-collapsing="true"] {
-  animation: drag-source-collapse 160ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
-  overflow: hidden;
 }
 
 /* Live spectrum bars in the music tile's SIDEWAYS meter strip (the full-height

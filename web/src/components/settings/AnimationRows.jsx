@@ -26,7 +26,7 @@ const ROWS = [
   { key: 'flyout',                 label: 'Flyout pop-in/out',       description: 'Spring snap-open for collapsed-sidebar hover flyouts; snap-closed on leave.' },
   { key: 'section-accordion',      label: 'Section accordion',       description: 'Expand/collapse settle for sidebar sections and the chevron flip rotation that accompanies it.' },
   { key: 'pulse-indicators',       label: 'Pulse indicators',        description: 'Active-pill left-bar pulse, "new" badge pulse, conflict-toast spring.' },
-  { key: 'drag-tile-follow',       label: 'Drag tile follow',        description: 'Clone motion during sidebar module reorder. Off: parks at origin. Cursor: tile stays at its rail position on pickup and translates by the cursor delta as you drag — the grab point stays under your cursor with no snap-to-center. Slot snap: snaps to current drop slot in 160ms with a subtle scale settle and soft snap thock.' },
+  { key: 'drag-tile-follow',       label: 'Drag tile follow',        description: 'How a picked-up tile moves during a sidebar reorder. Cursor: the tile follows the pointer from where you grabbed it, with no snap-to-centre. Slot snap: the tile stays in the run and glides between slots as the order changes. Grids and the dock always use slot snap.' },
   { key: 'theme-transition',       label: 'Theme color transition',  description: 'Smooth 120ms color cross-fade when switching colour themes. Without this, the theme switch is instant.' },
   { key: 'planner-day-slide',      label: 'Planner day slide',       description: 'Directional slide when the Planner day pane changes day — past days enter from the left, future days from the right.' },
   { key: 'counter-tick',           label: 'Section counter tick',    description: 'The Planner day pane’s section counters (events / tasks / notes) count up to new values instead of snapping.' },
@@ -304,9 +304,6 @@ function AnimVisual({ animKey, value, accent }) {
         background: `color-mix(in oklch, ${a} 40%, transparent)`,
         border: `1px solid ${a}`,
       };
-      if (mode === 'off') {
-        return <div style={baseStyle}/>;
-      }
       if (mode === 'slot-snap') {
         return <div style={{
           ...baseStyle,
