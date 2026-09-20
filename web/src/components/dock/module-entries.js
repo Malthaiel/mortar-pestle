@@ -11,13 +11,6 @@ import { useActiveModule } from '../../hooks/useActiveModule.jsx';
 import { useHashRoute } from '../../router.js';
 import * as hostIcons from '../icons.jsx';
 
-// Modules whose launcher lives on the titlebar strip instead of the Dock
-// (TitleBar.jsx's right cluster). Their left-sidebar slot registration stays —
-// that slot is the module's own sidebar BODY while it is active, not a
-// standalone pill — only the synthesized dock button is skipped, so the button
-// keeps one home like Settings and Downloads do.
-const TITLEBAR_MODULES = new Set(['feedback']);
-
 export function useModuleDockEntries() {
   const rawSlots = useLeftSidebarSlots();
   const manifests = useManifests();
@@ -30,7 +23,6 @@ export function useModuleDockEntries() {
 
   return useMemo(() => {
     return rawSlots.map(slot => {
-      if (TITLEBAR_MODULES.has(slot.moduleId)) return null;
       const manifest = manifests[slot.moduleId];
       if (!manifest) return null;
       const Icon = manifest.iconKey && hostIcons[manifest.iconKey]

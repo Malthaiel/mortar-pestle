@@ -11,7 +11,7 @@
 // PowerShell's Tee-Object wrote UTF-16, which made the log awkward to grep.
 
 import { spawn } from 'node:child_process';
-import { createWriteStream } from 'node:fs';
+import { createWriteStream, existsSync, renameSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -30,7 +30,13 @@ const args = process.argv.slice(2);
 // as proof; teeing `build` would just churn the file. Truncate rather than
 // append — a multi-session log makes "is this line from the current window?"
 // unanswerable, which is the exact failure the log exists to prevent.
-const log = args[0] === 'dev' ? createWriteStream(join(repo, 'devrun.log')) : null;
+// The previous run is rolled to devrun.prev.log first: a restart used to erase
+// the only record of the crash that prompted the restart.
+const logPath = join(repo, 'devrun.log');
+if (args[0] === 'dev' && existsSync(logPath)) {
+  try { renameSync(logPath, join(repo, 'devrun.prev.log')); } catch { /* locked: overwrite */ }
+}
+const log = args[0] === 'dev' ? createWriteStream(logPath) : null;
 
 const child = spawn(process.execPath, [cli, ...args], { stdio: ['inherit', 'pipe', 'pipe'], cwd: repo });
 

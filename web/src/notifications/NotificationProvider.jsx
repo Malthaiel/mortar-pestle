@@ -38,7 +38,14 @@ function loadHistory() {
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
     if (!Array.isArray(raw)) return [];
-    return raw.filter(n => n && typeof n === 'object' && n.id && n.type).slice(0, CAP);
+    // `transient` is what TransientToastLayer renders, and `dismissed` is
+    // session-local — so a stored transient entry re-raised itself as a live
+    // toast on every launch. History is history: it belongs in the bell panel,
+    // never back on screen.
+    return raw
+      .filter(n => n && typeof n === 'object' && n.id && n.type)
+      .map(n => (n.transient ? { ...n, transient: false } : n))
+      .slice(0, CAP);
   } catch { return []; }
 }
 

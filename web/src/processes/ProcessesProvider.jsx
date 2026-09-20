@@ -122,7 +122,10 @@ function normComms(s) {
   if (!s) return null;
   const running = s.status === 'running';
   return row({
-    id: 'comms-job', kind: 'mic', title: 'Comms extraction',
+    id: 'comms-job', kind: 'mic',
+    // One Rust job, three front doors: the write-out must not read as "Comms
+    // extraction" in the window the user opens to find out what it is doing.
+    title: s.kind === 'writeout' ? 'Writing the talk out' : 'Comms extraction',
     subtitle: s.matchN ? `Match ${s.matchN}` : (s.kind === 'vod' ? 'VOD comms' : ''),
     statusLine: running ? (s.phase || 'Working')
       : s.status === 'error' ? (s.error || 'Failed')
@@ -317,7 +320,24 @@ export default function ProcessesProvider({ children }) {
       listen('coach-job-progress', (e) => upsert(normCoach(e.payload))),
       listen('coach-job-done', (e) => upsert(normCoach(e.payload))),
       listen('comms-job-progress', (e) => upsert(normComms(e.payload))),
-      listen('comms-job-done', (e) => upsert(normComms(e.payload))),
+      listen('comms-job-done', (e) => {
+        upsert(normComms(e.payload));
+        // The popup that started it may not exist any more — that is the whole
+        // reason the job lives in Rust — so the failure is announced globally.
+        const d = e.payload || {};
+        if (d.kind === 'writeout' && !d.ok && !d.cancelled) {
+          window.dispatchEvent(new CustomEvent('agentic:notify', {
+            detail: {
+              type: 'note-error',
+              title: 'Writing the talk out stopped',
+              message: [d.matchN ? `Match ${d.matchN}` : '', d.error || ''].filter(Boolean).join(': '),
+              accent: 'var(--error)',
+              iconKey: 'alert',
+              duration: 8000,
+            },
+          }));
+        }
+      }),
       listen('library-import-progress', (e) => { if (e.payload?.id) upsert(normImport(e.payload)); }),
       listen('library-import-done', () => {
         invoke('library_import_status').then((js) => upsertMany((js || []).map(normImport))).catch(() => {});

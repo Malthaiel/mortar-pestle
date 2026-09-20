@@ -11,11 +11,19 @@
 //
 // Everything is drawn, so we own every stroke: thickness, corner, spacing, ink.
 
-// The glyph's HEIGHT is the fixed unit; its WIDTH is computed per render, because
-// the display fills the interior by WIDENING the digits rather than by spreading
-// them apart (user-directed 2026-09-03 - the colon's shoulders were reading as
-// dead space).
+// The glyph's HEIGHT in unit space. Everything else on the display is a multiple
+// of this or of the stroke, so the whole readout has ONE shape and one scale.
 const UH = 32;
+
+// The glyph's OWN width, and the only one it ever has. It used to be solved from
+// whatever box arrived - the display filled the interior by WIDENING the digits
+// (2026-09-03, the colon's shoulders were reading as dead space) - which means a
+// box that grows taller than it grows wide comes out as tall thin digits. That is
+// a stretch (user-directed 2026-09-06: "don't mess with the proportions"). 0.83 is
+// the ratio the solved version was landing on at the dial's own box, so today's
+// look is frozen here rather than recomputed: the same object, and a bigger box
+// now scales it instead of reshaping it.
+const NATURAL_UW = UH * 0.83;
 
 // THE thickness knob. Every other measurement on the glyph is a fraction of it,
 // so raising it fattens the strokes without collapsing the joins between them -
@@ -41,7 +49,14 @@ const COL_H = T * 1.55;      // its two marks are SHORT BARS off the same stroke
                              // a square at stroke thickness reads tiny beside a
                              // full-length bar, and a circle reads as type
                              // smuggled into a drawn display
-const MIN_UW = T * 2.6;      // a glyph narrower than this stops being legible
+// The display's whole width in unit space, and from it the height it paints at
+// when a box of a given width squeezes it. Exported because the dial has to size
+// its BOX around this display rather than the other way round - the readout's
+// gaps top and bottom have to equal its gaps left and right, and only the thing
+// that knows the shape can say how tall that is.
+const COLON_U = 2 * (T * 0.9) + 2 * (T * 0.9 * COLON_GAP_RATIO) + COL_W;
+export const TOTAL_U = 4 * NATURAL_UW + COLON_U;
+export const readoutHeightForWidth = (w) => (w / TOTAL_U) * UH;
 
 const MAP = {
   0: 'abcdef', 1: 'bc', 2: 'abged', 3: 'abgcd', 4: 'fgbc',
@@ -76,17 +91,15 @@ function segments(uw) {
 export default function SegmentReadout({ value, w, h }) {
   if (!(w > 0) || !(h > 0)) return null;
 
-  // HEIGHT sets the glyph size; the leftover WIDTH goes into the DIGITS, not into
-  // the gaps. The gaps stay fixed multiples of the stroke, so the display widens
-  // as one object instead of drifting apart around the colon.
+  // The glyph and every gap are fixed multiples of the stroke, so the display has
+  // ONE shape and only its scale changes.
   const colGap = GAP * COLON_GAP_RATIO;
-  const fixedU = 2 * GAP + 2 * colGap + COL_W;
-  let scale = h / UH;
-  const uw = Math.max(MIN_UW, (w / scale - fixedU) / 4);
-  const totalU = 4 * uw + fixedU;
-  // Only bites when the box is too narrow to hold four legible glyphs; then the
-  // whole display shrinks rather than cramping them.
-  scale = Math.min(scale, w / totalU);
+  const fixedU = COLON_U;
+  const uw = NATURAL_UW;
+  const totalU = TOTAL_U;
+  // The display fits the box on WHICHEVER axis runs out first and keeps its own
+  // shape on the other. This is the whole no-stretch rule, in one line.
+  const scale = Math.min(h / UH, w / totalU);
 
   const SEG = segments(uw);
   const keys = Object.keys(SEG);
