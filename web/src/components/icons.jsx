@@ -62,23 +62,10 @@ export function IconSearch        ({ size = 18 }) { return wrap(size, <><path d=
 // ── Non-sidebar icons (fixed default sizes for inline UI) ─────────────────────
 export function IconReset         ({ size = 15 }) { return wrap(size, <><path fill="currentColor" d="M256 64c-56.8 0-107.9 24.7-143.1 64l47.1 0c17.7 0 32 14.3 32 32s-14.3 32-32 32L32 192c-17.7 0-32-14.3-32-32L0 32C0 14.3 14.3 0 32 0S64 14.3 64 32l0 54.7C110.9 33.6 179.5 0 256 0 397.4 0 512 114.6 512 256S397.4 512 256 512c-87 0-163.9-43.4-210.1-109.7-10.1-14.5-6.6-34.4 7.9-44.6s34.4-6.6 44.6 7.9c34.8 49.8 92.4 82.3 157.6 82.3 106 0 192-86 192-192S362 64 256 64z"/></>, FA_BOX_512); } // Font Awesome solid arrow-rotate-left (Boxicons bx-reset is Basic-only)
 export function IconSkip          ({ size = 15 }) { return wrap(size, <><path d="M7 7v10l7-5zm9 10V7h-2v10z"/></>); } // bx-skip-next (Basic — no filled form)
-
-// Boxicons v3 bare marks, chosen by Malthaiel 2026-09-20 for the Planner clock
-// underside run. All four on the same 24 grid, none of them enclosed in a disc.
-//
-// Named apart from the v2 icons already here: IconRepeat, IconPlay and IconSkip
-// are the thin Basic forms and PlannerDock hand-compensates for how small two of
-// them draw, so nothing existing changes shape.
-//
-// Each draws at its OWN fraction of the 24 box, so one `size` lands them at
-// different painted widths - at 14 they measure 12 / 7 / 8 / 10 across. A run
-// that wants them even asks for a different size per icon and checks the result
-// on a photograph; the underside passes 14 / 22 / 25 / 19.
-export function IconRepeatSolid      ({ size = 14 }) { return wrap(size, <><path d="M17 5H6c-1.1 0-2 .9-2 2v5h2V7h11v3l5-4-5-4zm1 12H7v-3l-5 4 5 4v-3h11c1.1 0 2-.9 2-2v-5h-2z"/></>); } // Boxicons v3 repeat
-export function IconPlayMark         ({ size = 14 }) { return wrap(size, <><path d="M6.51 18.87c.15.09.32.13.49.13s.36-.05.51-.14l10-6c.3-.18.49-.51.49-.86s-.18-.68-.49-.86l-10-6a.99.99 0 0 0-1.01-.01c-.31.18-.51.51-.51.87v12c0 .36.19.69.51.87Z"/></>); } // Boxicons v3 play
-export function IconSkipMark         ({ size = 14 }) { return wrap(size, <><path d="m14.58 11.19-7-5c-.31-.22-.71-.25-1.04-.08S6 6.62 6 7v10c0 .37.21.72.54.89.14.07.3.11.46.11.21 0 .41-.06.58-.19l7-5c.26-.19.42-.49.42-.81s-.16-.63-.42-.81M16 6h2v12h-2z"/></>); } // Boxicons v3 skip-next
-export function IconListPlus         ({ size = 14 }) { return wrap(size, <><path d="M4 11h11v2H4zm0-5h16v2H4zm0 10h8v2H4zm15-3h-2v3h-3v2h3v3h2v-3h3v-2h-3z"/></>); } // Boxicons v3 list-plus
-
+export function IconRepeatSolid   ({ size = 14 }) { return wrap(size, <><path d="M17 5H6c-1.1 0-2 .9-2 2v5h2V7h11v3l5-4-5-4zm1 12H7v-3l-5 4 5 4v-3h11c1.1 0 2-.9 2-2v-5h-2z"/></>, '0 0 24 24'); } // Boxicons v3 repeat
+export function IconPlayMark      ({ size = 14 }) { return wrap(size, <><path d="M6.51 18.87c.15.09.32.13.49.13s.36-.05.51-.14l10-6c.3-.18.49-.51.49-.86s-.18-.68-.49-.86l-10-6a.99.99 0 0 0-1.01-.01c-.31.18-.51.51-.51.87v12c0 .36.19.69.51.87Z"/></>, '0 0 24 24'); } // Boxicons v3 play
+export function IconSkipMark      ({ size = 14 }) { return wrap(size, <><path d="m14.58 11.19-7-5c-.31-.22-.71-.25-1.04-.08S6 6.62 6 7v10c0 .37.21.72.54.89.14.07.3.11.46.11.21 0 .41-.06.58-.19l7-5c.26-.19.42-.49.42-.81s-.16-.63-.42-.81M16 6h2v12h-2z"/></>, '0 0 24 24'); } // Boxicons v3 skip-next
+export function IconListPlus      ({ size = 14 }) { return wrap(size, <><path d="M4 11h11v2H4zm0-5h16v2H4zm0 10h8v2H4zm15-3h-2v3h-3v2h3v3h2v-3h3v-2h-3z"/></>, '0 0 24 24'); } // Boxicons v3 list-plus
 export function IconSkipBack      ({ size = 15 }) { return wrap(size, <><path d="m16 7-7 5 7 5zm-7 5V7H7v10h2z"/></>); } // bx-skip-previous (Basic — no filled form)
 export function IconRewind        ({ size = 15 }) { return wrap(size, <><path d="M12 12V7l-7 5 7 5zm7-5-7 5 7 5z"/></>); } // bx-rewind (Basic — no filled form)
 export function IconFastForward   ({ size = 15 }) { return wrap(size, <><path d="m19 12-7-5v10zM5 7v10l7-5z"/></>); } // bx-fast-forward (Basic — no filled form)

@@ -46,7 +46,13 @@ const MAP = {
   IconLayers: 'bx-layer', IconHardDrive: 'bx-hdd', IconSettings: 'bx-cog',
   IconBell: 'bx-bell', IconTrash: 'bx-trash', IconDownload: 'bx-download', IconSearch: 'bx-search',
   // Non-sidebar / inline
-  IconReset: 'bx-reset', IconSkip: 'bx-skip-next', IconSkipBack: 'bx-skip-previous',
+  IconReset: 'bx-reset', IconSkip: 'bx-skip-next',
+  // Boxicons v3 bare marks, all four carried in OVERRIDES — the pack read off
+  // disk is v2 and has none of them. The names here are their v3 names and are
+  // never looked up; an override short-circuits the disk read.
+  IconRepeatSolid: 'repeat', IconPlayMark: 'play', IconSkipMark: 'skip-next',
+  IconListPlus: 'list-plus',
+  IconSkipBack: 'bx-skip-previous',
   IconRewind: 'bx-rewind', IconFastForward: 'bx-fast-forward', IconPause: 'bx-pause',
   IconStop: 'bx-stop',
   IconMaximize: 'bx-fullscreen', IconX: 'bx-x', IconCheck: 'bx-check',
@@ -97,6 +103,7 @@ const SIZES = {
   IconChevronRight: 14, IconExternal: 14, IconGrip: 14, IconPlayCircle: 14,
   IconKey: 15, IconLockOpen: 15, IconCopy: 14, IconShield: 15, IconShieldOff: 15,
   IconDot: 14, IconSend: 14,
+  IconRepeatSolid: 14, IconPlayMark: 14, IconSkipMark: 14, IconListPlus: 14,
 };
 
 // Section banners, keyed by the icon that opens each block.
@@ -159,6 +166,42 @@ const FA_BOX_512 = '0 0 512 512';
 // npm dependency on `boxicons`. The other Basic fallbacks are shapes, not bare
 // marks — leave them on Boxicons.
 const OVERRIDES = {
+  // ── Boxicons v3 bare marks ──────────────────────────────────────────────────
+  // Chosen 2026-09-20 for the Planner clock underside run. The generator reads
+  // Boxicons v2 off disk and v2 has no filled play or skip at all, which is why
+  // the v2 IconPlay/IconSkip fall back to the thin Basic set and paint a mark
+  // roughly a third the size of a solid one beside them. These four are v3, so
+  // their path data is inlined here the same way the Font Awesome marks are.
+  //
+  // DO NOT retune the v2 IconPlay/IconSkip to match: PlannerDock hand-compensates
+  // for how small they draw ("bx 24 box, path y 6..18 -> 0.50 of the box"), and
+  // changing the glyph would double those icons.
+  //
+  // `size` is a viewBox scale, not a painted size — each of these fills its 24 box
+  // differently, so one size across a row paints four different marks. Measured at
+  // size 14: repeat 12 across, play 7, skip-next 8, list-plus 10. A row that wants
+  // them even passes a size per icon and checks the result on a photograph; the
+  // clock underside uses 14 / 20 / 22 / 18 for a painted height of 12 rows.
+  IconRepeatSolid: {
+    d: '<path d="M17 5H6c-1.1 0-2 .9-2 2v5h2V7h11v3l5-4-5-4zm1 12H7v-3l-5 4 5 4v-3h11c1.1 0 2-.9 2-2v-5h-2z"/>',
+    box: "'0 0 24 24'",
+    pack: 'Boxicons v3 repeat',
+  },
+  IconPlayMark: {
+    d: '<path d="M6.51 18.87c.15.09.32.13.49.13s.36-.05.51-.14l10-6c.3-.18.49-.51.49-.86s-.18-.68-.49-.86l-10-6a.99.99 0 0 0-1.01-.01c-.31.18-.51.51-.51.87v12c0 .36.19.69.51.87Z"/>',
+    box: "'0 0 24 24'",
+    pack: 'Boxicons v3 play',
+  },
+  IconSkipMark: {
+    d: '<path d="m14.58 11.19-7-5c-.31-.22-.71-.25-1.04-.08S6 6.62 6 7v10c0 .37.21.72.54.89.14.07.3.11.46.11.21 0 .41-.06.58-.19l7-5c.26-.19.42-.49.42-.81s-.16-.63-.42-.81M16 6h2v12h-2z"/>',
+    box: "'0 0 24 24'",
+    pack: 'Boxicons v3 skip-next',
+  },
+  IconListPlus: {
+    d: '<path d="M4 11h11v2H4zm0-5h16v2H4zm0 10h8v2H4zm15-3h-2v3h-3v2h3v3h2v-3h3v-2h-3z"/>',
+    box: "'0 0 24 24'",
+    pack: 'Boxicons v3 list-plus',
+  },
   IconX: {
     d: '<path fill="currentColor" d="M55.1 73.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L147.2 256 9.9 393.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L192.5 301.3 329.9 438.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L237.8 256 375.1 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L192.5 210.7 55.1 73.4z"/>',
     box: 'FA_BOX_384',
