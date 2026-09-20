@@ -1,5 +1,4 @@
 import React, { Suspense } from 'react';
-import SidebarPill from '@host/components/SidebarPill.jsx';
 import { LazyErrorBoundary, lazyChunkError } from '@host/components/LazyErrorBoundary.jsx';
 import SttProvider from './SttProvider.jsx';
 import CaptureHotkeyBridge from './CaptureHotkeyBridge.jsx';
@@ -47,7 +46,6 @@ const KEYBIND_ENTRIES = [
 
 export default {
   register(api) {
-    const { IconGamepad } = api.ui.icons;
     registerModuleKeybinds(KEYBIND_ENTRIES);
     // App-level provider (always mounted in studio builds) — preloads the model
     // and keeps dictation alive across navigation. Serves the MAIN window; the
@@ -60,16 +58,6 @@ export default {
     ));
     api.slots.registerLeftSidebar({
       id: 'overlay',
-      render: ({ collapsed, accent, active }) => (
-        <SidebarPill
-          Icon={IconGamepad}
-          label="Overlay"
-          expanded={!collapsed}
-          accent={accent}
-          active={active}
-          onClick={() => api.router.navigate('/tools/overlay')}
-        />
-      ),
       isActive: (route) => route.page === 'tools' && route.sub === 'overlay',
       renderSecondary: ({ route, accent }) => <OverlayNav route={route} accent={accent} />,
       order: 46,

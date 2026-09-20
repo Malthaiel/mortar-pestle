@@ -753,399 +753,9 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
  * box-shadow + transform cascade to the smaller value. Pills + rectangles
  * inherit the :root default 7px and stay chunky. */
 
-/* ══ Candy button — THE one button ═══════════════════════════════════════ *
- * Exact clone of the .candy-tile recipe, reshaped into every role. Neutral
- * grey at rest → full accent face + white text on hover/press; .is-active /
- * .is-selected = accent at full RAISED depth (color carries state, depth
- * carries pressability — not held down). The whole colour recipe rides one
- * variable, --cbtn-band: var(--surface) at rest, var(--accent) when lit. Every
- * frame + offset-band color-mix() reads it, so a single var swap repaints the
- * button (custom-property substitution re-resolves the base rule's border +
- * box-shadow at used-value time). Depth follows the global --candy-depth picker;
- * small shapes opt into --candy-depth-small; the tile shape pins 10.5px.
- * data-shape = geometry only. Graduated from .candy-tile — see Decisions. */
-
-.candy-btn-legacy {
-  --cbtn-band: var(--cbtn-rest);
-  --cbtn-frame: 2px;
-  /* Reset native form-control chrome. Required because the route content sits
-     inside .page-tx, which keeps a persistent transform: scale(1) (pageCandy
-     animation, fill-mode both). WebKitGTK corrupts NATIVE <button> rendering
-     inside a transformed ancestor — appearance:none makes the button paint
-     purely from the CSS below, immune to that bug (div-based candy was already
-     immune). Do not remove. */
-  appearance: none;
-  -webkit-appearance: none;
-  touch-action: manipulation;
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  cursor: pointer;
-  outline: none;
-  vertical-align: middle;
-  user-select: none;
-  padding: 8px 16px;
-  font-size: 11px;
-  font-family: var(--font-mono);
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  background: var(--cbtn-face);
-  border: var(--cbtn-frame) solid color-mix(in oklch, var(--cbtn-band), black 22%);
-  border-radius: var(--radius-md);
-  box-shadow:
-    0 var(--candy-depth) 0 -2px color-mix(in oklch, var(--cbtn-band), black 10%),
-    0 var(--candy-depth) 0 0 color-mix(in oklch, var(--cbtn-band), black 22%);
-  transition:
-    transform var(--cbtn-press-dur, 150ms) cubic-bezier(0, 0, 0.58, 1),
-    color 150ms cubic-bezier(0, 0, 0.58, 1),
-    background 150ms cubic-bezier(0, 0, 0.58, 1),
-    border-color 150ms cubic-bezier(0, 0, 0.58, 1),
-    box-shadow 150ms cubic-bezier(0, 0, 0.58, 1);
-}
-
-/* Accent + RAISED — selected/active sits at full rest depth (not held down).
-   Listed before :hover/:active so those equal-specificity states still win. */
-.candy-btn-legacy.is-active,
-.candy-btn-legacy.is-selected {
-  --cbtn-band: var(--accent);
-  color: #fff;
-  background: var(--accent);
-}
-
-/* Hover — accent flip + half-depth lift. */
-.candy-btn-legacy:hover {
-  --cbtn-band: var(--accent);
-  color: #fff;
-  background: var(--accent);
-  transform: translate(0, var(--candy-depth-hover-transform));
-  box-shadow:
-    0 var(--candy-depth-hover-shadow) 0 -2px color-mix(in oklch, var(--cbtn-band), black 10%),
-    0 var(--candy-depth-hover-shadow) 0 0 color-mix(in oklch, var(--cbtn-band), black 22%);
-}
-
-/* Press — accent, depth collapses flush. !important beats the global
-   button:active scale(0.97) fallback so the candy translate is the only press. */
-.candy-btn-legacy:active {
-  --cbtn-band: var(--accent);
-  color: #fff;
-  background: var(--accent);
-  transform: translate(0, var(--candy-depth)) !important;
-  box-shadow:
-    0 0 0 -2px color-mix(in oklch, var(--cbtn-band), black 10%),
-    0 0 0 0 color-mix(in oklch, var(--cbtn-band), black 22%);
-}
-
-.candy-btn-legacy:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.candy-btn-legacy:disabled,
-.candy-btn-legacy[aria-disabled="true"] { opacity: 0.55; cursor: not-allowed; }
-
-/* Nested label/value elements flip to white with the face. */
-.candy-btn-legacy :where(div, span) { transition: color 150ms cubic-bezier(0, 0, 0.58, 1); }
-.candy-btn-legacy:is(:hover, :active, .is-active, .is-selected) :where(div, span) { color: #fff; }
-
-/* ── Shapes — geometry only; recipe above is shared ─────────────────────── */
-
-/* text — the default (Save / Confirm / action buttons). No override needed. */
-.candy-btn-legacy[data-shape="text"][data-size="sm"],
-.candy-btn-legacy[data-shape="block"][data-size="sm"] { padding: 5px 12px; font-size: 10px; }
-
-/* block — full-width pill (Planner Start, section CTAs, brand toggles). */
-.candy-btn-legacy[data-shape="block"] { width: 100%; font-size: 14px; border-radius: 999px; }
-
-/* row — full-width left-aligned list/nav/menu row (settings tabs, palette,
-   context menu). Body font, sentence case. */
-.candy-btn-legacy[data-shape="row"] {
-  width: 100%;
-  justify-content: flex-start;
-  gap: 10px;
-  padding: 9px 12px;
-  font-family: var(--font-body);
-  font-size: 12.5px;
-  font-weight: 500;
-  letter-spacing: 0;
-  text-transform: none;
-  text-align: left;
-  color: var(--text-muted);
-}
-.candy-btn-legacy[data-shape="row"]:has(.row-alias) { justify-content: space-between; }
-.candy-btn-legacy[data-shape="row"] .row-alias {
-  font-size: 10px;
-  font-family: var(--font-mono);
-  padding: 2px 6px;
-  border-radius: var(--radius-sm);
-  background: color-mix(in oklch, var(--surface), black 14%);
-  color: var(--text-muted);
-}
-.candy-btn-legacy[data-shape="row"]:is(:hover, :active, .is-active, .is-selected) .row-alias {
-  background: rgba(255, 255, 255, 0.18);
-  color: #fff;
-}
-
-/* chip — small mono pill (filter / stat / header chips). */
-.candy-btn-legacy[data-shape="chip"] {
-  --candy-depth: var(--candy-depth-small);
-  padding: 5px 10px;
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: none;
-  border-radius: 999px;
-}
-
-/* icon — rounded-square icon button (dock). circle — round (transport, tool,
-   reset/skip, play). Both small-depth, padding-free, sized via data-size. */
-.candy-btn-legacy[data-shape="icon"],
-.candy-btn-legacy[data-shape="circle"] {
-  --candy-depth: var(--candy-depth-small);
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  font-size: 14px;
-  letter-spacing: 0;
-  text-transform: none;
-}
-.candy-btn-legacy[data-shape="icon"] { border-radius: 10px; }
-.candy-btn-legacy[data-shape="circle"] { border-radius: 999px; }
-.candy-btn-legacy[data-shape="icon"][data-size="lg"],
-.candy-btn-legacy[data-shape="circle"][data-size="lg"] { width: 44px; height: 44px; font-size: 16px; }
-.candy-btn-legacy[data-shape="icon"][data-size="sm"],
-.candy-btn-legacy[data-shape="circle"][data-size="sm"] { width: 28px; height: 28px; font-size: 12px; }
-.candy-btn-legacy[data-shape="icon"][data-size="xs"],
-.candy-btn-legacy[data-shape="circle"][data-size="xs"] { width: 24px; height: 24px; font-size: 11px; }
-
-/* dot — tiny rating circle; semantic (neutral empty / accent filled). No hover
-   flip — turning every dot red on hover would hide which are actually filled. */
-.candy-btn-legacy[data-shape="dot"] {
-  --candy-depth: var(--candy-depth-small);
-  width: 16px;
-  height: 16px;
-  padding: 0;
-  border-radius: 999px;
-}
-.candy-btn-legacy[data-shape="dot"]:hover:not(.is-filled),
-.candy-btn-legacy[data-shape="dot"]:active:not(.is-filled) {
-  --cbtn-band: var(--cbtn-rest);
-  background: var(--cbtn-face);
-}
-.candy-btn-legacy[data-shape="dot"].is-filled {
-  --cbtn-band: var(--accent);
-  background: var(--accent);
-}
-
-/* swatch — colour square; semantic face (keeps its own colour via inline bg;
-   no accent flip). Heavier band; .is-active = surface+accent ring. */
-.candy-btn-legacy[data-shape="swatch"] {
-  --candy-depth: var(--candy-depth-small);
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border-radius: 8px;
-  box-shadow:
-    0 var(--candy-depth) 0 -2px color-mix(in oklch, var(--surface), black 22%),
-    0 var(--candy-depth) 0 0 color-mix(in oklch, var(--surface), black 28%);
-}
-.candy-btn-legacy[data-shape="swatch"]:hover {
-  --cbtn-band: var(--cbtn-rest);
-  box-shadow:
-    0 var(--candy-depth-hover-shadow) 0 -2px color-mix(in oklch, var(--surface), black 22%),
-    0 var(--candy-depth-hover-shadow) 0 0 color-mix(in oklch, var(--surface), black 28%);
-}
-.candy-btn-legacy[data-shape="swatch"]:active {
-  --cbtn-band: var(--cbtn-rest);
-  box-shadow:
-    0 0 0 -2px color-mix(in oklch, var(--surface), black 22%),
-    0 0 0 0 color-mix(in oklch, var(--surface), black 28%);
-}
-.candy-btn-legacy[data-shape="swatch"].is-active {
-  box-shadow:
-    0 0 0 2px var(--surface),
-    0 0 0 4px var(--accent),
-    0 var(--candy-depth) 0 -2px color-mix(in oklch, var(--surface), black 22%),
-    0 var(--candy-depth) 0 0 color-mix(in oklch, var(--surface), black 28%);
-}
-
-/* seg — segmented control. Container is a STATIC candy frame (no flip/press);
-   options are flat, the active one wears the accent face. */
-.candy-btn-legacy[data-shape="seg"] {
-  --candy-depth: var(--candy-depth-small);
-  gap: 0;
-  padding: 3px;
-  border-radius: 999px;
-  cursor: default;
-}
-.candy-btn-legacy[data-shape="seg"]:hover,
-.candy-btn-legacy[data-shape="seg"]:active {
-  --cbtn-band: var(--cbtn-rest);
-  color: var(--text-muted);
-  background: var(--cbtn-face);
-  transform: none !important;
-  box-shadow:
-    0 var(--candy-depth) 0 -2px color-mix(in oklch, var(--surface), black 10%),
-    0 var(--candy-depth) 0 0 color-mix(in oklch, var(--surface), black 22%);
-}
-.candy-btn-legacy[data-shape="seg-option"] {
-  padding: 5px 12px;
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: none;
-  color: var(--text-muted);
-  background: transparent;
-  border: none;
-  border-radius: 999px;
-  box-shadow: none;
-  transition: background 140ms ease, color 140ms ease;
-}
-.candy-btn-legacy[data-shape="seg-option"]:hover {
-  --cbtn-band: var(--cbtn-rest);
-  color: var(--text);
-  background: transparent;
-  transform: none !important;
-  box-shadow: none;
-}
-.candy-btn-legacy[data-shape="seg-option"]:active { transform: none !important; box-shadow: none; }
-.candy-btn-legacy[data-shape="seg-option"].is-active { color: #fff; background: var(--accent); box-shadow: none; }
-
-/* select — dropdown trigger (caret). Overlay menu keeps its own classes. */
-.candy-btn-legacy[data-shape="select"] {
-  --candy-depth: var(--candy-depth-small);
-  height: 28px;
-  padding: 0 12px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0;
-  text-transform: none;
-}
-.candy-btn-legacy[data-shape="select"] .cbtn-caret {
-  margin-left: auto;
-  font-size: 9px;
-  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-.candy-btn-legacy[data-shape="select"][aria-expanded="true"] .cbtn-caret { transform: rotate(180deg); }
-
-/* keycap — mono mechanical chip; .is-listening pulses accent. */
-.candy-btn-legacy[data-shape="keycap"] {
-  --candy-depth: var(--candy-depth-small);
-  min-width: 26px;
-  padding: 4px 8px;
-  font-size: 11px;
-  letter-spacing: 0.02em;
-  text-transform: none;
-  border-radius: 6px;
-  color: var(--text);
-}
-.candy-btn-legacy[data-shape="keycap"].is-listening {
-  --cbtn-band: var(--accent);
-  color: #fff;
-  background: var(--accent);
-  animation: keycap-pulse 1.2s ease-in-out infinite;
-}
-
-/* cta — accent badge card (icon + title/sub). */
-.candy-btn-legacy[data-shape="cta"] {
-  gap: 12px;
-  padding: 11px 14px;
-  font-family: var(--font-body);
-  letter-spacing: 0;
-  text-transform: none;
-  text-align: left;
-  border-radius: 12px;
-  color: var(--text);
-}
-.candy-btn-legacy[data-shape="cta"] .cta-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
-  flex-shrink: 0;
-  font-size: 18px;
-  background: color-mix(in oklch, var(--accent), transparent 75%);
-  color: var(--accent);
-}
-.candy-btn-legacy[data-shape="cta"] .cta-title { font-size: 12.5px; font-weight: 600; }
-.candy-btn-legacy[data-shape="cta"] .cta-sub { font-size: 10.5px; color: var(--text-muted); margin-top: 2px; }
-.candy-btn-legacy[data-shape="cta"]:is(:hover, :active) .cta-icon { background: rgba(255, 255, 255, 0.2); color: #fff; }
-
-/* card — wide expand card (accent left-bar + chevron). */
-.candy-btn-legacy[data-shape="card"] {
-  width: 100%;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 14px 12px 18px;
-  font-family: var(--font-body);
-  letter-spacing: 0;
-  text-transform: none;
-  text-align: left;
-  border-radius: 10px;
-  border-left-width: 4px;
-  border-left-color: var(--accent);
-  color: var(--text);
-}
-.candy-btn-legacy[data-shape="card"] .card-title { font-size: 13px; font-weight: 600; }
-.candy-btn-legacy[data-shape="card"] .card-sub { font-size: 11px; font-family: var(--font-mono); color: var(--text-muted); margin-top: 2px; }
-.candy-btn-legacy[data-shape="card"] .card-chevron { font-size: 14px; color: var(--text-muted); transition: transform 200ms ease; }
-.candy-btn-legacy[data-shape="card"].is-expanded .card-chevron { transform: rotate(180deg); }
-
-/* track — full-width tracklist row (<div>); .is-playing = accent. */
-.candy-btn-legacy[data-shape="track"] {
-  --candy-depth: var(--candy-depth-small);
-  width: 100%;
-  justify-content: flex-start;
-  gap: 12px;
-  min-height: 44px;
-  padding: 6px 12px;
-  font-family: var(--font-body);
-  font-weight: 500;
-  letter-spacing: 0;
-  text-transform: none;
-  text-align: left;
-  color: var(--text);
-}
-.candy-btn-legacy[data-shape="track"].is-playing { --cbtn-band: var(--accent); color: #fff; background: var(--accent); }
-.candy-btn-legacy[data-shape="track"].is-unavailable { opacity: 0.4; cursor: not-allowed; }
-
-/* tile — album/anime cover card (<div role=button>); the original .candy-tile,
-   now a shape: white face, 4px frame, pinned 10.5px depth. */
-.candy-btn-legacy[data-shape="tile"] {
-  --candy-depth: 10.5px;
-  --cbtn-frame: 4px;
-  flex-direction: column;
-  align-items: stretch;
-  justify-content: flex-start;
-  gap: 0;
-  padding: 8px;
-  font-family: var(--font-body);
-  font-weight: 500;
-  letter-spacing: 0;
-  text-transform: none;
-  text-align: left;
-  color: var(--text);
-  background: var(--surface);
-}
-
-/* daycell — calendar month-grid cell; heatmap face via --cal-cell-face;
-   .is-today = accent frame. */
-.candy-btn-legacy[data-shape="daycell"] {
-  --candy-depth: var(--candy-depth-small);
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: space-between;
-  padding: 6px 8px;
-  font-family: var(--font-body);
-  letter-spacing: 0;
-  text-transform: none;
-  text-align: left;
-  background: var(--cal-cell-face, var(--surface));
-  border-radius: var(--radius-md);
-  color: var(--text);
-}
-.candy-btn-legacy[data-shape="daycell"].is-today { border-color: var(--accent); }
+/* .candy-btn-legacy — the single-layer button sheet, DELETED 2026-09-18:
+   zero consumers anywhere in web/src or modules/ (every button had already
+   migrated to the two-layer .candy-btn below). Spec: Buttons.md. */
 
 /* ═══ Two-layer candy button (.candy-btn) — the app's two-layer recipe ══════ *
  * Generalized from the Prototype tab's .proto-tile. TWO real DOM layers:
@@ -1157,8 +767,8 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
  * button. data-shape = geometry only; recipe shared. No pseudo-element — a
  * transforming element traps a z-index:-1 ::after in front (stacking context),
  * which is the bug the two real layers exist to avoid. Built parallel to the
- * single-layer system during migration (now .candy-btn-legacy — frozen Template
- * demos only); reclaimed the .candy-btn name at Finalize 2026-06-04.
+ * single-layer system during migration (that legacy sheet was deleted
+ * 2026-09-18, unused); reclaimed the .candy-btn name at Finalize 2026-06-04.
  * Spec: Mortar & Pestle/Docs/Reference/Buttons.md. */
 
 .candy-btn {
@@ -1347,13 +957,18 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
   transform: translateY(var(--cbtn-depth));
 }
 /* Dragging clone — DraggableSidebarList clones the slot + adds .is-dragging to
-   the outer wrapper; reproduce the pressed-red look (band + face accent, face
-   slid down). */
+   the outer wrapper; reproduce the pressed-red look (band + face accent).
+
+   Colour ONLY, no face slide — the same recipe the chip rule below uses, and for
+   the same reason (2026-09-19). A rail tile's face carries the album art, the
+   title and the meter, so sliding it down for the flight means sliding it back up
+   on the landing, and that release is visible whichever speed it runs at: fast it
+   snaps, slow the tile's whole contents drift upward for a quarter second after
+   the drop. Left flat, there is nothing to release and the landing is still. */
 .is-dragging .candy-btn[data-shape="tile"].rail-tile { --cbtn-band: var(--accent); }
 .is-dragging .candy-btn[data-shape="tile"].rail-tile > .candy-face {
   color: #fff;
   background: var(--accent);
-  transform: translateY(var(--cbtn-depth));
 }
 /* A dragged Cluster item keeps the accent it was hovering. The clone is
    portalled to <body> with pointer-events:none, so :hover can never reach it and
@@ -2148,29 +1763,7 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
 /* Hover/active: the base flips the face accent (white text); invert the icon badge to match. */
 .candy-btn[data-shape="cta"]:is(:hover, :active) .cta-icon { background: rgba(255, 255, 255, 0.2); color: #fff; }
 
-/* card — wide expand/accordion card (persistent accent left-rail + chevron).
-   Neutral hover like the rest of the family — the accent lives in the left rail,
-   not a hover flip (apt for an accordion header; matches the intended
-   button-misc-card, whose hover only lifted). .is-expanded rotates the chevron.
-   Doc-only shape (legacy button-misc-card / "Releases-style" never shipped). (SUPERSEDED 2026-09-18: every candy shape now takes the base accent flood on hover, user-directed; only .rail-tile nested controls stay neutral.) */
-.candy-btn[data-shape="card"] { width: 100%; --corner-max: 20px; }  /* tall surface — capped, not half-height */
-.candy-btn[data-shape="card"] > .candy-face {
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 14px 12px 18px;
-  font-family: var(--font-body);
-  letter-spacing: 0;
-  text-transform: none;
-  text-align: left;
-  color: var(--text);
-  border-left-width: 4px;
-  border-left-color: var(--accent);
-}
-.candy-btn[data-shape="card"] .card-title { font-size: 13px; font-weight: 600; }
-.candy-btn[data-shape="card"] .card-sub { font-size: 11px; font-family: var(--font-mono); color: var(--text-muted); margin-top: 2px; }
-.candy-btn[data-shape="card"] .card-chevron { font-size: 14px; color: var(--text-muted); transition: transform 200ms ease; }
-.candy-btn[data-shape="card"].is-expanded .card-chevron { transform: rotate(180deg); }
-
+/* card — DELETED 2026-09-18: shape had no consumer in the app. */
 /* track — full-width tracklist row (a <div role=button>, so it can hold nested
    action buttons). The two-layer form of .music-track-candy (album tracklists,
    the play queue, episode rows). Small depth, list density; neutral hover (accent
@@ -2229,39 +1822,7 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
 /* Today = accent frame (the band + face colour stay the heatmap). */
 .candy-btn[data-shape="daycell"].is-today > .candy-face { border-color: var(--accent); }
 
-/* sidebar-pill — primary left-sidebar nav (host Sidebar + every module slot).
-   Two-layer candy press, but its ACTIVE state is a SUBTLE accent tint (soft face
-   + accent label), NOT the family's full accent fill: it's persistent always-on
-   nav, so a full flip on the current section would read too heavy. Geometry
-   (collapsed 32px icon ↔ expanded rounded pill) stays inline per `expanded`;
-   this block owns the face colours + the no-full-flip state overrides (the extra
-   .sidebar-pill class outranks the generic States rules below). Migrated off
-   legacy .btn3d[data-3d-variant="sidebar"]; the press ripple was dropped to
-   unify on the candy press. */
-.candy-btn.sidebar-pill { --cbtn-depth: var(--candy-depth-small); }
-.candy-btn.sidebar-pill > .candy-face {
-  background: var(--surface);
-  color: var(--text-muted);
-  font-family: var(--font-body);
-  letter-spacing: -0.005em;
-  text-transform: none;
-}
-/* Active — SUBTLE accent tint (soft face + accent label), held through hover;
-   only a real press slides the face. */
-.candy-btn.sidebar-pill.is-active { --cbtn-band: color-mix(in oklch, var(--accent) 32%, var(--border)); }
-.candy-btn.sidebar-pill.is-active > .candy-face {
-  background: color-mix(in oklch, var(--accent) 14%, var(--surface));
-  color: var(--accent);
-}
-.candy-btn.sidebar-pill.is-active .candy-face :where(span) { color: var(--accent); }
-/* Muted-accent active (mutedAccent prop) — neutral surface-2 face, plain text. */
-.candy-btn.sidebar-pill.is-active.is-muted { --cbtn-band: var(--cbtn-rest); }
-.candy-btn.sidebar-pill.is-active.is-muted > .candy-face {
-  background: var(--surface-2);
-  color: var(--text);
-}
-.candy-btn.sidebar-pill.is-active.is-muted .candy-face :where(span) { color: var(--text); }
-
+/* sidebar-pill — DELETED 2026-09-18: shape had no consumer in the app. */
 /* ── States — last, so they override per-shape face colours ─────────────── */
 
 /* Lit + RAISED — selected/active hold accent at full rest depth (face doesn't
@@ -2397,7 +1958,7 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
   transition: transform var(--cbtn-press-dur, 150ms) cubic-bezier(0, 0, 0.58, 1);
 }
 
-/* Animation gating — mirror the .candy-btn-legacy gates for the two-layer system.
+/* Animation gating for the two-layer system.
    Spring press off → face doesn't slide; Button depth off → frame-only (no band /
    no slide); colour states still apply in both. */
 body[data-anim-spring-press="off"] .candy-btn:is(:active, .is-pressed, [data-candy-pressed]) > .candy-face {
@@ -3746,7 +3307,6 @@ body[data-anim-clock-ambient="off"] [style*="breath"] {
 }
 
 body[data-anim-spring-press="off"] button:active:not(:disabled):not([data-no-tactile]),
-body[data-anim-spring-press="off"] .candy-btn-legacy:active,
 body[data-anim-spring-press="off"] .candy-tile:active,
 body[data-anim-spring-press="off"] .music-track-candy:active {
   transform: none !important;
@@ -3761,16 +3321,6 @@ body[data-anim-button-depth="off"] .btn3d:active:not(:disabled) {
   transform: none !important;
   box-shadow: 0 0 0 1px var(--btn3d-edge) !important;
 }
-/* Candy button flattens to a frame-only look (colour states stay; depth band +
-   translate go) when Button depth is off. Closes the doc/CSS gap where only
-   .btn3d flattened. */
-body[data-anim-button-depth="off"] .candy-btn-legacy,
-body[data-anim-button-depth="off"] .candy-btn-legacy:hover,
-body[data-anim-button-depth="off"] .candy-btn-legacy:active {
-  transform: none !important;
-  box-shadow: none !important;
-}
-
 body[data-anim-page-transitions="off"] .page-tx,
 body[data-anim-page-transitions="off"] .page-tx::before,
 body[data-anim-page-transitions="off"] .page-tx::after {

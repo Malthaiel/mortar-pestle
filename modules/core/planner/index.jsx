@@ -9,7 +9,6 @@ import { CalendarPage, NutritionPage, FitnessPage } from './leafPages.jsx';
 import { bindPlannerApi } from './api.js';
 import { PLANNER_RAIL_VARIANTS, PlannerMiniRail } from './rails/index.jsx';
 import { registerModuleKeybinds } from '@host/keybinds/registry.js';
-import SidebarPill from '@host/components/SidebarPill.jsx';
 
 // Candy-tile shell around the dock. The shell always fills the sidebar slot
 // (flex-grow:1); the wrapper's align-items:flex-start lets the candy TILE hug
@@ -93,19 +92,8 @@ export default {
     // the order:20 position the retired Pulse module held. The tree is the
     // secondary nav; PlannerRail is the collapsed rail. Note the WIDGET slot
     // above has its own renderRail (the right sidebar) — separate registration.
-    const { IconLayoutGrid } = api.ui.icons;
     api.slots.registerLeftSidebar({
       id: 'planner',
-      render: ({ collapsed, accent, active }) => (
-        <SidebarPill
-          Icon={IconLayoutGrid}
-          label="Planner"
-          expanded={!collapsed}
-          accent={accent}
-          active={active}
-          onClick={() => api.router.navigate('/planner')}
-        />
-      ),
       isActive: (route) => route.page === 'planner'
         || (route.page === 'page' && typeof route.sub === 'string' && route.sub.startsWith('Pulse/')),
       renderSecondary: ({ route, accent }) => <PlannerNav route={route} accent={accent}/>,

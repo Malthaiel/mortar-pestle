@@ -53,10 +53,10 @@ function rejectDuplicate(moduleId, slot, map, id) {
   }
 }
 
-export function registerLeftSidebar(moduleId, { id, render, isActive, renderSecondary, renderRail, order } = {}) {
+export function registerLeftSidebar(moduleId, { id, isActive, renderSecondary, renderRail, order } = {}) {
   requireId(moduleId, 'left-sidebar', id);
   rejectDuplicate(moduleId, 'left-sidebar', _leftSidebar, id);
-  _leftSidebar.set(id, { moduleId, id, render, isActive, renderSecondary, renderRail, order });
+  _leftSidebar.set(id, { moduleId, id, isActive, renderSecondary, renderRail, order });
   notify();
 }
 

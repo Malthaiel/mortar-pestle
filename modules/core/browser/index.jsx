@@ -1,5 +1,4 @@
 import BrowserPage from './BrowserPage.jsx';
-import SidebarPill from '@host/components/SidebarPill.jsx';
 import TabSidebar from './TabSidebar.jsx';
 import TabRail from './TabRail.jsx';
 import BrowserSettingsTab from './BrowserSettingsTab.jsx';
@@ -12,19 +11,8 @@ import { safeDecode } from '@host/router.js';
 // See Mortar & Pestle/Plans/Browser Multi-Tab.md.
 export default {
   register(api) {
-    const { IconGlobe } = api.ui.icons;
     api.slots.registerLeftSidebar({
       id: 'browser',
-      render: ({ collapsed, accent, active }) => (
-        <SidebarPill
-          Icon={IconGlobe}
-          label="Browser"
-          expanded={!collapsed}
-          accent={accent}
-          active={active}
-          onClick={() => api.router.navigate('/tools/browser')}
-        />
-      ),
       isActive: (route) => route.page === 'tools' && route.sub === 'browser',
       renderSecondary: ({ accent }) => <TabSidebar api={api} accent={accent} />,
       renderRail: ({ accent }) => <TabRail api={api} accent={accent} />,
@@ -33,7 +21,7 @@ export default {
     api.slots.registerRoute({
       // App.jsx matches route slots against route.path — the RAW hash. matchRoute
       // safeDecodes its named captures, but never `path`, so every module matcher
-      // decodes its own capture (game-wiki, vault, library/player all do). This one
+      // decodes its own capture (deadlock, vault, library/player all do). This one
       // did not, and a deep-linked URL reached browser_navigate still percent-encoded
       // ("https%3A%2F%2F…"), failing the Rust https:// guard with
       // "blocked: only https:// public URLs are allowed" — surfaced to the user as the

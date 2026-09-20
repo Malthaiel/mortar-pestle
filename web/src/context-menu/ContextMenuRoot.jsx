@@ -13,10 +13,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { candyGap } from '../util/candy.js';
-import { IconCheck, IconChevronRight, IconDot } from '../components/icons.jsx';
+import { IconChevronRight } from '../components/icons.jsx';
+import { TREE_TEXT } from '../components/vault-tree/treeKit.jsx';
 import { iconFor } from './menuIcons.js';
 
-const MIN_WIDTH = 200;
 const MAX_WIDTH = 320;
 const PAD = 8;
 const HOVER_INTENT = 120; // ms before a hover opens/closes a submenu
@@ -113,8 +113,15 @@ export default function ContextMenuRoot({ point, items = [], opts = {}, onClose 
     }
     function onDown(e) {
       for (const el of panelEls.current.values()) {
-        if (el && el.contains(e.target)) return; // click landed inside some panel
+        if (el && el.contains(e.target)) return; // press landed inside some panel
       }
+      // A dropdown trigger closes its own menu on the CLICK (useMenuTrigger), so
+      // leave this press alone. Closing here instead raced: the microtask
+      // checkpoint the browser runs between listeners on a real press flushed
+      // menuOpen=false before the trigger's own handler read it, and the click
+      // re-opened the menu it had just shut.
+      const trigger = e.target.closest && e.target.closest('[aria-haspopup="menu"]');
+      if (trigger && !trigger.disabled) return;
       onClose && onClose();
     }
     window.addEventListener('keydown', onKey, true);
@@ -239,6 +246,8 @@ export default function ContextMenuRoot({ point, items = [], opts = {}, onClose 
         depth={depth}
         items={level.items}
         point={depth === 0 ? point : undefined}
+        aboveY={depth === 0 ? opts.aboveY : undefined}
+        align={depth === 0 ? opts.align : undefined}
         anchorEl={anchorEl}
         header={depth === 0 ? opts.header : undefined}
         accent={accent}
@@ -257,7 +266,7 @@ export default function ContextMenuRoot({ point, items = [], opts = {}, onClose 
 }
 
 function MenuPanel({
-  depth, items, point, anchorEl, header, accent, menuId,
+  depth, items, point, aboveY, align, anchorEl, header, accent, menuId,
   activeIndex, openIndex, interactive,
   onKeyDown, onRowHover, onRowClick, registerRowEl, reportPanelEl,
 }) {
@@ -278,9 +287,15 @@ function MenuPanel({
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     if (point) {
-      let left = point.x;
+      // align: which part of the menu sits on point.x — its left edge (default),
+      // its centre (dropdowns, under the trigger) or its right edge (opens leftward).
+      let left = point.x - (align === 'end' ? my.width : align === 'center' ? my.width / 2 : 0);
       let top = point.y;
+      if (left < PAD) left = PAD;
       if (left + my.width + PAD > vw) left = Math.max(PAD, vw - my.width - PAD);
+      // A dropdown (opened from a trigger, see useMenuTrigger) passes aboveY =
+      // the trigger's top: flip above it rather than clamp up over the trigger.
+      if (top + my.height + PAD > vh && aboveY != null && aboveY - my.height >= PAD) top = aboveY - my.height;
       if (top + my.height + PAD > vh) top = Math.max(PAD, vh - my.height - PAD);
       setPos({ left, top, ready: true });
     } else if (anchorEl) {
@@ -294,7 +309,7 @@ function MenuPanel({
       if (top + my.height + PAD > vh) top = Math.max(PAD, vh - my.height - PAD);
       setPos({ left, top, ready: true });
     }
-  }, [point && point.x, point && point.y, anchorEl, items]);
+  }, [point && point.x, point && point.y, aboveY, align, anchorEl, items]);
 
   return createPortal(
     <div
@@ -312,7 +327,9 @@ function MenuPanel({
       style={{
         position: 'fixed',
         left: pos.left, top: pos.top,
-        minWidth: MIN_WIDTH, maxWidth: MAX_WIDTH,
+        // No min width: the menu is as wide as its longest row (user-directed
+        // 2026-09-18, dropdowns had too much empty space).
+        maxWidth: MAX_WIDTH,
         // Backdrop pinned to the dock's slate bg (#151411) per user request — not
         // var(--bg) — so the popup reads as part of the dock chrome.
         background: '#151411',
@@ -342,7 +359,6 @@ function MenuPanel({
               key={i}
               it={it}
               id={`${menuId}-${depth}-${i}`}
-              accent={accent}
               active={i === activeIndex || i === openIndex}
               hasChildren={kids}
               onHover={() => onRowHover(depth, i, kids)}
@@ -353,7 +369,9 @@ function MenuPanel({
         })}
       </div>
     </div>,
-    document.body
+    // Into the fullscreen element when there is one (the video player goes
+    // fullscreen on its own subtree) -- a body portal would render outside it.
+    document.fullscreenElement || document.body
   );
 }
 
@@ -385,25 +403,25 @@ function MenuSep() {
   );
 }
 
-function MenuRow({ it, id, accent, active, hasChildren, onHover, onClick, registerEl }) {
+function MenuRow({ it, id, active, hasChildren, onHover, onClick, registerEl }) {
   const disabled = !!it.disabled;
-  const glyph = it.kind === 'radio'
-    ? (it.checked ? <IconDot size={8} /> : null)
-    : (it.checked ? <IconCheck size={12} /> : null);
-  // icon may be a component (e.g. IconTrash) or a ready node; render either.
-  // A row carrying STATE keeps the check/radio slot — iconFor falls back to a
-  // plain dot for unmatched labels, which would paint checked and unchecked alike.
+  // Every row leads with its icon; a picked row (checked) is lit with the full
+  // accent fill (.is-selected, the hover look), not a tick or dot. Lettering is
+  // the sidebar tree's (TREE_TEXT), 1-1. User-directed 2026-09-18.
+  // icon may be a component or a ready node.
   const stateful = it.kind === 'radio' || 'checked' in it;
-  const Icon = stateful ? null : iconFor(it);
-  const lead = Icon ? (typeof Icon === 'function' ? <Icon size={14} /> : Icon) : glyph;
+  const Icon = iconFor(it);
+  const lead = typeof Icon === 'function' ? <Icon size={14} /> : Icon;
   const cls = 'candy-btn'
     + (it.danger ? ' is-danger' : '')
+    + (it.checked ? ' is-selected' : '')
     + (active && !disabled ? ' is-active' : '');
   return (
     <button
       ref={registerEl}
       type="button"
-      role="menuitem"
+      role={stateful ? 'menuitemradio' : 'menuitem'}
+      aria-checked={stateful ? !!it.checked : undefined}
       id={id}
       disabled={disabled}
       aria-disabled={disabled}
@@ -420,12 +438,11 @@ function MenuRow({ it, id, accent, active, hasChildren, onHover, onClick, regist
       }}
       style={{ opacity: disabled ? 0.4 : 1 }}
     >
-      <span className="candy-face">
+      <span className="candy-face" style={TREE_TEXT}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, width: '100%' }}>
           <span style={{
             width: 14, flexShrink: 0, display: 'inline-flex',
-            alignItems: 'center', justifyContent: 'center',
-            color: Icon ? undefined : accent, fontSize: 12,
+            alignItems: 'center', justifyContent: 'center', fontSize: 12,
           }}>{lead}</span>
           <span style={{ flex: 1, minWidth: 0 }}>{it.label}</span>
           {hasChildren ? (

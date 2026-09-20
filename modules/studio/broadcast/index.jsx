@@ -1,5 +1,4 @@
 import React, { Suspense } from 'react';
-import SidebarPill from '@host/components/SidebarPill.jsx';
 import { LazyErrorBoundary, lazyChunkError } from '@host/components/LazyErrorBoundary.jsx';
 import { registerModuleKeybinds } from '@host/keybinds/registry.js';
 import BroadcastSettingsTab from './BroadcastSettingsTab.jsx';
@@ -28,7 +27,6 @@ export const KEYBIND_ENTRIES = [
 
 export default {
   register(api) {
-    const { IconBroadcast } = api.ui.icons;
     registerModuleKeybinds(KEYBIND_ENTRIES);
     // One-shot stale-region heal: an F5 reload kills JS without running any
     // unmount cleanup, stranding a live native preview region over the page.
@@ -37,16 +35,6 @@ export default {
     api.invoke('broadcast_display_destroy', { id: 'preview' }).catch(() => {});
     api.slots.registerLeftSidebar({
       id: 'broadcast',
-      render: ({ collapsed, accent, active }) => (
-        <SidebarPill
-          Icon={IconBroadcast}
-          label="Broadcast"
-          expanded={!collapsed}
-          accent={accent}
-          active={active}
-          onClick={() => api.router.navigate('/tools/broadcast')}
-        />
-      ),
       isActive: (route) => route.page === 'tools' && route.sub === 'broadcast',
       // SP3: the combined scene/source tree (scenes = folders, sources =
       // children, groups = sub-folders) — the module's secondary sidebar.

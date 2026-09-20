@@ -12,7 +12,6 @@ import { TerminalProvider } from './TerminalProvider.jsx';
 import { SkillsProvider } from './SkillsProvider.jsx';
 import { bindSkillsApi } from './api.js';
 import TerminalSidebar from './TerminalSidebar.jsx';
-import SidebarPill from '@host/components/SidebarPill.jsx';
 import './terminal.css';
 
 // TerminalRouter pulls @xterm/xterm (+addon, ~200KB) via TerminalPage /
@@ -23,7 +22,6 @@ const TerminalRouter = lazy(() => import('./TerminalRouter.jsx'));
 
 export default {
   register(api) {
-    const { IconConsole } = api.ui.icons;
     bindSkillsApi(api);
 
     // Two app-wide providers: PTY tabs (TerminalProvider) and skill jobs
@@ -33,16 +31,6 @@ export default {
 
     api.slots.registerLeftSidebar({
       id: 'terminal',
-      render: ({ collapsed, accent, active }) => (
-        <SidebarPill
-          Icon={IconConsole}
-          label="Terminal"
-          expanded={!collapsed}
-          accent={accent}
-          active={active}
-          onClick={() => api.router.navigate('/tools/terminal')}
-        />
-      ),
       isActive: (route) => route.page === 'tools' && route.sub === 'terminal',
       renderSecondary: ({ route, accent }) => <TerminalSidebar route={route} accent={accent} />,
       order: 60,

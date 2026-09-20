@@ -23,7 +23,6 @@ import { MUSIC_RAIL_VARIANTS, MusicMiniRail } from './music/rails/index.jsx';
 
 import LibraryPage from './LibraryPage.jsx';
 import LibraryNav from './LibraryNav.jsx';
-import SidebarPill from '@host/components/SidebarPill.jsx';
 import RailStat from '@host/components/sidebar/RailStat.jsx';
 import { useManifestData } from '@host/lib/manifestReader.js';
 import { useHashRoute } from '@host/router.js';
@@ -141,20 +140,9 @@ export default {
       { id: 'music.next',       group: 'Music', label: 'Next track',     default: { kind: 'chord', key: ']', modifiers: ['meta', 'shift'] } },
       { id: 'music.prev',       group: 'Music', label: 'Previous track', default: { kind: 'chord', key: '[', modifiers: ['meta', 'shift'] } },
     ]);
-    const { IconLibrary } = api.ui.icons;
     api.slots.registerProvider(LibraryRoot);
     api.slots.registerLeftSidebar({
       id: 'library',
-      render: ({ collapsed, accent, active }) => (
-        <SidebarPill
-          Icon={IconLibrary}
-          label="Library"
-          expanded={!collapsed}
-          accent={accent}
-          active={active}
-          onClick={() => api.router.navigate('/tools/library')}
-        />
-      ),
       isActive: (route) => route.page === 'tools' && route.sub === 'library',
       renderSecondary: ({ route, accent }) => <LibraryNav route={route} accent={accent}/>,
       renderRail: ({ accent }) => <LibraryRail accent={accent}/>,

@@ -6,7 +6,6 @@
 
 import { lazy, Suspense } from 'react';
 import DeadlockRail from './DeadlockRail.jsx';
-import SidebarPill from '@host/components/SidebarPill.jsx';
 import { safeDecode } from '@host/router.js';
 import './deadlock.css';
 
@@ -25,20 +24,9 @@ function matchDeadlock(path) {
 
 export default {
   register(api) {
-    const { IconGamepad } = api.ui.icons;
 
     api.slots.registerLeftSidebar({
       id: 'deadlock',
-      render: ({ collapsed, accent, active }) => (
-        <SidebarPill
-          Icon={IconGamepad}
-          label="Deadlock"
-          expanded={!collapsed}
-          accent={accent}
-          active={active}
-          onClick={() => api.router.navigate('/deadlock')}
-        />
-      ),
       isActive: (route) => route.page === 'deadlock',
       renderSecondary: ({ route, accent }) => <DeadlockRail route={route} accent={accent}/>,
       order: 10,

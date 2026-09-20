@@ -1,198 +1,85 @@
-// Generic candy <select> replacement — a custom dropdown styled to match the
-// app's candy controls. Mirrors StatusDropdown's structure (trigger button +
-// absolute height-clip overlay menu, click-outside + Esc) but is module-agnostic:
-// no status dot, no clear-on-reselect. The trigger shows the current option's
-// label; pass a `placeholder` for command-style menus where no option stays
-// selected (e.g. the video chapters jump menu).
-//
-// Keyboard: focus stays on the trigger while open, so all navigation lives on
-// the trigger's onKeyDown — ↑/↓ move the highlight (wrapping), Home/End jump to
-// the ends, Enter/Space pick the highlighted option, type-ahead jumps to the
-// first label matching recent keystrokes, Esc closes. When closed, ↑/↓/Enter/
-// Space open the menu. (StatusDropdown shares the same keyboard model.)
-//
-// IMPORTANT: the menu is an absolute sibling INSIDE the trigger's relative
-// wrapper — never portal it to document.body. The video player requests
-// fullscreen on its own subtree (.video-cinema), so a body-portaled menu would
-// render outside the fullscreen element and disappear in fullscreen.
+// THE app dropdown (Unified Dropdown, 2026-09-17). The trigger is a candy
+// button; the menu it opens IS the app-wide right-click menu (useMenuTrigger ->
+// openContextMenu -> ContextMenuRoot), 1-1: same rows, same keyboard (arrows,
+// Home/End, type-ahead, Enter, Esc), same close rules. Every row leads with an
+// icon; the selected option shows in the accent colour. Fullscreen-safe: ContextMenuRoot portals into
+// document.fullscreenElement when there is one. Near the screen bottom the menu
+// flips above the trigger on its own, measured -- there is no direction prop.
 //
 // Props:
 //   value        current value (matched against options for the trigger label)
-//   options      [{ value, label }]
-//   onChange     (value) => void   — receives the raw option value
+//   options      [{ value, label, icon?, dot? }] -- `icon` is the row's icon, and
+//                the trigger wears the CURRENT option's one before its label, so
+//                button and menu row read as the same thing (user-directed
+//                2026-09-18). `dot` is a colour painted there instead, for an
+//                option that carries no icon at all
+//   icon         menu icon for every option without its own (a list of one kind:
+//                speeds, folders, languages); the trigger falls back to it too
+//   onChange     (value) => void   -- receives the raw option value
+//   clearable    re-picking the current option calls onChange('') (status pickers)
 //   title        tooltip / aria-label on the trigger
 //   placeholder  shown when no option matches value (default '')
-//   direction    'up' | 'down' (default 'down') — 'up' for the bottom control bar
-//   compact      smaller trigger + menu, fills its row — for the subtitle panel
+//   accent       --accent for the trigger and the menu (default: inherited / app)
+//   compact      smaller trigger, fills its row -- for the subtitle panel
 //   disabled     disables the trigger
-//   chevron      show the ▾ indicator (default true) — false for triggers that
-//                read as a plain title (the overlay scrim picker)
-//   shape        data-shape for the trigger (default 'select') — pass 'chip' to
-//                make the trigger the same control as the chips it sits beside,
-//                so its font, padding and height come from theirs
-//   className    extra classes on the trigger (e.g. 'is-hover-accent')
-// Styling: trigger = two-layer .candy-btn[data-shape="select"]; the overlay menu
-// keeps its own .candy-select-menu / .candy-select-option classes (no portal).
+//   shape        data-shape for the trigger (default 'select') -- 'chip' makes it
+//                the same control as the chips it sits beside
+//   fuse         render the bare button (no wrapper) so it welds into a .candy-split
+//   className    extra classes on the trigger
 
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { useMenuTrigger } from '../../context-menu/useContextMenu.js';
+import { TREE_TEXT } from '../vault-tree/treeKit.jsx';
 
 export default function CandySelect({
-  value, options, onChange, title, placeholder = '',
-  direction = 'down', compact = false, disabled = false, chevron = true, fuse = false,
+  value, options, onChange, title, placeholder = '', clearable = false, accent, icon,
+  compact = false, disabled = false, fuse = false,
   shape = 'select', className = '',
 }) {
-  const [open, setOpen] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(-1);
-  const ref = useRef(null);
-  const btnRef = useRef(null);
-  const listRef = useRef(null);
-  // `fuse` mode only — the menu's left edge. Ported from StatusDropdown's chip
-  // variant: with no wrapper the menu anchors to the nearest positioned ancestor
-  // (the .candy-split at the call site), whose left edge is the FIRST control in
-  // the run, not this one. Read the real offset rather than assume they line up.
-  const [menuLeft, setMenuLeft] = useState(0);
-  const typeahead = useRef({ str: '', t: 0 });
   const current = options.find(o => o.value === value);
+  // The trigger wears the row's own icon, else the list's shared one — the button
+  // and the menu row it mirrors always show the same mark (user-directed 2026-09-18).
+  const CurIcon = current?.icon || icon;
+  const menu = useMenuTrigger(() => options.map(o => ({
+    label: o.label,
+    icon: o.icon || icon,
+    checked: o.value === value,
+    onClick: () => onChange(clearable && o.value === value ? '' : o.value),
+  })), accent ? { accent } : undefined);
 
-  // On open, highlight the selected option (or the first); clear on close.
-  useEffect(() => {
-    if (!open) { setActiveIndex(-1); return; }
-    if (fuse && btnRef.current) setMenuLeft(btnRef.current.offsetLeft);
-    const sel = options.findIndex(o => o.value === value);
-    setActiveIndex(sel >= 0 ? sel : 0);
-  }, [open]);
-
-  // Keep the highlighted option scrolled into view.
-  useEffect(() => {
-    if (!open || activeIndex < 0 || !listRef.current) return;
-    listRef.current
-      .querySelector(`[data-idx="${activeIndex}"]`)
-      ?.scrollIntoView({ block: 'nearest' });
-  }, [open, activeIndex]);
-
-  // Click-outside + Escape close. The mousedown listener is CAPTURE phase (like
-  // StatusDropdown) so a parent's bubble-phase stopPropagation — e.g. the
-  // subtitle panel's — can't swallow it and leave the menu stuck open.
-  useEffect(() => {
-    if (!open) return;
-    // `fuse` renders WITHOUT a wrapper (so the trigger can be a direct child of a
-    // .candy-split), so "inside" is the trigger or the menu, not one box.
-    const inside = (t) => [ref.current, btnRef.current, listRef.current].some(el => el && el.contains(t));
-    const onDown = (e) => { if (!inside(e.target)) setOpen(false); };
-    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
-    window.addEventListener('mousedown', onDown, true);
-    window.addEventListener('keydown', onKey);
-    return () => {
-      window.removeEventListener('mousedown', onDown, true);
-      window.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
-
-  const pick = (v) => { onChange(v); setOpen(false); };
-
-  // All keyboard navigation — focus stays on the trigger while the menu is open.
-  const onKeyDown = (e) => {
-    if (disabled) return;
-    if (!open) {
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault(); setOpen(true);
-      }
-      return;
-    }
-    const n = options.length;
-    if (e.key === 'Escape') { e.preventDefault(); setOpen(false); return; }
-    if (!n) return;
-    if (e.key === 'ArrowDown')      { e.preventDefault(); setActiveIndex(i => (i + 1) % n); }
-    else if (e.key === 'ArrowUp')   { e.preventDefault(); setActiveIndex(i => (i - 1 + n) % n); }
-    else if (e.key === 'Home')      { e.preventDefault(); setActiveIndex(0); }
-    else if (e.key === 'End')       { e.preventDefault(); setActiveIndex(n - 1); }
-    else if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      if (activeIndex >= 0 && options[activeIndex]) pick(options[activeIndex].value);
-    } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
-      // Type-ahead: accumulate typed chars within 600ms, then jump to the first
-      // option whose label starts with the buffer.
-      const ta = typeahead.current;
-      const now = Date.now();
-      ta.str = now - ta.t > 600 ? e.key : ta.str + e.key;
-      ta.t = now;
-      const q = ta.str.toLowerCase();
-      // A JSX label (glyph + text row face) is an object — skip it, don't throw.
-      const hit = options.findIndex(o => typeof o.label === 'string' && o.label.toLowerCase().startsWith(q));
-      if (hit >= 0) setActiveIndex(hit);
-    }
-  };
-
-  const sfx = compact ? ' is-compact' : '';
-  // is-fused: honour the run's --cbtn-size for height and size the menu to its own
-  // content instead of the run's width (see styles.css § select). Scoped to this
-  // variant so no existing caller's geometry moves.
-  const fsx = fuse ? ' is-fused' : '';
-
-  // A fused trigger returns a FRAGMENT: .candy-split fuses only its DIRECT
-  // .candy-btn children, so a wrapper would leave this select unfused beside the
-  // buttons it is meant to read as one unit with. The call site's run must be
-  // position:relative for the absolute menu to anchor to it.
-  const Shell = fuse ? Fragment : 'div';
-  const shellProps = fuse ? {} : { ref, style: { position: 'relative' } };
-  return (
-    <Shell {...shellProps}>
-      <button
-        ref={btnRef}
-        type="button"
-        className={'candy-btn' + sfx + fsx + (className ? ' ' + className : '')}
-        data-shape={shape}
-        data-own-press
-        title={title}
-        aria-label={title}
-        disabled={disabled}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-activedescendant={open && activeIndex >= 0 ? `csopt-${activeIndex}` : undefined}
-        onKeyDown={onKeyDown}
-        onClick={() => !disabled && setOpen(o => !o)}
-      >
-        <span className="candy-face">
-          {/* inline-flex so a JSX label (leading icon + text) sits on the row's
-              centre line instead of the text baseline. No-op for plain strings. */}
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>{current ? current.label : placeholder}</span>
-          {chevron && <span aria-hidden style={{
-            transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
-          }}>▾</span>}
+  // is-fused: honour the run's --cbtn-size for height (see styles.css § select).
+  const cls = 'candy-btn' + (compact ? ' is-compact' : '') + (fuse ? ' is-fused' : '') + (className ? ' ' + className : '');
+  const button = (
+    <button
+      type="button"
+      className={cls}
+      data-shape={shape}
+      data-own-press
+      title={title}
+      aria-label={title}
+      disabled={disabled}
+      style={accent ? { '--accent': accent } : undefined}
+      {...menu}
+    >
+      {/* Same lettering as the menu rows this button opens (TREE_TEXT, the
+          sidebar tree's) so the trigger and its options read as one thing —
+          user-directed 2026-09-19. */}
+      <span className="candy-face" style={TREE_TEXT}>
+        {/* inline-flex so a JSX label (leading icon + text) sits on the row's
+            centre line instead of the text baseline. No-op for plain strings. */}
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          {CurIcon ? <CurIcon size={14} /> : current?.dot !== undefined && (
+            <span style={{
+              width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+              background: current.dot || 'transparent',
+              border: current.dot ? 'none' : '1px solid var(--border-2)',
+            }}/>
+          )}
+          {current ? current.label : placeholder}
         </span>
-      </button>
-
-      {/* Overlay menu — absolute sibling, NO portal (see file header). */}
-      <div
-        ref={listRef}
-        role="listbox"
-        className={'candy-select-menu is-' + direction + sfx + fsx}
-        data-open={open ? 'true' : 'false'}
-        style={{ maxHeight: open ? 320 : 0, opacity: open ? 1 : 0, left: fuse ? menuLeft : undefined }}
-      >
-        <div style={{ padding: 4 }}>
-          {options.map((o, i) => {
-            const isSel = o.value === value;
-            const isActive = i === activeIndex;
-            return (
-              <button
-                key={o.value}
-                id={`csopt-${i}`}
-                data-idx={i}
-                type="button"
-                role="option"
-                aria-selected={isSel}
-                className={'candy-select-option' + (isSel ? ' is-selected' : '') + (isActive ? ' is-active' : '')}
-                onMouseEnter={() => setActiveIndex(i)}
-                onClick={() => pick(o.value)}
-              >
-                <span style={{ flex: 1, textAlign: 'left', display: 'inline-flex', alignItems: 'center', gap: 6 }}>{o.label}</span>
-                {isSel && <span aria-hidden style={{ fontSize: 11 }}>✓</span>}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    </Shell>
+      </span>
+    </button>
   );
+  // A fused trigger is the bare button: .candy-split fuses only its DIRECT
+  // .candy-btn children, so a wrapper would leave it unfused beside its run.
+  return fuse ? button : <div style={{ position: 'relative' }}>{button}</div>;
 }

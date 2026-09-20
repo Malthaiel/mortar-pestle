@@ -12,7 +12,6 @@
 
 import VaultViewPage from '@host/pages/VaultViewPage.jsx';
 import VaultSidebar from '@host/components/VaultSidebar.jsx';
-import SidebarPill from '@host/components/SidebarPill.jsx';
 import RailStat from '@host/components/sidebar/RailStat.jsx';
 import { useManifestData } from '@host/lib/manifestReader.js';
 import { safeDecode } from '@host/router.js';
@@ -61,20 +60,9 @@ function VaultRail({ accent }) {
 
 export default {
   register(api) {
-    const { IconLibrary } = api.ui.icons;
 
     api.slots.registerLeftSidebar({
       id: 'vault',
-      render: ({ collapsed, accent, active }) => (
-        <SidebarPill
-          Icon={IconLibrary}
-          label="Vault View"
-          expanded={!collapsed}
-          accent={accent}
-          active={active}
-          onClick={() => api.router.navigate('/vault')}
-        />
-      ),
       isActive: (route) => route.page === 'vault'
         || (route.page === 'page' && typeof route.sub === 'string'
             && (route.sub.startsWith('Knowledge/') || route.sub.startsWith('Infrastructure/'))),

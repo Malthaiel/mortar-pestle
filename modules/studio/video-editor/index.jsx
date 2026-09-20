@@ -1,5 +1,4 @@
 import React, { Suspense } from 'react';
-import SidebarPill from '@host/components/SidebarPill.jsx';
 import RailStat from '@host/components/sidebar/RailStat.jsx';
 import { useHashRoute } from '@host/router.js';
 import { registerModuleKeybinds } from '@host/keybinds/registry.js';
@@ -42,19 +41,8 @@ export default {
     // every entry before first render, ahead of the settings seed/merge).
     registerModuleKeybinds(VEDIT_KEYBIND_ENTRIES);
 
-    const { IconClapperboard } = api.ui.icons;
     api.slots.registerLeftSidebar({
       id: 'video-editor',
-      render: ({ collapsed, accent, active }) => (
-        <SidebarPill
-          Icon={IconClapperboard}
-          label="Video Editor"
-          expanded={!collapsed}
-          accent={accent}
-          active={active}
-          onClick={() => api.router.navigate('/tools/video-editor')}
-        />
-      ),
       isActive: (route) => route.page === 'tools' && route.sub === 'video-editor',
       renderSecondary: ({ route, accent }) => <VeditNav route={route} accent={accent} />,
       renderRail: ({ accent }) => <VeditRail accent={accent} />,
