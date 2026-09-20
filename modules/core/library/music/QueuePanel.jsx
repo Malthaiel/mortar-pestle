@@ -120,7 +120,7 @@ export default function QueuePanel({ open, onClose, accent }) {
                 onPointerDown={(e) => startReorder(e, i)}
                 onClick={(e) => e.stopPropagation()}
                 title="Drag to reorder"
-                style={{ flexShrink: 0, width: 12, textAlign: 'center', cursor: 'grab', touchAction: 'none', color: active ? 'rgba(255,255,255,0.7)' : 'var(--text-faint)', fontSize: 12, lineHeight: 1, opacity: hovering ? 0.7 : 0, transition: 'opacity 120ms ease' }}
+                style={{ flexShrink: 0, width: 12, textAlign: 'center', cursor: 'grab', touchAction: 'none', color: 'rgba(255,255,255,0.7)', fontSize: 12, lineHeight: 1, opacity: hovering ? 0.7 : 0, transition: 'opacity 120ms ease' }}
               >⠿</span>
               <span style={{
                 fontSize: 10, fontFamily: 'var(--font-mono)',

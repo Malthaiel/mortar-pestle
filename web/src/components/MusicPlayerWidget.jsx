@@ -12,7 +12,7 @@ import { useMusicPlayer } from '@modules/core/library/music/MusicPlayerProvider.
 import LyricsPanel from '@modules/core/library/music/LyricsPanel.jsx';
 import QueuePanel from '@modules/core/library/music/QueuePanel.jsx';
 import { useSongMenu } from '@modules/core/library/music/contextMenus.js';
-import { mediaUrl } from '../api.js';
+import CollageCover from '@modules/core/library/music/CollageCover.jsx';
 import { navigate } from '../router.js';
 
 const BAR_COUNT = 12;   // 36 → 18 → 12 over 2026-09-03 — fewer, chunkier bars
@@ -103,7 +103,6 @@ export default function MusicPlayerWidget() {
   const [barBox, setBarBox] = useState({ h: 0, gap: 0 });
   const accent = 'var(--accent)';
   const hasTrack = !!currentTrack;
-  const cover   = hasTrack ? mediaUrl(currentTrack.albumImage, { library: true }) || null : null;
   const title   = hasTrack ? (currentTrack.title  || '—') : '';
   // While a stream track's URL is being fetched, the artist line reads
   // "Finding track" (decision 5 — plain words, no trailing dots).
@@ -375,11 +374,11 @@ export default function MusicPlayerWidget() {
               borderRadius: 'var(--radius-md)',
               overflow: 'hidden',
             }}>
-            {cover && (
-              <img src={cover} alt="" style={{
-                width: '100%', height: '100%',
-                objectFit: 'cover', display: 'block',
-              }}/>
+            {/* Same cover renderer the playlist and album tiles use, so a track
+                with no artwork falls back to its initials instead of an empty
+                square — every loose YouTube single in Saved Tracks is one. */}
+            {hasTrack && (
+              <CollageCover image={currentTrack.albumImage} title={title} accent={accent}/>
             )}
           </div>
           <div style={{

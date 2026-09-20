@@ -118,7 +118,10 @@ function PlaylistGrid({ accent }) {
 // master CoverArtCard uses, so the album and playlist grids read identically.
 // The shape owns the frame, the press depth and the hover colour flip; no
 // hand-rolled border/hover state here.
-export function PlaylistCard({ playlist, accent, onOpen }) {
+// `pinned` marks a card that must not be picked up inside a Cluster —
+// data-no-drag is DraggableSidebarList's own per-item opt-out, honoured even
+// under dragFromInteractive. Nothing else about the card changes.
+export function PlaylistCard({ playlist, accent, onOpen, pinned = false }) {
   const playlistMenu = usePlaylistMenu(accent);
   const onKeyDown = (e) => {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); }
@@ -132,7 +135,15 @@ export function PlaylistCard({ playlist, accent, onOpen }) {
       tabIndex={0}
       className="candy-btn"
       data-shape="tile"
-      style={{ '--accent': accent || 'var(--accent)' }}
+      {...(pinned ? { 'data-no-drag': '' } : {})}
+      // Straight from PlaylistsPage this is a grid item and stretches, but in
+      // the left panel's Cluster it sits inside the drag wrapper — a plain
+      // block — so nothing stretches it and its width falls back to the cover
+      // image's intrinsic size. A playlist whose cover does not load then has
+      // NO intrinsic content, and the whole card collapsed to a 24px dot
+      // (Macroblank, 2026-09-10). Claiming the width makes the cell, not the
+      // artwork, decide how big the tile is.
+      style={{ width: '100%', '--accent': accent || 'var(--accent)' }}
     >
       <div className="candy-face">
         <div

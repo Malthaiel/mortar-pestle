@@ -65,8 +65,33 @@ export function resolveDot(map, value, accent) {
   return map[value] === null ? accent : map[value];
 }
 
+// PlaylistTrack -> player queue item. Each track keeps its own album cover/artist
+// (playlists span albums), which is why playback uses playTracks, not
+// playAlbumTracks. Lives here rather than in PlaylistDetail because the player's
+// own last-played restore needs it too, and importing it from PlaylistDetail
+// would cycle back through MusicPlayerProvider.
+export function trackToQueueItem(t, pl) {
+  return {
+    albumPath: t.albumPath || pl.path,
+    albumTitle: t.albumTitle || pl.title,
+    albumImage: t.albumImage || pl.image || null,
+    artist: t.artist || '',
+    n: t.n,
+    title: t.title,
+    audioPath: t.audioPath,
+    available: t.available,
+    // A row carrying its own source link streams from that link directly;
+    // otherwise streaming needs a real album card to resolve against, so rows
+    // whose album is gone (recycled) stay truly unavailable.
+    streamable: !!t.watchUrl || (!t.available && !!t.albumPath && t.n != null),
+    watchUrl: t.watchUrl || null,
+    wikilink: t.wikilink || null,
+    duration: t.duration ?? null,
+  };
+}
+
 // A loose YouTube search hit as a player queue item. Same field set
-// trackToQueueItem builds (PlaylistDetail), minus any album card: `watchUrl`
+// trackToQueueItem builds, minus any album card: `watchUrl`
 // is what music_stream_resolve keys on instead of albumPath + n.
 export function youtubeQueueItem(hit) {
   return {

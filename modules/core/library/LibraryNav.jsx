@@ -71,9 +71,12 @@ function movieRows(s) {
 }
 function musicRows(s) {
   return [
-    { label: 'Listening',      path: `${MUSIC}/library/Currently-Listening`, count: s.byStatus['Currently-Listening'] || 0 },
+    // Short names match the music folds and StatusDropdown (media-status.js
+    // STATUS_LABEL) — user-directed 2026-09-11, "everywhere on screen". The
+    // PATHS still carry the schema verbs; only the drawn word is short.
+    { label: 'Currently',      path: `${MUSIC}/library/Currently-Listening`, count: s.byStatus['Currently-Listening'] || 0 },
     { label: 'Listened',       path: `${MUSIC}/library/Listened`,            count: s.byStatus['Listened'] || 0 },
-    { label: 'Plan',           path: `${MUSIC}/library/Plan-to-Listen`,      count: s.byStatus['Plan-to-Listen'] || 0 },
+    { label: 'Planned',        path: `${MUSIC}/library/Plan-to-Listen`,      count: s.byStatus['Plan-to-Listen'] || 0 },
     { label: 'Dropped',        path: `${MUSIC}/library/Dropped`,             count: s.byStatus['Dropped'] || 0 },
     { label: 'Total',          path: `${MUSIC}/library`,                     count: s.total },
     { label: 'Downloaded',     path: `${MUSIC}/library/Downloaded`,          count: s.downloaded },

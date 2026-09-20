@@ -17,31 +17,7 @@ import { encodePath } from '../paths.js';
 import { navigate } from '@host/router.js';
 import { fmtDuration } from './searchShared.jsx';
 import { useSongMenu } from './contextMenus.js';
-
-// PlaylistTrack → player queue item. Each track keeps its own album cover/artist
-// (playlists span albums), which is why playback uses playTracks, not
-// playAlbumTracks.
-function trackToQueueItem(t, pl) {
-  return {
-    albumPath: t.albumPath || pl.path,
-    albumTitle: t.albumTitle || pl.title,
-    albumImage: t.albumImage || pl.image || null,
-    artist: t.artist || '',
-    n: t.n,
-    title: t.title,
-    audioPath: t.audioPath,
-    available: t.available,
-    // Streamable needs a real album card to resolve against — playlist rows
-    // whose album is gone (recycled) stay truly unavailable.
-    // A row carrying its own source link streams from that link directly;
-    // otherwise streaming needs a real album card to resolve against, so rows
-    // whose album is gone (recycled) stay truly unavailable.
-    streamable: !!t.watchUrl || (!t.available && !!t.albumPath && t.n != null),
-    watchUrl: t.watchUrl || null,
-    wikilink: t.wikilink || null,
-    duration: t.duration ?? null,
-  };
-}
+import { trackToQueueItem } from './util.js';
 
 const DL_FILTER_KEY = 'tools:savedTracksFilter';
 const DL_FILTER_OPTIONS = [
@@ -219,7 +195,8 @@ export default function PlaylistDetail({ path, accent }) {
   };
 
   const a = accent || 'var(--accent)';
-
+  // The playlist's own chosen cover when it has one; otherwise the first sleeve
+  // its collage is built from, so a collage playlist still gets a backdrop.
   return (
     <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
       {/* Header */}

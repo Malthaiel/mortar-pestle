@@ -12,9 +12,15 @@ function initials(text) {
   return words.slice(0, 2).map((w) => w[0].toUpperCase()).join('');
 }
 
-function Tile({ src, accent, alt, library }) {
+// Every source this renders — a custom playlist cover and the album covers the
+// collage is built from — lives in the Library vault, so the root is not a
+// per-caller choice. The collage branches used to omit it, which resolved album
+// covers against the wrong root: coverSrc returned nothing, the tile fell
+// through to its blank state, and a collage-backed playlist showed no cover at
+// all (Macroblank, 2026-09-10).
+function Tile({ src, accent, alt }) {
   const [ok, setOk] = useState(true);
-  const url = coverSrc(src, 320, library ? { library: true } : undefined);
+  const url = coverSrc(src, 320, { library: true });
   if (url && ok) {
     return (
       <img
@@ -52,7 +58,7 @@ export default function CollageCover({ image, urls = [], title, accent, style })
   if (image) {
     return (
       <div style={base}>
-        <Tile src={image} accent={accent} alt={title} library />
+        <Tile src={image} accent={accent} alt={title} />
       </div>
     );
   }

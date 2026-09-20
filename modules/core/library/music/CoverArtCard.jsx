@@ -28,7 +28,11 @@ export default function CoverArtCard({ album, accent, selected, onSelect, onPlay
       aria-pressed={selected}
       className={'candy-btn' + (selected ? ' is-selected' : '')}
       data-shape="tile"
-      style={{ '--accent': accent || 'var(--accent)' }}
+      // Inside the left panel's Cluster the tile sits in the drag wrapper — a
+      // plain block — so nothing stretches it and its width falls back to the
+      // cover's intrinsic size. An album with no cover has no intrinsic content
+      // and collapses to a dot; claiming the width lets the cell decide instead.
+      style={{ width: '100%', '--accent': accent || 'var(--accent)' }}
     >
       <div className="candy-face">
       <div style={{
