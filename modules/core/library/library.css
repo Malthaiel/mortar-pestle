@@ -562,16 +562,3 @@
   inset: 0;
   background: color-mix(in oklch, var(--surface), transparent 45%);
 }
-
-/* MUSIC ACTION RUN — one voice across the whole run.
- * CandySelect pins the vault tree's lettering (mono, 700, uppercase) INLINE on
- * its face, so a fused trigger shouted PLANNED / RATE beside plain chips reading
- * Play / Queue / Playlist in the body font. Beating an inline style is the only
- * reason `!important` is here. Scoped to this run on purpose: a standalone
- * dropdown still matches the menu rows it opens, which is what TREE_TEXT is for. */
-.music-actions .candy-btn[data-shape="chip"] > .candy-face {
-  font-family: var(--font-body) !important;
-  font-weight: 600 !important;
-  letter-spacing: 0.04em !important;
-  text-transform: none !important;
-}

@@ -252,7 +252,7 @@ export default function PlaylistDetail({ path, accent }) {
 
           {/* One fused run, as on the album and film pages. Delete lives in the
               "more" menu and Saved Tracks cannot be deleted at all. */}
-          <div className="candy-split music-actions" style={{
+          <div className="candy-split is-plain-label" style={{
             position: 'relative', '--cbtn-size': '26px',
             marginTop: 4, alignSelf: 'flex-start',
             ...(accent ? { '--accent': accent } : {}),

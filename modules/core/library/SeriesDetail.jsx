@@ -433,7 +433,7 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
           <>
             {/* Status, Download and More read as ONE unit on a film — the same
                 fused .candy-split shell the tab strip above them uses. */}
-            <div className={isMovie ? 'candy-split' : undefined}
+            <div className={isMovie ? 'candy-split is-plain-label' : undefined}
               style={isMovie ? { position: 'relative', '--cbtn-size': '26px' } : undefined}>
             <CandySelect
               value={statusValue}

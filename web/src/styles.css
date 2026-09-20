@@ -1606,6 +1606,20 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
    `auto`, so every split that never asked for a size is untouched. */
 .candy-split > .candy-btn { height: var(--cbtn-size); }
 
+/* is-plain-label — the run speaks in ONE voice. CandySelect pins the vault
+   tree's lettering (mono, 700, 0.06em, uppercase) INLINE on its face so the
+   trigger matches the menu it opens; fused beside plain chips that reads as two
+   voices in one control (PLANNED | RATE against Play | Queue | Playlist).
+   Beating an inline style is the only reason `!important` is here. Opt-in, NOT
+   the default: a standalone dropdown should keep matching its menu rows.
+   Consumers: the music album/playlist action runs, the film action run. */
+.candy-split.is-plain-label > .candy-btn[data-shape="chip"] > .candy-face {
+  font-family: var(--font-body) !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.04em !important;
+  text-transform: none !important;
+}
+
 /* Written for ANY number of parts, not just two: only the run's two OUTER ends
    keep the shell's roundness, every interior edge squares off and overlaps its
    neighbour. A three-part row (a chip field plus two action buttons) needs no
