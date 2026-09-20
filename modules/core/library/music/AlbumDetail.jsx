@@ -1,14 +1,16 @@
-// RIGHT pane of the Music page. Big cover, metadata, Play All, Mark-as-
-// Listened, tracklist with per-row play / open-page / add-to-queue actions.
+// RIGHT pane of the Music page. The film page's header, wearing an album: the
+// sleeve full-bleed behind a sleeve tile, the title at the film's derived
+// scale, one fact line, and every action fused into one .candy-split run.
+// Then the disc-grouped tracklist, notes and credits.
 
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { musicApi } from './api.js';
 import { useMusicPlayer } from './MusicPlayerProvider.jsx';
-import { IconFolder } from '@host/components/icons.jsx';
+import { IconPlay, IconStar, IconLayers, IconPlus, IconDownload } from '@host/components/icons.jsx';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
 import { statusLabel, STATUS_ICON } from '@host/util/media-status.js';
 import { libraryAbs } from '@host/api.js';
-import { coverSrc, STATUS_DOT_COLOR, resolveDot } from './util.js';
+import { coverSrc, STATUS_DOT_COLOR, resolveDot, toBrowse } from './util.js';
 import AddToPlaylistButton from './AddToPlaylistButton.jsx';
 import { refFromQueueItem } from './PlaylistProvider.jsx';
 import MusicCredits from './MusicCredits.jsx';
@@ -17,9 +19,53 @@ import { useDownloads } from './DownloadProvider.jsx';
 import { consumeTrackHighlight, fmtDuration } from './searchShared.jsx';
 import { useSongMenu } from './contextMenus.js';
 import { navigate } from '@host/router.js';
-import RatingStrip from '../RatingStrip.jsx';
+import { useContextMenu } from '@host/context-menu/useContextMenu.js';
+import { FILM_POSTER_W, FILM_DOT } from '../AnimeDetailHeader.jsx';
+import { BODY_COLOR } from '../AnimeMainColumn.jsx';
+import { artistImage } from './artistImage.js';
 
 const LISTEN_STATUSES = ['Plan-to-Listen', 'Currently-Listening', 'Listened', 'Dropped'];
+
+// The photo rides the fact line, so it is sized to that line: an even number of
+// pixels, so the circle has no half-pixel edge.
+const ARTIST_PFP = 22;
+
+// The artist, leading the fact line: a round press photo and the name, which
+// opens the only artist surface the app has (a Browse search). The photo comes
+// from TheAudioDB (artistImage.js) and is often absent, so the initials circle
+// is the normal case, not an error state.
+function ArtistLink({ name, accent }) {
+  const [src, setSrc] = useState('');
+  useEffect(() => {
+    let live = true;
+    setSrc('');
+    artistImage(name).then(url => { if (live) setSrc(url); });
+    return () => { live = false; };
+  }, [name]);
+  const a = accent || 'var(--accent)';
+  const initials = String(name || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+  return (
+    <span
+      onClick={() => toBrowse(name)}
+      title={`Find ${name}`}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 7, cursor: 'pointer' }}
+      onMouseEnter={e => { e.currentTarget.style.color = a; }}
+      onMouseLeave={e => { e.currentTarget.style.color = ''; }}
+    >
+      {src
+        ? <img src={src} alt="" onError={() => setSrc('')}
+            style={{ width: ARTIST_PFP, height: ARTIST_PFP, borderRadius: '50%', objectFit: 'cover', display: 'block', flexShrink: 0 }}/>
+        : <span style={{
+            width: ARTIST_PFP, height: ARTIST_PFP, borderRadius: '50%', flexShrink: 0,
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            background: `color-mix(in oklch, ${a} 16%, var(--surface-2))`,
+            fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 600,
+            color: 'var(--text-muted)', letterSpacing: '0.02em', userSelect: 'none',
+          }}>{initials}</span>}
+      {name}
+    </span>
+  );
+}
 
 // The recessed tray and its averaged-pixel cover tint were replaced 2026-09-19
 // by the film page's full-bleed backdrop (.film-detail / .film-backdrop in
@@ -33,6 +79,7 @@ export default function AlbumDetail({ accent, albumPath }) {
   const { playAlbumTracks, enqueue, currentTrack, isPlaying } = useMusicPlayer();
   const { jobs: dlJobs, enqueue: enqueueDownload } = useDownloads();
   const songMenu = useSongMenu(accent);
+  const { openContextMenu } = useContextMenu();
   const [dlJobId, setDlJobId] = useState(null);
   const [dlError, setDlError] = useState(null);
 
@@ -98,6 +145,20 @@ export default function AlbumDetail({ accent, albumPath }) {
   };
 
   const playAll = () => playAlbumTracks(album, 0);
+
+  // The fact line, in the film's order and shape. Length is SUMMED off the real
+  // tracks rather than trusting the frontmatter "Length" string, which is often
+  // absent; that string is only the fallback when no track carries a duration.
+  const secs = album.tracks.reduce((t, x) => t + (x.duration || 0), 0);
+  const lengthLabel = secs ? `${Math.round(secs / 60)}m` : (album.length || null);
+  const nTracks = album.tracks.length;
+  const facts = [
+    album.artist ? <ArtistLink name={album.artist} accent={accent}/> : null,
+    (album.genres && album.genres.length) ? album.genres.slice(0, 4).join(', ') : null,
+    album.year || null,
+    nTracks ? `${nTracks} track${nTracks === 1 ? '' : 's'}` : null,
+    lengthLabel,
+  ].filter(Boolean);
   const playFrom = (idx) => playAlbumTracks(album, idx);
 
   const enqueueAlbum = () => {
@@ -162,137 +223,111 @@ export default function AlbumDetail({ accent, albumPath }) {
         {/* One wrapper for both columns: .film-detail centres its children at
             the reading measure, so the flex row has to BE a single child. */}
         <div style={{ display: 'flex', gap: 28 }}>
-        {/* LEFT column: cover + metadata stacked beneath it */}
-        <div style={{
-          width: 240, flexShrink: 0,
-          display: 'flex', flexDirection: 'column', gap: 14,
-        }}>
+        {/* LEFT column: the sleeve alone, in the film poster's column. */}
+        <div style={{ width: FILM_POSTER_W, flexShrink: 0 }}>
           <div style={{
-            width: 180, aspectRatio: '1 / 1', flexShrink: 0,
-            alignSelf: 'flex-start',
+            width: '100%', aspectRatio: '1 / 1',
             background: 'var(--surface-2)',
             borderRadius: 8, overflow: 'hidden',
             boxShadow: '0 10px 32px rgba(0,0,0,0.34)',
           }}>
             {img && <img src={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}/>}
           </div>
-
-          {/* Stat tiles */}
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {[
-              { label: 'Year', value: album.year },
-              { label: 'Tracks', value: album.tracks.length || null },
-              { label: 'Length', value: album.length },
-            ].filter(s => s.value).map(s => (
-              <div key={s.label} style={{
-                padding: '7px 14px', borderRadius: 8,
-                background: 'var(--surface-2)',
-                display: 'flex', flexDirection: 'column',
-                gap: 2, minWidth: 64,
-              }}>
-                <span style={{
-                  fontSize: 9, fontFamily: 'var(--font-mono)',
-                  letterSpacing: '0.06em', textTransform: 'uppercase',
-                  color: 'var(--text-faint)',
-                }}>{s.label}</span>
-                <span style={{
-                  fontSize: 15, fontWeight: 600, color: 'var(--text)',
-                  fontVariantNumeric: 'tabular-nums',
-                }}>{s.value}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* Genre chips */}
-          {(album.genres && album.genres.length > 0) && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-              {album.genres.slice(0, 6).map(g => (
-                <span key={g} style={{
-                  fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.04em',
-                  textTransform: 'uppercase', color: 'var(--text-muted)',
-                  padding: '2px 8px', borderRadius: 999,
-                  border: '1px solid var(--border)',
-                }}>{g}</span>
-              ))}
-            </div>
-          )}
-
-          {/* Personal rating */}
-          <RatingStrip
-            stacked
-            value={album.personalRating || 0}
-            accent={accent}
-            disabled={busy}
-            onChange={(r) => {
-              musicApi.markAlbumRating(album.path, r)
-                .then(() => {
-                  setAlbum(a => ({ ...a, personalRating: r }));
-                  window.dispatchEvent(new CustomEvent('album-updated', {
-                    detail: { path: album.path, personalRating: r },
-                  }));
-                })
-                .catch(err => alert('Rating failed: ' + err.message));
-            }}
-          />
         </div>
+
         <div style={{
-          flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12,
+          flex: 1, minWidth: 320, display: 'flex', flexDirection: 'column', gap: 8,
         }}>
-          {/* Type tag */}
+          {/* Type tag. The film has none, but nothing else on the page tells an
+              EP from an album. */}
           <div style={{
-            fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-faint)',
+            fontSize: 10, fontFamily: 'var(--font-mono)', color: BODY_COLOR,
             letterSpacing: '0.08em', textTransform: 'uppercase',
           }}>{album.releaseType || 'Album'}</div>
 
-          {/* Title */}
+          {/* Title and fact line both multiply by --film-head, the film's one
+              head knob -- never type a size here that ignores it. */}
           <h2 style={{
-            margin: 0, fontSize: 30, fontWeight: 700,
-            color: 'var(--text)', lineHeight: 1.12,
-            letterSpacing: '-0.015em',
+            margin: 0, fontSize: 'calc(28px * var(--film-head))', fontWeight: 700,
+            color: 'var(--text)', lineHeight: 1.12, letterSpacing: '-0.015em',
           }}>
             {album.title}
           </h2>
 
-          {/* Artist caption */}
-          {album.artist && (
-            <div style={{ fontSize: 14, color: 'var(--text-muted)', marginTop: -6 }}>
-              {album.artist}
+          {facts.length > 0 && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+              fontSize: 'calc(12px * var(--film-head))', color: BODY_COLOR,
+            }}>
+              {facts.map((f, i) => <Fragment key={i}>{i > 0 && FILM_DOT}{f}</Fragment>)}
             </div>
           )}
 
-          {/* Action row */}
-          <div style={{
-            display: 'flex', gap: 10, marginTop: 6,
-            alignItems: 'center', flexWrap: 'wrap',
+          {/* Every action as ONE control, the same fused shell the film page
+              uses for status / rating / Download / More. A disabled half keeps
+              its paint and simply does nothing -- fading it punches a hole in
+              the run. */}
+          <div className="candy-split music-actions" style={{
+            position: 'relative', '--cbtn-size': '26px',
+            marginTop: 4, alignSelf: 'flex-start',
           }}>
-            <button
-              className="candy-btn is-primary"
-              data-own-press
-              onClick={playAll}
-              disabled={playable.length === 0}
-              style={{
-                height: 36,
-                opacity: playable.length === 0 ? 0.4 : 1,
-                cursor: playable.length === 0 ? 'not-allowed' : 'pointer',
-                ...(playable.length === 0 ? { pointerEvents: 'none', boxShadow: 'none' } : {}),
+            <CandySelect
+              value={album.status || ''}
+              accent={accent}
+              fuse shape="chip"
+              title="Mark status"
+              placeholder="Status"
+              options={LISTEN_STATUSES.map(s => ({ value: s, label: statusLabel(s), icon: STATUS_ICON[s], dot: resolveDot(STATUS_DOT_COLOR, s, accent) }))}
+              clearable
+              disabled={busy}
+              onChange={setStatus}
+            />
+
+            {/* The film's rating control, 1-1: re-picking the current value
+                clears it, exactly as the dot strip did. */}
+            <CandySelect icon={IconStar}
+              value={album.personalRating ? String(album.personalRating) : ''}
+              accent={accent}
+              fuse shape="chip"
+              title="Your rating out of 10"
+              placeholder="Rate"
+              options={Array.from({ length: 10 }, (_, n) => ({ value: String(10 - n), label: String(10 - n), dot: accent }))}
+              clearable
+              disabled={busy}
+              onChange={(v) => {
+                const r = Number(v) || 0;
+                musicApi.markAlbumRating(album.path, r)
+                  .then(() => {
+                    setAlbum(a => ({ ...a, personalRating: r }));
+                    window.dispatchEvent(new CustomEvent('album-updated', {
+                      detail: { path: album.path, personalRating: r },
+                    }));
+                  })
+                  .catch(err => alert('Rating failed: ' + err.message));
               }}
-            ><span className="candy-face" style={{ padding: '0 18px' }}>Play All</span></button>
+            />
 
             <button
               className="candy-btn"
+              data-shape="chip"
+              data-own-press
+              onClick={playAll}
+              disabled={playable.length === 0}
+            ><span className="candy-face"><IconPlay size={14}/>Play</span></button>
+
+            <button
+              className="candy-btn"
+              data-shape="chip"
               data-own-press
               onClick={enqueueAlbum}
               disabled={playable.length === 0}
-              style={{
-                height: 36,
-                opacity: playable.length === 0 ? 0.4 : 1,
-                cursor: playable.length === 0 ? 'not-allowed' : 'pointer',
-                ...(playable.length === 0 ? { pointerEvents: 'none', boxShadow: 'none' } : {}),
-              }}
-            ><span className="candy-face" style={{ padding: '0 18px' }}>+ Queue</span></button>
+            ><span className="candy-face"><IconLayers size={14}/>Queue</span></button>
 
             <AddToPlaylistButton
               variant="form"
+              fuse
+              icon={IconPlus}
+              label="Playlist"
               accent={accent}
               title="Add all tracks to a playlist"
               refs={playable.map(t => refFromQueueItem({
@@ -302,46 +337,37 @@ export default function AlbumDetail({ accent, albumPath }) {
               }))}
             />
 
-            <CandySelect
-              value={album.status || ''}
-              accent={accent}
-              title="Mark status"
-              placeholder="Status"
-              options={LISTEN_STATUSES.map(s => ({ value: s, label: statusLabel(s), icon: STATUS_ICON[s], dot: resolveDot(STATUS_DOT_COLOR, s, accent) }))}
-              clearable
-              disabled={busy}
-              onChange={setStatus}
-            />
-
             {album.providerId && (missing > 0 || dlJob) && (
               <button
-                className={'candy-btn' + (playable.length === 0 ? ' is-primary' : '')}
+                className="candy-btn"
+                data-shape="chip"
                 data-own-press
                 onClick={startDownload}
                 disabled={dlBusy}
                 title={playable.length > 0 ? `Download the ${missing} missing track${missing === 1 ? '' : 's'}` : 'Download this album'}
-                style={{ height: 36, opacity: dlBusy ? 0.6 : 1 }}
-              ><span className="candy-face" style={{ padding: '0 18px' }}>{dlLabel}</span></button>
+              ><span className="candy-face"><IconDownload size={14}/>{dlLabel}</span></button>
             )}
 
-            {album.trackFolder && (
-              <button
-                className="candy-btn"
-                data-own-press
-                onClick={() => musicApi.revealInFiles(libraryAbs(album.trackFolder)).catch(err => alert('Reveal failed: ' + err.message))}
-                title={`Reveal "${album.trackFolder}" in file manager`}
-                style={{ width: 36, height: 36, borderRadius: 8 }}
-              ><span className="candy-face" style={{ padding: 0 }}><IconFolder size={16}/></span></button>
-            )}
-
+            {/* Reveal and Delete live in here, as Uninstall does on a film --
+                the run stays short enough to fit the reading measure. */}
             <button
-              className="candy-btn is-danger"
+              type="button"
+              className="candy-btn"
+              data-shape="chip"
               data-own-press
-              onClick={onDelete}
-              disabled={busy}
-              title="Delete album → recycling bin"
-              style={{ height: 36, opacity: busy ? 0.5 : 1 }}
-            ><span className="candy-face" style={{ padding: '0 16px' }}>Delete</span></button>
+              title="More"
+              onClick={(e) => {
+                const r = e.currentTarget.getBoundingClientRect();
+                const items = [];
+                if (album.trackFolder) items.push({
+                  label: 'Reveal in files',
+                  onClick: () => musicApi.revealInFiles(libraryAbs(album.trackFolder))
+                    .catch(err => alert('Reveal failed: ' + err.message)),
+                });
+                items.push({ label: 'Delete album', onClick: onDelete });
+                openContextMenu({ x: r.left, y: r.bottom + 4 }, items, { accent });
+              }}
+            ><span className="candy-face">⋯</span></button>
           </div>
 
           {dlError && (

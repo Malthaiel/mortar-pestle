@@ -28,7 +28,13 @@ import AnimeStatistics from './AnimeStatistics.jsx';
 import AnimeTrailer, { normalizeTrailer } from './AnimeTrailer.jsx';
 
 // 15% off the 260 the film poster shipped at (2026-09-12).
-const FILM_POSTER_W = 221;
+// Exported: the music detail pages size their sleeve column off the same
+// constant rather than restating it.
+export const FILM_POSTER_W = 221;
+
+// The separator between two facts on the film's fact line. Module scope and
+// exported so the album and playlist fact lines use the same mark.
+export const FILM_DOT = <span aria-hidden>·</span>;
 
 const fmtNum = (n) => (n == null || n === '' ? null : Number(n).toLocaleString());
 
@@ -236,7 +242,7 @@ export default function AnimeDetailHeader({
   // REPLACES that row rather than repeating it.
   const filmGenres = Array.isArray(genres) ? genres.filter(Boolean) : [];
   const hasFilmFacts = scoreShown || filmGenres.length > 0 || has(filmDate) || has(duration);
-  const dot = <span aria-hidden>·</span>;
+  const dot = FILM_DOT;
 
   return (
     // A film pads deeper at the top so more of the backdrop shows above the

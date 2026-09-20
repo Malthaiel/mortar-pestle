@@ -1,4 +1,5 @@
-// One playlist: cover + title + actions (Play all / + Queue / Edit / Delete) and
+// One playlist, wearing the film page's header (the same shell the album page
+// uses): the cover full-bleed behind it, one fact line, one fused action run --
 // a drag-reorderable tracklist (pointer-drag via a per-row grip handle; HTML5
 // DnD doesn't fire in the Tauri WebKitGTK webview). Clicking a
 // row plays from there; the per-row × removes it from the playlist (never
@@ -6,18 +7,22 @@
 // page through the provider. Reloads on `music-playlists-changed` so external
 // edits and our own writes stay in sync.
 
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { musicApi } from './api.js';
 import { useMusicPlayer } from './MusicPlayerProvider.jsx';
 import { usePlaylists, refFromPlaylistTrack, isSavedTracks } from './PlaylistProvider.jsx';
 import { Seg } from '@host/components/ui/index.js';
 import PlaylistModal from './PlaylistModal.jsx';
 import CollageCover from './CollageCover.jsx';
+import { IconPlay, IconLayers, IconBrush } from '@host/components/icons.jsx';
 import { encodePath } from '../paths.js';
 import { navigate } from '@host/router.js';
 import { fmtDuration } from './searchShared.jsx';
 import { useSongMenu } from './contextMenus.js';
-import { trackToQueueItem } from './util.js';
+import { trackToQueueItem, coverSrc } from './util.js';
+import { useContextMenu } from '@host/context-menu/useContextMenu.js';
+import { FILM_POSTER_W, FILM_DOT } from '../AnimeDetailHeader.jsx';
+import { BODY_COLOR } from '../AnimeMainColumn.jsx';
 
 const DL_FILTER_KEY = 'tools:savedTracksFilter';
 const DL_FILTER_OPTIONS = [
@@ -52,6 +57,7 @@ export default function PlaylistDetail({ path, accent }) {
   const { playTracks, enqueue, currentTrack, isPlaying } = useMusicPlayer();
   const { saveTracks, rename, setCover, deletePlaylist } = usePlaylists();
   const songMenu = useSongMenu(accent);
+  const { openContextMenu } = useContextMenu();
 
   const load = () => {
     const myId = ++reqId.current;
@@ -197,55 +203,96 @@ export default function PlaylistDetail({ path, accent }) {
   const a = accent || 'var(--accent)';
   // The playlist's own chosen cover when it has one; otherwise the first sleeve
   // its collage is built from, so a collage playlist still gets a backdrop.
+  // With neither there is no picture, and .film-detail's top padding is
+  // reserved FOR one -- so a pictureless playlist keeps the flat header.
+  const backdrop = coverSrc(pl.image || (pl.coverUrls || []).filter(Boolean)[0], 400, { library: true });
+  // Summed off the real rows, never a stored total.
+  const secs = tracks.reduce((t, x) => t + (x.duration || 0), 0);
+  const facts = [
+    `${tracks.length} track${tracks.length === 1 ? '' : 's'}`,
+    secs ? `${Math.round(secs / 60)}m` : null,
+  ].filter(Boolean);
   return (
     <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-      {/* Header */}
-      <div
-        style={{
-          display: 'flex',
-          gap: 24,
-          padding: '28px 26px 22px',
-          borderBottom: '1px solid var(--border)',
-          alignItems: 'flex-end',
-        }}
-      >
-        <div style={{ width: 168, height: 168, flexShrink: 0, borderRadius: 8, overflow: 'hidden', boxShadow: '0 10px 32px rgba(0,0,0,0.34)', background: 'var(--surface-2)' }}>
-          <CollageCover image={pl.image} urls={pl.coverUrls} title={pl.title} accent={accent} />
-        </div>
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-faint)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Playlist</div>
-          <h2 style={{ margin: 0, fontSize: 28, fontWeight: 700, color: 'var(--text)', lineHeight: 1.12, letterSpacing: '-0.015em' }}>{pl.title}</h2>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
-            {tracks.length} track{tracks.length === 1 ? '' : 's'}
+      {/* Header: the film page's shell (library.css .film-detail /
+          .film-backdrop), used verbatim as the album page uses it. */}
+      <div className={backdrop ? 'film-detail' : undefined}
+           style={backdrop ? undefined : {
+             display: 'flex', gap: 24, padding: '28px 26px 22px',
+             borderBottom: '1px solid var(--border)', alignItems: 'flex-end',
+           }}>
+        {backdrop && (
+          <div className="film-backdrop is-square" aria-hidden>
+            <img src={backdrop} alt=""/>
           </div>
-          <div style={{ display: 'flex', gap: 10, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        )}
+        {/* One wrapper for both columns: .film-detail centres its children at
+            the reading measure, so the flex row has to BE a single child. */}
+        <div style={{ display: 'flex', gap: 28 }}>
+        <div style={{ width: FILM_POSTER_W, flexShrink: 0 }}>
+          <div style={{ width: '100%', aspectRatio: '1 / 1', borderRadius: 8, overflow: 'hidden', boxShadow: '0 10px 32px rgba(0,0,0,0.34)', background: 'var(--surface-2)' }}>
+            <CollageCover image={pl.image} urls={pl.coverUrls} title={pl.title} accent={accent} />
+          </div>
+        </div>
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: BODY_COLOR, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Playlist</div>
+
+          <h2 style={{
+            margin: 0, fontSize: 'calc(28px * var(--film-head))', fontWeight: 700,
+            color: 'var(--text)', lineHeight: 1.12, letterSpacing: '-0.015em',
+          }}>{pl.title}</h2>
+
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+            fontSize: 'calc(12px * var(--film-head))', color: BODY_COLOR,
+            fontVariantNumeric: 'tabular-nums',
+          }}>
+            {facts.map((f, i) => <Fragment key={i}>{i > 0 && FILM_DOT}{f}</Fragment>)}
+          </div>
+
+          {/* One fused run, as on the album and film pages. Delete lives in the
+              "more" menu and Saved Tracks cannot be deleted at all. */}
+          <div className="candy-split music-actions" style={{
+            position: 'relative', '--cbtn-size': '26px',
+            marginTop: 4, alignSelf: 'flex-start',
+            ...(accent ? { '--accent': accent } : {}),
+          }}>
             <button
-              className="candy-btn is-primary"
+              className="candy-btn"
+              data-shape="chip"
               data-own-press
               onClick={playAll}
               disabled={playable.length === 0}
-              style={{ height: 36, ...(accent ? { '--accent': accent } : {}), ...(playable.length === 0 ? { opacity: 0.4, pointerEvents: 'none' } : {}) }}
-            >
-              <span className="candy-face" style={{ padding: '0 18px' }}>Play All</span>
-            </button>
+            ><span className="candy-face"><IconPlay size={14}/>Play</span></button>
             <button
               className="candy-btn"
+              data-shape="chip"
               data-own-press
               onClick={addToQueue}
               disabled={playable.length === 0}
-              style={{ height: 36, ...(playable.length === 0 ? { opacity: 0.4, pointerEvents: 'none' } : {}) }}
-            >
-              <span className="candy-face" style={{ padding: '0 18px' }}>+ Queue</span>
-            </button>
-            <button className="candy-btn" data-own-press onClick={() => setEditOpen(true)} style={{ height: 36 }}>
-              <span className="candy-face" style={{ padding: '0 16px' }}>Edit</span>
-            </button>
+            ><span className="candy-face"><IconLayers size={14}/>Queue</span></button>
+            <button
+              className="candy-btn"
+              data-shape="chip"
+              data-own-press
+              onClick={() => setEditOpen(true)}
+            ><span className="candy-face"><IconBrush size={14}/>Edit</span></button>
             {!saved && (
-              <button className="candy-btn is-danger" data-own-press onClick={onDelete} style={{ height: 36 }}>
-                <span className="candy-face" style={{ padding: '0 16px' }}>Delete</span>
-              </button>
+              <button
+                type="button"
+                className="candy-btn"
+                data-shape="chip"
+                data-own-press
+                title="More"
+                onClick={(e) => {
+                  const r = e.currentTarget.getBoundingClientRect();
+                  openContextMenu({ x: r.left, y: r.bottom + 4 },
+                    [{ label: 'Delete playlist', onClick: onDelete }], { accent });
+                }}
+              ><span className="candy-face">⋯</span></button>
             )}
           </div>
+        </div>
         </div>
       </div>
 

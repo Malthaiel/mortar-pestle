@@ -1,5 +1,6 @@
 // Always-visible "+ Playlist" control for a track row, album header, or queue
-// row. Click opens a ContextMenu listing the user's playlists ("Add to <name>")
+// row. `fuse` welds it into a .candy-split run (chip shape, the run's height).
+// Click opens a ContextMenu listing the user's playlists ("Add to <name>")
 // plus "New playlist with this song…". `refs` is the TrackRefInput[] to add (one
 // for a single track, many for a whole album). Feedback via the global
 // `agentic:notify` toast bridge — duplicates are surfaced, never silently
@@ -16,6 +17,10 @@ export default function AddToPlaylistButton({
   variant = 'pill',
   title = 'Add to playlist',
   disabled,
+  fuse = false,
+  // Leading mark for the `form` trigger, so a fused one reads like the icon-led
+  // parts it is welded to. The face is already inline-flex with its own gap.
+  icon: Icon = null,
 }) {
   const { openMenu, modalEl, canAdd } = useAddToPlaylistMenu(accent);
   const [hover, setHover] = useState(false);
@@ -28,13 +33,14 @@ export default function AddToPlaylistButton({
       <button
         type="button"
         className="candy-btn"
+        data-shape={fuse ? 'chip' : undefined}
         data-own-press
         onClick={open}
         disabled={isDisabled}
         title={title}
-        style={{ height: 36, opacity: isDisabled ? 0.4 : 1 }}
+        style={fuse ? { opacity: isDisabled ? 0.4 : 1 } : { height: 36, opacity: isDisabled ? 0.4 : 1 }}
       >
-        <span className="candy-face" style={{ padding: '0 16px' }}>{label}</span>
+        <span className="candy-face" style={fuse ? undefined : { padding: '0 16px' }}>{Icon && <Icon size={14}/>}{label}</span>
       </button>
     ) : (
       <button

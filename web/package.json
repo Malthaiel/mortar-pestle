@@ -12,6 +12,7 @@
     "check-time": "node scripts/check-planner-time.mjs",
     "check-path": "node scripts/check-path-marshal.mjs",
     "check-busy": "node scripts/check-busy-ranges.mjs",
+    "check-artist-image": "node scripts/artistimage-check.mjs",
     "lint": "eslint ."
   },
   "dependencies": {

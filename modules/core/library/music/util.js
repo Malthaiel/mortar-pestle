@@ -3,6 +3,12 @@
 // preferred over cross-module imports per the W5 plan.
 
 import { mediaUrl } from '@host/api.js';
+import { navigate } from '@host/router.js';
+
+// The one route to an artist. Music has no artist PAGE — the Browse search is
+// the only artist surface the app has — so every place that makes an artist
+// name clickable (the credits panel, the album header) goes through this.
+export const toBrowse = (q) => navigate('/tools/library/music/browse/q/' + encodeURIComponent(q));
 
 // The one cover-tile grid for the whole music module (album browser panel, home,
 // library, browse, playlists). Two rules are baked in, both easy to get wrong:

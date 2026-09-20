@@ -19,9 +19,9 @@ import PosterRow from '@modules/core/library/PosterRow.jsx';
 import { encodePath } from '../paths.js';
 import { navigate as go } from '@host/router.js';
 import { EyebrowHeading } from '@host/components/ui/Eyebrow.jsx';
+import { toBrowse } from './util.js';
 
 const toAlbum = (path) => go('/tools/library/music/downloaded/' + encodePath(path));
-const toBrowse = (q) => go('/tools/library/music/browse/q/' + encodeURIComponent(q));
 
 
 export default function MusicCredits({ album, accent }) {

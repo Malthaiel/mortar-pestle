@@ -1597,6 +1597,15 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
    overlap into ONE line — the outer ends keep the shell's normal roundness. */
 .candy-split > .candy-btn { --split-lap: var(--cbtn-frame); }
 
+/* Every part of a run is the height the run ASKED for. A chip declares no height
+   of its own (it is content-sized), so a part carrying an icon came out a pixel
+   taller than a text-only one beside it -- a 14px mark against a 13px line box.
+   The film page hid this behind `.anime-rail-controls .candy-btn { height: 26px }`,
+   a written-out number the music pages never inherited. No fallback ON PURPOSE:
+   a run that declares no --cbtn-size leaves this invalid, which computes to
+   `auto`, so every split that never asked for a size is untouched. */
+.candy-split > .candy-btn { height: var(--cbtn-size); }
+
 /* Written for ANY number of parts, not just two: only the run's two OUTER ends
    keep the shell's roundness, every interior edge squares off and overlaps its
    neighbour. A three-part row (a chip field plus two action buttons) needs no
