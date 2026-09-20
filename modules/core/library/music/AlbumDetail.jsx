@@ -5,7 +5,8 @@ import { useEffect, useRef, useState } from 'react';
 import { musicApi } from './api.js';
 import { useMusicPlayer } from './MusicPlayerProvider.jsx';
 import { IconFolder } from '@host/components/icons.jsx';
-import StatusDropdown from '@host/components/ui/StatusDropdown.jsx';
+import CandySelect from '@host/components/ui/CandySelect.jsx';
+import { statusLabel, STATUS_ICON } from '@host/util/media-status.js';
 import { libraryAbs } from '@host/api.js';
 import { coverSrc, STATUS_DOT_COLOR, resolveDot } from './util.js';
 import AddToPlaylistButton from './AddToPlaylistButton.jsx';
@@ -16,35 +17,13 @@ import { useDownloads } from './DownloadProvider.jsx';
 import { consumeTrackHighlight, fmtDuration } from './searchShared.jsx';
 import { useSongMenu } from './contextMenus.js';
 import { navigate } from '@host/router.js';
+import RatingStrip from '../RatingStrip.jsx';
 
 const LISTEN_STATUSES = ['Plan-to-Listen', 'Currently-Listening', 'Listened', 'Dropped'];
 
-// Recessed candy tray: the header reads as a pressed-in surface (inset shadow)
-// whose floor carries a faint wash of the cover's dominant color. useCoverTint
-// downsamples the cover to a single averaged pixel for that clean tint; returns
-// null on any canvas/CORS failure, in which case the tray leans on an accent wash.
-function useCoverTint(src) {
-  const [tint, setTint] = useState(null);
-  useEffect(() => {
-    if (!src) { setTint(null); return; }
-    let cancelled = false;
-    const im = new Image();
-    im.onload = () => {
-      try {
-        const c = document.createElement('canvas');
-        c.width = c.height = 1;
-        const ctx = c.getContext('2d', { willReadFrequently: true });
-        ctx.drawImage(im, 0, 0, 1, 1);
-        const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
-        if (!cancelled) setTint(`rgb(${r}, ${g}, ${b})`);
-      } catch { if (!cancelled) setTint(null); }
-    };
-    im.onerror = () => { if (!cancelled) setTint(null); };
-    im.src = src;
-    return () => { cancelled = true; };
-  }, [src]);
-  return tint;
-}
+// The recessed tray and its averaged-pixel cover tint were replaced 2026-09-19
+// by the film page's full-bleed backdrop (.film-detail / .film-backdrop in
+// library.css), which shows the sleeve itself instead of one colour taken off it.
 
 export default function AlbumDetail({ accent, albumPath }) {
   const [album, setAlbum] = useState(null);
@@ -78,7 +57,6 @@ export default function AlbumDetail({ accent, albumPath }) {
   useEffect(() => { setHighlight(consumeTrackHighlight(albumPath)); }, [albumPath]);
 
   const coverImgSrc = album ? coverSrc(album.image, 400, { library: true }) : null;
-  const tint = useCoverTint(coverImgSrc);
 
   if (loading) return <Centered>Loading</Centered>;
   if (error)   return <Centered tone="error">Failed to load: {error}</Centered>;
@@ -164,27 +142,28 @@ export default function AlbumDetail({ accent, albumPath }) {
 
   return (
     <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-      {/* Header: cover + meta */}
-      <div style={{
-        position: 'relative',
-        display: 'flex', gap: 28,
-        padding: '32px 28px 26px',
-        borderBottom: '1px solid var(--border)',
-        background: 'color-mix(in oklch, var(--surface), black 8%)',
-        boxShadow: 'inset 0 3px 7px rgba(0,0,0,0.30), inset 0 -1px 0 rgba(255,255,255,0.03)',
-      }}>
-        {/* Recessed-tray floor: a clean wash of the cover's averaged color
-            (falls back to a faint accent wash when extraction is unavailable). */}
-        <div aria-hidden style={{
-          position: 'absolute', inset: 0,
-          background: tint || (accent ? `color-mix(in oklch, ${accent} 60%, transparent)` : 'transparent'),
-          opacity: tint ? 0.16 : 0.06,
-          pointerEvents: 'none',
-          zIndex: 0,
-        }}/>
+      {/* Header: cover + meta, over the sleeve painted full-bleed behind them.
+          .film-detail is the film page's own header shell (library.css) -- it
+          owns the deep top padding derived from the still's aspect, the reading
+          measure, and the layering that keeps the content clickable. Used here
+          verbatim, exactly as AnimeDetailHeader uses it for a film. */}
+      {/* No sleeve, no shell: .film-detail's top padding is reserved FOR the
+          picture, so applying it without one leaves 266px of empty page. */}
+      <div className={img ? 'film-detail' : undefined}
+           style={img ? undefined : { padding: '32px 28px 26px', borderBottom: '1px solid var(--border)' }}>
+        {img && (
+          <div className="film-backdrop is-square" aria-hidden>
+            {/* A real <img>, like the film still: the box takes its height from
+                the file rather than restating an aspect here. is-square adds
+                the one crop a square sleeve needs. */}
+            <img src={img} alt=""/>
+          </div>
+        )}
+        {/* One wrapper for both columns: .film-detail centres its children at
+            the reading measure, so the flex row has to BE a single child. */}
+        <div style={{ display: 'flex', gap: 28 }}>
         {/* LEFT column: cover + metadata stacked beneath it */}
         <div style={{
-          position: 'relative', zIndex: 1,
           width: 240, flexShrink: 0,
           display: 'flex', flexDirection: 'column', gap: 14,
         }}>
@@ -257,7 +236,6 @@ export default function AlbumDetail({ accent, albumPath }) {
           />
         </div>
         <div style={{
-          position: 'relative', zIndex: 1,
           flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12,
         }}>
           {/* Type tag */}
@@ -324,14 +302,14 @@ export default function AlbumDetail({ accent, albumPath }) {
               }))}
             />
 
-            <StatusDropdown
+            <CandySelect
               value={album.status || ''}
               accent={accent}
               title="Mark status"
               placeholder="Status"
-              statuses={LISTEN_STATUSES}
+              options={LISTEN_STATUSES.map(s => ({ value: s, label: statusLabel(s), icon: STATUS_ICON[s], dot: resolveDot(STATUS_DOT_COLOR, s, accent) }))}
+              clearable
               disabled={busy}
-              dotFor={(s) => resolveDot(STATUS_DOT_COLOR, s, accent)}
               onChange={setStatus}
             />
 
@@ -369,6 +347,7 @@ export default function AlbumDetail({ accent, albumPath }) {
           {dlError && (
             <div style={{ fontSize: 11, color: 'var(--error)' }}>{dlError}</div>
           )}
+        </div>
         </div>
       </div>
 
@@ -531,9 +510,11 @@ function TrackRow({ track, idx, accent, playing, highlighted, onPlay, onEnqueue,
 }
 
 function HoverBtn({ children, hover, title, onClick, playing }) {
-  const base = playing ? 'rgba(255,255,255,0.7)' : 'var(--text-faint)';
-  const lit = playing ? 'white' : 'var(--text)';
-  const litBg = playing ? 'rgba(255,255,255,0.18)' : 'var(--surface-2)';
+  // The row face is accent whenever these are visible (hovered or playing), so
+  // one white set reads in both states -- --text-faint vanished on the red face.
+  const base = 'rgba(255,255,255,0.7)';
+  const lit = 'white';
+  const litBg = 'rgba(255,255,255,0.18)';
   return (
     <button
       title={title} onClick={onClick}
@@ -570,58 +551,7 @@ function Centered({ children, tone }) {
   );
 }
 
-function RatingStrip({ value, accent, disabled, stacked, onChange }) {
-  const [hover, setHover] = useState(0);
-  const display = hover || value || 0;
-  const fill = accent || 'var(--accent)';
-  const starsRow = (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-      <div style={{ display: 'flex', gap: 4 }}>
-        {Array.from({ length: 10 }, (_, i) => i + 1).map(n => {
-          const filled = n <= display;
-          return (
-            <button
-              key={n}
-              type="button"
-              data-own-press
-              disabled={disabled}
-              onMouseEnter={() => setHover(n)}
-              onClick={() => onChange(n === value ? 0 : n)}
-              aria-label={`Rate ${n} out of 10`}
-              title={`${n}/10`}
-              className={'candy-btn' + (filled ? ' is-filled' : '')}
-              data-shape="dot"
-              style={{ '--accent': fill }}
-            ><span className="candy-face" /></button>
-          );
-        })}
-      </div>
-      <span style={{
-        fontSize: 10, fontFamily: 'var(--font-mono)',
-        color: value > 0 ? 'var(--text-muted)' : 'var(--text-faint)',
-        fontVariantNumeric: 'tabular-nums',
-        minWidth: 32,
-      }}>
-        {value > 0 ? `${value}/10` : '— /10'}
-      </span>
-    </div>
-  );
-  return (
-    <div
-      onMouseLeave={() => setHover(0)}
-      style={stacked
-        ? { display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6 }
-        : { display: 'flex', alignItems: 'center', gap: 12, marginTop: 2 }}
-    >
-      <span style={{
-        fontSize: 9, fontFamily: 'var(--font-mono)',
-        letterSpacing: '0.08em', textTransform: 'uppercase',
-        color: 'var(--text-faint)',
-      }}>Personal</span>
-      {starsRow}
-    </div>
-  );
-}
+// RatingStrip moved to ../RatingStrip.jsx — shared with the film / series detail
+// page, which used to carry a separate dropdown for the same value.
 
-// StatusDropdown moved to @host/components/ui/StatusDropdown.jsx (shared with the
-// video module). Imported at the top of this file.
+// The status picker is the shared CandySelect (clearable, with status dots).

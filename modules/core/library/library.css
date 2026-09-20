@@ -6,7 +6,7 @@
    stacks its controls (Personal Rating / Status / Play / Download / Add) full
    width and normalizes the three differently-shaped widgets to ONE height
    (33px) so they line up. Selectors out-specify the per-shape heights
-   (.status-candy 36px, select 27px, AddToLibrary 33px inline). */
+   (select 27px, AddToLibrary 33px inline). */
 /* Controls live in a rectangle (.anime-controls-box) at the foot of the head
  * card, laid out as a horizontal wrapping row: [Rating] [Status] [Play/D-L]. */
 /* Uniform height matches the file-tree row (data-shape="row" is --corner-max
@@ -14,8 +14,7 @@
    sidebar uses. The rating dots opt OUT: they are small circles, and stretching
    them to row height would turn them into capsules. */
 .anime-rail-controls { display: flex; flex-flow: row wrap; gap: 10px; align-items: center; justify-content: center; }
-.anime-rail-controls .candy-btn:not([data-shape="dot"]),
-.anime-rail-controls button.status-candy { height: 26px; }
+.anime-rail-controls .candy-btn:not([data-shape="dot"]) { height: 26px; }
 .anime-rail-controls .candy-btn[data-shape="select"] { height: 26px; }
 .anime-rail-controls .candy-btn[data-shape="icon"] { width: 26px; height: 26px; }
 .anime-rail-controls .candy-btn:not([data-shape="dot"]) > .candy-face { height: 100%; }
@@ -446,29 +445,8 @@
  * --cbtn-rest knob (styles.css :root) now carries a lifted --border for every
  * button in the app, which is what this rule was reaching for locally; leaving it
  * would have pinned the film page to the UNLIFTED --border and made it the only
- * dark surface left. The hover pin below stays: it is about hover BEHAVIOUR
- * (neutral, no accent), not about the resting colour. */
-
-/* HOVER — user-directed 2026-09-12: on a film page ONLY the Download button
- * lights accent. Every neutral control (⋯, Reveal, the poster tile, the Seg
- * options) stays at its rest colours through hover and press. is-primary
- * buttons (Download, the status trigger, IMDb / Letterboxd / TMDb) are already
- * accent at rest and are untouched, as are the rating dots, which carry their
- * fill as .is-filled rather than :hover. */
-.film-detail .candy-btn:not(.is-primary, .is-hover-accent, .is-active, .is-selected, [data-shape="dot"]):is(:hover, :active) {
-  --cbtn-band: var(--cbtn-rest);
-}
-.film-detail .candy-btn:not(.is-primary, .is-hover-accent, .is-active, .is-selected, [data-shape="dot"]):is(:hover, :active) > .candy-face {
-  color: var(--text-muted);
-  background: var(--cbtn-face);
-}
-.film-detail .candy-btn:not(.is-primary, .is-hover-accent, .is-active, .is-selected, [data-shape="dot"]):is(:hover, :active) .candy-face :where(div, span) {
-  color: var(--text-muted);
-}
-
-/* is-hover-accent is the app's existing opt-in for "neutral at rest, accent on
- * hover" (the titlebar wears it). Exempted above so the source buttons and the
- * tab run keep lighting up while every other film control stays dark. */
+ * dark surface left. (The film-page hover pin was deleted 2026-09-18: every
+ * button lights accent on hover, app-wide.) */
 
 /* Cast / Crew as a wrapping run of plain name chips. */
 .film-credit-list {
@@ -564,6 +542,15 @@
   display: block;
   width: 100%;
   height: auto;
+}
+/* An album sleeve is SQUARE, and a square at full width is a 1:1 wall that
+   buries the page. This is the one and only difference from a film still:
+   crop it to the same 16:9 the mask stops and the derived padding above
+   already assume. Everything else about the rule -- mask, scrim, the
+   ratio-derived padding -- is shared with films untouched. */
+.film-detail > .film-backdrop.is-square > img {
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
 }
 /* An EVEN scrim over the photo -- masking alone still let bright frames wash out
  * the title. Flat, not a left-to-right gradient: the gradient hid the left of
