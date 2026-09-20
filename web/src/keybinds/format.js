@@ -22,7 +22,9 @@ const MODIFIER_GLYPH = IS_MAC
 
 function prettyKey(key) {
   if (!key) return '';
-  if (key.length === 1) return key.toUpperCase();
+  // F-keys read F6, not f6 — toAccelerator already uppercases them for Windows,
+  // so without this the cap and the registered hotkey disagreed on screen.
+  if (/^f([1-9]|1\d|2[0-4])$/i.test(key) || key.length === 1) return key.toUpperCase();
   // Common named keys
   if (key === 'ArrowUp') return '↑';
   if (key === 'ArrowDown') return '↓';

@@ -129,7 +129,7 @@ export default function KeybindsTab({ settings, setSetting, accent, initialFilte
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
         <SectionHeaderInline title="Keybinds" subtitle="Click a binding to record a new one. Esc cancels, Backspace clears. Modifier-only hold bindings (like Shift to peek) capture after a 1-second hold with no follow-up key." />
 
-        {initialFilter && (
+        {initialFilter && onClearFilter && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{
               fontSize: 11, fontFamily: 'var(--font-mono)', letterSpacing: '0.04em',

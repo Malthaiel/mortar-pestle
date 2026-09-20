@@ -82,6 +82,7 @@ export const PAGE_SECTIONS = {
       { id: 'voice',   label: 'Voice' },
       { id: 'agents',  label: 'Agents' },
       { id: 'monitor', label: 'Monitor' },
+      { id: 'deadlock', label: 'Deadlock' },
     ],
   },
   broadcast: {

@@ -47,7 +47,11 @@ export const KEYBIND_REGISTRY = [
   // fixed in the daemon and deliberately absent — there is nothing to edit.
   {
     id: 'stt.scrim-note',
-    group: 'Voice',
+    // 'Coaching', not 'Voice' (2026-09-19, user call): it is a Deadlock-match key,
+    // so it belongs beside the VOD timer binds in Overlay settings › Deadlock,
+    // which filters KeybindsTab to this group. It was the ONLY 'Voice' row, so
+    // that group is gone rather than left empty.
+    group: 'Coaching',
     label: 'Hold to dictate a note onto the live scrim',
     default: { kind: 'chord', key: 'X', modifiers: ['alt'] },
   },
