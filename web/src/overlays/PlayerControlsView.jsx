@@ -368,11 +368,19 @@ export default function PlayerControlsView() {
       >
         {/* Title + window buttons. Was an overlay on the <video>; under mpv the
             picture is above the web layer, so it lives here instead — same
-            gradient, same buttons, reaching the app as events. */}
-        <div style={{
+            buttons, reaching the app as events. NO backing gradient: the scrim
+            that used to fade down from the top read as a shadow cast onto the
+            picture. */}
+        <div
+          onMouseDown={(e) => {
+            // Empty bar space drags the APP window. Anything interactive keeps
+            // its own click: a drag started on a button eats the press.
+            if (e.button !== 0 || e.target.closest('button, input, a, [role="button"]')) return;
+            send('drag');
+          }}
+          style={{
           ...fade,
           padding: '14px 24px 32px',
-          background: 'linear-gradient(to bottom, rgba(0,0,0,0.7), rgba(0,0,0,0))',
           display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
           gap: 16, flexShrink: 0,
         }}>

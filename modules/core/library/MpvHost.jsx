@@ -18,6 +18,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, emit } from '@tauri-apps/api/event';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useVideoPlayer, LS, loadJSON, saveJSON } from './VideoPlayerProvider.jsx';
 import { videoApi } from './api.js';
 
@@ -215,6 +216,12 @@ export default function MpvHost() {
           .catch(() => { startRef.current = 0; })
           .finally(() => setReopenNonce((n) => n + 1));
       }
+      // The picture is `inset: 0`, so it buries the app's own drag strip
+      // (TitleBar.jsx) under an OS window no stacking order in the page can
+      // reach — the app could not be dragged at all while a video was open.
+      // The bar asks; THIS window drags, because `startDragging` moves the
+      // window it is called from and the controls layer is not that window.
+      else if (a === 'drag') getCurrentWindow().startDragging().catch(() => {});
       else if (a === 'fullscreen') v.requestFullscreen();
       else if (a === 'close') v.closePlayer();
       else if (a === 'minimise') window.location.hash = '/pulse/today';

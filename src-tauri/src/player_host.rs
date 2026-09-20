@@ -19,8 +19,24 @@
 //! HWND_BOTTOM is simply invisible. The controls therefore cannot live in the
 //! main web layer.
 //!
-//! THE CONTROLS ARE A BORDERLESS TRANSPARENT TOP-LEVEL WINDOW, the shape
-//! `overlay-toast` and `overlay-host` already use. A CHILD WEBVIEW WAS TRIED
+//! THE CONTROLS ARE A BORDERLESS TRANSPARENT TOP-LEVEL WINDOW **OWNED BY THE
+//! MAIN WINDOW** — deliberately NOT an always-on-top one. Ownership is what
+//! keeps the bar above the app and its mpv child while still letting every
+//! OTHER application cover it; `always_on_top` was tried on 2026-09-06 and
+//! floated this click-eating transparent layer over File Explorer. The full
+//! reasoning lives at the `.owner(&main)` call in `player_controls_attach`,
+//! which is the authority — do not re-derive it from this header.
+//!
+//! A non-TOPMOST ex-style on the live window is therefore CORRECT, not a
+//! missing flag. Re-verified by measurement 2026-09-07 after this header's
+//! earlier "ALWAYS-ON-TOP" wording sent a debug session hunting a z-order bug
+//! that does not exist: `GWLP_HWNDPARENT` on the live controls window returns
+//! the main HWND, and forcing the main window to `HWND_TOP` still cannot get
+//! above the bar. Note the window is rebuilt on every episode change, so a
+//! handle captured earlier measures a DEAD window and reports no owner.
+//!
+//! It uses the same shape `overlay-toast` and `overlay-host` already do.
+//! A CHILD WEBVIEW WAS TRIED
 //! FIRST AND CANNOT WORK: a transparent child webview occludes the mpv child
 //! EVERYWHERE IT EXTENDS, transparent pixels included — its DirectComposition
 //! surface hides a plain sibling window and shows the MAIN web layer through
@@ -68,7 +84,7 @@ use windows::Win32::System::Threading::{OpenProcess, TerminateProcess, PROCESS_T
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, IsWindow, RegisterClassExW, SetWindowPos,
     HWND_TOP, SWP_NOACTIVATE, SWP_NOZORDER, SWP_SHOWWINDOW, WNDCLASSEXW, WS_CHILD,
-    GetForegroundWindow, GetWindowLongPtrW, GetWindowThreadProcessId, SetWindowLongPtrW,
+    GetWindowLongPtrW, SetWindowLongPtrW,
     GWL_EXSTYLE, WS_CLIPSIBLINGS, WS_EX_NOACTIVATE,
     WS_EX_NOPARENTNOTIFY, WS_EX_TRANSPARENT, WS_VISIBLE,
 };
@@ -692,6 +708,31 @@ fn reflow_controls(app: &AppHandle) {
 
 /// Show or hide every live controls window. An always-on-top window that keeps
 /// floating once the app is behind something else is a bug, not a feature.
+/// Re-apply `WS_EX_NOACTIVATE`. MUST be called AFTER every `show()`.
+///
+/// NEVER take focus. A normal window steals activation the moment it is created
+/// or clicked, which blurs the main window — and the controls hide with the app,
+/// so using a control hid the controls. Worse, the two events disagree: measured
+/// 2026-08-23, the controls window reported `focused=true` in its event while
+/// `is_focused()` said false 176 ms later, so nothing that ASKS about focus can
+/// arbitrate this. With the flag the window still receives every mouse message,
+/// it just never becomes active; keyboard input keeps going to the app, which is
+/// where the player's shortcuts already live.
+///
+/// AFTER, not before: showing a window rewrites `GWL_EXSTYLE` wholesale from the
+/// toolkit's own flag model, so a style applied between `build()` and `show()` is
+/// erased with no error. Measured 2026-09-06 — the live controls window read
+/// ex=0x40118, the NOACTIVATE bit (0x08000000) absent, and it was the foreground
+/// window. That is why this lives in a function: every `show()` site needs it.
+fn no_activate(win: &tauri::WebviewWindow) {
+    if let Ok(hwnd) = win.hwnd() {
+        unsafe {
+            let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+            SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex | WS_EX_NOACTIVATE.0 as isize);
+        }
+    }
+}
+
 fn set_controls_visible(app: &AppHandle, visible: bool) {
     let labels: Vec<String> = CONTROLS
         .lock()
@@ -703,6 +744,9 @@ fn set_controls_visible(app: &AppHandle, visible: bool) {
         match app.get_webview_window(&label) {
             Some(win) => {
                 let r = if visible { win.show() } else { win.hide() };
+                if visible {
+                    no_activate(&win);
+                }
                 trace(&format!("vis   {label} ok={}", r.is_ok()));
             }
             None => trace(&format!("vis   {label} NO SUCH WINDOW")),
@@ -713,8 +757,8 @@ fn set_controls_visible(app: &AppHandle, visible: bool) {
 /// Wire the controls windows to the app window, once. Window events arrive on
 /// the main thread, which is where every placement call has to happen anyway.
 ///
-/// Move and resize only. FOCUS IS NOT HANDLED HERE — see `on_focus_change`,
-/// which `lib.rs`'s builder-level handler drives instead. This one is registered
+/// Move and resize only. Nothing here reacts to focus — see the note above
+/// `player_controls_attach` for why focus is not tracked at all. Registered
 /// lazily behind a `Once` whose body starts with `let Some(main) = … else
 /// { return }`: one missed lookup spends the `Once` for the life of the process
 /// and the handler is then never registered at all. Measured 2026-08-23: the
@@ -735,53 +779,22 @@ fn ensure_follow(app: &AppHandle) {
     });
 }
 
-/// Show or hide the controls with the app, driven from `lib.rs`'s window-event
-/// handler — the one that is known to fire for every window.
+/// FOCUS IS NOT TRACKED. There used to be an `on_focus_change` here that hid
+/// the controls whenever the app blurred, because an `always_on_top` layer left
+/// up would float over whatever the user switched to. The layer is OWNED by main
+/// now (see `player_controls_attach`), so the window manager already keeps it
+/// above this app and below every other one, and it hides and minimises with its
+/// owner for free — the hide had nothing left to prevent and two ways to fail:
 ///
-/// Only the MAIN window matters here, because the controls window carries
-/// WS_EX_NOACTIVATE and can never take focus (see player_controls_attach). That
-/// is what makes this a one-liner: main blurred means a real app-switch, so the
-/// controls hide with it, and minimise is covered for free because a minimised
-/// window loses focus first. An earlier version tried to arbitrate by asking
-/// each window whether it held focus, 180 ms after the fact — the window flags
-/// and the focus events disagreed and it hid the controls the instant they
-/// appeared.
-pub fn on_focus_change(app: &AppHandle, label: &str, focused: bool) {
-    trace(&format!("focus event    label={label} focused={focused}"));
-    // MAIN ONLY. Letting the controls window drive this makes it hide itself the
-    // moment it loses focus — measured 2026-08-23, it fired focused=true then
-    // focused=false 11 ms later, and the second one put it away.
-    if label != "main" {
-        return;
-    }
-    if focused {
-        set_controls_visible(app, true);
-        return;
-    }
-    // A blur on main is NOT proof the app went away. Clicking the controls (or
-    // anything else of ours) moves focus WITHIN the process, and no single
-    // window's focus state describes that: measured 2026-08-23, main went
-    // false, the controls went true then false 1 ms later, so at the end NOTHING
-    // reported focus while the user was actively clicking. Ask the only question
-    // that separates "using the player" from "switched to another app": does the
-    // foreground window still belong to this process? Deferred, because the new
-    // foreground window is not set yet at the instant the old one blurs.
-    let app = app.clone();
-    std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_millis(150));
-        let ours = unsafe {
-            let fg = GetForegroundWindow();
-            let mut pid = 0u32;
-            GetWindowThreadProcessId(fg, Some(&mut pid));
-            pid == std::process::id()
-        };
-        trace(&format!("focus settled  foreground_is_ours={ours}"));
-        if !ours {
-            set_controls_visible(&app, false);
-        }
-    });
-}
-
+/// - mpv takes the foreground when it spawns, so the "is the front window still
+///   ours" test read a foreign pid and put the bar away 650 ms into playback
+///   (measured 2026-09-06).
+/// - WS_EX_NOACTIVATE means clicking the bar can never re-focus main, so once
+///   the bar was hidden NOTHING on the player could bring it back. That is the
+///   dead-controls bug, and no amount of tuning the test fixes it: the test is
+///   the wrong question now.
+///
+/// `set_controls_visible` survives for teardown (`ensure_follow`'s close path).
 /// Attach (or move) the controls window over `surface`'s picture rect.
 #[tauri::command]
 pub async fn player_controls_attach(
@@ -808,8 +821,15 @@ pub async fn player_controls_attach(
                 win.set_position(pos).map_err(|e| format!("controls position: {e}"))?;
                 win.set_size(size).map_err(|e| format!("controls size: {e}"))?;
                 let _ = win.show();
+                no_activate(&win);
                 return Ok(label);
             }
+
+            // The owner, looked up before the builder so a missing main window is
+            // an error here rather than a silently un-owned floating layer.
+            let main = app2
+                .get_webview_window("main")
+                .ok_or_else(|| "controls: no main window to own the layer".to_string())?;
 
             let win = WebviewWindowBuilder::new(
                 &app2,
@@ -827,37 +847,33 @@ pub async fn player_controls_attach(
             .shadow(false)
             .resizable(false)
             .skip_taskbar(true)
-            // Above the picture, which itself sits above the main web layer.
-            .always_on_top(true)
+            // OWNED BY MAIN, never always-on-top. An owned window is kept above
+            // its owner AND the owner's children — so above the mpv picture,
+            // which is what this needs — and BELOW every other application,
+            // which is the whole difference. `always_on_top(true)` floated this
+            // transparent, click-eating layer over File Explorer and everything
+            // else: the other app looked like it was in front while every click
+            // aimed at it landed here instead. Measured 2026-09-06 — ex=0x40118
+            // (TOPMOST set) on a window stacked over a foreign window, and the
+            // app's own hide-on-blur could not save it. Ownership is the window
+            // manager's own answer to "above mine, below theirs" and needs no
+            // focus bookkeeping at all.
+            .owner(&main)
+            .map_err(|e| format!("owner(controls): {e}"))?
             // Never steal activation at creation. Without this the new window
             // takes focus, the MAIN window blurs, and the blur handler hides the
             // controls the instant they were built — the app is then focused
             // with no controls and nothing to bring them back. WS_EX_NOACTIVATE
-            // is applied below as well, but only takes effect after build().
+            // is applied after every show() as well — see `no_activate`.
             .focused(false)
             // Placed before it is shown, so it never flashes at the origin.
             .visible(false)
             .build()
             .map_err(|e| format!("build(controls): {e}"))?;
-            // NEVER take focus. A normal window steals activation the moment it
-            // is created or clicked, which blurs the main window — and the
-            // controls hide with the app, so using a control hid the controls.
-            // Worse, the two events disagree: measured 2026-08-23, the controls
-            // window reported `focused=true` in its event while `is_focused()`
-            // said false 176 ms later, so nothing that ASKS about focus can
-            // arbitrate this. WS_EX_NOACTIVATE removes the question — the window
-            // still receives every mouse message, it just never becomes active.
-            // Keyboard input keeps going to the app, which is where the player's
-            // shortcuts already live.
-            if let Ok(hwnd) = win.hwnd() {
-                unsafe {
-                    let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
-                    SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex | WS_EX_NOACTIVATE.0 as isize);
-                }
-            }
             win.set_position(pos).map_err(|e| format!("controls position: {e}"))?;
             win.set_size(size).map_err(|e| format!("controls size: {e}"))?;
             let _ = win.show();
+            no_activate(&win);
             if let Ok(mut g) = CONTROLS.lock() {
                 g.get_or_insert_with(HashMap::new).insert(surface.clone(), label.clone());
             }
