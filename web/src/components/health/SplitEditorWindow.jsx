@@ -124,7 +124,7 @@ export default function SplitEditorWindow({ open, onClose, accent = 'var(--accen
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <button type="button" className="candy-btn" data-shape="chip" onClick={onClose}><span className="candy-face">Cancel</span></button>
           <button type="button" className="candy-btn" data-shape="chip" disabled={!canSave || saving} onClick={save} style={!canSave ? { opacity: 0.5 } : undefined}>
-            <span className="candy-face"><IconCheck size={13} /> {saving ? 'Saving' : 'Save split'}</span>
+            <span className="candy-face"><IconCheck size={13} /> {saving ? 'Saving' : 'Save Split'}</span>
           </button>
         </div>
       )}
@@ -157,7 +157,7 @@ export default function SplitEditorWindow({ open, onClose, accent = 'var(--accen
             )}
           />
           <button type="button" className="candy-btn" data-shape="chip" onClick={addDay} style={{ alignSelf: 'flex-start' }}>
-            <span className="candy-face"><IconPlus size={12} /> Add day</span>
+            <span className="candy-face"><IconPlus size={12} /> Add Day</span>
           </button>
         </div>
 
@@ -185,7 +185,7 @@ export default function SplitEditorWindow({ open, onClose, accent = 'var(--accen
               )}
             />
             <button type="button" className="candy-btn" data-shape="chip" onClick={addEx} style={{ alignSelf: 'flex-start' }}>
-              <span className="candy-face"><IconPlus size={12} /> Add exercise</span>
+              <span className="candy-face"><IconPlus size={12} /> Add Exercise</span>
             </button>
           </div>
         )}

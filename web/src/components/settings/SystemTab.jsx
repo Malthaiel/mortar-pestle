@@ -356,7 +356,6 @@ function PhaseLadder({ mode, phase, accent }) {
               }}/>
               <span style={{
                 fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.04em',
-                textTransform: 'uppercase',
                 color: lit ? 'var(--text-muted)' : 'var(--text-faint)',
                 transition: 'color 160ms cubic-bezier(0.32, 0.72, 0, 1)',
               }}>{PHASE_LABELS[p]}</span>
@@ -427,7 +426,7 @@ function OutputPanel({ lines, open, onToggle, running }) {
           transition: 'transform 160ms ease',
           fontFamily: 'var(--font-mono)',
         }}>▸</span>
-        <span style={{ textTransform: 'uppercase' }}>Output · {count} line{count === 1 ? '' : 's'}</span>
+        <span style={{}}>Output · {count} line{count === 1 ? '' : 's'}</span>
         {!open && tailLine && (
           <span style={{
             flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',

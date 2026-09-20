@@ -26,8 +26,8 @@ const MACROS = [
 
 const MICRO_LABELS = {
   vitamin_d: 'Vit D', vitamin_a: 'Vit A', vitamin_c: 'Vit C', vitamin_e: 'Vit E', vitamin_k: 'Vit K',
-  vitamin_b6: 'Vit B6', vitamin_b12: 'Vit B12', added_sugars: 'Added sugar', natural_sugar: 'Natural sugar',
-  saturated_fat: 'Sat fat', trans_fat: 'Trans fat',
+  vitamin_b6: 'Vit B6', vitamin_b12: 'Vit B12', added_sugars: 'Added Sugar', natural_sugar: 'Natural Sugar',
+  saturated_fat: 'Sat Fat', trans_fat: 'Trans Fat',
 };
 const microLabel = (k) => MICRO_LABELS[k] || k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
@@ -183,7 +183,7 @@ export default function NutritionSection({ accent = 'var(--accent)', isToday = f
         <NutritionRing value={consumed.kcal} goal={targets?.kcal || 0} accent={accent} />
         {!lib.loading && !lib.goals && (
           <button type="button" className="candy-btn" data-shape="chip" onClick={() => setGoalsOpen(true)}>
-            <span className="candy-face">Set goals to track targets</span>
+            <span className="candy-face">Set Goals to Track Targets</span>
           </button>
         )}
         <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -230,7 +230,7 @@ export default function NutritionSection({ accent = 'var(--accent)', isToday = f
           style={{ columnGap: 6, rowGap: candyGap(6, true), justifyContent: 'space-between' }}
         />
         <button type="button" className="candy-btn" data-shape="chip" onClick={() => setShowMore((v) => !v)} style={{ alignSelf: 'center' }}>
-          <span className="candy-face">{showMore ? 'Less' : 'More micros'}</span>
+          <span className="candy-face">{showMore ? 'Less' : 'More Micros'}</span>
         </button>
       </div>
 

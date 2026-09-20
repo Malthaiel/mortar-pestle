@@ -6,9 +6,9 @@
 // colours the avatar circles and the VOD report's stamp chips draw from, so a retune is one edit.
 const STATUS = {
   open:         { label: 'Open',         hue: 'var(--hue-slate)' },
-  under_review: { label: 'Under review', hue: 'var(--hue-amber)' },
+  under_review: { label: 'Under Review', hue: 'var(--hue-amber)' },
   planned:      { label: 'Planned',      hue: 'var(--hue-violet)' },
-  in_progress:  { label: 'In progress',  hue: 'var(--accent)' },
+  in_progress:  { label: 'In Progress',  hue: 'var(--accent)' },
   done:         { label: 'Done',         hue: 'var(--hue-green)' },
   declined:     { label: 'Declined',     hue: 'var(--error)' },
 };

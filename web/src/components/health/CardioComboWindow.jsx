@@ -78,7 +78,7 @@ export default function CardioComboWindow({ open, onClose, accent = 'var(--accen
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <button type="button" className="candy-btn" data-shape="chip" onClick={onClose}><span className="candy-face">Cancel</span></button>
           <button type="button" className="candy-btn" data-shape="chip" disabled={!canSave || saving} onClick={save} style={!canSave ? { opacity: 0.5 } : undefined}>
-            <span className="candy-face"><IconCheck size={13} /> {saving ? 'Saving' : 'Save preset'}</span>
+            <span className="candy-face"><IconCheck size={13} /> {saving ? 'Saving' : 'Save Preset'}</span>
           </button>
         </div>
       )}

@@ -89,7 +89,7 @@ export default function ExportDialog({ open, onClose, api, accent, project, regi
   }, [open, api]);
 
   // SF6/SF8: probe encoder caps + load user presets on open. Cached in Rust, so
-  // this is cheap on repeat opens; the Re-probe control forces a refresh.
+  // this is cheap on repeat opens; the Re-Probe control forces a refresh.
   const runProbe = (force) => {
     setProbing(true);
     return api.invoke('vedit_encoder_probe', { force: !!force })
@@ -285,7 +285,7 @@ export default function ExportDialog({ open, onClose, api, accent, project, regi
         {/* SF8: remediation banner — proactive, before any render attempt. */}
         {ffmpegMissing && (
           <div style={{ ...mono, fontSize: 11.5, color: 'var(--error)', border: '1px solid color-mix(in oklch, var(--error) 33%, transparent)', borderRadius: 8, padding: '8px 10px', lineHeight: 1.5 }}>
-            <b>ffmpeg not found.</b> Install it and reopen — e.g. <span style={{ color: 'var(--text)' }}>winget install Gyan.FFmpeg</span> — or place ffmpeg.exe on PATH. <button type="button" onClick={() => runProbe(true)} className="candy-btn" data-shape="row" style={{ marginLeft: 4 }}><span className="candy-face">Re-probe</span></button>
+            <b>ffmpeg not found.</b> Install it and reopen — e.g. <span style={{ color: 'var(--text)' }}>winget install Gyan.FFmpeg</span> — or place ffmpeg.exe on PATH. <button type="button" onClick={() => runProbe(true)} className="candy-btn" data-shape="row" style={{ marginLeft: 4 }}><span className="candy-face">Re-Probe</span></button>
           </div>
         )}
         {!ffmpegMissing && h264Missing && (

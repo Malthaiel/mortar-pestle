@@ -1,5 +1,5 @@
 // Playlists tab. With a `rest` path → the playlist detail; otherwise the grid of
-// playlist cards + a "New playlist" action. Mirrors AlbumBrowser's grid feel; the
+// playlist cards + a "New Playlist" action. Mirrors AlbumBrowser's grid feel; the
 // cards use CollageCover (custom image, else 2×2 album-cover mosaic, else
 // initials).
 
@@ -59,7 +59,7 @@ function PlaylistGrid({ accent }) {
           onClick={() => setModal(true)}
           style={{ height: 32, ...(accent ? { '--accent': accent } : {}) }}
         >
-          <span className="candy-face" style={{ padding: '0 14px' }}>+ New playlist</span>
+          <span className="candy-face" style={{ padding: '0 14px' }}>+ New Playlist</span>
         </button>
       </div>
 

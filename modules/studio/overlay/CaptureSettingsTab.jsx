@@ -70,7 +70,7 @@ const triggerKbd = {
 };
 const reservedBadge = {
   fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.06em',
-  textTransform: 'uppercase', color: 'var(--text-faint)',
+  color: 'var(--text-faint)',
   border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)',
   padding: '1px 5px', marginLeft: 8,
 };
@@ -242,7 +242,7 @@ function RecordingsSection({ snapshot }) {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button type="button" onClick={change} disabled={busy || locked} style={actionBtn}>Change folder</button>
           <button type="button" onClick={openFolder} disabled={!dir} style={actionBtn}>Open folder</button>
-          <button type="button" onClick={reset} disabled={busy || locked} style={actionBtn}>Reset to default</button>
+          <button type="button" onClick={reset} disabled={busy || locked} style={actionBtn}>Reset to Default</button>
         </div>
         {locked && <div style={hintText}>Stop recording to change the folder.</div>}
         {err && <div style={{ ...hintText, color: 'var(--error)' }}>{err}</div>}

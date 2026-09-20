@@ -119,7 +119,7 @@ export default function RoomTitle({ accent, kind = 'series', imdbId }) {
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 2 }}>
             {owned ? (
               <button onClick={() => go(HOME + '/' + encodePath(owned.path))} className="candy-btn is-primary" style={{ cursor: 'pointer' }}>
-                <span className="candy-face">Open in your library</span>
+                <span className="candy-face">Open in Your Library</span>
               </button>
             ) : (
               <button onClick={onAdd} disabled={adding} className="candy-btn is-primary"
@@ -166,7 +166,7 @@ function Refused({ refused, accent, home }) {
       {!toAnime && owned && (
         <button onClick={() => go(`${home}/${encodePath(owned)}`)}
           data-own-press className="candy-btn" data-shape="chip" style={{ marginLeft: 'auto', '--accent': accent }}>
-          <span className="candy-face" style={{ fontSize: 11 }}>Open it →</span>
+          <span className="candy-face" style={{ fontSize: 11 }}>Open It →</span>
         </button>
       )}
     </div>

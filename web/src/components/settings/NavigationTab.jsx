@@ -66,8 +66,8 @@ function LeftSidebarPanel({ settings, setSetting, accent }) {
           <Seg
             value={settings.sidebarGroupMode || 'accordion'}
             options={[
-              { value: 'expanded',    label: 'All open' },
-              { value: 'accordion',   label: 'One open' },
+              { value: 'expanded',    label: 'All Open' },
+              { value: 'accordion',   label: 'One Open' },
               { value: 'independent', label: 'Manual' },
             ]}
             onChange={v => setSetting('sidebarGroupMode', v)}

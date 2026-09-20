@@ -19,7 +19,7 @@
 //
 // Reset:
 //   - Per-row ↺ icon (visible only when the row's binding differs from default)
-//   - "Reset all keybinds" footer button (resets the whole keybinds object)
+//   - "Reset All Keybinds" footer button (resets the whole keybinds object)
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -135,7 +135,7 @@ export default function KeybindsTab({ settings, setSetting, accent, initialFilte
               fontSize: 11, fontFamily: 'var(--font-mono)', letterSpacing: '0.04em',
               color: 'var(--text-muted)',
             }}>Showing {initialFilter} keybinds only</span>
-            <OutlinedBtn small onClick={onClearFilter}>Show all ✕</OutlinedBtn>
+            <OutlinedBtn small onClick={onClearFilter}>Show All ✕</OutlinedBtn>
           </div>
         )}
 
@@ -143,8 +143,7 @@ export default function KeybindsTab({ settings, setSetting, accent, initialFilte
           <div key={groupName} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <div style={{
               fontSize: 10, fontFamily: 'var(--font-mono)',
-              letterSpacing: '0.1em', textTransform: 'uppercase',
-              color: 'var(--text-faint)', fontWeight: 600,
+              letterSpacing: '0.1em',               color: 'var(--text-faint)', fontWeight: 600,
               padding: '4px 0 2px',
             }}>{groupName}</div>
             <div style={{
@@ -177,7 +176,7 @@ export default function KeybindsTab({ settings, setSetting, accent, initialFilte
           borderTop: '1px solid var(--border-soft)',
           display: 'flex', justifyContent: 'flex-end',
         }}>
-          <OutlinedBtn small onClick={resetAll}>Reset all keybinds</OutlinedBtn>
+          <OutlinedBtn small onClick={resetAll}>Reset All Keybinds</OutlinedBtn>
         </div>
       </div>
 
@@ -374,7 +373,6 @@ function KeybindRow({ entry, binding, listening, isLast, accent, onStart, onCanc
           <span style={{
             fontSize: 10.5, color: accent,
             fontFamily: 'var(--font-mono)', letterSpacing: '0.08em',
-            textTransform: 'uppercase',
           }}>Listening… Esc cancels · Backspace clears</span>
         )}
       </div>
@@ -395,7 +393,7 @@ function KeybindRow({ entry, binding, listening, isLast, accent, onStart, onCanc
         {!isDefault && !listening && (
           <IconBtn
             size={26}
-            title="Reset to default"
+            title="Reset to Default"
             onClick={(e) => { e.stopPropagation(); onReset(); }}
           >
             <IconRotateCw size={14} />

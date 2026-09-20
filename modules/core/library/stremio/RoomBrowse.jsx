@@ -63,7 +63,7 @@ export default function RoomBrowse({ accent, kind = 'series', mode, query }) {
       {items && items.length > 0 && more && (
         <button onClick={() => setSkip(s => s + 100)} disabled={loading} data-own-press className="candy-btn"
           style={{ alignSelf: 'center', cursor: loading ? 'default' : 'pointer' }}>
-          <span className="candy-face" style={{ fontSize: 12 }}>{loading ? 'Loading' : 'Load more'}</span>
+          <span className="candy-face" style={{ fontSize: 12 }}>{loading ? 'Loading' : 'Load More'}</span>
         </button>
       )}
     </div>

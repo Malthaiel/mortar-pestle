@@ -53,7 +53,6 @@
   font-size: 9px;
   font-family: var(--font-mono);
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--text-faint);
   font-weight: 600;
 }
@@ -120,7 +119,6 @@
   font-size: 16px;
   font-family: var(--font-mono);
   letter-spacing: 0.07em;
-  text-transform: uppercase;
   color: var(--text);
   font-weight: 700;
   white-space: nowrap;
@@ -213,7 +211,6 @@
   font-size: 9.5px;
   font-family: var(--font-mono);
   letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: var(--text-muted);
   font-weight: 600;
   white-space: nowrap;
@@ -297,7 +294,6 @@
   font-size: 9px;
   font-family: var(--font-mono);
   letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: var(--text-faint);
   overflow: hidden;
   text-overflow: ellipsis;

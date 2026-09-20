@@ -118,7 +118,7 @@ export default function MealBuilderWindow({ open, onClose, accent = 'var(--accen
             <span className="candy-face">Cancel</span>
           </button>
           <button type="button" className="candy-btn" data-shape="chip" disabled={!canSave || saving} onClick={save} style={!canSave ? { opacity: 0.5 } : undefined}>
-            <span className="candy-face"><IconCheck size={13} /> {saving ? 'Saving' : 'Save meal'}</span>
+            <span className="candy-face"><IconCheck size={13} /> {saving ? 'Saving' : 'Save Meal'}</span>
           </button>
         </div>
       )}

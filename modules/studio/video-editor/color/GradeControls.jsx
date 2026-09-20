@@ -17,7 +17,6 @@ const rowLabel = {
   fontSize: 10,
   fontWeight: 600,
   letterSpacing: '0.08em',
-  textTransform: 'uppercase',
   color: 'var(--text-faint)',
   width: 36,
   flexShrink: 0,

@@ -46,8 +46,7 @@ export default function RecipeTray({ recipeState, def, accent, onApply, onDiscar
           <span style={{ color: accentColor, fontSize: 11 }}>✦</span>
           <span style={{
             fontSize: 10.5, fontWeight: 700, color: 'var(--text)',
-            fontFamily: 'var(--font-mono)', letterSpacing: '0.04em', textTransform: 'uppercase',
-          }}>{def?.label || 'Recipe'}</span>
+            fontFamily: 'var(--font-mono)', letterSpacing: '0.04em',           }}>{def?.label || 'Recipe'}</span>
           {file && (
             <span title={file} style={{
               fontSize: 10, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)',

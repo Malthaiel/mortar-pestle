@@ -44,7 +44,7 @@ export default function SubtitleSettingsPanel() {
       }}>
         <span style={{
           fontSize: 13, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em',
-          textTransform: 'uppercase', color: 'white', fontWeight: 700,
+          color: 'white', fontWeight: 700,
         }}>Subtitles</span>
         <button
           onClick={v.resetSubSettings}

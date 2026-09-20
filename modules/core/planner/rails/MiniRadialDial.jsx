@@ -62,8 +62,7 @@ export default function MiniRadialDial({ accent: _appAccent }) {
           maxHeight: '100%',
           fontFamily: 'var(--font-mono)',
           fontSize: 12, fontWeight: 600,
-          letterSpacing: '0.12em', textTransform: 'uppercase',
-          lineHeight: 1.15,
+          letterSpacing: '0.12em',           lineHeight: 1.15,
           color: phaseColor,
           transition: 'color 240ms cubic-bezier(0.32, 0.72, 0, 1)',
         }}>{phaseLabel}</span>
@@ -74,8 +73,7 @@ export default function MiniRadialDial({ accent: _appAccent }) {
           maxHeight: '100%',
           fontFamily: 'var(--font-mono)',
           fontSize: 10, fontWeight: 500,
-          letterSpacing: '0.14em', textTransform: 'uppercase',
-          lineHeight: 1.15,
+          letterSpacing: '0.14em',           lineHeight: 1.15,
           color: timeColor,
           transition: 'color 240ms cubic-bezier(0.32, 0.72, 0, 1)',
         }}>{fmt(displaySecs)}</span>

@@ -359,8 +359,7 @@ function TierBadge({ tier, accent }) {
   return (
     <span style={{
       fontSize: 9, fontFamily: 'var(--font-mono)',
-      letterSpacing: '0.08em', textTransform: 'uppercase',
-      padding: '2px 6px',
+      letterSpacing: '0.08em',       padding: '2px 6px',
       borderRadius: 'var(--radius-sm)',
       background: bg,
       color: fg,

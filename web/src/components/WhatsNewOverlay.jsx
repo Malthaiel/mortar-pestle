@@ -101,8 +101,7 @@ export default function WhatsNewOverlay() {
             <>
               <div style={{
                 fontSize: 9, fontFamily: 'var(--font-mono)',
-                letterSpacing: '0.08em', textTransform: 'uppercase',
-                color: accentColor, fontWeight: 600,
+                letterSpacing: '0.08em',                 color: accentColor, fontWeight: 600,
                 marginBottom: 8,
               }}>New in this release</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>

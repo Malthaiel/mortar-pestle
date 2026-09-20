@@ -201,14 +201,14 @@ function MainApp() {
       }),
       registerCommandAction({
         id: 'host.hints.open',
-        label: 'Show keyboard shortcuts',
+        label: 'Show Keyboard Shortcuts',
         keywords: ['help', 'keys', 'cheatsheet'],
         shortcut: '?',
         run: () => setHintsOpen(true),
       }),
       registerCommandAction({
         id: 'host.releases.open',
-        label: 'Open release history',
+        label: 'Open Release History',
         keywords: ['changelog', 'versions', 'updates', 'what\'s new'],
         run: () => navigate('/docs/releases'),
       }),

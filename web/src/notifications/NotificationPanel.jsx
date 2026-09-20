@@ -5,7 +5,7 @@
 // bell is gone). Esc + click-outside close (the bell itself is
 // exempt so it toggles). Opening marks everything read. Rows show per-type accent
 // glyph + title + message + relative time; click an actionable row to run its
-// action; × removes a row; Clear all sweeps the list.
+// action; × removes a row; Clear All sweeps the list.
 
 import { useEffect, useState } from 'react';
 import { useNotifications, runNotificationAction, NOTIF_GLYPH } from './NotificationProvider.jsx';
@@ -47,7 +47,7 @@ export default function NotificationPanel({ open, onClose, accent }) {
       accent={accent}
       title="Notifications"
       outsideExempt="[data-notif-bell]"
-      headerActions={notifications.length > 0 ? <OutlinedBtn small onClick={doClear}>Clear all</OutlinedBtn> : null}
+      headerActions={notifications.length > 0 ? <OutlinedBtn small onClick={doClear}>Clear All</OutlinedBtn> : null}
       style={{
         position: 'fixed', left: pos.left, top: pos.top, width: PANEL_W,
         maxHeight: 420, zIndex: 130, transformOrigin: 'top center',

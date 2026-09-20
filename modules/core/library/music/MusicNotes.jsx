@@ -114,8 +114,7 @@ export default function MusicNotes({ album, accent }) {
     <div style={{ padding: '4px 24px 26px', display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{
         fontSize: 11, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)',
-        letterSpacing: '0.08em', textTransform: 'uppercase',
-        padding: '0 0 6px', borderBottom: '1px solid var(--border)',
+        letterSpacing: '0.08em',         padding: '0 0 6px', borderBottom: '1px solid var(--border)',
         display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
       }}>
         <span>Notes</span>
@@ -156,8 +155,7 @@ export default function MusicNotes({ album, accent }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 2 }}>
           <div style={{
             fontSize: 9, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)',
-            letterSpacing: '0.06em', textTransform: 'uppercase',
-          }}>Linked from</div>
+            letterSpacing: '0.06em',           }}>Linked from</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {backlinks.map((e) => (
               <button

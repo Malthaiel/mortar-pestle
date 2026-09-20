@@ -355,7 +355,7 @@ export function SearchResults({ query, tab, source = 'both', accent, albums, own
             {mbAlbums && mbAlbums.length > 0 && (
               <button onClick={() => toBrowse(query, 'albums')} data-own-press
                       className="candy-btn" data-shape="chip" style={{ marginLeft: 'auto' }}>
-                <span className="candy-face" style={{ fontSize: 11 }}>See all →</span>
+                <span className="candy-face" style={{ fontSize: 11 }}>See All →</span>
               </button>
             )}
           </div>
@@ -396,7 +396,7 @@ function RowList({ children }) {
 
 function GroupHeading({ children }) {
   return (
-    <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>
+    <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', color: 'var(--text-faint)' }}>
       {children}
     </div>
   );

@@ -80,7 +80,7 @@ export default function AnimeCredits({ malId, accent }) {
               <div key={r.relation} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <span style={{
                   fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-faint)',
-                  textTransform: 'uppercase', letterSpacing: '0.06em',
+                  letterSpacing: '0.06em',
                 }}>{r.relation}</span>
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                   {r.entries.map(e => <RelatedCard key={e.malId} entry={e} accent={accent} />)}
@@ -107,7 +107,7 @@ export default function AnimeCredits({ malId, accent }) {
                   <button onClick={() => setCharsExpanded(e => !e)} data-own-press
                           className="candy-btn" data-shape="chip" style={{ '--accent': accent }}>
                     <span className="candy-face" style={{ fontSize: 11 }}>
-                      {charsExpanded ? 'Show less ↑' : 'See all →'}
+                      {charsExpanded ? 'Show Less ↑' : 'See All →'}
                     </span>
                   </button>
                 </div>
@@ -119,7 +119,7 @@ export default function AnimeCredits({ malId, accent }) {
           </section>
         )}
 
-      {/* Staff — horizontal candy tile rail; See all expands to a grid. */}
+      {/* Staff — horizontal candy tile rail; See All expands to a grid. */}
       {staff === null
         ? <CreditsSkeleton title="Staff" />
         : staff.length > 0 && (
@@ -128,7 +128,7 @@ export default function AnimeCredits({ malId, accent }) {
             accent={accent}
             colWidth={112}
             layout={staffExpanded ? 'grid' : 'row'}
-            seeAllLabel={staffExpanded ? 'Show less ↑' : 'See all →'}
+            seeAllLabel={staffExpanded ? 'Show Less ↑' : 'See All →'}
             onSeeAll={() => setStaffExpanded(e => !e)}
           >
             {shownStaff.map(p => <StaffCard key={p.malId || p.name} p={p} accent={accent} />)}
@@ -250,7 +250,7 @@ function StaffCard({ p, accent }) {
         {positions && (
           <div title={positions} style={{
             fontSize: 8, fontFamily: 'var(--font-mono)', color: 'var(--text-faint)',
-            textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 3,
+            letterSpacing: '0.06em', marginTop: 3,
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>{positions}</div>
         )}

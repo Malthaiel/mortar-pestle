@@ -117,7 +117,7 @@ export default function ShieldPopover({ api, accent, host, onClose }) {
 
         <button type="button" className="candy-btn" data-shape="text" data-own-press
           onClick={openSettings} style={{ width: '100%', marginBottom: candyGap(16), '--accent': accent }}>
-          <span className="candy-face">Open Shield settings</span>
+          <span className="candy-face">Open Shield Settings</span>
         </button>
       </div>
     </BrowserPopover>

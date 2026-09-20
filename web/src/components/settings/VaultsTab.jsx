@@ -28,7 +28,7 @@ function ActiveVaultStrip() {
       <VaultStatusDisplay status={vaultStatus} name={vaultName}/>
       <div style={{ flex: 1 }}/>
       <OutlinedBtn small onClick={loadVault} disabled={vaultStatus === 'loading'}>
-        {vaultStatus === 'loading' ? 'Loading' : 'Reload vault'}
+        {vaultStatus === 'loading' ? 'Loading' : 'Reload Vault'}
       </OutlinedBtn>
     </div>
   );
@@ -200,7 +200,7 @@ export default function VaultsTab({ accent }) {
 
       {draft ? (
         <div className="candy-section" style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 14, marginTop: 12 }}>
-          <SectionLabel>{draft.mode === 'create' ? 'Create new vault' : 'Add vault'}</SectionLabel>
+          <SectionLabel>{draft.mode === 'create' ? 'Create New Vault' : 'Add Vault'}</SectionLabel>
           <div style={{ fontSize: 10.5, color: 'var(--text-faint)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{draft.path}</div>
           {draft.mode === 'create' && (
             <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>An empty folder — <code>.obsidian/</code> + a welcome note will be created here.</div>
@@ -225,17 +225,17 @@ export default function VaultsTab({ accent }) {
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
             <OutlinedBtn small onClick={() => { setDraft(null); setError(null); }}>Cancel</OutlinedBtn>
             <OutlinedBtn small onClick={submit} disabled={busy}>
-              {draft.mode === 'create' ? (busy ? 'Creating' : 'Create vault') : (busy ? 'Adding' : 'Add vault')}
+              {draft.mode === 'create' ? (busy ? 'Creating' : 'Create Vault') : (busy ? 'Adding' : 'Add Vault')}
             </OutlinedBtn>
           </div>
         </div>
       ) : (
         <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
           <OutlinedBtn small onClick={() => pickFolder('create')}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconPlus size={13} /> Create new</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconPlus size={13} /> Create New</span>
           </OutlinedBtn>
           <OutlinedBtn small onClick={() => pickFolder('add')}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconDatabase size={13} /> Add existing</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconDatabase size={13} /> Add Existing</span>
           </OutlinedBtn>
         </div>
       )}
@@ -257,7 +257,7 @@ export default function VaultsTab({ accent }) {
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
             <OutlinedBtn small onClick={() => setAdopted(null)}>Dismiss</OutlinedBtn>
-            <OutlinedBtn small onClick={() => { if (adopted.id) request(adopted.id); }}>Switch to configure</OutlinedBtn>
+            <OutlinedBtn small onClick={() => { if (adopted.id) request(adopted.id); }}>Switch to Configure</OutlinedBtn>
           </div>
         </div>
       )}
@@ -326,7 +326,7 @@ function VaultRow({ v, isActive, accent, readOnly, onSwitch, onRegen, onRemove, 
         <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 8 }}>
           {v.name}
           {isActive && (
-            <span style={{ fontSize: 9.5, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.06em', color: accent || 'var(--accent)' }}>active</span>
+            <span style={{ fontSize: 9.5, fontFamily: 'var(--font-mono)', letterSpacing: '0.06em', color: accent || 'var(--accent)' }}>active</span>
           )}
         </span>
         <span style={{ fontSize: 10.5, color: 'var(--text-faint)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.path}</span>
@@ -425,7 +425,7 @@ function VaultMappingEditor({ vault, onClose, setVaultMapping, accent }) {
       {err && <div style={{ fontSize: 12, color: 'var(--danger, var(--text))' }}>{err}</div>}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
         <OutlinedBtn small onClick={onClose}>Cancel</OutlinedBtn>
-        <OutlinedBtn small onClick={save} disabled={busy || folders === null}>{busy ? 'Saving' : 'Save mapping'}</OutlinedBtn>
+        <OutlinedBtn small onClick={save} disabled={busy || folders === null}>{busy ? 'Saving' : 'Save Mapping'}</OutlinedBtn>
       </div>
     </div>
   );

@@ -264,8 +264,7 @@ export default function BrowsePreview({ result, accent, onBack, libraryEntry }) 
                     {showDisc && (
                       <div style={{
                         fontSize: 11, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)',
-                        letterSpacing: '0.08em', textTransform: 'uppercase',
-                        padding: '14px 0 6px', borderBottom: '1px solid var(--border)', marginBottom: 2,
+                        letterSpacing: '0.08em',                         padding: '14px 0 6px', borderBottom: '1px solid var(--border)', marginBottom: 2,
                       }}>Disc {t.disc}</div>
                     )}
                     <TrackRow

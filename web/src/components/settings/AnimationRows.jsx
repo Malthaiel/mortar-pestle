@@ -139,7 +139,7 @@ function Row({ row, value, bucketConfig, accent, onChange }) {
 }
 
 function labelForEnum(v, key) {
-  return v.replace(/-/g, ' ').replace(/^./, c => c.toUpperCase());
+  return v.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
 // Portal popup that follows the cursor while you hover the animation rows: demo +
@@ -226,8 +226,7 @@ function AnimHoverPopup({ seedX, seedY, lerp, row, value, accent }) {
       </div>
       <div style={{
         fontSize: 9, fontFamily: 'var(--font-mono)',
-        letterSpacing: '0.08em', textTransform: 'uppercase',
-        color: 'var(--text-faint)',
+        letterSpacing: '0.08em',         color: 'var(--text-faint)',
       }}>{row.label}</div>
       <div style={{
         fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5,

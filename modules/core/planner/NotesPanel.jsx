@@ -69,8 +69,7 @@ export default function NotesPanel({
           <span style={{
             fontSize: 9, fontFamily: 'var(--font-mono)',
             color: 'var(--text-faint)',
-            letterSpacing: '0.08em', textTransform: 'uppercase',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
+            letterSpacing: '0.08em',             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
           }}>
             {sessionActive ? `SESSION · ${activeTaskName}` : 'NO ACTIVE SESSION'}
           </span>

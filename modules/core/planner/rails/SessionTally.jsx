@@ -37,7 +37,6 @@ export default function SessionTally({ accent }) {
         fontWeight: 600,
         letterSpacing: '0.14em',
         lineHeight: 1.15,
-        textTransform: 'uppercase',
         color: 'var(--text-muted)',
         flexShrink: 0,
       }}>TODAY</span>

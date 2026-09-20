@@ -27,7 +27,7 @@ import CardioChooserPopover from './CardioChooserPopover.jsx';
 import CardioComboWindow from './CardioComboWindow.jsx';
 
 const mono12 = { fontFamily: 'var(--font-mono)', fontSize: 12 };
-const subHeader = { fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' };
+const subHeader = { fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--text-faint)', letterSpacing: '0.05em' };
 const actualInput = { width: 60, flexShrink: 0, background: 'var(--bg-elev)', border: '1px solid var(--border-soft)', borderRadius: 6, color: 'var(--text)', padding: '3px 6px', font: 'inherit', fontSize: 10.5 };
 
 // One logged exercise: done toggle + name + frozen target + free-text actuals

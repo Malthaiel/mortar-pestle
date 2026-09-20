@@ -90,7 +90,7 @@ function RecCard({ rec, accent }) {
           {rec.votes > 0 && (
             <div style={{
               fontSize: 8, fontFamily: 'var(--font-mono)', color: 'var(--text-faint)',
-              textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 3,
+              letterSpacing: '0.06em', marginTop: 3,
             }}>{rec.votes} rec{rec.votes === 1 ? '' : 's'}</div>
           )}
         </div>

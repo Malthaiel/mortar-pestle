@@ -38,7 +38,6 @@ const paneLabel = {
   fontSize: 11,
   fontWeight: 600,
   letterSpacing: '0.08em',
-  textTransform: 'uppercase',
   color: 'var(--text-faint)',
   padding: '10px 12px',
   userSelect: 'none',
@@ -60,7 +59,7 @@ function ClipAudioStrip({ gain, mute, clipId, accent, onGain, onMute }) {
   };
   return (
     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }} onPointerUp={commit} onKeyUp={commit}>
-      <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>Gain</span>
+      <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', color: 'var(--text-faint)' }}>Gain</span>
       <input
         type="range"
         min={0}
@@ -105,7 +104,7 @@ function NumField({ label, value, width = 64, min, max, float = false, onCommit 
   };
   return (
     <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-      <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>{label}</span>
+      <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', color: 'var(--text-faint)' }}>{label}</span>
       <input
         value={draft}
         onChange={e => setDraft(e.target.value)}
@@ -204,7 +203,7 @@ function KeyframeStrip({ clip, laneIdx, ph, accent, seekToFrame, applyOp, projec
 
   return (
     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-      <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>Keyframes</span>
+      <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', color: 'var(--text-faint)' }}>Keyframes</span>
       {KF_PARAMS.map(([p, lbl]) => (
         <button key={p} style={armStyle(armed(p))} onClick={() => toggleArm(p)} title={`${armed(p) ? 'Disable' : 'Enable'} ${lbl} keyframes`}>{lbl}</button>
       ))}

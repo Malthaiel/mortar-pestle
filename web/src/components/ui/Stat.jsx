@@ -29,8 +29,7 @@ export function StatTile({ label, value, accent }) {
       <div style={{
         fontSize: 9, color: 'var(--text-faint)',
         fontFamily: 'var(--font-mono)',
-        letterSpacing: '0.06em', textTransform: 'uppercase',
-        marginBottom: 4,
+        letterSpacing: '0.06em',         marginBottom: 4,
       }}>{label}</div>
       <div style={{
         fontSize: 18, fontWeight: 600,

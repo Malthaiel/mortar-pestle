@@ -31,8 +31,7 @@ function SourceBadge({ source }) {
     <span
       style={{
         fontSize: 9, fontFamily: 'var(--font-mono, ui-monospace, monospace)',
-        letterSpacing: '0.08em', textTransform: 'uppercase',
-        padding: '2px 6px', borderRadius: 5, border: '1px solid var(--border)',
+        letterSpacing: '0.08em',         padding: '2px 6px', borderRadius: 5, border: '1px solid var(--border)',
         color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0,
       }}
     >
@@ -216,7 +215,7 @@ export default function RecyclingBinModal({ open, onClose, accent, retentionDays
     empty: {
       title: 'Empty recycling bin?',
       message: `Permanently destroy all ${items.length} item(s)? This can't be undone.`,
-      confirmLabel: 'Empty bin',
+      confirmLabel: 'Empty Bin',
     },
     bulkDelete: {
       title: 'Delete selected?',
@@ -402,7 +401,7 @@ export default function RecyclingBinModal({ open, onClose, accent, retentionDays
                   <div style={{ fontSize: 12.5, lineHeight: 1.5, color: 'var(--text-muted)' }}>The folder this lived in was deleted. Recreate it and restore?</div>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                     <OutlinedBtn small onClick={() => setConflict(null)}>Skip</OutlinedBtn>
-                    <OutlinedBtn small onClick={() => resolveConflict('overwrite')}>Recreate &amp; restore</OutlinedBtn>
+                    <OutlinedBtn small onClick={() => resolveConflict('overwrite')}>Recreate &amp; Restore</OutlinedBtn>
                   </div>
                 </>
               )

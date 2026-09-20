@@ -124,12 +124,12 @@ export default function AlbumDetail({ accent, albumPath }) {
         case 'queued': return 'Queued';
         case 'downloading': return `Downloading ${dlJob.trackIndex || 0}/${dlJob.trackTotal || '?'}`;
         case 'done': return 'Downloaded ✓';
-        case 'error': return 'Failed — retry';
-        case 'cancelled': return 'Cancelled — retry';
+        case 'error': return 'Failed — Retry';
+        case 'cancelled': return 'Cancelled — Retry';
         default: return 'Download';
       }
     }
-    return playable.length > 0 ? `Repair · ${missing} missing` : 'Download';
+    return playable.length > 0 ? `Repair · ${missing} Missing` : 'Download';
   })();
   const startDownload = async () => {
     if (dlBusy || !album.providerId) return;
@@ -242,8 +242,7 @@ export default function AlbumDetail({ accent, albumPath }) {
               EP from an album. */}
           <div style={{
             fontSize: 10, fontFamily: 'var(--font-mono)', color: BODY_COLOR,
-            letterSpacing: '0.08em', textTransform: 'uppercase',
-          }}>{album.releaseType || 'Album'}</div>
+            letterSpacing: '0.08em',           }}>{album.releaseType || 'Album'}</div>
 
           {/* Title and fact line both multiply by --film-head, the film's one
               head knob -- never type a size here that ignores it. */}
@@ -397,8 +396,7 @@ export default function AlbumDetail({ accent, albumPath }) {
                 <div style={{
                   padding: di === 0 ? '4px 14px 6px' : '14px 14px 6px',
                   fontSize: 10, fontFamily: 'var(--font-mono)',
-                  letterSpacing: '0.12em', textTransform: 'uppercase',
-                  color: 'var(--text-faint)',
+                  letterSpacing: '0.12em',                   color: 'var(--text-faint)',
                   borderBottom: '1px solid var(--border)',
                 }}>Disc {d}</div>
               )}

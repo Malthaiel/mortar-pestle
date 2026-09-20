@@ -515,7 +515,7 @@ function CrashedNotice({ reason, accent, onReload }) {
           className="candy-btn" data-shape="text" data-own-press
           style={{ '--accent': accent }}
           onClick={onReload}
-        ><span className="candy-face">Reload page</span></button>
+        ><span className="candy-face">Reload Page</span></button>
       </div>
     </div>
   );

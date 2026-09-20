@@ -50,7 +50,7 @@ function CandyAction({ primary, onClick, children }) {
 // The click popover. Contextual single surface for every block state:
 //   upcoming   → Start now (now→end) · Pull & start… (selection mode)
 //   in-window  → Start (remaining only)
-//   past       → Pull to now & start (single-block)
+//   past       → Pull to Now & start (single-block)
 //   this block running → Stop
 // When another timer is running, a banner shows it and actions run through
 // the provider's switch flow (labels gain a "Switch & " prefix via `switchMode`).
@@ -84,18 +84,18 @@ export function BlockPopover({
   let spanLine, actions;
   if (state === 'running') {
     spanLine = `Running — ${fmtMMSS(runningSecsLeft)} left`;
-    actions = <CandyAction primary onClick={() => { onClose(); onStopRun(); }}>STOP BLOCK TIMER</CandyAction>;
+    actions = <CandyAction primary onClick={() => { onClose(); onStopRun(); }}>Stop Block Timer</CandyAction>;
   } else if (state === 'upcoming') {
     const lead = desc.startMins - nowM;
     spanLine = `Starts in ${fmtDur(lead)} — timer now → ${fmtT(desc.endMins, t24)} (${fmtDur(desc.endMins - nowM)})`;
     actions = (
       <>
         <CandyAction primary onClick={() => { onClose(); onStart(desc); }}>
-          {sw ? 'SWITCH & START NOW' : 'START NOW'}
+          {sw ? 'Switch & Start Now' : 'Start Now'}
         </CandyAction>
         {!desc.wrapSegment && (
           <CandyAction onClick={() => { onClose(); onEnterPullMode(desc); }}>
-            {sw ? 'Switch & pull to now' : 'Pull to now'}
+            {sw ? 'Switch & Pull to Now' : 'Pull to Now'}
           </CandyAction>
         )}
       </>
@@ -104,7 +104,7 @@ export function BlockPopover({
     spanLine = `In progress — ${fmtDur(desc.endMins - nowM)} left (until ${fmtT(desc.endMins, t24)})`;
     actions = (
       <CandyAction primary onClick={() => { onClose(); onStart(desc); }}>
-        {sw ? 'SWITCH & START' : 'START'}
+        {sw ? 'Switch & Start' : 'Start'}
       </CandyAction>
     );
   } else {
@@ -113,7 +113,7 @@ export function BlockPopover({
       ? <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>Midnight-crossing blocks can’t be pulled.</div>
       : (
         <CandyAction primary onClick={() => { onClose(); onPullStart(desc); }}>
-          {sw ? 'SWITCH & PULL TO NOW' : 'PULL TO NOW & START'}
+          {sw ? 'Switch & Pull to Now' : 'Pull to Now & Start'}
         </CandyAction>
       );
   }
@@ -172,7 +172,7 @@ export function PullConfirmBar({ count, onConfirm, onCancel }) {
       <button type="button" className="candy-btn is-primary" data-shape="block" data-own-press
         onClick={onConfirm} style={{ '--cbtn-depth': '5px', height: 24 }}>
         <span className="candy-face" style={{ padding: '0 12px', fontSize: 11 }}>
-          PULL {count} TO NOW
+          Pull {count} to Now
         </span>
       </button>
       <button type="button" className="candy-btn" data-shape="chip" data-own-press onClick={onCancel}>

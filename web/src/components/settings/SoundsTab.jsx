@@ -91,7 +91,6 @@ export default function SoundsTab({ settings, setSetting, accent }) {
           <span style={{
             fontSize: 10, fontFamily: 'var(--font-mono)',
             letterSpacing: '0.06em', color: 'var(--text-faint)',
-            textTransform: 'uppercase',
           }}>{masterOn ? 'on' : 'off'}</span>
         </div>
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -99,8 +98,7 @@ export default function SoundsTab({ settings, setSetting, accent }) {
           {preset === 'custom' && (
             <span style={{
               fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.06em',
-              color: 'var(--text-faint)', textTransform: 'uppercase',
-            }}>custom</span>
+              color: 'var(--text-faint)',             }}>custom</span>
           )}
         </div>
       </div>
@@ -172,8 +170,7 @@ function Row({ row, on, accent, onToggle, onAudition }) {
           {row.kind === 'planner' && (
             <span style={{
               fontSize: 9, fontFamily: 'var(--font-mono)',
-              letterSpacing: '0.08em', textTransform: 'uppercase',
-              padding: '1px 5px',
+              letterSpacing: '0.08em',               padding: '1px 5px',
               borderRadius: 'var(--radius-sm)',
               background: `color-mix(in oklch, ${accent} 18%, transparent)`,
               color: accent,

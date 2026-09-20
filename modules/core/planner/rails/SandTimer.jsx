@@ -59,7 +59,6 @@ export default function SandTimer({ accent }) {
           fontWeight: 600,
           letterSpacing: '0.14em',
           lineHeight: 1.15,
-          textTransform: 'uppercase',
           color: phaseColor,
           whiteSpace: 'nowrap',
         }}>{phase === 'focus' ? 'FOCUS' : 'BREAK'}</span>

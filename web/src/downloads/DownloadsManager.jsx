@@ -60,7 +60,7 @@ export default function DownloadsManager({ open, onClose, accent = GREEN }) {
   const rows = [...active, ...recent]; // active already state-sorted, recent date-desc
   const th = {
     textAlign: 'left', padding: '8px 12px', fontSize: 11.5, fontFamily: 'var(--font-mono)',
-    letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text)',
+    letterSpacing: '0.06em', color: 'var(--text)',
     fontWeight: 600, position: 'sticky', top: 0, background: 'var(--surface)',
     borderBottom: '1px solid var(--border)', zIndex: 1,
   };

@@ -53,7 +53,7 @@ export default function NewIdeaModal({ open, noteText, onClose, onCreate }) {
         display: 'flex', flexDirection: 'column', gap: 14, overflow: 'hidden',
         animation: 'fadeIn 0.16s ease', padding: 18,
       }}>
-        <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>
+        <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', color: 'var(--text-faint)' }}>
           New Idea from note
         </div>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>

@@ -43,7 +43,7 @@ export default function AreaReleasesView({ area, accent }) {
               <span style={{
                 fontSize: 10, fontWeight: 600, color: 'var(--text-muted)',
                 border: '1px solid var(--border-2)', borderRadius: 4, padding: '1px 7px',
-                textTransform: 'uppercase', letterSpacing: '0.04em',
+                letterSpacing: '0.04em',
               }}>
                 {release.tag}
               </span>

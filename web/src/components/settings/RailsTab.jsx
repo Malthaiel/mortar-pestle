@@ -86,8 +86,7 @@ function SubLabel({ children, style }) {
   return (
     <div style={{
       fontSize: 9, fontFamily: 'var(--font-mono)',
-      letterSpacing: '0.08em', textTransform: 'uppercase',
-      color: 'var(--text-muted)', fontWeight: 600,
+      letterSpacing: '0.08em',       color: 'var(--text-muted)', fontWeight: 600,
       marginBottom: 8,
       ...style,
     }}>{children}</div>

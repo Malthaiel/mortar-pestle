@@ -19,7 +19,6 @@ const paneLabel = {
   fontSize: 11,
   fontWeight: 600,
   letterSpacing: '0.08em',
-  textTransform: 'uppercase',
   color: 'var(--text-faint)',
   padding: '10px 12px',
   userSelect: 'none',

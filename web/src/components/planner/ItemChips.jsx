@@ -88,7 +88,7 @@ export function Group({ label, children, labelColor = 'var(--text-muted)' }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'calc(10px + var(--candy-depth-small))' }}>
       <div style={{
         fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
-        textTransform: 'uppercase', color: labelColor,
+        color: labelColor,
       }}>{label}</div>
       {children}
     </div>
@@ -257,7 +257,7 @@ export function NoteChip({ text, sourceDate, index, showDate = true }) {
     { section: true, label: 'Standard' },
     { label: 'Move to Idea', onClick: () => setPickerOpen(true) },
     ...(lastIdeaPath
-      ? [{ label: `Re-file to ${lastIdeaName || 'last Idea'}`, onClick: () => doMove({ path: lastIdeaPath, title: lastIdeaName }) }]
+      ? [{ label: `Re-File to ${lastIdeaName || 'Last Idea'}`, onClick: () => doMove({ path: lastIdeaPath, title: lastIdeaName }) }]
       : []),
     { label: 'Copy Text', onClick: copyText },
     { label: 'Open Log', onClick: openSourceLog },

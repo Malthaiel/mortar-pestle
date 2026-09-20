@@ -86,7 +86,7 @@ export default function BrowseGrid({ accent, mode, query, kind, name }) {
             <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--text)' }}>{name}</span>
             <span style={{
               fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.06em',
-              textTransform: 'uppercase', color: 'var(--text-faint)',
+              color: 'var(--text-faint)',
             }}>{kind} · MyAnimeList</span>
           </div>
         )}
@@ -128,7 +128,7 @@ export default function BrowseGrid({ accent, mode, query, kind, name }) {
               disabled={loading}
               className="candy-btn is-primary"
               style={{ cursor: loading ? 'default' : 'pointer', opacity: loading ? 0.6 : 1 }}
-            ><span className="candy-face">{loading ? 'Loading' : 'Load more'}</span></button>
+            ><span className="candy-face">{loading ? 'Loading' : 'Load More'}</span></button>
           </div>
         )}
       </div>

@@ -16,7 +16,7 @@ import { verb } from './broadcastStore.js';
 import { pushUndo } from './broadcastUndo.js';
 import { glyphFor } from './sourceGlyphs.jsx';
 
-const SMALL = { fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-faint)' };
+const SMALL = { fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', color: 'var(--text-faint)' };
 
 // picker_open/close + interval invokes must not interleave across StrictMode
 // remounts (Tauri invoke order ≠ call order) — one module-level chain.
@@ -195,8 +195,7 @@ function GamePanel({ api, sceneName, node, accent }) {
         <SectionHeader title="Game hook" />
         <span style={{
           fontFamily: 'var(--font-mono)', fontSize: 10.5, fontWeight: 700,
-          letterSpacing: '0.06em', textTransform: 'uppercase',
-          color: hooked ? 'var(--text)' : 'var(--text-muted)',
+          letterSpacing: '0.06em',           color: hooked ? 'var(--text)' : 'var(--text-muted)',
         }}>
           {hooked ? `● hooked ${node.width}×${node.height}` : '○ waiting for game'}
         </span>

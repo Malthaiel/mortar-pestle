@@ -72,7 +72,7 @@ export default function IdeaPickerModal({ open, onClose, onPick }) {
         }}>
           <span style={{
             fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em',
-            textTransform: 'uppercase', color: 'var(--text-faint)',
+            color: 'var(--text-faint)',
           }}>Move to</span>
           <input
             ref={inputRef}

@@ -22,7 +22,6 @@ const CAPTION_STYLE = {
   fontSize: 9,
   fontFamily: 'var(--font-mono)',
   letterSpacing: '0.08em',
-  textTransform: 'uppercase',
   color: 'var(--text-faint)',
   userSelect: 'none',
 };
@@ -171,7 +170,6 @@ function GroupHeader({ label, expanded, clickable, showCaret, onClick, onContext
       }}
     >
       <span className="candy-face" style={{
-        textTransform: 'uppercase',
         // Height −15%: vertical padding 5px→3px (horizontal 10px stays from chip CSS).
         paddingTop: 3, paddingBottom: 3,
       }}>

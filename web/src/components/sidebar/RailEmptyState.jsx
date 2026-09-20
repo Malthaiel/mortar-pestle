@@ -24,7 +24,6 @@ export default function RailEmptyState({ manifest }) {
         transform: 'rotate(180deg)',
         whiteSpace: 'nowrap',
         fontFamily: 'var(--font-mono)',
-        textTransform: 'uppercase',
         letterSpacing: '0.18em',
         fontSize: 11,
         fontWeight: 600,

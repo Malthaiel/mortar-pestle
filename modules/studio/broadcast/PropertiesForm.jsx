@@ -23,7 +23,7 @@ import { open, save } from '@tauri-apps/plugin-dialog';
 import { verb } from './broadcastStore.js';
 import { pushUndo } from './broadcastUndo.js';
 
-const LABEL = { fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-muted)' };
+const LABEL = { fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', color: 'var(--text-muted)' };
 const ROW = { display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 };
 
 export function NumField({ value, min, max, float = false, width = 72, onCommit }) {

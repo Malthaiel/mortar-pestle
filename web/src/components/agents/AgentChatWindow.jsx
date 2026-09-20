@@ -102,7 +102,7 @@ function AgentChatHeader({ avatar, title, subtitle, onClose, closeTitle, dragHan
             <span style={{
               fontSize: 9.5, color: 'var(--text-faint)',
               fontFamily: 'var(--font-mono)', letterSpacing: '0.08em',
-              textTransform: 'uppercase', marginTop: 3,
+              marginTop: 3,
             }}>{subtitle}</span>
           )}
         </div>

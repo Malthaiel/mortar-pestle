@@ -136,8 +136,7 @@ export default function CopyFramePopup({ open, onClose, onCopy, sourceDay, accen
                 {isSource && (
                   <span style={{
                     fontSize: 9, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)',
-                    letterSpacing: '0.06em', textTransform: 'uppercase',
-                  }}>source</span>
+                    letterSpacing: '0.06em',                   }}>source</span>
                 )}
               </button>
             );

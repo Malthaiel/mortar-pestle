@@ -30,7 +30,6 @@ export default function ProgressPillar({ accent }) {
         fontWeight: 700,
         letterSpacing: '0.14em',
         lineHeight: 1.15,
-        textTransform: 'uppercase',
         color: phaseColor,
         padding: '2px 6px',
         borderRadius: 999,

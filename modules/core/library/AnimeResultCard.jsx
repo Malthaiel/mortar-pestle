@@ -60,8 +60,7 @@ export default function AnimeResultCard({ result, accent, onSelect }) {
             padding: '2px 6px', borderRadius: 5,
             background: 'rgba(0,0,0,0.62)', color: 'white',
             fontSize: 10, fontWeight: 600, letterSpacing: '0.04em',
-            fontFamily: 'var(--font-mono)', textTransform: 'uppercase',
-          }}>{result.type}</span>
+            fontFamily: 'var(--font-mono)',           }}>{result.type}</span>
         )}
       </div>
       <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>

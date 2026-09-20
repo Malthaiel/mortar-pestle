@@ -257,13 +257,13 @@ export default function TitleBar({
             className="candy-btn titlebar-account"
             data-shape="chip"
             style={{ height: BTN, ...CENTER }}
-            title={signedIn ? (name || 'Account') : 'Sign in'}
+            title={signedIn ? (name || 'Account') : 'Sign In'}
             data-tip-desc={signedIn ? 'Your account, and signing out' : 'Sign in to your account'}
             onClick={() => (signedIn ? setMenuOpen(o => !o) : setSignInOpen(true))}
           >
             <span className="candy-face">
               <UserAvatar src={profile?.avatar_url} name={name} size={MARK}/>
-              {signedIn ? (name || 'Account') : 'Sign in'}
+              {signedIn ? (name || 'Account') : 'Sign In'}
             </span>
           </button>
 

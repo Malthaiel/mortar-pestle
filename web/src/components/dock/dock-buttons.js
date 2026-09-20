@@ -32,7 +32,7 @@ export const DOCK_BUTTONS = [
   // orders still holding the bare 'planner' id are dropped by effectiveOrder()
   // in Dock.jsx, so no migration is needed.
   {
-    id: 'quick-capture', group: 'tools', Icon: IconPlus, label: 'Quick capture',
+    id: 'quick-capture', group: 'tools', Icon: IconPlus, label: 'Quick Capture',
     // Sub-feature 5 wires the floating capture popover.
     onClick: (ctx) => ctx.setQuickCaptureOpen?.(true),
     visible: () => false, // hidden until sub-feature 5

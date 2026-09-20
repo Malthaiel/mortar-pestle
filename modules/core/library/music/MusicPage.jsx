@@ -287,7 +287,6 @@ function EmptyDetail() {
       flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
       color: 'var(--text-faint)', fontSize: 13,
       fontFamily: 'var(--font-mono)', letterSpacing: '0.06em',
-      textTransform: 'uppercase',
     }}>
       Select an album
     </div>

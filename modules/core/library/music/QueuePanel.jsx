@@ -72,7 +72,7 @@ export default function QueuePanel({ open, onClose, accent }) {
       }}>
         <span style={{
           fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em',
-          textTransform: 'uppercase', color: 'var(--text-muted)',
+          color: 'var(--text-muted)',
           fontVariantNumeric: 'tabular-nums',
         }}>Queue · {queue.length}</span>
         <button onClick={onClose} title="Close" data-own-press className="candy-btn" data-shape="circle"><span className="candy-face">×</span></button>

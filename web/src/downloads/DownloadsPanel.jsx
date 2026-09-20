@@ -29,7 +29,7 @@ function rowColor(r) {
 
 const sectionLabel = {
   fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em',
-  textTransform: 'uppercase', color: 'var(--text-faint)', fontWeight: 600,
+  color: 'var(--text-faint)', fontWeight: 600,
   padding: '8px 8px 4px',
 };
 const titleRow = { display: 'flex', alignItems: 'baseline', gap: 8 };
@@ -156,7 +156,7 @@ export default function DownloadsPanel({ open, onClose, accent = GREEN, onOpenMa
       headerActions={(
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {recent.length > 0 && (
-            <OutlinedBtn small onClick={() => clear(recent.map(r => r.id))}>Clear recent</OutlinedBtn>
+            <OutlinedBtn small onClick={() => clear(recent.map(r => r.id))}>Clear Recent</OutlinedBtn>
           )}
           <button onClick={onOpenManager} title="Open downloads manager" aria-label="Open downloads manager" style={{
             background: 'transparent', border: 'none', cursor: 'pointer',

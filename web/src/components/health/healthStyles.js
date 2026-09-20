@@ -9,6 +9,5 @@ export const labelStyle = {
   fontFamily: 'var(--font-mono)',
   fontSize: 10,
   color: 'var(--text-faint)',
-  textTransform: 'uppercase',
   letterSpacing: '0.05em',
 };

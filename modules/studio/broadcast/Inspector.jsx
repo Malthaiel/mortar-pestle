@@ -39,7 +39,7 @@ const BOUNDS_OPTIONS = [
 
 const GRID2 = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, alignItems: 'center' };
 const CELL = { display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'space-between', minWidth: 0 };
-const SMALL = { fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-faint)' };
+const SMALL = { fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', color: 'var(--text-faint)' };
 
 function TransformSection({ api, sceneName, node, accent }) {
   const t = node.transform;

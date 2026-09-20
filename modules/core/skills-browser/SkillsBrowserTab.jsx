@@ -133,8 +133,7 @@ function SkillRow({ skill, installed, busy, onInstall, onUninstall }) {
           }}>{skill.name}</span>
           <span style={{
             fontSize: 9, fontFamily: 'var(--font-mono)',
-            letterSpacing: '0.08em', textTransform: 'uppercase',
-            color: 'var(--text-faint)',
+            letterSpacing: '0.08em',             color: 'var(--text-faint)',
           }}>{skill.category}</span>
           <span style={{
             fontSize: 10, fontFamily: 'var(--font-mono)',

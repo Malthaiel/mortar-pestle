@@ -38,7 +38,7 @@ export default function NewScrimModal({ open, error, onSubmit, onCancel }) {
         {error && <div style={{ fontSize: 12.5, color: 'var(--error)' }}>{error}</div>}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <div className="candy-btn" data-shape="field">
-            <input className="candy-face" ref={ref1} placeholder="Team 1 (coached)" value={t1}
+            <input className="candy-face" ref={ref1} placeholder="Team 1 (Coached)" value={t1}
               onChange={(e) => setT1(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); submit(); } else if (e.key === 'Escape') { e.stopPropagation(); onCancel?.(); } }}/>
           </div>

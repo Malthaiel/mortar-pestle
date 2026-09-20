@@ -101,7 +101,7 @@ export default function BinPanel({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px' }}>
-        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-faint)', flex: 1 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', color: 'var(--text-faint)', flex: 1 }}>
           Bin
         </div>
         <PrimaryBtn chip accent={accent} onClick={onImport} disabled={importing}>

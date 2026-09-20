@@ -65,4 +65,4 @@ export default function ComposeModal({ open, onClose, fb, accent, onCreated }) {
   );
 }
 
-const label = { display: 'block', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-faint)', marginBottom: 6 };
+const label = { display: 'block', fontSize: 11, letterSpacing: '0.04em', color: 'var(--text-faint)', marginBottom: 6 };

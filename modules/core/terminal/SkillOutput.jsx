@@ -169,16 +169,14 @@ export default function SkillOutput({ jobId, onCleared, accent }) {
         <span style={{
           display: 'inline-flex', alignItems: 'center', gap: 8,
           fontSize: 9, fontFamily: 'var(--font-mono)',
-          letterSpacing: '0.08em', textTransform: 'uppercase',
-          color: 'var(--text-faint)', fontWeight: 700,
+          letterSpacing: '0.08em',           color: 'var(--text-faint)', fontWeight: 700,
         }}>
           <Dot color={dotColor} glow={dotGlow}/>
           Output
         </span>
         <span style={{
           fontSize: 9, fontFamily: 'var(--font-mono)',
-          letterSpacing: '0.08em', textTransform: 'uppercase',
-          color: dotColor,
+          letterSpacing: '0.08em',           color: dotColor,
           fontWeight: 600,
         }}>{statusLabel}</span>
         <span style={{ flex: 1 }}/>
@@ -189,8 +187,7 @@ export default function SkillOutput({ jobId, onCleared, accent }) {
           border: '1px solid var(--border)',
           color: 'var(--text-muted)',
           fontSize: 9, fontFamily: 'var(--font-mono)',
-          letterSpacing: '0.06em', textTransform: 'uppercase',
-          fontVariantNumeric: 'tabular-nums',
+          letterSpacing: '0.06em',           fontVariantNumeric: 'tabular-nums',
         }}>job {jobId.slice(0, 8)}</span>
         {status === 'running' && (
           <DangerOutlinedBtn onClick={onCancel} disabled={cancelling} small>

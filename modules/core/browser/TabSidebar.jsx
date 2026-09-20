@@ -180,8 +180,7 @@ export default function TabSidebar({ api, accent }) {
           zIndex: 9999, pointerEvents: 'none',
           background: 'var(--bg, #1b1b1f)', color: 'var(--text, #eee)',
           border: '1px solid var(--accent)', borderRadius: 999, padding: '4px 11px',
-          fontFamily: 'var(--font-mono)', fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
-          maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          fontFamily: 'var(--font-mono)', fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em',           maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           boxShadow: '0 6px 16px rgba(0,0,0,0.35)',
         }}>{drag.label}</div>
       )}
@@ -223,8 +222,7 @@ function TabRow({ tab, accent, active, dragging, dropBefore, onClick, onClose, o
         <span className="candy-face" style={{
           justifyContent: 'flex-start', gap: 6, minWidth: 0,
           minHeight: NAV_H, boxSizing: 'border-box', padding: '0 28px 0 11px',
-          fontFamily: 'var(--font-mono)', fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
-        }}>
+          fontFamily: 'var(--font-mono)', fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em',         }}>
           <span style={favWrap}>
             {tab.favicon
               ? <img src={tab.favicon} width={16} height={16} alt="" style={{ borderRadius: 3 }} onError={(e) => { e.currentTarget.style.display = 'none'; }} />

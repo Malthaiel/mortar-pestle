@@ -13,7 +13,7 @@
 
 import { useRef } from 'react';
 
-export default function PosterRow({ title, subtitle, onSeeAll, seeAllLabel = 'See all →', layout = 'row', colWidth = 150, accent, children }) {
+export default function PosterRow({ title, subtitle, onSeeAll, seeAllLabel = 'See All →', layout = 'row', colWidth = 150, accent, children }) {
   const ref = useRef(null);
   const grid = layout === 'grid';
   const scrollByDir = (dir) => {

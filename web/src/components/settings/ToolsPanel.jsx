@@ -91,14 +91,14 @@ function ToolBlock({ tool, accent }) {
 // Disabled candy-btn — same recipe as ModulesTab's CardActionBtn (candy-btn /
 // data-shape="row" / .candy-face), plus the native disabled attr. The single
 // opacity layer comes from `.candy-btn:disabled { opacity: 0.55 }` in
-// styles.css — no extra row/chip opacity is stacked on top. title="Coming soon"
+// styles.css — no extra row/chip opacity is stacked on top. title="Coming Soon"
 // is the only hint (no floating tooltip popover anywhere in the app).
 function ComingSoonBtn() {
   return (
     <button
       type="button"
       disabled
-      title="Coming soon"
+      title="Coming Soon"
       className="candy-btn"
       data-shape="row"
       style={{ width: 'auto', flexShrink: 0 }}
@@ -106,7 +106,7 @@ function ComingSoonBtn() {
       <span className="candy-face" style={{
         justifyContent: 'center',
         padding: '6px 12px', fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap',
-      }}>Coming soon</span>
+      }}>Coming Soon</span>
     </button>
   );
 }
@@ -119,8 +119,7 @@ function PlannedPill({ accent }) {
   return (
     <span style={{
       fontSize: 10, fontFamily: 'var(--font-mono)',
-      letterSpacing: '0.08em', textTransform: 'uppercase',
-      padding: '4px 9px',
+      letterSpacing: '0.08em',       padding: '4px 9px',
       borderRadius: 'var(--radius-sm)',
       background: `color-mix(in oklch, ${accent} 18%, transparent)`,
       color: accent,

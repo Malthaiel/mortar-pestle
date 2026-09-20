@@ -19,7 +19,6 @@ export default function RailStat({ label, value, accent }) {
         transform: 'rotate(180deg)',
         whiteSpace: 'nowrap',
         fontFamily: 'var(--font-mono)',
-        textTransform: 'uppercase',
         letterSpacing: '0.14em',
         fontSize: 12,
         fontWeight: 600,

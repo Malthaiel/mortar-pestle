@@ -181,8 +181,7 @@ export default function AnimeVoiceActorPage({ malId, accent }) {
         <div style={{ padding: '0 24px 28px' }}>
           <div style={{
             fontSize: 11, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)',
-            letterSpacing: '0.08em', textTransform: 'uppercase',
-            padding: '0 0 10px', borderBottom: '1px solid var(--border)', marginBottom: 14,
+            letterSpacing: '0.08em',             padding: '0 0 10px', borderBottom: '1px solid var(--border)', marginBottom: 14,
           }}>Staff Roles</div>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             {shownStaff.map(r => <StaffRoleCard key={r.animeId} role={r} accent={accent} />)}
@@ -208,7 +207,7 @@ export default function AnimeVoiceActorPage({ malId, accent }) {
           }}>
             <span style={{
               fontSize: 11, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)',
-              letterSpacing: '0.08em', textTransform: 'uppercase', marginRight: 'auto',
+              letterSpacing: '0.08em', marginRight: 'auto',
             }}>Voiced In</span>
             <Pill active={sort === 'popularity'} accent={accent} onClick={() => setSort('popularity')}>Popularity</Pill>
             <Pill active={sort === 'newest'} accent={accent} onClick={() => setSort('newest')}>Newest</Pill>
@@ -326,8 +325,7 @@ function StaffRoleCard({ role, accent }) {
         {positions && (
           <div title={positions} style={{
             fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-faint)',
-            letterSpacing: '0.04em', marginTop: 4, textTransform: 'uppercase',
-            display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+            letterSpacing: '0.04em', marginTop: 4,             display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
           }}>{positions}</div>
         )}
       </div>

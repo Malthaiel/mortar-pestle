@@ -510,7 +510,7 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
                 className={isMovie ? 'candy-btn' : 'candy-btn is-primary'}
                 data-shape={isMovie ? 'chip' : undefined}
                 style={{ cursor: canDownload ? 'pointer' : 'not-allowed', opacity: canDownload ? 1 : 0.4 }}>
-                <span className="candy-face" style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><IconDownload size={15}/> {dlJob && dlJob.state === 'error' ? 'Retry download' : 'Download'}</span>
+                <span className="candy-face" style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><IconDownload size={15}/> {dlJob && dlJob.state === 'error' ? 'Retry Download' : 'Download'}</span>
               </button>
             )}
             {series.localPath && (

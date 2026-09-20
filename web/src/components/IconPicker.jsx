@@ -150,7 +150,7 @@ export function IconPickerHost() {
           placeholder="Or paste <svg> markup here, then press Enter"
           style={{ flex: 1, minWidth: 0 }}
         />
-        <OutlinedBtn small onClick={() => pick(null)} disabled={!current}>Reset to default</OutlinedBtn>
+        <OutlinedBtn small onClick={() => pick(null)} disabled={!current}>Reset to Default</OutlinedBtn>
       </div>
     </ConfirmModal>
   );

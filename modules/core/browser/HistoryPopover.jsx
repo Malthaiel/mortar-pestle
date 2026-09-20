@@ -63,7 +63,7 @@ export default function HistoryPopover({ api, accent, onClose, onOpenUrl }) {
       </div>
       <button type="button" className="candy-btn" data-shape="text" data-own-press
         onClick={openFull} style={{ flex: '0 0 auto', width: 'calc(100% - 24px)', margin: `8px 12px ${candyGap(16)}`, '--accent': accent }}>
-        <span className="candy-face">View full history</span>
+        <span className="candy-face">View Full History</span>
       </button>
     </BrowserPopover>
   );

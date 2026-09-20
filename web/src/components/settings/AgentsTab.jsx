@@ -111,7 +111,7 @@ function GeneralPanel({ settings, setSetting, accent }) {
             accent={accent}
             value={backend}
             options={[
-              { value: 'api-key', label: 'API key' },
+              { value: 'api-key', label: 'API Key' },
               { value: 'claude-cli', label: 'Claude Code' },
             ]}
             onChange={(v) => setSetting('agents', { authBackend: v })}
@@ -225,7 +225,7 @@ function ChatWindowPanel({ settings, setSetting, accent }) {
           hint="Send an agent chat back to its default spot in the bottom-right."
         >
           <OutlinedBtn small onClick={() => setSetting('agents', { chatPosition: null })}>
-            Reset position
+            Reset Position
           </OutlinedBtn>
         </Row>
       </Section>
@@ -265,8 +265,7 @@ function SectionHeader({ title }) {
   return (
     <div style={{
       fontSize: 9, fontFamily: 'var(--font-mono)',
-      letterSpacing: '0.12em', textTransform: 'uppercase',
-      color: 'var(--text-faint)', fontWeight: 700,
+      letterSpacing: '0.12em',       color: 'var(--text-faint)', fontWeight: 700,
     }}>{title}</div>
   );
 }
@@ -373,7 +372,7 @@ function CliStatusBanner({ status, busy, onRefresh, onCopyLogin }) {
       )}
       <div>
         <OutlinedBtn small onClick={onRefresh} disabled={busy}>
-          {busy ? 'checking' : 'Re-check'}
+          {busy ? 'checking' : 'Re-Check'}
         </OutlinedBtn>
       </div>
     </div>

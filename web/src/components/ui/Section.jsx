@@ -73,7 +73,6 @@ export function LoadingState({ label = 'Loading' }) {
       padding: '32px 32px',
       color: 'var(--text-muted)', fontSize: 12,
       fontFamily: 'var(--font-mono)', letterSpacing: '0.06em',
-      textTransform: 'uppercase',
     }}>
       <span style={{
         width: 7, height: 7, borderRadius: '50%',

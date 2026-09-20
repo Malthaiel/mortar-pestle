@@ -93,6 +93,6 @@ export default function AccountSettingsTab({ api, accent }) {
   );
 }
 
-const label = { display: 'block', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-faint)', marginBottom: 6 };
+const label = { display: 'block', fontSize: 11, letterSpacing: '0.04em', color: 'var(--text-faint)', marginBottom: 6 };
 const hint = { fontSize: 11, color: 'var(--text-faint)', marginTop: 4 };
 const muted = { color: 'var(--text-muted)', fontSize: 13 };

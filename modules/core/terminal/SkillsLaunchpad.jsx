@@ -98,7 +98,7 @@ export default function SkillsLaunchpad({ accent }) {
           </div>
         ) : sections.map((sec) => (
           <div key={sec.cat} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>{CATEGORY_LABELS[sec.cat]}</div>
+            <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', color: 'var(--text-faint)' }}>{CATEGORY_LABELS[sec.cat]}</div>
             <div style={GRID}>
               {sec.list.map((s) => (
                 <SkillCard

@@ -292,7 +292,7 @@ function SearchResults({ query, accent, kind = 'series', series }) {
               className="candy-btn"
               data-shape="chip"
               style={{ marginLeft: 'auto' }}
-            ><span className="candy-face" style={{ fontSize: 11 }}>See all →</span></button>
+            ><span className="candy-face" style={{ fontSize: 11 }}>See All →</span></button>
           )}
         </div>
         {loading && <Muted>Searching</Muted>}
@@ -313,7 +313,7 @@ function SearchResults({ query, accent, kind = 'series', series }) {
 
 function GroupHeading({ children }) {
   return (
-    <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>
+    <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', color: 'var(--text-faint)' }}>
       {children}
     </div>
   );

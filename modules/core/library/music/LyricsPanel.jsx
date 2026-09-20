@@ -82,7 +82,7 @@ export default function LyricsPanel({ open, onClose, accent }) {
       }}>
         <span style={{
           fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em',
-          textTransform: 'uppercase', color: 'var(--text-muted)',
+          color: 'var(--text-muted)',
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           flex: 1,
         }}>

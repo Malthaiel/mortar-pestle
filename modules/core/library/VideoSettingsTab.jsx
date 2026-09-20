@@ -386,15 +386,15 @@ function DownloadsSection({ accent }) {
       <div style={{ display: 'flex', gap: 8 }}>
         {cfg && !cfg.isDefault && (
           <button onClick={() => apply('')} disabled={busy || !!moving} className="candy-btn">
-            <span className="candy-face">Reset to default</span>
+            <span className="candy-face">Reset to Default</span>
           </button>
         )}
         <button onClick={moveAll} disabled={busy || !!moving} className="candy-btn">
-          <span className="candy-face">{moving ? 'Moving' : 'Move all here'}</span>
+          <span className="candy-face">{moving ? 'Moving' : 'Move All Here'}</span>
         </button>
       </div>
       <div style={{ fontSize: 11, color: 'var(--text-faint)', lineHeight: 1.5 }}>
-        <b>Move all here</b> brings every finished series into the folder above — it copies each one,
+        <b>Move All Here</b> brings every finished series into the folder above — it copies each one,
         checks it arrived whole, and only then removes the old copy. Series still downloading are left alone.
       </div>
       {moving && (

@@ -73,7 +73,6 @@ export default function AlbumStack({ accent }) {
           fontFamily: 'var(--font-mono)',
           fontSize: 12,
           letterSpacing: '0.14em',
-          textTransform: 'uppercase',
           fontWeight: 600,
           lineHeight: 1.15,
           color: hasTrack ? 'var(--text-muted)' : 'var(--text-faint)',

@@ -63,8 +63,7 @@ export default function SkillArgsForm({ skill, values, onChange, onValidity, acc
         borderRadius: 'var(--radius-md)',
         color: 'var(--text-muted)',
         fontSize: 12, fontFamily: 'var(--font-mono)',
-        letterSpacing: '0.06em', textTransform: 'uppercase',
-      }}>
+        letterSpacing: '0.06em',       }}>
         <span style={{
           width: 6, height: 6, borderRadius: '50%',
           background: 'var(--text-faint)', flexShrink: 0,
@@ -95,8 +94,7 @@ function ArgRow({ arg, value, set, accent }) {
       <div style={{
         display: 'flex', alignItems: 'baseline', gap: 8,
         fontSize: 9, fontFamily: 'var(--font-mono)',
-        letterSpacing: '0.08em', textTransform: 'uppercase',
-        color: 'var(--text-faint)', fontWeight: 700,
+        letterSpacing: '0.08em',         color: 'var(--text-faint)', fontWeight: 700,
       }}>
         <span style={{ color: 'var(--text-muted)' }}>{label}</span>
         {arg.required && <span style={{ color: accent }}>*</span>}

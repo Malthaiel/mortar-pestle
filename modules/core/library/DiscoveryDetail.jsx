@@ -168,12 +168,12 @@ export default function DiscoveryDetail({ malId, accent, onResolveTitle }) {
         case 'preparing': return { label: 'Preparing', busy: true };
         case 'downloading': return { label: `Downloading ${Math.round(job.progressPct || 0)}%`, busy: true };
         case 'done': return { label: 'Downloaded ✓', done: true };
-        case 'error': return { label: 'Failed — retry' };
-        case 'cancelled': return { label: 'Cancelled — retry' };
+        case 'error': return { label: 'Failed — Retry' };
+        case 'cancelled': return { label: 'Cancelled — Retry' };
         default: return { label: 'Download' };
       }
     }
-    if (libraryEntry) return { label: '✓ In library', done: true };
+    if (libraryEntry) return { label: '✓ In Library', done: true };
     return { label: 'Download' };
   })();
 
@@ -261,8 +261,7 @@ export default function DiscoveryDetail({ malId, accent, onResolveTitle }) {
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <div style={{
               fontSize: 11, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)',
-              letterSpacing: '0.08em', textTransform: 'uppercase',
-              padding: '0 0 6px', borderBottom: '1px solid var(--border)', marginBottom: 2,
+              letterSpacing: '0.08em',               padding: '0 0 6px', borderBottom: '1px solid var(--border)', marginBottom: 2,
             }}>Episodes ({episodes.length})</div>
             {episodes.map(ep => <MalEpisodeRow key={ep.malId} ep={ep} />)}
           </div>

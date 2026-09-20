@@ -372,8 +372,7 @@ function SecondaryHeroCard({ activeModule, rootCounts }) {
     }}>
       <div style={{
         fontSize: 8, fontFamily: 'var(--font-mono)',
-        letterSpacing: '0.12em', textTransform: 'uppercase',
-        color: 'var(--text-faint)', fontWeight: 700, opacity: 0.9,
+        letterSpacing: '0.12em',         color: 'var(--text-faint)', fontWeight: 700, opacity: 0.9,
       }}>Section</div>
       <div style={{
         fontSize: 14, fontWeight: 700, color: 'var(--text)',

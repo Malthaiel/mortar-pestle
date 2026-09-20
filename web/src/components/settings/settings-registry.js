@@ -45,7 +45,7 @@ export const TAB_SECTIONS = {
     default: 'general',
     sections: [
       { id: 'general',     label: 'General' },
-      { id: 'chat-window', label: 'Chat window' },
+      { id: 'chat-window', label: 'Chat Window' },
       { id: 'concierge',   label: 'Concierge' },
     ],
   },
@@ -60,7 +60,7 @@ export const PAGE_SECTIONS = {
   browser: {
     default: 'adblock',
     sections: [
-      { id: 'adblock', label: 'AD Blocker' },
+      { id: 'adblock', label: 'Ad Blocker' },
       { id: 'data',    label: 'Browsing Data' },
       { id: 'vault',   label: 'Password Vault' },
       { id: 'sidebar', label: 'Browser Sidebar' },

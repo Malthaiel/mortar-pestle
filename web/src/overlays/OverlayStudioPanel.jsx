@@ -6,7 +6,7 @@
 // the right-sidebar music/planner widgets). Order persists to localStorage
 // (overlay-studio-order) because the bare overlay host can't reach the server-
 // backed useSidebarOrder. Recent history shows inline (5 transcripts · 3 clips ·
-// 3 screenshots) with a per-section "View all" popup. STT + Game Capture are
+// 3 screenshots) with a per-section "View All" popup. STT + Game Capture are
 // stubbed on Windows v1 — offline/empty states are intentional.
 //
 // Pointer arbitration: the OUTER panel drags by its ⠿ header grip only (dragProps
@@ -205,7 +205,7 @@ export default function OverlayStudioPanel({ showToast }) {
           <div className="candy-face">
             <div className="candy-center-row ov-studio-sec-head">
               <span className="ov-studio-sec-title section-title">Voice{recording && <> · <span style={{ color: 'var(--accent)' }}>● live</span> · {mmss(elapsed)}</>}</span>
-              <button type="button" data-no-drag className="candy-btn" data-size="small" onClick={() => setViewAll('voice')}><span className="candy-face">View all</span></button>
+              <button type="button" data-no-drag className="candy-btn" data-size="small" onClick={() => setViewAll('voice')}><span className="candy-face">View All</span></button>
             </div>
             <div className="candy-center-row" style={{ gap: 10 }}>
               <RecordButton recording={recording} disabled={micDisabled} onToggle={toggleDictation} />
@@ -218,7 +218,7 @@ export default function OverlayStudioPanel({ showToast }) {
               <button type="button" data-no-drag className="candy-btn" data-size="small" disabled={!canSend} onClick={sendTask}><span className="candy-face">Task</span></button>
               <button type="button" data-no-drag className="candy-btn" data-size="small" disabled={!canSend} title="Ask Concierge — send transcript" onClick={() => openConcierge({ prefill: text })}><span className="candy-face">Claude</span></button>
               <span style={{ flex: 1 }} />
-              <button type="button" data-no-drag className={`candy-btn${autoCopy ? ' is-active' : ''}`} data-shape="chip" data-size="small" title="Auto-copy on final" aria-pressed={autoCopy} onClick={toggleAutoCopy}><span className="candy-face">Auto-copy</span></button>
+              <button type="button" data-no-drag className={`candy-btn${autoCopy ? ' is-active' : ''}`} data-shape="chip" data-size="small" title="Auto-Copy on final" aria-pressed={autoCopy} onClick={toggleAutoCopy}><span className="candy-face">Auto-Copy</span></button>
             </div>
             {history.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -243,10 +243,10 @@ export default function OverlayStudioPanel({ showToast }) {
           <div className="candy-face">
             <div className="candy-center-row ov-studio-sec-head">
               <span className="ov-studio-sec-title section-title">Video</span>
-              <button type="button" data-no-drag className="candy-btn" data-size="small" onClick={() => setViewAll('video')}><span className="candy-face">View all</span></button>
+              <button type="button" data-no-drag className="candy-btn" data-size="small" onClick={() => setViewAll('video')}><span className="candy-face">View All</span></button>
             </div>
             <div className="candy-center-row" style={{ gap: 8 }}>
-              <button type="button" data-no-drag className="candy-btn" data-size="small" onClick={clip}><span className="candy-face">▣ Clip last 30s</span></button>
+              <button type="button" data-no-drag className="candy-btn" data-size="small" onClick={clip}><span className="candy-face">▣ Clip Last 30s</span></button>
               <button type="button" data-no-drag className={`candy-btn${recordingVid ? ' is-active' : ''}`} data-size="small" onClick={toggleRecord}><span className="candy-face">{recordingVid ? '■ Stop' : '● Record'}</span></button>
             </div>
             {clips.length ? (
@@ -263,7 +263,7 @@ export default function OverlayStudioPanel({ showToast }) {
           <div className="candy-face">
             <div className="candy-center-row ov-studio-sec-head">
               <span className="ov-studio-sec-title section-title">Screenshots</span>
-              <button type="button" data-no-drag className="candy-btn" data-size="small" onClick={() => setViewAll('shots')}><span className="candy-face">View all</span></button>
+              <button type="button" data-no-drag className="candy-btn" data-size="small" onClick={() => setViewAll('shots')}><span className="candy-face">View All</span></button>
             </div>
             <div className="candy-center-row" style={{ gap: 8 }}>
               <button type="button" data-no-drag className="candy-btn" data-size="small" onClick={screenshot}><span className="candy-face">📷 Screenshot</span></button>

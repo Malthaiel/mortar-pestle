@@ -232,7 +232,6 @@ function TrackInfoBox({ trackName, artistName, hasTrack }) {
         fontSize: 12,
         fontWeight: 600,
         letterSpacing: '0.12em',
-        textTransform: 'uppercase',
         lineHeight: 1.15,
         color: hasTrack ? 'var(--text)' : 'var(--text-faint)',
       }}>{trackName}</span>
@@ -248,7 +247,6 @@ function TrackInfoBox({ trackName, artistName, hasTrack }) {
           fontSize: 10,
           fontWeight: 500,
           letterSpacing: '0.14em',
-          textTransform: 'uppercase',
           lineHeight: 1.15,
           color: 'var(--text-muted)',
         }}>{artistName}</span>

@@ -535,8 +535,7 @@ export default function PageView({ path, accent }) {
         }}>
           <span style={{
             fontSize: 10, fontFamily: 'var(--font-mono)',
-            letterSpacing: '0.08em', textTransform: 'uppercase',
-            color: 'var(--text-faint)',
+            letterSpacing: '0.08em',             color: 'var(--text-faint)',
           }}>Saving</span>
         </div>
       )}
@@ -556,8 +555,8 @@ export default function PageView({ path, accent }) {
             background: '#d9a55a', flexShrink: 0,
           }}/>
           <span style={{ flex: 1 }}>File changed on disk while you were editing.</span>
-          <FilterChip onClick={keepMine} accent={accent}>Keep mine</FilterChip>
-          <FilterChip onClick={reloadFromDisk} accent={accent}>Load theirs</FilterChip>
+          <FilterChip onClick={keepMine} accent={accent}>Keep Mine</FilterChip>
+          <FilterChip onClick={reloadFromDisk} accent={accent}>Load Theirs</FilterChip>
         </div>
       )}
 

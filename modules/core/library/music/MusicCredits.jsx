@@ -179,7 +179,7 @@ export default function MusicCredits({ album, accent }) {
               padding: '7px 14px', borderRadius: 8, background: 'var(--surface-2)',
               display: 'flex', flexDirection: 'column', gap: 2, minWidth: 64, maxWidth: 280,
             }}>
-              <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>{s.label}</span>
+              <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.06em', color: 'var(--text-faint)' }}>{s.label}</span>
               <span style={{ fontSize: 13, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={String(s.value)}>{s.value}</span>
             </div>
           ))}
@@ -200,7 +200,7 @@ function CreditChip({ name, role, accent, onClick }) {
     >
       <span className="candy-face" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1, padding: '4px 10px' }}>
         <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>{name}</span>
-        {role && <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-faint)' }}>{role}</span>}
+        {role && <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.06em', color: 'var(--text-faint)' }}>{role}</span>}
       </span>
     </button>
   );

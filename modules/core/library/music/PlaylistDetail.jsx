@@ -235,7 +235,7 @@ export default function PlaylistDetail({ path, accent }) {
           </div>
         </div>
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: BODY_COLOR, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Playlist</div>
+          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: BODY_COLOR, letterSpacing: '0.08em'}}>Playlist</div>
 
           <h2 style={{
             margin: 0, fontSize: 'calc(28px * var(--film-head))', fontWeight: 700,

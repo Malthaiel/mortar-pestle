@@ -88,8 +88,7 @@ export default function BreakOverlay({ accent }) {
       }}>
         <div style={{
           fontSize: 10, fontFamily: 'var(--font-mono)',
-          letterSpacing: '0.18em', textTransform: 'uppercase',
-          color: accentColor, fontWeight: 700,
+          letterSpacing: '0.18em',           color: accentColor, fontWeight: 700,
           marginBottom: 10,
         }}>Break</div>
         <div style={{

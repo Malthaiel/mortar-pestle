@@ -1,5 +1,5 @@
 // Browser settings page (Settings → Modules › Browser). Four sub-tabs on the
-// shared host Topbar: AD Blocker (Shield master + filter lists + per-site
+// shared host Topbar: Ad Blocker (Shield master + filter lists + per-site
 // exceptions), Browsing Data (cache / cookies / history), Password Vault
 // (backup, security, master password — managed here; the in-browser vault
 // route keeps the generator + logins), and Browser Sidebar (stub for the
@@ -17,13 +17,12 @@ import { applyEnabled, applySiteAllowed, reloadShieldTabs } from './blocker.js';
 import * as store from './tabStore.js';
 import { ExportImport, SettingsPanel, ChangeMaster } from './VaultSettingsSections.jsx';
 import { ModuleSectionBand as SectionBand } from '@host/components/settings/section-primitives.jsx';
+import { PAGE_SECTIONS } from '@host/components/settings/settings-registry.js';
 
-const SECTIONS = [
-  { id: 'adblock', label: 'AD Blocker' },
-  { id: 'data',    label: 'Browsing Data' },
-  { id: 'vault',   label: 'Password Vault' },
-  { id: 'sidebar', label: 'Browser Sidebar' },
-];
+// The strip's tabs ARE the host's registered browser page-sections — read them,
+// never re-type them. A second copy here drifted the moment either side was
+// retitled (the 2026-09-20 title-case sweep had to fix "AD Blocker" twice).
+const SECTIONS = PAGE_SECTIONS.browser.sections;
 
 
 function SettingRow({ label, hint, children, stacked }) {
@@ -99,7 +98,7 @@ export default function BrowserSettingsTab({ accent, initialSection, onNavigateS
   );
 }
 
-// ── AD Blocker ───────────────────────────────────────────────────────────────
+// ── Ad Blocker ───────────────────────────────────────────────────────────────
 
 function AdBlockPanel({ accent }) {
   const { settings, setSetting } = useModuleSettings('browser');

@@ -68,8 +68,8 @@ export default function DockTab({ settings, setSetting, accent }) {
           accent={accent}
           value={dock.edgeStyle}
           options={[
-            { value: 'flush', label: 'Flush hairline' },
-            { value: 'band',  label: 'Depth band' },
+            { value: 'flush', label: 'Flush Hairline' },
+            { value: 'band',  label: 'Depth Band' },
           ]}
           onChange={(v) => set({ edgeStyle: v })}
         />
@@ -88,7 +88,7 @@ export default function DockTab({ settings, setSetting, accent }) {
           accent={accent}
           value={dockModules.defaultMode}
           options={[
-            { value: 'last',     label: 'Last selected' },
+            { value: 'last',     label: 'Last Selected' },
             { value: 'specific', label: 'Specific' },
           ]}
           onChange={(v) => setModules({ defaultMode: v })}
@@ -118,8 +118,8 @@ export default function DockTab({ settings, setSetting, accent }) {
           accent={accent}
           value={dockModules.clickBehavior}
           options={[
-            { value: 'navigate-and-swap', label: 'Navigate + swap' },
-            { value: 'swap-only',         label: 'Swap only' },
+            { value: 'navigate-and-swap', label: 'Navigate + Swap' },
+            { value: 'swap-only',         label: 'Swap Only' },
           ]}
           onChange={(v) => setModules({ clickBehavior: v })}
         />
@@ -134,7 +134,7 @@ export default function DockTab({ settings, setSetting, accent }) {
           accent={accent}
           value={dockModules.navSync}
           options={[
-            { value: 'auto',   label: 'Auto-sync' },
+            { value: 'auto',   label: 'Auto-Sync' },
             { value: 'sticky', label: 'Sticky' },
           ]}
           onChange={(v) => setModules({ navSync: v })}
@@ -168,8 +168,8 @@ export default function DockTab({ settings, setSetting, accent }) {
           accent={accent}
           value={dockModules.activeIndicator}
           options={[
-            { value: 'accent-fill', label: 'Accent fill' },
-            { value: 'vertical-beam',   label: 'Vertical beam' },
+            { value: 'accent-fill', label: 'Accent Fill' },
+            { value: 'vertical-beam',   label: 'Vertical Beam' },
             { value: 'lift',            label: 'Lift' },
           ]}
           onChange={(v) => setModules({ activeIndicator: v })}
@@ -221,7 +221,7 @@ export default function DockTab({ settings, setSetting, accent }) {
         label="Dock order"
         hint="Drag any dock icon left or right to rearrange — modules and built-in buttons share one order. Reset returns to the default order."
       >
-        <OutlinedBtn small onClick={resetOrder}>Reset order</OutlinedBtn>
+        <OutlinedBtn small onClick={resetOrder}>Reset Order</OutlinedBtn>
       </Row>
 
       <SectionHeader title="Layout" />
@@ -229,14 +229,14 @@ export default function DockTab({ settings, setSetting, accent }) {
       <Row
         anchor="set-dock-defaultLayout"
         label="Default layout"
-        hint="Centered keeps every icon in one middle cluster. 3-zone splits them into far-left, centre, and far-right clusters. Reset order returns to this."
+        hint="Centered keeps every icon in one middle cluster. 3-zone splits them into far-left, centre, and far-right clusters. Reset Order returns to this."
       >
         <Seg
           accent={accent}
           value={dock.defaultLayout}
           options={[
             { value: 'center',     label: 'Centered' },
-            { value: 'three-zone', label: '3-zone' },
+            { value: 'three-zone', label: '3-Zone' },
           ]}
           onChange={(v) => set({ defaultLayout: v })}
         />
@@ -328,8 +328,7 @@ function SectionHeader({ title }) {
   return (
     <div style={{
       fontSize: 9, fontFamily: 'var(--font-mono)',
-      letterSpacing: '0.12em', textTransform: 'uppercase',
-      color: 'var(--text-faint)', fontWeight: 700,
+      letterSpacing: '0.12em',       color: 'var(--text-faint)', fontWeight: 700,
       paddingTop: 6, marginTop: 2,
       borderTop: '1px solid var(--border-soft)',
     }}>{title}</div>
@@ -375,7 +374,7 @@ function ModulePicker({ modules, value, accent, onChange }) {
 }
 
 // Lists the separators/spacers currently in the order, with per-item remove and
-// a Clear all — a non-drag way to clean dividers up.
+// a Clear All — a non-drag way to clean dividers up.
 function DividerManager({ dock, set }) {
   const specials = (dock.order || []).filter(isSpecial);
   if (!specials.length) {
@@ -389,7 +388,7 @@ function DividerManager({ dock, set }) {
           <OutlinedBtn small onClick={() => set({ order: dock.order.filter(x => x !== id) })}>Remove</OutlinedBtn>
         </div>
       ))}
-      <OutlinedBtn small onClick={() => set({ order: dock.order.filter(x => !isSpecial(x)) })}>Clear all</OutlinedBtn>
+      <OutlinedBtn small onClick={() => set({ order: dock.order.filter(x => !isSpecial(x)) })}>Clear All</OutlinedBtn>
     </div>
   );
 }

@@ -55,8 +55,7 @@ export default function RatingStrip({ value, accent, disabled, stacked, onChange
     >
       <span style={{
         fontSize: 9, fontFamily: 'var(--font-mono)',
-        letterSpacing: '0.08em', textTransform: 'uppercase',
-        color: 'var(--text-faint)',
+        letterSpacing: '0.08em',         color: 'var(--text-faint)',
       }}>Personal</span>
       {starsRow}
     </div>

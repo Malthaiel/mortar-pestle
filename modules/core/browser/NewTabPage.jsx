@@ -103,7 +103,6 @@ const headingStyle = {
   fontSize: 11,
   fontWeight: 600,
   letterSpacing: '0.04em',
-  textTransform: 'uppercase',
   color: 'var(--text-muted)',
 };
 

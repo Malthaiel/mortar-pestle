@@ -83,7 +83,7 @@ export default function ColorWheel({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-      <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-faint)', userSelect: 'none' }}>
+      <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', color: 'var(--text-faint)', userSelect: 'none' }}>
         {label}
       </span>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

@@ -381,12 +381,12 @@ export default function NewEventModal({ open, onClose, onCreated, accent = 'var(
                 disabled={busy}
                 onClick={() => (confirmDelete ? removeEvent() : setConfirmDelete(true))}
               >
-                {confirmDelete ? 'Confirm delete' : 'Delete'}
+                {confirmDelete ? 'Confirm Delete' : 'Delete'}
               </DangerOutlinedBtn>
             )}
             <OutlinedBtn small onClick={() => { if (!busy) onClose(); }}>Cancel</OutlinedBtn>
             <PrimaryBtn small onClick={submit} disabled={busy} accent={accent}>
-              {busy ? 'Saving' : (editing ? 'Save changes' : 'Create event')}
+              {busy ? 'Saving' : (editing ? 'Save Changes' : 'Create Event')}
             </PrimaryBtn>
           </div>
         </div>
@@ -407,7 +407,7 @@ function Field({ label, action, children }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minHeight: 22 }}>
         <div style={{
           fontSize: 12.5, fontFamily: 'var(--font-mono)', letterSpacing: '0.06em',
-          textTransform: 'uppercase', color: 'var(--text)', fontWeight: 700,
+          color: 'var(--text)', fontWeight: 700,
         }}>{label}</div>
         {action}
       </div>

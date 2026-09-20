@@ -646,7 +646,7 @@ export default function DayPane({ accent = 'var(--accent)', pivotDs, onPivotChan
             <div key={key} style={{ display: 'flex', flexDirection: 'column', gap: GAP_UNDER_BTN }}>
               <div style={{
                 fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
-                textTransform: 'uppercase', color: isViewed ? 'var(--text)' : 'var(--text-muted)',
+                color: isViewed ? 'var(--text)' : 'var(--text-muted)',
               }}>{label}</div>
               {/* Only the VIEWED weekday's items carry live tick state — a
                   routine item is checked per DAY, and the other six weekdays

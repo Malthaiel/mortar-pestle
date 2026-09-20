@@ -36,8 +36,7 @@ const hint = { fontSize: 11, color: 'var(--text-faint)', lineHeight: 1.5, paddin
 const mono = { fontSize: 12.5, fontFamily: 'var(--font-mono)', color: 'var(--text)', fontWeight: 600 };
 const slider = (accent) => ({ width: '100%', accentColor: accent });
 const badgeStyle = (accent) => ({
-  fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.06em', textTransform: 'uppercase',
-  padding: '1px 6px', borderRadius: 'var(--radius-sm)',
+  fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.06em',   padding: '1px 6px', borderRadius: 'var(--radius-sm)',
   background: `color-mix(in oklch, ${accent} 18%, transparent)`, color: accent,
 });
 const kbd = {
@@ -224,7 +223,7 @@ export default function SttSettingsTab({ settings, setSetting, accent }) {
           />
         ))}
         <div style={hint}>
-          Download caches a model for later — it doesn’t switch the active one. Use <b>Use now</b> to load it immediately, or <b>Set default</b> to load it on launch.
+          Download caches a model for later — it doesn’t switch the active one. Use <b>Use Now</b> to load it immediately, or <b>Set Default</b> to load it on launch.
         </div>
       </SectionBand>
 
@@ -300,8 +299,8 @@ function ModelRow({
           <PickerBtn onClick={onCancel} accent={accent} title="Cancel download">Cancel</PickerBtn>
         ) : m.cached ? (
           <>
-            {!isResident && <PickerBtn onClick={onUse} accent={accent} title="Load this model now">Use now</PickerBtn>}
-            {!isDefault && <PickerBtn onClick={onSetDefault} accent={accent} title="Load this model on launch">Set default</PickerBtn>}
+            {!isResident && <PickerBtn onClick={onUse} accent={accent} title="Load this model now">Use Now</PickerBtn>}
+            {!isDefault && <PickerBtn onClick={onSetDefault} accent={accent} title="Load this model on launch">Set Default</PickerBtn>}
             <PickerBtn onClick={onAskDelete} accent={accent} title="Delete from cache">Delete</PickerBtn>
           </>
         ) : (

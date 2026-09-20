@@ -310,8 +310,7 @@ function Field({ label, children }) {
       <div style={{
         color: 'var(--text-faint)',
         fontFamily: 'var(--font-mono)',
-        fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase',
-      }}>{label}</div>
+        fontSize: 10, letterSpacing: '0.08em',       }}>{label}</div>
       {children}
     </div>
   );

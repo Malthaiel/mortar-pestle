@@ -77,7 +77,7 @@ export function Caret({ open }) {
 
 // Node label + optional suffix. The suffix ("/" for folders, ".md" for files)
 // renders in its own span with textTransform:none so ".md" stays lowercase against
-// the uppercase name, and never shrinks (the name truncates before it). With no
+// the title-case name, and never shrinks (the name truncates before it). With no
 // suffix it's the bare ellipsis span — identical to before the setting.
 export function Label({ text, suffix }) {
   if (!suffix) return <span style={ELLIPSIS}>{text}</span>;
@@ -142,11 +142,11 @@ export function StaggerChild({ index, count, open, children }) {
 // stays in FACE — a borrower wants the lettering, not the pill.
 export const TREE_TEXT = {
   fontFamily: 'var(--font-mono)',
-  fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+  fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'none',
 };
 
 // Shared candy-face for both folder headers and leaf rows — the inline overrides
-// (mono / uppercase / 10.5px / radius 999) keep the tree's compact pill geometry.
+// (mono / title-case / 10.5px / radius 999) keep the tree's compact pill geometry.
 const FACE = {
   justifyContent: 'flex-start', gap: 6, minWidth: 0,
   minHeight: NAV_H, boxSizing: 'border-box', padding: '0 11px',

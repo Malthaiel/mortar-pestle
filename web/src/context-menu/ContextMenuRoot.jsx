@@ -380,7 +380,7 @@ function MenuHeader({ label, first, inline, newSection }) {
     <div style={{
       padding: inline ? '0 10px' : (first ? '2px 10px 4px' : '8px 10px 4px'),
       fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em',
-      textTransform: 'uppercase', color: 'var(--text-faint)', fontWeight: 600,
+      textTransform: 'none', color: 'var(--text-faint)', fontWeight: 600,
       // Inline headers cast no candy shadow: cancel the depth-gap below so the
       // label hugs its rows, and add a little space above a mid-menu header so a
       // fresh section reads without a separator.

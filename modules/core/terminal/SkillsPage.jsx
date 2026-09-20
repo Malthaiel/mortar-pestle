@@ -157,7 +157,6 @@ export default function SkillsPage({ accent, selectedSlug, onBack }) {
                   flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
                   color: 'var(--text-faint)', fontSize: 12,
                   fontFamily: 'var(--font-mono)', letterSpacing: '0.06em',
-                  textTransform: 'uppercase',
                 }}>
                   No run yet
                 </div>
@@ -210,8 +209,7 @@ export function Badge({ tone, children }) {
       border: `1px solid ${palette.border}`,
       borderRadius: 999,
       fontSize: 9, fontFamily: 'var(--font-mono)',
-      letterSpacing: '0.08em', textTransform: 'uppercase',
-      fontWeight: 700,
+      letterSpacing: '0.08em',       fontWeight: 700,
     }}>{children}</span>
   );
 }

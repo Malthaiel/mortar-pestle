@@ -2,7 +2,7 @@
 // LogMealPopover + BlockLibraryPopover's right-click menu): list seed + custom
 // splits, pick one to ACTIVATE — which first prompts "which cycle day are you on
 // today?" to pin the anchor (locked: prompt-at-activation, avoids a wrong first
-// day). Right-click → Edit / Delete. Footer → New split. The useWorkoutSplits
+// day). Right-click → Edit / Delete. Footer → New Split. The useWorkoutSplits
 // instance is owned by FitnessSection and its callbacks passed down (single load).
 // No "Open in Obsidian": the Library vault is app-managed, not an Obsidian vault.
 import { useState } from 'react';
@@ -35,7 +35,7 @@ export default function SplitChooserPopover({ open, onClose, style, accent = 'va
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {pickFor.cycle.map((label, idx) => (
                 <button key={`${label}:${idx}`} type="button" className="candy-btn" data-shape="chip" onClick={() => activate(pickFor, idx)}>
-                  <span className="candy-face">{label}{(pickFor.days?.[label] || []).length === 0 ? ' (rest)' : ''}</span>
+                  <span className="candy-face">{label}{(pickFor.days?.[label] || []).length === 0 ? ' (Rest)' : ''}</span>
                 </button>
               ))}
             </div>
@@ -46,7 +46,7 @@ export default function SplitChooserPopover({ open, onClose, style, accent = 'va
         ) : (
           <>
             <div style={{ maxHeight: 240, overflowY: 'auto', border: '1px solid var(--border-soft)', borderRadius: 8 }}>
-              {splits.length === 0 && <div style={{ padding: 10, ...labelStyle }}>No splits yet — make one with “New split”.</div>}
+              {splits.length === 0 && <div style={{ padding: 10, ...labelStyle }}>No splits yet — make one with “New Split”.</div>}
               {splits.map((s) => (
                 <button key={s.id} type="button" style={rowBtn(s.active)} onClick={() => setPickFor(s)} onContextMenu={(e) => rowMenu(e, s)} title={s.active ? 'Active — click to re-pick today' : 'Activate'}>
                   {s.active ? <IconCheck size={12} /> : <span style={{ width: 12, flexShrink: 0 }} />}
@@ -57,7 +57,7 @@ export default function SplitChooserPopover({ open, onClose, style, accent = 'va
             </div>
             <div style={{ display: 'flex', justifyContent: 'center', borderTop: '1px solid var(--border-soft)', paddingTop: 8 }}>
               <button type="button" data-own-press className="candy-btn" data-shape="chip" onClick={() => { onNew(); close(); }}>
-                <span className="candy-face"><IconPlus size={11} /> New split</span>
+                <span className="candy-face"><IconPlus size={11} /> New Split</span>
               </button>
             </div>
           </>

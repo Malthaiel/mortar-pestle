@@ -103,7 +103,7 @@ export default function PageLinksPanel({ filePath, accent, onClose }) {
       }}>
         <span style={{
           fontSize: 11, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em',
-          textTransform: 'uppercase', color: 'var(--text-muted)',
+          color: 'var(--text-muted)',
         }}>Links</span>
         <button
           type="button" onClick={onClose} title="Close links panel"

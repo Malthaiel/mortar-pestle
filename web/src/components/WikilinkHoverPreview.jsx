@@ -121,8 +121,7 @@ export default function WikilinkHoverPreview() {
     >
       <div style={{
         fontSize: 9, fontFamily: 'var(--font-mono)',
-        letterSpacing: '0.08em', textTransform: 'uppercase',
-        color: 'var(--text-faint)', fontWeight: 600,
+        letterSpacing: '0.08em',         color: 'var(--text-faint)', fontWeight: 600,
         marginBottom: 4,
       }}>{state.target}</div>
       <div style={{

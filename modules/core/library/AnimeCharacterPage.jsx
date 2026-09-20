@@ -179,7 +179,7 @@ export default function AnimeCharacterPage({ malId, accent }) {
                   {a.role && (
                     <div style={{
                       fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-faint)',
-                      textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 4,
+                      letterSpacing: '0.06em', marginTop: 4,
                     }}>{a.role}</div>
                   )}
                 </div>

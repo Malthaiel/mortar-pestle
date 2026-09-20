@@ -25,8 +25,7 @@ export default function UpdateQueue({ accent }) {
       <div style={{
         padding: '10px 24px', borderBottom: '1px solid var(--border)',
         fontSize: 11, fontFamily: 'var(--font-mono)', letterSpacing: '0.06em',
-        color: 'var(--text)', textTransform: 'uppercase',
-        borderLeft: `3px solid ${accentBg}`,
+        color: 'var(--text)',         borderLeft: `3px solid ${accentBg}`,
       }}>Update Queue</div>
       <div style={{ flex: 1, overflow: 'auto', padding: '24px 32px' }}>
         {loading

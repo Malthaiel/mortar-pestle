@@ -316,7 +316,7 @@ export default function MpvHost() {
         }}>
           <div style={{
             color: 'rgba(255,120,120,0.95)', fontSize: 11,
-            letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8,
+            letterSpacing: '0.08em', marginBottom: 8,
           }}>Playback failed</div>
           <div style={{ wordBreak: 'break-word' }}>{v.streamError}</div>
         </div>

@@ -76,7 +76,6 @@ const laneLabel = {
   float: 'left',
   fontSize: 10,
   color: 'var(--text-faint)',
-  textTransform: 'uppercase',
   userSelect: 'none',
   zIndex: 1,
   pointerEvents: 'none',
@@ -433,7 +432,7 @@ export default function Timeline({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 12px', flexShrink: 0 }}>
-        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-faint)', userSelect: 'none' }}>
+        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', color: 'var(--text-faint)', userSelect: 'none' }}>
           Timeline
         </div>
         <button

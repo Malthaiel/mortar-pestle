@@ -326,8 +326,7 @@ function SectionHeading({ children }) {
   return (
     <div style={{
       fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-faint)',
-      letterSpacing: '0.08em', textTransform: 'uppercase',
-    }}>{children}</div>
+      letterSpacing: '0.08em',     }}>{children}</div>
   );
 }
 

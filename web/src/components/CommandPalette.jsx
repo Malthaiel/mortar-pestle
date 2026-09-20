@@ -202,8 +202,7 @@ function renderGrouped(items, selected, accent, invokeItem) {
     <div key={gi}>
       <div style={{
         fontSize: 9, fontFamily: 'var(--font-mono)',
-        letterSpacing: '0.08em', textTransform: 'uppercase',
-        color: 'var(--text-faint)', fontWeight: 600,
+        letterSpacing: '0.08em',         color: 'var(--text-faint)', fontWeight: 600,
         padding: '8px 14px 4px',
       }}>{g.label}</div>
       {g.items.map(({ item, index }) => (
@@ -277,8 +276,7 @@ function PaletteRow({ item, dataIdx, active, accent, onClick }) {
           {showAliasChip && (
             <span aria-label="matched by alias" style={{
               fontSize: 9, fontFamily: 'var(--font-mono)',
-              letterSpacing: '0.06em', textTransform: 'uppercase',
-              padding: '1px 5px', borderRadius: 3,
+              letterSpacing: '0.06em',               padding: '1px 5px', borderRadius: 3,
               border: `1px solid color-mix(in oklch, ${accent} 32%, transparent)`,
               color: `color-mix(in oklch, ${accent} 80%, var(--text-muted))`,
               flexShrink: 0,

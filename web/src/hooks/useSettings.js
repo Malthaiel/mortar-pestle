@@ -181,7 +181,7 @@ export const DOCK_DEFAULT = {
   hidden: [],            // button ids hidden from the dock (right-click → Hide)
   edgeSnap: false,       // snap a dragged icon to the nearest zone on release
   snapStrength: 'medium',// edge-snap trigger distance: 'subtle' | 'medium' | 'strong'
-  defaultLayout: 'center',// 'center' | 'three-zone' — what Reset order returns to
+  defaultLayout: 'center',// 'center' | 'three-zone' — what Reset Order returns to
   expandMs: 240,
   collapseMs: 240,
   modules: {

@@ -124,7 +124,7 @@ const ghost = { flexShrink: 0, padding: '7px 12px', borderRadius: 'var(--radius-
 const searchWrap = { display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0, padding: '0 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-muted)' };
 const searchInput = { flex: 1, minWidth: 0, padding: '7px 0', border: 'none', background: 'transparent', color: 'var(--text)', font: 'inherit', outline: 'none' };
 
-const dayHeading = { fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-faint)', fontWeight: 600, padding: '14px 16px 4px' };
+const dayHeading = { fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', color: 'var(--text-faint)', fontWeight: 600, padding: '14px 16px 4px' };
 const row = { display: 'flex', alignItems: 'center' };
 const rowMain = { flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 10, padding: '7px 4px 7px 16px', border: 'none', background: 'transparent', color: 'var(--text)', cursor: 'pointer', font: 'inherit', textAlign: 'left' };
 const favWrap = { flexShrink: 0, width: 16, height: 16, display: 'grid', placeItems: 'center', color: 'var(--text-muted)' };

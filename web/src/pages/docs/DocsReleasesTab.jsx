@@ -19,7 +19,7 @@ import { eyebrowStyle } from '../../components/ui/Eyebrow.jsx';
 const BUMP_LEVELS = ['patch', 'minor', 'major'];
 // 0.0.x pre-beta scheme: patch is the default ship, minor (0.1.0) is the
 // deliberate move into beta, major (1.0.0) is reserved for public release.
-const BUMP_LABELS = { patch: 'Patch', minor: 'Minor (0.1, beta)', major: 'Major (1.0, public)' };
+const BUMP_LABELS = { patch: 'Patch', minor: 'Minor (0.1, Beta)', major: 'Major (1.0, Public)' };
 const CANON = ['New', 'Changed', 'Removed', 'Performance', 'Fixed', 'Migration', 'Process'];
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -344,7 +344,7 @@ export default function DocsReleasesTab({ accent }) {
                           ? `color-mix(in oklch, ${accentColor} 30%, transparent)`
                           : 'var(--border-2)'}`,
                         borderRadius: 4, padding: '1px 7px',
-                        textTransform: 'uppercase', letterSpacing: '0.04em',
+                        letterSpacing: '0.04em',
                       }}>
                         {release.tag}
                       </span>
@@ -460,7 +460,7 @@ function ReleaseQueuePanel({ accent, queue, latestVersion, tag, onShipped }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{
             fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em',
-            textTransform: 'uppercase', color: isEmpty ? 'var(--text-faint)' : accent,
+            color: isEmpty ? 'var(--text-faint)' : accent,
             fontWeight: 600, marginBottom: 3,
           }}>
             Release Queue
@@ -746,7 +746,7 @@ function ShipReleaseModal({ accent, queue, latestVersion, tag, onClose, onShippe
                       }} />
                       <span style={{
                         fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.06em',
-                        textTransform: 'uppercase', fontWeight: 700, color: 'var(--text)',
+                        fontWeight: 700, color: 'var(--text)',
                       }}>
                         {group.name}
                       </span>
@@ -1048,8 +1048,7 @@ function Section({ title, items, color, bulletIdPrefix }) {
       {title && (
         <div style={{
           fontSize: 9, fontFamily: 'var(--font-mono)',
-          letterSpacing: '0.08em', textTransform: 'uppercase',
-          color, fontWeight: 600,
+          letterSpacing: '0.08em',           color, fontWeight: 600,
           marginBottom: 8,
         }}>
           {title}

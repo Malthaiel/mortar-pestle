@@ -823,7 +823,7 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
   font-family: var(--font-mono);
   font-weight: 700;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
+  text-transform: none;
   color: var(--cbtn-rest-text);
   background: var(--cbtn-face);
   border: var(--cbtn-frame) solid color-mix(in oklch, var(--cbtn-band), black 22%);
@@ -3755,7 +3755,6 @@ button.cal-daycell.is-today { border-color: var(--accent); }
   font-family: var(--font-mono);
   font-weight: 700;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--accent);
 }
 button.cal-customdays__step {
@@ -3959,7 +3958,6 @@ button.cal-customdays__step:hover {
   font-size: 10px;
   color: var(--text-faint);
   letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 .docs-pn-cat {
   font-family: var(--font-mono);
@@ -4062,7 +4060,7 @@ button.cal-customdays__step:hover {
 .ov-scrim-ticker-track { display: flex; width: max-content; will-change: transform; }
 .ov-scrim-ticker-group { display: flex; align-items: center; white-space: nowrap; }
 .ov-scrim-ticker-item { font-family: var(--font-body); font-size: 16px; font-weight: 600;
-  text-transform: uppercase; letter-spacing: .06em; font-variant-numeric: tabular-nums;
+  letter-spacing: .06em; font-variant-numeric: tabular-nums;
   color: var(--text-2); white-space: nowrap; }
 .ov-scrim-ticker-item.is-bright { color: var(--text); }
 .ov-scrim-ticker-sep { color: var(--text-faint); opacity: .5; padding: 0 14px; font-size: 9px; }
@@ -4071,7 +4069,7 @@ button.cal-customdays__step:hover {
 /* Panel + section titles use the shared .section-title standard (applied in
    OverlayStudioPanel.jsx). These rules keep only the overlay-specific bits — the
    uppercase panel-title look; type/size/weight/colour come from .section-title. */
-.ov-studio-title { text-transform: uppercase; letter-spacing: .06em; }
+.ov-studio-title { letter-spacing: .06em; }
 .ov-studio-sec-head { justify-content: space-between; }
 
 /* The Voice / Video / Screenshots tiles are `.rail-tile.is-panel` — the shared
@@ -4124,7 +4122,7 @@ button.cal-customdays__step:hover {
 /* Headerless (2026-07-15): the head row is gone — picker lives in the tree toolbar,
    minimize in the bottom-left chip; the whole panel drags (cursor stays default,
    drag bails on buttons/inputs). */
-.ov-scrim-title { text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
+.ov-scrim-title { letter-spacing: .06em; white-space: nowrap; }
 .ov-scrim-team { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ov-scrim-clock { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 18px; font-weight: 700; min-width: 58px; text-align: center; color: var(--text-muted); }
 .ov-scrim-clock.is-running { color: var(--accent); }
@@ -4140,7 +4138,7 @@ button.cal-customdays__step:hover {
    mirrors the .ov-scrim-* panel above. */
 .ov-browser-panel { display: flex; flex-direction: column; gap: var(--ov-gap); padding: var(--ov-gap); position: relative; }
 .ov-browser-head { justify-content: space-between; cursor: move; gap: 8px; padding: 2px 4px 4px; }
-.ov-browser-title { text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+.ov-browser-title { letter-spacing: .06em; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
 .ov-browser-body { flex: 1; min-height: 0; display: flex; gap: var(--ov-gap); }
 .ov-browser-side { flex: 0 0 220px; min-height: 0; overflow-y: auto; }
 .ov-browser-main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }

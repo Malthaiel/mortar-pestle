@@ -167,7 +167,7 @@ const S = {
     width: 580, maxWidth: '92vw', maxHeight: '82vh',
     padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 12,
   },
-  label: { fontSize: 11, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.06em' },
+  label: { fontSize: 11, color: 'var(--text-faint)', letterSpacing: '0.06em' },
   list: {
     flex: 1, minHeight: 120, maxHeight: '46vh', overflowY: 'auto',
     display: 'flex', flexDirection: 'column', gap: 4,

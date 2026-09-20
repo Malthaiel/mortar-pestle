@@ -100,8 +100,7 @@ export default function VaultTaskSection({ tasks, activeRaw, onSelect, onToggle,
 
   const sectionHeader = (label, color) => (
     <div style={{
-      fontSize: 9, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
-      color, padding: '12px 20px 4px',
+      fontSize: 9, fontWeight: 600, letterSpacing: '0.06em',       color, padding: '12px 20px 4px',
     }}>{label}</div>
   );
 

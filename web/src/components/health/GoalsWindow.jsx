@@ -83,7 +83,7 @@ export default function GoalsWindow({ open, onClose, accent = 'var(--accent)', i
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <button type="button" className="candy-btn" data-shape="chip" onClick={onClose}><span className="candy-face">Cancel</span></button>
           <button type="button" className="candy-btn" data-shape="chip" disabled={saving} onClick={save}>
-            <span className="candy-face"><IconCheck size={13} /> {saving ? 'Saving' : 'Save goals'}</span>
+            <span className="candy-face"><IconCheck size={13} /> {saving ? 'Saving' : 'Save Goals'}</span>
           </button>
         </div>
       )}
