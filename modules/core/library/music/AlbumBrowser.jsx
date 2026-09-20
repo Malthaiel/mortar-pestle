@@ -10,10 +10,10 @@ import CoverArtCard from './CoverArtCard.jsx';
 import { Seg } from '@host/components/ui/index.js';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
 import {
-  IconLayers, IconClock, IconPlay, IconCheck, IconX,
+  IconLayers,
   IconCalendar, IconStar, IconMic, IconTag, IconTypeText, IconSort,
 } from '@host/components/icons.jsx';
-import { statusLabel } from '@host/util/media-status.js';
+import { statusLabel, STATUS_ICON } from '@host/util/media-status.js';
 import { Cluster, useRailOrder } from '@host/components/ui/Rail.jsx';
 import { usePlaylists, isSavedTracks } from './PlaylistProvider.jsx';
 import { PlaylistCard } from './PlaylistsPage.jsx';
@@ -40,30 +40,6 @@ const SORT_DIMENSIONS = [
 ];
 const isCustom = (key) => key === 'custom';
 
-// The context menu's row face (ContextMenuRoot.jsx rowFace), same numbers: a
-// fixed 14px glyph gutter so every label starts on one vertical line, 8px off
-// the words, and `width: 100%` so the row fills its option. Not imported — rowFace is private to the context menu and carries
-// its disabled/chevron/iconFor branches, none of which exist here.
-const rowFace = (Icon, text) => (
-  <span style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
-    <span style={{
-      width: 14, flexShrink: 0, display: 'inline-flex',
-      alignItems: 'center', justifyContent: 'center',
-    }}>
-      <Icon size={14} />
-    </span>
-    <span style={{ whiteSpace: 'nowrap' }}>{text}</span>
-  </span>
-);
-
-// Keyed on the STORED status, never on the shortened label — the short names are
-// paint (see media-status.js) and the map has to survive one being renamed.
-const STATUS_ICON = {
-  'Plan-to-Listen': IconClock,
-  'Currently-Listening': IconPlay,
-  Listened: IconCheck,
-  Dropped: IconX,
-};
 const ALL_STATUS_ICON = IconLayers;
 
 // Custom has no direction to show — onPillClick never flips one for it, and the
@@ -259,8 +235,8 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
             <CandySelect
               value={statusFilter || ''}
               options={[
-                { value: '', label: rowFace(ALL_STATUS_ICON, 'All Status') },
-                ...statuses.map(s => ({ value: s, label: rowFace(STATUS_ICON[s], statusLabel(s)) })),
+                { value: '', label: 'All Status', icon: ALL_STATUS_ICON },
+                ...statuses.map(s => ({ value: s, label: statusLabel(s), icon: STATUS_ICON[s] })),
               ]}
               onChange={(v) => setStatusFilter(v || null)}
               title="Filter by status"
@@ -271,7 +247,8 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
               value={sortDim}
               options={SORT_DIMENSIONS.map(d => ({
                 value: d.key,
-                label: rowFace(d.icon, d.label + sortArrow(d, sortDim, sortDir)),
+                label: d.label + sortArrow(d, sortDim, sortDir),
+                icon: d.icon,
               }))}
               onChange={(k) => onPillClick(activeSortDim(k))}
               title="Sort albums"

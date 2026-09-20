@@ -18,6 +18,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
+import { IconSpeaker } from '@host/components/icons.jsx';
 import { LevelMeter, VFader, dbToFill } from '@host/components/ui';
 import { verb } from './broadcastStore.js';
 
@@ -102,7 +103,7 @@ function ChannelStrip({
           F
         </button>
       </div>
-      <CandySelect
+      <CandySelect icon={IconSpeaker}
         value={row.monitoring}
         options={MONITOR_OPTIONS}
         onChange={(v) => onMonitor(row.name, v)}

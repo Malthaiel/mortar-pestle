@@ -3,7 +3,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useVideoPlayer } from './VideoPlayerProvider.jsx';
-import { IconVolume, IconPlay, IconPause, IconSkip, IconSkipBack, IconRewind, IconFastForward, IconSettings, IconMaximize, IconRotateCw } from '@host/components/icons.jsx';
+import { IconVolume, IconPlay, IconPause, IconSkip, IconSkipBack, IconRewind, IconFastForward, IconSettings, IconMaximize, IconRotateCw, IconClock, IconMessageSquare, IconBookOpen } from '@host/components/icons.jsx';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
 import SubtitleSettingsPanel from './SubtitleSettingsPanel.jsx';
 
@@ -91,17 +91,16 @@ export default function VideoControls() {
         <span style={{ flex: 1 }}/>
 
         {/* Speed */}
-        <CandySelect
+        <CandySelect icon={IconClock}
           value={String(v.speed)}
           options={SPEEDS.map(s => ({ value: String(s), label: `${s}×` }))}
           onChange={(val) => v.setSpeed(Number(val))}
           title="Playback speed"
-          direction="up"
         />
 
         {/* Audio track */}
         {v.probe && v.probe.audio && v.probe.audio.length > 1 && (
-          <CandySelect
+          <CandySelect icon={IconVolume}
             value={String(v.audioIdx)}
             options={v.probe.audio.map((t, i) => ({
               value: String(i),
@@ -109,13 +108,12 @@ export default function VideoControls() {
             }))}
             onChange={(val) => v.setAudioTrack(Number(val))}
             title="Audio track"
-            direction="up"
           />
         )}
 
         {/* Subtitle track */}
         {v.probe && v.probe.subtitles && v.probe.subtitles.length > 0 && (
-          <CandySelect
+          <CandySelect icon={IconMessageSquare}
             value={String(v.subIdx)}
             options={[
               { value: '-1', label: 'Subs off' },
@@ -126,7 +124,6 @@ export default function VideoControls() {
             ]}
             onChange={(val) => v.setSubtitleTrack(Number(val))}
             title="Subtitle track"
-            direction="up"
           />
         )}
 
@@ -144,7 +141,7 @@ export default function VideoControls() {
 
         {/* Chapters (only if any) */}
         {v.probe && v.probe.chapters && v.probe.chapters.length > 0 && (
-          <CandySelect
+          <CandySelect icon={IconBookOpen}
             value=""
             placeholder={`Chapters (${v.probe.chapters.length})`}
             options={v.probe.chapters.map(c => ({
@@ -153,7 +150,6 @@ export default function VideoControls() {
             }))}
             onChange={(val) => { const t = Number(val); if (Number.isFinite(t)) v.seek(t); }}
             title="Jump to chapter"
-            direction="up"
           />
         )}
 

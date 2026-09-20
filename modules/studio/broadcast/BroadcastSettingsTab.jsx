@@ -13,6 +13,7 @@ import { createApi } from '@host/module-sdk/index.js';
 import { Topbar, Slider, StatChip, TextInput, Seg } from '@host/components/ui';
 import { OutlinedBtn } from '@host/components/ui/Button.jsx';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
+import { IconSparkles, IconCpu, IconPackage, IconMonitor, IconFilm, IconCut, IconClock, IconHardDrive, IconBroadcast, IconGlobe } from '@host/components/icons.jsx';
 import EnableToggle from '@host/components/ui/EnableToggle.jsx';
 import { SectionBand, Row } from '@host/components/settings/section-primitives.jsx';
 import { verb } from './broadcastStore.js';
@@ -322,16 +323,16 @@ export default function BroadcastSettingsTab({ accent, initialSection, onNavigat
               onChange={(v) => { const a = v === 'advanced'; setAdvanced(a); api.settings.set('advancedMode', a); }}
             />
           </Row>
-          <Row label="Quality"><CandySelect value={g('SimpleOutput', 'RecQuality', 'HQ')} options={QUALITY_OPTS} onChange={(v) => set('SimpleOutput', 'RecQuality', v)} disabled={locked} title="Recording quality" /></Row>
+          <Row label="Quality"><CandySelect icon={IconSparkles} value={g('SimpleOutput', 'RecQuality', 'HQ')} options={QUALITY_OPTS} onChange={(v) => set('SimpleOutput', 'RecQuality', v)} disabled={locked} title="Recording quality" /></Row>
           {!advanced && (
-            <Row label="Encoder"><CandySelect value={g('SimpleOutput', 'RecEncoder', 'x264')} options={[{ value: 'x264', label: 'x264 (H.264)' }]} onChange={(v) => set('SimpleOutput', 'RecEncoder', v)} disabled={locked} title="Video encoder" /></Row>
+            <Row label="Encoder"><CandySelect icon={IconCpu} value={g('SimpleOutput', 'RecEncoder', 'x264')} options={[{ value: 'x264', label: 'x264 (H.264)' }]} onChange={(v) => set('SimpleOutput', 'RecEncoder', v)} disabled={locked} title="Video encoder" /></Row>
           )}
-          <Row label="Container"><CandySelect value={container} options={FORMAT_OPTS} onChange={(v) => set('SimpleOutput', 'RecFormat2', v)} disabled={locked} title="File container" /></Row>
-          <Row label="Resolution"><CandySelect value={resValue} options={RES_OPTS} onChange={setRes} disabled={locked} title="Output scale of the canvas" /></Row>
-          <Row label="Frame rate"><CandySelect value={g('Video', 'FPSCommon', '60')} options={FPS_OPTS} onChange={(v) => set('Video', 'FPSCommon', v)} disabled={locked} title="Frames per second" /></Row>
+          <Row label="Container"><CandySelect icon={IconPackage} value={container} options={FORMAT_OPTS} onChange={(v) => set('SimpleOutput', 'RecFormat2', v)} disabled={locked} title="File container" /></Row>
+          <Row label="Resolution"><CandySelect icon={IconMonitor} value={resValue} options={RES_OPTS} onChange={setRes} disabled={locked} title="Output scale of the canvas" /></Row>
+          <Row label="Frame rate"><CandySelect icon={IconFilm} value={g('Video', 'FPSCommon', '60')} options={FPS_OPTS} onChange={(v) => set('Video', 'FPSCommon', v)} disabled={locked} title="Frames per second" /></Row>
           {advanced && (
             <>
-              <Row label="Encoder"><CandySelect value={advEncoder} options={encoders.map((e) => ({ value: e.id, label: e.display_name || e.id }))} onChange={(v) => set('AdvOut', 'RecEncoder', v)} disabled={locked} title="Detected hardware/software encoders" /></Row>
+              <Row label="Encoder"><CandySelect icon={IconCpu} value={advEncoder} options={encoders.map((e) => ({ value: e.id, label: e.display_name || e.id }))} onChange={(v) => set('AdvOut', 'RecEncoder', v)} disabled={locked} title="Detected hardware/software encoders" /></Row>
               <div style={{ paddingTop: 6 }}>
                 <PropertiesForm
                   api={api} accent={accent}
@@ -349,7 +350,7 @@ export default function BroadcastSettingsTab({ accent, initialSection, onNavigat
       {section === 'recording' && (
         <SectionBand title="Recording" anchor="set-bcast-recording">
           <Row label="Microphone track"><EnableToggle enabled={micOn} accent={accent} onChange={setMic} title="Record the mic to a second audio track" /></Row>
-          <Row label="Split file"><CandySelect value={splitMode} options={SPLIT_OPTS} onChange={setSplit} title="Auto-split by time/size, or split manually from the composer" /></Row>
+          <Row label="Split file"><CandySelect icon={IconCut} value={splitMode} options={SPLIT_OPTS} onChange={setSplit} title="Auto-split by time/size, or split manually from the composer" /></Row>
           {splitMode === 'Time' && (
             <Row label="Every"><Slider value={parseInt(g('AdvOut', 'RecSplitFileTime', '15'), 10) || 15} min={1} max={60} step={1} unit=" min" accent={accent} onChange={(v) => set('AdvOut', 'RecSplitFileTime', v)} /></Row>
           )}
@@ -372,8 +373,8 @@ export default function BroadcastSettingsTab({ accent, initialSection, onNavigat
 
       {section === 'replay' && (
         <SectionBand title="Replay" anchor="set-bcast-replay">
-          <Row label="Length"><CandySelect value={g('SimpleOutput', 'RecRBTime', '30')} options={RBTIME_OPTS} onChange={(v) => set('SimpleOutput', 'RecRBTime', v)} title="Seconds kept in the rolling buffer" /></Row>
-          <Row label="Max size"><CandySelect value={g('SimpleOutput', 'RecRBSize', '512')} options={RBSIZE_OPTS} onChange={(v) => set('SimpleOutput', 'RecRBSize', v)} title="Memory cap for the buffer" /></Row>
+          <Row label="Length"><CandySelect icon={IconClock} value={g('SimpleOutput', 'RecRBTime', '30')} options={RBTIME_OPTS} onChange={(v) => set('SimpleOutput', 'RecRBTime', v)} title="Seconds kept in the rolling buffer" /></Row>
+          <Row label="Max size"><CandySelect icon={IconHardDrive} value={g('SimpleOutput', 'RecRBSize', '512')} options={RBSIZE_OPTS} onChange={(v) => set('SimpleOutput', 'RecRBSize', v)} title="Memory cap for the buffer" /></Row>
           <Row label="File prefix"><NameField value={g('SimpleOutput', 'RecRBPrefix', 'Replay')} accent={accent} onCommit={(v) => set('SimpleOutput', 'RecRBPrefix', v)} /></Row>
           <div style={muted}>Arm and save the replay buffer from the composer bar (or Meta+Shift+S).</div>
         </SectionBand>
@@ -418,8 +419,8 @@ export default function BroadcastSettingsTab({ accent, initialSection, onNavigat
             <>
               {svcType === 'rtmp_common' ? (
                 <>
-                  <Row label="Service"><CandySelect value={svcName} options={serviceOpts} onChange={pickService} placeholder="Pick a service" title="Streaming service — start typing to jump" /></Row>
-                  <Row label="Server"><CandySelect value={svcSet.server || ''} options={serverOpts} onChange={(v) => setSvcField('server', v)} placeholder="Pick a server" title="Ingest server — closest is usually best" /></Row>
+                  <Row label="Service"><CandySelect icon={IconBroadcast} value={svcName} options={serviceOpts} onChange={pickService} placeholder="Pick a service" title="Streaming service — start typing to jump" /></Row>
+                  <Row label="Server"><CandySelect icon={IconGlobe} value={svcSet.server || ''} options={serverOpts} onChange={(v) => setSvcField('server', v)} placeholder="Pick a server" title="Ingest server — closest is usually best" /></Row>
                 </>
               ) : (
                 <Row label="Server URL"><NameField value={svcSet.server || ''} accent={accent} onCommit={(v) => setSvcField('server', v)} /></Row>

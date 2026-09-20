@@ -7,6 +7,7 @@
 import React from 'react';
 import { IconBtn, SectionHeader } from '@host/components/ui';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
+import { IconMove, IconMaximize } from '@host/components/icons.jsx';
 import PropertiesForm, { NumField } from './PropertiesForm.jsx';
 import BespokePanel, { hasBespokePanel } from './BespokePanels.jsx';
 import { glyphFor } from './sourceGlyphs.jsx';
@@ -73,11 +74,11 @@ function TransformSection({ api, sceneName, node, accent }) {
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <span style={SMALL}>Alignment</span>
-        <CandySelect value={t.alignment} options={ALIGN_OPTIONS} onChange={(v) => tf('alignment')(v)} compact />
+        <CandySelect icon={IconMove} value={t.alignment} options={ALIGN_OPTIONS} onChange={(v) => tf('alignment')(v)} compact />
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <span style={SMALL}>Bounds</span>
-        <CandySelect value={t.bounds_type} options={BOUNDS_OPTIONS} onChange={(v) => tf('bounds_type')(v)} compact />
+        <CandySelect icon={IconMaximize} value={t.bounds_type} options={BOUNDS_OPTIONS} onChange={(v) => tf('bounds_type')(v)} compact />
         {t.bounds_type !== 0 && (
           <div style={GRID2}>
             <div style={CELL}><span style={SMALL}>W</span><NumField value={Math.round(t.bounds_x)} min={1} onCommit={tf('bounds_x')} /></div>

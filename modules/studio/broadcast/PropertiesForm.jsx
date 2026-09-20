@@ -18,6 +18,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { OutlinedBtn, Slider, TextInput, SectionHeader, HexInput } from '@host/components/ui';
 import EnableToggle from '@host/components/ui/EnableToggle.jsx';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
+import { IconSettings } from '@host/components/icons.jsx';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { verb } from './broadcastStore.js';
 import { pushUndo } from './broadcastUndo.js';
@@ -164,7 +165,7 @@ function PropRow({ prop, value, accent, onCommit, onButton }) {
       return (
         <div style={{ ...ROW, ...dim }}>
           <span style={LABEL} title={prop.long_desc}>{prop.label}</span>
-          <CandySelect value={value} options={options} onChange={onCommit} title={prop.label} compact />
+          <CandySelect icon={IconSettings} value={value} options={options} onChange={onCommit} title={prop.label} compact />
         </div>
       );
     }

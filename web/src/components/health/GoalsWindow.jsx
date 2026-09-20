@@ -5,7 +5,8 @@
 import { useEffect, useState } from 'react';
 import { deriveTargets, STANDARD_DV } from '../../util/nutritionTotals.js';
 import AppWindow from '../ui/AppWindow.jsx';
-import { IconPlus, IconTrash, IconCheck } from '../icons.jsx';
+import CandySelect from '../ui/CandySelect.jsx';
+import { IconPlus, IconTrash, IconCheck, IconLeaf } from '../icons.jsx';
 import { labelStyle } from './healthStyles.js';
 
 const MICRO_KEYS = Object.keys(STANDARD_DV);
@@ -120,9 +121,8 @@ export default function GoalsWindow({ open, onClose, accent = 'var(--accent)', i
           </span>
           {microTargets.map((m, idx) => (
             <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <select value={m.key} onChange={(e) => setMicro(idx, { key: e.target.value, unit: STANDARD_DV[e.target.value]?.unit })} style={{ ...inputStyle, flex: 1 }}>
-                {MICRO_KEYS.map((k) => <option key={k} value={k}>{k.replace(/_/g, ' ')}</option>)}
-              </select>
+              <CandySelect icon={IconLeaf} value={m.key} onChange={(v) => setMicro(idx, { key: v, unit: STANDARD_DV[v]?.unit })}
+                options={MICRO_KEYS.map((k) => ({ value: k, label: k.replace(/_/g, ' ') }))} />
               <input type="number" min="0" value={m.target} onChange={(e) => setMicro(idx, { target: e.target.value })} style={{ ...inputStyle, width: 80, textAlign: 'right' }} />
               <span style={{ ...labelStyle, width: 28 }}>{STANDARD_DV[m.key]?.unit}</span>
               <button type="button" className="candy-btn" data-shape="icon" title="Remove" onClick={() => removeMicro(idx)}>

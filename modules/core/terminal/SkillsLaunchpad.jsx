@@ -6,6 +6,7 @@
 import { useMemo, useState } from 'react';
 import { navigate } from '@host/router.js';
 import { TextInput, Select } from '@host/components/ui/index.js';
+import { IconSort } from '@host/components/icons.jsx';
 import { useSkillsData } from './SkillsProvider.jsx';
 import { Badge } from './SkillsPage.jsx';
 
@@ -86,7 +87,7 @@ export default function SkillsLaunchpad({ accent }) {
           <TextInput value={q} onChange={setQ} placeholder="Filter skills" accent={accentColor} style={{ width: '100%', borderRadius: 'var(--radius-md)', background: 'var(--surface-2)' }} />
         </div>
         <div style={{ width: 150, flexShrink: 0 }}>
-          <Select value={sort} onChange={setSort} options={SORT_OPTIONS} accent={accentColor} style={{ borderRadius: 'var(--radius-md)', background: 'var(--surface-2)' }} />
+          <Select icon={IconSort} value={sort} onChange={setSort} options={SORT_OPTIONS} accent={accentColor} style={{ borderRadius: 'var(--radius-md)', background: 'var(--surface-2)' }} />
         </div>
       </div>
 

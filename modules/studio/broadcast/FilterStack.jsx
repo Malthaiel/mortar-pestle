@@ -20,6 +20,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppWindow, OutlinedBtn } from '@host/components/ui';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
+import { IconLayers } from '@host/components/icons.jsx';
 import EnableToggle from '@host/components/ui/EnableToggle.jsx';
 import ConfirmModal from '@host/components/ui/ConfirmModal.jsx';
 import DraggableSidebarList from '@host/components/DraggableSidebarList.jsx';
@@ -174,12 +175,11 @@ export default function FilterStack({ api, source, filters = [], kind = 'audio',
               />
             )}
             <div className="bcast-filters-actions">
-              <CandySelect
+              <CandySelect icon={IconLayers}
                 value=""
                 options={addOptions}
                 onChange={add}
                 title="Add a filter to this source"
-                direction="up"
               />
               <OutlinedBtn
                 disabled={!selected}

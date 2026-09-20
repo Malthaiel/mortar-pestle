@@ -12,6 +12,7 @@ import RailEmptyState from './RailEmptyState.jsx';
 import { useManifests } from '../../module-sdk/useModuleRegistry.js';
 import { readRailVariant, setRailVariant } from '../../hooks/useRailVariant.js';
 import { useContextMenu } from '../../context-menu/useContextMenu.js';
+import { IconLayoutGrid } from '../icons.jsx';
 
 const TILE_HEIGHT = 150;
 
@@ -34,6 +35,7 @@ export default function RightRailStack({ rightSlots, accent }) {
           const current = readRailVariant(slot.moduleId, slot.railVariants[0]?.id);
           const items = slot.railVariants.map((v) => ({
             label: v.label,
+            icon: IconLayoutGrid,
             kind: 'radio',
             checked: v.id === current,
             onClick: () => setRailVariant(slot.moduleId, v.id),

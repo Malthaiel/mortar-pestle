@@ -10,9 +10,10 @@ import { api } from '../../api.js';
 import { useVaults, useConfirmableSwitch } from '../../hooks/useVaults.jsx';
 import { sharedEvents } from '../../module-sdk/index.js';
 import { OutlinedBtn } from '../ui/Button.jsx';
+import CandySelect from '../ui/CandySelect.jsx';
 import EnableToggle from '../ui/EnableToggle.jsx';
 import ConfirmModal from '../ui/ConfirmModal.jsx';
-import { IconCheck, IconDatabase, IconPlus, IconX, IconRepeat, IconLock } from '../icons.jsx';
+import { IconCheck, IconDatabase, IconPlus, IconX, IconRepeat, IconLock, IconFolder } from '../icons.jsx';
 import { useVaultStatus } from '../../hooks/useVaultStatus.js';
 import { eyebrowStyle } from '../ui/Eyebrow.jsx';
 
@@ -387,12 +388,6 @@ function VaultMappingEditor({ vault, onClose, setVaultMapping, accent }) {
     }
   };
 
-  const selStyle = {
-    appearance: 'none', background: 'var(--surface-2)',
-    border: '1px solid var(--border)', borderRadius: 'var(--radius-md)',
-    color: 'var(--text)', fontSize: 13, padding: '7px 10px', outline: 'none',
-  };
-
   return (
     <div className="candy-section" style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: 14, marginTop: 12 }}>
       <SectionLabel>Configure mapping — {vault?.name}</SectionLabel>
@@ -405,17 +400,13 @@ function VaultMappingEditor({ vault, onClose, setVaultMapping, accent }) {
         <>
           <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Knowledge root</span>
-            <select value={knowledgeRoot} onChange={(e) => setKnowledgeRoot(e.target.value)} style={selStyle}>
-              <option value="">(none — use Knowledge/ or auto-discovery)</option>
-              {folders.map((name) => <option key={name} value={name}>{name}</option>)}
-            </select>
+            <CandySelect icon={IconFolder} value={knowledgeRoot} onChange={setKnowledgeRoot}
+              options={[{ value: '', label: '(none — use Knowledge/ or auto-discovery)' }, ...folders.map((name) => ({ value: name, label: name }))]} />
           </label>
           <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Infrastructure root</span>
-            <select value={infraRoot} onChange={(e) => setInfraRoot(e.target.value)} style={selStyle}>
-              <option value="">(none — use Infrastructure/)</option>
-              {folders.map((name) => <option key={name} value={name}>{name}</option>)}
-            </select>
+            <CandySelect icon={IconFolder} value={infraRoot} onChange={setInfraRoot}
+              options={[{ value: '', label: '(none — use Infrastructure/)' }, ...folders.map((name) => ({ value: name, label: name }))]} />
           </label>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Hide folders from the tree</span>

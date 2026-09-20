@@ -4,6 +4,8 @@
 
 import { useEffect, useState } from 'react';
 import * as creds from './credsStore.js';
+import CandySelect from '@host/components/ui/CandySelect.jsx';
+import { IconFolder } from '@host/components/icons.jsx';
 import PasswordField from './PasswordField.jsx';
 
 const overlay = {
@@ -133,10 +135,8 @@ export default function VaultEntryEditor({ entryId, prefillOrigin, folders = [],
             <input style={input} value={form.origin} onChange={e => set('origin', e.target.value)} placeholder="https://example.com" /></div>
           <div style={{ display: 'flex', gap: 10 }}>
             <div style={{ flex: 1 }}><label style={label}>Folder</label>
-              <select style={input} value={form.folder} onChange={e => set('folder', e.target.value)}>
-                <option value="">Unfiled</option>
-                {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-              </select></div>
+              <CandySelect icon={IconFolder} value={form.folder} onChange={v => set('folder', v)}
+                options={[{ value: '', label: 'Unfiled' }, ...folders.map(f => ({ value: f.id, label: f.name }))]} /></div>
             <div style={{ flex: 1 }}><label style={label}>Tags (comma-separated)</label>
               <input style={input} value={form.tags.join(', ')}
                 onChange={e => set('tags', e.target.value.split(',').map(t => t.trim()).filter(Boolean))} /></div>

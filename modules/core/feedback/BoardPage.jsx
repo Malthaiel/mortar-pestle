@@ -9,9 +9,7 @@ import PostIdentity from './PostIdentity.jsx';
 import MetaRun from './MetaRun.jsx';
 import { candyGap } from '@host/util/candy.js';
 import { useContextMenu } from '@host/context-menu/useContextMenu.js';
-import {
-  IconLayoutGrid, IconAlert, IconPackage, IconWrench, IconTag, IconSort, IconChart,
-} from '@host/components/icons.jsx';
+import { IconLayoutGrid, IconAlert, IconPackage, IconWrench, IconTag, IconSort, IconChart } from '@host/components/icons.jsx';
 
 // Leading icons follow Seg's shape ({ value, label, Icon } rendered at size 12
 // inside .candy-face, which is already an inline-flex with a 6px gap).
@@ -132,14 +130,14 @@ export default function BoardPage({ fb, accent, onOpen }) {
             absolute menu anchors to. Every control on this row is therefore the
             same height as a filter chip by construction, not by a copied number. */}
         <div style={{ position: 'relative' }}>
-          <CandySelect value={sort} options={SORTS} onChange={setSort} title="Sort"
-            fuse chevron={false} shape="chip" className="is-hover-accent" />
+          <CandySelect icon={IconSort} value={sort} options={SORTS} onChange={setSort} title="Sort"
+            fuse shape="chip" />
         </div>
         {/* position:relative — a fused CandySelect renders as a Fragment, so its
             absolute menu anchors to this run (see CandySelect's `fuse` note). */}
         <div className="candy-split">
           {CATEGORY_FILTERS.map((c) => (
-            <FilterChip key={c.value} className="is-hover-accent" active={category === c.value}
+            <FilterChip key={c.value} active={category === c.value}
               accent={accent} onClick={() => setCategory(c.value)}>
               <c.Icon size={12} />{c.label}
             </FilterChip>

@@ -41,30 +41,5 @@ export function TextInput({
   );
 }
 
-export function Select({ value, onChange, options, accent, style, disabled }) {
-  const [focus, setFocus] = useState(false);
-  return (
-    <select
-      className="candy-input"
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      disabled={disabled}
-      onFocus={() => setFocus(true)}
-      onBlur={() => setFocus(false)}
-      style={{
-        width: '100%',
-        padding: '8px 10px',
-        color: 'var(--text)',
-        border: `1px solid ${focus ? (accent || 'var(--text)') : 'var(--border)'}`,
-        fontSize: 13, fontFamily: 'var(--font-body)',
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        outline: 'none',
-        opacity: disabled ? 0.5 : 1,
-        transition: 'border-color 80ms ease',
-        ...style,
-      }}
-    >
-      {options.map(o => <option key={String(o.value)} value={o.value}>{o.label}</option>)}
-    </select>
-  );
-}
+// The one app dropdown: a form Select is CandySelect (Unified Dropdown, 2026-09-17).
+export { default as Select } from './CandySelect.jsx';

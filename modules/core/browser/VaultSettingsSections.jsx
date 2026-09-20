@@ -7,6 +7,8 @@
 import { useState } from 'react';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import * as creds from './credsStore.js';
+import CandySelect from '@host/components/ui/CandySelect.jsx';
+import { IconFile, IconCopy } from '@host/components/icons.jsx';
 import { writeModuleSetting } from '@host/module-sdk/index.js';
 
 const input = { padding: '6px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', font: 'inherit' };
@@ -81,16 +83,16 @@ export function ExportImport({ accent }) {
       {exOut && <textarea readOnly style={{ ...input, minHeight: 70, fontFamily: 'var(--font-mono,monospace)', fontSize: 11 }} value={exOut} onFocus={e => e.target.select()} />}
       <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '4px 0' }} />
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <select style={input} value={imFmt} onChange={e => setImFmt(e.target.value)}>
-          <option value="bitwarden">Bitwarden JSON</option>
-          <option value="csv">CSV</option>
-          <option value="agentic">Agentic JSON</option>
-          <option value="encrypted">Encrypted (.enc hex)</option>
-        </select>
-        <select style={input} value={imMode} onChange={e => setImMode(e.target.value)}>
-          <option value="merge">Merge</option>
-          <option value="replace">Replace all</option>
-        </select>
+        <CandySelect icon={IconFile} value={imFmt} onChange={setImFmt} options={[
+          { value: 'bitwarden', label: 'Bitwarden JSON' },
+          { value: 'csv', label: 'CSV' },
+          { value: 'agentic', label: 'Agentic JSON' },
+          { value: 'encrypted', label: 'Encrypted (.enc hex)' },
+        ]} />
+        <CandySelect icon={IconCopy} value={imMode} onChange={setImMode} options={[
+          { value: 'merge', label: 'Merge' },
+          { value: 'replace', label: 'Replace All' },
+        ]} />
         {imFmt === 'encrypted' && <input type="password" style={input} placeholder="Import password" value={imPw} onChange={e => setImPw(e.target.value)} />}
       </div>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>

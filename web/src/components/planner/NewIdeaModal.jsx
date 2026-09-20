@@ -7,6 +7,8 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../../api.js';
 import { PrimaryBtn, OutlinedBtn } from '../ui/index.js';
+import CandySelect from '../ui/CandySelect.jsx';
+import { IconFolder } from '../icons.jsx';
 
 export default function NewIdeaModal({ open, noteText, onClose, onCreate }) {
   const [title, setTitle] = useState('');
@@ -70,13 +72,10 @@ export default function NewIdeaModal({ open, noteText, onClose, onCreate }) {
         </label>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
           <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Domain</span>
-          <select value={domain} onChange={e => setDomain(e.target.value)} style={field}>
-            {domains.length === 0 && <option value="">Uncategorized</option>}
-            {domains.map(d => {
-              const v = d.name || d.slug;
-              return <option key={v} value={v}>{v}</option>;
-            })}
-          </select>
+          <CandySelect icon={IconFolder} value={domain} onChange={setDomain}
+            options={domains.length === 0
+              ? [{ value: '', label: 'Uncategorized' }]
+              : domains.map(d => ({ value: d.name || d.slug, label: d.name || d.slug }))} />
         </label>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 2 }}>
           <OutlinedBtn onClick={onClose}>Cancel</OutlinedBtn>

@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { StatTile, Select } from '@host/components/ui/index.js';
-import { IconRotateCw } from '@host/components/icons.jsx';
+import { IconRotateCw, IconCalendar } from '@host/components/icons.jsx';
 
 const RANGES = [{ value: 'all', label: 'All time' }, { value: '30', label: 'Last 30 days' }, { value: '7', label: 'Last 7 days' }];
 
@@ -103,7 +103,7 @@ export default function TokenDashboard({ accent }) {
           </div>
         </div>
         <div style={{ width: 140, flexShrink: 0 }}>
-          <Select value={range} onChange={setRange} options={RANGES} accent={accentColor} style={{ borderRadius: 'var(--radius-md)', background: 'var(--surface-2)' }} />
+          <Select icon={IconCalendar} value={range} onChange={setRange} options={RANGES} accent={accentColor} style={{ borderRadius: 'var(--radius-md)', background: 'var(--surface-2)' }} />
         </div>
         <button
           type="button"

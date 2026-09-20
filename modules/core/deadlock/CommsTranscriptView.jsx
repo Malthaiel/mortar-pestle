@@ -18,6 +18,7 @@ import { api } from '@host/api.js';
 import { parseCommsSidecar, segIndexForStamp } from './commsCompile.js';
 import { speakerColor } from './diarize.js';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
+import { IconUser } from '@host/components/icons.jsx';
 
 const muted = { color: 'var(--text-muted)', fontSize: 12 };
 
@@ -98,7 +99,7 @@ export default function CommsTranscriptView({ sidecarPath, roster = [], onReassi
                 {hasSpeakers && (canRelabel
                   ? (
                     <span style={{ flexShrink: 0, alignSelf: 'center' }}>
-                      <CandySelect compact value={roster.includes(s.speaker) ? s.speaker : ''} options={relabelOptions}
+                      <CandySelect icon={IconUser} compact value={roster.includes(s.speaker) ? s.speaker : ''} options={relabelOptions}
                         onChange={(n) => onReassign(s.cluster, n)} title="Reassign this voice to a player" placeholder={s.speaker || 'Unknown'} />
                     </span>
                   )

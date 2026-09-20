@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { PrimaryBtn, OutlinedBtn } from '@host/components/ui/Button.jsx';
-import StatusDropdown from '@host/components/ui/StatusDropdown.jsx';
+import CandySelect from '@host/components/ui/CandySelect.jsx';
+import { IconMessageSquare, IconEye, IconClock, IconWrench, IconCheck, IconX } from '@host/components/icons.jsx';
 
-// Role-gated dev powers on a post: set roadmap status (reuses the shared
-// StatusDropdown), pin, hide, and post an official reply. The real gate is RLS
+// Role-gated dev powers on a post: set roadmap status (the shared
+// CandySelect), pin, hide, and post an official reply. The real gate is RLS
 // server-side (is_dev()); this component is only rendered when the caller's
 // profile.role === 'dev', so a non-dev never sees it.
 const STATUSES = ['open', 'under_review', 'planned', 'in_progress', 'done', 'declined'];
@@ -11,6 +12,10 @@ const STATUSES = ['open', 'under_review', 'planned', 'in_progress', 'done', 'dec
 const HUE = {
   open: 'var(--hue-slate)', under_review: 'var(--hue-amber)', planned: 'var(--hue-violet)',
   in_progress: 'var(--accent)', done: 'var(--hue-green)', declined: 'var(--error)',
+};
+const ICON = {
+  open: IconMessageSquare, under_review: IconEye, planned: IconClock,
+  in_progress: IconWrench, done: IconCheck, declined: IconX,
 };
 
 export default function DevControls({ fb, post, accent, onChanged }) {
@@ -33,11 +38,12 @@ export default function DevControls({ fb, post, accent, onChanged }) {
     <div className="fb-devbar">
       <div className="fb-devbar-row">
         <span className="fb-devbar-label">DEV</span>
-        <StatusDropdown
+        <CandySelect
           value={post.status}
-          statuses={STATUSES}
+          options={STATUSES.map(s => ({ value: s, dot: HUE[s], icon: ICON[s],
+            label: s.split('_').map(w => w[0].toUpperCase() + w.slice(1)).join(' ') }))}
+          clearable
           accent={accent}
-          dotFor={(s) => HUE[s]}
           title="Set roadmap status"
           disabled={busy}
           onChange={(s) => { if (s) run(() => fb.postSetStatus(post.id, s)); }}

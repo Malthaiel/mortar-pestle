@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import AppWindow from '@host/components/ui/AppWindow.jsx';
 import { TextInput } from '@host/components/ui/Input.jsx';
+import { IconTag } from '@host/components/icons.jsx';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
 import { PrimaryBtn, OutlinedBtn } from '@host/components/ui/Button.jsx';
 
@@ -36,7 +37,7 @@ export default function ComposeModal({ open, onClose, fb, accent, onCreated }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div>
           <label style={label}>Category</label>
-          <CandySelect value={category} options={CATEGORIES} onChange={setCategory} title="Category" />
+          <CandySelect icon={IconTag} value={category} options={CATEGORIES} onChange={setCategory} title="Category" />
         </div>
         <div>
           <label style={label}>Title</label>

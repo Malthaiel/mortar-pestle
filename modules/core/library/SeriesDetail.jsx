@@ -11,9 +11,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { videoApi } from './api.js';
 import { useVideoPlayer } from './VideoPlayerProvider.jsx';
 import EpisodeRow from './EpisodeRow.jsx';
-import { IconFolder, IconDownload, IconPlay } from '@host/components/icons.jsx';
+import { IconFolder, IconDownload, IconPlay, IconStar } from '@host/components/icons.jsx';
 import { coverSrc, STATUS_DOT_COLOR, DOWNLOAD_DOT_COLOR, resolveDot } from './util.js';
-import StatusDropdown from '@host/components/ui/StatusDropdown.jsx';
+import CandySelect from '@host/components/ui/CandySelect.jsx';
+import { statusLabel, STATUS_ICON } from '@host/util/media-status.js';
 import RatingStrip from './RatingStrip.jsx';
 import AnimeMainColumn from './AnimeMainColumn.jsx';
 import LoadingScreen from './LoadingScreen.jsx';
@@ -413,6 +414,8 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
             crew={isMovie ? series.crew : null}
             castImages={isMovie ? series.castImages : null}
             crewImages={isMovie ? series.crewImages : null}
+            filmTitle={isMovie ? series.title : null}
+            genres={isMovie ? series.genres : null}
             writer={isMovie ? series.writer : null}
             studios={isMovie ? (series.studio && series.studio.length ? series.studio : series.studios) : null}
             country={isMovie ? series.country : null}
@@ -429,18 +432,18 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
         rating={(
           <>
             {/* Status, Download and More read as ONE unit on a film — the same
-                fused .candy-split shell the tab strip above them uses. It is
-                the positioned ancestor the status menu unrolls against. */}
+                fused .candy-split shell the tab strip above them uses. */}
             <div className={isMovie ? 'candy-split' : undefined}
               style={isMovie ? { position: 'relative', '--cbtn-size': '26px' } : undefined}>
-            <StatusDropdown
+            <CandySelect
               value={statusValue}
               accent={accent}
-              variant={isMovie ? 'chip' : null}
+              fuse={isMovie}
+              shape={isMovie ? 'chip' : 'select'}
               title={statusTitle}
               placeholder={isFranchise ? `${seasonName} status` : 'Status'}
-              statuses={STATUSES}
-              dotFor={(s) => resolveDot(STATUS_DOT_COLOR, s, accent)}
+              options={STATUSES.map(s => ({ value: s, label: statusLabel(s), icon: STATUS_ICON[s], dot: resolveDot(STATUS_DOT_COLOR, s, accent) }))}
+              clearable
               onChange={(s) => {
                 if (!s) return;
                 videoApi.markSeriesStatus(series.path, s, isFranchise ? seasonName : null)
@@ -459,19 +462,17 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
                   .catch(err => alert('Status failed: ' + err.message));
               }}
             />
-            {/* Rating as a peer of the status chip: StatusDropdown IS the
-                app's fusable pick-one chip (CandySelect wraps its trigger and
-                so cannot weld into a .candy-split). The values are the schema
+            {/* Rating as a peer of the status chip. The values are the schema
                 numbers; re-picking the current one clears it, as the dot strip did. */}
             {isMovie && (
-              <StatusDropdown
+              <CandySelect icon={IconStar}
                 value={series.personalRating ? String(series.personalRating) : ''}
                 accent={accent}
-                variant="chip"
+                fuse shape="chip"
                 title="Your rating out of 10"
                 placeholder="Rate"
-                statuses={Array.from({ length: 10 }, (_, n) => String(10 - n))}
-                dotFor={(r) => (r && String(r) === String(series.personalRating) ? accent : null)}
+                options={Array.from({ length: 10 }, (_, n) => ({ value: String(10 - n), label: String(10 - n), dot: accent }))}
+                clearable
                 onChange={(v) => {
                   const r = Number(v) || 0;
                   videoApi.markSeriesRating(series.path, r)
@@ -496,7 +497,7 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
               </>
             ) : (!isAnime && !isMovie) ? null : dlActive ? (
               <button disabled
-                className={isMovie ? 'candy-btn is-hover-accent' : 'candy-btn is-primary'}
+                className={isMovie ? 'candy-btn' : 'candy-btn is-primary'}
                 data-shape={isMovie ? 'chip' : undefined}
                 style={{ cursor: 'default', opacity: 0.6 }}>
                 <span className="candy-face">{dlLabel}</span>
@@ -506,7 +507,7 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
               // the source buttons beside it; every other domain keeps the
               // standing accent that marks it the primary action.
               <button onClick={onDownload} disabled={!canDownload}
-                className={isMovie ? 'candy-btn is-hover-accent' : 'candy-btn is-primary'}
+                className={isMovie ? 'candy-btn' : 'candy-btn is-primary'}
                 data-shape={isMovie ? 'chip' : undefined}
                 style={{ cursor: canDownload ? 'pointer' : 'not-allowed', opacity: canDownload ? 1 : 0.4 }}>
                 <span className="candy-face" style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><IconDownload size={15}/> {dlJob && dlJob.state === 'error' ? 'Retry download' : 'Download'}</span>
@@ -713,5 +714,4 @@ function Centered({ children, tone }) {
   );
 }
 
-// StatusPill replaced by the shared candy StatusDropdown
-// (@host/components/ui/StatusDropdown.jsx), imported at the top of this file.
+// StatusPill replaced by the shared CandySelect (clearable, with status dots).

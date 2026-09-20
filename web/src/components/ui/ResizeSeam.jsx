@@ -11,7 +11,8 @@
 //      different offset at every call site. It is measured now — see
 //      dividerPos(). Restating it as a constant is what caused the bug.
 //   2. The width chooser was a hand-rolled pill list with its own hover colours.
-//      It wears CandySelect's menu skin now (.candy-select-menu / -option).
+//      Since 2026-09-18 (Unified Dropdown) it IS the app's context menu, opened
+//      beside the divider at the click's height, a check on the current width.
 //   3. Each call site declared five `snapTargets` 40px apart, unrelated to its
 //      three presets, so a drag ratcheted. The snap set IS the presets now.
 //
@@ -33,7 +34,8 @@
 //      `onSnapChange` prop are gone with it — six hosts now just declare the
 //      trail on their own transition and stopped tracking a snap flag.
 //   2. Rows carry a glyph, like the right-click menu's do. See PRESET_ICON.
-//   3. The menu is locked horizontally: its x freezes at the click.
+//   3. (A cursor-tracking menu — superseded 2026-09-18, the chooser is the
+//      context menu now, same rows as every other dropdown.)
 //   4. The menu opens on a CLICK, not on hover.
 //   5. The snap pull reaches 18px instead of 12.
 //
@@ -46,7 +48,8 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { IconChevronLeft, IconChevronRight, IconDot } from '../icons.jsx';
+import { useContextMenu } from '../../context-menu/useContextMenu.js';
+import { IconChevronLeft, IconChevronRight, IconReset } from '../icons.jsx';
 import { GLIDE } from '../../util/motion.js';
 
 const HOTZONE_PX  = 6;
@@ -59,9 +62,6 @@ const SNAP_RADIUS = 14;
 const RUBBER_MAX  = 28;
 // Divider to the menu's near edge — the 8px the old fold's paper left visible.
 const MENU_GAP    = 8;
-// How long the cursor may be off BOTH the seam and the menu before it folds
-// away — enough to travel the MENU_GAP between them.
-const MENU_GRACE  = 150;
 
 // The trail a dragged thing keeps behind the cursor, exported so all six hosts
 // share one clock instead of six copies of a number. Property-less: a host
@@ -78,48 +78,17 @@ const MENU_GRACE  = 150;
 // restated so the five hosts that import it keep working.
 export const DRAG_EASE = GLIDE;
 
-// A glyph per preset, keyed on the label, the same way `context-menu/menuIcons`
-// keys the right-click rows — the labels are Compact / Default / Wide at every
-// seam in the app, so one table covers all six. The mark IS the width it sets:
-// chevrons facing IN for narrow, OUT for wide, a dot between them.
-// User-directed 2026-08-13, matching the right-click menu's icon-and-words rows.
-//
-// Built from the two SINGLE chevrons rather than the `IconChevrons*` pair
-// icons: those are Font Awesome's angles-up / angles-down, i.e. two chevrons
-// pointing the SAME way (collapse-all / expand-all), which turned on their side
-// read as two arrows both pointing left. There is no in/out pair in the pack.
-//
-// The three rows are NOT drawn at one size, because `size` is a viewBox scale
-// and these two glyphs fill wildly different fractions of it. Measured off the
-// Boxicons paths: at 9px the filled circle lays down 44.2 px2 of ink and a
-// chevron PAIR only 14.3 — the dot read 3.1x heavier than its neighbours, which
-// is exactly the "the chevrons look lighter" report. Equal ink would want 15.8px
-// chevrons, wider than the 14px icon slot, so the gap is closed from both ends:
-// chevrons up to 11 (21.4 px2 a pair), dot down to 7 (26.7). 1.25x apart now,
-// which the eye reads as the same weight.
+// A glyph per preset, keyed on the label (Compact / Default / Wide at every seam).
+// The mark IS the width it sets: chevrons facing IN for narrow, OUT for wide.
+// Built from the two SINGLE chevrons: the IconChevrons* pair icons point the
+// same way. User-directed 2026-08-13; Default's dot became the reset mark
+// 2026-09-18 when menus dropped their dots (Default IS the reset width).
 const CHEV = 11;
-const DOT  = 7;
 const PRESET_ICON = {
   Compact: <><IconChevronRight size={CHEV} /><IconChevronLeft size={CHEV} /></>,
-  Default: <IconDot size={DOT} />,
+  Default: IconReset,
   Wide:    <><IconChevronLeft size={CHEV} /><IconChevronRight size={CHEV} /></>,
 };
-
-// Same glyph gutter the context menu's rows use: a fixed 14px slot, so every
-// label starts on one vertical line.
-function rowFace(label) {
-  return (
-    <span style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
-      <span style={{
-        width: 14, flexShrink: 0, display: 'inline-flex',
-        alignItems: 'center', justifyContent: 'center',
-      }}>
-        {PRESET_ICON[label] || <IconDot size={DOT} />}
-      </span>
-      <span style={{ whiteSpace: 'nowrap' }}>{label}</span>
-    </span>
-  );
-}
 
 function rubberBand(over) {
   return RUBBER_MAX * (1 - Math.exp(-over / 50));
@@ -231,18 +200,14 @@ export default function ResizeSeam({
   style: outerStyle,
 }) {
   const [hover, setHover] = useState(false);
-  const [menuHover, setMenuHover] = useState(false);
-  // The menu is CLICK-opened now, not hover-opened — a hover-opened menu popped
-  // up every time the cursor crossed the seam on its way somewhere else.
-  // User-directed 2026-08-13. It still closes on its own once the cursor
-  // leaves both it and the seam, so the ways OUT are unchanged.
-  const [menuOpen, setMenuOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
-  const [cursor, setCursor] = useState({ x: 0, y: 0 });
-  // Frozen at the click. The menu tracks the cursor vertically only, so its x
-  // must not be re-read from a moving cursor — that is what let it slide
-  // sideways during a drag. User-directed 2026-08-13, "locked horizontally".
-  const anchorXRef = useRef(0);
+  // The width chooser is the context menu, CLICK-opened (a hover-opened menu
+  // popped up every time the cursor crossed the seam, user-directed 2026-08-13).
+  // `menuMine`: the open menu is ours — the same bookkeeping useMenuTrigger does.
+  const { openContextMenu, closeContextMenu, menuOpen: ctxOpen } = useContextMenu();
+  const menuMine = useRef(false);
+  useEffect(() => { if (!ctxOpen) menuMine.current = false; }, [ctxOpen]);
+  const menuOpen = ctxOpen && menuMine.current;
   const [pulseTick, setPulseTick] = useState(0);
   const [pulseFlash, setPulseFlash] = useState(false);
   // The line's live geometry: viewport top/height of the seam plus the measured
@@ -268,34 +233,6 @@ export default function ResizeSeam({
   }, [pulseTick]);
 
   const visible = hover || dragging || menuOpen;
-
-  // The ways out, all four wired to the same close: cursor gone from BOTH the
-  // seam and the menu for MENU_GRACE, Escape, a pointer down anywhere else, or
-  // a second click on the seam (in onUp below). Picking a row closes too.
-  useEffect(() => {
-    if (!menuOpen) return undefined;
-    if (hover || menuHover || dragging) return undefined;
-    const t = setTimeout(() => setMenuOpen(false), MENU_GRACE);
-    return () => clearTimeout(t);
-  }, [menuOpen, hover, menuHover, dragging]);
-
-  useEffect(() => {
-    if (!menuOpen) return undefined;
-    const onKey = (e) => { if (e.key === 'Escape') setMenuOpen(false); };
-    const onDown = (e) => {
-      if (hitRef.current?.contains(e.target)) return;
-      if (e.target.closest?.('[data-seam-menu]')) return;
-      setMenuOpen(false);
-    };
-    window.addEventListener('keydown', onKey);
-    // Capture: a row's own click must still land, but a pointer down on some
-    // other control should close this before that control reacts.
-    window.addEventListener('pointerdown', onDown, true);
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      window.removeEventListener('pointerdown', onDown, true);
-    };
-  }, [menuOpen]);
 
   // Measure while showing. A rAF loop rather than a one-shot read, because the
   // seam travels with the pane during a drag and keeps travelling afterwards
@@ -336,10 +273,18 @@ export default function ResizeSeam({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snapSet.join(',')]);
 
+  const pickPreset = useCallback((v) => {
+    onWidthChange(v);
+    persist(v);
+  }, [onWidthChange, persist]);
+
   const onPointerDown = useCallback((e) => {
     if (collapsed) return;
     e.preventDefault();
-    dragStateRef.current = { startX: horizontal ? e.clientY : e.clientX, startWidth: width, moved: false };
+    // The seam's preventDefault swallows the mousedown the context menu closes
+    // on, so close it here: a press on the seam starts a drag or toggles ours.
+    if (ctxOpen) closeContextMenu();
+    dragStateRef.current = { startX: horizontal ? e.clientY : e.clientX, startWidth: width, moved: false, wasOpen: menuOpen };
     setDragging(true);
     lastSnappedRef.current = null;
     onDragStart?.();
@@ -351,7 +296,6 @@ export default function ResizeSeam({
       const rawDx = (horizontal ? ev.clientY : ev.clientX) - dragStateRef.current.startX;
       const dx = inverted ? -rawDx : rawDx;
       let raw = dragStateRef.current.startWidth + dx;
-      setCursor({ x: ev.clientX, y: ev.clientY });
       // Past this the gesture is a DRAG, not a click, so the pointer-up below
       // resizes instead of toggling the menu. 3px is the usual slop a hand
       // leaves on a deliberate click.
@@ -391,12 +335,23 @@ export default function ResizeSeam({
       // before the snap below matters — SNAP_RADIUS is 18px now, so running a
       // click through it would silently resize a pane nobody dragged.
       if (!dragStateRef.current.moved) {
+        if (dragStateRef.current.wasOpen || !presets.length || !seamRef.current) return;
         // Anchored on the MEASURED divider, not on where the click landed —
         // the hotzone is 12px wide, so anchoring on the click made the menu
         // pop up in a different place every time. User-reported 2026-08-13.
-        anchorXRef.current = seamRef.current ? dividerPos(seamRef.current, horizontal) : ev.clientX;
-        setCursor({ x: ev.clientX, y: ev.clientY });
-        setMenuOpen(o => !o);
+        // Opens on the side AWAY from the pane being resized.
+        const x = dividerPos(seamRef.current, horizontal);
+        menuMine.current = true;
+        openContextMenu(
+          { x: inverted ? x - MENU_GAP : x + MENU_GAP, y: ev.clientY },
+          presets.map(p => ({
+            label: p.label,
+            icon: PRESET_ICON[p.label],
+            checked: p.value === Math.round(width),
+            onClick: () => pickPreset(p.value),
+          })),
+          { dropdown: true, align: inverted ? 'end' : undefined },
+        );
         return;
       }
 
@@ -421,19 +376,14 @@ export default function ResizeSeam({
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
   }, [collapsed, width, minWidth, maxWidth, snapIfNear, collapseThreshold,
-    onCollapse, onWidthChange, persist, onDragStart, onDragEnd, inverted]);
+    onCollapse, onWidthChange, persist, onDragStart, onDragEnd, inverted,
+    ctxOpen, menuOpen, closeContextMenu, openContextMenu, presets, pickPreset]);
 
   const onDoubleClick = useCallback(() => {
     if (collapsed || defaultWidth == null) return;
     onWidthChange(defaultWidth);
     persist(defaultWidth);
   }, [collapsed, defaultWidth, onWidthChange, persist]);
-
-  const pickPreset = useCallback((v) => {
-    onWidthChange(v);
-    persist(v);
-    setMenuOpen(false);
-  }, [onWidthChange, persist]);
 
   // Collapsed: a thin clickable expand strip instead of the drag seam. Clicking
   // it restores the pane to its remembered expanded width.
@@ -510,11 +460,8 @@ export default function ResizeSeam({
       {line && createPortal(
         <div
           ref={hitRef}
-          onMouseEnter={(e) => { setCursor({ x: e.clientX, y: e.clientY }); measure(); setHover(true); }}
+          onMouseEnter={() => { measure(); setHover(true); }}
           onMouseLeave={() => setHover(false)}
-          // Tracked before a drag as well as during one, so the menu can follow
-          // the cursor the moment it appears.
-          onPointerMove={(e) => { if (!dragging) setCursor({ x: e.clientX, y: e.clientY }); }}
           onPointerDown={onPointerDown}
           onDoubleClick={onDoubleClick}
           role="separator"
@@ -559,94 +506,6 @@ export default function ResizeSeam({
         document.body,
       )}
 
-      {presets.length > 0 && (
-        <SeamMenu
-          wanted={menuOpen}
-          cursorY={cursor.y}
-          anchorX={anchorXRef.current}
-          mirror={inverted}
-          presets={presets}
-          value={Math.round(width)}
-          onPick={pickPreset}
-          onHoverChange={setMenuHover}
-        />
-      )}
     </>
-  );
-}
-
-/**
- * The width chooser: a flat panel beside the point you CLICKED, following the
- * cursor up and down but never sideways, and staying up for the whole drag.
- * CandySelect's menu skin, portaled and fixed because the seam's ancestors clip
- * (see the file header). The seam owns every close (cursor gone, Escape,
- * outside press, second click, row picked), all through `wanted`.
- *
- * `anchorX` is a frozen number, not a live cursor x. That is the whole of the
- * horizontal lock: the transform below reads y only.
- */
-function SeamMenu({ wanted, cursorY, anchorX, mirror, presets, value, onPick, onHoverChange }) {
-  const ref = useRef(null);
-  // The panel's own measured size: half its height centres it on the cursor,
-  // its width pulls a mirrored panel back to the divider's far side.
-  const [box, setBox] = useState(null);
-  // Trail only once placed, or the first visible frame glides in from the
-  // unmeasured origin.
-  const [placed, setPlaced] = useState(false);
-
-  useLayoutEffect(() => {
-    // Unmounting under the cursor fires no mouseleave, so clear the hover here.
-    if (!wanted) { setBox(null); setPlaced(false); onHoverChange(false); return; }
-    const r = ref.current?.getBoundingClientRect();
-    if (r) setBox({ w: r.width, h: r.height });
-  }, [wanted, presets.length]);
-
-  useEffect(() => {
-    if (!box) return undefined;
-    const r = requestAnimationFrame(() => setPlaced(true));
-    return () => cancelAnimationFrame(r);
-  }, [box]);
-
-  if (!wanted) return null;
-
-  return createPortal(
-    <div
-      ref={ref}
-      data-seam-menu
-      role="menu"
-      aria-label="Resize presets"
-      className="candy-select-menu"
-      data-open="true"
-      onMouseEnter={() => onHoverChange(true)}
-      onMouseLeave={() => onHoverChange(false)}
-      style={{
-        position: 'fixed',
-        top: 0,
-        // Anchored on the side AWAY from the pane being resized.
-        left: mirror ? anchorX - MENU_GAP : anchorX + MENU_GAP,
-        minWidth: 112,
-        zIndex: 1300,
-        transform: `translate3d(${mirror ? -(box?.w || 0) : 0}px, ${cursorY - (box?.h || 0) / 2}px, 0)`,
-        transition: placed ? `transform ${DRAG_EASE}` : 'none',
-        visibility: box ? 'visible' : 'hidden',
-      }}
-    >
-      <div style={{ padding: 4 }}>
-        {presets.map((p) => {
-          const sel = p.value === value;
-          return (
-            <button
-              key={p.value}
-              type="button"
-              role="menuitemradio"
-              aria-checked={sel}
-              className={'candy-select-option' + (sel ? ' is-selected' : '')}
-              onClick={() => onPick(p.value)}
-            >{rowFace(p.label)}</button>
-          );
-        })}
-      </div>
-    </div>,
-    document.body,
   );
 }

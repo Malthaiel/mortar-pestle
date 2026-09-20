@@ -1,6 +1,6 @@
 // Read-only roadmap status as a muted candy badge — the same low-key treatment as
 // UserAvatar (colour-mixed 48% into surface-3), distinct from the interactive dev
-// StatusDropdown. The whole badge is the status colour, held via inline --cbtn-band
+// status picker (CandySelect). The whole badge is the status colour, held via inline --cbtn-band
 // (so band + frame darken to match); inert, no hover-flip.
 // Hues come from the app's named palette (styles.css --hue-*), never a local hex — the same seven
 // colours the avatar circles and the VOD report's stamp chips draw from, so a retune is one edit.

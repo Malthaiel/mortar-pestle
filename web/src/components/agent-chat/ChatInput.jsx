@@ -8,7 +8,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Channel } from '@tauri-apps/api/core';
 import { invoke } from '../../api.js';
 
-import { IconSend, IconMic } from '../icons.jsx';
+import { IconSend, IconMic, IconBrain } from '../icons.jsx';
 import CandySelect from '../ui/CandySelect.jsx';
 import { ChipIconBtn } from '../planner/ItemChips.jsx';
 
@@ -138,10 +138,8 @@ export default function ChatInput({ onSend, streaming, accent, mentions = [], on
             />
           </span>
         </span>
-        <CandySelect
+        <CandySelect icon={IconBrain}
           fuse
-          direction="up"
-          chevron={false}
           title="Model"
           value={model}
           options={MODELS}

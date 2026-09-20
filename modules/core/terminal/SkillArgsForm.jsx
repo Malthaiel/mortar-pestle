@@ -14,7 +14,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Select, TextInput } from '@host/components/ui/index.js';
 
-import { IconCheck } from '@host/components/icons.jsx';
+import { IconCheck, IconTag } from '@host/components/icons.jsx';
 const nameOf = (arg) => arg?.name ?? arg?.Name ?? '';
 
 function defaultsFor(args) {
@@ -110,7 +110,7 @@ function ArgRow({ arg, value, set, accent }) {
       {arg.type === 'boolean' ? (
         <BoolCheckbox value={value} onChange={set} description={arg.description} accent={accent}/>
       ) : arg.type === 'enum' ? (
-        <Select
+        <Select icon={IconTag}
           value={value}
           onChange={set}
           options={[

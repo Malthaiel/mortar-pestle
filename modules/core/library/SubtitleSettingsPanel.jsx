@@ -11,6 +11,7 @@
 import { useState } from 'react';
 import { useVideoPlayer } from './VideoPlayerProvider.jsx';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
+import { IconPalette, IconSquare, IconTypeText } from '@host/components/icons.jsx';
 import { candyCenterOffset } from '@host/util/candy.js';
 
 export default function SubtitleSettingsPanel() {
@@ -56,7 +57,7 @@ export default function SubtitleSettingsPanel() {
       {/* The gate. Off keeps the release's own signs and karaoke; on hands the
           look below to mpv's sub-* properties. */}
       <Row label="Override">
-        <CandySelect value={styled ? 'on' : 'off'} compact direction="down" options={[
+        <CandySelect icon={IconPalette} value={styled ? 'on' : 'off'} compact options={[
           { value: 'off', label: 'Keep release style' },
           { value: 'on',  label: 'Use my style' },
         ]} onChange={(x) => v.updateSubSetting('assOverride', x === 'on')}/>
@@ -75,7 +76,7 @@ export default function SubtitleSettingsPanel() {
       </Row>
 
       <Row label="Style" dim={!styled}>
-        <CandySelect value={s.bgStyle} compact direction="down" options={[
+        <CandySelect icon={IconSquare} value={s.bgStyle} compact options={[
           { value: 'box',     label: 'Box' },
           { value: 'shadow',  label: 'Shadow' },
           { value: 'outline', label: 'Outline' },
@@ -109,7 +110,7 @@ export default function SubtitleSettingsPanel() {
 
       {/* mpv's sub-bold is a flag, so there is no middle weight to offer. */}
       <Row label="Weight" dim={!styled}>
-        <CandySelect value={String(s.fontWeight)} compact direction="down" options={[
+        <CandySelect icon={IconTypeText} value={String(s.fontWeight)} compact options={[
           { value: '400', label: 'Normal' },
           { value: '700', label: 'Bold' },
         ]} onChange={(x) => v.updateSubSetting('fontWeight', Number(x))}/>

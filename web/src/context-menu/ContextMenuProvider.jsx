@@ -19,7 +19,8 @@ import { invoke } from '../api.js';
 // Dev builds append Inspect Element to EVERY menu (custom + default): the
 // suppressor above kills the native WebKit menu app-wide, which also kills
 // the native Inspect Element — this row is its replacement. Release builds:
-// no row (and the open_devtools command no-ops there anyway).
+// no row (and the open_devtools command no-ops there anyway). Dropdowns
+// (opts.dropdown, set by useMenuTrigger) skip it: a picker lists only its choices.
 const withDevRows = (items) => {
   if (!import.meta.env.DEV) return items || [];
   return [
@@ -58,7 +59,7 @@ export function ContextMenuProvider({ openCommandPalette, openSettings, accent, 
     } else {
       point = { x: (evtOrPoint && evtOrPoint.x) || 0, y: (evtOrPoint && evtOrPoint.y) || 0 };
     }
-    setMenu({ point, items: withDevRows(items), opts: { accent: accentNow, ...opts } });
+    setMenu({ point, items: opts.dropdown ? (items || []) : withDevRows(items), opts: { accent: accentNow, ...opts } });
   }, []);
 
   const closeContextMenu = useCallback(() => setMenu(null), []);

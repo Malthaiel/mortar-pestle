@@ -17,6 +17,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AppWindow, Slider } from '@host/components/ui';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
+import { IconMic, IconSpeaker } from '@host/components/icons.jsx';
 import EnableToggle from '@host/components/ui/EnableToggle.jsx';
 import BalanceSlider, { CENTRE } from './BalanceSlider.jsx';
 import { verb } from './broadcastStore.js';
@@ -63,13 +64,13 @@ function GlobalSlotRow({ slot, devices, accent, onAssign }) {
   return (
     <div className="bcast-slot-row">
       <div className="bcast-slot-ch">{slot.channel}</div>
-      <CandySelect
+      <CandySelect icon={IconMic}
         value={inputId}
         options={SLOT_KINDS}
         onChange={(v) => onAssign(slot.channel, v, '')}
         title={`Channel ${slot.channel} input type`}
       />
-      <CandySelect
+      <CandySelect icon={IconMic}
         value={slot.device_id || ''}
         options={deviceOpts}
         onChange={(v) => onAssign(slot.channel, inputId, v)}
@@ -133,7 +134,7 @@ function SourceCard({ row, accent, call }) {
       </Row>
 
       <Row label="Monitoring">
-        <CandySelect
+        <CandySelect icon={IconSpeaker}
           value={row.monitoring || 'none'}
           options={MONITOR_OPTIONS}
           onChange={(v) => call('set_monitoring', { source: row.name, type: v })}
@@ -228,7 +229,7 @@ export default function AudioPropsWindow({ api, snapshot, accent, onClose }) {
         <section>
           <h4 className="bcast-audio-h">Monitoring output</h4>
           <Row label="Device" hint="where monitored audio is played back">
-            <CandySelect
+            <CandySelect icon={IconSpeaker}
               value={monitoringValue}
               options={monitorOpts}
               onChange={(id) => {

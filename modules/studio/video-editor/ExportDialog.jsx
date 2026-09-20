@@ -20,7 +20,7 @@ import { listen } from '@tauri-apps/api/event';
 import AppWindow from '@host/components/ui/AppWindow.jsx';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
 import { PrimaryBtn, OutlinedBtn } from '@host/components/ui/Button.jsx';
-import { IconClapperboard } from '@host/components/icons.jsx';
+import { IconClapperboard, IconLayers, IconFilm, IconPackage, IconCpu } from '@host/components/icons.jsx';
 import { getLutFor } from './color/gradePipeline.js';
 import { serializeCube } from './color/gradeLut.js';
 import { resolveColorimetry } from './color/colorimetry.js';
@@ -298,7 +298,7 @@ export default function ExportDialog({ open, onClose, api, accent, project, regi
         <div style={rowGap}>
           <span style={lbl}>Preset</span>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <CandySelect
+            <CandySelect icon={IconLayers}
               value={presetId}
               options={presetOptions}
               onChange={setPresetId}
@@ -316,17 +316,17 @@ export default function ExportDialog({ open, onClose, api, accent, project, regi
             <div style={rowGap}>
               <span style={lbl}>Codec</span>
               <div style={{ flex: 1 }}>
-                <CandySelect value={custom.codec} options={CODECS.map(c => ({ value: c.value, label: c.label }))} onChange={setCustomCodec} title="Codec" disabled={running} compact />
+                <CandySelect icon={IconFilm} value={custom.codec} options={CODECS.map(c => ({ value: c.value, label: c.label }))} onChange={setCustomCodec} title="Codec" disabled={running} compact />
               </div>
               <span style={lbl}>Container</span>
               <div style={{ flex: 1 }}>
-                <CandySelect value={custom.container} options={containerOpts} onChange={(v) => setCustom({ ...custom, container: v })} title="Container" disabled={running || containerOpts.length < 2} compact />
+                <CandySelect icon={IconPackage} value={custom.container} options={containerOpts} onChange={(v) => setCustom({ ...custom, container: v })} title="Container" disabled={running || containerOpts.length < 2} compact />
               </div>
             </div>
             <div style={rowGap}>
               <span style={lbl}>Encoder</span>
               <div style={{ flex: 1 }}>
-                <CandySelect value={custom.encoder} options={encoderOpts} onChange={(v) => setCustom({ ...custom, encoder: v })} title="Encoder (Auto resolves the best available)" disabled={running} compact />
+                <CandySelect icon={IconCpu} value={custom.encoder} options={encoderOpts} onChange={(v) => setCustom({ ...custom, encoder: v })} title="Encoder (Auto resolves the best available)" disabled={running} compact />
               </div>
             </div>
             <div style={rowGap}>

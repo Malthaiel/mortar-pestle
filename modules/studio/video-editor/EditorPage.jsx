@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AppWindow from '@host/components/ui/AppWindow.jsx';
 import Toast from '@host/components/ui/Toast.jsx';
+import CandySelect from '@host/components/ui/CandySelect.jsx';
 import { PrimaryBtn, OutlinedBtn, IconBtn } from '@host/components/ui/Button.jsx';
-import { IconClapperboard, IconTrash } from '@host/components/icons.jsx';
+import { IconClapperboard, IconTrash, IconTypeText } from '@host/components/icons.jsx';
 import { newProject, normalizeProject, newId, defaultTitle, TITLE_FONTS } from './project.js';
 import { evaluate, transformAtFrame, gainAtFrame } from './keyframes/engine.js';
 import useAutosave from './useAutosave.js';
@@ -244,9 +245,8 @@ function TitleControls({ clip, laneIdx, accent, applyOp, projectRef }) {
       <textarea value={t.text ?? ''} onChange={e => set({ text: e.target.value })} rows={1} spellCheck={false}
         placeholder="Title text" style={{ ...TITLE_INPUT, width: '100%', resize: 'vertical', fontFamily: 'inherit' }} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <select value={t.font || 'DM Sans'} onChange={e => set({ font: e.target.value })} style={TITLE_INPUT}>
-          {TITLE_FONTS.map(f => <option key={f} value={f}>{f}</option>)}
-        </select>
+        <CandySelect icon={IconTypeText} value={t.font || 'DM Sans'} onChange={v => set({ font: v })}
+          options={TITLE_FONTS.map(f => ({ value: f, label: f }))} />
         <NumField label="Size" value={t.size ?? 96} min={1} max={2000} width={66} onCommit={v => set({ size: v })} />
         <input type="color" title="Text color" value={t.color || '#ffffff'} onChange={e => set({ color: e.target.value })} style={SWATCH} />
         {tog(t.bold, 'B', () => set({ bold: !t.bold }), 'Bold')}

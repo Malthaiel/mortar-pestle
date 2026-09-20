@@ -8,6 +8,7 @@ import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { AppWindow } from '@host/components/ui';
 import { PrimaryBtn, OutlinedBtn } from '@host/components/ui/Button.jsx';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
+import { IconVideo } from '@host/components/icons.jsx';
 
 const baseName = (p) => (p ? p.split(/[\\/]/).pop() : '');
 const toMp4 = (p) => {
@@ -58,7 +59,7 @@ export default function RemuxWindow({ api, accent, onClose }) {
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <CandySelect value={input} options={clipOpts} onChange={setInput} placeholder={clipOpts.length ? 'Recent recordings' : 'No recordings yet'} title="Recent recordings" />
+            <CandySelect icon={IconVideo} value={input} options={clipOpts} onChange={setInput} placeholder={clipOpts.length ? 'Recent recordings' : 'No recordings yet'} title="Recent recordings" />
           </div>
           <OutlinedBtn small onClick={browse} title="Pick any video file">Browse</OutlinedBtn>
         </div>
