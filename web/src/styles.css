@@ -978,8 +978,13 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
    rail-tile (the Music left column's albums + playlists, added 2026-09-04). The
    :not(.rail-tile) matters — a real rail-tile has its own rule above that ALSO
    slides the face, which is right for the player tile and wrong here. */
-.is-dragging .candy-btn:is([data-shape="chip"], [data-shape="tile"]:not(.rail-tile)) { --cbtn-band: var(--accent); }
-.is-dragging .candy-btn:is([data-shape="chip"], [data-shape="tile"]:not(.rail-tile)) > .candy-face {
+/* ICON joined the list 2026-09-19: the dock's buttons. They used to read as held
+   only because the press never released for the whole drag — the bug fixed that
+   day — so once the face popped back up the lifted button went grey and there was
+   nothing telling you which one you had (reported 2026-09-19). Same recipe as the
+   other two shapes, one more shape on the list. */
+.is-dragging .candy-btn:is([data-shape="chip"], [data-shape="icon"], [data-shape="tile"]:not(.rail-tile)) { --cbtn-band: var(--accent); }
+.is-dragging .candy-btn:is([data-shape="chip"], [data-shape="icon"], [data-shape="tile"]:not(.rail-tile)) > .candy-face {
   color: #fff;
   background: var(--accent);
 }
@@ -1881,6 +1886,19 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
    then the attribute drops at 150ms to ease back up. A data attribute (not a
    class) survives React's className rewrite on re-render — see useTactileSound. */
 .candy-btn:is(:active, .is-pressed, [data-candy-pressed]) > .candy-face { transform: translateY(var(--cbtn-depth)); }
+/* ...but never while the item is being DRAGGED. The browser holds :active on the
+   held element for the whole gesture, and a pseudo-class is not something JS can
+   clear — releasePress() strips the marks and cannot touch :active, so the face
+   stayed sunk until a reorder detached the element and dropped it. That read as
+   "the button doesn't unpress until I move it to another slot" on the rail tiles
+   and the nutrition chips (reported 2026-09-19). Synthetic pointer events never
+   set :active, which is why the audit passed over it. One rule for every shape;
+   .is-dragging's accent band still reads as held. */
+[data-drag-list][data-dragging] .candy-btn[data-shape]:is(:active, .is-pressed, [data-candy-pressed]) > .candy-face,
+/* The rail tile needs its own arm: its press rule carries :not(:has(button:active))
+   whose element in the :has() lifts it to (0,6,1), which outranks the (0,6,0) above
+   and kept the widget tiles sunk while the chips released (reported 2026-09-19). */
+[data-drag-list][data-dragging] .candy-btn[data-shape="tile"].rail-tile:is(:active, .is-pressed, [data-candy-pressed]) > .candy-face { transform: none; }
 
 .candy-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .candy-btn:disabled,

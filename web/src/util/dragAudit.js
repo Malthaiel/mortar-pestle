@@ -141,9 +141,17 @@ export async function dragAudit(target = '[data-drag-list]', { from = 0, to = nu
   // ── landed: every final rect is one of the resting slots ─────────────────
   const final = after.length ? after[after.length - 1].rects : [];
   const offSlot = [];
+  // The permutation only holds when every item is the SAME SIZE. Swap two items
+  // of different heights and each one's final rect pairs its neighbour's top
+  // with its own height — a rect that existed nowhere at rest, though the
+  // landing is exactly right. The right widget rail's tiles are flex-weighted
+  // (147.66 and 138.70 tall, measured 2026-09-19), so this check failed every
+  // rail drag on a correct result. Uniform lists (the dock, the chips, the
+  // grid) still get it.
+  const uniform = rest.every((rr) => rr[2] === rest[0][2] && rr[3] === rest[0][3]);
   if (final.length !== rest.length) {
     flags.push(`ITEM COUNT CHANGED: ${rest.length} → ${final.length} — the drag added or lost a slot.`);
-  } else {
+  } else if (uniform) {
     for (let i = 0; i < final.length; i++) {
       if (!rest.some((rr) => rr.every((v, j) => v === final[i][j]))) offSlot.push(i);
     }
@@ -174,6 +182,7 @@ export async function dragAudit(target = '[data-drag-list]', { from = 0, to = nu
     settledSamples: settled.length,
     movedAfterDrop,
     offSlot,
+    landedChecked: uniform,   // false = items differ in size, so the permutation rule does not apply
     inlineFossils: fossils,
     flags,
     pass: flags.length === 0,

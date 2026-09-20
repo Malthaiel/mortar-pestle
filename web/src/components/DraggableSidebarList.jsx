@@ -268,9 +268,17 @@ export default function DraggableSidebarList({
   // ── Per-frame loop ────────────────────────────────────────────────────────
   const step = useCallback(() => {
     const d = dRef.current;
-    const cur = dsRef.current;
-    if (!d || d.phase !== 'drag' || !cur || cur.releasing) { rafRef.current = 0; return; }
+    // Stop only when the GESTURE is over. `ds` lands one render after the
+    // pointer state, and on a heavy list that commit can miss the first frame:
+    // the dock re-renders ten buttons plus the parent's own drag-active state,
+    // so `dsRef` was still null when this ran. Treating that as "finished"
+    // killed the loop on frame one and nothing restarted it, leaving the dock
+    // to reorder only at release (reported 2026-09-19). A frame with no `ds`
+    // yet is an idle frame, not the end.
+    if (!d || d.phase !== 'drag') { rafRef.current = 0; return; }
     rafRef.current = requestAnimationFrame(step);
+    const cur = dsRef.current;
+    if (!cur || cur.releasing) return;
 
     const t = pointerTarget();
     if (d.mode === 'cursor') {
