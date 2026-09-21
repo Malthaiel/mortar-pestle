@@ -288,19 +288,26 @@ export default function TitleBar({
           </CircleChip>
         </div>
 
-        <CircleChip title="Minimize" data-tip-desc="Tuck the window out of the way" size={BTN} style={CENTER} onClick={() => win.minimize()}>
-          <IconMinus size={14}/>
-        </CircleChip>
-        <CircleChip
-          title={maximized ? 'Restore' : 'Maximize'}
-          data-tip-desc={maximized ? 'Back to the smaller size' : 'Fill the whole screen'}
-          size={BTN}
-          style={CENTER}
-          onClick={() => win.toggleMaximize()}
-        >{maximized ? <IconRestore size={14}/> : <IconSquare size={14}/>}</CircleChip>
-        <CircleChip title="Close" data-tip-desc="Close Mortar & Pestle" size={BTN} style={CENTER} onClick={() => win.close()}>
-          <IconX size={14}/>
-        </CircleChip>
+        {/* The three window controls fuse into their OWN run (2026-09-20) —
+            deliberately not welded onto the account run beside them, so "your
+            account" and "this window" stay two units. Same CircleChip parts as
+            every other split: no wrapper spans, .candy-split styles DIRECT
+            children only. */}
+        <div className="candy-split">
+          <CircleChip title="Minimize" data-tip-desc="Tuck the window out of the way" size={BTN} style={CENTER} onClick={() => win.minimize()}>
+            <IconMinus size={14}/>
+          </CircleChip>
+          <CircleChip
+            title={maximized ? 'Restore' : 'Maximize'}
+            data-tip-desc={maximized ? 'Back to the smaller size' : 'Fill the whole screen'}
+            size={BTN}
+            style={CENTER}
+            onClick={() => win.toggleMaximize()}
+          >{maximized ? <IconRestore size={14}/> : <IconSquare size={14}/>}</CircleChip>
+          <CircleChip title="Close" data-tip-desc="Close Mortar & Pestle" size={BTN} style={CENTER} onClick={() => win.close()}>
+            <IconX size={14}/>
+          </CircleChip>
+        </div>
       </div>
 
       {menuOpen && menuPos && (
