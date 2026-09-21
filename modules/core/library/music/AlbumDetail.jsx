@@ -30,6 +30,23 @@ const LISTEN_STATUSES = ['Plan-to-Listen', 'Currently-Listening', 'Listened', 'D
 // pixels, so the circle has no half-pixel edge.
 const ARTIST_PFP = 22;
 
+// The rows and the action run above them are the SAME size knob, so a row can
+// never drift from the run it sits under (.candy-split derives the seam, the
+// corners and every part's height from it). Change this and both change.
+const ROW_H = '26px';
+
+// The track's own page: an md sibling of the audio file, falling back to the
+// pipeline's Tracks folder for a card with no audio on disk. `wikilink` is the
+// base filename with no extension.
+function openTrackPage(track) {
+  if (!track.wikilink) return;
+  const albumFolder = track.audioPath ? track.audioPath.split('/').slice(0, -1).join('/') : '';
+  const target = albumFolder
+    ? albumFolder + '/' + track.wikilink + '.md'
+    : 'Knowledge/Music/MusicBrainz Pipeline/Tracks/' + track.wikilink + '.md';
+  window.location.hash = '/page/' + target.split('/').map(encodeURIComponent).join('/');
+}
+
 // The artist, leading the fact line: a round press photo and the name, which
 // opens the only artist surface the app has (a Browse search). The photo comes
 // from TheAudioDB (artistImage.js) and is often absent, so the initials circle
@@ -76,7 +93,7 @@ export default function AlbumDetail({ accent, albumPath }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
-  const { playAlbumTracks, enqueue, currentTrack, isPlaying } = useMusicPlayer();
+  const { playAlbumTracks, enqueue, currentTrack, isPlaying, toggle } = useMusicPlayer();
   const { jobs: dlJobs, enqueue: enqueueDownload } = useDownloads();
   const songMenu = useSongMenu(accent);
   const { openContextMenu } = useContextMenu();
@@ -102,6 +119,20 @@ export default function AlbumDetail({ accent, albumPath }) {
   // navigating elsewhere.
   const [highlight, setHighlight] = useState(null);
   useEffect(() => { setHighlight(consumeTrackHighlight(albumPath)); }, [albumPath]);
+
+  // The tracklist is exactly as wide as the action run above it. That width is
+  // whatever the run's labels add up to -- a status word, a rating, whether the
+  // Download half is there at all -- so it is READ off the live run and re-read
+  // whenever the run changes size, never written down here.
+  const runRef = useRef(null);
+  const [runW, setRunW] = useState(null);
+  useEffect(() => {
+    const el = runRef.current;
+    if (!el) return undefined;
+    const ro = new ResizeObserver(([entry]) => setRunW(entry.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [album]);
 
   const coverImgSrc = album ? coverSrc(album.image, 400, { library: true }) : null;
 
@@ -154,7 +185,7 @@ export default function AlbumDetail({ accent, albumPath }) {
   const nTracks = album.tracks.length;
   const facts = [
     album.artist ? <ArtistLink name={album.artist} accent={accent}/> : null,
-    (album.genres && album.genres.length) ? album.genres.slice(0, 4).join(', ') : null,
+    (album.genres && album.genres.length) ? album.genres.slice(0, 2).join(', ') : null,
     album.year || null,
     nTracks ? `${nTracks} track${nTracks === 1 ? '' : 's'}` : null,
     lengthLabel,
@@ -266,9 +297,13 @@ export default function AlbumDetail({ accent, albumPath }) {
               uses for status / rating / Download / More. A disabled half keeps
               its paint and simply does nothing -- fading it punches a hole in
               the run. */}
-          <div className="candy-split is-plain-label" style={{
-            position: 'relative', '--cbtn-size': '26px',
-            marginTop: 4, alignSelf: 'flex-start',
+          {/* The film page's action-row shell, 1-1 (AnimeMainColumn.jsx): the run,
+              14px of air, one hairline, then 10px down to the body under it --
+              which on a film is the Cast/Crew panel and here is the tracklist. */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', paddingBottom: 14, borderBottom: '1px solid var(--border)' }}>
+          <div ref={runRef} className="candy-split is-plain-label" style={{
+            position: 'relative', '--cbtn-size': ROW_H,
           }}>
             <CandySelect
               value={album.status || ''}
@@ -368,19 +403,16 @@ export default function AlbumDetail({ accent, albumPath }) {
               }}
             ><span className="candy-face">⋯</span></button>
           </div>
+          </div>
 
           {dlError && (
             <div style={{ fontSize: 11, color: 'var(--error)' }}>{dlError}</div>
           )}
-        </div>
-        </div>
-      </div>
 
-      {/* Track list — grouped by disc when the album has more than one */}
-      <div style={{
-        padding: '10px 14px 32px',
-        display: 'flex', flexDirection: 'column', gap: 8,
-      }}>
+          {/* Track list — grouped by disc when the album has more than one.
+              It rides IN the right column, under the hairline, exactly where a
+              film's Cast panel sits: same reading width as the title above it. */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: runW ? runW + 'px' : undefined }}>
         {(() => {
           const groups = new Map();
           album.tracks.forEach((t, idx) => {
@@ -412,7 +444,7 @@ export default function AlbumDetail({ accent, albumPath }) {
                 return (
                   <TrackRow
                     key={t.n + ':' + t.title}
-                    track={t} idx={idx}
+                    track={t}
                     accent={accent}
                     highlighted={!!highlight && highlight.n === t.n && (highlight.disc ?? 1) === (t.disc || 1)}
                     playlistRef={playlistRef}
@@ -422,8 +454,8 @@ export default function AlbumDetail({ accent, albumPath }) {
                       artist: album.artist, n: t.n, title: t.title,
                       audioPath: t.audioPath, wikilink: t.wikilink, duration: t.duration,
                       available: t.available, rgMbid: album.providerId || null,
-                    })}
-                    onPlay={() => playFrom(idx)}
+                    }, t.wikilink ? [{ label: 'Open track page', onClick: () => openTrackPage(t) }] : [])}
+                    onPlay={() => (playingThis ? toggle() : playFrom(idx))}
                     onEnqueue={() => {
                       enqueue([{
                         albumPath: album.path, albumTitle: album.title, albumImage: album.image,
@@ -439,6 +471,10 @@ export default function AlbumDetail({ accent, albumPath }) {
             </div>
           ));
         })()}
+          </div>
+          </div>
+        </div>
+        </div>
       </div>
 
       <MusicNotes album={album} accent={accent} />
@@ -450,118 +486,78 @@ export default function AlbumDetail({ accent, albumPath }) {
   );
 }
 
-function TrackRow({ track, idx, accent, playing, highlighted, onPlay, onEnqueue, onMenu, playlistRef }) {
-  const [hover, setHover] = useState(false);
+// One row = ONE fused run (.candy-split, Component Map § Default Components):
+// the name half plays and pauses, then Playlist, then Queue. The two marks are
+// the same ones the album's own Playlist / Queue buttons wear at the top of the
+// page, so a row reads as a smaller copy of them. Every part is ROW_H tall
+// because the run declares --cbtn-size; nothing here restates a height.
+function TrackRow({ track, accent, playing, highlighted, onPlay, onEnqueue, onMenu, playlistRef }) {
   const rowRef = useRef(null);
   // Scroll a song arrived-at from search into view; long tracklists otherwise
   // highlight a row sitting below the fold.
   useEffect(() => {
     if (highlighted) rowRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }, [highlighted]);
-  const openPage = (e) => {
-    e.stopPropagation();
-    if (!track.wikilink) return;
-    // Track pages live under Knowledge/Music/MusicBrainz Pipeline/Tracks (md sibling).
-    // wikilink is the base filename without extension. Navigate to /page/<encoded>.
-    const albumFolder = track.audioPath ? track.audioPath.split('/').slice(0, -1).join('/') : '';
-    const target = albumFolder
-      ? albumFolder + '/' + track.wikilink + '.md'
-      : 'Knowledge/Music/MusicBrainz Pipeline/Tracks/' + track.wikilink + '.md';
-    window.location.hash = '/page/' + target.split('/').map(encodeURIComponent).join('/');
-  };
+
+  // Same parts the run above is built from -- plain chips, not a shape of their
+  // own -- so a row IS the action run, carrying a track instead of an action.
+  // `.is-active` is the split's own lit-half state; the loaded track wears it.
+  const lit = playing || highlighted;
 
   return (
     <div
       ref={rowRef}
-      className={'candy-btn' + (playing ? ' is-playing' : '') + (highlighted ? ' is-active' : '')}
-      data-shape="track"
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      onClick={() => onPlay()}
-      onContextMenu={onMenu}
-      style={{ '--accent': accent || 'var(--accent)' }}
+      className="candy-split"
+      style={{ display: 'flex', '--cbtn-size': ROW_H, '--accent': accent || 'var(--accent)' }}
     >
-      <div className="candy-face">
-      {/* Number / playing indicator */}
-      <div style={{
-        width: 26, height: 26, flexShrink: 0,
-        borderRadius: 7,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: playing ? 'rgba(255,255,255,0.22)' : 'var(--surface-2)',
-        border: playing ? 'none' : '1px solid var(--border)',
-        color: playing ? 'white' : 'var(--text-muted)',
-        fontSize: 11, fontFamily: 'var(--font-mono)',
-        fontWeight: playing ? 700 : 500,
-        fontVariantNumeric: 'tabular-nums',
-        lineHeight: 1,
-      }}>
-        {playing ? '▶' : String(track.n).padStart(2, '0')}
-      </div>
+      <button
+        type="button"
+        className={'candy-btn' + (lit ? ' is-active' : '')}
+        data-shape="chip"
+        data-own-press
+        onClick={onPlay}
+        onContextMenu={onMenu}
+        title={playing ? 'Pause' : 'Play'}
+        style={{ flex: 1, minWidth: 0 }}
+      >
+        <span className="candy-face" style={{ width: '100%', justifyContent: 'flex-start' }}>
+          <span style={{
+            flexShrink: 0, fontVariantNumeric: 'tabular-nums', opacity: 0.7,
+          }}>{playing ? '▶' : String(track.n).padStart(2, '0')}</span>
 
-      {/* Title */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{
-          fontSize: 13, lineHeight: 1.25,
-          fontWeight: playing ? 700 : 500,
-          color: playing ? 'white' : 'var(--text)',
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }}>{track.title}</div>
-      </div>
+          <span style={{
+            flex: 1, minWidth: 0, textAlign: 'left',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>{track.title}</span>
 
-      {/* Hover-reveal: open page + add to queue */}
-      {track.wikilink && (
-        <HoverBtn hover={hover} playing={playing} title="Open track page" onClick={openPage}>↗</HoverBtn>
-      )}
-      <HoverBtn hover={hover} playing={playing} title="Add to queue" onClick={(e) => { e.stopPropagation(); onEnqueue(); }}>+</HoverBtn>
-
-      {/* Always-visible add-to-playlist (decision #6) */}
-      {playlistRef && (
-        <span onClick={(e) => e.stopPropagation()} style={{ flexShrink: 0, pointerEvents: 'auto' }}>
-          <AddToPlaylistButton refs={[playlistRef]} accent={accent} />
+          {/* Duration, at the far end of the half that carries the name. */}
+          <span style={{
+            flexShrink: 0, fontVariantNumeric: 'tabular-nums', opacity: 0.7,
+          }}>{fmtDuration(track.duration)}</span>
         </span>
-      )}
+      </button>
 
-      {/* Duration */}
-      <span style={{
-        width: 42, textAlign: 'right', flexShrink: 0,
-        fontSize: 11, fontFamily: 'var(--font-mono)',
-        color: playing ? 'rgba(255,255,255,0.85)' : 'var(--text-muted)',
-        fontVariantNumeric: 'tabular-nums',
-      }}>{fmtDuration(track.duration)}</span>
-      </div>
+      {/* Its own half now, not a child of the row -- so it needs no
+          stopPropagation to keep the row from playing under it. */}
+      <AddToPlaylistButton
+        variant="form"
+        fuse
+        icon={IconPlus}
+        label=""
+        accent={accent}
+        title="Add to playlist"
+        refs={playlistRef ? [playlistRef] : []}
+      />
+
+      <button
+        type="button"
+        className="candy-btn"
+        data-shape="chip"
+        data-own-press
+        onClick={onEnqueue}
+        title="Add to queue"
+      ><span className="candy-face"><IconLayers size={14}/></span></button>
     </div>
-  );
-}
-
-function HoverBtn({ children, hover, title, onClick, playing }) {
-  // The row face is accent whenever these are visible (hovered or playing), so
-  // one white set reads in both states -- --text-faint vanished on the red face.
-  const base = 'rgba(255,255,255,0.7)';
-  const lit = 'white';
-  const litBg = 'rgba(255,255,255,0.18)';
-  return (
-    <button
-      title={title} onClick={onClick}
-      style={{
-        background: 'transparent', border: 'none',
-        color: base,
-        padding: '4px 8px',
-        cursor: 'pointer', fontSize: 13, lineHeight: 1,
-        borderRadius: 4,
-        opacity: hover ? 1 : 0,
-        pointerEvents: hover ? 'auto' : 'none',
-        transition: 'opacity 120ms ease, background 80ms ease, color 80ms ease',
-        flexShrink: 0,
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.background = litBg;
-        e.currentTarget.style.color = lit;
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background = 'transparent';
-        e.currentTarget.style.color = base;
-      }}
-    >{children}</button>
   );
 }
 
