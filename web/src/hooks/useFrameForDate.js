@@ -5,7 +5,7 @@
 
 import { useEffect, useState } from 'react';
 import { api, subscribeEvents } from '../api.js';
-import { weekdayForKey } from '../util/events.js';
+import { itemsForDate } from '../util/recurrence.js';
 import { useDailyFrame } from './useDailyFrame.js';
 
 function timeToMins(hhmm) {
@@ -116,8 +116,9 @@ export function useFrameForDates(dates) {
 
   const perDay = {};
   for (const ds of dates || []) {
-    // Pick this date's weekday frame (Sunday-indexed util → lowercase mon..sun).
-    const dayFrame = frames[weekdayForKey(ds).toLowerCase()] || [];
+    // This date's items: its weekday drawer plus every repeating item whose
+    // rule lands on it (util/recurrence.itemsForDate).
+    const dayFrame = itemsForDate(frames, ds);
     perDay[ds] = mergeFrameForDate(dayFrame, overrides[ds] || {}, ds);
   }
   return {

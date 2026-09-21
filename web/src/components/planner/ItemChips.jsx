@@ -120,6 +120,11 @@ export function TaskChip({ path, line, text, sourceDate, checked = false, showDa
   useEffect(() => {
     if (document.activeElement !== inputRef.current) setDraft(text);
   }, [text]);
+  // A chip born EMPTY is one the section's + just made, so it takes the caret on
+  // mount. Blank IS the signal - no id handshake with the list - and a blank chip
+  // cannot survive a blur, because commit below deletes it.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (text === '') inputRef.current?.focus(); }, []);
 
   const onToggle = async () => {
     const r = await api.noteActions.toggleTask({ path, line, text });
@@ -132,8 +137,11 @@ export function TaskChip({ path, line, text, sourceDate, checked = false, showDa
   const commit = async () => {
     if (doneRef.current) return; doneRef.current = true;
     const v = draft.trim();
-    if (v === text) return;                                   // no change
+    // EMPTY FIRST. A chip born empty carries text '' as well, so the no-change
+    // check below would return before the delete ever ran and leave the blank
+    // line in the log.
     if (v === '') { await api.noteActions.deleteTask({ path, line, text }); return; }
+    if (v === text) return;                                   // no change
     await api.noteActions.editTask({ path, line, text, newText: v });
   };
   const cancel = () => { doneRef.current = true; setDraft(text); inputRef.current?.blur(); };
@@ -219,14 +227,20 @@ export function NoteChip({ text, sourceDate, index, showDate = true }) {
   useEffect(() => {
     if (document.activeElement !== inputRef.current) setDraft(text);
   }, [text]);
+  // A chip born EMPTY is one the section's + just made, so it takes the caret on
+  // mount. Blank IS the signal - no id handshake with the list - and a blank chip
+  // cannot survive a blur, because commit below deletes it.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (text === '') inputRef.current?.focus(); }, []);
 
   // Commit on blur / Enter; the doneRef guard (reset on focus) collapses the
   // Enter-then-blur double-fire. Esc reverts and bails via the same guard.
   const commit = async () => {
     if (doneRef.current) return; doneRef.current = true;
     const v = draft.trim();
-    if (v === text) return;                                   // no change
+    // EMPTY FIRST - see TaskChip.commit.
     if (v === '') { await api.noteActions.deleteNoteInline({ ds, index, text }); return; }
+    if (v === text) return;                                   // no change
     await api.noteActions.editNote({ ds, index, text, newText: v });
   };
   const cancel = () => { doneRef.current = true; setDraft(text); inputRef.current?.blur(); };
@@ -327,19 +341,25 @@ export function NoteChip({ text, sourceDate, index, showDate = true }) {
   );
 }
 
-// Out-of-chip icon action button for a Planner row (✓ / ROUTE / ×). Uses
+// Out-of-chip icon action button for a Planner row (✓ / ROUTE / ×). `className`
+// and `btnRef` exist so a consumer can anchor a popover to this button, or hand
+// it an extra class, WITHOUT wrapping it in a span: `.candy-split` styles its
+// DIRECT children, so a wrapper takes the run's seam and flattened corners and
+// the real button inside keeps its stock corners and depth — it then paints as a
+// detached pill hanging below the row (photographed 2026-09-20). Uses
 // data-shape="icon", which lights accent on hover like every candy button. `round` makes the delete × a circle; `active` holds
 // the accent fill for the checked ✓. `data-own-press` opts out of the global
 // :active scale; the mousedown stop keeps a click from starting the chip drag.
-export function ChipIconBtn({ title, onClick, round, active, disabled, size, children }) {
+export function ChipIconBtn({ title, onClick, round, active, disabled, size, className, btnRef, children }) {
   return (
     <button
+      ref={btnRef}
       type="button"
       title={title}
       aria-label={title}
       disabled={disabled}
       data-own-press
-      className={`candy-btn${active ? ' is-active' : ''}`}
+      className={`candy-btn${active ? ' is-active' : ''}${className ? ` ${className}` : ''}`}
       data-shape="icon"
       onMouseDown={(e) => e.stopPropagation()}
       onClick={onClick}

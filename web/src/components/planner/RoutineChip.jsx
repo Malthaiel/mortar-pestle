@@ -13,23 +13,87 @@
 // kind 'routine', which the calendar routes to a frames write rather than a
 // one-off session (see PlannerProvider.handleRoutineDrop).
 
+import { useEffect, useRef, useState } from 'react';
 import { ChipIconBtn, useHoldDrag } from './ItemChips.jsx';
-import { IconCheck, IconX } from '../icons.jsx';
+import { IconCheck, IconX, IconRepeat } from '../icons.jsx';
+import { useAnchoredRect } from '../ui/Popover.jsx';
+import RepeatPopover from './RepeatPopover.jsx';
+import { hasRule, describeRule } from '../../util/recurrence.js';
 import { usePlanner } from '@modules/core/planner/PlannerProvider.jsx';
 
 const ROW = { display: 'flex', alignItems: 'center', width: '100%' };
+// Panel box, owned here because the CALLER positions a Popover (the component
+// supplies chrome only). Height is the eight rows plus the body padding — it
+// only has to be close enough to pick a side.
+const REPEAT_PANEL_W = 284;
+const REPEAT_PANEL_H = 330;
 
 // "07:00" + "08:00" -> "07:00–08:00"; 24:00 stays the end-of-day sentinel.
 function range(start, end) {
   return `${start}–${end}`;
 }
 
-export default function RoutineChip({ item, onToggle, onDelete }) {
+export default function RoutineChip({ item, ds, onToggle, onDelete, onRename, onSetRule }) {
   const { startPaneDrag } = usePlanner();
   const checked = !!item.checked;
 
+  // REPEAT. Only offered when a host passes onSetRule, so the read-only "all
+  // routine" listing keeps the row it already had. The panel is anchored off
+  // the trigger's own rect rather than positioned by guess.
+  //
+  // NO lit state, even when the item repeats (user-directed 2026-09-20): every
+  // candy button is grey at rest and accent on hover, and a standing accent here
+  // would break that run. The rule is carried by the button's title instead.
+  const repeatRef = useRef(null);
+  const [repeatOpen, setRepeatOpen] = useState(false);
+  // Which side the panel drops on is decided from the trigger's REAL position at
+  // open time, not assumed: a routine row sitting low in the pane has no room
+  // under it, and useAnchoredRect does not flip on its own.
+  const [place, setPlace] = useState('below');
+  const repeatPos = useAnchoredRect(() => repeatRef.current?.getBoundingClientRect(),
+    { open: repeatOpen, width: REPEAT_PANEL_W, place });
+  const repeating = hasRule(item);
+  const toggleRepeat = () => {
+    const r = repeatRef.current?.getBoundingClientRect();
+    if (r) setPlace(r.bottom + REPEAT_PANEL_H > window.innerHeight ? 'above' : 'below');
+    setRepeatOpen(o => !o);
+  };
+
+  // INLINE EDIT, the same one TaskChip has (user-directed 2026-09-20: "i cant edit
+  // the text within a currently existing routinechip"). The name used to be a plain
+  // <span>, so there was nothing to type into - not a broken editor, an absent one.
+  // The writer differs (a frames entry by id, not a log line by {path, line}), the
+  // field does not.
+  const [draft, setDraft] = useState(item.name);
+  const doneRef = useRef(false);
+  const inputRef = useRef(null);
+
+  // Keep the live field synced to external edits (watcher refresh) unless the user
+  // is mid-edit in this very input.
+  useEffect(() => {
+    if (document.activeElement !== inputRef.current) setDraft(item.name);
+  }, [item.name]);
+
+  // A chip born EMPTY is one the Routine + just made, so it takes the caret.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (item.name === '') inputRef.current?.focus(); }, []);
+
+  // Commit on blur / Enter; the doneRef guard (reset on focus) collapses the
+  // Enter-then-blur double-fire. Esc reverts and bails via the same guard.
+  // Empty is checked FIRST so a chip abandoned straight after + deletes itself
+  // rather than living on as a nameless row.
+  const commit = async () => {
+    if (doneRef.current) return; doneRef.current = true;
+    const v = draft.trim();
+    if (v === '') { await onDelete?.(item); return; }
+    if (v === item.name) return;
+    await onRename?.(item, v);
+  };
+  const cancel = () => { doneRef.current = true; setDraft(item.name); inputRef.current?.blur(); };
+
   const hold = useHoldDrag({
     onPickup: (ev) => {
+      inputRef.current?.blur();
       window.getSelection?.()?.removeAllRanges?.();
       startPaneDrag('routine', { taskName: item.name, routineId: item.id }, item.name, ev);
     },
@@ -42,16 +106,27 @@ export default function RoutineChip({ item, onToggle, onDelete }) {
         data-shape="chip-field"
         data-checked={checked ? 'true' : undefined}
         title={item.timed
-          ? 'Hold and drag onto the calendar to move it'
-          : 'Hold and drag onto the calendar to give it a time'}
+          ? 'Click to edit · hold and drag onto the calendar to move it'
+          : 'Click to edit · hold and drag onto the calendar to give it a time'}
         onMouseDown={hold.onMouseDown}
         style={{ flex: 1 }}
       >
         <span className="candy-face">
-          <span className="chip-field-input" style={{
-            flex: 1, minWidth: 0,
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          }}>{item.name}</span>
+          <input
+            ref={inputRef}
+            className="chip-field-input"
+            value={draft}
+            spellCheck={false}
+            style={{ flex: 1, minWidth: 0 }}
+            onChange={e => setDraft(e.target.value)}
+            onFocus={() => { doneRef.current = false; }}
+            onClick={() => { if (hold.draggingRef.current) { hold.draggingRef.current = false; inputRef.current?.blur(); } }}
+            onBlur={commit}
+            onKeyDown={e => {
+              if (e.key === 'Enter') { e.preventDefault(); commit(); inputRef.current?.blur(); }
+              else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); cancel(); }
+            }}
+          />
           {item.timed && (
             <span className="chip-meta" style={{
               fontSize: 10,
@@ -60,6 +135,26 @@ export default function RoutineChip({ item, onToggle, onDelete }) {
           )}
         </span>
       </span>
+
+      {onSetRule && (
+        <ChipIconBtn
+          btnRef={repeatRef}
+          className="routine-repeat-trigger"
+          title={repeating ? describeRule(item) : 'Does not repeat'}
+          onClick={toggleRepeat}
+        ><IconRepeat size={12}/></ChipIconBtn>
+      )}
+      {onSetRule && (
+        <RepeatPopover
+          open={repeatOpen && !!repeatPos}
+          onClose={() => setRepeatOpen(false)}
+          style={{ position: 'fixed', zIndex: 1100, width: REPEAT_PANEL_W,
+                   left: repeatPos?.left, top: repeatPos?.top, bottom: repeatPos?.bottom }}
+          ds={ds}
+          item={item}
+          onPick={(rule) => onSetRule(item, rule)}
+        />
+      )}
 
       <ChipIconBtn
         title={checked ? 'Uncheck' : 'Check off'}

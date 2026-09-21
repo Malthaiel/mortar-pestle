@@ -37,6 +37,10 @@ import RoutineChip from './RoutineChip.jsx';
 import { useRoutineItems } from '../../hooks/useRoutineItems.js';
 import { useDailyFrame } from '../../hooks/useDailyFrame.js';
 import { makeUniqueId } from '../../util/frames.js';
+
+// The id a nameless new Routine row carries until it is typed into. It only has to
+// be recognisable on the way back out in renameRoutineItem - nothing binds to it.
+const NEW_ROUTINE_ID = 'new-routine';
 import { weekdayForKey, colorForType } from '../../util/events.js';
 import { candyGap } from '../../util/candy.js';
 import { playCelebrationChime } from '../../hooks/useTactileSound.js';
@@ -92,43 +96,6 @@ function AddCircle({ onClick, label }) {
     >
       <span className="candy-face"><IconPlus size={14}/></span>
     </button>
-  );
-}
-
-// One-line inline inserter shown under a section header after its "+" is
-// clicked. Enter commits, Esc cancels (stopPropagation keeps the modal open).
-function InlineAdd({ placeholder, onSubmit, onClose }) {
-  const [val, setVal] = useState('');
-  const [busy, setBusy] = useState(false);
-  const inputRef = useRef(null);
-  useEffect(() => { inputRef.current?.focus(); }, []);
-  const commit = async () => {
-    const t = val.trim();
-    if (!t) { onClose(); return; }
-    setBusy(true);
-    const r = await onSubmit(t);
-    setBusy(false);
-    if (r?.ok) onClose();
-  };
-  // ponytail: no margin — the section's gap spaces this. It carries
-  // --candy-surface-depth, not --candy-depth-small, so its trailing gap is a
-  // couple of px off the rest; it's a transient row, not worth a third constant.
-  return (
-    <div>
-      <input
-        ref={inputRef}
-        className="candy-input"
-        value={val}
-        disabled={busy}
-        onChange={e => setVal(e.target.value)}
-        onKeyDown={e => {
-          if (e.key === 'Enter') { e.preventDefault(); commit(); }
-          if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onClose(); }
-        }}
-        placeholder={placeholder}
-        style={{ width: '100%', boxSizing: 'border-box', fontSize: 12 }}
-      />
-    </div>
   );
 }
 
@@ -372,39 +339,83 @@ export default function DayPane({ accent = 'var(--accent)', pivotDs, onPivotChan
   // The event the modal is editing, as { ds, ev } — null means "new event".
   const [editingEvent, setEditingEvent] = useState(null);
   const openEventEditor = (ds, ev) => { setEditingEvent({ ds, ev }); setModalOpen(true); };
-  const [addingTask, setAddingTask] = useState(false);
-  const [addingRoutine, setAddingRoutine] = useState(false);
 
   // Routine items for the viewed weekday + the writer that creates an UNTIMED
   // one. A new item is born with no start/end — it lives in the list only until
   // it's dragged onto the calendar, which is what gives it a time.
   const routine = useRoutineItems(pivotDs, tick);
   const { frames, writeFrames } = useDailyFrame();
-  const addRoutineItem = async (text) => {
-    const name = (text || '').trim();
-    if (!name) return;
+  // BORN NAMELESS (user-directed 2026-09-20: the + should make the chip, not a text
+  // box to fill in first). The row is written straight away with an empty name, the
+  // list renders its real RoutineChip, and the chip focuses itself because it is
+  // empty. Abandoning it blurs an empty field, which deletes the row again.
+  const addRoutineItem = async () => {
     const dayKey = weekdayForKey(pivotDs).toLowerCase();
     const day = frames?.[dayKey] || [];
     const next = {
       ...frames,
-      [dayKey]: [...day, { id: makeUniqueId(day, name), name }],
+      [dayKey]: [...day, { id: makeUniqueId(day, NEW_ROUTINE_ID), name: '' }],
     };
     try { await writeFrames(next); }
     catch (e) { console.error('routine add failed', e); }
   };
-  // The mirror of addRoutineItem: drop the item from THIS weekday's frames
-  // entry. By id, not name — two items may share a name across weekdays and
+  // WHICH DRAWER holds this item. A routine item lives either under its weekday
+  // (no repeat rule) or in the single `any` drawer (has one), so every writer
+  // below has to look before it edits — editing the weekday blindly would make
+  // a repeating item's rename and delete silently do nothing.
+  const drawerOf = (id, dayKey) =>
+    (frames?.any || []).some(b => b.id === id) ? 'any' : dayKey;
+
+  // Rename by id. The id is the item's identity everywhere else - the calendar's
+  // frame link and the tick keying both hang off it - so it is left alone, EXCEPT
+  // while it is still the placeholder the adder minted, which no one has bound to
+  // anything yet and which would otherwise sit in Schedule.md as a nameless slug.
+  const renameRoutineItem = async (item, newName) => {
+    const dayKey = weekdayForKey(pivotDs).toLowerCase();
+    const key = drawerOf(item.id, dayKey);
+    const day = frames?.[key] || [];
+    const fresh = item.id === NEW_ROUTINE_ID || item.id.startsWith(`${NEW_ROUTINE_ID}-`);
+    const next = {
+      ...frames,
+      [key]: day.map(b => b.id !== item.id ? b : {
+        ...b,
+        name: newName,
+        id: fresh ? makeUniqueId(day.filter(x => x.id !== item.id), newName) : b.id,
+      }),
+    };
+    try { await writeFrames(next); }
+    catch (e) { console.error('routine rename failed', e); }
+  };
+  // The mirror of addRoutineItem: drop the item from whichever drawer holds it.
+  // By id, not name — two items may share a name across weekdays and
   // makeUniqueId only guarantees uniqueness within the day. The tick line the
   // item may have left in the log's `## Routine` section is keyed by name and
   // simply stops being rendered; nothing reads a tick without an item.
   const removeRoutineItem = async (item) => {
     const dayKey = weekdayForKey(pivotDs).toLowerCase();
-    const day = frames?.[dayKey] || [];
-    const next = { ...frames, [dayKey]: day.filter(b => b.id !== item.id) };
+    const key = drawerOf(item.id, dayKey);
+    const next = { ...frames, [key]: (frames?.[key] || []).filter(b => b.id !== item.id) };
     try { await writeFrames(next); }
     catch (e) { console.error('routine delete failed', e); }
   };
-  const [addingNote, setAddingNote] = useState(false);
+  // Give the item a repeat rule, change it, or take it away — which MOVES the
+  // item between drawers, because the drawer IS the rule's absence. Taking a
+  // rule away lands the item on the weekday currently being viewed, which is
+  // the only weekday the user can have meant.
+  const setRoutineRule = async (item, rule) => {
+    const dayKey = weekdayForKey(pivotDs).toLowerCase();
+    const from = drawerOf(item.id, dayKey);
+    const to = rule ? 'any' : dayKey;
+    const found = (frames?.[from] || []).find(b => b.id === item.id);
+    if (!found) return;
+    const { freq, interval, weekday, monthday, nth, month, from: ruleFrom, ...bare } = found;
+    const moved = rule ? { ...bare, ...rule } : bare;
+    const next = { ...frames };
+    next[from] = (frames?.[from] || []).filter(b => b.id !== item.id);
+    next[to] = [...(next[to] || frames?.[to] || []), moved];
+    try { await writeFrames(next); }
+    catch (e) { console.error('routine repeat failed', e); }
+  };
 
   const colorFor = (typeName) => colorForType(types, typeName);
 
@@ -480,19 +491,12 @@ export default function DayPane({ accent = 'var(--accent)', pivotDs, onPivotChan
             open={allOpen === 'routine'}
             onToggle={() => toggleAll('routine')}
           >
-            <AddCircle label="New routine item" onClick={() => setAddingRoutine(true)}/>
+            <AddCircle label="New routine item" onClick={addRoutineItem}/>
           </SectionHead>
-          {addingRoutine && (
-            <InlineAdd
-              placeholder="New routine item — Enter to add, Esc to cancel"
-              onSubmit={addRoutineItem}
-              onClose={() => setAddingRoutine(false)}
-            />
-          )}
           {routine.total > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: GAP_UNDER_BTN }}>
               {routine.items.map(it => (
-                <RoutineChip key={it.id} item={it} onToggle={routine.toggle} onDelete={removeRoutineItem}/>
+                <RoutineChip key={it.id} item={it} ds={pivotDs} onToggle={routine.toggle} onDelete={removeRoutineItem} onRename={renameRoutineItem} onSetRule={setRoutineRule}/>
               ))}
             </div>
           )}
@@ -506,15 +510,8 @@ export default function DayPane({ accent = 'var(--accent)', pivotDs, onPivotChan
             open={allOpen === 'tasks'}
             onToggle={() => toggleAll('tasks')}
           >
-            <AddCircle label="New task" onClick={() => setAddingTask(true)}/>
+            <AddCircle label="New task" onClick={() => api.daySections.addTask(pivotDs, '')}/>
           </SectionHead>
-          {addingTask && (
-            <InlineAdd
-              placeholder="New task — Enter to add, Esc to cancel"
-              onSubmit={(text) => api.daySections.addTask(pivotDs, text)}
-              onClose={() => setAddingTask(false)}
-            />
-          )}
           <div style={chipList(!day.loading && !day.error && !dayTasks.length)}>
             {day.loading ? (
               <Subdued>Loading</Subdued>
@@ -543,15 +540,8 @@ export default function DayPane({ accent = 'var(--accent)', pivotDs, onPivotChan
             open={allOpen === 'notes'}
             onToggle={() => toggleAll('notes')}
           >
-            <AddCircle label="New quick note" onClick={() => setAddingNote(true)}/>
+            <AddCircle label="New quick note" onClick={() => api.daySections.addNote(pivotDs, '')}/>
           </SectionHead>
-          {addingNote && (
-            <InlineAdd
-              placeholder="New quick note — Enter to add, Esc to cancel"
-              onSubmit={(text) => api.daySections.addNote(pivotDs, text)}
-              onClose={() => setAddingNote(false)}
-            />
-          )}
           <div style={chipList(!day.loading && !day.error && !day.notes.length)}>
             {day.loading ? (
               <Subdued>Loading</Subdued>
@@ -652,7 +642,7 @@ export default function DayPane({ accent = 'var(--accent)', pivotDs, onPivotChan
                   routine item is checked per DAY, and the other six weekdays
                   have no day to check against, so they list as plain rows. */}
               {isViewed
-                ? routine.items.map(it => <RoutineChip key={it.id} item={it} onToggle={routine.toggle} onDelete={removeRoutineItem}/>)
+                ? routine.items.map(it => <RoutineChip key={it.id} item={it} ds={pivotDs} onToggle={routine.toggle} onDelete={removeRoutineItem} onRename={renameRoutineItem} onSetRule={setRoutineRule}/>)
                 : items.map(it => (
                     <div key={it.id} style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.35 }}>
                       {it.name}

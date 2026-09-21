@@ -383,13 +383,23 @@ const BLOCK_LIBRARY_BODY_TAIL = '\n\nReusable session blocks for the Planner. Ed
 // Same hand-rolled YAML approach as Block Library, but preserves user-typed
 // frontmatter extras (Type, Created) since Schedule.md predates the schema.
 const SCHEDULE_PATH = 'Pulse/Schedule.md';
-const FRAME_FIELD_ORDER = ['id', 'name', 'start', 'end', 'planned'];
+// `freq`..`from` are the repeat rule (see util/recurrence.js). They are flat
+// scalars on purpose: this serializer only emits keys it knows, so a nested
+// rule object would be silently dropped on the next write.
+const FRAME_FIELD_ORDER = ['id', 'name', 'start', 'end', 'planned',
+  'freq', 'interval', 'weekday', 'monthday', 'nth', 'month', 'from'];
 // Per-weekday frame: canonical + tab order is Monday-first.
 const DAY_ORDER = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+// The eighth drawer. An item with a repeat rule has no single weekday to live
+// under, so it lives here and every read path asks recurrence.occursOn whether
+// it falls on the date being drawn. The seven weekday drawers are untouched by
+// this — an item with no rule behaves exactly as it always did, and the file
+// needed no migration.
+const ANY_KEY = 'any';
 
-// A fresh 7-key map with every weekday an empty block list.
+// A fresh map: every weekday an empty block list, plus the `any` drawer.
 export function emptyFramesMap() {
-  return Object.fromEntries(DAY_ORDER.map(d => [d, []]));
+  return { ...Object.fromEntries(DAY_ORDER.map(d => [d, []])), [ANY_KEY]: [] };
 }
 
 // Returns { frames, extras } where `frames` is ALWAYS a 7-key map (mon..sun),
@@ -431,7 +441,7 @@ export function parseDailyFrame(content) {
       continue;
     }
     // mode === 'frames'
-    const dayHdr = raw.match(/^ {2}(mon|tue|wed|thu|fri|sat|sun):\s*$/);
+    const dayHdr = raw.match(/^ {2}(mon|tue|wed|thu|fri|sat|sun|any):\s*$/);
     if (dayHdr) { flush(curDay ? frames[curDay] : legacy); curDay = dayHdr[1]; continue; }
     const itemStart = raw.match(/^ {4}-\s+(\w+):\s*(.*)$/);
     const itemCont  = raw.match(/^ {6,}(\w+):\s*(.*)$/);
@@ -462,7 +472,7 @@ export function buildScheduleFrontmatter(frames, extras = {}) {
   }
   lines.push(`last_modified: ${today}`);
   lines.push('frames:');
-  for (const day of DAY_ORDER) {
+  for (const day of [...DAY_ORDER, ANY_KEY]) {
     lines.push(`  ${day}:`);
     for (const b of (frames?.[day] || [])) {
       let first = true;

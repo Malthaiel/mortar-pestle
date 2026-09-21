@@ -18,7 +18,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, subscribeEvents } from '../api.js';
 import { useDailyFrame } from './useDailyFrame.js';
-import { weekdayForKey } from '../util/events.js';
+import { itemsForDate } from '../util/recurrence.js';
 
 export function useRoutineItems(ds, refreshTick = 0) {
   const { frames } = useDailyFrame();
@@ -51,10 +51,12 @@ export function useRoutineItems(ds, refreshTick = 0) {
 
   const items = useMemo(() => {
     if (!ds || !frames) return [];
-    const dayKey = weekdayForKey(ds).toLowerCase();
-    return (frames[dayKey] || []).map(b => ({
-      id: b.id,
-      name: b.name,
+    // That weekday's drawer plus any repeating item whose rule lands today.
+    // `...b` first so the repeat rule's flat fields (freq, interval, weekday,
+    // monthday, nth, month, from) ride along — the chip's repeat trigger reads
+    // them straight off the item rather than re-fetching the frames map.
+    return itemsForDate(frames, ds).map(b => ({
+      ...b,
       start: b.start || null,
       end: b.end || null,
       timed: !!(b.start && b.end),
