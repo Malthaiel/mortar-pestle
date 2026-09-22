@@ -925,7 +925,10 @@ function parseDaySections(content) {
     const m = DAY_TASK_RE.exec(trimmed);
     if (m) {
       const text = resolveWikilinksJs(m[2].trim());
-      if (text) tasks.push({ line: i, text, checked: m[1] !== ' ' });
+      // Viewed-day only: a blank task is the + button's new-row signal (a chip
+      // born empty takes the caret — see TaskChip). The Rust carryover scan
+      // keeps its is_empty guard so blank rows from OTHER days stay hidden.
+      tasks.push({ line: i, text, checked: m[1] !== ' ' });
     }
   }
   const notes = [];
