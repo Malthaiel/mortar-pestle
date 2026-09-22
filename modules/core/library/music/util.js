@@ -39,10 +39,14 @@ export const TILE_GRID = {
 export function coverSrc(image, width, opts) {
   if (!image) return null;
   const url = mediaUrl(image, opts) || null;
-  // Local covers (mortar-pestle-asset:// scheme) support server-side resize via
-  // ?w=<n>, which hits the cached-thumbnail path in the Rust asset protocol.
-  // Remote URLs (http/data/blob) are returned untouched.
-  if (width && url && url.startsWith('mortar-pestle-asset:')) {
+  // Local covers support server-side resize via ?w=<n>, which hits the cached-
+  // thumbnail path in the Rust asset protocol. Remote URLs (http/data/blob) are
+  // returned untouched. Both spellings of our own asset URL count: WebKitGTK gets
+  // the literal `mortar-pestle-asset://` scheme, WebView2 gets the http origin
+  // `http://mortar-pestle-asset.localhost/`. Testing only the scheme form meant
+  // the resize never fired on Windows at all, so a 60px widget tile loaded a
+  // 3000x3000 PNG (measured 2026-09-22).
+  if (width && url && /^(mortar-pestle-asset:|https?:\/\/mortar-pestle-asset\.)/.test(url)) {
     return url + (url.includes('?') ? '&' : '?') + 'w=' + width;
   }
   return url;

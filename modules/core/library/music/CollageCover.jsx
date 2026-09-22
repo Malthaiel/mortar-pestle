@@ -18,8 +18,15 @@ function initials(text) {
 // covers against the wrong root: coverSrc returned nothing, the tile fell
 // through to its blank state, and a collage-backed playlist showed no cover at
 // all (Macroblank, 2026-09-10).
+// The failure flag is keyed to the SRC, not to the component instance: this tile
+// is long-lived (the player widget's cover swaps picture per track), and a plain
+// boolean latched false on the first error and never re-checked. The widget's
+// cover mounts before setMediaLibraryRoot runs, so its very first URL resolves
+// against no Library root, 404s once, and the tile stayed blank for the rest of
+// the session while the same cover painted fine everywhere else (2026-09-22).
 function Tile({ src, accent, alt }) {
-  const [ok, setOk] = useState(true);
+  const [bad, setBad] = useState(null);
+  const ok = bad !== src;
   const url = coverSrc(src, 320, { library: true });
   if (url && ok) {
     return (
@@ -28,7 +35,7 @@ function Tile({ src, accent, alt }) {
         alt={alt || ''}
         loading="lazy"
         decoding="async"
-        onError={() => setOk(false)}
+        onError={() => setBad(src)}
         style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
       />
     );
