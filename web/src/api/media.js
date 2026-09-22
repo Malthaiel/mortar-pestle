@@ -18,7 +18,9 @@ let VAULT_ROOT_FOR_MEDIA = null;
 // VaultProvider calls this on switch so media (img/audio/video) paths resolve
 // against the active vault's root instead of the Citadel default.
 export function setMediaVaultRoot(p) {
-  if (p) VAULT_ROOT_FOR_MEDIA = p;
+  if (!p) return;
+  VAULT_ROOT_FOR_MEDIA = p;
+  announceMediaReady();
 }
 // The Library vault (writable media catalogs) is a fixed mount independent of
 // the active vault. Catalog audio + playlist covers are Library-relative and
@@ -27,7 +29,9 @@ export function setMediaVaultRoot(p) {
 // (Library Migration Phase 2)
 let LIBRARY_ROOT_FOR_MEDIA = null;
 export function setMediaLibraryRoot(p) {
-  if (p) LIBRARY_ROOT_FOR_MEDIA = p;
+  if (!p) return;
+  LIBRARY_ROOT_FOR_MEDIA = p;
+  announceMediaReady();
 }
 // Absolute filesystem path for a Library-relative path. reveal-in-files needs a
 // real FS path, and Library catalog fields (e.g. an album's trackFolder) are
@@ -48,6 +52,14 @@ let _mediaBaseUrlPromise = null;
 // which reads exactly like a codec problem. Poll instead of caching the miss; the
 // module-load prime below therefore also un-sticks the sync `mediaHttpUrl` path,
 // whose callers re-render on the ready event this fires.
+// One "media paths are resolvable now" signal, fired by the port resolve AND by
+// each root setter. Consumers (MusicPlayerProvider's mediaReadyTick, CollageCover)
+// already listen for it, so a root arriving late re-renders them and the URL gets
+// rebuilt with its beginning attached.
+function announceMediaReady() {
+  if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') return;
+  window.dispatchEvent(new CustomEvent('agentic:media-server-ready', { detail: { baseUrl: _mediaBaseUrl } }));
+}
 async function resolveMediaBase(tries = 20, delayMs = 150) {
   for (let i = 0; i < tries; i++) {
     let info = null;
@@ -56,9 +68,7 @@ async function resolveMediaBase(tries = 20, delayMs = 150) {
     if (info && typeof info.port === 'number' && info.port > 0) {
       _mediaBaseUrl = `http://127.0.0.1:${info.port}`;
       _mediaToken = info.token;
-      if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
-        window.dispatchEvent(new CustomEvent('agentic:media-server-ready', { detail: { baseUrl: _mediaBaseUrl } }));
-      }
+      announceMediaReady();
       return _mediaBaseUrl;
     }
     await new Promise((r) => setTimeout(r, delayMs));
@@ -82,12 +92,19 @@ function absFromInput(p, base) {
   // that passes an absolute path — and on Windows it has a drive letter, not `/`.)
   if (isAbsolutePath(p)) return p;
   const root = base || VAULT_ROOT_FOR_MEDIA;
-  return root ? `${root}/${p}` : p;
+  // No root yet = an address with no beginning. Emitting the bare relative path
+  // built a URL the media server can only 404 on, and the caller read that 404 as
+  // a broken file: a restored music track toasted "Format error" on a perfectly
+  // good mp3 (measured 2026-09-22 - main window 206, a rootless webview 404 on the
+  // SAME file), and CollageCover latched blank the same way. Null instead - same
+  // "not ready" contract as the unknown port - and the roots announce when they land.
+  return root ? `${root}/${p}` : null;
 }
 export function mediaUrl(p, opts) {
   if (!p) return '';
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(p) || p.startsWith('data:') || p.startsWith('blob:')) return p;
   const abs = absFromInput(p, opts && opts.library ? LIBRARY_ROOT_FOR_MEDIA : undefined);
+  if (!abs) return '';
   // <img> path — still works via custom scheme.
   return convertFileSrc(abs, 'mortar-pestle-asset');
 }
@@ -117,6 +134,7 @@ export function mediaHttpUrl(p, opts) {
     return null;
   }
   const abs = absFromInput(p, opts && opts.library ? LIBRARY_ROOT_FOR_MEDIA : undefined);
+  if (!abs) return null;
   return `${_mediaBaseUrl}/media?path=${encodeURIComponent(abs)}&t=${_mediaToken}`;
 }
 // Relay a resolved googlevideo URL through the loopback media server, which does

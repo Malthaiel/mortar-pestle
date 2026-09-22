@@ -233,7 +233,19 @@ export function MusicPlayerProvider({ children }) {
       const codeMap = { 1: 'aborted', 2: 'network', 3: 'decode', 4: 'src not supported' };
       const cls = codeMap[err?.code] || `code ${err?.code}`;
       const msg = err?.message ? `${cls}: ${err.message}` : cls;
-      emitPlayError(currentTrack, { message: msg });
+      // EVIDENCE, NOT A FIX (2026-09-20). Two failures were reported on a track
+      // whose file AND the loopback media server both tested clean afterwards
+      // (ffprobe: valid Ogg/Opus; a live range request: 206, audio/ogg, full
+      // length), so the error string alone cannot name the cause. Ask the server
+      // what it says about THIS url at the moment of the failure: a 403/404 means
+      // the port or token the element is still holding went stale under it, and a
+      // 206 means delivery was fine and the fault is above it in the decoder.
+      // The answer rides the toast so it survives without DevTools open.
+      const src = a.currentSrc || a.getAttribute('src');
+      fetch(src, { headers: { Range: 'bytes=0-0' } })
+        .then(r => `server ${r.status}`)
+        .catch(e => `server unreachable: ${e}`)
+        .then(probe => emitPlayError(currentTrack, { message: `${msg} — ${probe}` }));
       setIsPlaying(false);
     };
     a.addEventListener('timeupdate', onTime);
@@ -352,6 +364,12 @@ export function MusicPlayerProvider({ children }) {
       streamSrcKeyRef.current = null;
       setResolvingStream(false);
       const want = audioSrcFor(currentTrack.audioPath);
+      // Null = the loopback port or the Library root isn't known yet. Assigning it
+      // makes the element load the literal string "null" against the page origin,
+      // which 404s and surfaces as MEDIA_ERR_SRC_NOT_SUPPORTED on a healthy file.
+      // Both roots fire 'agentic:media-server-ready' when they land, and that bumps
+      // mediaReadyTick (a dep of this effect), so this re-runs with a real URL.
+      if (!want) return;
       // Without a CORS fetch the media is never "CORS-approved", so
       // createMediaElementSource legally feeds the graph digital silence — the
       // analyser reads zeros AND the user hears nothing, since the graph is the
