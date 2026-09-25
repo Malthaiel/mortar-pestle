@@ -1699,6 +1699,12 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
 .candy-split > .candy-btn.is-active { z-index: 1; }
 .candy-split > .candy-btn:is(:hover, :active) { z-index: 2; }
 
+/* is-liquid - TEST ONLY (LiquidSplitTestPanel, dev tab). The parts never light on
+   their own: a lit copy of the run sits on top, cut to a moving window, and that
+   window is the only lit thing. Delete with the panel. */
+.candy-split.is-liquid > .candy-btn:is(:hover, :active) { --cbtn-band: var(--cbtn-rest); }
+.candy-split.is-liquid > .candy-btn:is(:hover, :active) > .candy-face { background: var(--cbtn-face); color: var(--cbtn-rest-text); }
+
 /* select — dropdown trigger (CandySelect.jsx). Neutral candy control like
    chip/icon: no accent flip (a dropdown trigger turning accent-red reads wrong,
    and legacy .candy-select never colour-shifted on hover — it only lifted, which
