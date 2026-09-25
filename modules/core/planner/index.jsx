@@ -12,11 +12,9 @@ import { registerModuleKeybinds } from '@host/keybinds/registry.js';
 
 // Candy-tile shell around the dock. The shell always fills the sidebar slot
 // (flex-grow:1); the wrapper's align-items:flex-start lets the candy TILE hug
-// its content vertically, so the tile shrinks to (dial + CALENDAR header) when
-// the calendar collapses and grows to fill when it expands. The open/close
-// motion itself is driven by the calendar body's measured max-height inside
-// PlannerDock — see .button-planner-calendar-body. The .planner-dock-fill
-// wrapper is the stable full-height reference that measurement reads.
+// its content vertically. Since the calendar came out (2026-09-22) the dock has
+// nothing that grows, so the tile is always the dial's own height — the
+// measured max-height that used to drive the open/close slide is gone with it.
 function PlannerDockShell() {
   return (
     <div

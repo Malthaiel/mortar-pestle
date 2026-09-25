@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { GLIDE_MS, glideEase } from '@host/util/motion.js';
+import { MOVE_THRESHOLD } from '@host/components/DraggableSidebarList.jsx';
 import { cornerAt, strokedCornerAt } from './corners.js';
 
 // The planner's sole watchface: a rounded-rectangle two-ring dial.
@@ -176,6 +178,28 @@ export default function DualRingRect({
   // accent-coloured and would vanish on an accent face. Inside the SVG rather than
   // a CSS layer - no stacking-order games, and it lines up by construction.
   plate = null,
+  // WHERE THE SESSION RING IS PAINTED (user-directed 2026-09-20: "i actually want
+  // the inner ring to be a PART of the 3d button"). Given { node, dx, dy }, the
+  // ring's three shapes are portalled into `node` inside their own <svg>, offset by
+  // dx/dy so they land on exactly the same pixels as before - the host is telling
+  // us where its own box starts, and we shift back by it. Nothing about the ring's
+  // geometry, its refs or the rAF loop that redraws the arc every frame changes:
+  // the shapes are the same shapes in the same coordinate space, just carried into
+  // a box that can turn. Omit the prop and the ring stays in this svg as it was.
+  ringSlot = null,
+  // PAINT THE RINGS AT ALL. False strips the session arc and the ring art, leaving
+  // the svg as the drag-to-SET-time hit surface and nothing else — which is what
+  // the planner dock became on 2026-09-22, when the turning block grew to fill the
+  // tile and there was no band left for a ring to sit in. Default true: the Dev
+  // rig (FlipTestPanel) still wants them.
+  rings = true,
+  // WHERE THE SESSION RING'S PAINTED OUTER EDGE SITS, from the svg's edge. Null
+  // keeps the dial's own stack (SESSION_OUTER_INSET). The planner dock overrides
+  // it from 2026-09-22: its svg IS the turning block now, so the ring has to be
+  // re-placed against the block's rim instead of against a band that no longer
+  // exists. Given as the OUTER edge, not the path centre, because that is the
+  // edge the eye judges and the caller should not have to know the stroke width.
+  ringOuterInset = null,
   // Ring 3's DATA left this file on 2026-09-08 (Ribbon Pour) - the dock's overlay
   // owns the dashes, the now-marker and the click target now, because they travel
   // down over the calendar and this svg paints behind it. All that is passed in
@@ -192,7 +216,8 @@ export default function DualRingRect({
   // because the eye judges a band's outer lip and the path runs down its middle.
   const plateR = cornerAt(outerR, svgInset + PLATE_OUTER_INSET);
   const ribbonR = strokedCornerAt(outerR, svgInset + RIBBON_OUTER_INSET, RIBBON_W);
-  const sessionR = strokedCornerAt(outerR, svgInset + SESSION_OUTER_INSET, sessionStrokeW);
+  const sessionOuter = ringOuterInset ?? SESSION_OUTER_INSET;
+  const sessionR = strokedCornerAt(outerR, svgInset + sessionOuter, sessionStrokeW);
 
   const totalSec = Math.max(0, Math.round(remainingMins * 60));
   const totalSecRef = useRef(totalSec);
@@ -260,8 +285,11 @@ export default function DualRingRect({
     : Math.min(1, Math.max(0, totalSec - subSecRef.current) / 3600);
 
 
-  const sessionX = sessionInset, sessionY = sessionInset;
-  const sessionW = width - 2 * sessionInset, sessionH = height - 2 * sessionInset;
+  // The path runs down the stroke's middle, so the centre is the outer edge plus
+  // half a stroke - the same relation SESSION_OUTER_INSET is derived by.
+  const sessionCentre = sessionOuter + sessionStrokeW / 2;
+  const sessionX = sessionCentre, sessionY = sessionCentre;
+  const sessionW = width - 2 * sessionCentre, sessionH = height - 2 * sessionCentre;
 
   const ribbonX = ribbonInset, ribbonY = ribbonInset;
   const ribbonW = width - 2 * ribbonInset, ribbonH = height - 2 * ribbonInset;
@@ -290,27 +318,46 @@ export default function DualRingRect({
   const sessionHaloW = sessionStrokeW * 2.2;
 
   const dragging = useRef(false);
+  const settingRef = useRef(false);
   const startXRef = useRef(0);
+  const startYRef = useRef(0);
   const startMinsRef = useRef(0);
   const lastSentMinsRef = useRef(null);
   const PX_PER_MIN = 6;
 
+  // The time-set starts only once the first move past the sidebar list's
+  // MOVE_THRESHOLD is sideways. Vertical belongs to the list, which lifts the
+  // tile on that same move (PlannerDock's data-drag-axis), so the minutes are
+  // never touched by a reorder.
   function onPointerDown(e) {
     if (!interactive) return;
     e.preventDefault();
     dragging.current = true;
+    settingRef.current = false;
     startXRef.current = e.clientX;
+    startYRef.current = e.clientY;
     startMinsRef.current = dragMins != null
       ? dragMins
       : Math.max(1, Math.min(60, Math.round(remainingMins)));
     lastSentMinsRef.current = null;
     e.currentTarget.setPointerCapture?.(e.pointerId);
     onPressedChange?.(true);
-    onDragStart?.(startMinsRef.current);
   }
   function onPointerMove(e) {
     if (!dragging.current) return;
     const deltaPx = e.clientX - startXRef.current;
+    if (!settingRef.current) {
+      const dy = e.clientY - startYRef.current;
+      if (Math.hypot(deltaPx, dy) <= MOVE_THRESHOLD) return;
+      if (Math.abs(dy) > Math.abs(deltaPx)) {
+        // The list lifts the tile and clears its press; nothing to commit.
+        dragging.current = false;
+        e.currentTarget.releasePointerCapture?.(e.pointerId);
+        return;
+      }
+      settingRef.current = true;
+      onDragStart?.(startMinsRef.current);
+    }
     const newMins = Math.max(
       1,
       Math.min(60, Math.round(startMinsRef.current + deltaPx / PX_PER_MIN)),
@@ -325,10 +372,38 @@ export default function DualRingRect({
     dragging.current = false;
     e.currentTarget.releasePointerCapture?.(e.pointerId);
     onPressedChange?.(false);
-    onDragEnd?.();
+    if (settingRef.current) onDragEnd?.();
   }
 
+  // The session ring's three shapes, in one place so they can be painted either
+  // in this svg or portalled into the turning block. The filter id follows them.
+  const ringArt = (
+    <>
+      {/* Background ring — full perimeter, neutral stroke. */}
+      <path d={sessionBgPath} fill="none"
+        stroke="var(--clock-stroke-bg)" strokeWidth={sessionStrokeW}/>
+      {/* Session arc — the whole session, depleting once. Always glows.
+          `.tube-water` rather than a stroke attribute (user-directed 2026-09-16):
+          the class paints var(--accent) exactly as the hand-set colour did, AND
+          carries the tile's hover flip to #fff that the pipe's liquid already
+          had — one rule, both liquids. */}
+      {sessionArcPath && (
+        <>
+          {glow && (
+            <path ref={sessionGlowEl} d={sessionArcPath} className="tube-water"
+              strokeWidth={sessionHaloW} fill="none" strokeLinecap="round"
+              opacity="0.32"
+              filter={`url(#${ringSlot ? 'dualRectGlowSlot' : 'dualRectGlow'})`}/>
+          )}
+          <path ref={sessionArcEl} d={sessionArcPath} className="tube-water"
+            strokeWidth={sessionStrokeW} fill="none" strokeLinecap="round"/>
+        </>
+      )}
+    </>
+  );
+
   return (
+    <>
     <svg
       ref={svgRef}
       viewBox={`0 0 ${width} ${height}`}
@@ -372,6 +447,12 @@ export default function DualRingRect({
           fill={plate}
         />
       )}
+      {/* THE PLATE IS A RULER NOW (user-directed 2026-09-20: the ring and the
+          background round the clock both come off). Painting it is what the host
+          switched off - it passes "transparent" - but the rect itself has to stay:
+          PlannerDock finds it by `rect[fill*="planner-face"]`... which a transparent
+          fill would not match, so the host passes the token INSIDE a transparent
+          colour-mix instead. See the plate prop at its call site. */}
 
       {/* ── Ring 3: the day ribbon's GROOVE ─────────────────────────
           Only the empty track lives here now. The dashes, the now-marker and the
@@ -382,18 +463,16 @@ export default function DualRingRect({
           the dial keeps its three-ring proportion whether the strip is home or
           poured, and the pour visibly starts FROM something.
 
-          IT PAINTS NOTHING NOW (2026-09-09, Planner Ribbon Pour revision). The
-          tube's own WALL is this ring - one ring, one owner - and the tube is drawn
-          by the dock's overlay, on top, so a stroke here would be a second copy of
-          the same band showing through wherever the tube has not been laid yet.
+          IT PAINTS NOTHING, and since 2026-09-20 nothing paints it at all. The tube
+          drew this band from 2026-09-09; the tube is archived (_attic/tube) and the
+          band was NOT handed back - user-directed, the ring and the plate behind it
+          both come off, leaving the turning block on bare tile face.
 
-          The path stays because it is the RULER. grooveRef is how the dock measures
-          where its top ring goes: this path's real painted box, READ, never summed
-          from insets - so the dial still owns every number in it. `transparent`
-          rather than `none` on purpose: a stroke painted at zero alpha is still
-          rendered, so getBoundingClientRect keeps spanning the painted outer edge
-          and the dock's half-stroke correction stays honest. `none` would drop the
-          stroke from the box and quietly shift the measurement by RIBBON_W / 2.
+          The path is also the RULER. grooveRef is how the dock measures the turning
+          block's box: this path's real painted box, READ, never summed from insets -
+          so the dial owns every number in it. Painted or transparent the box is the
+          same; `none` is what would drop the stroke from it and quietly shift the
+          measurement by RIBBON_W / 2.
 
           It still swallows pointerdown, exactly as the old hit stroke did: this
           band is not a drag-to-SET-time surface, and without that the press falls
@@ -422,27 +501,38 @@ export default function DualRingRect({
           onGrooveClick?.(e);
         }}/>
 
-      {/* Background ring — full perimeter, neutral stroke. */}
-      <path d={sessionBgPath} fill="none"
-        stroke="var(--clock-stroke-bg)" strokeWidth={sessionStrokeW}/>
+      {rings && !ringSlot && ringArt}
 
       {/* Session arc — the whole session, depleting once. Always glows.
           `.tube-water` rather than a stroke attribute (user-directed 2026-09-16):
           the class paints var(--accent) exactly as the hand-set colour did, AND
           carries the tile's hover flip to #fff that the pipe's liquid already
           had — one rule, both liquids. */}
-      {sessionArcPath && (
-        <>
-          {glow && (
-            <path ref={sessionGlowEl} d={sessionArcPath} className="tube-water"
-              strokeWidth={sessionHaloW} fill="none" strokeLinecap="round"
-              opacity="0.32" filter="url(#dualRectGlow)"/>
-          )}
-          <path ref={sessionArcEl} d={sessionArcPath} className="tube-water"
-            strokeWidth={sessionStrokeW} fill="none" strokeLinecap="round"/>
-        </>
-      )}
     </svg>
+      {rings && ringSlot && createPortal(
+        <svg
+          className="planner-ring-art"
+          viewBox={`0 0 ${width} ${height}`}
+          width={width} height={height} overflow="visible"
+          style={{
+            position: 'absolute', left: -ringSlot.dx, top: -ringSlot.dy,
+            // The block underneath owns the drag-to-SET-time gesture and the three
+            // buttons; this is paint only.
+            pointerEvents: 'none',
+          }}
+        >
+          <defs>
+            {glow && (
+              <filter id="dualRectGlowSlot" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="1.9"/>
+              </filter>
+            )}
+          </defs>
+          {ringArt}
+        </svg>,
+        ringSlot.node,
+      )}
+    </>
   );
 }
 

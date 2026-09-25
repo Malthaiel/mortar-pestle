@@ -31,7 +31,7 @@ import { useEffect, useRef, useState } from 'react';
 import { eyebrowStyle } from '../ui/Eyebrow.jsx';
 import DualRingRect from '@modules/core/planner/watchfaces/DualRingRect.jsx';
 import SegmentReadout from '@modules/core/planner/watchfaces/SegmentReadout.jsx';
-import { IconRepeatSolid, IconPlayMark, IconSkipMark, IconListPlus } from '../icons.jsx';
+import { IconRepeatSolid, IconPlayMark, IconSkipMark, IconListPlus, IconPlus, IconNotes } from '../icons.jsx';
 
 // The pen's two external stylesheets, loaded once. Same URLs the pen uses.
 const LINKS = [
@@ -151,6 +151,12 @@ const COPY_CSS = `
        back on demote. Holding the layer open rounds it the same way throughout.
        Costs one resting paint row (it sits at the rounded position). */
     will-change: transform;
+    /* The pen hardcodes 0.5s and the real dial reads --dial-roll, which the Dev
+       panel's slider writes on :root. The scroll cooldown below reads the same
+       var, so if the copy kept the pen's fixed number the two would disagree the
+       moment the slider moved - a 1400ms cooldown gating a 500ms roll. Duration
+       only; the pen's curve is untouched. */
+    transition-duration: var(--dial-roll, 500ms);
     transform-origin: 50% 50%; }
   .flip-copy .button-3d {
     height: var(--h);
@@ -178,6 +184,29 @@ const COPY_CSS = `
      a way it is NOT on the front face: the back face's child is an ordinary grid
      of panels, while the front's two children are absolutely positioned and would
      resolve against a content-sized grid area instead (probe CLOCK-1). */
+  /* THE THIRD FACE, on the block's TOP plane (user-directed 2026-09-20).
+     Its transform is the underside's mirror and needs no new arithmetic: the
+     back face's rotateX(90) rotateZ(180) rotateY(180) IS rotateX(-90) written
+     the long way, because two 180s about perpendicular axes compose to one 180
+     about the third. So the top plane is the plain inverse, rotateX(90), and
+     rolling the flipper to rotateX(-90deg) brings it up the right way round.
+     It carries its own paint because the pen's sheet declares background and
+     border per class, on .front and .back only - there is nothing for a third
+     class to inherit. */
+  .flip-copy .button-3d.top {
+    top: 50%;
+    height: var(--d);
+    margin-top: calc(var(--d) / -2);
+    transform: rotateX(90deg) translateZ(calc(var(--d) / 2));
+    background: var(--cbtn-face);
+    border: var(--block-frame) solid color-mix(in oklch, var(--cbtn-rest), black 22%);
+    font-size: 11px;
+    font-family: var(--font-mono);
+    /* Same two reasons as .back: a grid so its one child fills it, and
+       justify-content back to stretch because the pen's centred flex column
+       packs the implicit track at content width instead. */
+    display: grid;
+    justify-content: normal; }
   .flip-copy .button-3d.back {
     display: grid;
     /* The pen's .button is a CENTRED flex column, and justify-content survives the
@@ -247,9 +276,35 @@ const CLOCK_CSS = '';
 // dead click is deliberate.
 const noop = () => {};
 
-// 27px is the app's standard TEXT split height, read off the live AlbumBrowser runs
-// (the only ones that declare --cbtn-size) rather than typed from memory.
-const SPLIT_H = '27px';
+// The run's height. It STARTED at 27px, the app's standard text-split height read
+// off the live AlbumBrowser runs (the only ones that declare --cbtn-size), which
+// was the right reference while this run sat fused into the block's frame like a
+// toolbar. It is not a text run and no longer fused - it floats on the liquid as
+// four marks - so it is tuned by eye instead (user-directed 2026-09-20: a bit
+// smaller). Kept as one constant; the four parts still divide the width evenly.
+const SPLIT_H = '24px';
+
+// The sideways run's WIDTH. In a column --cbtn-size stops being a height and
+// becomes the across measurement, because the two parts split the face's height
+// between them the same way the bottom run's four parts split its width. Starting
+// number, tuned on a photograph like every other size on this block.
+const COL_W = '38px';
+
+// PLACEHOLDER DAY, on the same footing as the plate's placeholder text: the real
+// strip reads planBlocks and sessions off PlannerProvider when this ports to the
+// dial. Shaped as the real one will be - a flat run of segments in MINUTES, with
+// the gaps between blocks carried as segments of no kind so the bar's own track
+// shows through. Nothing here is a clock time; the bar is proportional and the
+// two end labels are the only times on the face.
+const DEMO_DAY = [
+  { mins: 45, kind: 'done' },
+  { mins: 15, kind: null },
+  { mins: 60, kind: 'done' },
+  { mins: 30, kind: null },
+  { mins: 45, kind: 'plan' },
+  { mins: 45, kind: null },
+];
+const DEMO_NOW_PCT = 58;
 
 // One part of the fused run. A .candy-split child is an ORDINARY .candy-btn - there
 // is no React button component in this app and there should not be - so this is just
@@ -307,6 +362,17 @@ function useDialRingGeometry() {
   return g;
 }
 
+// The roll's duration, ASKED OF THE LIVE STYLESHEET rather than restated. The Dev
+// panel's slider writes --dial-roll on :root and both the real dial's transition
+// and the copy's read it, so the cooldown between scroll notches has to come from
+// the same place - a typed 500 here would gate a 1400ms roll the moment he moved
+// the slider. Handles both units; an unset var computes to '' and falls back.
+function rollMs() {
+  const v = getComputedStyle(document.documentElement).getPropertyValue('--dial-roll').trim();
+  const n = parseFloat(v);
+  return n ? (v.endsWith('ms') ? n : n * 1000) : 500;
+}
+
 function FlipClockBlock() {
   const hostRef = useRef(null);
   usePlannerBlockSize(hostRef);
@@ -316,6 +382,57 @@ function FlipClockBlock() {
   // callback ref, because the portal only exists once there is a real node to put
   // it in, and that needs a render to notice. Same reason the dock uses one.
   const [frontNode, setFrontNode] = useState(null);
+
+  // SCROLL DRIVES THE ROLL, NOT HOVER (user-directed 2026-09-20). face is which
+  // plane is up: -1 the day strip on top, 0 the clock at rest, +1 the controls
+  // underneath. Direction-mapped and CLAMPED, so each direction owns one face, the
+  // clock is always exactly one notch from either, and a trackpad's momentum
+  // cannot spin the block past the end.
+  //
+  // Written as an inline transform on the flipper, which beats the pen's
+  // `:hover .flipper-3d` rule without editing the frozen sheet - so hover dies on
+  // THIS block only and the two demo blocks beside it keep working.
+  const [face, setFace] = useState(0);
+  const lockRef = useRef(0);
+
+  // A NATIVE NON-PASSIVE LISTENER, not React's onWheel, and that is a measured
+  // correction rather than a preference. The first build used onWheel with
+  // stopPropagation - the move MusicPlayerWidget makes to own the wheel for its
+  // volume fader - and MEASURED the Settings drawer scrolling 998 -> 878 under the
+  // block anyway, the full deltaY.
+  //
+  // OWNING A WHEEL TAKES TWO THINGS, and stopPropagation is neither of them.
+  //   1. smoothWheel.js has to bow out. It is registered CAPTURE-PHASE ON WINDOW,
+  //      so it runs before any listener this block could add and nothing said down
+  //      here can reach it. Its own opt-out is the answer: the host carries
+  //      data-owns-wheel, which is in that module's EXCLUDE list.
+  //   2. The browser's own default scroll has to be cancelled, which needs
+  //      preventDefault on a listener registered { passive: false }. React attaches
+  //      wheel PASSIVELY at its root container, so the same call inside an onWheel
+  //      handler is a silent no-op. Only addEventListener can register this.
+  // stopPropagation stays as cheap insurance against a third listener, but it is
+  // carrying none of the weight.
+  //
+  // Empty deps are safe: setFace is stable and every read of the current face goes
+  // through the functional updater, so nothing here can go stale.
+  useEffect(() => {
+    const el = hostRef.current;
+    if (!el) return undefined;
+    const onWheel = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const now = performance.now();
+      if (now < lockRef.current) return;   // one notch per roll
+      const dir = e.deltaY > 0 ? 1 : -1;
+      setFace((f) => {
+        const next = Math.max(-1, Math.min(1, f + dir));
+        if (next !== f) lockRef.current = now + rollMs();
+        return next;
+      });
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
 
   // THE FACE HAS A BORDER AND THE DIAL DOES NOT. An absolutely positioned child
   // resolves against the PADDING box, so every offset measured off the real block
@@ -354,10 +471,63 @@ function FlipClockBlock() {
 
   const inset = g ? g.inset - frame : 0;
 
+  // DRAG THE FACE LEFT AND RIGHT TO SET THE TIMER (user-directed 2026-09-20). One
+  // value drives three things - the digits, the ring arc and how far the water has
+  // come - so there is nothing to keep in sync.
+  //
+  // THIS GESTURE IS A DUPLICATE AND IT SHOULD NOT BE. DualRingRect already owns
+  // exactly it (interactive + onDrag, same clamp, same PX_PER_MIN), but it hangs
+  // its handlers on its OWN svg, and in this rig that svg sits in a display:none
+  // wrapper while only the ring portals out - so there is nothing there to grab.
+  // The real fix is a dragSurface prop on that component, the pointer twin of the
+  // ringSlot prop it already has. Not done here: DualRingRect.jsx is dirty from
+  // another session and must not be touched. Delete this block and pass
+  // dragSurface={frontNode} the moment that lands.
+  const PX_PER_MIN = 6;   // MUST match DualRingRect's. That is the duplication above.
+  const [mins, setMins] = useState(30);
+  const dragRef = useRef(null);
+  const [grabbing, setGrabbing] = useState(false);
+  const onDragDown = (e) => {
+    e.preventDefault();
+    dragRef.current = { x: e.clientX, mins };
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    setGrabbing(true);
+  };
+  const onDragMove = (e) => {
+    const d = dragRef.current;
+    if (!d) return;
+    setMins(Math.max(1, Math.min(60, Math.round(d.mins + (e.clientX - d.x) / PX_PER_MIN))));
+  };
+  const onDragUp = (e) => {
+    if (!dragRef.current) return;
+    dragRef.current = null;
+    e.currentTarget.releasePointerCapture?.(e.pointerId);
+    setGrabbing(false);
+  };
+
   return (
-    <div ref={hostRef} className="button-container button-container-3d flip-copy flip-clock">
-      <div className="flipper-3d">
-        <div className="button button-3d front" ref={setFrontNode}>
+    <div ref={hostRef} data-owns-wheel
+      className="button-container button-container-3d flip-copy flip-clock">
+      <div className="flipper-3d" style={{ transform: `rotateX(${face * 90}deg)` }}>
+        <div className="button button-3d front" ref={setFrontNode}
+          onPointerDown={onDragDown}
+          onPointerMove={onDragMove}
+          onPointerUp={onDragUp}
+          onPointerCancel={onDragUp}
+          style={{ touchAction: 'none', cursor: grabbing ? 'grabbing' : 'grab' }}>
+          {/* THE LIQUID, moved here off the underside and turned a quarter turn
+              (user-directed 2026-09-20). It pools against the RIGHT edge and its
+              surface is a vertical line travelling left as the block fills, sitting
+              behind the ring and the digits. aria-hidden: pure decoration.
+
+              The clipper is its own div rather than overflow:hidden on the face,
+              because the face is the candy block itself and clipping it would cut
+              the block's own depth band off with the water. */}
+          <div className="fc-wet" aria-hidden="true">
+            {/* The ONE place the timer becomes a water level: minutes over the
+                hour the dial spans, straight into the sheet's only knob. */}
+            <div className="fc-liquid" style={{ '--fc-fill': `${(mins / 60) * 100}%` }} />
+          </div>
           {g && (
             <div
               className="planner-ring-inner-controls"
@@ -365,15 +535,16 @@ function FlipClockBlock() {
               style={{ top: inset, bottom: inset, left: inset, right: inset, '--ring-radius': '0px' }}
             >
               <div className="planner-timer-digits">
-                <SegmentReadout value="30:00" w={readoutBox.w} h={readoutBox.h} />
+                <SegmentReadout value={`${String(mins).padStart(2, '0')}:00`} w={readoutBox.w} h={readoutBox.h} />
               </div>
             </div>
           )}
         </div>
-        {/* THE UNDERSIDE, user-designed 2026-09-20 (his own layout, after the six
-            studies were all rejected): the plate readout from study 3 on top, one
-            fused four-part candy-split run filling the bottom 42%, flush to the
-            left, right and bottom frame.
+        {/* THE UNDERSIDE, second design 2026-09-20 (user-directed): a bare face
+            with the four controls floating over its bottom edge, lifted off the
+            left, right and bottom by an even gap. No text on this face at all -
+            the task name and the next-block time both came off in this pass, and
+            the liquid moved to the CLOCK face later the same day.
 
             THE RUN IS A REAL .candy-split, not a lookalike - ordinary .candy-btn
             children in a .candy-split wrapper, so the seams, the 2px frame overlap
@@ -384,20 +555,56 @@ function FlipClockBlock() {
             click in the Dev tab reset Malthaiel's actual session. */}
         <div className="button button-3d back">
           <div className="fc-under">
-            <div className="fc-plate">
-              <div className="fc-task">
-                <span className="fc-lab">TASK</span>
-                <span className="fc-val">Rewrite the dial</span>
-              </div>
-              <div className="fc-stats">
-                <span>3 done</span><span>1h 12m</span><span>next 14:00</span>
-              </div>
-            </div>
             <div className="candy-split fc-run" style={{ '--cbtn-size': SPLIT_H }}>
               <SplitBtn title="Reset" Icon={IconRepeatSolid} />
               <SplitBtn title="Start" Icon={IconPlayMark} size={20} />
               <SplitBtn title="Skip to break" Icon={IconSkipMark} size={22} />
               <SplitBtn title="Select a task for this session" Icon={IconListPlus} size={18} />
+            </div>
+          </div>
+        </div>
+        {/* THE NEW FACE, on the block's TOP plane (user-directed 2026-09-20):
+            the day at a glance on the left, two fused adders hugging the right
+            edge the way the four controls hug the underside's bottom. Scroll UP
+            to reach it - the opposite roll - so the clock is one notch from
+            either face.
+
+            IconPlus and IconNotes rather than reusing IconListPlus, which is
+            already the underside's fourth button meaning 'select a task for this
+            session'. The same glyph on two faces meaning two things is a bug you
+            only notice months later.
+
+            No-ops for the same reason the four below are: this is a shape rig in
+            Settings, and a stray click must not write to his real day. */}
+        <div className="button button-3d top">
+          <div className="fc-over">
+            <div className="fc-strip">
+              <div className="fc-head">
+                <span className="fc-lab">TODAY</span>
+                <div className="fc-stats">
+                  <span>3 done</span><span>1h 12m</span>
+                </div>
+              </div>
+              <div className="fc-bar">
+                {DEMO_DAY.map((seg, i) => (
+                  <div key={i} style={{ flex: seg.mins }}
+                    className={'fc-seg' + (seg.kind ? ' is-' + seg.kind : '')} />
+                ))}
+                <div className="fc-now" style={{ left: DEMO_NOW_PCT + '%' }} />
+              </div>
+              <div className="fc-span"><span>14:00</span><span>18:00</span></div>
+            </div>
+            <div className="candy-split fc-col" style={{ '--cbtn-size': COL_W }}>
+              {/* SIZE IS A VIEWBOX SCALE, not a size - the same trap the bottom
+                  run's four marks were tuned around. Measured off the live svgs:
+                  IconPlus draws 448 of its 448 box (it is a Font Awesome path on a
+                  512 grid) so it paints at exactly `size`, while IconNotes draws
+                  20 of 24 and paints at size x 0.833. 14 and 17 therefore both
+                  land ~14 rows, which is the bottom run's 12 opened up a little
+                  for a cell that is 39px tall rather than 27. Checked on a
+                  photograph, not on these numbers. */}
+              <SplitBtn title="Add a task" Icon={IconPlus} size={14} />
+              <SplitBtn title="Add a quick note" Icon={IconNotes} size={17} />
             </div>
           </div>
         </div>
@@ -407,7 +614,8 @@ function FlipClockBlock() {
       <div style={{ display: 'none' }}>
         {frontNode && g && (
           <DualRingRect
-            remainingMins={30}
+            remainingMins={mins}
+            dragMins={mins}
             phase="idle"
             running={false}
             width={g.svgW}
@@ -424,65 +632,156 @@ function FlipClockBlock() {
 
 // -- THE UNDERSIDE -----------------------------------------------------------
 //
-// His own layout, 2026-09-20, after all six of the earlier studies were rejected.
-// The six flat study rectangles and their .us-* sheet were deleted in the same
-// pass; nothing else consumed them.
+// REDESIGNED 2026-09-20 (second pass, user-directed). The first version was his
+// own layout - a task plate over a four-part run fused flush into the block's
+// frame on three sides. All three of those ideas are gone in this pass:
 //
-// THE GEOMETRY, all of it measured rather than typed. The underside is 233 x 84
-// and its 2px frame leaves 229 x 80 to work in. The run is 27px of face - the
-// app's standard text-split height, read off the live AlbumBrowser runs - plus its
-// own lip, for 34px of paint, 42% of the 80. The plate takes the 46 above it.
+//   1. THE RUN LIFTS OFF THE EDGES. It used to overhang the content box by one
+//      frame on left, right and bottom so its border merged with the block's.
+//      Now it sits inside an even gap on all three sides.
+//   2. THE TEXT IS GONE. No task name, no next-block time. The face carries the
+//      controls and nothing else for now.
+//   3. A LIQUID SURFACE RUNS BEHIND IT, adapted from
+//      codepen.io/fliseno1k/pen/WNboLBy ("Liquid Button", fliseno1k), which is
+//      the pen he pointed at via freefrontend.com/css-liquid-effects.
 //
-// FLUSH TO THE BOTTOM WITHOUT LOSING THE LIP. A candy button's depth is a
-// box-shadow cast BELOW its border box, so a run whose box touched the frame would
-// paint its band straight through it. Instead the container reserves exactly one
-// depth of bottom padding: the run's box stops that far up and its band falls into
-// the reserved strip, landing ON the frame. The reservation reads --candy-depth,
-// the same token .candy-btn derives --cbtn-depth from, so the two can never drift -
-// including under the depth presets in Settings, which rewrite that token on body.
+// HOW THE LIQUID ACTUALLY WORKS, because it is not what it looks like. There is
+// no fluid simulation and no canvas. It is ONE coloured square with TWO big
+// near-circles rotating on top of it - pseudo-elements at 200% of the square,
+// border-radius 45% and 40% so they are deliberately NOT round, spinning at 5s
+// and 10s. The blobs are painted in the block's own face colour, so they read as
+// air; the colour beneath them reads as liquid; and the wobbling edge where they
+// cross is the wave. Two different periods mean the two edges drift against each
+// other and the surface never repeats on a count you can see.
 //
-// SHARP CORNERS. .candy-btn re-declares --corner-max on itself precisely so a
-// wrapper cannot set it, and .candy-split then overrides it again with half the
-// run's height. Zeroing it needs a rule of its own at equal specificity, placed
-// after both - which an inline <style> in the body is, by document order.
+// The blobs are sized off the face's own HEIGHT (aspect-ratio 1), so they rescale
+// with the block and no number here restates the block's size. Only the FILL is a
+// typed knob - see --fc-fill below - and it is a percentage of the face, so it is
+// the one value a timer would drive.
+//
+// DROPPED FROM THE PEN: its hover rise (the square slides up 40px so the button
+// fills). Hover no longer means anything on this block - the scroll drives the
+// roll now - and rebinding the rise to something else would be inventing a
+// gesture rather than copying one. The fill sits still.
+//
+// EVEN GAPS ARE MEASURED TO THE PAINT, not to the boxes. A candy button's depth
+// band is a box-shadow cast BELOW its border box, so a run whose box sat one gap
+// off the bottom would PAINT a gap one band shorter than the two beside it. The
+// container's bottom padding therefore carries the gap PLUS the band's reach,
+// which is the same --candy-depth minus --block-frame expression the flush
+// version used to drop the band onto the frame. One --fc-gap drives all three.
+//
+// SHARP CORNERS KEPT. .candy-btn re-declares --corner-max on itself precisely so
+// a wrapper cannot set it, and .candy-split overrides it again with half the run's
+// height; zeroing it needs a rule of its own after both, which an inline <style>
+// in the body is by document order. The reason for zeroing them (a run fused into
+// a square frame) is gone now that the run floats - deleting that one line hands
+// the ends back their normal roundness, if that reads better.
 const UNDERSIDE_CSS = `
 .fc-under {
-  display: flex; flex-direction: column;
+  position: relative;
+  /* The liquid square is far bigger than the face and has to be cut to it. */
+  overflow: hidden;
+  display: flex; flex-direction: column; justify-content: flex-end;
   height: 100%; box-sizing: border-box;
-  /* ONE FRAME, NOT TWO. The block's 2px frame is the candy frame width on
-     purpose, and it is the run's outline too - so the run OVERHANGS the content
-     box by exactly one frame on three sides and its own border lands on top of
-     the block's, the same way two fused .candy-split halves share a seam. Both
-     lines are color-mix(--cbtn-rest, black 22%), so the overlap is invisible.
-     The bottom reservation shrinks by the same frame: the band still fills what
-     is left and now reaches the frame's OUTER edge. Without this the underside
-     carried 4px of doubled border down three sides and the run read inset. */
-  padding-bottom: calc(var(--candy-depth) - var(--block-frame));
+  /* ONE number for all three gaps. The bottom carries the depth band's reach on
+     top of it so the PAINTED gap matches the two sides rather than the boxes
+     matching and the paint disagreeing.
+     THE BAND REACHES A FULL --candy-depth, not depth minus a frame. A candy
+     button casts TWO shadows, and the second, darker one sits below the first:
+     scanned 2026-09-20 at x=640, the face ends at row 481, the border takes
+     482-483, the lit band 484-488 and the dark layer 489-490 - a full 7 below the
+     border box. Reserving depth-minus-frame painted an 8px gap under a 10px pair
+     at the sides. Measured on the photograph, not computed from the shadow. */
+  --fc-gap: 10px;
+  padding: var(--fc-gap);
+  padding-bottom: calc(var(--fc-gap) + var(--candy-depth));
   font-family: var(--font-mono);
   /* The pen's own .button.back rule forces uppercase and that is inherited
-     lettering, not this plate's. Off once here, for every descendant. */
+     lettering, not this face's. Off once here, for every descendant. */
   text-transform: none;
-  /* One hairline, one rule - the stat dividers and nothing else. */
+  /* One hairline, one rule. Still read by the top face's stat dividers. */
   --us-line: color-mix(in oklch, var(--cbtn-rest), black 34%); }
 
-/* Lifted from study 3 unchanged: the one arrangement that added what the front
-   face lacks. Its 34px tool column is gone - the run below replaces it - so the
-   right gutter goes back to matching the left. */
-.fc-plate { flex: 1; min-height: 0;
-  display: flex; flex-direction: column; justify-content: center;
-  gap: 7px; padding: 0 11px; }
-.fc-task { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-.fc-lab { font-size: 8px; letter-spacing: 0.16em; color: var(--text-faint); }
-.fc-val { font-size: 12px; font-weight: 700; color: var(--text); letter-spacing: 0;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.fc-stats { display: flex; align-items: center; font-size: 9px; color: var(--text-muted); }
-.fc-stats > span { padding: 0 9px; border-left: 1px solid var(--us-line); }
-.fc-stats > span:first-child { padding-left: 0; border-left: 0; }
+/* THE LIQUID, adapted from the pen and TURNED A QUARTER TURN (user-directed
+   2026-09-20). It lives on the CLOCK face now, not the underside: it pools
+   against the right edge and its surface is a VERTICAL line that travels left as
+   the block fills, behind the ring and the digits.
 
-/* .candy-split is inline-flex by default; the run has to span the face - and
-   then one frame past it on each side, so the outer parts' borders sit on the
-   block's own frame rather than beside it. */
-.fc-run { display: flex; margin: 0 calc(var(--block-frame) * -1); }
+   Two of the pen's knobs are GONE with the rotation, and that is the point of
+   doing it this way. The pen anchors its blobs at the edge OPPOSITE the water, so
+   every change to the blob size walked the waterline and needed --fc-shift to
+   compensate, and the crossing point then needed --fc-level on top. Anchoring
+   each blob at the waterline ITSELF - right: --fc-fill - deletes both. One knob,
+   nothing derived, nothing to keep in sync. */
+.fc-wet {
+  position: absolute; inset: 0;
+  overflow: hidden;
+  pointer-events: none; }
+.fc-liquid {
+  position: absolute; inset: 0;
+  background: color-mix(in oklch, var(--accent, oklch(0.55 0.16 25)), black 25%);
+  /* THE ONE KNOB, and it is the one a timer drives: how far in from the right
+     edge the surface has reached. 0% empty, 100% the whole face drowned. A
+     percentage resolves against the FACE's width, which is what makes "full"
+     mean the full block. Static here - this rig has no timer behind it. */
+  --fc-fill: 55%;
+  /* HOW FLAT THE WAVE IS. The surface is the edge of a rotating near-square, so
+     a bigger blob draws a straighter line down the same face height. Both waves
+     share it - they move alike, they just sit apart (see --fc-lead). */
+  --fc-blob: 3.2;
+  /* HOW FAR RIGHT THE BRIGHT WATER STARTS (user-directed 2026-09-20). --fc-fill
+     stays the waterline itself - where air meets water, and the timer's value.
+     The TRANSPARENT blob is what moves: pushed this far right of it, the strip it
+     still covers reads as darker water and the bright water begins beyond it.
+     Moving the OPAQUE blob instead was the first attempt and it only dragged the
+     one boundary along, because a transparent blob sitting entirely left of the
+     opaque one is painted over and shows nothing. Clamped at the right edge so a
+     nearly-empty block reads dark rather than hanging an edge off the block. */
+  --fc-lead: 4%;
+  /* ONE SPEED KNOB. The second blob runs at exactly twice this, which is what
+     makes the two wave edges drift apart instead of locking together. */
+  --fc-spin: 5s; }
+
+/* The two blobs, anchored by the RIGHT edge that IS the waterline. Square and
+   sized off the face's HEIGHT, not its width, so a blob stays round on a face
+   that is far wider than it is tall. border-radius under 50% is what makes the
+   edge wobble as it turns rather than sweep as a clean arc. Same size, same
+   swing - only where they SIT differs, and only the bright one overrides it. */
+.fc-liquid::before,
+.fc-liquid::after {
+  content: "";
+  position: absolute;
+  height: calc(var(--fc-blob) * 100%);
+  aspect-ratio: 1;
+  top: 50%;
+  right: var(--fc-fill);
+  transform: translateY(-50%); }
+/* The opaque blob is the face's OWN colour, so the air left of the water is the
+   same material as the rest of the block and the surface reads as cut out of it
+   rather than painted over it. */
+.fc-liquid::before {
+  border-radius: 45%;
+  background: var(--cbtn-face);
+  animation: fc-liquid-spin var(--fc-spin) linear infinite; }
+/* Half-transparent, so where it overlaps the liquid you get a third mid tone -
+   the depth under the surface. Slower, so the two edges drift apart. */
+.fc-liquid::after {
+  right: max(0%, calc(var(--fc-fill) - var(--fc-lead)));
+  border-radius: 40%;
+  background: color-mix(in oklch, var(--cbtn-face), transparent 50%);
+  animation: fc-liquid-spin calc(var(--fc-spin) * 2) linear infinite; }
+
+@keyframes fc-liquid-spin {
+  0%   { transform: translateY(-50%) rotate(0deg); }
+  100% { transform: translateY(-50%) rotate(360deg); }
+}
+}
+
+/* The run rides ABOVE the liquid. .candy-btn is already position: relative, but
+   the run's own wrapper is not, and without a stacking position of its own it
+   would sit under an absolutely positioned sibling that comes first in source. */
+.fc-run { display: flex; position: relative; z-index: 1; }
 .fc-run > .candy-btn { --corner-max: 0px; }
 /* list-plus is drawn BOTTOM-HEAVY in its 24 box (ink y 6..21, centre 13.5 against
    the box's 12), so at a matched height it still paints one row lower than the
@@ -491,6 +790,107 @@ const UNDERSIDE_CSS = `
    lifted the whole fourth cell a row out of line with its neighbours
    (photographed). Only the glyph moves. */
 .fc-run > .candy-btn:last-child > .candy-face > svg { transform: translateY(-1px); }
+`;
+
+// -- THE NEW FACE, on the block's TOP plane -----------------------------------
+//
+// His own call 2026-09-20: the day at a glance on the left, two fused adders
+// hugging the right edge the way the four controls hug the underside's bottom.
+// Reached by scrolling UP - the opposite roll from the underside - so the clock
+// sits exactly one notch from either face and nothing wraps.
+//
+// EVERYTHING SHARED WITH THE UNDERSIDE IS SHARED, NOT COPIED. .fc-lab and
+// .fc-stats are declared once in UNDERSIDE_CSS and worn by both faces; the frame
+// overhang, the depth reservation and the zeroed corners are the same three moves
+// the bottom run already proved, turned ninety degrees.
+const TOPSIDE_CSS = `
+.fc-over {
+  display: flex;
+  height: 100%; box-sizing: border-box;
+  font-family: var(--font-mono);
+  /* The pen's own .button.back rule forces uppercase, and .top sits beside it in
+     the same block. Off once here, for every descendant. */
+  text-transform: none;
+  /* Same one hairline the underside declares, so both faces divide the same way. */
+  --us-line: color-mix(in oklch, var(--cbtn-rest), black 34%); }
+
+/* .fc-col - the fused run TURNED SIDEWAYS. The shipped .candy-split sheet is
+   row-only in three ways: inline-flex, a margin-LEFT overlap, and four rules that
+   square a part's end or start corners. Only the first two matter here, because
+   the parts carry --corner-max: 0px like the bottom run's do, so every radius in
+   this run is already zero and the corner rules are no-ops on it.
+   ponytail: three facts, not seven. A ROUNDED column run would need those corner
+   rules written the other way round - promote this to .candy-split.is-column in
+   styles.css on the day one is actually wanted, not before.
+
+   ONE FRAME, NOT TWO, exactly as .fc-run does it: the run overhangs the content
+   box by one --block-frame on top and right so its border lands on the block's
+   rather than beside it. The bottom is the depth reservation instead - a candy
+   button's band is cast BELOW its border box, so the run's box stops one depth
+   short and the band falls into the reserved strip, landing on the frame's outer
+   edge. Both numbers are read, never typed. */
+.fc-col {
+  display: flex; flex-direction: column; align-items: stretch;
+  width: var(--cbtn-size);
+  margin: calc(var(--block-frame) * -1) calc(var(--block-frame) * -1)
+          calc(var(--candy-depth) - var(--block-frame)) 0; }
+.fc-col > .candy-btn {
+  --corner-max: 0px;
+  /* height: auto beats .candy-split's height: var(--cbtn-size) on source order -
+     this sheet is in the body, that one is in the head. min-height: 0 is what lets
+     flex: 1 1 0 (set inline by SplitBtn) actually divide the height; a flex item's
+     automatic minimum along the main axis is its content otherwise. */
+  width: var(--cbtn-size); height: auto; min-height: 0; }
+/* The overlap swaps axis: the trailing part climbs onto its neighbour's BOTTOM
+   border so the two lines fuse into one seam, which is what margin-left does
+   sideways in a row. */
+.fc-col > .candy-btn:not(:first-child) {
+  margin-left: 0; margin-top: calc(var(--split-lap) * -1); }
+/* .candy-face carries padding: 8px 16px, which is 32px of SIDE padding - and a
+   column part is only as wide as --cbtn-size. At 38px that leaves 6px for the
+   mark and BOTH icons painted 2px wide (measured 2026-09-20, svg.w = 2 for a
+   requested 14 and 16). It never showed on the bottom run because its parts are
+   57.25px across and clear it comfortably. A column part is sized to its mark
+   rather than to a label, so the side padding has no work to do: drop it and let
+   the face's own centring place the glyph.
+   The VERTICAL padding stays - it is doing the same job it does everywhere. */
+.fc-col > .candy-btn > .candy-face { padding-left: 0; padding-right: 0; }
+
+.fc-strip {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; justify-content: center;
+  gap: 6px; padding: 0 11px; }
+.fc-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+/* .fc-stats gives every span 9px on BOTH sides, and on the underside that trailing
+   9px falls off the end of a left-aligned row where nothing lines up against it.
+   Pushed to the right by the header, it becomes a visible 9px of air between the
+   last tally and the bar's right edge directly below it (photographed). The boxes
+   already agree - .fc-head, .fc-bar and .fc-span all end at the same x - so this
+   is the PAINT disagreeing with the layout, and only the paint needs moving. */
+.fc-over .fc-stats > span:last-child { padding-right: 0; }
+
+/* THE BAR IS PROPORTIONAL, never a fixed grid. Each planned block is a flex child
+   sized by its own minutes and each gap between blocks is a spacer sized the same
+   way, so the day's shape on screen IS the data's shape - no segment count, no
+   typed 09:00-18:00 window that would lie on a short day. The span is the first
+   block's start to the last block's end, read off the list.
+   Sharp ends and no clip: the marker overhangs the bar by 2px top and bottom to
+   read at this height, and square corners are the block's own language (every
+   part of both runs declares --corner-max: 0px). */
+.fc-bar {
+  position: relative; height: 8px; display: flex;
+  background: var(--us-line); }
+.fc-seg { min-width: 0; }
+/* Planned and worked solid, planned and not yet hollow, the gaps left to the
+   track. Three tones, one bar, plan against reality. */
+.fc-seg.is-done { background: var(--accent, oklch(0.55 0.16 25)); }
+.fc-seg.is-plan { background: color-mix(in oklch, var(--cbtn-rest), white 6%); }
+.fc-now {
+  position: absolute; top: -2px; bottom: -2px; width: 2px;
+  background: var(--text); }
+.fc-span {
+  display: flex; justify-content: space-between;
+  font-size: 8px; letter-spacing: 0.12em; color: var(--text-faint); }
 `;
 
 // The dial own padding between the clock and the ring inner stroke. Same value
@@ -528,6 +928,10 @@ export default function FlipTestPanel() {
       <style>{COPY_CSS}</style>
       <style>{CLOCK_CSS}</style>
       <style>{UNDERSIDE_CSS}</style>
+      {/* AFTER the underside sheet on purpose: .fc-col beats .candy-split's
+          row-only rules on source order alone, at equal specificity, and it
+          reuses .fc-lab and .fc-stats declared above it. */}
+      <style>{TOPSIDE_CSS}</style>
 
       <div style={{ display: 'flex', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
         {/* ORIGINAL — index.html lines 55-64, verbatim. FROZEN, do not edit. */}

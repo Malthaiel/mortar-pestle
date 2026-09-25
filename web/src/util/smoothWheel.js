@@ -42,7 +42,18 @@ import { GLIDE_MS, glideEase } from './motion.js';
 
 const SETTLE = 0.5;       // px slack when deciding an element is AT its edge
 const WHEEL_MIN = 48;     // |deltaY| below this in pixel-mode ⇒ treat as trackpad
-const EXCLUDE = '.cm-scroller, .cm-editor, .xterm, .xterm-viewport, .xterm-screen';
+// [data-owns-wheel] is the OPT-OUT for a control that drives itself off the wheel
+// rather than scrolling - the Planner dial's block, which rolls between its three
+// faces a notch at a time. It has to live here and nowhere else: this listener is
+// registered capture-phase on WINDOW, so it runs before any listener the control
+// itself could add, and no amount of stopPropagation down in the target can reach
+// it. Measured 2026-09-20 - a block using stopPropagation alone still watched the
+// Settings drawer glide 998 -> 878 underneath it, the full deltaY.
+// An ATTRIBUTE rather than a class so a utility never has to know a widget's class
+// name, and so a control keeps its opt-out through a rename.
+// CodeMirror and xterm are here for the same reason: they own their own scrolling
+// and selection.
+const EXCLUDE = '[data-owns-wheel], .cm-scroller, .cm-editor, .xterm, .xterm-viewport, .xterm-screen';
 const SCROLL_HOLD = 420;  // ms the glow stays lit after the last scroll, then fades
 const GLOW_IN = 0.065;    // per-frame approach when brightening (~700ms fade-in)
 const GLOW_OUT = 0.065;   // per-frame approach when dimming (~700ms fade-out)

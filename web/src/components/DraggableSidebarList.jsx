@@ -40,8 +40,9 @@ const HOLD_MS = 180;
 // MOVE_THRESHOLD: cursor displacement (px) during the 180ms hold that aborts
 // the long-press. 10, not 6 — high-precision tap-to-click touchpads register
 // tiny drift during a deliberate hold, and 6 made the tile fail to lift on
-// light holds (KI v0.7.0 + v0.7.3).
-const MOVE_THRESHOLD = 10;
+// light holds (KI v0.7.0 + v0.7.3). Exported: a [data-drag-axis] surface must
+// decide its own axis on the same number or the two disagree about the gesture.
+export const MOVE_THRESHOLD = 10;
 // Exponential chase for the pointer-following tile: close this fraction of the
 // gap each frame so it slides with weight instead of sticking to the cursor.
 // 0.18 is what the retired 'drag-tile-smoothness' setting called medium.
@@ -471,7 +472,12 @@ export default function DraggableSidebarList({
       const dy = e.clientY - d.sy;
       if (Math.sqrt(dx * dx + dy * dy) > MOVE_THRESHOLD) {
         clearHold();
-        if (P.current.dragFromInteractive) {
+        if (d.axis && Math.abs(dx) >= Math.abs(dy)) {
+          // A sideways first move on a [data-drag-axis] surface is the inner
+          // surface's own gesture (the planner clock setting its time).
+          dRef.current = null;
+          detach();
+        } else if (!d.axis && P.current.dragFromInteractive) {
           // Dock: a move during the hold cancels, so a tap stays navigation and
           // only a deliberate still hold reads as drag intent.
           dRef.current = null;
@@ -563,9 +569,14 @@ export default function DraggableSidebarList({
     if (blocked && blocked !== e.currentTarget) return;
     if (!itemRefs.current[slot]) return;
 
-    dRef.current = { phase: 'hold', slot, sx: e.clientX, sy: e.clientY };
+    // [data-drag-axis]: the press lands on a surface with a sideways drag of its
+    // own. No hold timer - a still hold is that surface's press, not a lift -
+    // and the first move past MOVE_THRESHOLD decides: vertical lifts at once,
+    // sideways hands the gesture over (onMove).
+    const axis = !!e.target.closest?.('[data-drag-axis]');
+    dRef.current = { phase: 'hold', slot, sx: e.clientX, sy: e.clientY, axis };
     mouseRef.current = { x: e.clientX, y: e.clientY };
-    holdRef.current = setTimeout(() => beginDrag(slot, e.clientX, e.clientY), HOLD_MS);
+    if (!axis) holdRef.current = setTimeout(() => beginDrag(slot, e.clientX, e.clientY), HOLD_MS);
     window.addEventListener('pointermove', onMove, { passive: false });
     window.addEventListener('pointerup', onUp, { passive: false });
     window.addEventListener('pointercancel', onAbort);

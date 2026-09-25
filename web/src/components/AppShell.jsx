@@ -213,10 +213,15 @@ export default function AppShell({ children, onOpenSettings, settingsOpen, accen
               style={{ flex: 1, minHeight: 0, paddingTop: 7, paddingBottom: 6 }}
               getItemStyle={(slot) => {
                 const fw = slot.flexWeight;
+                const fit = fw === 0 || fw === '0';
                 return {
-                  flex: fw === 0 || fw === '0' ? '0 0 auto' : (fw ?? 1),
+                  flex: fit ? '0 0 auto' : (fw ?? 1),
                   minHeight: 0,
-                  overflow: 'hidden',
+                  // A content-height slot is exactly its tile's size, so a clip cuts
+                  // nothing at rest - it only sliced the planner clock's mid-roll
+                  // swell above the tile (filmed 2026-09-24). Flex-filled slots can
+                  // be shorter than their content and keep the clip.
+                  overflow: fit ? 'visible' : 'hidden',
                   display: 'flex',
                   flexDirection: 'column',
                   // No divider between expanded module tiles — the 10px container

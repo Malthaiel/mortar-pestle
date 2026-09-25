@@ -832,7 +832,10 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
   text-transform: none;
   color: var(--cbtn-rest-text);
   background: var(--cbtn-face);
-  border: var(--cbtn-frame) solid color-mix(in oklch, var(--cbtn-band), black 22%);
+  /* Named so a descendant can wear its button's exact outline (the planner
+     clock's block faces): computed here, inherited as this face's colour. */
+  --cbtn-outline: color-mix(in oklch, var(--cbtn-band), black 22%);
+  border: var(--cbtn-frame) solid var(--cbtn-outline);
   border-radius: inherit;
   transition:
     transform var(--cbtn-press-dur, 150ms) cubic-bezier(0, 0, 0.58, 1),
@@ -1065,8 +1068,11 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
      that travel off flat, so the press read as the face shrinking instead of
      sinking (the music player twin, which has no clip, presses clean). The face
      inherits the tile's border-radius, so clipping here rounds the dock's square
-     corners identically and moves with the press. */
-  overflow: hidden;
+     corners identically and moves with the press.
+     VISIBLE since 2026-09-24: the calendar's square corners were the last thing
+     this rounded, and the clock block rounds its own faces. The clip's top edge
+     sat 4px above the block and sliced the digits flat mid-roll (filmed). */
+  overflow: visible;
 }
 /* .is-panel — the content-height flavour: a titled section of controls that is
    exactly as tall as what it holds. Was `.ov-studio-tile`, an independently
@@ -2040,7 +2046,7 @@ body[data-anim-button-depth="off"] .candy-btn:is(:active, .is-pressed, [data-can
 /* An inner control (Reset / START / Skip) owns its own press — the widget must not
    sink under it. The tile's own :has() gate covers the CSS press; this covers the
    JS-held one the dial drag sets. */
-.candy-btn[data-shape="tile"].rail-tile.is-pressed:has(.planner-ring-panel:active) > .candy-face {
+.candy-btn[data-shape="tile"].rail-tile.is-pressed:has(.planner-dial-run > .candy-btn:active) > .candy-face {
   transform: none;
 }
 
@@ -2087,10 +2093,11 @@ body[data-anim-button-depth="off"] .candy-btn:is(:active, .is-pressed, [data-can
  * far edge stays exactly as wide as the near one. That is the look that was
  * approved; adding a camera here would stop this being a copy.
  *
- * The flipper CANNOT be .planner-ring-controls - that element clips itself to the
- * ring's inner corner, and ANY overflow other than visible force-flattens
- * transform-style. Its clip stays exactly where it is, one level down inside the
- * moving face, where flattening its own children is what we want anyway.
+ * THE FLIPPER CANNOT BE A CLIPPING ELEMENT - any overflow other than visible
+ * force-flattens transform-style, and a flattened flipper has no depth to roll.
+ * That is why it is its own node: every clip in this stack (the block's own, and
+ * the underside's, which cuts the control run to the face) sits one level down
+ * inside the moving face, where flattening its children is what we want anyway.
  *
  * --dial-depth is written inline by PlannerDock off the interior's measured
  * height. It is the block's depth AND the height the control face stands up at,
@@ -2099,6 +2106,13 @@ body[data-anim-button-depth="off"] .candy-btn:is(:active, .is-pressed, [data-can
  * centred strip with dial plate above and below them. */
 .planner-dial-block {
   position: absolute;
+  /* POINTER-TRANSPARENT, and inherited by the hinge and all three faces
+     (2026-09-24). This stack sat on top of the dial's svg and caught every press,
+     so the drag-to-set gesture and the tile's press never heard a hold anywhere on
+     the clock - only the tile's corners pressed. The faces' candy buttons
+     re-enable themselves through the rail tile's :where(.candy-btn, button, ...)
+     pointer-events rule. */
+  pointer-events: none;
   /* CLIPPED TO THE TUBE'S INNER CORNER. Mid-roll a solid block is always TALLER
      than the box it turns in - its projected height peaks at the diagonal of its
      height and depth, which is over the box for any depth above zero - so some
@@ -2107,15 +2121,30 @@ body[data-anim-button-depth="off"] .candy-btn:is(:active, .is-pressed, [data-can
      by the 3d object"). Safe here: this element declares no transform-style of its
      own, so clipping it cannot flatten the 3D context, which lives one level down
      on .planner-dial-flip-inner. The radius comes from the same corner rule as
-     everything else on this dial, fed the block's own measured inset. */
-  overflow: hidden;
+     everything else on this dial, fed the block's own measured inset.
+
+     UNCLIPPED AGAIN 2026-09-22 (user-directed: "that increase of size is a very
+     important part of the illusion that it's actually flipping"). The clip was
+     added when the overhang covered the RING BAND's top and bottom; that band no
+     longer exists - the block fills the tile and the ring rides the front face -
+     so the only thing the clip still did was hide the growth. The round corner
+     moved onto each FACE, which is what the clip was really keeping. */
+  overflow: visible;
   border-radius: var(--block-radius, 12px);
   /* ONE writer for the block's material, read by both faces AND the three control
      panels that ride on one of them, so the block is a single piece rather than a
      lit face with a dark slab painted over it - which is exactly what the first
      lift attempt looked like. A MIX of the plate rather than its own token, so it
      tracks the dial through a theme change. The amount is a Dev-panel knob. */
-  --dial-block: color-mix(in oklch, var(--planner-face), white var(--dial-lift, 5%));
+  /* THE LIFT IS BAKED AT THE RIG'S MEASURED COLOUR (user-directed 2026-09-20:
+     "isn't the same color"). The Dev-tab copy's faces paint (41,39,37) and the
+     dial's painted (30,29,27) at the old 5%. Copying the rig's TOKEN did not
+     work - --cbtn-face resolves darker inside the rail tile than it does in the
+     Settings drawer, and came out (24,23,21) - so the number was matched
+     instead: swept live at 5/12/16/20/26%, read oklch 0.2305 -> 0.2872 across
+     5->12, and 10.5% is where it crosses the tile face's own 0.275.
+     Still the FALLBACK, not a declaration, so the Dev-tab slider still wins. */
+  --dial-block: color-mix(in oklch, var(--planner-face), white var(--dial-lift, 10.5%));
 }
 .planner-dial-flip-inner {
   position: relative;
@@ -2135,6 +2164,11 @@ body[data-anim-button-depth="off"] .candy-btn:is(:active, .is-pressed, [data-can
   left: 0;
   right: 0;
   backface-visibility: hidden;
+  /* THE CORNER LIVES HERE NOW, not on the block. The block has to stay unclipped
+     for the mid-roll growth to paint, and a face is the thing that actually has
+     material to round - the water inside it is what would otherwise square off. */
+  border-radius: var(--block-radius, 12px);
+  overflow: hidden;
   /* Both faces wear the dial's own plate LIFTED a few percent toward white
      (user-directed 2026-09-20: "make the 3d object a bit lighter so that the flip
      is more visible"). Painted at the plate exactly, a dark block turning against
@@ -2142,14 +2176,36 @@ body[data-anim-button-depth="off"] .candy-btn:is(:active, .is-pressed, [data-can
      the Dev-tab panel, not a typed colour - tune it on screen and bake the number
      in. It stays a MIX of the plate rather than a separate token so it tracks the
      dial through a theme change. */
+  /* THE RIG'S OWN MATERIAL (user-directed 2026-09-20: "isn't the same color").
+     The Dev-tab copy paints all three faces --cbtn-face; the dial painted
+     --dial-block, a 5% white lift of the planner face, and MEASURED 11 levels
+     darker on a photograph - (30,29,27) against the rig's (41,39,37). Matched
+     here rather than re-tuned. --dial-block still exists and still writes the
+     turning block's own plate; only the faces moved.
+     NOT ported with it: the rig's 2px frame round each face. That one shifts the
+     padding box every measured offset on the front face resolves against, and
+     the rig carries a matching correction for it (see `frame` in FlipTestPanel).
+     Left for a deliberate pass. */
   background: var(--dial-block);
   /* A face is a grid so its one child FILLS it. The readout and the control row
      used to be grid items of .planner-ring-inner-controls and were stretched by
      it; moved onto the faces they became plain children of an absolutely
      positioned box, and the control row promptly collapsed to the height of a
-     glyph (measured 34px inside a 67px face) because .planner-ring-panel's
+     glyph (measured 34px inside a 67px face) because the control row's
      height: 100% had nothing to resolve against. */
   display: grid;
+}
+/* EACH FACE WEARS THE TILE'S OUTLINE, AS THE TILE'S OUTLINE (user-directed
+   2026-09-24): mid-roll there was no outline between the faces. An `outline`, not
+   a border or an inset frame: it paints just OUTSIDE the face, which sits flush
+   against the tile outline's inner edge, so at rest it lands exactly on the
+   tile's own outline - same width (--cbtn-frame), same computed colour, and its
+   outer curve is the face's radius + the width = the tile's radius. One outline
+   at rest, not two; no padding box moves; and a box's own outline is never cut
+   by its own overflow: hidden. Colour inherited from the tile's .candy-face, so
+   it follows the hover flip. */
+.planner-dial-flip-face {
+  outline: var(--cbtn-frame) solid var(--cbtn-outline);
 }
 .planner-dial-flip-face.front {
   top: 0;
@@ -2165,7 +2221,101 @@ body[data-anim-button-depth="off"] .candy-btn:is(:active, .is-pressed, [data-can
   transform: rotateX(90deg) rotateZ(180deg) rotateY(180deg)
              translateZ(calc(var(--dial-depth) / 2));
 }
+/* THE THIRD FACE, on the block's TOP plane (ported from the Dev-tab rig
+   2026-09-20). Reached by rolling the OPPOSITE way from the underside, so the
+   clock sits one notch from either face and nothing wraps.
+
+   Its transform is the underside's mirror written short. The underside reads
+   rotateX(90) rotateZ(180) rotateY(180), and two 180s about perpendicular axes
+   compose to a single 180 about the third - so that whole run IS rotateX(-90),
+   and this face is its opposite sign. */
+.planner-dial-flip-face.top {
+  top: 50%;
+  height: var(--dial-depth);
+  margin-top: calc(var(--dial-depth) / -2);
+  transform: rotateX(90deg) translateZ(calc(var(--dial-depth) / 2));
+}
 .planner-dial:hover .planner-dial-flip-inner { transform: rotateX(90deg); }
+/* THE ROLL FOLLOWS THE DEV SLIDER. The hover rule above is the old two-face
+   gesture and it still fires; the scroll-driven roll beats it because the
+   component writes rotateX INLINE, and an inline style outranks any rule here
+   without this sheet being edited to get out of its way. */
+
+/* THE LIQUID on the clock face, ported from the Dev rig 2026-09-20. Adapted from
+   codepen.io/fliseno1k/pen/WNboLBy ("Liquid Button", fliseno1k) and turned a
+   quarter turn: it pools against the RIGHT edge of the face and its surface is a
+   vertical line travelling left as the block fills, behind the ring and digits.
+
+   The pen's --fc-shift and --fc-level are both GONE and that is the point of the
+   rotation. The pen anchors its blobs at the edge OPPOSITE the water, so every
+   change to blob size walked the waterline and needed a derived shift to
+   compensate, and the crossing point needed a level on top. Anchoring each blob
+   at the waterline ITSELF - right: --dial-fill - deletes both. */
+.planner-dial-wet {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.planner-dial-liquid {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in oklch, var(--accent), black 25%);
+  /* THE ONE KNOB, and it is the one the timer drives: how far in from the right
+     edge the surface has reached. 0% empty, 100% the whole face drowned. A
+     percentage resolves against the FACE's width, so "full" means the full
+     block. Written inline by the component from the running session. */
+  --dial-fill: 55%;
+  /* HOW FLAT THE WAVE IS. The surface is the edge of a rotating near-square, so
+     a bigger blob draws a straighter line down the same face height. Both waves
+     share it - they move alike, they just sit apart. */
+  --dial-blob: 3.2;
+  /* HOW FAR RIGHT THE BRIGHT WATER STARTS. --dial-fill is the waterline itself,
+     where air meets water. The TRANSPARENT blob is what moves: pushed this far
+     right of it, the strip it still covers reads as darker water and the bright
+     water begins beyond it. Moving the OPAQUE blob instead only drags the one
+     boundary along, because a transparent blob sitting entirely left of the
+     opaque one is painted over and shows nothing. */
+  --dial-lead: 4%;
+  /* ONE SPEED KNOB. The second blob runs at exactly twice this, which is what
+     makes the two wave edges drift apart instead of locking together. */
+  --dial-spin: 5s;
+}
+/* The two blobs, anchored by the RIGHT edge that IS the waterline. Square and
+   sized off the face's HEIGHT, not its width, so a blob stays round on a face far
+   wider than it is tall. border-radius under 50% is what makes the edge wobble as
+   it turns rather than sweep as a clean arc. */
+.planner-dial-liquid::before,
+.planner-dial-liquid::after {
+  content: "";
+  position: absolute;
+  height: calc(var(--dial-blob) * 100%);
+  aspect-ratio: 1;
+  top: 50%;
+  right: var(--dial-fill);
+  transform: translateY(-50%);
+}
+/* The opaque blob is the block's OWN material, so the air left of the water is
+   the same stuff as the rest of the face and the surface reads as cut out of it
+   rather than painted over it. --dial-block is the one writer for that material,
+   declared on .planner-dial-block above. */
+.planner-dial-liquid::before {
+  border-radius: 45%;
+  background: var(--dial-block);
+  animation: dial-liquid-spin var(--dial-spin) linear infinite;
+}
+/* Half-transparent and slower, so where it overlaps you get a third mid tone -
+   the depth under the surface - and the two edges drift apart. */
+.planner-dial-liquid::after {
+  right: max(0%, calc(var(--dial-fill) - var(--dial-lead)));
+  border-radius: 40%;
+  background: color-mix(in oklch, var(--dial-block), transparent 50%);
+  animation: dial-liquid-spin calc(var(--dial-spin) * 2) linear infinite;
+}
+@keyframes dial-liquid-spin {
+  0%   { transform: translateY(-50%) rotate(0deg); }
+  100% { transform: translateY(-50%) rotate(360deg); }
+}
 /* Dragging the dial SETS the duration, so the minutes have to stay up while you
    do it - a held press rolls the clock back regardless of hover. .is-pressed is
    already put on the enclosing rail tile by setDialPressed from DualRingRect's
@@ -2218,63 +2368,59 @@ body[data-anim-button-depth="off"] .candy-btn:is(:active, .is-pressed, [data-can
 /* Rides the clock's own ambient-motion toggle, like the breath and the aura. */
 body[data-anim-clock-ambient="off"] .planner-seg rect { transition: none; }
 
-/* Three flush equal-width, full-height panels over the readout. The dim is
- * per-PANEL, never a group opacity: opacity on a group is multiplicative, so a
- * hovered child could never climb back above the parent's 0.30. Rounded + clipped
- * because square corners poke outside the inner ring's own rounded corner. */
-.planner-ring-controls {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  z-index: 2;
-  /* Clipped to the ring's own inner corner, handed down from DualRingRect, so the
-     three panels reach the stroke on every side without poking past its curve. */
-  border-radius: var(--ring-radius, 7px);
-  overflow: hidden;
-  pointer-events: none;
-}
-.planner-ring-panel {
-  width: 100%;
-  height: 100%;
-  --cbtn-depth: 0px;
-  --corner-max: 0px;
-  box-shadow: none;
-}
-/* The panels are the block's underside now, a SOLID face - so the whole
-   see-through compromise that used to live here is gone with it: the transparent
-   resting face, the separate face/ink fade legs, the dark backing disc under each
-   glyph, and the --planner-ctrl-face / --planner-ctrl-ink / --planner-ctrl-face-on
-   knobs, which never had a writer anywhere. A glyph on an opaque plate is legible
-   with no help, and the ROLL is the reveal now.
-
-   EVERY rule below carries the full tile prefix. The enclosing rail-tile paints
-   `.candy-face :where(div, span)` at (0,3,0) - and (0,4,0) in its .is-panel form -
-   and a candy button's own face IS a span nested in that tile, so a bare
-   `.planner-ring-panel > .candy-face` at (0,2,0) LOSES and the glyphs stay painted
-   at rest. That is the regression that put all three marks on the dial with the
-   pointer nowhere near it. Prefixed, these sit at (0,6,0)/(0,7,0) and only ever
-   compete with each other, resolved by the source order they are written in. */
-.candy-btn[data-shape="tile"].rail-tile
-  .planner-ring-controls > .planner-ring-panel > .candy-face {
+/* THE UNDERSIDE'S CONTROL RUN, ported from the Dev-tab rig 2026-09-20. The
+ * three flush full-height panels that used to live here are GONE, and with them
+ * the hover-reveal: the ROLL is the reveal now, so a panel that hid itself until
+ * the pointer arrived had nothing left to do. Four marks fused into one candy
+ * run, floating against the face's bottom edge. */
+.planner-dial-under {
   position: relative;
-  width: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
   height: 100%;
-  padding: 0;
-  border: 0;
-  background: var(--dial-block);
-  color: var(--cbtn-rest-text);
-  transition: background-color 140ms ease, color 140ms ease;
+  box-sizing: border-box;
+  /* ONE number for all three gaps. The bottom carries the depth band's reach on
+     top of it so the PAINTED gap matches the two sides, rather than the boxes
+     matching while the paint disagrees. THE BAND REACHES A FULL --candy-depth,
+     not depth minus a frame: a candy button casts TWO shadows and the second,
+     darker one sits below the first — scanned 2026-09-20, the face ends at row
+     481, the border takes 482-483, the lit band 484-488 and the dark layer
+     489-490, a full 7 below the border box. Reserving depth-minus-frame painted
+     an 8px gap under a 10px pair at the sides. Measured on the photograph. */
+  --dial-under-gap: 10px;
+  padding: var(--dial-under-gap);
+  padding-bottom: calc(var(--dial-under-gap) + var(--candy-depth));
 }
-
-.planner-dial:hover .planner-ring-controls { pointer-events: auto; }
-
-/* The panel under the pointer does the flip every other candy button in the app
-   does - grey at rest, accent under the pointer. The rules this replaces dodged
-   accent deliberately, because a part-transparent face let the accent-coloured
-   ring arcs show straight through it. The face is opaque now, so that reason went
-   out with the transparency. */
+/* The run rides ABOVE anything absolutely positioned on the face. .candy-btn is
+   already position: relative, but the run's own wrapper is not, and without a
+   stacking position of its own it would sit under an absolute sibling that
+   comes first in source. */
+.planner-dial-run { display: flex; position: relative; z-index: 1; }
+.planner-dial-run > .candy-btn { --corner-max: 0px; }
+/* list-plus is drawn BOTTOM-HEAVY in its 24 box (ink y 6..21, centre 13.5
+   against the box's 12), so at a matched height it still paints one row lower
+   than its neighbours — measured rows 9-20 against their 8-19. The GLYPH is
+   nudged, not the button, and not the FACE either: the face carries the frame,
+   so moving it lifted the whole cell a row out of line (photographed). Keyed on
+   the part's own mark rather than :last-child, because a block run's last part
+   is the check and must not move. */
+.planner-dial-run > .candy-btn[data-mark="task"] > .candy-face > svg {
+  transform: translateY(-1px);
+}
+/* THE ENCLOSING TILE REPAINTS EVERY SPAN INSIDE IT. `.candy-btn[data-shape=
+   "tile"].rail-tile .candy-face :where(div, span)` floods #fff at (0,3,0), and a
+   part's own face IS a span nested in the tile's face — so without these two the
+   whole run sits lit white at rest. Same trap the panels hit before the port,
+   same answer: carry the full tile prefix and let the parts compete only with
+   each other. The hover leg also has to out-rank the rail-tile's own nested
+   `... .candy-btn:is(:hover, :active) ... { color: var(--text) }` at (0,6,0). */
+.candy-btn[data-shape="tile"].rail-tile :is(.planner-dial-run, .planner-dial-col) > .candy-btn > .candy-face {
+  color: var(--cbtn-rest-text);
+}
 .candy-btn[data-shape="tile"].rail-tile
-  .planner-ring-controls > .planner-ring-panel:is(:hover, :active) > .candy-face {
-  background: var(--accent);
+  :is(.planner-dial-run, .planner-dial-col) > .candy-btn:is(:hover, :active) > .candy-face {
   color: #fff;
 }
 
@@ -2413,90 +2559,130 @@ body[data-anim-clock-ambient="off"] .planner-seg rect { transition: none; }
  * inline, so the ribbon's track is var(--clock-stroke-bg) at the point it is
  * drawn, which is the same neutral the other two rings already sit on. */
 
-/* Day calendar — rows on the widget's own face since the 2026-09-06 merge; it
- * used to be a recessed --surface screen with its own 2px frame, back when the
- * strip above it was a separate button. Height
- * animates (max-height) for the open/close slide; box-sizing:border-box so at
- * max-height:0 the border collapses with it instead of leaving a 4px seam.
- * pointer-events: the tile's .candy-face is pointer-transparent and this panel is
- * not in the tile's whitelist, so it has to claim events itself or the whole
- * calendar goes dead. */
-/* OUTER = the clip. Carries NOTHING that has layout height of its own — no border,
-   no padding, no top margin — so max-height is the only animated property and 0
-   really reaches 0. Every earlier attempt failed here: a real border can't compress
-   below its own 4px, and a top margin (even delayed) moves the layout 12px in a
-   single frame, which is what read as the snap at the end of the close.
-   The bottom 12px is the gap below this module, identical open or shut, so it never
-   animates. The top 12px lives on the INNER panel, inside this clip. */
-.planner-calendar-body {
-  --candy-depth: var(--candy-depth-small);
+/* THE DAY CALENDAR IS GONE from the sidebar widget (2026-09-22, user-directed:
+ * "just the 3d clock faces only, no calendar at all"). It carried
+ * .planner-calendar-body (the animated clip whose max-height grew the tile)
+ * and .planner-calendar-panel (the slab + static outline inside it), plus the
+ * three vars PlannerDock published for them. The full day calendar is
+ * untouched on the Planner page and in the pop-out - CalendarPanel.jsx lives
+ * on; only this widget's copy of it went. */
+
+/* THE TOP FACE, ported from the Dev-tab rig 2026-09-20 (user-directed: copy the
+ * rig's clock across 1-1). The day at a glance on the left, two fused adders
+ * hugging the right edge the way the four controls hug the underside's bottom.
+ * Reached by rolling the OPPOSITE way from the underside, so the clock sits one
+ * notch from either face and nothing wraps.
+ *
+ * SHARED, NOT COPIED: the hairline and the shell mirror .planner-dial-under's,
+ * turned ninety degrees. --block-frame carries a 0px fallback because the rig's
+ * faces wear a candy frame and the dial's do not - with no frame there is no
+ * overhang to cancel, and the run simply sits on the edge. */
+.planner-dial-over {
+  display: flex;
+  height: 100%;
+  box-sizing: border-box;
+  font-family: var(--font-mono);
+  text-transform: none;
+  --us-line: color-mix(in oklch, var(--cbtn-rest), black 34%);
+}
+/* The fused run TURNED SIDEWAYS. The shipped .candy-split sheet is row-only in
+   three ways: inline-flex, a margin-LEFT overlap, and four rules squaring a
+   part's end corners. Only the first two matter here - the parts carry
+   --corner-max: 0px like the bottom run's, so every radius is already zero and
+   the corner rules are no-ops. A ROUNDED column run would need those rules
+   written the other way round: promote this to .candy-split.is-column on the day
+   one is actually wanted, not before. */
+.planner-dial-col {
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  /* One even border round the whole widget, sides and bottom (2026-09-06). The
-     number is WIDGET_MARGIN in PlannerDock, published onto the dock root as a var
-     - it used to be typed here as well as there, and the dial's width calc had a
-     third copy. The fallback is the pre-2026-09-06 value, for any host that
-     renders this panel outside the dock. The stacking gaps inside stay 12. */
-  /* MEASURED off the clock's slab now (--planner-slab-inset, PlannerDock), not
-     typed: at WIDGET_MARGIN the calendar's slab sat 3px inside the clock's and the
-     two edges did not line up, which also left no grey showing round the
-     calendar's frame. Falls back to the old typed value. */
-  margin: 0 var(--planner-slab-inset, var(--planner-widget-margin, 14px))
-             var(--planner-slab-inset, var(--planner-widget-margin, 14px));
-  overflow: hidden;
-  pointer-events: auto;
-  /* 640ms, doubled from 320ms 2026-09-09 (user-directed) so the tube's pour is
-     easy to follow. This is the ONLY clock in that animation - the tube reads the
-     calendar's real height every frame - so retiming it here retimes the pour. */
-  transition: max-height 640ms cubic-bezier(0.32, 0.72, 0, 1);
+  align-items: stretch;
+  width: var(--cbtn-size);
+  margin: calc(var(--block-frame, 0px) * -1) calc(var(--block-frame, 0px) * -1)
+          calc(var(--candy-depth) - var(--block-frame, 0px)) 0;
 }
-/* INNER = the recessed screen. Its margin-top is the button↔calendar gap, and being
-   inside the clip it shrinks away with the height for free. flex:1 + min-height:0
-   against the outer's max-height is what gives it a bounded box to scroll in.
-   The frame is an INSET SHADOW, not a border, so it adds no height even here. */
-.planner-calendar-panel {
-  box-sizing: border-box;
-  flex: 1 1 auto;
+.planner-dial-col > .candy-btn {
+  --corner-max: 0px;
+  /* height: auto beats .candy-split's height: var(--cbtn-size) on source order.
+     min-height: 0 is what lets flex: 1 1 0 actually divide the height; a flex
+     item's automatic minimum along the main axis is its content otherwise. */
+  width: var(--cbtn-size);
+  height: auto;
   min-height: 0;
-  /* margin-top is INLINE (PlannerDock): the band between the clock's plate and
-     this panel is built from the dial's own RING_EDGE_GAP and RIBBON_W so it
-     matches the band above the plate, and neither number is typed twice. */
-  /* The clock's own plate colour (user-directed 2026-09-09): open, the calendar
-     reads as the same dark slab the clock sits on rather than as bare rows on the
-     widget's face. It replaced "no fill" from 2026-09-06, which was written while
-     the day strip was still a separate button above it.
-     The corner is the POURED FRAME's, published from PlannerDock, so the fill ends
-     exactly where the stroke is drawn instead of on the app's generic --radius-md
-     (kept as the fallback for any host rendering this panel outside the dock). */
-  background: var(--planner-face);
-  /* The calendar's own interior paints this too, so the open widget is ONE flat
-     slab from the clock's plate to the bottom row instead of two near-identical
-     greys meeting (user-directed 2026-09-09). CalendarPanel falls back to
-     --surface wherever it is rendered outside this panel. */
-  --cal-surface: var(--planner-face);
-  border-radius: var(--planner-pour-r, var(--radius-md));
-  overflow: hidden;
-  /* Clearance for the poured strip (Ribbon Pour, 2026-09-08). Once the calendar is
-     open the day strip has travelled down and landed as this panel's outline, its
-     stroke centred on the calendar body's edge - so without this the rows run
-     under it and the hour gutter gets clipped. The number is the strip's OWN
-     stroke width, published onto the dock root from RIBBON_W in PlannerDock; a
-     literal here would be a copy that goes wrong the moment the stroke is retuned.
-     The fallback covers any host rendering this panel outside the dock. Collapsed
-     the strip is home on the dial, so there is nothing to clear - the inline style
-     zeroes this on the same calendarCollapsed branch the overflow rides.
-     ALL FOUR SIDES take it since 2026-09-09. The top used to be exempt because the
-     frame's top stroke was centred on this box's own top edge - but the frame is
-     inset from the box by the slab's proud edge now, so the top crosses the rows
-     exactly like the other three. */
-  /* A transparent BORDER, not padding, and that is the whole point: this box
-     scrolls, and a scrollport clips its content at the PADDING edge - so with
-     padding the rows scrolled straight through the clearance and showed past the
-     frame's bottom stroke (photographed 2026-09-09). A border moves the clip in
-     with it, while the slab still paints across it (background-clip is border-box
-     by default), so the colour is unbroken and the rows stop at the frame. */
-  border: var(--planner-pour-clear, var(--planner-ribbon-w, 0px)) solid transparent;
+}
+/* The overlap swaps axis: the trailing part climbs onto its neighbour's BOTTOM
+   border so the two lines fuse into one seam, which is what margin-left does
+   sideways in a row. */
+.planner-dial-col > .candy-btn:not(:first-child) {
+  margin-left: 0;
+  margin-top: calc(var(--split-lap) * -1);
+}
+/* .candy-face carries 32px of SIDE padding and a column part is only --cbtn-size
+   across. At 38px that leaves 6px for the mark and BOTH icons painted 2px wide
+   (measured 2026-09-20). It never showed on the bottom run, whose parts are 57px
+   across. A column part is sized to its mark rather than to a label, so the side
+   padding has no work to do. The VERTICAL padding stays. */
+.planner-dial-col > .candy-btn > .candy-face { padding-left: 0; padding-right: 0; }
+
+.planner-dial-strip {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 11px;
+}
+.planner-dial-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+/* The stats row gives every span 9px on both sides; pushed right by the header
+   that trailing 9px becomes visible air between the last tally and the bar's
+   right edge directly below it (photographed). The boxes already agree - head,
+   bar and span all end at the same x - so it is the PAINT disagreeing with the
+   layout, and only the paint moves. */
+/* THE RULE THE OVERRIDE BELOW PRESUPPOSES. The rig's own sheet lost it when the
+   underside's text came off, leaving a :last-child exception pointing at padding
+   that no longer existed - so the two tallies painted touching ("3 done1h 12m",
+   photographed 2026-09-20). Restored here rather than copied blind. */
+.planner-dial-stats { display: flex; }
+.planner-dial-stats > span { padding: 0 9px; }
+.planner-dial-lab,
+.planner-dial-stats { font-size: 9px; letter-spacing: 0.12em; color: var(--text-muted); }
+.planner-dial-stats > span:last-child { padding-right: 0; }
+
+/* THE BAR IS PROPORTIONAL, never a fixed grid. Each planned block is a flex child
+   sized by its own minutes and each gap between blocks is a spacer sized the same
+   way, so the day's shape on screen IS the data's shape - no segment count, no
+   typed 09:00-18:00 window that would lie on a short day.
+   Sharp ends and no clip: the marker overhangs the bar by 2px top and bottom to
+   read at this height, and square corners are the block's own language. */
+.planner-dial-bar {
+  position: relative;
+  height: 8px;
+  display: flex;
+  background: var(--us-line);
+}
+.planner-dial-seg { min-width: 0; }
+/* Planned and worked solid, planned and not yet hollow, the gaps left to the
+   track. Three tones, one bar, plan against reality. */
+.planner-dial-seg.is-done { background: var(--accent, oklch(0.55 0.16 25)); }
+.planner-dial-seg.is-plan { background: color-mix(in oklch, var(--cbtn-rest), white 6%); }
+.planner-dial-now {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: var(--text);
+}
+.planner-dial-span {
+  display: flex;
+  justify-content: space-between;
+  font-size: 8px;
+  letter-spacing: 0.12em;
+  color: var(--text-faint);
 }
 
 /* ── Watchface bezel (static) ───────────────────────────────────────────── *
@@ -3470,9 +3656,6 @@ body[data-anim-section-accordion="off"] [style*="collapseSettle"],
 body[data-anim-section-accordion="off"] [style*="chevronFlipDown"],
 body[data-anim-section-accordion="off"] [style*="chevronFlipUp"] {
   animation: none !important;
-}
-body[data-anim-section-accordion="off"] .planner-calendar-body {
-  transition: none !important;
 }
 
 body[data-anim-pulse-indicators="off"] [style*="newBadgePulse"],
