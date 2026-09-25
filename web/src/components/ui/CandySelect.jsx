@@ -28,6 +28,8 @@
 //                the same control as the chips it sits beside
 //   fuse         render the bare button (no wrapper) so it welds into a .candy-split
 //   className    extra classes on the trigger
+//   style        extra inline style on the trigger -- `pointerEvents: 'none'`
+//                leaves one part of a run drawn but inert (disabled fades it)
 
 import { useMenuTrigger } from '../../context-menu/useContextMenu.js';
 import { TREE_TEXT } from '../vault-tree/treeKit.jsx';
@@ -35,7 +37,7 @@ import { TREE_TEXT } from '../vault-tree/treeKit.jsx';
 export default function CandySelect({
   value, options, onChange, title, placeholder = '', clearable = false, accent, icon,
   compact = false, disabled = false, fuse = false,
-  shape = 'select', className = '',
+  shape = 'select', className = '', style,
 }) {
   // `value` may be an ARRAY: several independent picks in one menu (a status AND
   // a downloaded/not state, say). The FIRST match in option order drives the
@@ -70,7 +72,7 @@ export default function CandySelect({
       title={title}
       aria-label={title}
       disabled={disabled}
-      style={accent ? { '--accent': accent } : undefined}
+      style={{ ...(accent && { '--accent': accent }), ...style }}
       {...menu}
     >
       {/* Same lettering as the menu rows this button opens (TREE_TEXT, the

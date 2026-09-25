@@ -155,6 +155,11 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
   --radius-sm:    calc(var(--corner) * 8px);
   --radius-md:    calc(var(--corner) * 16px);
   --radius-lg:    calc(var(--corner) * 24px);
+  /* Candy spacing that a second shape has to match, so it lives here instead of
+     inside one rule: the gap between a face's icon and its label, and a chip's
+     side padding (SearchRun's field reads both to sit like the chips beside it). */
+  --candy-face-gap: 6px;
+  --chip-pad-x:     10px;
   /* Overlay Studio panel spacing. ONE token drives the inter-tile list gap AND
      all four sides of the panel padding so the two can never drift (batch 1 had
      6px vertical vs 12px horizontal). Invariant: container padding == inter-item
@@ -821,7 +826,7 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--candy-face-gap);
   width: 100%;
   box-sizing: border-box;
   padding: 8px 16px;
@@ -1365,7 +1370,9 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
   color: color-mix(in oklch, #fff, transparent 35%);
 }
 .candy-btn[data-shape="chip-field"]:focus-within { --cbtn-band: var(--accent); }
-.candy-btn[data-shape="chip-field"]:focus-within > .candy-face { background: var(--accent); }
+/* color: a leading icon in the face (SearchRun's magnifier) goes white with the
+   text; trailing buttons in the face paint their own faces and are unaffected. */
+.candy-btn[data-shape="chip-field"]:focus-within > .candy-face { background: var(--accent); color: #fff; }
 .candy-btn[data-shape="chip-field"]:focus-within > .candy-face > .chip-field-input { color: #fff; }
 .candy-btn[data-shape="chip-field"]:focus-within > .candy-face > .chip-field-input::placeholder {
   color: color-mix(in oklch, #fff, transparent 35%);
@@ -1460,9 +1467,8 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
      it (the Planner calendar header, 2026-08-10). Squashing is now visible as a
      squashed pill instead of as two stacked words. */
   white-space: nowrap;
-  /* Side padding gets a var so .candy-split can ADD its overlap to it rather
-     than restate the number and fork it. */
-  --chip-pad-x: 10px;
+  /* Side padding is a var (on :root) so .candy-split can ADD its overlap to it
+     rather than restate the number and fork it. */
   padding: 5px var(--chip-pad-x);
   font-size: var(--chip-label-size);
   font-weight: 600;

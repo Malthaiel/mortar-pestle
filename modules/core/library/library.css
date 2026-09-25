@@ -444,6 +444,13 @@
  * dark surface left. (The film-page hover pin was deleted 2026-09-18: every
  * button lights accent on hover, app-wide.) */
 
+/* The painted gap between chips on a detail page: the film's Cast / Crew /
+   Releases chips AND the album tracklist rows (AlbumDetail.jsx) both read it, so
+   the two pages space alike by construction (user-directed 2026-09-24, was 5px
+   here and a separate 8px layout gap on the tracklist). On :root because the
+   tracklist sits outside .film-credit-list. */
+:root { --credit-gap: 6px; }
+
 /* Cast / Crew as a wrapping run of plain name chips. */
 .film-credit-list {
   display: flex;
@@ -454,7 +461,6 @@
      --cbtn-depth is declared ON the button and is invalid up here;
      --candy-depth-small is the same 5px value at root, which is what the chip
      shape pins its lip to. */
-  --credit-gap: 5px;
   column-gap: var(--credit-gap);
   row-gap: calc(var(--credit-gap) + var(--candy-depth-small));
   max-width: 760px;

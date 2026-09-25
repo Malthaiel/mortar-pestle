@@ -8,6 +8,7 @@ import { musicApi, subscribeManifest } from './api.js';
 import { useMusicPlayer } from './MusicPlayerProvider.jsx';
 import CoverArtCard from './CoverArtCard.jsx';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
+import SearchRun from '@host/components/ui/SearchRun.jsx';
 import {
   IconLayers, IconDownload, IconGlobe,
   IconNotes, IconMusic, IconLayoutGrid,
@@ -54,13 +55,13 @@ const activeSortDim = (sortDim) =>
 
 const SORT_LS_KEY = 'tools:musicSort';
 const VIEW_LS_KEY = 'tools:musicPaneView';
-// Every part of both runs leads with its mark — the two CandySelects wear the
-// current option's icon for free, so these three carry one too or the line reads
-// half-marked (user-directed 2026-09-20).
+// The view picker is the third dropdown in the Sort | Status run (user-directed
+// 2026-09-24; was its own three-chip run). Every row carries its mark, which the
+// trigger wears like the other two.
 const VIEW_OPTIONS = [
-  { value: 'playlists', label: 'Playlists', Icon: IconNotes },
-  { value: 'albums',    label: 'Albums',    Icon: IconMusic },
-  { value: 'both',      label: 'Both',      Icon: IconLayoutGrid },
+  { value: 'playlists', label: 'Playlists', icon: IconNotes },
+  { value: 'albums',    label: 'Albums',    icon: IconMusic },
+  { value: 'both',      label: 'Both',      icon: IconLayoutGrid },
 ];
 
 // The downloaded/not half of the Status dropdown. An album counts as downloaded
@@ -72,12 +73,10 @@ const DL_OPTIONS = [
 ];
 const isDownloaded = (a) => (a.tracksPresent || 0) > 0;
 
-// Height of every fused part, one constant for both runs (.candy-split derives
-// corner, seam, overlap and part height from it — see styles.css § candy-split).
+// Height of every part of the one fused run, search field included (.candy-split
+// derives corner, seam, overlap and part height from it — see styles.css
+// § candy-split).
 const RUN_SIZE = '27px';
-// The field is the SAME height as the five buttons under it (user-directed
-// 2026-09-20), so it takes RUN_SIZE too rather than a second number that could
-// drift from it.
 
 export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
   const [albums, setAlbums] = useState(null);
@@ -224,57 +223,40 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
 
   const showAlbums = view === 'albums' || view === 'both';
   const showPlaylists = view === 'playlists' || view === 'both';
+  const inertUnlessAlbums = showAlbums ? undefined : { pointerEvents: 'none' };
 
   // A playlist opens in the right column — the same route the Playlists page uses.
   const openPlaylist = (path) => go('/tools/library/music/playlists/' + encodePath(path));
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-      {/* Filter bar */}
-      <div style={{
-        padding: '14px 18px 10px',
-        display: 'flex', flexDirection: 'column', gap: 10,
-        borderBottom: '1px solid var(--border)',
+      {/* Filter bar — no hairline, run centred both ways (user-directed
+          2026-09-25): even left and right, and the painted gap above the run
+          equals the gap from its band to whatever comes first below (the body's
+          TILE_GAP, then a tile or the cap-trimmed Playlists heading). 14px is
+          the bar's long-standing top inset, mirrored below -- off the 4px grid
+          on purpose. */}
+      <div data-spacing-intent="centred-run" style={{
+        padding: `14px 18px calc(14px + var(--candy-depth-small) - ${TILE_GAP}px)`,
+        display: 'flex', justifyContent: 'safe center',
         flexShrink: 0,
       }}>
-        {/* The agent chat's type box, 1-1 (user-directed 2026-09-20): the field
-            IS a candy button — chip-field + .candy-face + a bare
-            .chip-field-input — so it wears the same frame, band and hover flip
-            as the two runs under it instead of reading as a foreign input.
-            Same markup as ChatInput.jsx; --cbtn-size is the one height knob. */}
-        {/* A one-part .candy-split: the run's own rule pins every child to
-            --cbtn-size, which is how the five buttons below get their height —
-            reusing it here means ONE number drives all six and no new CSS.
-            A lone child keeps both outer ends round (the squaring rules are
-            :not(:first-child) / :not(:last-child)). */}
-        <span className="candy-split" style={{ '--cbtn-size': RUN_SIZE, display: 'flex' }}>
-        <span className="candy-btn" data-shape="chip-field" style={{ width: '100%' }}>
-          <span className="candy-face">
-            <input
-              className="chip-field-input"
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={view === 'playlists' ? 'Search playlists' : 'Search title or artist'}
-            />
-          </span>
-        </span>
-        </span>
-
-        {/* Two fused runs on one line: Sort | Status, then the view picker.
-            The first run stays DRAWN but inert under Playlists — neither knob
-            means anything without albums on screen, and hiding two of the four
-            would reflow the whole bar on every view change (user-directed
+        {/* ONE fused run: Search | Sort | Status | View (user-directed
+            2026-09-24; the field used to sit on its own line above the three).
+            SearchRun owns the field: clicking it slides the three out through
+            the row's end and the field takes the whole row (user-directed
+            2026-09-24). Sort and Status stay DRAWN but inert under Playlists —
+            neither means anything without albums on screen, and hiding them
+            would reflow the run on every view change (user-directed
             2026-09-20). Inert, never faded: a .55 opacity erases a small candy
-            button. */}
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
-          <div className="candy-split"
-               style={{ '--cbtn-size': RUN_SIZE,
-                        pointerEvents: showAlbums ? undefined : 'none' }}>
+            button. Per part, not on the run, or View and the field would lock
+            too. */}
+          <SearchRun value={query} onChange={setQuery} size={RUN_SIZE}>
             {/* Picking the active dimension again flips its direction, exactly
                 as the old pills did — CandySelect fires onChange on a re-pick. */}
             <CandySelect
               fuse shape="chip" accent={accent}
+              style={inertUnlessAlbums}
               value={sortDim}
               options={SORT_DIMENSIONS.map(d => ({
                 value: d.key,
@@ -290,6 +272,7 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
                 and both marks reach the trigger. */}
             <CandySelect
               fuse shape="chip" accent={accent}
+              style={inertUnlessAlbums}
               value={[statusFilter, dlFilter].filter(Boolean)}
               options={[
                 { header: 'Status' },
@@ -305,22 +288,14 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
                 : setStatusFilter(cur => cur === v ? null : v)}
               title="Filter by status and downloaded state"
             />
-          </div>
-
-          <div className="candy-split" style={{ '--cbtn-size': RUN_SIZE }}>
-            {VIEW_OPTIONS.map(o => (
-              <button key={o.value} type="button" data-own-press
-                      className={'candy-btn' + (view === o.value ? ' is-active' : '')}
-                      data-shape="chip"
-                      style={accent ? { '--accent': accent } : undefined}
-                      onClick={() => setView(o.value)}>
-                {/* .candy-face is already inline-flex with a 6px gap — a leading
-                    icon needs no wrapper and no new prop. */}
-                <span className="candy-face"><o.Icon size={12}/>{o.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
+            <CandySelect
+              fuse shape="chip" accent={accent}
+              value={view}
+              options={VIEW_OPTIONS}
+              onChange={setView}
+              title="Show playlists, albums or both"
+            />
+          </SearchRun>
       </div>
 
       {/* Body — playlist tiles and/or the album grid */}
@@ -338,7 +313,7 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
 
         {showPlaylists && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {view === 'both' && visiblePlaylists.length > 0 && <SectionHeading>Playlists</SectionHeading>}
+            {view === 'both' && visiblePlaylists.length > 0 && <SectionHeading trim>Playlists</SectionHeading>}
             {/* Distinct copy per cause: a filtered-to-nothing list and a genuinely
                 empty one look identical otherwise, which cost a debugging session. */}
             {visiblePlaylists.length === 0 && (
@@ -387,12 +362,14 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
   );
 }
 
-// Only shown in "Both", where the two grids need telling apart.
-function SectionHeading({ children }) {
+// Only shown in "Both", where the two grids need telling apart. `trim` cuts the
+// half-leading above the word so its box starts at the ink -- set on the one
+// heading that can sit first under the filter bar, which centres against it.
+function SectionHeading({ trim, children }) {
   return (
     <div style={{
       fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-faint)',
-      letterSpacing: '0.08em',     }}>{children}</div>
+      letterSpacing: '0.08em', textBox: trim ? 'trim-start cap alphabetic' : undefined }}>{children}</div>
   );
 }
 

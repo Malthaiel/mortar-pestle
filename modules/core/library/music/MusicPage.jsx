@@ -24,18 +24,22 @@ import { navigate as go } from '@host/router.js';
 const HOME_PATH = '/tools/library/music';
 const LAST_VIEWED_KEY = 'tools:lastMusicPath';
 const SPLIT_WIDTH_KEY = 'music:split:width';
-const SPLIT_MIN      = 320;  // album-browser (left) floor
 const RIGHT_MIN      = 360;  // detail (right) floor — reserved so it never overflows
 const SEAM_W         = 6;    // ResizeSeam hotzone width
 const SPLIT_FALLBACK = 480;  // used before the container is measured
 // The presets ARE the snap set — ResizeSeam derives it from them. Same three
-// words as every other seam in the app; the values are the old snap targets,
-// less the fourth (520) that never had a name.
+// words as every other seam in the app. Compact is the narrowest the filter
+// row fits (the Playlists view's 385px row + the bar's 18px sides + the 1px
+// border, user-picked 2026-09-25); Default moved to 480 with it so the two
+// keep their own snap zones (ResizeSeam SNAP_RADIUS 14).
 const SPLIT_PRESETS = [
-  { label: 'Compact', value: 360 },
-  { label: 'Default', value: 440 },
+  { label: 'Compact', value: 424 },
+  { label: 'Default', value: 480 },
   { label: 'Wide',    value: 600 },
 ];
+// Album-browser (left) floor: no drag goes narrower than Compact, where the
+// filter row would stick out (user-directed 2026-09-25; was 320).
+const SPLIT_MIN = SPLIT_PRESETS[0].value;
 
 // Split the rest into a mode:
 //   "" (bare /tools/library/music)        → home (the combined search-first surface)

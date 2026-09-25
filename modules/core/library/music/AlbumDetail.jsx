@@ -423,7 +423,10 @@ export default function AlbumDetail({ accent, albumPath }) {
           const discNumbers = [...groups.keys()].sort((a, b) => a - b);
           const multiDisc = discNumbers.length > 1;
           return discNumbers.map((d, di) => (
-            <div key={d} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            // Row gap = the film Cast list's (library.css --credit-gap) plus the
+            // chip lip, which paints outside layout -- same formula, same gap.
+            // Off the 4px grid on purpose (6px, user-picked 2026-09-24).
+            <div key={d} data-spacing-intent="credit-gap" style={{ display: 'flex', flexDirection: 'column', gap: 'calc(var(--credit-gap) + var(--candy-depth-small))' }}>
               {multiDisc && (
                 <div style={{
                   padding: di === 0 ? '4px 14px 6px' : '14px 14px 6px',
