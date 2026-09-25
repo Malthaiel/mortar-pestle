@@ -28,6 +28,7 @@ export const TUNE = {
   time: 1,                       // 1 = real time; lower it to film the motion
   front: { k: 900, zeta: 0.9 },  // the edge that grows the window
   back: { k: 260, zeta: 0.55 },  // the edge that shrinks it: soft, overshoots into a squash
+  stretch: { k: 260, zeta: 0.5 }, // Stretch, both edges: one spring, so they leave, bounce and land together
   plain: { k: 420, zeta: 1 },    // Plain slide, both edges
   fill: { k: 300, zeta: 0.8 },   // first-entry fill: the blob's radius, from the pointer's entry point
   bulge: 0.012,                  // px of edge bulge per px/s of edge speed
@@ -79,7 +80,7 @@ function useLiquid(mode, runRef, copyRef, fillRef) {
     const target = () => rectOf(s.i);
 
     const retarget = () => {
-      if (mode === 'plain') { s.kL = s.kR = 'plain'; return; }
+      if (mode !== 'pinch') { s.kL = s.kR = mode; return; }
       const t = target();
       s.kL = t.l < s.L ? 'front' : 'back';
       s.kR = t.r > s.R ? 'front' : 'back';
