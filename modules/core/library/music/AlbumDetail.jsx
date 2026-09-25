@@ -302,7 +302,7 @@ export default function AlbumDetail({ accent, albumPath }) {
               which on a film is the Cast/Crew panel and here is the tracklist. */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', paddingBottom: 14, borderBottom: '1px solid var(--border)' }}>
-          <div ref={runRef} className="candy-split is-plain-label" style={{
+          <div ref={runRef} className="candy-split" style={{
             position: 'relative', '--cbtn-size': ROW_H,
           }}>
             <CandySelect

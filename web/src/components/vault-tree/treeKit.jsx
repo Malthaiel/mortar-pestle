@@ -141,8 +141,9 @@ export function StaggerChild({ index, count, open, children }) {
 // re-typing them (the planner dial's START, user-directed 2026-08-28). Geometry
 // stays in FACE — a borrower wants the lettering, not the pill.
 export const TREE_TEXT = {
-  fontFamily: 'var(--font-mono)',
-  fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'none',
+  // The vars live on :root in styles.css; every .candy-face is forced to them.
+  fontFamily: 'var(--tree-font-family)',
+  fontSize: 10.5, fontWeight: 'var(--tree-font-weight)', letterSpacing: 'var(--tree-letter-spacing)', textTransform: 'none',
 };
 
 // Shared candy-face for both folder headers and leaf rows — the inline overrides

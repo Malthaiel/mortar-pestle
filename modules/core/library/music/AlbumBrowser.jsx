@@ -268,7 +268,7 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
             2026-09-20). Inert, never faded: a .55 opacity erases a small candy
             button. */}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
-          <div className="candy-split is-plain-label"
+          <div className="candy-split"
                style={{ '--cbtn-size': RUN_SIZE,
                         pointerEvents: showAlbums ? undefined : 'none' }}>
             {/* Picking the active dimension again flips its direction, exactly
@@ -307,7 +307,7 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
             />
           </div>
 
-          <div className="candy-split is-plain-label" style={{ '--cbtn-size': RUN_SIZE }}>
+          <div className="candy-split" style={{ '--cbtn-size': RUN_SIZE }}>
             {VIEW_OPTIONS.map(o => (
               <button key={o.value} type="button" data-own-press
                       className={'candy-btn' + (view === o.value ? ' is-active' : '')}
