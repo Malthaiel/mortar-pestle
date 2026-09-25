@@ -826,6 +826,10 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
   box-sizing: border-box;
   padding: 8px 16px;
   font-size: 11px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: none;
   color: var(--cbtn-rest-text);
   background: var(--cbtn-face);
   border: var(--cbtn-frame) solid color-mix(in oklch, var(--cbtn-band), black 22%);
@@ -842,13 +846,15 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
    sidebar changes every button. Size is NOT forced -- each shape keeps its own
    (a clock tile and a 10.5px chip are both candy). `!important` because ~80
    consumers pin their own lettering inline; this is meant to beat all of them,
-   typing boxes and menu rows included (user-directed 2026-09-24). */
+   typing boxes and menu rows included (user-directed 2026-09-24). The ONE
+   exception is the music player tile, which keeps its own lettering (and the
+   base .candy-face lettering above, which is why that block still exists). */
 :root {
   --tree-font-family: var(--font-mono);
   --tree-font-weight: 700;
   --tree-letter-spacing: 0.06em;
 }
-.candy-face, .candy-face *, .candy-face ::placeholder {
+.candy-face:not(.is-music *), .candy-face *:not(.is-music *), .candy-face ::placeholder {
   font-family: var(--tree-font-family) !important;
   font-weight: var(--tree-font-weight) !important;
   letter-spacing: var(--tree-letter-spacing) !important;
