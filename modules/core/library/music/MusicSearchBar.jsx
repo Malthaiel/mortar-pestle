@@ -1,27 +1,33 @@
-// The persistent Music search bar. It lives in MusicTopBar's `leading` slot, so
-// every Music screen can search without navigating to the home surface first.
+// The persistent Music search bar. MusicPage pins it top-right over the right
+// column, so every Music screen can search without navigating to the home
+// surface first.
 //
-// Typing floats the results in a Popover anchored under the input — the page
+// Typing floats the results in a Popover anchored under the field — the page
 // behind is left alone. Enter commits the search and navigates to the full-page
 // results at /tools/library/music/q/<query>, where `suppress` turns the popup
 // off and the same bar drives the page inline instead.
 //
-// Composition only: `.candy-input` (the markup MusicHome's inline bar used),
+// Composition only: the library column's search field (SearchRun's chip-field
+// part, in a one-part .candy-split for the run's height rule) minus the slide,
 // the shared Popover (portal + Esc + click-outside), Seg + useSearchTab (same
 // localStorage key as the full page, so the tab choice carries across), and
 // SearchResults itself — every fetch and result stack is reused verbatim.
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Popover, Seg } from '@host/components/ui';
+import { IconSearch } from '@host/components/icons.jsx';
 import { navigate as go } from '@host/router.js';
 import { SEARCH_TABS, useSearchTab, SEARCH_SOURCES, useSearchSource } from './searchShared.jsx';
 import { SearchResults } from './MusicHome.jsx';
+import { RUN_SIZE } from './util.js';
 
+const FIELD_W = 320;
 const PANEL_W = 560;
 const PAD = 8;    // viewport edge clamp
-const GAP_Y = 12; // breathing room under the input
+const GAP_Y = 12; // breathing room under the field
 
 export default function MusicSearchBar({ accent, query, setQuery, albums, ownedIds, onPlay, suppress }) {
+  const btnRef = useRef(null);
   const inputRef = useRef(null);
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
@@ -30,25 +36,19 @@ export default function MusicSearchBar({ accent, query, setQuery, albums, ownedI
   const q = (query || '').trim();
   const show = open && !!q && !suppress;
 
-  // Anchor under the input, left edges flush, clamped into the viewport.
-  // Measured rather than positioned by CSS because the panel is portalled to
-  // document.body (the topbar is a scroll container and would clip it).
+  // Anchor under the field, RIGHT edges flush (it sits in the top-right
+  // corner), clamped into the viewport. Measured rather than positioned by CSS
+  // because the panel is portalled to document.body.
   useLayoutEffect(() => {
     if (!show) { setPos(null); return undefined; }
     const measure = () => {
-      const el = inputRef.current;
-      const r = el?.getBoundingClientRect();
+      const r = btnRef.current?.getBoundingClientRect();
       if (!r) return;
-      // Drop from the TOPBAR's bottom edge, not the input's: the topbar has 12px of
-      // bottom padding, so anchoring to the input left the panel overlapping the bar.
-      // The input is a direct child of the Topbar root (it rides the `leading` slot),
-      // so parentElement IS that bar; fall back to the input if that ever changes.
-      const barBottom = el.parentElement?.getBoundingClientRect().bottom ?? r.bottom;
       const vw = window.innerWidth;
       const width = Math.min(PANEL_W, vw - 2 * PAD);
       setPos({
-        top: barBottom + GAP_Y,
-        left: Math.max(PAD, Math.min(r.left, vw - width - PAD)),
+        top: r.bottom + GAP_Y,
+        left: Math.max(PAD, Math.min(r.right - width, vw - width - PAD)),
         width,
       });
     };
@@ -76,23 +76,38 @@ export default function MusicSearchBar({ accent, query, setQuery, albums, ownedI
 
   return (
     <>
-      <input
-        ref={inputRef}
-        type="text"
-        value={query || ''}
-        onChange={(e) => { setQuery(e.target.value); setOpen(!!e.target.value.trim()); }}
-        onFocus={() => setOpen(!!q)}
-        onKeyDown={onKeyDown}
-        placeholder={'Search your library and ' +
-          (source === 'yt' ? 'YouTube' : source === 'mb' ? 'MusicBrainz' : 'MusicBrainz + YouTube')}
-        className="candy-input"
-        data-music-search
-        style={{
-          width: 320, flexShrink: 0,
-          padding: '7px 12px', fontSize: 12,
-          color: 'var(--text)', outline: 'none',
-        }}
-      />
+      <div className="candy-split" style={{ display: 'flex', width: FIELD_W, '--cbtn-size': RUN_SIZE }}>
+        <span
+          ref={btnRef}
+          className="candy-btn"
+          data-shape="chip-field"
+          data-music-search
+          // A press on the icon or padding focuses the input, as in SearchRun.
+          onMouseDown={(e) => {
+            if (e.target === inputRef.current) return;
+            e.preventDefault();
+            inputRef.current.focus();
+          }}
+        >
+          <span className="candy-face" style={{ padding: '5px var(--chip-pad-x)', gap: 'var(--candy-face-gap)' }}>
+            <IconSearch size={14} />
+            <input
+              ref={inputRef}
+              className="chip-field-input"
+              type="text"
+              value={query || ''}
+              onChange={(e) => { setQuery(e.target.value); setOpen(!!e.target.value.trim()); }}
+              onFocus={() => setOpen(!!q)}
+              onKeyDown={onKeyDown}
+              placeholder={'Search your library and ' +
+                (source === 'yt' ? 'YouTube' : source === 'mb' ? 'MusicBrainz' : 'MusicBrainz + YouTube')}
+              // SearchRun's input style: the face carries the padding, and
+              // line-height normal keeps the word level with chip labels.
+              style={{ padding: 0, lineHeight: 'normal' }}
+            />
+          </span>
+        </span>
+      </div>
       {show && pos && (
         <Popover
           open

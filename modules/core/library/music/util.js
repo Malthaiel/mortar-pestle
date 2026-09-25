@@ -36,6 +36,11 @@ export const TILE_GRID = {
   rowGap: `calc(${TILE_GAP}px + var(--candy-tile-depth))`,
 };
 
+// Height of every part of the library column's fused run, search field
+// included (.candy-split derives corner, seam, overlap and part height from
+// it — see styles.css § candy-split). The top-right search field shares it.
+export const RUN_SIZE = '27px';
+
 export function coverSrc(image, width, opts) {
   if (!image) return null;
   const url = mediaUrl(image, opts) || null;

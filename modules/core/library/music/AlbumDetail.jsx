@@ -20,7 +20,7 @@ import { consumeTrackHighlight, fmtDuration } from './searchShared.jsx';
 import { useSongMenu } from './contextMenus.js';
 import { navigate } from '@host/router.js';
 import { useContextMenu } from '@host/context-menu/useContextMenu.js';
-import { FILM_POSTER_W, FILM_DOT } from '../AnimeDetailHeader.jsx';
+import { FILM_POSTER_W, FILM_DOT, POSTER_COL_GAP, PosterTile, SourceRun } from '../AnimeDetailHeader.jsx';
 import { BODY_COLOR } from '../AnimeMainColumn.jsx';
 import { artistImage } from './artistImage.js';
 
@@ -192,6 +192,23 @@ export default function AlbumDetail({ accent, albumPath }) {
   ].filter(Boolean);
   const playFrom = (idx) => playAlbumTracks(album, idx);
 
+  // The film's IMDb / Letterboxd / TMDb run, for a record. MusicBrainz opens
+  // the release group itself when the card knows its id; Last.fm's album URL
+  // is built from the names (spaces as +); Rate Your Music has no id here, so
+  // it opens a release search. "RYM", not the full name: user-picked
+  // 2026-09-25 because it is the label that keeps the run inside the sleeve's
+  // width (measured 220.5 of 221; "Discogs" overhung it by 28).
+  const plus = (s) => encodeURIComponent(s).replace(/%20/g, '+');
+  const named = [album.artist, album.title].filter(Boolean).join(' ');
+  const sources = [
+    album.artist && album.title
+      ? { label: 'Last.fm', url: `https://www.last.fm/music/${plus(album.artist)}/${plus(album.title)}` } : null,
+    { label: 'MusicBrainz', url: album.providerId
+      ? `https://musicbrainz.org/release-group/${album.providerId}`
+      : `https://musicbrainz.org/search?type=release_group&query=${encodeURIComponent(named)}` },
+    { label: 'RYM', url: `https://rateyourmusic.com/search?searchtype=l&searchterm=${encodeURIComponent(named)}` },
+  ].filter(Boolean);
+
   const enqueueAlbum = () => {
     const items = album.tracks.map(t => ({
       albumPath: album.path, albumTitle: album.title, albumImage: album.image,
@@ -254,16 +271,11 @@ export default function AlbumDetail({ accent, albumPath }) {
         {/* One wrapper for both columns: .film-detail centres its children at
             the reading measure, so the flex row has to BE a single child. */}
         <div style={{ display: 'flex', gap: 28 }}>
-        {/* LEFT column: the sleeve alone, in the film poster's column. */}
-        <div style={{ width: FILM_POSTER_W, flexShrink: 0 }}>
-          <div style={{
-            width: '100%', aspectRatio: '1 / 1',
-            background: 'var(--surface-2)',
-            borderRadius: 8, overflow: 'hidden',
-            boxShadow: '0 10px 32px rgba(0,0,0,0.34)',
-          }}>
-            {img && <img src={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}/>}
-          </div>
+        {/* LEFT column: the film poster's column 1-1 -- the same candy tile
+            (opens the full sleeve) and the same source run under it. */}
+        <div style={{ width: FILM_POSTER_W, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: POSTER_COL_GAP }}>
+          <PosterTile image={img} title={album.title} accent={accent || 'var(--accent)'} aspect="1 / 1"/>
+          <SourceRun sources={sources}/>
         </div>
 
         <div style={{

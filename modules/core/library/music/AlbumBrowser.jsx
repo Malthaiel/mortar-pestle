@@ -18,7 +18,7 @@ import { statusLabel, STATUS_ICON } from '@host/util/media-status.js';
 import { Cluster, useRailOrder } from '@host/components/ui/Rail.jsx';
 import { usePlaylists, isSavedTracks } from './PlaylistProvider.jsx';
 import { PlaylistCard } from './PlaylistsPage.jsx';
-import { TILE_GRID, TILE_GAP } from './util.js';
+import { TILE_GRID, TILE_GAP, RUN_SIZE } from './util.js';
 import { encodePath } from '../paths.js';
 import { navigate as go } from '@host/router.js';
 
@@ -73,10 +73,6 @@ const DL_OPTIONS = [
 ];
 const isDownloaded = (a) => (a.tracksPresent || 0) > 0;
 
-// Height of every part of the one fused run, search field included (.candy-split
-// derives corner, seam, overlap and part height from it — see styles.css
-// § candy-split).
-const RUN_SIZE = '27px';
 
 export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
   const [albums, setAlbums] = useState(null);
@@ -230,14 +226,13 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-      {/* Filter bar — no hairline, run centred both ways (user-directed
-          2026-09-25): even left and right, and the painted gap above the run
-          equals the gap from its band to whatever comes first below (the body's
-          TILE_GAP, then a tile or the cap-trimmed Playlists heading). 14px is
-          the bar's long-standing top inset, mirrored below -- off the 4px grid
-          on purpose. */}
+      {/* Filter bar — no hairline, run centred left and right. The painted gap
+          above the run and the gap from its band to whatever comes first below
+          both equal the tiles' own side margin, TILE_GAP (user-directed
+          2026-09-25): the bottom reserves only the band, and the body's
+          TILE_GAP padding supplies the gap under it. */}
       <div data-spacing-intent="centred-run" style={{
-        padding: `14px 18px calc(14px + var(--candy-depth-small) - ${TILE_GAP}px)`,
+        padding: `${TILE_GAP}px 18px var(--candy-depth-small)`,
         display: 'flex', justifyContent: 'safe center',
         flexShrink: 0,
       }}>

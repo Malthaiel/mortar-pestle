@@ -6,8 +6,8 @@
 // (/tools/library/music/downloaded/<path>); MusicBrainz cards route into the
 // existing Browse preview seeded with their query.
 //
-// The search bar itself no longer lives here — it moved into MusicTopBar
-// (MusicSearchBar.jsx) so it is present on every Music screen. MusicPage owns the
+// The search bar itself no longer lives here — it is MusicSearchBar.jsx, pinned
+// top-right by MusicPage so it is present on every Music screen. MusicPage owns the
 // query, the album list and the hash mirroring, and hands them down; this page is
 // the FULL-PAGE view of a committed search, and `SearchResults` is exported so
 // the topbar popup renders the identical stacks.
@@ -209,7 +209,7 @@ function MoreFromYourArtists({ albums, ownedIds, accent }) {
 
 // ---- Search ----------------------------------------------------------------
 
-// Exported: the topbar's MusicSearchBar popup renders the identical stacks, so
+// Exported: the MusicSearchBar popup renders the identical stacks, so
 // the popup and the full page can never drift apart.
 export function SearchResults({ query, tab, source = 'both', accent, albums, ownedIds, onPlay }) {
   const [mbAlbums, setMbAlbums] = useState(null);

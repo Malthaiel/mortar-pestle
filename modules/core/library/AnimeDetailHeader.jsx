@@ -136,6 +136,52 @@ function SourceBtn({ label, url, filmLayout }) {
   );
 }
 
+// Gap between the poster, the source run and whatever follows in the poster
+// column. Exported with the two parts below so the album page's column cannot
+// drift from the film's.
+export const POSTER_COL_GAP = 16;
+
+// The film's source buttons as one fused run, centred under the poster.
+// Exported: the album page puts Last.fm / MusicBrainz / Discogs under its sleeve.
+export function SourceRun({ sources }) {
+  return (
+    <div className="candy-split" style={{ '--cbtn-size': '26px', alignSelf: 'center' }}>
+      {sources.map(x => <SourceBtn key={x.label} {...x} filmLayout />)}
+    </div>
+  );
+}
+
+// The poster as a candy tile that opens the full picture. Exported: the album
+// page wears the same tile for its sleeve, at a square aspect.
+export function PosterTile({ image, title, accent, aspect = '2 / 3' }) {
+  const lb = useLightbox();
+  return (
+    <>
+      <button
+        type="button"
+        disabled={!image}
+        onClick={() => lb.show(image, title)}
+        className="candy-btn"
+        data-shape="tile"
+        title={image ? `View ${title} cover` : title}
+        style={{ '--accent': accent, width: '100%', padding: 0, cursor: image ? 'zoom-in' : 'default' }}
+      >
+        <span className="candy-face" style={{ padding: 0, overflow: 'hidden' }}>
+          <div style={{
+            width: '100%', aspectRatio: aspect, background: 'var(--surface-3)',
+            overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            {image
+              ? <img src={image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : <span style={{ fontFamily: 'var(--font-mono)', fontSize: 24, color: 'var(--text-muted)' }}>—</span>}
+          </div>
+        </span>
+      </button>
+      <ImageLightbox {...lb} accent={accent} />
+    </>
+  );
+}
+
 export default function AnimeDetailHeader({
   title, subtitle, malId, image, sourceUrl, sourceLabel,
   score, scoredBy, rank, popularity, members,
@@ -147,7 +193,6 @@ export default function AnimeDetailHeader({
   released, filmLayout, extraSources, backdrop,
   accent, topRight, rating, actions, rightColumn,
 }) {
-  const lb = useLightbox();
   const a = accent || 'var(--accent)';
 
   const synList = Array.isArray(synonyms) ? synonyms.filter(Boolean) : [];
@@ -288,35 +333,14 @@ export default function AnimeDetailHeader({
       {/* Left column (cover + info + chips) | right column (panels over synopsis) */}
       <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap', marginTop: filmLayout ? 0 : 18 }}>
         {/* ── LEFT COLUMN ── */}
-        <div style={{ width: filmLayout ? FILM_POSTER_W : 200, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ width: filmLayout ? FILM_POSTER_W : 200, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: POSTER_COL_GAP }}>
           {/* Cover → lightbox */}
-          <button
-            type="button"
-            disabled={!image}
-            onClick={() => lb.show(image, title)}
-            className="candy-btn"
-            data-shape="tile"
-            title={image ? `View ${title} cover` : title}
-            style={{ '--accent': a, width: '100%', padding: 0, cursor: image ? 'zoom-in' : 'default' }}
-          >
-            <span className="candy-face" style={{ padding: 0, overflow: 'hidden' }}>
-              <div style={{
-                width: '100%', aspectRatio: '2 / 3', background: 'var(--surface-3)',
-                overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                {image
-                  ? <img src={image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  : <span style={{ fontFamily: 'var(--font-mono)', fontSize: 24, color: 'var(--text-muted)' }}>—</span>}
-              </div>
-            </span>
-          </button>
+          <PosterTile image={image} title={title} accent={a} />
 
           {/* Source buttons sit under the poster on a film: the title line above
               carries enough already, and the poster column is the one place they
               are the full column width with nothing to compete with. */}
-          {filmLayout && sourceBtns.length > 0 && (
-            <div className="candy-split" style={{ '--cbtn-size': '26px', alignSelf: 'center' }}>{sourceBtns}</div>
-          )}
+          {filmLayout && sources.length > 0 && <SourceRun sources={sources} />}
 
           {/* Information — unified MAL-style label/value list: Japanese, Synonyms,
               Source, Rating, Broadcast, Aired, Genres, Themes, Demographic, Producers.
@@ -449,8 +473,6 @@ export default function AnimeDetailHeader({
             : rightColumn}
         </div>
       </div>
-
-      <ImageLightbox {...lb} accent={a} />
     </div>
   );
 }

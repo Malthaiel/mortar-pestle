@@ -1,7 +1,8 @@
-// Music section page. A persistent MusicTopBar sits atop every mode, and the
-// AlbumBrowser library column is docked to the left of ALL of them (it used to
-// exist only inside the `downloaded` route). The mode picks what fills the right
-// half; it is parsed from the URL rest (everything after /tools/library/music/):
+// Music section page. The AlbumBrowser library column is docked to the left of
+// every mode (it used to exist only inside the `downloaded` route), and the
+// MusicSearchBar is pinned top-right over the right half on every mode (the
+// topbar strip it rode was removed 2026-09-25). The mode picks what fills the
+// right half; it is parsed from the URL rest (everything after /tools/library/music/):
 //   ""                                   → MusicHome (combined search-first home)
 //   "downloaded" | "downloaded/<album>"  → AlbumDetail
 //   "playlists" | "playlists/<path>"     → PlaylistsPage (grid / detail)
@@ -16,7 +17,8 @@ import AlbumDetail  from './AlbumDetail.jsx';
 import BrowsePage   from './BrowsePage.jsx';
 import PlaylistsPage from './PlaylistsPage.jsx';
 import MusicHome    from './MusicHome.jsx';
-import MusicTopBar  from './MusicTopBar.jsx';
+import MusicSearchBar from './MusicSearchBar.jsx';
+import { TILE_GAP } from './util.js';
 import ResizeSeam, { DRAG_EASE } from '@host/components/ui/ResizeSeam.jsx';
 import { encodePath, decodePath } from '../paths.js';
 import { navigate as go } from '@host/router.js';
@@ -100,7 +102,7 @@ export default function MusicPage({ accent, rest }) {
   const selectedPath = album;
 
   // ── Search (topbar-owned) ────────────────────────────────────────────
-  // The query lives here, not in MusicHome, because MusicTopBar renders on every
+  // The query lives here, not in MusicHome, because MusicSearchBar renders on every
   // Music screen and MusicHome only on one. `onSearchPage` is the committed
   // search (Enter navigated to /q/<query>): there the popup is suppressed and the
   // bar drives the page inline instead of floating over it.
@@ -234,12 +236,6 @@ export default function MusicPage({ accent, rest }) {
   // the right half of the same split, so the panel never unmounts on navigation.
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-      <MusicTopBar
-        accent={accent}
-        query={query} setQuery={setQuery}
-        albums={albums} ownedIds={ownedIds} onPlay={playAlbum}
-        suppressPopup={onSearchPage}
-      />
       <div
         ref={containerRef}
         style={{
@@ -276,9 +272,22 @@ export default function MusicPage({ accent, rest }) {
 
         <div style={{
           flex: 1, minWidth: RIGHT_MIN, minHeight: 0,
-          display: 'flex', flexDirection: 'column',
+          display: 'flex', flexDirection: 'column', position: 'relative',
         }}>
           {content}
+          {/* Pinned top-right, the same TILE_GAP from the top and right edges
+              as the library column's run sits from its top (user-directed
+              2026-09-25). Over the page rather than above it, so the album's
+              full-bleed sleeve still reaches the top edge. zIndex 2 clears
+              .film-detail's children (z-index 1). */}
+          <div style={{ position: 'absolute', top: TILE_GAP, right: TILE_GAP, zIndex: 2 }}>
+            <MusicSearchBar
+              accent={accent}
+              query={query} setQuery={setQuery}
+              albums={albums} ownedIds={ownedIds} onPlay={playAlbum}
+              suppress={onSearchPage}
+            />
+          </div>
         </div>
       </div>
     </div>
