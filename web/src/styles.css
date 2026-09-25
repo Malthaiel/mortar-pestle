@@ -1074,10 +1074,14 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
      sinking (the music player twin, which has no clip, presses clean). The face
      inherits the tile's border-radius, so clipping here rounds the dock's square
      corners identically and moves with the press.
-     VISIBLE since 2026-09-24: the calendar's square corners were the last thing
-     this rounded, and the clock block rounds its own faces. The clip's top edge
-     sat 4px above the block and sliced the digits flat mid-roll (filmed). */
-  overflow: visible;
+     VISIBLE on 2026-09-24 (the clip then sliced the digits mid-roll), CLIPPED
+     AGAIN 2026-09-25: the roll has no camera, so a tilting face squashes
+     vertically and its rounded corners squash into square ones that stuck out
+     past the tile's round corners (filmed hovered, p0258-p0288). The tile's top
+     is pinned and its bottom follows the silhouette now, so the only paint this
+     clip still cuts is those corners - at the border's inner edge, which is the
+     block's own resting radius. `clip`, not `hidden`: no scroll container. */
+  overflow: clip;
 }
 /* .is-panel — the content-height flavour: a titled section of controls that is
    exactly as tall as what it holds. Was `.ov-studio-tile`, an independently
