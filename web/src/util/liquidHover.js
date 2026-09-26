@@ -27,6 +27,13 @@
 // Menus and dropdowns: each row drains and fills on its own, driven by the
 // menu's own cursor, so the arrow keys light rows too (from their middle).
 //
+// The dock: its buttons are lone buttons that widen as they light (the copies
+// follow the measured width), and the dock holds the last one lit and open across
+// the gap ([data-dock-hover], sticky). The colour holds with it: a held button
+// drains only when the dock lets go of it (the next button lights, or the pointer
+// leaves the dock). The copies own [data-dock-hover]: never on the rest copy,
+// always on the lit one.
+//
 // Typing rows: a copy has no caret, but the caret only exists in the FOCUSED box,
 // and focus already lights that box. So a box is copied like any button until you
 // type in it; then that one part stays real ([data-liquid-live]) and both copies
@@ -43,9 +50,9 @@ export const TUNE = {
   bulge: 0.012,                   // px of edge bulge per px/s of edge speed
 };
 
-// Later phases of the plan, each with its own snag: rail tiles (card owns the
-// flood, nested controls hover neutral), the dock (sticky hover, widening buttons).
-const SKIP = '.rail-tile, .dock-root, [data-liquid-skip], [data-dragging]';
+// A later phase of the plan, with its own snag: rail tiles (card owns the flood,
+// nested controls hover neutral).
+const SKIP = '.rail-tile, [data-liquid-skip], [data-dragging]';
 // Right-click menus and dropdowns (one component): see watchMenu below.
 const MENU = '[role="menu"]';
 // A copy cannot show a canvas, a video or a frame (rail tiles, a later phase).
@@ -87,8 +94,10 @@ function copy(s, lit) {
   for (const el of [c, ...c.querySelectorAll('[id], [title], [data-tip]')]) {
     el.removeAttribute('id'); el.removeAttribute('title'); el.removeAttribute('data-tip');
   }
-  if (lit) for (const p of partsOf(c, s.split)) p.dataset.dockHover = 'true';
-  else if (s.menu) c.classList.remove('is-active');   // a menu row's .is-active IS its hover
+  // The copies own the lit marker: the dock's sticky hold on the real button must
+  // never reach the rest copy.
+  for (const p of partsOf(c, s.split)) { if (lit) p.dataset.dockHover = 'true'; else delete p.dataset.dockHover; }
+  if (!lit && s.menu) c.classList.remove('is-active');   // a menu row's .is-active IS its hover
   return c;
 }
 
@@ -205,6 +214,9 @@ function build(host, btn) {
     for (const m of recs) {
       if (m.type !== 'attributes') { rebuild = true; continue; }
       const n = m.attributeName;
+      // The dock letting go of a button it held lit (the pointer is on the next
+      // button, or off the dock) is that button's leave.
+      if (n === 'data-dock-hover') { if (m.target === host && !host.hasAttribute(n) && host !== hot) leave(host, pt); continue; }
       if (n === 'id' || n === 'title' || n === 'data-tip' || (m.target === host && n === 'data-liquid-host')) continue;
       const path = pathOf(host, m.target), v = m.target.getAttribute(n);
       for (const c of [s.rest, s.lit]) {
@@ -262,6 +274,13 @@ function drop(s) {
   if (hot === s.host) hot = null;
 }
 
+// Drained: hand back to the real host only once it paints like the rest copy and
+// has stopped moving. A dock button shrinks as it drains, its word still fading
+// out; until it has stopped, the rest copy stands in for it.
+// The part being typed in is real either way (lit by its own focus).
+const still = (s) => s.parts.every((p, k) => k === s.live || floods(p) === floods(partsOf(s.rest, s.split)[k]))
+  && !s.host.getAnimations({ subtree: true }).some((a) => a instanceof CSSTransition);
+
 // DEV regression gate: once settled, the lit copy's part must paint exactly like
 // the real part, which is still :hover under opacity 0 and so computes the true
 // hover paint. A mismatch means a :hover rule is missing [data-dock-hover].
@@ -302,8 +321,12 @@ function advance(s, dt) {
     // run backwards. Gone = unlit THAT frame (reset on invisible, not on settle),
     // so a quick re-entry fills again instead of sliding open.
     const goal = s.out ? 0 : cover(s, t.l, t.r, hr);
+    if (s.out) s.fx = Math.min(s.fx, hr.width);   // a button shrinking under the drain keeps its centre inside
     [s.rad, s.vrad] = step(s.rad, s.vrad, goal, 'fill', dt);
-    if (s.out && s.rad <= 0) return drop(s);
+    if (s.out && s.rad <= 0) {
+      s.on = false;   // unlit: coming back fills afresh from the new entry point
+      if (still(s)) return drop(s);
+    }
     if (!s.out && s.rad >= goal) s.filling = false;
     clip(s, 'cf', s.fill, s.filling ? circle(s, s.rad) : 'none');
   }
@@ -407,7 +430,8 @@ function onOver(e) {
   keyed = false; pt = { clientX: e.clientX, clientY: e.clientY };
   const btn = e.target.closest?.('.candy-btn');
   const host = btn && !btn.closest(MENU) && hostOf(btn);
-  if (hot && hot !== host) { leave(hot, e); hot = null; }
+  // A button the dock still holds lit drains when the dock lets go (the mirror).
+  if (hot && hot !== host) { if (!hot.hasAttribute('data-dock-hover')) leave(hot, e); hot = null; }
   for (const p of menus.keys()) syncMenu(p);   // :hover flips no class, so read it here
   if (!host) return;
   let s = layers.get(host);
