@@ -81,7 +81,7 @@ export function ExportImport({ accent }) {
         <button type="button" style={ghost} onClick={() => doExport(false)}>Plaintext</button>
       </div>
       {exOut && <textarea readOnly style={{ ...input, minHeight: 70, fontFamily: 'var(--font-mono,monospace)', fontSize: 11 }} value={exOut} onFocus={e => e.target.select()} />}
-      <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '4px 0' }} />
+      <hr style={{ border: 'none', borderTop: 'var(--candy-frame) solid var(--border)', margin: '4px 0' }} />
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <CandySelect icon={IconFile} value={imFmt} onChange={setImFmt} options={[
           { value: 'bitwarden', label: 'Bitwarden JSON' },

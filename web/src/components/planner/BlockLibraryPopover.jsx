@@ -113,7 +113,7 @@ export default function BlockLibraryPopover({ open, onClose, anchorRef, accent }
             ))}
           </div>
         )}
-        <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 10, display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
+        <div style={{ borderTop: 'var(--candy-frame) solid var(--border-soft)', paddingTop: 10, display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
           <button
             type="button"
             data-own-press

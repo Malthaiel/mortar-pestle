@@ -883,7 +883,7 @@ function MonthGrid({ days, monthAnchor, sessionsByDay, accent, today, onSelectDa
 
   return (
     <div className="flex-col" style={{ flex: 1, overflow: 'hidden' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: 'var(--candy-frame) solid var(--border)', flexShrink: 0 }}>
         {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(label => (
           <div key={label} style={{
             textAlign: 'center', padding: '8px 0 6px',
@@ -1228,7 +1228,7 @@ export default function CalendarPanel({
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8,
         padding: '12px 18px',
-        borderBottom: '1px solid var(--border)', flexShrink: 0,
+        borderBottom: 'var(--candy-frame) solid var(--border)', flexShrink: 0,
       }}>
         <IconBtn title="Previous" onClick={() => stepPivot(-1)} size={26}>
           <IconChevronLeft/>

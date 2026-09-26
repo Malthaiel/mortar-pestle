@@ -179,7 +179,7 @@ export default function BlockEditorModal({ open, block, accent, onSave, onCancel
         {/* Header */}
         <div style={{
           padding: '14px 18px 12px',
-          borderBottom: '1px solid var(--border-soft)',
+          borderBottom: 'var(--candy-frame) solid var(--border-soft)',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           flexShrink: 0,
         }}>
@@ -289,7 +289,7 @@ export default function BlockEditorModal({ open, block, accent, onSave, onCancel
         {/* Footer */}
         <div className="candy-chip-row" style={{
           padding: '12px 18px',
-          borderTop: '1px solid var(--border-soft)',
+          borderTop: 'var(--candy-frame) solid var(--border-soft)',
           justifyContent: 'flex-end', '--candy-gap': '8px',
           flexShrink: 0,
         }}>

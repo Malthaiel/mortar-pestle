@@ -68,7 +68,7 @@ export default function QueuePanel({ open, onClose, accent }) {
       <div className="candy-center-row" style={{
         padding: '12px 16px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        borderBottom: '1px solid var(--border)',
+        borderBottom: 'var(--candy-frame) solid var(--border)',
       }}>
         <span style={{
           fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em',

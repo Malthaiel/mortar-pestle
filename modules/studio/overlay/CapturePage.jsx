@@ -240,7 +240,7 @@ export default function CapturePage({ api, accent }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
       {/* HEADER BAR */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 18, padding: '8px 14px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 18, padding: '8px 14px', borderBottom: 'var(--candy-frame) solid var(--border)', flexShrink: 0 }}>
         <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text)' }}>Capture</div>
         <div style={{ flex: 1 }} />
         <div style={{ ...mono, fontSize: 11.5, color: status.isError ? 'var(--error)' : 'var(--text-faint)' }}>
@@ -288,7 +288,7 @@ export default function CapturePage({ api, accent }) {
 
       {/* BODY ROW: left clip list + center preview */}
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-        <aside style={{ width: 280, flexShrink: 0, borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
+        <aside style={{ width: 280, flexShrink: 0, borderRight: 'var(--candy-frame) solid var(--border)', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px' }}>
             <div style={{ ...paneLabel, padding: 0, flex: 1 }}>Clips</div>
             <OutlinedBtn chip onClick={reloadClips}>Refresh</OutlinedBtn>

@@ -24,7 +24,7 @@
 .deadlock-md table { border-collapse: collapse; margin: 0.6em 0; font-size: 12.5px; display: block; overflow-x: auto; }
 .deadlock-md th, .deadlock-md td { border: 1px solid var(--border); padding: 4px 8px; text-align: left; }
 .deadlock-md th { background: var(--surface-2); font-weight: 600; }
-.deadlock-md hr { border: none; border-top: 1px solid var(--border); margin: 1em 0; }
+.deadlock-md hr { border: none; border-top: var(--candy-frame) solid var(--border); margin: 1em 0; }
 .deadlock-md pre { margin: 8px 0; }
 /* Prose TimeChips reserve their shadow band below the line: an inline-flex box's
    vertical margin participates in the line box, so only chip-bearing lines grow —

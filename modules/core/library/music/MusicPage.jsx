@@ -18,8 +18,7 @@ import BrowsePage   from './BrowsePage.jsx';
 import PlaylistsPage from './PlaylistsPage.jsx';
 import MusicHome    from './MusicHome.jsx';
 import MusicSearchBar from './MusicSearchBar.jsx';
-import { TILE_GAP } from './util.js';
-import ResizeSeam, { DRAG_EASE } from '@host/components/ui/ResizeSeam.jsx';
+import ResizeSeam, { DRAG_EASE, HOTZONE_PX } from '@host/components/ui/ResizeSeam.jsx';
 import { encodePath, decodePath } from '../paths.js';
 import { navigate as go } from '@host/router.js';
 
@@ -246,7 +245,7 @@ export default function MusicPage({ accent, rest }) {
         <div style={{
           width: leftWidth, flexShrink: 0,
           minWidth: SPLIT_MIN, minHeight: 0,
-          borderRight: '1px solid var(--border)',
+          borderRight: 'var(--candy-frame) solid var(--border)',
           display: 'flex', flexDirection: 'column',
           // A drag TRAILS the cursor on ResizeSeam's shared clock rather than
           // tracking it 1:1 — same lag and curve as the seam's own menu.
@@ -275,14 +274,16 @@ export default function MusicPage({ accent, rest }) {
           display: 'flex', flexDirection: 'column', position: 'relative',
         }}>
           {content}
-          {/* Pinned top-centre (user-directed 2026-09-25), the same TILE_GAP
-              from the top as the library column's run sits from its top.
-              left/right 0 + fit-content + auto margins centres it without a
+          {/* Pinned top-centre (user-directed 2026-09-25), hanging from the
+              titlebar: top 0, so its island (MusicSearchBar) reads as one
+              piece with the bar, a MacBook notch (2026-09-26). left/right 0 + fit-content + auto margins centres it without a
               full-width strip over the page. Over the page rather than above
               it, so the album's full-bleed sleeve still reaches the top edge.
-              zIndex 2 clears .film-detail's children (z-index 1). */}
+              zIndex 2 clears .film-detail's children (z-index 1). left reaches
+              back over the seam's in-flow strip so it centres between the two
+              painted dividers, not 3px right of them (2026-09-26). */}
           <div style={{
-            position: 'absolute', top: TILE_GAP, left: 0, right: 0,
+            position: 'absolute', top: 0, left: -HOTZONE_PX, right: 0,
             width: 'fit-content', margin: '0 auto', zIndex: 2,
           }}>
             <MusicSearchBar

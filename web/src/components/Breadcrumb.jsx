@@ -58,7 +58,7 @@ export default function Breadcrumb({ route, accent }) {
       style={{
         flexShrink: 0,
         padding: '10px 20px 8px',
-        borderBottom: '1px solid var(--border-soft)',
+        borderBottom: 'var(--candy-frame) solid var(--border-soft)',
         background: 'var(--surface)',
         display: 'flex', alignItems: 'center', gap: 8,
         overflowX: 'auto', overflowY: 'hidden',

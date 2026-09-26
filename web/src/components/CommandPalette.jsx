@@ -123,7 +123,7 @@ export default function CommandPalette({ open, onClose, accent, onOpenSettings, 
         <div style={{
           display: 'flex', alignItems: 'center', gap: 12,
           padding: '14px 16px',
-          borderBottom: '1px solid var(--border-soft)',
+          borderBottom: 'var(--candy-frame) solid var(--border-soft)',
         }}>
           <span style={{ color: 'var(--text-faint)', display: 'inline-flex' }}>
             <IconCommand size={16}/>

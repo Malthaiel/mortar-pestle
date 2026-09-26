@@ -449,7 +449,7 @@ const barStyle = {
   gap: 6,
   padding: 8,
   flex: '0 0 auto',
-  borderBottom: '1px solid var(--border)',
+  borderBottom: 'var(--candy-frame) solid var(--border)',
   background: 'var(--surface)',
 };
 
@@ -484,7 +484,7 @@ const hintStyle = {
   color: 'var(--text)',
   opacity: 0.7,
   background: 'var(--surface)',
-  borderBottom: '1px solid var(--border)',
+  borderBottom: 'var(--candy-frame) solid var(--border)',
 };
 
 // Shown over the (hidden) native view when a tab's renderer process died and

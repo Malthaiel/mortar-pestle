@@ -111,7 +111,7 @@ export default function TerminalPage() {
         alignItems: 'center',
         gap: 6,
         padding: '8px 12px',
-        borderBottom: `1px solid ${PANE_BORDER}`,
+        borderBottom: `var(--candy-frame) solid ${PANE_BORDER}`,
         flexShrink: 0,
         background: PANE_BG,
       }}>

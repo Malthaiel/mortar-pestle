@@ -51,7 +51,7 @@ export default function RightRailStack({ rightSlots, accent }) {
               minHeight: TILE_HEIGHT,
               display: 'flex', flexDirection: 'column',
               overflow: 'hidden',
-              borderBottom: '1px solid var(--border)',
+              borderBottom: 'var(--candy-frame) solid var(--border)',
             }}
           >
             {typeof slot.renderRail === 'function'

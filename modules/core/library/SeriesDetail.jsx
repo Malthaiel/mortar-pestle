@@ -569,7 +569,7 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
       {isFranchise && (
         <div style={{
           display: 'flex', padding: '14px 18px 10px',
-          borderBottom: '1px solid var(--border)',
+          borderBottom: 'var(--candy-frame) solid var(--border)',
           overflowX: 'auto',
         }}>
           <div className="candy-seg">

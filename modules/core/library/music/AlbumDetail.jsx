@@ -20,8 +20,13 @@ import { useSongMenu } from './contextMenus.js';
 import { navigate } from '@host/router.js';
 import { useContextMenu } from '@host/context-menu/useContextMenu.js';
 import { FILM_POSTER_W, FILM_DOT, POSTER_COL_GAP, PosterTile, SourceRun } from '../AnimeDetailHeader.jsx';
-import { BODY_COLOR } from '../AnimeMainColumn.jsx';
 import { artistImage } from './artistImage.js';
+
+// The header's text: type tag, title and fact line all in the title's colour,
+// the tag at the fact line's size (user-directed 2026-09-26). The size rides
+// --film-head, the film's one head knob.
+const HEAD_COLOR = 'var(--text)';
+const FACT_SIZE = 'calc(12px * var(--film-head))';
 
 const LISTEN_STATUSES = ['Plan-to-Listen', 'Currently-Listening', 'Listened', 'Dropped'];
 
@@ -258,7 +263,7 @@ export default function AlbumDetail({ accent, albumPath }) {
       {/* No sleeve, no shell: .film-detail's top padding is reserved FOR the
           picture, so applying it without one leaves 266px of empty page. */}
       <div className={img ? 'film-detail' : undefined}
-           style={img ? undefined : { padding: '32px 28px 26px', borderBottom: '1px solid var(--border)' }}>
+           style={img ? undefined : { padding: '32px 28px 26px', borderBottom: 'var(--candy-frame) solid var(--border)' }}>
         {img && (
           <div className="film-backdrop is-square" aria-hidden>
             {/* A real <img>, like the film still: the box takes its height from
@@ -281,24 +286,27 @@ export default function AlbumDetail({ accent, albumPath }) {
           flex: 1, minWidth: 320, display: 'flex', flexDirection: 'column', gap: 8,
         }}>
           {/* Type tag. The film has none, but nothing else on the page tells an
-              EP from an album. */}
+              EP from an album. The title's colour at the fact line's size
+              (user-directed 2026-09-26). */}
           <div style={{
-            fontSize: 10, fontFamily: 'var(--font-mono)', color: BODY_COLOR,
+            fontSize: FACT_SIZE, fontFamily: 'var(--font-mono)', color: HEAD_COLOR,
             letterSpacing: '0.08em',           }}>{album.releaseType || 'Album'}</div>
 
           {/* Title and fact line both multiply by --film-head, the film's one
               head knob -- never type a size here that ignores it. */}
           <h2 style={{
             margin: 0, fontSize: 'calc(28px * var(--film-head))', fontWeight: 700,
-            color: 'var(--text)', lineHeight: 1.12, letterSpacing: '-0.015em',
+            color: HEAD_COLOR, lineHeight: 1.12, letterSpacing: '-0.015em',
           }}>
             {album.title}
           </h2>
 
+          {/* White like the title (user-directed 2026-09-26); ArtistLink
+              inherits it and only tints on hover. */}
           {facts.length > 0 && (
             <div style={{
               display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
-              fontSize: 'calc(12px * var(--film-head))', color: BODY_COLOR,
+              fontSize: FACT_SIZE, color: HEAD_COLOR,
             }}>
               {facts.map((f, i) => <Fragment key={i}>{i > 0 && FILM_DOT}{f}</Fragment>)}
             </div>
@@ -312,7 +320,7 @@ export default function AlbumDetail({ accent, albumPath }) {
               14px of air, one hairline, then 10px down to the body under it --
               which on a film is the Cast/Crew panel and here is the tracklist. */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', paddingBottom: 14, borderBottom: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', paddingBottom: 14, borderBottom: 'var(--candy-frame) solid var(--border)' }}>
           <div ref={runRef} className="candy-split" style={{
             position: 'relative', '--cbtn-size': ROW_H,
           }}>
@@ -443,7 +451,7 @@ export default function AlbumDetail({ accent, albumPath }) {
                   padding: di === 0 ? '4px 14px 6px' : '14px 14px 6px',
                   fontSize: 10, fontFamily: 'var(--font-mono)',
                   letterSpacing: '0.12em',                   color: 'var(--text-faint)',
-                  borderBottom: '1px solid var(--border)',
+                  borderBottom: 'var(--candy-frame) solid var(--border)',
                 }}>Disc {d}</div>
               )}
               {groups.get(d).map(({ t, idx }) => {

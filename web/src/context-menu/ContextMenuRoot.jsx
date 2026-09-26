@@ -404,7 +404,7 @@ function MenuSep() {
   // keep the line visually centered between its neighbors.
   return (
     <div role="separator" style={{
-      height: 1, background: 'var(--border-soft)', margin: '0 6px',
+      height: 'var(--candy-frame)', background: 'var(--border-soft)', margin: '0 6px',
       marginBottom: 'calc(-1 * var(--candy-depth))',
     }} />
   );

@@ -53,7 +53,7 @@ export default function CardioChooserPopover({ open, onClose, style, accent = 'v
     { label: 'Delete', danger: true, onClick: () => onDelete(p.file) },
   ], { accent });
 
-  const rowBtn = { display: 'flex', alignItems: 'center', gap: 6, width: '100%', textAlign: 'left', background: 'none', border: 'none', borderBottom: '1px solid var(--border-soft)', color: 'var(--text)', padding: '8px 10px', cursor: 'pointer', font: 'inherit', fontSize: 12.5 };
+  const rowBtn = { display: 'flex', alignItems: 'center', gap: 6, width: '100%', textAlign: 'left', background: 'none', border: 'none', borderBottom: 'var(--candy-frame) solid var(--border-soft)', color: 'var(--text)', padding: '8px 10px', cursor: 'pointer', font: 'inherit', fontSize: 12.5 };
   const TabBtn = ({ id, children }) => (
     <button type="button" className={`candy-btn${mode === id ? ' is-active' : ''}`} data-shape="chip" onClick={() => setMode(id)}>
       <span className="candy-face">{children}</span>
@@ -82,7 +82,7 @@ export default function CardioChooserPopover({ open, onClose, style, accent = 'v
                 );
               })}
             </div>
-            <div style={{ display: 'flex', justifyContent: 'center', borderTop: '1px solid var(--border-soft)', paddingTop: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'center', borderTop: 'var(--candy-frame) solid var(--border-soft)', paddingTop: 8 }}>
               <button type="button" data-own-press className="candy-btn" data-shape="chip" onClick={() => { onNew(); close(); }}>
                 <span className="candy-face"><IconPlus size={11} /> New preset</span>
               </button>

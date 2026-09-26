@@ -170,7 +170,7 @@ export default function AppShell({ children, onOpenSettings, settingsOpen, accen
           flexShrink: 0,
           position: 'relative',
           isolation: 'isolate',
-          borderLeft: '1px solid var(--border)',
+          borderLeft: 'var(--candy-frame) solid var(--border)',
           background: 'var(--surface)',
           display: 'flex', flexDirection: 'column',
           overflow: 'hidden',

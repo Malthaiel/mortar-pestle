@@ -140,8 +140,8 @@ export default function DashboardPage({ accent }) {
         <div style={{
           flex: 1, minWidth: 360, minHeight: 0,
           display: 'flex', flexDirection: 'column',
-          borderLeft: '1px solid var(--border)',
-          borderRight: '1px solid var(--border)',
+          borderLeft: 'var(--candy-frame) solid var(--border)',
+          borderRight: 'var(--candy-frame) solid var(--border)',
         }}>
           <DayPane
             accent={accent}

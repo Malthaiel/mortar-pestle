@@ -187,7 +187,7 @@ function FilmColumn({ tabActions,
           titlebar's Settings / Recycling bin / Processes / Downloads run uses.
           CSS-only: a div plus ordinary .candy-btn children, sized by --cbtn-size. */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', paddingBottom: 14, borderBottom: '1px solid var(--border)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', paddingBottom: 14, borderBottom: 'var(--candy-frame) solid var(--border)' }}>
         <div className="candy-split" style={{ '--accent': accent || 'var(--accent)', '--cbtn-size': '26px' }}>
           {FILM_TABS.map(t => (
             <button

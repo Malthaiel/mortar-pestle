@@ -119,7 +119,7 @@ export default function HistoryRoute({ api, accent, onClose, onOpenUrl }) {
 }
 
 const wrap = { display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, background: 'var(--bg)', position: 'relative' };
-const bar = { display: 'flex', alignItems: 'center', gap: 8, padding: 10, borderBottom: '1px solid var(--border)', background: 'var(--surface)', flex: '0 0 auto' };
+const bar = { display: 'flex', alignItems: 'center', gap: 8, padding: 10, borderBottom: 'var(--candy-frame) solid var(--border)', background: 'var(--surface)', flex: '0 0 auto' };
 const ghost = { flexShrink: 0, padding: '7px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text)', cursor: 'pointer', font: 'inherit', fontSize: 12.5 };
 const searchWrap = { display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0, padding: '0 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-muted)' };
 const searchInput = { flex: 1, minWidth: 0, padding: '7px 0', border: 'none', background: 'transparent', color: 'var(--text)', font: 'inherit', outline: 'none' };

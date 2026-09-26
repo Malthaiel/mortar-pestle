@@ -149,13 +149,13 @@ export default function Sidebar({ accent, settings }) {
       patternClass="sidebar-pattern-mirror"
       containerStyle={{
         background: 'var(--surface)',
-        borderRight: '1px solid var(--border)',
+        borderRight: 'var(--candy-frame) solid var(--border)',
         // A drag TRAILS the cursor on ResizeSeam's shared clock rather than
         // tracking it 1:1 — same lag and same curve as the seam's own menu.
         transition: isResizing ? `width ${DRAG_EASE}` : 'width 180ms ease',
         zIndex: 50,
       }}
-      layerStyle={{ borderTop: '1px solid var(--border)', marginTop: 0, transition: isResizing ? 'none' : 'opacity 180ms ease' }}
+      layerStyle={{ borderTop: 'var(--candy-frame) solid var(--border)', marginTop: 0, transition: isResizing ? 'none' : 'opacity 180ms ease' }}
       header={
         <SidebarHeader
           expanded={effectiveExpanded}

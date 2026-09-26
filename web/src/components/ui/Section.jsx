@@ -11,7 +11,7 @@ export function SectionHeader({ title, subtitle, action, progress, accent }) {
     <header className="candy-chip-row" style={{
       position: 'relative',
       padding: '32px 32px 18px',
-      borderBottom: '1px solid var(--border)',
+      borderBottom: 'var(--candy-frame) solid var(--border)',
       alignItems: 'flex-end', '--candy-gap': '16px',
     }}>
       <div style={{ flex: 1, minWidth: 0 }}>

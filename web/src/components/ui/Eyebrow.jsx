@@ -29,7 +29,7 @@ export function EyebrowHeading({ children }) {
   return (
     <div style={{
       fontSize: 11, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)',
-      letterSpacing: '0.08em',       padding: '0 0 6px', borderBottom: '1px solid var(--border)', marginBottom: 12,
+      letterSpacing: '0.08em',       padding: '0 0 6px', borderBottom: 'var(--candy-frame) solid var(--border)', marginBottom: 12,
     }}>{children}</div>
   );
 }

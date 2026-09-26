@@ -138,7 +138,7 @@ function EqBand({ band, accent, onLive, onCommit }) {
 
 const eqPanelStyle = {
   flex: '1 1 auto', minWidth: 300, display: 'flex', flexDirection: 'column',
-  minHeight: 0, borderLeft: '1px solid var(--border)',
+  minHeight: 0, borderLeft: 'var(--candy-frame) solid var(--border)',
 };
 
 // The parametric EQ editor for the selected strip (track or master). Renders
@@ -260,7 +260,7 @@ function ChannelStrip({
   const p = pDraft ?? pan ?? 0;
   const faderColor = audible ? accent : 'var(--text-faint)';
   return (
-    <div style={{ width: 84, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, padding: '8px 6px', borderRight: '1px solid var(--border)', minHeight: 0 }}>
+    <div style={{ width: 84, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, padding: '8px 6px', borderRight: 'var(--candy-frame) solid var(--border)', minHeight: 0 }}>
       <span style={{ ...mono, fontSize: 9.5, color: 'var(--text-faint)' }}>{dbLabel(v)}</span>
       <div style={{ flex: 1, minHeight: 24, display: 'flex', gap: 5, alignItems: 'stretch' }}>
         <Meter peakRef={peakRef} rmsRef={rmsRef} />

@@ -23,7 +23,7 @@ export default function UpdateQueue({ accent }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
       <div style={{
-        padding: '10px 24px', borderBottom: '1px solid var(--border)',
+        padding: '10px 24px', borderBottom: 'var(--candy-frame) solid var(--border)',
         fontSize: 11, fontFamily: 'var(--font-mono)', letterSpacing: '0.06em',
         color: 'var(--text)',         borderLeft: `3px solid ${accentBg}`,
       }}>Update Queue</div>

@@ -246,7 +246,7 @@ export default function RecyclingBinModal({ open, onClose, accent, retentionDays
       >
 
         {/* Toolbar */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderBottom: '1px solid var(--border)', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderBottom: 'var(--candy-frame) solid var(--border)', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', gap: 4 }}>
             {SOURCES.map((f) => {
               const count = f === 'all' ? items.length : items.filter((i) => i.source === f).length;
@@ -286,7 +286,7 @@ export default function RecyclingBinModal({ open, onClose, accent, retentionDays
         {/* Body: list + preview */}
         <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
           {/* List */}
-          <div style={{ flex: 1, overflowY: 'auto', minWidth: 0, borderRight: '1px solid var(--border)' }}>
+          <div style={{ flex: 1, overflowY: 'auto', minWidth: 0, borderRight: 'var(--candy-frame) solid var(--border)' }}>
             {shown.length === 0 ? (
               <div style={{ padding: 24, fontSize: 12.5, color: 'var(--text-muted)', textAlign: 'center' }}>
                 {items.length === 0 ? 'The recycling bin is empty.' : 'No items for this filter.'}
@@ -297,7 +297,7 @@ export default function RecyclingBinModal({ open, onClose, accent, retentionDays
                   key={it.id}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
-                    borderBottom: '1px solid var(--border)',
+                    borderBottom: 'var(--candy-frame) solid var(--border)',
                     background: selectedId === it.id ? 'color-mix(in srgb, var(--text) 6%, transparent)' : 'transparent',
                   }}
                 >

@@ -24,7 +24,7 @@ export default function SplitChooserPopover({ open, onClose, style, accent = 'va
   ], { accent });
   const activate = (s, idx) => { onActivate(s.id, { anchorDate: todayLocalStr(), anchorIndex: idx }); close(); };
 
-  const rowBtn = (active) => ({ display: 'flex', alignItems: 'center', gap: 6, width: '100%', textAlign: 'left', background: active ? `color-mix(in oklch, ${accent} 16%, transparent)` : 'none', border: 'none', borderBottom: '1px solid var(--border-soft)', color: 'var(--text)', padding: '8px 10px', cursor: 'pointer', font: 'inherit', fontSize: 12.5 });
+  const rowBtn = (active) => ({ display: 'flex', alignItems: 'center', gap: 6, width: '100%', textAlign: 'left', background: active ? `color-mix(in oklch, ${accent} 16%, transparent)` : 'none', border: 'none', borderBottom: 'var(--candy-frame) solid var(--border-soft)', color: 'var(--text)', padding: '8px 10px', cursor: 'pointer', font: 'inherit', fontSize: 12.5 });
 
   return (
     <Popover open={open} onClose={close} accent={accent} ariaLabel="Workout splits" style={style} bodyStyle={{ padding: 12 }} outsideExempt=".health-split-trigger">
@@ -55,7 +55,7 @@ export default function SplitChooserPopover({ open, onClose, style, accent = 'va
                 </button>
               ))}
             </div>
-            <div style={{ display: 'flex', justifyContent: 'center', borderTop: '1px solid var(--border-soft)', paddingTop: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'center', borderTop: 'var(--candy-frame) solid var(--border-soft)', paddingTop: 8 }}>
               <button type="button" data-own-press className="candy-btn" data-shape="chip" onClick={() => { onNew(); close(); }}>
                 <span className="candy-face"><IconPlus size={11} /> New Split</span>
               </button>

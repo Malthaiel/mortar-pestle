@@ -111,7 +111,7 @@ export default function ColorSuite({
 
   return (
     <div style={{ display: 'flex', height: '100%', minHeight: 0 }}>
-      <div style={{ width: 190, flexShrink: 0, borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <div style={{ width: 190, flexShrink: 0, borderRight: 'var(--candy-frame) solid var(--border)', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         <div style={{ ...paneLabel, display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: 8 }}>
           <span>Clips</span>
           <button
@@ -173,7 +173,7 @@ export default function ColorSuite({
         </div>
       </div>
 
-      <div style={{ flex: 1.5, minWidth: 0, borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <div style={{ flex: 1.5, minWidth: 0, borderRight: 'var(--candy-frame) solid var(--border)', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         <div style={paneLabel}>Wheels</div>
         {targetClip ? (
           <WheelsColumn
@@ -186,7 +186,7 @@ export default function ColorSuite({
         ) : disabledHint}
       </div>
 
-      <div style={{ flex: 1, minWidth: 0, borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <div style={{ flex: 1, minWidth: 0, borderRight: 'var(--candy-frame) solid var(--border)', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         <div style={paneLabel}>Sat · Temp · LUT</div>
         {targetClip ? (
           <SatLutColumn
@@ -204,7 +204,7 @@ export default function ColorSuite({
         ) : disabledHint}
       </div>
 
-      <div style={{ flex: 1.2, minWidth: 0, borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <div style={{ flex: 1.2, minWidth: 0, borderRight: 'var(--candy-frame) solid var(--border)', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         <div style={paneLabel}>Curves</div>
         {targetClip ? (
           <CurvesColumn

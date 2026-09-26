@@ -13,7 +13,7 @@ export default function Topbar({ tiles, activeId, onSelect, accent, leading, sty
       flexShrink: 0,
       display: 'flex', alignItems: 'center', gap: 8,
       padding: '10px 14px 12px',
-      borderBottom: '1px solid var(--border)',
+      borderBottom: 'var(--candy-frame) solid var(--border)',
       background: 'var(--surface)',
       overflowX: 'auto',
       ...style,
@@ -27,7 +27,7 @@ export default function Topbar({ tiles, activeId, onSelect, accent, leading, sty
 }
 
 function Divider() {
-  return <div aria-hidden style={{ width: 1, height: 22, background: 'var(--border)', flexShrink: 0 }} />;
+  return <div aria-hidden style={{ width: 'var(--candy-frame)', height: 22, background: 'var(--border)', flexShrink: 0 }} />;
 }
 
 // Candy tab: grey shell, accent fill when active. Box props ride the base;

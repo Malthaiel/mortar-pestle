@@ -104,7 +104,7 @@
   gap: 2px;
   padding: 0 14px;
 }
-.anime-hero-stat + .anime-hero-stat { border-left: 1px solid var(--border); }
+.anime-hero-stat + .anime-hero-stat { border-left: var(--candy-frame) solid var(--border); }
 /* Label is the prominent line; the value reads as a smaller secondary figure
  * beneath it (hierarchy intentionally inverted from the usual big-number layout). */
 .anime-hero-stat .hv {
@@ -140,7 +140,7 @@
   column-gap: 8px;
   row-gap: calc(8px + var(--candy-depth));
   padding-top: 12px;
-  border-top: 1px solid var(--border);
+  border-top: var(--candy-frame) solid var(--border);
 }
 .anime-meta-rail .candy-btn[data-shape="chip"] > .candy-face {
   padding: 3.5px 7.5px;
@@ -538,7 +538,9 @@
     linear-gradient(to bottom, #000 0%, #000 calc(var(--film-backdrop-solid) * 100%), transparent 100%);
   -webkit-mask-composite: source-in;
   mask-composite: intersect;
-  opacity: 0.7;
+  /* Full strength for films and sleeves alike, so the picture reads through
+     the scrim (user-directed 2026-09-26; was 0.7). */
+  opacity: 1;
 }
 .film-detail > .film-backdrop > img {
   display: block;
@@ -549,7 +551,8 @@
    buries the page. This is the one and only difference from a film still:
    crop it to the same 16:9 the mask stops and the derived padding above
    already assume. Everything else about the rule -- mask, scrim, the
-   ratio-derived padding -- is shared with films untouched. */
+   ratio-derived padding -- is shared with films untouched. 3:2 was tried and
+   rejected 2026-09-26. */
 .film-detail > .film-backdrop.is-square > img {
   aspect-ratio: 16 / 9;
   object-fit: cover;

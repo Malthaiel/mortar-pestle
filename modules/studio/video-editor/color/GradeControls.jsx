@@ -128,7 +128,7 @@ export function SatLutColumn({
         onResetValue={() => commitPatch({ sat: 1 }, 'Reset saturation')}
       />
 
-      <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ borderTop: 'var(--candy-frame) solid var(--border)', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
         {!lut ? (
           <OutlinedBtn small onClick={loadLut}>Load LUT</OutlinedBtn>
         ) : (

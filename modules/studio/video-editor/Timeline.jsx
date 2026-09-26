@@ -102,7 +102,7 @@ const LaneArea = memo(function LaneArea({
             key={track.id}
             data-track-lane={idx}
             onClick={(e) => { if (e.target === e.currentTarget) onSelectClip(null, null); }}
-            style={{ position: 'relative', height: LANE_H, borderBottom: '1px solid var(--border)', contain: 'layout' }}
+            style={{ position: 'relative', height: LANE_H, borderBottom: 'var(--candy-frame) solid var(--border)', contain: 'layout' }}
           >
             <span style={{ ...laneLabel, top: 4 }}>{track.id}</span>
             {track.clips.filter(c => inWindow(c, ppf, winA, winB)).map((c) => (
@@ -131,7 +131,7 @@ const LaneArea = memo(function LaneArea({
       {/* Linked-audio strip: each clip's audio mirrored at the same x/width,
           drawn in track order (v2 over v1). Visual only until SF9 wires
           gain/mute. */}
-      <div style={{ position: 'relative', height: AUDIO_H, borderBottom: '1px solid var(--border)', contain: 'layout' }}>
+      <div style={{ position: 'relative', height: AUDIO_H, borderBottom: 'var(--candy-frame) solid var(--border)', contain: 'layout' }}>
         <span style={{ ...laneLabel, top: 3, textTransform: 'none' }}>A</span>
         {tracks.map((track) =>
           track.clips.filter(c => inWindow(c, ppf, winA, winB)).map((c) => (
@@ -478,7 +478,7 @@ export default function Timeline({
               onPointerMove={onRulerMove}
               onPointerUp={onRulerUp}
               onPointerCancel={onRulerUp}
-              style={{ position: 'relative', height: 26, borderBottom: '1px solid var(--border)', cursor: 'pointer', touchAction: 'none' }}
+              style={{ position: 'relative', height: 26, borderBottom: 'var(--candy-frame) solid var(--border)', cursor: 'pointer', touchAction: 'none' }}
             >
               <TimeRuler pps={pps} winA={winA} winB={winB} contentW={contentW} />
             </div>

@@ -92,14 +92,14 @@ export default function PageLinksPanel({ filePath, accent, onClose }) {
 
   return (
     <aside style={{
-      width: 280, flexShrink: 0, borderLeft: '1px solid var(--border)',
+      width: 280, flexShrink: 0, borderLeft: 'var(--candy-frame) solid var(--border)',
       background: 'var(--surface)', display: 'flex', flexDirection: 'column',
       minHeight: 0, overflow: 'hidden',
       ...(accent ? { '--accent': accent } : {}),
     }}>
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '14px 16px', borderBottom: '1px solid var(--border)', flexShrink: 0,
+        padding: '14px 16px', borderBottom: 'var(--candy-frame) solid var(--border)', flexShrink: 0,
       }}>
         <span style={{
           fontSize: 11, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em',

@@ -398,7 +398,7 @@ export default function DocsReleasesTab({ accent }) {
                       <div style={{ overflow: 'hidden', minHeight: 0 }}>
                         <div style={{
                           paddingTop: 12,
-                          borderTop: '1px solid var(--border-soft)',
+                          borderTop: 'var(--candy-frame) solid var(--border-soft)',
                           display: 'flex', flexDirection: 'column', gap: 14,
                         }}>
                           {release.wasLabel && (
@@ -501,7 +501,7 @@ function ReleaseQueuePanel({ accent, queue, latestVersion, tag, onShipped }) {
       {!isEmpty && !loading && (
         <div style={{
           marginTop: 12, paddingTop: 12,
-          borderTop: '1px solid var(--border-soft)',
+          borderTop: 'var(--candy-frame) solid var(--border-soft)',
           display: 'flex', flexDirection: 'column', gap: 8,
         }}>
           {entries.map((e, i) => {
@@ -681,7 +681,7 @@ function ShipReleaseModal({ accent, queue, latestVersion, tag, onClose, onShippe
         {/* Header */}
         <div style={{
           display: 'flex', alignItems: 'center', gap: 10,
-          padding: '14px 18px', borderBottom: '1px solid var(--border-soft)',
+          padding: '14px 18px', borderBottom: 'var(--candy-frame) solid var(--border-soft)',
         }}>
           <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)' }}>Ship Release</div>
           <span style={{
@@ -709,7 +709,7 @@ function ShipReleaseModal({ accent, queue, latestVersion, tag, onClose, onShippe
           {/* LEFT — Include (scrolls) over a pinned Bump */}
           <div style={{
             flex: '1 1 48%', minWidth: 0, display: 'flex', flexDirection: 'column',
-            minHeight: 0, borderRight: '1px solid var(--border-soft)',
+            minHeight: 0, borderRight: 'var(--candy-frame) solid var(--border-soft)',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 18px 8px' }}>
               <span style={{ ...eyebrowStyle }}>
@@ -760,7 +760,7 @@ function ShipReleaseModal({ accent, queue, latestVersion, tag, onClose, onShippe
                       const effArea = effAreaOf(e);
                       const editing = areaEditKey === k;
                       return (
-                        <div key={k} style={{ borderTop: '1px solid var(--border-soft)' }}>
+                        <div key={k} style={{ borderTop: 'var(--candy-frame) solid var(--border-soft)' }}>
                           <div style={{
                             display: 'flex', alignItems: 'center', gap: 10,
                             padding: '8px 10px', opacity: on ? 1 : 0.5,
@@ -855,7 +855,7 @@ function ShipReleaseModal({ accent, queue, latestVersion, tag, onClose, onShippe
             {/* Bump (pinned to the bottom of the left column) */}
             <div style={{
               padding: '12px 18px', display: 'flex', alignItems: 'center', gap: 10,
-              borderTop: '1px solid var(--border-soft)', flexWrap: 'wrap',
+              borderTop: 'var(--candy-frame) solid var(--border-soft)', flexWrap: 'wrap',
             }}>
               <span style={{ ...eyebrowStyle }}>
                 Bump
@@ -932,7 +932,7 @@ function ShipReleaseModal({ accent, queue, latestVersion, tag, onClose, onShippe
         {/* Footer */}
         <div style={{
           display: 'flex', justifyContent: 'flex-end', gap: 8,
-          padding: '12px 18px', borderTop: '1px solid var(--border-soft)',
+          padding: '12px 18px', borderTop: 'var(--candy-frame) solid var(--border-soft)',
         }}>
           {!summary.trim() && (
             <span style={{

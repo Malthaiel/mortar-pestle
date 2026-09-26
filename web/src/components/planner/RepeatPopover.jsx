@@ -48,7 +48,7 @@ export default function RepeatPopover({ open, onClose, style, accent = 'var(--ac
   const rowBtn = (active) => ({
     display: 'flex', alignItems: 'center', gap: 6, width: '100%', textAlign: 'left',
     background: active ? `color-mix(in oklch, ${accent} 16%, transparent)` : 'none',
-    border: 'none', borderBottom: '1px solid var(--border-soft)', color: 'var(--text)',
+    border: 'none', borderBottom: 'var(--candy-frame) solid var(--border-soft)', color: 'var(--text)',
     padding: '8px 10px', cursor: 'pointer', font: 'inherit', fontSize: 12.5,
   });
 

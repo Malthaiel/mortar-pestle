@@ -16,7 +16,7 @@
   align-items: center;
   gap: 14px;
   padding: 8px 14px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: var(--candy-frame) solid var(--border);
   flex-shrink: 0;
 }
 .stt-title { font-size: 13.5px; font-weight: 600; color: var(--text); }
@@ -100,7 +100,7 @@
   align-items: center;
   gap: 10px;
   padding: 10px 14px 13px;
-  border-top: 1px solid var(--border);
+  border-top: var(--candy-frame) solid var(--border);
   flex-shrink: 0;
 }
 .stt-controlbar-meter { flex: 1; min-width: 80px; display: flex; align-items: center; }
@@ -156,7 +156,7 @@
 .stt-overlay .stt-controls { display: flex; align-items: center; gap: 6px; }
 .stt-overlay .stt-send { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .stt-overlay .stt-send .lbl { font-family: var(--font-mono); font-size: 10px; letter-spacing: .06em; color: var(--text-faint); }
-.stt-overlay .stt-history { display: flex; flex-direction: column; gap: 6px; margin-top: 2px; border-top: 1px solid var(--border-2); padding-top: 8px; }
+.stt-overlay .stt-history { display: flex; flex-direction: column; gap: 6px; margin-top: 2px; border-top: var(--candy-frame) solid var(--border-2); padding-top: 8px; }
 .stt-overlay .stt-h-head { font-family: var(--font-mono); font-size: 10px; letter-spacing: .08em; color: var(--text-faint); }
 .stt-overlay .stt-history-scroll { display: flex; flex-direction: column; gap: 6px; max-height: 116px; overflow-y: auto; scrollbar-width: thin; }
 .stt-overlay .stt-row { display: flex; align-items: center; gap: 6px; }

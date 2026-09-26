@@ -130,7 +130,7 @@ function PageHeaderTile({ mtime, frontmatter, accent }) {
           <div style={{
             display: 'flex', flexWrap: 'wrap', gap: 6,
             paddingTop: 6,
-            borderTop: '1px solid var(--border-soft, var(--border))',
+            borderTop: 'var(--candy-frame) solid var(--border-soft, var(--border))',
           }}>
             {chipFields.map(([k, v]) => (
               <FrontmatterChip key={k} field={k} value={v} accent={accentColor}/>

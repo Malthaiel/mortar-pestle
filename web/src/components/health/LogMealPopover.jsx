@@ -76,7 +76,7 @@ export default function LogMealPopover({ open, onClose, style, accent = 'var(--a
   const logSupp = (su) => doLog({ time: nowHHMM(), name: su.name, kcal: 0, protein: 0, carb: 0, fat: 0, sugar: { total: null, added: null }, micros: su.micros || [], supplements: [] });
 
   const inputStyle = { background: 'var(--bg-elev)', border: '1px solid var(--border-soft)', borderRadius: 8, color: 'var(--text)', padding: '7px 9px', font: 'inherit', width: '100%' };
-  const rowBtn = (sel) => ({ display: 'block', width: '100%', textAlign: 'left', background: sel ? `color-mix(in oklch, ${accent} 16%, transparent)` : 'none', border: 'none', borderBottom: '1px solid var(--border-soft)', color: 'var(--text)', padding: '8px 10px', cursor: 'pointer', font: 'inherit', fontSize: 12.5 });
+  const rowBtn = (sel) => ({ display: 'block', width: '100%', textAlign: 'left', background: sel ? `color-mix(in oklch, ${accent} 16%, transparent)` : 'none', border: 'none', borderBottom: 'var(--candy-frame) solid var(--border-soft)', color: 'var(--text)', padding: '8px 10px', cursor: 'pointer', font: 'inherit', fontSize: 12.5 });
 
   const TabBtn = ({ id, children }) => (
     <button type="button" className={`candy-btn${mode === id ? ' is-active' : ''}`} data-shape="chip" onClick={() => { setMode(id); reset(); }}>

@@ -84,7 +84,7 @@ export default function SkillsPage({ accent, selectedSlug, onBack }) {
               flex: 1, minHeight: 0, overflow: 'auto',
               padding: '18px 24px',
               display: 'flex', flexDirection: 'column', gap: 18,
-              borderBottom: '1px solid var(--border)',
+              borderBottom: 'var(--candy-frame) solid var(--border)',
             }}>
               <SkillArgsForm
                 skill={selected}
@@ -177,7 +177,7 @@ export default function SkillsPage({ accent, selectedSlug, onBack }) {
 
 function BackBar({ onBack }) {
   return (
-    <div style={{ flexShrink: 0, padding: '8px 14px', borderBottom: '1px solid var(--border)' }}>
+    <div style={{ flexShrink: 0, padding: '8px 14px', borderBottom: 'var(--candy-frame) solid var(--border)' }}>
       <button
         type="button"
         onClick={onBack}

@@ -181,7 +181,7 @@ export default function AnimeVoiceActorPage({ malId, accent }) {
         <div style={{ padding: '0 24px 28px' }}>
           <div style={{
             fontSize: 11, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)',
-            letterSpacing: '0.08em',             padding: '0 0 10px', borderBottom: '1px solid var(--border)', marginBottom: 14,
+            letterSpacing: '0.08em',             padding: '0 0 10px', borderBottom: 'var(--candy-frame) solid var(--border)', marginBottom: 14,
           }}>Staff Roles</div>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             {shownStaff.map(r => <StaffRoleCard key={r.animeId} role={r} accent={accent} />)}
@@ -203,7 +203,7 @@ export default function AnimeVoiceActorPage({ malId, accent }) {
         <div style={{ padding: '0 24px 28px' }}>
           <div style={{
             display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
-            padding: '0 0 10px', borderBottom: '1px solid var(--border)', marginBottom: 14,
+            padding: '0 0 10px', borderBottom: 'var(--candy-frame) solid var(--border)', marginBottom: 14,
           }}>
             <span style={{
               fontSize: 11, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)',

@@ -142,7 +142,7 @@ export default function MealBuilderWindow({ open, onClose, accent = 'var(--accen
               {!loading && results.length === 0 && <div style={{ padding: 10, ...labelStyle }}>No matches</div>}
               {results.map((hit) => (
                 <button key={hit.fdc_id} type="button" onClick={() => addIngredient(hit)}
-                  style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', borderBottom: '1px solid var(--border-soft)', color: 'var(--text)', padding: '8px 10px', cursor: 'pointer', font: 'inherit', fontSize: 12.5 }}>
+                  style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', borderBottom: 'var(--candy-frame) solid var(--border-soft)', color: 'var(--text)', padding: '8px 10px', cursor: 'pointer', font: 'inherit', fontSize: 12.5 }}>
                   {hit.description}
                   {hit.data_type === 'branded_food' && <span style={{ ...labelStyle, marginLeft: 6 }}>branded</span>}
                 </button>

@@ -20,6 +20,10 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
      body[data-large-depth] rules below. */
   --candy-depth-base: 7px;
   --candy-depth-small: 5px;
+  /* Candy button outline width (.candy-btn's default --cbtn-frame). On :root so
+     the titlebar's bottom line and the Music search island can wear the same
+     outline (user-directed 2026-09-26). */
+  --candy-frame: 2px;
   /* Nav-tree depth (tree rows + tree toolbars run 15% shallower). GLOBAL
      fallback: tree shells re-declare the same calc locally, but spacing math
      (treeKit GAP) references this var from wrappers OUTSIDE those shells —
@@ -39,13 +43,16 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
      56, not 55: the button PAINTS 41px tall (it sits 2.5px above its own box and
      its depth shadow hangs ~4.5px below), so a 54px interior left 13px of slack —
      an odd number, unsplittable, landing 7 above / 6 below and reading low. One
-     more pixel makes the slack even. Measured off the screen, not computed. */
-  --dock-height: 58px;
+     more pixel makes the slack even. Measured off the screen, not computed.
+     The top line is a candy outline since 2026-09-26: 57px interior + the line,
+     so the interior (and its even slack) is unchanged. */
+  --dock-height: calc(57px + var(--candy-frame));
 
   /* Height of the custom titlebar that replaced the native Windows one.
      Single source of truth: .titlebar is sized to this, and AppShell subtracts
-     it alongside --dock-height so content ends flush under the strip. */
-  --titlebar-h: 46px;
+     it alongside --dock-height so content ends flush under the strip.
+     33px painted clusters + 6px above and below + the bottom line. */
+  --titlebar-h: calc(45px + var(--candy-frame));
 
   /* Titlebar fill. Tracks --surface so the four chrome edges (titlebar, dock,
      left rail, right rail) read as one continuous frame around the content
@@ -54,6 +61,8 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
      surface scale runs LIGHTER as the number rises (--surface 0.190 → -2 0.215
      → -3 0.245). */
   --titlebar-bg: var(--surface);
+  /* The bar's bottom line colour; the Music search island traces it too. */
+  --titlebar-line: color-mix(in oklch, var(--titlebar-bg), white 10%);
 
   /* Candy SURFACE rest depth — the STATIC offset-shadow band under framed
      container surfaces (the .candy-* family). Distinct from --candy-depth:
@@ -464,7 +473,7 @@ body[data-design-pointer="markup"] *:not(input):not(textarea):not(select):not([d
    clusters to the edges. Neither is a .candy-btn[data-shape="icon"], so the
    [data-dragging] collapse rule above leaves them untouched. */
 .dock-root .dock-sep {
-  flex: 0 0 auto; width: 1px; height: 24px; align-self: center;
+  flex: 0 0 auto; width: var(--candy-frame); height: 24px; align-self: center;
   background: color-mix(in oklch, var(--dock-bg, oklch(0.230 0.005 78)), white 22%);
   border-radius: 1px; cursor: grab;
 }
@@ -482,11 +491,12 @@ body[data-design-pointer="markup"] *:not(input):not(textarea):not(select):not([d
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  /* Side padding matches the 6px the clusters clear top and bottom (46px bar,
-     33px painted chip) — the bar breathes the same in both axes. */
+  /* Side padding matches the 6px the clusters clear top and bottom (33px
+     painted chip) — the bar breathes the same in both axes. */
   padding: 0 6px;
   background: var(--titlebar-bg);
-  border-bottom: 1px solid color-mix(in oklch, var(--titlebar-bg), white 10%);
+  /* A candy outline's width, not a hairline (user-directed 2026-09-26). */
+  border-bottom: var(--candy-frame) solid var(--titlebar-line);
 }
 /* The two button clusters. Everything BETWEEN them is bare strip, which is what
    stays draggable — the clusters sit on top of the drag region and swallow their
@@ -507,7 +517,7 @@ body[data-design-pointer="markup"] *:not(input):not(textarea):not(select):not([d
   height: var(--dock-height);
   background-color: var(--dock-bg);
   background-image: none;
-  border-top: 1px solid color-mix(in oklch, var(--dock-bg), white 10%);
+  border-top: var(--candy-frame) solid color-mix(in oklch, var(--dock-bg), white 10%);
 }
 /* Edge depth — user-toggleable in Settings → Dock. Default 'flush' is the bare
    top hairline above; 'band' adds a calm static upward band so the bar lifts
@@ -784,7 +794,7 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
 
 .candy-btn {
   --cbtn-band: var(--cbtn-rest);
-  --cbtn-frame: 2px;
+  --cbtn-frame: var(--candy-frame);
   --cbtn-depth: var(--candy-depth);
   appearance: none;
   -webkit-appearance: none;
@@ -3792,7 +3802,7 @@ body[data-anim-theme-transition="off"] {
   margin: 1.4em 0 0.5em;
 }
 .reference-render h1 { font-size: 1.6em; }
-.reference-render h2 { font-size: 1.3em; border-bottom: 1px solid var(--divider); padding-bottom: 0.25em; }
+.reference-render h2 { font-size: 1.3em; border-bottom: var(--candy-frame) solid var(--divider); padding-bottom: 0.25em; }
 .reference-render h3 { font-size: 1.1em; }
 .reference-render h4 { font-size: 1em; color: var(--text-2); }
 .reference-render p { margin: 0.6em 0; }
@@ -3823,7 +3833,7 @@ body[data-anim-theme-transition="off"] {
   text-align: left;
 }
 .reference-render th { background: var(--surface-2); font-weight: 600; }
-.reference-render hr { border: none; border-top: 1px solid var(--divider); margin: 1.5em 0; }
+.reference-render hr { border: none; border-top: var(--candy-frame) solid var(--divider); margin: 1.5em 0; }
 .reference-render a:not(.wikilink) { color: var(--text-2); text-decoration: underline; }
 .reference-render a:not(.wikilink):hover { color: var(--text); }
 .reference-render details > summary { cursor: pointer; }
@@ -3883,7 +3893,7 @@ body[data-anim-theme-transition="off"] {
 .cm-lp-link { color: var(--text-2); text-decoration: underline; cursor: pointer; }
 .cm-lp-hr {
   display: inline-block; width: 100%; vertical-align: middle;
-  border-top: 1px solid var(--border-2);
+  border-top: var(--candy-frame) solid var(--border-2);
 }
 .cm-lp-task {
   margin: 0 6px 0 0; cursor: pointer;
@@ -3974,7 +3984,7 @@ body[data-anim-theme-transition="off"] {
 .cm-lp-embed-note-title {
   padding: 5px 12px; font-size: 12px; font-weight: 600;
   color: var(--text-2); background: var(--surface-2);
-  border-bottom: 1px solid var(--border-2); cursor: text;
+  border-bottom: var(--candy-frame) solid var(--border-2); cursor: text;
 }
 .cm-lp-embed-note-body { padding: 4px 14px; }
 .cm-lp-embed-note-body > :first-child { margin-top: 0; }
@@ -4119,7 +4129,7 @@ button.cal-customdays__step:hover {
   background: color-mix(in oklch, var(--bg) 92%, transparent);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  border-bottom: 1px solid var(--divider);
+  border-bottom: var(--candy-frame) solid var(--divider);
   padding: 22px 48px 14px;
 }
 
@@ -4206,7 +4216,7 @@ button.cal-customdays__step:hover {
 }
 .docs-body h2 {
   margin-top: 1.8em;
-  border-bottom: 1px solid var(--divider);
+  border-bottom: var(--candy-frame) solid var(--divider);
   padding-bottom: 0.3em;
 }
 .docs-body h3 { margin-top: 1.4em; }
@@ -4226,7 +4236,7 @@ button.cal-customdays__step:hover {
   gap: 14px;
   margin-top: 56px;
   padding-top: 24px;
-  border-top: 1px solid var(--divider);
+  border-top: var(--candy-frame) solid var(--divider);
 }
 /* Prev/next docs nav — interactive, so it's a candy BUTTON (full pressable
  * depth + hover-lift + press), not a static .candy-* surface. Mirrors

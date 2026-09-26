@@ -442,7 +442,7 @@ function OutputPanel({ lines, open, onToggle, running }) {
           ref={scrollRef}
           onScroll={onScroll}
           style={{
-            borderTop: '1px solid var(--border)',
+            borderTop: 'var(--candy-frame) solid var(--border)',
             maxHeight: 240,
             overflowY: 'auto',
             padding: '8px 10px',

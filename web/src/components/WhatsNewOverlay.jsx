@@ -56,7 +56,7 @@ export default function WhatsNewOverlay() {
         {/* Header */}
         <div style={{
           padding: '18px 22px 14px',
-          borderBottom: '1px solid var(--border-soft)',
+          borderBottom: 'var(--candy-frame) solid var(--border-soft)',
         }}>
           <div style={{
             display: 'flex', alignItems: 'baseline', gap: 10,
@@ -135,7 +135,7 @@ export default function WhatsNewOverlay() {
         {/* Footer */}
         <div style={{
           padding: '12px 22px 14px',
-          borderTop: '1px solid var(--border-soft)',
+          borderTop: 'var(--candy-frame) solid var(--border-soft)',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
           <button

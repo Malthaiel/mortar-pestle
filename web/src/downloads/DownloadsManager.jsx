@@ -62,12 +62,12 @@ export default function DownloadsManager({ open, onClose, accent = GREEN }) {
     textAlign: 'left', padding: '8px 12px', fontSize: 11.5, fontFamily: 'var(--font-mono)',
     letterSpacing: '0.06em', color: 'var(--text)',
     fontWeight: 600, position: 'sticky', top: 0, background: 'var(--surface)',
-    borderBottom: '1px solid var(--border)', zIndex: 1,
+    borderBottom: 'var(--candy-frame) solid var(--border)', zIndex: 1,
   };
   const thR = { ...th, textAlign: 'right' };
   const td = {
     padding: '9px 12px', fontSize: 12.5,
-    borderBottom: '1px solid color-mix(in oklch, var(--border) 50%, transparent)', whiteSpace: 'nowrap',
+    borderBottom: 'var(--candy-frame) solid color-mix(in oklch, var(--border) 50%, transparent)', whiteSpace: 'nowrap',
   };
   const mono = { fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums' };
 

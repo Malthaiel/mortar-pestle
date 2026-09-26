@@ -173,7 +173,7 @@ export default function KeybindsTab({ settings, setSetting, accent, initialFilte
 
         <div style={{
           marginTop: 8, paddingTop: 14,
-          borderTop: '1px solid var(--border-soft)',
+          borderTop: 'var(--candy-frame) solid var(--border-soft)',
           display: 'flex', justifyContent: 'flex-end',
         }}>
           <OutlinedBtn small onClick={resetAll}>Reset All Keybinds</OutlinedBtn>

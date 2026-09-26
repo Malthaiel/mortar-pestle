@@ -166,7 +166,7 @@ export function PullConfirmBar({ count, onConfirm, onCancel }) {
         padding: '8px 10px calc(var(--candy-depth-small, 5px) + 8px)',
         background: 'color-mix(in oklch, var(--surface) 90%, transparent)',
         backdropFilter: 'blur(4px)',
-        borderTop: '1px solid var(--border)',
+        borderTop: 'var(--candy-frame) solid var(--border)',
       }}
     >
       <button type="button" className="candy-btn is-primary" data-shape="block" data-own-press

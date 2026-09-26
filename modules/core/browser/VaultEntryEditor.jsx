@@ -18,9 +18,9 @@ const card = {
   borderRadius: 'var(--radius-lg)', boxShadow: '0 12px 40px rgba(0,0,0,0.4)',
   display: 'flex', flexDirection: 'column', maxHeight: '100%', overflow: 'hidden',
 };
-const head = { display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px', borderBottom: '1px solid var(--border)' };
+const head = { display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px', borderBottom: 'var(--candy-frame) solid var(--border)' };
 const body = { padding: 16, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 12 };
-const foot = { display: 'flex', gap: 8, padding: '12px 16px', borderTop: '1px solid var(--border)' };
+const foot = { display: 'flex', gap: 8, padding: '12px 16px', borderTop: 'var(--candy-frame) solid var(--border)' };
 const label = { fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 3 };
 const input = {
   width: '100%', padding: '6px 10px', borderRadius: 'var(--radius-md)',

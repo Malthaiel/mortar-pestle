@@ -28,7 +28,7 @@ export default function RecipeTray({ recipeState, def, accent, onApply, onDiscar
     <div
       data-aos-no-mark
       style={{
-        borderTop: '1px solid var(--border-soft)',
+        borderTop: 'var(--candy-frame) solid var(--border-soft)',
         background: 'var(--surface-2)',
         animation: 'pendingTrayDown 220ms cubic-bezier(0.16, 1, 0.3, 1) both',
         flexShrink: 0,
@@ -40,7 +40,7 @@ export default function RecipeTray({ recipeState, def, accent, onApply, onDiscar
       <div style={{
         padding: '8px 10px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        borderBottom: '1px solid var(--border-soft)', gap: 6,
+        borderBottom: 'var(--candy-frame) solid var(--border-soft)', gap: 6,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
           <span style={{ color: accentColor, fontSize: 11 }}>✦</span>

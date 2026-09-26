@@ -95,7 +95,7 @@ export default function TokenDashboard({ accent }) {
   return (
     <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Header */}
-      <div style={{ padding: '12px 18px 10px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+      <div style={{ padding: '12px 18px 10px', borderBottom: 'var(--candy-frame) solid var(--border)', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Token Dashboard</div>
           <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-faint)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -183,7 +183,7 @@ export default function TokenDashboard({ accent }) {
               <thead>
                 <tr style={{ color: 'var(--text-faint)', textAlign: 'left' }}>
                   {['session', 'date', 'tokens', 'hit %', 'model'].map((h) => (
-                    <th key={h} style={{ padding: '4px 10px 6px 0', fontWeight: 600, borderBottom: '1px solid var(--border)' }}>{h}</th>
+                    <th key={h} style={{ padding: '4px 10px 6px 0', fontWeight: 600, borderBottom: 'var(--candy-frame) solid var(--border)' }}>{h}</th>
                   ))}
                 </tr>
               </thead>

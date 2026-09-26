@@ -235,7 +235,7 @@ export default function CalendarPane({ accent, pushUndo, pivotDs, onPivotChange 
           one, the halves abut. */}
       <div className="planner-cal-header" style={{
         padding: '12px 16px',
-        borderBottom: '1px solid var(--border-soft)',
+        borderBottom: 'var(--candy-frame) solid var(--border-soft)',
         flexShrink: 0,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         gap: 'var(--planner-btn-gap)',

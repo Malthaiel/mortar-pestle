@@ -392,7 +392,7 @@ export default function SettingsDrawer({ open, onClose, settings, setSetting, se
             style={{
               width: railCollapsed ? RAIL_COLLAPSED : railWidth,
               padding: railCollapsed ? '14px 6px' : '14px 10px',
-              borderRight: '1px solid var(--border)',
+              borderRight: 'var(--candy-frame) solid var(--border)',
               flexShrink: 0,
               display: 'flex', flexDirection: 'column', gap: candyGap(8),
               background: 'var(--surface-2)',

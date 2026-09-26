@@ -112,7 +112,7 @@ export default function SeriesBrowser({ accent, onSelect, selectedPath, initialS
       <div style={{
         padding: '12px 18px',
         display: 'flex', flexDirection: 'column', gap: 12,
-        borderBottom: '1px solid var(--border)', flexShrink: 0,
+        borderBottom: 'var(--candy-frame) solid var(--border)', flexShrink: 0,
       }}>
         <input
           type="text" value={query} placeholder="Search title"

@@ -219,7 +219,7 @@ export default function PlaylistDetail({ path, accent }) {
       <div className={backdrop ? 'film-detail' : undefined}
            style={backdrop ? undefined : {
              display: 'flex', gap: 24, padding: '28px 26px 22px',
-             borderBottom: '1px solid var(--border)', alignItems: 'flex-end',
+             borderBottom: 'var(--candy-frame) solid var(--border)', alignItems: 'flex-end',
            }}>
         {backdrop && (
           <div className="film-backdrop is-square" aria-hidden>

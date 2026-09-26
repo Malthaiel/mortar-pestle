@@ -77,7 +77,7 @@ export default function LyricsPanel({ open, onClose, accent }) {
       <div className="candy-center-row" style={{
         padding: '12px 16px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        borderBottom: '1px solid var(--border)',
+        borderBottom: 'var(--candy-frame) solid var(--border)',
         gap: 12,
       }}>
         <span style={{

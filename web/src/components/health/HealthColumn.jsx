@@ -54,7 +54,7 @@ export default function HealthColumn({ accent = 'var(--accent)', pivotDs, only =
         {only !== 'fitness' && (
           <NutritionSection accent={accent} isToday={isToday} pivotDs={pivotDs} refreshTick={tick} history={history.days} />
         )}
-        {only == null && <div style={{ height: 1, background: 'var(--border-soft)', flexShrink: 0 }}/>}
+        {only == null && <div style={{ height: 'var(--candy-frame)', background: 'var(--border-soft)', flexShrink: 0 }}/>}
         {only !== 'nutrition' && (
           <FitnessSection accent={accent} isToday={isToday} pivotDs={pivotDs} refreshTick={tick} history={history.days} />
         )}

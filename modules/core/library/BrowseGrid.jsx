@@ -78,7 +78,7 @@ export default function BrowseGrid({ accent, mode, query, kind, name }) {
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       <div style={{
-        padding: '12px 18px 10px', borderBottom: '1px solid var(--border)',
+        padding: '12px 18px 10px', borderBottom: 'var(--candy-frame) solid var(--border)',
         display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0,
       }}>
         {mode === 'discover' && name && (

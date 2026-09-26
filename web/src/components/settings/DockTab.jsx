@@ -330,7 +330,7 @@ function SectionHeader({ title }) {
       fontSize: 9, fontFamily: 'var(--font-mono)',
       letterSpacing: '0.12em',       color: 'var(--text-faint)', fontWeight: 700,
       paddingTop: 6, marginTop: 2,
-      borderTop: '1px solid var(--border-soft)',
+      borderTop: 'var(--candy-frame) solid var(--border-soft)',
     }}>{title}</div>
   );
 }

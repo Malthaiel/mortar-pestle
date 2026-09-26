@@ -322,7 +322,7 @@ function Inspector({ clip, laneIdx, accent, playheadFrameRef, seekToFrame, apply
 
   const isTitle = clip.kind === 'title';
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '6px 14px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '6px 14px', borderBottom: 'var(--candy-frame) solid var(--border)', flexShrink: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
         {!isTitle && <ClipAudioStrip gain={effGain} mute={clip.mute} clipId={clip.id} accent={accent} onGain={onGain} onMute={onMute} />}
         <TransformStrip t={eff} onField={onField} />
@@ -985,7 +985,7 @@ export default function EditorPage({ api, accent, rest }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
       {project && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 18, padding: '8px 14px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 18, padding: '8px 14px', borderBottom: 'var(--candy-frame) solid var(--border)', flexShrink: 0 }}>
           <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text)' }}>{project.name}</div>
           <NumField label="W" value={project.sequence.width} min={16} max={8192} onCommit={v => setSequence({ width: v })} />
           <NumField label="H" value={project.sequence.height} min={16} max={8192} onCommit={v => setSequence({ height: v })} />
@@ -1112,7 +1112,7 @@ export default function EditorPage({ api, accent, rest }) {
       })()}
 
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-        <aside style={{ width: 280, flexShrink: 0, borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
+        <aside style={{ width: 280, flexShrink: 0, borderRight: 'var(--candy-frame) solid var(--border)', display: 'flex', flexDirection: 'column' }}>
           {project ? (
             <BinPanel
               media={project.media}
@@ -1163,7 +1163,7 @@ export default function EditorPage({ api, accent, rest }) {
           )}
         </main>
       </div>
-      <footer style={{ height: mode === 'color' ? 320 : mode === 'mix' ? 300 : 240, flexShrink: 0, borderTop: '1px solid var(--border)', minHeight: 0 }}>
+      <footer style={{ height: mode === 'color' ? 320 : mode === 'mix' ? 300 : 240, flexShrink: 0, borderTop: 'var(--candy-frame) solid var(--border)', minHeight: 0 }}>
         {project ? (
           mode === 'color' ? (
             <ColorSuite

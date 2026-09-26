@@ -68,7 +68,7 @@ export default function IdeaPickerModal({ open, onClose, onPick }) {
       }}>
         <div style={{
           display: 'flex', alignItems: 'center', gap: 10,
-          padding: '13px 15px', borderBottom: '1px solid var(--border-soft)',
+          padding: '13px 15px', borderBottom: 'var(--candy-frame) solid var(--border-soft)',
         }}>
           <span style={{
             fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em',

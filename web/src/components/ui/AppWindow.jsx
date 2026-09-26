@@ -65,7 +65,7 @@ export default function AppWindow({
         {/* Header */}
         <div className="candy-center-row" style={{
           padding: '18px 22px 14px',
-          borderBottom: '1px solid var(--border-soft)',
+          borderBottom: 'var(--candy-frame) solid var(--border-soft)',
           display: 'flex', alignItems: 'center', gap: 14,
           flexShrink: 0,
         }}>
@@ -90,7 +90,7 @@ export default function AppWindow({
         {footer && (
           <div style={{
             padding: '12px 22px',
-            borderTop: '1px solid var(--border)',
+            borderTop: 'var(--candy-frame) solid var(--border)',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             flexShrink: 0,
           }}>

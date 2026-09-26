@@ -49,7 +49,7 @@ function PlaylistGrid({ accent }) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          borderBottom: '1px solid var(--border)',
+          borderBottom: 'var(--candy-frame) solid var(--border)',
           flexShrink: 0,
         }}
       >

@@ -52,7 +52,8 @@ import { useContextMenu } from '../../context-menu/useContextMenu.js';
 import { IconChevronLeft, IconChevronRight, IconReset } from '../icons.jsx';
 import { GLIDE } from '../../util/motion.js';
 
-const HOTZONE_PX  = 6;
+// Also the seam's in-flow width, so hosts centring over a pane can read it.
+export const HOTZONE_PX = 6;
 const SEAM_WIDTH  = 2;
 // 12 was too tight to find, 18 grabbed too eagerly — user-tuned to 12 + 2 on
 // 2026-08-13. The ceiling is 20 regardless: the toolkit rail and the Planner
@@ -97,7 +98,7 @@ function rubberBand(over) {
 /**
  * Where the REAL rail divider is, in viewport x.
  *
- * The divider is a 1px `border` on a NEIGHBOUR — sometimes the pane before the
+ * The divider is a `border` (var(--candy-frame) wide) on a NEIGHBOUR — sometimes the pane before the
  * seam (Settings rail: `borderRight`), sometimes the pane after it (AppShell
  * toolkit: `borderLeft`), and sometimes an ANCESTOR, because the left sidebar's
  * seam is absolutely positioned inside the rail it resizes (Sidebar.jsx). All

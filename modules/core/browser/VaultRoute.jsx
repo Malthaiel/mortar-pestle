@@ -12,7 +12,7 @@ import PasswordGenerator from './PasswordGenerator.jsx';
 import { IconLockOpen } from '@host/components/icons.jsx';
 
 const wrap = { display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, background: 'var(--bg)', position: 'relative' };
-const bar = { display: 'flex', alignItems: 'center', gap: 8, padding: 10, borderBottom: '1px solid var(--border)', background: 'var(--surface)', flex: '0 0 auto' };
+const bar = { display: 'flex', alignItems: 'center', gap: 8, padding: 10, borderBottom: 'var(--candy-frame) solid var(--border)', background: 'var(--surface)', flex: '0 0 auto' };
 const input = { padding: '6px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', font: 'inherit' };
 const ghost = { padding: '7px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text)', cursor: 'pointer', font: 'inherit' };
 const label = { fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 3 };
@@ -78,7 +78,7 @@ export default function VaultRoute({ api, accent, onClose }) {
 
       {view === 'entries' ? (
         <div style={{ display: 'flex', flex: '1 1 auto', minHeight: 0 }}>
-          <div style={{ width: 200, flex: '0 0 auto', borderRight: '1px solid var(--border)', overflow: 'auto', padding: 8, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <div style={{ width: 200, flex: '0 0 auto', borderRight: 'var(--candy-frame) solid var(--border)', overflow: 'auto', padding: 8, display: 'flex', flexDirection: 'column', gap: 2 }}>
             <FolderRow active={folderSel === 'all'} onClick={() => setFolderSel('all')} label={`All (${entries.length})`} accent={accent} />
             <FolderRow active={folderSel === 'unfiled'} onClick={() => setFolderSel('unfiled')} label="Unfiled" accent={accent} />
             {folders.map(f => (
@@ -93,7 +93,7 @@ export default function VaultRoute({ api, accent, onClose }) {
           </div>
 
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', gap: 8, padding: 10, borderBottom: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', gap: 8, padding: 10, borderBottom: 'var(--candy-frame) solid var(--border)' }}>
               <input style={{ ...input, flex: 1 }} placeholder="Search logins" value={query} onChange={e => setQuery(e.target.value)} />
               <button type="button" style={primary(accent)} onClick={() => setEditing({ new: true })}>＋ New</button>
             </div>
@@ -209,7 +209,7 @@ function BackupNudge({ accent, onExport }) {
   if (done) return null;
   const dismiss = () => { writeModuleSetting('browser', 'vaultBackupDone', true); setDone(true); };
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)', fontSize: 12 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'var(--surface-2)', borderBottom: 'var(--candy-frame) solid var(--border)', fontSize: 12 }}>
       <span style={{ flex: 1, color: 'var(--text)' }}>Back up your vault — it lives only on this machine and there's no recovery. Export an encrypted copy from Tools.</span>
       <button type="button" style={primary(accent)} onClick={() => { onExport(); dismiss(); }}>Go to Tools</button>
       <button type="button" style={ghost} onClick={dismiss}>Dismiss</button>

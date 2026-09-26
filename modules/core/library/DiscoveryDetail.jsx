@@ -261,7 +261,7 @@ export default function DiscoveryDetail({ malId, accent, onResolveTitle }) {
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <div style={{
               fontSize: 11, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)',
-              letterSpacing: '0.08em',               padding: '0 0 6px', borderBottom: '1px solid var(--border)', marginBottom: 2,
+              letterSpacing: '0.08em',               padding: '0 0 6px', borderBottom: 'var(--candy-frame) solid var(--border)', marginBottom: 2,
             }}>Episodes ({episodes.length})</div>
             {episodes.map(ep => <MalEpisodeRow key={ep.malId} ep={ep} />)}
           </div>

@@ -48,12 +48,12 @@ export default function NotesPanel({
   return (
     <div className="flex-col" style={{
       height: '100%', background: 'var(--surface)',
-      borderLeft: '1px solid var(--border)',
+      borderLeft: 'var(--candy-frame) solid var(--border)',
     }}>
       {/* Composer header */}
       <div style={{
         padding: '14px 20px 14px',
-        borderBottom: '1px solid var(--border)', flexShrink: 0,
+        borderBottom: 'var(--candy-frame) solid var(--border)', flexShrink: 0,
       }}>
         <div style={{
           display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8,
@@ -95,7 +95,7 @@ export default function NotesPanel({
       {/* Filter chips row */}
       <div style={{
         padding: '10px 20px',
-        borderBottom: '1px solid var(--border)', flexShrink: 0,
+        borderBottom: 'var(--candy-frame) solid var(--border)', flexShrink: 0,
         display: 'flex', alignItems: 'center', gap: 6,
       }}>
         {activeTaskName && (
@@ -115,7 +115,7 @@ export default function NotesPanel({
 
       {showFreeform && (
         <div style={{
-          padding: '0 20px 12px', borderBottom: '1px solid var(--border)',
+          padding: '0 20px 12px', borderBottom: 'var(--candy-frame) solid var(--border)',
           flexShrink: 0,
         }}>
           <div style={{ display: 'flex', gap: 6 }}>
@@ -185,7 +185,7 @@ function NoteRow({
 }) {
   return (
     <div style={{
-      borderBottom: '1px solid var(--border)',
+      borderBottom: 'var(--candy-frame) solid var(--border)',
       padding: '10px 20px',
       background: expanded ? `color-mix(in oklch, ${accent} 6%, transparent)` : 'transparent',
       transition: 'background 120ms ease',

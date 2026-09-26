@@ -50,7 +50,7 @@ export default function MarkdownDiff({ before, after, onApply, onDiscard, applyi
         padding: '6px 10px',
         fontFamily: 'var(--font-mono)', fontSize: 10,
         color: 'var(--text-faint)',
-        borderBottom: '1px solid var(--border-soft)',
+        borderBottom: 'var(--candy-frame) solid var(--border-soft)',
       }}>
         <span style={{ color: '#3f9c5e' }}>+{adds}</span>
         <span style={{ color: 'var(--error)' }}>−{dels}</span>
@@ -78,7 +78,7 @@ export default function MarkdownDiff({ before, after, onApply, onDiscard, applyi
 
       <div style={{
         display: 'flex', justifyContent: 'flex-end', gap: 6,
-        padding: '8px 10px', borderTop: '1px solid var(--border-soft)',
+        padding: '8px 10px', borderTop: 'var(--candy-frame) solid var(--border-soft)',
       }}>
         <button
           type="button"

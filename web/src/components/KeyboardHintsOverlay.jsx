@@ -71,7 +71,7 @@ export default function KeyboardHintsOverlay({ open, onClose, accent, keybinds }
       }}>
         <div style={{
           padding: '14px 18px',
-          borderBottom: '1px solid var(--border-soft)',
+          borderBottom: 'var(--candy-frame) solid var(--border-soft)',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
           <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>

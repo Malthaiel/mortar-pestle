@@ -32,7 +32,7 @@ const preStyle = {
   maxHeight: 240,
   overflowY: 'auto',
 };
-const detailsStyle = { borderBottom: '1px solid var(--border-soft)', padding: '4px 0' };
+const detailsStyle = { borderBottom: 'var(--candy-frame) solid var(--border-soft)', padding: '4px 0' };
 
 function Field({ label, hint, children }) {
   return (
@@ -377,7 +377,7 @@ export function DomainBuilderOverlay() {
           outline: 'none',
         }}
       >
-        <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-soft)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+        <div style={{ padding: '14px 18px', borderBottom: 'var(--candy-frame) solid var(--border-soft)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>
             {reopen ? 'Reconfigure' : 'New Domain'}{!onResult && draft.domainName.trim() ? ` — ${draft.domainName.trim()}` : ''}
           </div>
@@ -391,7 +391,7 @@ export function DomainBuilderOverlay() {
           <Body />
         </div>
 
-        <div className="candy-chip-row" style={{ padding: '12px 18px', borderTop: '1px solid var(--border-soft)', justifyContent: 'flex-end', '--candy-gap': '8px', flexShrink: 0 }}>
+        <div className="candy-chip-row" style={{ padding: '12px 18px', borderTop: 'var(--candy-frame) solid var(--border-soft)', justifyContent: 'flex-end', '--candy-gap': '8px', flexShrink: 0 }}>
           {onResult ? (
             <PrimaryBtn onClick={close}>Done</PrimaryBtn>
           ) : (

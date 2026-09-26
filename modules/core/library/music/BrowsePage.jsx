@@ -155,7 +155,7 @@ export default function BrowsePage({ accent, initialQuery = '', initialMode = MO
       <div style={{
         padding: '14px 18px 10px',
         display: 'flex', flexDirection: 'column', gap: 10,
-        borderBottom: '1px solid var(--border)', flexShrink: 0,
+        borderBottom: 'var(--candy-frame) solid var(--border)', flexShrink: 0,
       }}>
         <div style={{ display: 'flex', gap: 6 }}>
           <FilterChip active={mode === MODE_ALBUMS} accent={accent} onClick={() => switchMode(MODE_ALBUMS)}>Albums</FilterChip>

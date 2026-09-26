@@ -85,7 +85,7 @@ export default function Popover({
       {hasHeader && (
         <div style={{
           display: 'flex', alignItems: 'center', gap: 10,
-          padding: '12px 14px', borderBottom: '1px solid var(--border)', flexShrink: 0,
+          padding: '12px 14px', borderBottom: 'var(--candy-frame) solid var(--border)', flexShrink: 0,
         }}>
           {title && <span style={{ fontWeight: 600, fontSize: 13, flex: 1, minWidth: 0 }}>{title}</span>}
           {headerActions}

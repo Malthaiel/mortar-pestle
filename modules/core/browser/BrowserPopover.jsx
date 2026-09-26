@@ -13,12 +13,12 @@ export const POPOVER_HEIGHT = 360;
 const panel = {
   position: 'absolute', top: 0, left: 0, right: 0, height: POPOVER_HEIGHT, zIndex: 6,
   display: 'flex', flexDirection: 'column', overflow: 'hidden',
-  background: 'var(--surface)', borderBottom: '1px solid var(--border)',
+  background: 'var(--surface)', borderBottom: 'var(--candy-frame) solid var(--border)',
   boxShadow: '0 10px 26px rgba(0,0,0,0.26)',
 };
 const head = {
   display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px',
-  borderBottom: '1px solid var(--border)', flex: '0 0 auto',
+  borderBottom: 'var(--candy-frame) solid var(--border)', flex: '0 0 auto',
 };
 const hostSpan = {
   fontSize: 12, color: 'var(--text-muted)', flex: 1,

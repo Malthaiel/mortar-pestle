@@ -184,7 +184,7 @@ export default function BrowsePreview({ result, accent, onBack, libraryEntry }) 
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       {/* Back bar */}
       <div style={{
-        padding: '12px 18px', borderBottom: '1px solid var(--border)', flexShrink: 0,
+        padding: '12px 18px', borderBottom: 'var(--candy-frame) solid var(--border)', flexShrink: 0,
       }}>
         <button
           onClick={onBack}
@@ -264,7 +264,7 @@ export default function BrowsePreview({ result, accent, onBack, libraryEntry }) 
                     {showDisc && (
                       <div style={{
                         fontSize: 11, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)',
-                        letterSpacing: '0.08em',                         padding: '14px 0 6px', borderBottom: '1px solid var(--border)', marginBottom: 2,
+                        letterSpacing: '0.08em',                         padding: '14px 0 6px', borderBottom: 'var(--candy-frame) solid var(--border)', marginBottom: 2,
                       }}>Disc {t.disc}</div>
                     )}
                     <TrackRow

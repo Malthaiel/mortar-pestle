@@ -202,7 +202,7 @@ export default function NewEventModal({ open, onClose, onCreated, accent = 'var(
         }}>
         {/* Header */}
         <div style={{
-          padding: '16px 20px 12px', borderBottom: '1px solid var(--border-soft)',
+          padding: '16px 20px 12px', borderBottom: 'var(--candy-frame) solid var(--border-soft)',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0,
         }}>
           <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--text)' }}>{editing ? 'Edit Event' : 'New Event'}</div>
@@ -368,7 +368,7 @@ export default function NewEventModal({ open, onClose, onCreated, accent = 'var(
 
         {/* Footer */}
         <div style={{
-          padding: '20px 18px', borderTop: '1px solid var(--border-soft)',
+          padding: '20px 18px', borderTop: 'var(--candy-frame) solid var(--border-soft)',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexShrink: 0,
         }}>
           <div style={{ fontSize: 11, color: err ? 'var(--text)' : 'var(--text-faint)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
