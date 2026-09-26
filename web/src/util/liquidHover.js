@@ -34,8 +34,8 @@
 // (after any HMR edit, reload first — the bare import returns the page-load instance).
 export const TUNE = {
   time: 1,                        // 1 = real time; lower it to film the motion
-  stretch: { k: 260, zeta: 0.5 }, // the slide: one spring, ~15% overshoot of `reach`
-  reach: 40,                      // px: every slide swings like one this long (~6px past)
+  stretch: { k: 260, zeta: 1 },   // the slide: one spring; zeta 1 = lands with no swing (0.5 = ~15% of `reach` past, shipped 1f6a8ca)
+  reach: 40,                      // px: every slide moves like one this long (at zeta 0.5, ~6px past)
   fill: { k: 300, zeta: 0.8 },    // the entry/exit circle's radius
   bulge: 0.012,                   // px of edge bulge per px/s of edge speed
 };
