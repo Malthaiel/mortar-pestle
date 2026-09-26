@@ -38,6 +38,14 @@
 // and focus already lights that box. So a box is copied like any button until you
 // type in it; then that one part stays real ([data-liquid-live]) and both copies
 // leave a hole for it.
+//
+// Rail tiles (music player, clock, day sections, overlay panels): only the colour
+// pours. The copies are EMPTY tiles slid in UNDER the real one, which keeps
+// everything it shows live (cover, clock, its own buttons and their own liquid)
+// and gives up only its own paint (styles.css). A tile is lit by its own hover,
+// measured: a music or clock tile stays lit over its grey-hovering buttons, and a
+// panel tile hands its red to the button you point at, so it drains toward that
+// spot while the button fills from it.
 
 // Every knob in one object; the dev bridge can tune it live:
 //   (await import('/src/util/liquidHover.js')).TUNE.time = 0.15
@@ -50,12 +58,12 @@ export const TUNE = {
   bulge: 0.012,                   // px of edge bulge per px/s of edge speed
 };
 
-// A later phase of the plan, with its own snag: rail tiles (card owns the flood,
-// nested controls hover neutral).
-const SKIP = '.rail-tile, [data-liquid-skip], [data-dragging]';
+const SKIP = '[data-liquid-skip], [data-dragging]';
 // Right-click menus and dropdowns (one component): see watchMenu below.
 const MENU = '[role="menu"]';
-// A copy cannot show a canvas, a video or a frame (rail tiles, a later phase).
+// Rail tiles: see syncTiles below.
+const TILE = '.rail-tile';
+// A copy cannot show a canvas, a video or a frame (a tile's empty copies never try).
 const LIVE = 'canvas, video, iframe';
 const TYPING = 'input, textarea, [contenteditable]:not([contenteditable="false"])';
 
@@ -89,7 +97,8 @@ const pathOf = (root, node) => { const p = []; for (; node !== root; node = node
 const at = (root, path) => path.reduce((el, i) => el?.children[i], root);
 
 function copy(s, lit) {
-  const c = s.host.cloneNode(true);
+  const c = s.host.cloneNode(!s.shell);
+  if (s.shell) c.append(s.face.cloneNode(false));   // a tile's copy is its empty face: paint only
   c.removeAttribute('data-liquid-host');
   for (const el of [c, ...c.querySelectorAll('[id], [title], [data-tip]')]) {
     el.removeAttribute('id'); el.removeAttribute('title'); el.removeAttribute('data-tip');
@@ -136,7 +145,8 @@ function rectOf(s, i, hr) {
 // The lip's paint below the box, off the RESOLVED box-shadow (y + blur + spread):
 // --cbtn-depth itself can read back as an unresolved "calc(7px * 0.85)" (tree
 // rows), which parsed to 0 and cut the lit lip off at the box edge.
-const depth = (s) => Math.max(0, ...[...getComputedStyle(s.parts[0]).boxShadow
+// A tile's real lip is switched off while its copies paint it: read the copy's.
+const depth = (s) => Math.max(0, ...[...getComputedStyle(s.shell ? s.rest : s.parts[0]).boxShadow
   .matchAll(/-?[\d.]+px (-?[\d.]+)px (-?[\d.]+)px(?: (-?[\d.]+)px)?/g)].map((m) => +m[1] + +m[2] + (+m[3] || 0)));
 const circle = (s, r) => `circle(${f(Math.max(0, r))}px at ${f(s.fx + s.ox)}px ${f(s.fy + s.oy)}px)`;
 // The circle radius that just covers the span l..r (lip included) from its centre.
@@ -158,13 +168,14 @@ function draw(s, hr) {
 
 function build(host, btn) {
   const parent = host.parentElement;
-  if (!parent) return null;
+  const shell = host.matches(TILE), face = shell && host.querySelector(':scope > .candy-face');
+  if (!parent || (shell ? !face : host.querySelector(LIVE))) return null;
   const split = host !== btn;
   const s = {
-    host, split, menu: !!host.closest(MENU), parts: partsOf(host, split), x: 0, y: 0, ox: 0, oy: 0, w: -1, h: -1,
+    host, split, shell, face, menu: !!host.closest(MENU), parts: partsOf(host, split), x: 0, y: 0, ox: 0, oy: 0, w: -1, h: -1,
     L: 0, R: 0, vL: 0, vR: 0, bL: 0, bR: 0, i: -1, on: false, live: -1,
     p: 0, vp: 0, aL: 0, aR: 0, dir: 1, hit: true,
-    fx: 0, fy: 0, rad: 0, vrad: 0, filling: false, out: false, checked: -1,
+    fx: 0, fy: 0, rad: 0, vrad: 0, filling: false, out: false, checked: -1, twins: [],
   };
   s.layer = document.createElement('div');
   s.layer.dataset.liquidLayer = '';
@@ -191,9 +202,10 @@ function build(host, btn) {
   pin(s);
 
   // Appending must not move anything (a parent's :last-child rule would): measure.
+  // A tile's copies go BEFORE it, so they paint under its live contents.
   const box = (el) => { const r = el.getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; };
   const sibs = [...parent.children], before = sibs.map(box);
-  parent.append(s.layer);
+  if (shell) host.before(s.layer); else parent.append(s.layer);
   if (sibs.some((el, k) => box(el).some((v, j) => Math.abs(v - before[k][j]) > 0.01))) {
     s.layer.remove();
     host.dataset.liquidSkip = '';
@@ -218,7 +230,7 @@ function build(host, btn) {
       // button, or off the dock) is that button's leave.
       if (n === 'data-dock-hover') { if (m.target === host && !host.hasAttribute(n) && host !== hot) leave(host, pt); continue; }
       if (n === 'id' || n === 'title' || n === 'data-tip' || (m.target === host && n === 'data-liquid-host')) continue;
-      const path = pathOf(host, m.target), v = m.target.getAttribute(n);
+      const path = s.shell && m.target !== host ? [0] : pathOf(host, m.target), v = m.target.getAttribute(n);
       for (const c of [s.rest, s.lit]) {
         const el = at(c, path);
         if (!el) { rebuild = true; continue; }
@@ -234,7 +246,9 @@ function build(host, btn) {
     }
     if (repin) pin(s);   // now, not next frame: in between, the unpinned copy's glide would start
   });
-  s.mo.observe(host, { subtree: true, attributes: true, childList: true, characterData: true });
+  // A tile's contents stay real: only the tile and its face (press, flavour) are copied.
+  if (shell) { s.mo.observe(host, { attributes: true }); s.mo.observe(face, { attributes: true }); }
+  else s.mo.observe(host, { subtree: true, attributes: true, childList: true, characterData: true });
   layers.set(host, s);
   return s;
 }
@@ -265,9 +279,48 @@ function typing(s) {
   }
 }
 
+// Bits drawn ON a tile that turn white as it lights (the music wave bars and scrub
+// track, the clock's water line) whiten exactly where the liquid has reached:
+// while it moves, the real ones keep their rest colour ([data-liquid-dry]) and a
+// lit copy of each ([data-liquid-wet]), cut to the circle, sits exactly on top.
+// Copied afresh every frame (the bars and the line move); once the liquid stops,
+// the copies go and the real ones take their own colour back.
+// ponytail: a named list; a new bit that recolours on tile hover joins it, and its
+// CSS rule lists the two markers (styles.css: the music rail/meter, .tube-water).
+const WET = '.music-tile-meter, .music-tile-rail, .tube-water';
+function wet(s, hr) {
+  const had = s.twins.length;
+  for (const t of s.twins) t.remove();
+  s.twins = [];
+  const moving = s.filling && !(s.out && s.rad <= 0);
+  if (!moving && !had) return;
+  // A line in a drawing is copied with its drawing: the drawing has a box to cut.
+  const roots = new Set([...s.host.querySelectorAll(WET)].map((el) => (el instanceof SVGElement ? el.ownerSVGElement : el)));
+  for (const o of roots) {
+    if (!moving) { o.removeAttribute('data-liquid-dry'); continue; }
+    const t = o.cloneNode(true);
+    t.removeAttribute('data-liquid-dry');
+    t.setAttribute('data-liquid-wet', '');
+    t.setAttribute('aria-hidden', 'true');
+    o.setAttribute('data-liquid-dry', '');
+    // Out of the flow at the real one's used size, then moved onto it (measured).
+    const { width, height } = getComputedStyle(o);
+    Object.assign(t.style, { position: 'absolute', left: '0px', top: '0px', width, height, margin: '0', pointerEvents: 'none' });
+    o.after(t);
+    s.twins.push(t);
+    const a = o.getBoundingClientRect(), b = t.getBoundingClientRect();
+    t.style.left = `${a.left - b.left}px`; t.style.top = `${a.top - b.top}px`;
+    t.style.clipPath = `circle(${f(Math.max(0, s.rad))}px at ${f(hr.left + s.fx - a.left)}px ${f(hr.top + s.fy - a.top)}px)`;
+  }
+}
+
 function drop(s) {
   s.mo.disconnect();
   s.layer.remove();
+  if (s.shell) {
+    for (const t of s.twins) t.remove();
+    for (const o of s.host.querySelectorAll('[data-liquid-dry]')) o.removeAttribute('data-liquid-dry');
+  }
   s.parts[s.live]?.removeAttribute('data-liquid-live');
   s.host.removeAttribute('data-liquid-host');
   layers.delete(s.host);
@@ -278,8 +331,11 @@ function drop(s) {
 // has stopped moving. A dock button shrinks as it drains, its word still fading
 // out; until it has stopped, the rest copy stands in for it.
 // The part being typed in is real either way (lit by its own focus).
+// A tile's own paint fading back in is on the tile and its face alone (its
+// contents may animate forever: the music meter).
 const still = (s) => s.parts.every((p, k) => k === s.live || floods(p) === floods(partsOf(s.rest, s.split)[k]))
-  && !s.host.getAnimations({ subtree: true }).some((a) => a instanceof CSSTransition);
+  && !(s.shell ? [s.host, s.face].flatMap((el) => el.getAnimations()) : s.host.getAnimations({ subtree: true }))
+    .some((a) => a instanceof CSSTransition);
 
 // DEV regression gate: once settled, the lit copy's part must paint exactly like
 // the real part, which is still :hover under opacity 0 and so computes the true
@@ -287,7 +343,8 @@ const still = (s) => s.parts.every((p, k) => k === s.live || floods(p) === flood
 function parity(s) {
   s.checked = s.i;
   const real = s.parts[s.i], twin = partsOf(s.lit, s.split)[s.i];
-  if (!real?.matches(':hover') || !twin || s.i === s.live) return;   // a typed-in part is real, its copy hidden
+  // A typed-in part is real, its copy hidden; a tile's real paint is switched off.
+  if (s.shell || !real?.matches(':hover') || !twin || s.i === s.live) return;
   const face = (el) => el.querySelector(':scope > .candy-face') || el;
   const a = getComputedStyle(face(real)), b = getComputedStyle(face(twin));
   const bad = ['backgroundColor', 'color', 'borderTopColor'].filter((p) => a[p] !== b[p]);
@@ -302,7 +359,7 @@ function parity(s) {
 
 function advance(s, dt) {
   if (!s.host.isConnected || s.host.closest('[data-dragging]') || off()) return drop(s);
-  typing(s);
+  if (!s.shell) typing(s);   // a tile's boxes are real already
   const hr = place(s), t = rectOf(s, s.i, hr);
   // ONE spring p runs every slide as if it were TUNE.reach px long (p: -reach -> 0),
   // so the swing past 0 is the same on every slide. Until p first arrives, each
@@ -325,11 +382,15 @@ function advance(s, dt) {
     [s.rad, s.vrad] = step(s.rad, s.vrad, goal, 'fill', dt);
     if (s.out && s.rad <= 0) {
       s.on = false;   // unlit: coming back fills afresh from the new entry point
+      // A tile takes its own paint back first; it fades in over the identical
+      // rest copy, which leaves once the fade is done.
+      if (s.shell) s.host.removeAttribute('data-liquid-host');
       if (still(s)) return drop(s);
     }
     if (!s.out && s.rad >= goal) s.filling = false;
     clip(s, 'cf', s.fill, s.filling ? circle(s, s.rad) : 'none');
   }
+  if (s.shell) wet(s, hr);
   draw(s, hr);
   if (import.meta.env.DEV && !s.filling && !s.out && s.checked !== s.i && s.L === t.l && s.R === t.r) parity(s);
 }
@@ -350,6 +411,7 @@ function enter(s, btn, e) {
   if (i < 0 || (i === s.i && !s.out)) return;
   const hr = place(s), r = rectOf(s, i, hr);
   if (!s.on) {   // first entry: the circle fills the part from where the pointer came in
+    s.host.setAttribute('data-liquid-host', '');   // a tile back mid hand-back gives its paint up again
     s.L = r.l; s.R = r.r;
     s.fx = clamp(e.clientX - hr.left, r.l, r.r);
     s.fy = clamp(e.clientY - hr.top, 0, hr.height);
@@ -406,6 +468,17 @@ function watchMenu(panel) {
 }
 function unwatchMenu(panel) { menus.get(panel)?.mo.disconnect(); menus.delete(panel); }
 
+// A menu row or a tile whose measured lit state flipped: fill or drain it on its own.
+function flip(r, lit, at) {
+  let s = layers.get(r);
+  if (!s) {
+    if (off() || r.closest(SKIP) || !(s = build(r, r))) return;
+    // Lit with no layer yet (a submenu opens with its first row lit): start full.
+    if (!lit) { enter(s, r, at); s.filling = false; clip(s, 'cf', s.fill, 'none'); }
+  }
+  if (lit) enter(s, r, at); else leave(r, at);
+}
+
 function syncMenu(panel) {
   const m = menus.get(panel);
   if (!panel.isConnected) return unwatchMenu(panel);
@@ -414,14 +487,21 @@ function syncMenu(panel) {
     if (!m.seen.has(r)) { m.seen.set(r, lit); continue; }   // a row that just appeared is as it paints
     if (lit === m.seen.get(r)) continue;
     m.seen.set(r, lit);
-    const at = keyed ? middle(r) : pt;
-    let s = layers.get(r);
-    if (!s) {
-      if (off() || r.closest(SKIP) || r.querySelector(LIVE) || !(s = build(r, r))) continue;
-      // Lit with no layer yet (a submenu opens with its first row lit): start full.
-      if (!lit) { enter(s, r, at); s.filling = false; clip(s, 'cf', s.fill, 'none'); }
-    }
-    if (lit) enter(s, r, at); else leave(r, at);
+    flip(r, lit, keyed ? middle(r) : pt);
+  }
+}
+
+// Rail tiles are lit by their own hover, re-read on every pointerover rather than
+// followed: a music or clock tile stays lit over its own (grey-hovering) buttons,
+// and a panel tile gives its red up to the button you point at (styles.css
+// :has(.candy-btn:hover)), so it drains toward that spot as the button fills.
+const tiles = new Map();   // tile -> lit, as last read
+function syncTiles(under) {
+  if (under && !tiles.has(under)) tiles.set(under, false);
+  for (const [t, was] of tiles) {
+    const lit = t.isConnected && floods(t);
+    if (lit !== was) flip(t, lit, pt);
+    if (lit || t === under) tiles.set(t, lit); else tiles.delete(t);
   }
 }
 
@@ -429,14 +509,15 @@ function onOver(e) {
   if (e.pointerType === 'touch') return;
   keyed = false; pt = { clientX: e.clientX, clientY: e.clientY };
   const btn = e.target.closest?.('.candy-btn');
-  const host = btn && !btn.closest(MENU) && hostOf(btn);
+  const host = btn && !btn.closest(MENU) && !btn.matches(TILE) && hostOf(btn);
   // A button the dock still holds lit drains when the dock lets go (the mirror).
   if (hot && hot !== host) { if (!hot.hasAttribute('data-dock-hover')) leave(hot, e); hot = null; }
   for (const p of menus.keys()) syncMenu(p);   // :hover flips no class, so read it here
+  syncTiles(e.target.closest?.(TILE));
   if (!host) return;
   let s = layers.get(host);
   if (!s) {
-    if (off() || host.closest(SKIP) || host.querySelector(LIVE) || !floods(btn)) return;
+    if (off() || host.closest(SKIP) || !floods(btn)) return;
     s = build(host, btn);
     if (!s) return;
   }
@@ -444,7 +525,10 @@ function onOver(e) {
   enter(s, btn, e);
 }
 function onOut(e) {   // the pointer left the window altogether
-  if (!e.relatedTarget && hot) { leave(hot, e); hot = null; }
+  if (e.relatedTarget) return;
+  if (hot) { leave(hot, e); hot = null; }
+  for (const t of tiles.keys()) leave(t, e);
+  tiles.clear();
 }
 
 let installed = false;
