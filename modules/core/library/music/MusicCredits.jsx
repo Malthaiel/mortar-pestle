@@ -31,6 +31,7 @@ export default function MusicCredits({ album, accent }) {
   const [library, setLibrary] = useState([]);    // owned albums (for owned-map + related)
   const [discography, setDiscography] = useState(null); // artist's MB release groups
   const [personnel, setPersonnel] = useState(null);     // null=loading, []=none/failed
+  const [moreExpanded, setMoreExpanded] = useState(false);
   const reqId = useRef(0);
   const persReq = useRef(0);
 
@@ -78,6 +79,10 @@ export default function MusicCredits({ album, accent }) {
     () => (discography || []).filter(r => r.mbid && r.mbid !== selfId),
     [discography, selfId],
   );
+  // The rail renders the first MORE_CAP; "See All" expands to the full grid
+  // in place (AnimeCredits' Staff pattern). User-directed 2026-09-26.
+  const MORE_CAP = 10;
+  const shownMore = moreExpanded ? more : more.slice(0, MORE_CAP);
 
   // Group flat credits into one entry per person, merging their roles in order.
   const performers = useMemo(() => {
@@ -111,8 +116,15 @@ export default function MusicCredits({ album, accent }) {
     <div style={{ padding: '22px 24px 8px', display: 'flex', flexDirection: 'column', gap: 28 }}>
       {/* More from this artist */}
       {more.length > 0 && (
-        <PosterRow title={`More from ${artist}`} accent={accent} colWidth={150}>
-          {more.map(r => {
+        <PosterRow
+          title={`More from ${artist}`}
+          accent={accent}
+          colWidth={150}
+          layout={moreExpanded ? 'grid' : 'row'}
+          seeAllLabel={moreExpanded ? 'Show Less ↑' : 'See All →'}
+          onSeeAll={more.length > MORE_CAP ? () => setMoreExpanded(e => !e) : undefined}
+        >
+          {shownMore.map(r => {
             const ownedPath = ownedByProvider.get(r.mbid);
             return (
               <BrowseResultCard

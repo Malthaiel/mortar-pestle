@@ -1,7 +1,7 @@
 // RIGHT pane of the Music page. The film page's header, wearing an album: the
 // sleeve full-bleed behind a sleeve tile, the title at the film's derived
 // scale, one fact line, and every action fused into one .candy-split run.
-// Then the disc-grouped tracklist, notes and credits.
+// Then the disc-grouped tracklist and credits.
 
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { musicApi } from './api.js';
@@ -14,7 +14,6 @@ import { coverSrc, STATUS_DOT_COLOR, resolveDot, toBrowse } from './util.js';
 import AddToPlaylistButton from './AddToPlaylistButton.jsx';
 import { refFromQueueItem } from './PlaylistProvider.jsx';
 import MusicCredits from './MusicCredits.jsx';
-import MusicNotes from './MusicNotes.jsx';
 import { useDownloads } from './DownloadProvider.jsx';
 import { consumeTrackHighlight, fmtDuration } from './searchShared.jsx';
 import { useSongMenu } from './contextMenus.js';
@@ -491,8 +490,6 @@ export default function AlbumDetail({ accent, albumPath }) {
         </div>
         </div>
       </div>
-
-      <MusicNotes album={album} accent={accent} />
 
       <MusicCredits album={album} accent={accent} />
 

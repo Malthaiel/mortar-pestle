@@ -32,6 +32,11 @@ export default function PosterRow({ title, subtitle, onSeeAll, seeAllLabel = 'Se
         // bars, flipped horizontal. paddingBottom drops it into a clear band
         // below the cards (the custom bar is non-overlay, so this separates it).
         paddingBottom: 20,
+        // The scroller must be the containing block of its positioned cards
+        // (every candy tile is position: relative): left static, the cards
+        // painted past the row's left edge, over the column beside it, while it
+        // scrolled (filmed 2026-09-26: 5 of 6 passes spilled, 0 of 6 with this).
+        position: 'relative',
       };
   return (
     <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
