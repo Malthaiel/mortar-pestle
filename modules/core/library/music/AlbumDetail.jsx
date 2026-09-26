@@ -6,14 +6,16 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { musicApi } from './api.js';
 import { useMusicPlayer } from './MusicPlayerProvider.jsx';
-import { IconPlay, IconStar, IconLayers, IconPlus, IconDownload } from '@host/components/icons.jsx';
+import { IconPlay, IconStar, IconLayers, IconPlus, IconDownload, IconMusic, IconUsers } from '@host/components/icons.jsx';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
 import { statusLabel, STATUS_ICON } from '@host/util/media-status.js';
 import { libraryAbs } from '@host/api.js';
 import { coverSrc, STATUS_DOT_COLOR, resolveDot, toBrowse } from './util.js';
 import AddToPlaylistButton from './AddToPlaylistButton.jsx';
+import { useAddToPlaylistMenu } from './useAddToPlaylistMenu.jsx';
 import { refFromQueueItem } from './PlaylistProvider.jsx';
-import MusicCredits from './MusicCredits.jsx';
+import MusicCredits, { AlbumPerformers } from './MusicCredits.jsx';
+import { usePersistedState } from '@host/components/vault-tree/useTreeExpansion.js';
 import { useDownloads } from './DownloadProvider.jsx';
 import { consumeTrackHighlight, fmtDuration } from './searchShared.jsx';
 import { useSongMenu } from './contextMenus.js';
@@ -29,6 +31,14 @@ const HEAD_COLOR = 'var(--text)';
 const FACT_SIZE = 'calc(12px * var(--film-head))';
 
 const LISTEN_STATUSES = ['Plan-to-Listen', 'Currently-Listening', 'Listened', 'Dropped'];
+
+// The film's tab strip (AnimeMainColumn FILM_TABS), for a record: one section
+// under the hairline at a time (user-directed 2026-09-26).
+// Icon + word, like Play; "Credits" because "Performers" ran too long
+// (user-directed 2026-09-26). Details was removed the same day (user-directed);
+// a persisted 'Details' falls back to Tracks through the includes() guard.
+const ALBUM_TABS = ['Tracks', 'Credits'];
+const TAB_ICON = { Tracks: IconMusic, Credits: IconUsers };
 
 // The photo rides the fact line, so it is sized to that line: an even number of
 // pixels, so the circle has no half-pixel edge.
@@ -100,6 +110,9 @@ export default function AlbumDetail({ accent, albumPath }) {
   const { playAlbumTracks, enqueue, currentTrack, isPlaying, toggle } = useMusicPlayer();
   const { jobs: dlJobs, enqueue: enqueueDownload } = useDownloads();
   const songMenu = useSongMenu(accent);
+  // The album's Add to Playlist rides the More menu (user-directed 2026-09-26),
+  // the same sub-menu a song's right-click menu carries.
+  const playlistMenu = useAddToPlaylistMenu(accent);
   const { openContextMenu } = useContextMenu();
   const [dlJobId, setDlJobId] = useState(null);
   const [dlError, setDlError] = useState(null);
@@ -121,22 +134,10 @@ export default function AlbumDetail({ accent, albumPath }) {
   // A song picked from the browser's Songs tab parks its track number for us;
   // we claim it on mount. Re-runs per album, so the highlight can't survive
   // navigating elsewhere.
+  const [tab, setTab] = usePersistedState('library:albumTab', 'Tracks');
+  const active = ALBUM_TABS.includes(tab) ? tab : 'Tracks';
   const [highlight, setHighlight] = useState(null);
   useEffect(() => { setHighlight(consumeTrackHighlight(albumPath)); }, [albumPath]);
-
-  // The tracklist is exactly as wide as the action run above it. That width is
-  // whatever the run's labels add up to -- a status word, a rating, whether the
-  // Download half is there at all -- so it is READ off the live run and re-read
-  // whenever the run changes size, never written down here.
-  const runRef = useRef(null);
-  const [runW, setRunW] = useState(null);
-  useEffect(() => {
-    const el = runRef.current;
-    if (!el) return undefined;
-    const ro = new ResizeObserver(([entry]) => setRunW(entry.contentRect.width));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [album]);
 
   const coverImgSrc = album ? coverSrc(album.image, 400, { library: true }) : null;
 
@@ -253,17 +254,21 @@ export default function AlbumDetail({ accent, albumPath }) {
     }
   };
 
+  // scrollbar-gutter keeps the scrollbar's lane even when nothing scrolls, so
+  // the right edge (lane + gutter) always matches the left (the ResizeSeam
+  // grab strip + gutter): 34px both sides, measured 2026-09-26.
   return (
-    <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+    <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', scrollbarGutter: 'stable' }}>
       {/* Header: cover + meta, over the sleeve painted full-bleed behind them.
           .film-detail is the film page's own header shell (library.css) -- it
           owns the deep top padding derived from the still's aspect, the reading
           measure, and the layering that keeps the content clickable. Used here
           verbatim, exactly as AnimeDetailHeader uses it for a film. */}
       {/* No sleeve, no shell: .film-detail's top padding is reserved FOR the
-          picture, so applying it without one leaves 266px of empty page. */}
-      <div className={img ? 'film-detail' : undefined}
-           style={img ? undefined : { padding: '32px 28px 26px', borderBottom: 'var(--candy-frame) solid var(--border)' }}>
+          picture, so applying it without one leaves 266px of empty page.
+          .film-below keeps the same column (gutter + measure) without it. */}
+      <div className={img ? 'film-detail' : 'film-below'}
+           style={img ? undefined : { paddingTop: 32, paddingBottom: 26, borderBottom: 'var(--candy-frame) solid var(--border)' }}>
         {img && (
           <div className="film-backdrop is-square" aria-hidden>
             {/* A real <img>, like the film still: the box takes its height from
@@ -321,9 +326,34 @@ export default function AlbumDetail({ accent, albumPath }) {
               which on a film is the Cast/Crew panel and here is the tracklist. */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', paddingBottom: 14, borderBottom: 'var(--candy-frame) solid var(--border)' }}>
-          <div ref={runRef} className="candy-split" style={{
+          <div className="candy-split" style={{ '--accent': accent || 'var(--accent)', '--cbtn-size': ROW_H }}>
+            {ALBUM_TABS.map(t => {
+              const Icon = TAB_ICON[t];
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  data-own-press
+                  data-shape="chip"
+                  className={'candy-btn' + (t === active ? ' is-active' : '')}
+                  onClick={() => setTab(t)}
+                ><span className="candy-face"><Icon size={14}/>{t}</span></button>
+              );
+            })}
+          </div>
+          <div className="candy-split" style={{
             position: 'relative', '--cbtn-size': ROW_H,
           }}>
+            {/* Play leads the run (user-directed 2026-09-26; the film's too).
+                Never disabled: a track not on disk streams (playAlbumTracks
+                marks it streamable), so an undownloaded album plays too. */}
+            <button
+              className="candy-btn"
+              data-shape="chip"
+              data-own-press
+              onClick={playAll}
+            ><span className="candy-face"><IconPlay size={14}/>Play</span></button>
+
             <CandySelect
               value={album.status || ''}
               accent={accent}
@@ -360,36 +390,6 @@ export default function AlbumDetail({ accent, albumPath }) {
               }}
             />
 
-            <button
-              className="candy-btn"
-              data-shape="chip"
-              data-own-press
-              onClick={playAll}
-              disabled={playable.length === 0}
-            ><span className="candy-face"><IconPlay size={14}/>Play</span></button>
-
-            <button
-              className="candy-btn"
-              data-shape="chip"
-              data-own-press
-              onClick={enqueueAlbum}
-              disabled={playable.length === 0}
-            ><span className="candy-face"><IconLayers size={14}/>Queue</span></button>
-
-            <AddToPlaylistButton
-              variant="form"
-              fuse
-              icon={IconPlus}
-              label="Playlist"
-              accent={accent}
-              title="Add all tracks to a playlist"
-              refs={playable.map(t => refFromQueueItem({
-                albumPath: album.path, albumTitle: album.title, albumImage: album.image,
-                artist: album.artist, wikilink: t.wikilink, audioPath: t.audioPath,
-                title: t.title, duration: t.duration,
-              }))}
-            />
-
             {album.providerId && (missing > 0 || dlJob) && (
               <button
                 className="candy-btn"
@@ -401,7 +401,7 @@ export default function AlbumDetail({ accent, albumPath }) {
               ><span className="candy-face"><IconDownload size={14}/>{dlLabel}</span></button>
             )}
 
-            {/* Reveal and Delete live in here, as Uninstall does on a film --
+            {/* Add to Queue / Playlist, Reveal and Delete live in here, as Uninstall does on a film --
                 the run stays short enough to fit the reading measure. */}
             <button
               type="button"
@@ -412,6 +412,14 @@ export default function AlbumDetail({ accent, albumPath }) {
               onClick={(e) => {
                 const r = e.currentTarget.getBoundingClientRect();
                 const items = [];
+                // Always offered: off-disk tracks stream from the queue too.
+                items.push({ label: 'Add to Queue', onClick: enqueueAlbum });
+                const refs = album.tracks.map(t => refFromQueueItem({
+                  albumPath: album.path, albumTitle: album.title, albumImage: album.image,
+                  artist: album.artist, wikilink: t.wikilink, audioPath: t.audioPath,
+                  title: t.title, duration: t.duration,
+                }));
+                if (playlistMenu.canAdd(refs)) items.push({ label: 'Add to Playlist', children: playlistMenu.buildItems(refs) });
                 if (album.trackFolder) items.push({
                   label: 'Reveal in files',
                   onClick: () => musicApi.revealInFiles(libraryAbs(album.trackFolder))
@@ -430,9 +438,12 @@ export default function AlbumDetail({ accent, albumPath }) {
 
           {/* Track list — grouped by disc when the album has more than one.
               It rides IN the right column, under the hairline, exactly where a
-              film's Cast panel sits: same reading width as the title above it. */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: runW ? runW + 'px' : undefined }}>
-        {(() => {
+              film's Cast panel sits: same reading width as the title above it.
+              Full column width, no longer capped at the two runs' width
+              (user-directed 2026-09-26). */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {active === 'Credits' && <AlbumPerformers album={album} accent={accent} />}
+        {active === 'Tracks' && (() => {
           const groups = new Map();
           album.tracks.forEach((t, idx) => {
             const d = t.disc || 1;
@@ -502,6 +513,7 @@ export default function AlbumDetail({ accent, albumPath }) {
       <MusicCredits album={album} accent={accent} />
 
       {songMenu.modalEl}
+      {playlistMenu.modalEl}
     </div>
   );
 }

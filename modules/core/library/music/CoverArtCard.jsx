@@ -9,7 +9,7 @@
 import { useState } from 'react';
 import { coverSrc } from './util.js';
 import { useAlbumMenu } from './contextMenus.js';
-import { COVER_BTN_STYLE, COVER_PIC_STYLE, COVER_TILE_FACE_STYLE } from '../AnimeDetailHeader.jsx';
+import { COVER_BOX_STYLE, COVER_BTN_STYLE, COVER_PIC_STYLE, COVER_TILE_FACE_STYLE } from '../AnimeDetailHeader.jsx';
 
 export default function CoverArtCard({ album, accent, selected, onSelect, onPlay }) {
   const [hover, setHover] = useState(false);
@@ -20,6 +20,7 @@ export default function CoverArtCard({ album, accent, selected, onSelect, onPlay
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(); }
   };
   return (
+    <div style={COVER_BOX_STYLE}>
     <div
       onClick={activate}
       onKeyDown={onKeyDown}
@@ -75,6 +76,7 @@ export default function CoverArtCard({ album, accent, selected, onSelect, onPlay
         </div>
       </div>
       </div>
+    </div>
     </div>
   );
 }

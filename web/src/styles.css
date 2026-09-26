@@ -816,8 +816,11 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
      on every .candy-btn so a nested button can't inherit its parent's max. */
   --corner-max: 16px;
   border-radius: calc(var(--corner) * var(--corner-max));
+  /* The band's inset IS the ledge's outline, so it follows the face's frame:
+     a thick-framed tile had a 2px ledge outline under its 4-6px face outline
+     (user-directed 2026-09-26). 2px on every plain button, as before. */
   box-shadow:
-    0 var(--cbtn-depth) 0 -2px color-mix(in oklch, var(--cbtn-band), black 10%),
+    0 var(--cbtn-depth) 0 calc(-1 * var(--cbtn-frame)) color-mix(in oklch, var(--cbtn-band), black 10%),
     0 var(--cbtn-depth) 0 0 color-mix(in oklch, var(--cbtn-band), black 22%);
   transition: box-shadow 150ms cubic-bezier(0, 0, 0.58, 1);
 }

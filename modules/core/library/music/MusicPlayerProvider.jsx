@@ -182,9 +182,11 @@ export function MusicPlayerProvider({ children }) {
 
   // Which shape `music_stream_resolve` gets: an exact YouTube upload, a library
   // album card (cached watch URL + writeback), or bare MusicBrainz metadata.
+  // A streamKey means n is not the album's track number (Browse preview,
+  // playlist rows), so those always take the metadata branch.
   const streamResolveArgs = (t) =>
     t.watchUrl ? { watchUrl: t.watchUrl }
-      : t.albumPath ? { albumPath: t.albumPath, n: t.n }
+      : t.albumPath && !t.streamKey ? { albumPath: t.albumPath, n: t.n }
         : { artist: t.artist, albumTitle: t.albumTitle, trackTitle: t.title,
             durationSec: t.duration || 0 };
   const isPlayable = (t) =>

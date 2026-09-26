@@ -353,6 +353,40 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
     ? `Set ${seasonName} status`
     : 'Set watch status';
 
+  // Play (or Download, when there is no file yet). A film leads its fused run
+  // with it (user-directed 2026-09-26); every other room keeps it after status.
+  const primaryAction = (
+    flatStartIdx >= 0 ? (
+      <>
+        <button onClick={onPlayAll} className="candy-btn is-primary" style={{ cursor: 'pointer' }}>
+          <span className="candy-face" style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><IconPlay size={14}/> {canResume ? 'Resume' : 'Play'}</span>
+        </button>
+        {canGrabMore && isAnime && (
+          <button onClick={onDownload} title="Download more episodes" data-own-press className="candy-btn" data-shape="icon" style={{ cursor: 'pointer' }}>
+            <span className="candy-face"><IconDownload size={16}/></span>
+          </button>
+        )}
+      </>
+    ) : (!isAnime && !isMovie) ? null : dlActive ? (
+      <button disabled
+        className={isMovie ? 'candy-btn' : 'candy-btn is-primary'}
+        data-shape={isMovie ? 'chip' : undefined}
+        style={{ cursor: 'default', opacity: 0.6 }}>
+        <span className="candy-face">{dlLabel}</span>
+      </button>
+    ) : (
+      // A film draws Download neutral and lights it on hover, matching
+      // the source buttons beside it; every other domain keeps the
+      // standing accent that marks it the primary action.
+      <button onClick={onDownload} disabled={!canDownload}
+        className={isMovie ? 'candy-btn' : 'candy-btn is-primary'}
+        data-shape={isMovie ? 'chip' : undefined}
+        style={{ cursor: canDownload ? 'pointer' : 'not-allowed', opacity: canDownload ? 1 : 0.4 }}>
+        <span className="candy-face" style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><IconDownload size={15}/> {dlJob && dlJob.state === 'error' ? 'Retry Download' : 'Download'}</span>
+      </button>
+    )
+  );
+
   return (
     <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
       <div className="detail-column">
@@ -435,6 +469,7 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
                 fused .candy-split shell the tab strip above them uses. */}
             <div className={isMovie ? 'candy-split' : undefined}
               style={isMovie ? { position: 'relative', '--cbtn-size': '26px' } : undefined}>
+            {isMovie && primaryAction}
             <CandySelect
               value={statusValue}
               accent={accent}
@@ -484,35 +519,7 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
                 }}
               />
             )}
-            {flatStartIdx >= 0 ? (
-              <>
-                <button onClick={onPlayAll} className="candy-btn is-primary" style={{ cursor: 'pointer' }}>
-                  <span className="candy-face" style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><IconPlay size={14}/> {canResume ? 'Resume' : 'Play'}</span>
-                </button>
-                {canGrabMore && isAnime && (
-                  <button onClick={onDownload} title="Download more episodes" data-own-press className="candy-btn" data-shape="icon" style={{ cursor: 'pointer' }}>
-                    <span className="candy-face"><IconDownload size={16}/></span>
-                  </button>
-                )}
-              </>
-            ) : (!isAnime && !isMovie) ? null : dlActive ? (
-              <button disabled
-                className={isMovie ? 'candy-btn' : 'candy-btn is-primary'}
-                data-shape={isMovie ? 'chip' : undefined}
-                style={{ cursor: 'default', opacity: 0.6 }}>
-                <span className="candy-face">{dlLabel}</span>
-              </button>
-            ) : (
-              // A film draws Download neutral and lights it on hover, matching
-              // the source buttons beside it; every other domain keeps the
-              // standing accent that marks it the primary action.
-              <button onClick={onDownload} disabled={!canDownload}
-                className={isMovie ? 'candy-btn' : 'candy-btn is-primary'}
-                data-shape={isMovie ? 'chip' : undefined}
-                style={{ cursor: canDownload ? 'pointer' : 'not-allowed', opacity: canDownload ? 1 : 0.4 }}>
-                <span className="candy-face" style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><IconDownload size={15}/> {dlJob && dlJob.state === 'error' ? 'Retry Download' : 'Download'}</span>
-              </button>
-            )}
+            {!isMovie && primaryAction}
             {series.localPath && (
               <button onClick={() => videoApi.revealInFiles(series.localPath).catch(err => alert('Reveal failed: ' + err.message))}
                 title={`Reveal ${series.localPath} in file manager`} data-own-press className="candy-btn" data-shape="icon">

@@ -99,6 +99,11 @@ export function trackToQueueItem(t, pl) {
     // otherwise streaming needs a real album card to resolve against, so rows
     // whose album is gone (recycled) stay truly unavailable.
     streamable: !!t.watchUrl || (!t.available && !!t.albumPath && t.n != null),
+    // A playlist row's n is its place in the PLAYLIST, not the album's track
+    // number, so the album-card resolve (albumPath + n) would fetch the wrong
+    // song. A row not on disk streams by artist + title instead: streamKey
+    // names it and routes streamResolveArgs to that branch.
+    streamKey: !t.available && !t.watchUrl ? `${t.albumPath}|${t.title}` : null,
     watchUrl: t.watchUrl || null,
     wikilink: t.wikilink || null,
     duration: t.duration ?? null,

@@ -19,7 +19,6 @@ import { Cluster, useRailOrder } from '@host/components/ui/Rail.jsx';
 import { usePlaylists, isSavedTracks } from './PlaylistProvider.jsx';
 import { PlaylistCard } from './PlaylistsPage.jsx';
 import { TILE_GRID, TILE_GAP, RUN_SIZE } from './util.js';
-import { ISLAND_STYLE } from './MusicSearchBar.jsx';
 import { encodePath } from '../paths.js';
 import { navigate as go } from '@host/router.js';
 
@@ -227,17 +226,16 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-      {/* Filter bar — the run sits on the search bar's island, hanging from
-          the titlebar (top 0) and centred left and right (user-directed
-          2026-09-26). The island's plate already holds the chips' band, so the
-          bar reserves nothing below it and the body's TILE_GAP padding is the
-          whole gap to the first tile - the tiles' own side margin. */}
+      {/* Filter bar — no hairline, run centred left and right. The painted gap
+          above the run and the gap from its band to whatever comes first below
+          both equal the tiles' own side margin, TILE_GAP (user-directed
+          2026-09-25): the bottom reserves only the band, and the body's
+          TILE_GAP padding supplies the gap under it. */}
       <div data-spacing-intent="centred-run" style={{
-        padding: '0 18px',
+        padding: `${TILE_GAP}px 18px var(--candy-depth-small)`,
         display: 'flex', justifyContent: 'safe center',
         flexShrink: 0,
       }}>
-        <div style={ISLAND_STYLE}>
         {/* ONE fused run: Search | Sort | Status | View (user-directed
             2026-09-24; the field used to sit on its own line above the three).
             SearchRun owns the field: clicking it slides the three out through
@@ -293,7 +291,6 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
               title="Show playlists, albums or both"
             />
           </SearchRun>
-        </div>
       </div>
 
       {/* Body — playlist tiles and/or the album grid */}

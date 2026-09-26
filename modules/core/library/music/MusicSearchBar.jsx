@@ -30,21 +30,6 @@ const PANEL_W = 560;
 const PAD = 8;    // viewport edge clamp
 const GAP_Y = 12; // breathing room under the field
 
-// The island: a plate in the left sidebar's colour that hugs its run, hanging
-// from the titlebar like a MacBook notch (user-directed 2026-09-26): square top
-// corners where it joins the bar, rounded bottom ones. Even 6px all round, the
-// chips' lip (--candy-depth-small) added under them; --radius-lg follows the
-// global corner setting and is concentric with the chips at the default (6px
-// chip + 6px pad = 12px). The titlebar's own candy-width line runs down its
-// sides and round its bottom, no top border: the bar's line is its top edge.
-// Exported so AlbumBrowser's filter run wears the same island.
-export const ISLAND_STYLE = {
-  background: 'var(--surface)',
-  padding: '6px 6px calc(6px + var(--candy-depth-small))',
-  borderRadius: '0 0 var(--radius-lg) var(--radius-lg)',
-  border: 'var(--candy-frame) solid var(--titlebar-line)', borderTop: 'none',
-};
-
 export default function MusicSearchBar({ accent, query, setQuery, albums, ownedIds, onPlay, suppress, onHome }) {
   const btnRef = useRef(null);
   const [open, setOpen] = useState(false);
@@ -97,9 +82,7 @@ export default function MusicSearchBar({ accent, query, setQuery, albums, ownedI
 
   return (
     <>
-      {/* The island (ISLAND_STYLE above). */}
-      <div ref={btnRef} data-music-search onKeyDown={onKeyDown} onFocus={(e) => { if (isInput(e)) setOpen(!!q); }}
-        style={ISLAND_STYLE}>
+      <div ref={btnRef} data-music-search onKeyDown={onKeyDown} onFocus={(e) => { if (isInput(e)) setOpen(!!q); }}>
         <SearchRun
           value={query || ''}
           onChange={(v) => { setQuery(v); setOpen(!!v.trim()); }}

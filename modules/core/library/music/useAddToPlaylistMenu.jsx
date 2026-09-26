@@ -37,9 +37,11 @@ export function useAddToPlaylistMenu(accent) {
   const pending = useRef([]);
 
   // Only references the app can actually resolve to audio are addable: a file on
-  // disk, a vault track page, or (since 2026-08-08) a source link for a streamed
-  // song. Anything with none of the three filters out and canAdd() is false.
-  const addable = (refs) => (refs || []).filter((r) => r && (r.audioPath || r.wikilink || r.watchUrl));
+  // disk, a vault track page, (since 2026-08-08) a source link for a streamed
+  // song, or (since 2026-09-26) a titled track on an album card -- a song not
+  // downloaded yet, written as a plain row that streams by artist + title
+  // (trackToQueueItem). Anything else filters out and canAdd() is false.
+  const addable = (refs) => (refs || []).filter((r) => r && (r.audioPath || r.wikilink || r.watchUrl || (r.albumPath && r.title)));
 
   // The rows themselves, so a bigger menu (useSongMenu) can nest them as a
   // submenu instead of growing a second copy of this list.

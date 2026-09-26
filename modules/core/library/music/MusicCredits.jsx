@@ -1,30 +1,17 @@
-// "Max detail" credits for one album, mounted below the tracklist in
-// AlbumDetail — the music analog of the Anime tab's AnimeCredits. Four stacked
-// sections, each hidden when it has no data (so the page never shows an empty
-// rail):
-//   • More from this artist — the artist's MusicBrainz discography (owned ones
-//     link to the library detail; the rest seed a Browse search).
-//   • Performers & personnel — release-level credits from MusicBrainz
-//     (music_release_personnel): main/featured artists plus producer, mixing,
-//     mastering, and performer relations, grouped one chip per person. Falls
-//     back to the primary album artist when a release carries no relationships.
-//   • Related — other owned albums that share a genre with this one.
-//   • Release details — type / year / tracks / length / genres / MBID.
+// Credits for one album. The default export mounts below the album header in
+// AlbumDetail and is now only "More from this artist" (the artist's MusicBrainz
+// discography; owned ones link to the library detail, the rest seed a Browse
+// search). Performers moved into the header's tab strip (AlbumPerformers
+// below); Related and the Release details tab were deleted, all
+// user-directed 2026-09-26.
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { musicApi, useMbRefreshTick } from './api.js';
 import BrowseResultCard from './BrowseResultCard.jsx';
-import CoverArtCard from './CoverArtCard.jsx';
-import PosterRow, { ROW_TITLE_STYLE, faceInset } from '@modules/core/library/PosterRow.jsx';
+import PosterRow from '@modules/core/library/PosterRow.jsx';
 import { encodePath } from '../paths.js';
 import { navigate as go } from '@host/router.js';
 import { toBrowse } from './util.js';
-
-// Plain sections title themselves like the PosterRows between them (same
-// lettering, same 10px title-to-content gap as PosterRow's section), and all
-// four titles share ONE inset: the first button on the page's (see below).
-const SECTION_STYLE = { display: 'flex', flexDirection: 'column', gap: 10 };
-const SECTION_TITLE_STYLE = { ...ROW_TITLE_STYLE, paddingLeft: 'var(--row-title-inset, 0px)' };
 
 const toAlbum = (path) => go('/tools/library/music/downloaded/' + encodePath(path));
 
@@ -33,17 +20,10 @@ export default function MusicCredits({ album, accent }) {
   const artist = album?.artist || '';
   const selfId = album?.providerId || null;
 
-  const [library, setLibrary] = useState([]);    // owned albums (for owned-map + related)
+  const [library, setLibrary] = useState([]);    // owned albums (for the owned map)
   const [discography, setDiscography] = useState(null); // artist's MB release groups
-  const [personnel, setPersonnel] = useState(null);     // null=loading, []=none/failed
   const [moreExpanded, setMoreExpanded] = useState(false);
-  // One title column: every heading takes the first button's inset (the first
-  // More-from cover), so rows whose covers wear a thicker outline still line up.
-  const rootRef = useRef(null);
-  const [titleInset, setTitleInset] = useState(0);
-  useLayoutEffect(() => { setTitleInset(faceInset(rootRef.current)); });
   const reqId = useRef(0);
-  const persReq = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -73,16 +53,6 @@ export default function MusicCredits({ album, accent }) {
     })();
   }, [artist, mbTick]);
 
-  // Release-level credits for THIS album (selfId is the release-group MBID).
-  useEffect(() => {
-    if (!selfId) { setPersonnel([]); return; }
-    const my = ++persReq.current;
-    setPersonnel(null);
-    musicApi.releasePersonnel(selfId)
-      .then(res => { if (my === persReq.current) setPersonnel((res && res.credits) || []); })
-      .catch(() => { if (my === persReq.current) setPersonnel([]); });
-  }, [selfId]);
-
   const ownedByProvider = useMemo(() => {
     const m = new Map();
     library.forEach(a => { if (a.providerId) m.set(a.providerId, a.path); });
@@ -98,6 +68,58 @@ export default function MusicCredits({ album, accent }) {
   const MORE_CAP = 10;
   const shownMore = moreExpanded ? more : more.slice(0, MORE_CAP);
 
+  if (!album || more.length === 0) return null;
+
+  return (
+    // .film-below (library.css) = the header's own column: its side gutter and
+    // centred measure, so the row's edges line up with the sleeve and the
+    // tracklist at every pane width (user-directed 2026-09-26).
+    <div className="film-below" style={{ paddingTop: 22, paddingBottom: 8 }}>
+      <PosterRow
+        title={`More from ${artist}`}
+        accent={accent}
+        colWidth={150}
+        layout={moreExpanded ? 'grid' : 'row'}
+        seeAllLabel={moreExpanded ? 'Show Less ↑' : 'See All →'}
+        onSeeAll={more.length > MORE_CAP ? () => setMoreExpanded(e => !e) : undefined}
+      >
+        {shownMore.map(r => {
+          const ownedPath = ownedByProvider.get(r.mbid);
+          return (
+            <BrowseResultCard
+              key={r.mbid}
+              result={r}
+              accent={accent}
+              inLibrary={!!ownedPath}
+              onSelect={() => ownedPath ? toAlbum(ownedPath) : toBrowse(`${r.title} ${artist}`.trim())}
+            />
+          );
+        })}
+      </PosterRow>
+    </div>
+  );
+}
+
+// The Performers tab: release-level credits from MusicBrainz
+// (music_release_personnel), main/featured artists plus producer, mixing,
+// mastering and performer relations, one chip per person. Falls back to the
+// primary album artist when a release carries no relationships.
+export function AlbumPerformers({ album, accent }) {
+  const artist = album?.artist || '';
+  const selfId = album?.providerId || null;
+  const [personnel, setPersonnel] = useState(null);     // null=loading, []=none/failed
+  const persReq = useRef(0);
+
+  // Release-level credits for THIS album (selfId is the release-group MBID).
+  useEffect(() => {
+    if (!selfId) { setPersonnel([]); return; }
+    const my = ++persReq.current;
+    setPersonnel(null);
+    musicApi.releasePersonnel(selfId)
+      .then(res => { if (my === persReq.current) setPersonnel((res && res.credits) || []); })
+      .catch(() => { if (my === persReq.current) setPersonnel([]); });
+  }, [selfId]);
+
   // Group flat credits into one entry per person, merging their roles in order.
   const performers = useMemo(() => {
     const order = [];
@@ -112,105 +134,26 @@ export default function MusicCredits({ album, accent }) {
     return order.map(k => byKey.get(k));
   }, [personnel]);
 
-  // Related: other owned albums sharing at least one genre, excluding this album
-  // and the same artist (which "More from this artist" already covers).
-  const related = useMemo(() => {
-    const genres = new Set((album?.genres || []).map(g => String(g).toLowerCase()));
-    if (genres.size === 0) return [];
-    return library.filter(a =>
-      a.path !== album.path &&
-      (a.artist || '') !== artist &&
-      (a.genres || []).some(g => genres.has(String(g).toLowerCase()))
-    ).slice(0, 14);
-  }, [library, album, artist]);
-
-  if (!album) return null;
-
+  if (personnel === null) {
+    return (
+      <div style={{ fontSize: 11, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)' }}>
+        Loading credits…
+      </div>
+    );
+  }
   return (
-    <div ref={rootRef} style={{ padding: '22px 24px 8px', display: 'flex', flexDirection: 'column', gap: 28, '--row-title-inset': `${titleInset}px` }}>
-      {/* More from this artist */}
-      {more.length > 0 && (
-        <PosterRow
-          title={`More from ${artist}`}
-          accent={accent}
-          colWidth={150}
-          layout={moreExpanded ? 'grid' : 'row'}
-          seeAllLabel={moreExpanded ? 'Show Less ↑' : 'See All →'}
-          onSeeAll={more.length > MORE_CAP ? () => setMoreExpanded(e => !e) : undefined}
-        >
-          {shownMore.map(r => {
-            const ownedPath = ownedByProvider.get(r.mbid);
-            return (
-              <BrowseResultCard
-                key={r.mbid}
-                result={r}
-                accent={accent}
-                inLibrary={!!ownedPath}
-                onSelect={() => ownedPath ? toAlbum(ownedPath) : toBrowse(`${r.title} ${artist}`.trim())}
-              />
-            );
-          })}
-        </PosterRow>
-      )}
-
-      {/* Performers & personnel — release-level credits (MusicBrainz). */}
-      {(performers.length > 0 || artist) && (
-        <section style={SECTION_STYLE}>
-          <h3 style={SECTION_TITLE_STYLE}>Performers &amp; personnel</h3>
-          {personnel === null ? (
-            <div style={{ fontSize: 11, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)' }}>
-              Loading credits…
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {performers.length > 0
-                ? performers.map((p, i) => (
-                    <CreditChip
-                      key={p.name + i}
-                      name={p.name}
-                      role={p.roles.slice(0, 3).join(' · ') + (p.roles.length > 3 ? ` +${p.roles.length - 3}` : '')}
-                      accent={accent}
-                      onClick={() => toBrowse(p.name)}
-                    />
-                  ))
-                : <CreditChip name={artist} role="Primary artist" accent={accent} onClick={() => toBrowse(artist)} />}
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* Related (shared genre, owned) */}
-      {related.length > 0 && (
-        <PosterRow title="Related" accent={accent} colWidth={150}>
-          {related.map(a => (
-            <CoverArtCard key={a.path} album={a} accent={accent} selected={false}
-                          onSelect={toAlbum} onPlay={() => {}} />
-          ))}
-        </PosterRow>
-      )}
-
-      {/* Release details */}
-      <section style={SECTION_STYLE}>
-        <h3 style={SECTION_TITLE_STYLE}>Release details</h3>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {[
-            { label: 'Type', value: album.releaseType || 'Album' },
-            { label: 'Year', value: album.year },
-            { label: 'Tracks', value: album.tracks ? album.tracks.length : null },
-            { label: 'Length', value: album.length },
-            { label: 'Genres', value: (album.genres && album.genres.length) ? album.genres.join(', ') : null },
-            { label: 'MusicBrainz', value: album.providerId },
-          ].filter(s => s.value != null && s.value !== '').map(s => (
-            <div key={s.label} style={{
-              padding: '7px 14px', borderRadius: 8, background: 'var(--surface-2)',
-              display: 'flex', flexDirection: 'column', gap: 2, minWidth: 64, maxWidth: 280,
-            }}>
-              <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.06em', color: 'var(--text-faint)' }}>{s.label}</span>
-              <span style={{ fontSize: 13, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={String(s.value)}>{s.value}</span>
-            </div>
-          ))}
-        </div>
-      </section>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+      {performers.length > 0
+        ? performers.map((p, i) => (
+            <CreditChip
+              key={p.name + i}
+              name={p.name}
+              role={p.roles.slice(0, 3).join(' · ') + (p.roles.length > 3 ? ` +${p.roles.length - 3}` : '')}
+              accent={accent}
+              onClick={() => toBrowse(p.name)}
+            />
+          ))
+        : artist && <CreditChip name={artist} role="Primary artist" accent={accent} onClick={() => toBrowse(artist)} />}
     </div>
   );
 }

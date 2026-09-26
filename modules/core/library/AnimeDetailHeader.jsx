@@ -142,7 +142,11 @@ function SourceBtn({ label, name = label, url, filmLayout }) {
 // gap is the album track list's own formula (--credit-gap + the band): the
 // visible space under the poster equals the space between two tracks (16 left
 // 5.5px against the tracks' 6, measured 2026-09-26).
-export const POSTER_COL_GAP = 'calc(var(--credit-gap) + var(--candy-tile-depth))';
+// The poster's press depth: 1.5x a tile's, so the press reads bigger
+// (user-directed 2026-09-26; 2x read too deep). Whole px: 10.5 paints a
+// half-shaded row. The gap above follows it.
+export const POSTER_DEPTH = 'round(var(--candy-tile-depth) * 1.5, 1px)';
+export const POSTER_COL_GAP = `calc(var(--credit-gap) + ${POSTER_DEPTH})`;
 
 // The film's source buttons as one fused run, centred under the poster.
 // Exported: the album page puts Last.fm / MusicBrainz / RYM under its sleeve.
@@ -162,13 +166,16 @@ export function SourceRun({ sources }) {
 // tile, ~6.6px on the 221px sleeve. Fully in step (1/24 of the width, ~9px) was
 // tried the same day and read as far too thick. Floored at the tile shape's 4px:
 // border widths paint rounded DOWN to whole pixels, so a 95.8px tile's 3.99px
-// painted as 3px, thinner than before (photographed 2026-09-25). The button is
-// its own container, so its face and the picture resolve 100cqi against it.
-// Rounded down to whole px at the source, as borders paint floored anyway.
+// painted as 3px, thinner than before (photographed 2026-09-25). Rounded down to
+// whole px at the source, as borders paint floored anyway.
 export const COVER_BTN_STYLE = {
-  containerType: 'inline-size',
   '--cbtn-frame': 'round(down, max(4px, 2px + 100cqi / 48), 1px)',
 };
+// The container every cover button sits in, exactly its width. Not the button
+// itself: an element's cqi resolves against its ANCESTOR container, so the
+// button's own ledge shadow (spread = -frame) read 40px off the page while its
+// face read the button (2026-09-26). Here the button and face agree.
+export const COVER_BOX_STYLE = { containerType: 'inline-size', width: '100%' };
 // The picture box inside every cover button: it sits in the face's own padding
 // and wears the button's exact outline (--cbtn-outline at --cbtn-frame, so it
 // darkens with the band on hover), and the button's own corner radius read
@@ -189,6 +196,7 @@ export function PosterTile({ image, title, accent, aspect = '2 / 3' }) {
   const lb = useLightbox();
   return (
     <>
+      <div style={COVER_BOX_STYLE}>
       <button
         type="button"
         disabled={!image}
@@ -196,7 +204,7 @@ export function PosterTile({ image, title, accent, aspect = '2 / 3' }) {
         className="candy-btn"
         data-shape="tile"
         title={image ? `View ${title} cover` : title}
-        style={{ ...COVER_BTN_STYLE, '--accent': accent, width: '100%', padding: 0, cursor: image ? 'zoom-in' : 'default' }}
+        style={{ ...COVER_BTN_STYLE, '--cbtn-depth': POSTER_DEPTH, '--accent': accent, width: '100%', padding: 0, cursor: image ? 'zoom-in' : 'default' }}
       >
         <span className="candy-face">
           <div style={{
@@ -210,6 +218,7 @@ export function PosterTile({ image, title, accent, aspect = '2 / 3' }) {
           </div>
         </span>
       </button>
+      </div>
       <ImageLightbox {...lb} accent={accent} />
     </>
   );

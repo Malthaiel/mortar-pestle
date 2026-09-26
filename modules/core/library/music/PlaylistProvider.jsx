@@ -43,7 +43,10 @@ export function usePlaylists() {
 // De-dupe / identity key for a track reference.
 export function trackKey(ref) {
   // watchUrl before title: two streamed hits can share a title but never a URL.
-  return ref.audioPath || ref.wikilink || ref.watchUrl || ref.title || '';
+  // A plain (not downloaded) row keys by album + title: two albums' "Intro"
+  // are different songs.
+  return ref.audioPath || ref.wikilink || ref.watchUrl
+    || (ref.albumPath ? `${ref.albumPath}|${ref.title || ''}` : ref.title) || '';
 }
 
 // Build a writer ref from a now-playing/album-mapped queue item (carries the

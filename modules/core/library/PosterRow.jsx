@@ -13,8 +13,7 @@
 
 import { useLayoutEffect, useRef, useState } from 'react';
 
-// The row's title lettering. Exported so a plain section heading beside these
-// rows (MusicCredits' Performers / Release details) reads as the same title.
+// The row's title lettering.
 export const ROW_TITLE_STYLE = { margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.01em' };
 // A title starts where the first card's face does, inside its outline, so it
 // has the same gap to its left as the button below it (user-directed
@@ -31,7 +30,17 @@ export default function PosterRow({ title, subtitle, onSeeAll, seeAllLabel = 'Se
   // Own first card's inset, unless a page lines several titles up on one value
   // (--row-title-inset, set by MusicCredits).
   const [inset, setInset] = useState(0);
-  useLayoutEffect(() => { setInset(faceInset(ref.current)); });
+  // How far the title's line box runs below its letters (a zero-size probe
+  // sits on the baseline). The button run is lifted by that plus its own lip,
+  // so the space under the buttons equals the space under the title
+  // (user-directed 2026-09-26): read off the live title, never restated.
+  const baseRef = useRef(null);
+  const [descent, setDescent] = useState(0);
+  useLayoutEffect(() => {
+    setInset(faceInset(ref.current));
+    const b = baseRef.current;
+    if (b) setDescent(b.parentElement.getBoundingClientRect().bottom - b.getBoundingClientRect().bottom);
+  });
   const scrollByDir = (dir) => {
     const el = ref.current;
     if (el) el.scrollBy({ left: dir * Math.max(300, el.clientWidth * 0.82), behavior: 'smooth' });
@@ -56,14 +65,18 @@ export default function PosterRow({ title, subtitle, onSeeAll, seeAllLabel = 'Se
       };
   return (
     <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
-        <h3 style={{ ...ROW_TITLE_STYLE, paddingLeft: `var(--row-title-inset, ${inset}px)` }}>{title}</h3>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12 }}>
+        <h3 style={{ ...ROW_TITLE_STYLE, paddingLeft: `var(--row-title-inset, ${inset}px)` }}>{title}<span ref={baseRef} style={{ display: 'inline-block' }}/></h3>
         {subtitle && (
           <span style={{ fontSize: 11, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)' }}>
             {subtitle}
           </span>
         )}
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
+        {/* One fused run at the source run's height (Last.fm / RYM, 26px),
+            user-directed 2026-09-26. ponytail: 26px restated from SourceRun;
+            lift to a shared export if a third run needs it. */}
+        {(onSeeAll || !grid) && (
+        <div className="candy-split" style={{ marginLeft: 'auto', marginBottom: `calc(${descent}px + var(--candy-depth-small))`, '--cbtn-size': '26px', '--accent': accent }}>
           {onSeeAll && (
             <button onClick={onSeeAll} data-own-press className="candy-btn" data-shape="chip">
               <span className="candy-face" style={{ fontSize: 11 }}>{seeAllLabel}</span>
@@ -76,6 +89,7 @@ export default function PosterRow({ title, subtitle, onSeeAll, seeAllLabel = 'Se
             </>
           )}
         </div>
+        )}
       </div>
       <div ref={ref} style={track}>
         {children}
@@ -91,8 +105,8 @@ function Scrub({ accent, onClick, label, children }) {
       aria-label={label}
       data-own-press
       className="candy-btn"
-      data-shape="icon"
-      style={{ width: 26, height: 26, '--accent': accent }}
+      data-shape="chip"
+      style={{ '--accent': accent }}
     ><span className="candy-face" style={{ fontSize: 16, lineHeight: 1, color: 'var(--text-muted)' }}>{children}</span></button>
   );
 }

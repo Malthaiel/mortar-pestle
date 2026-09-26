@@ -12,7 +12,7 @@ import PlaylistDetail from './PlaylistDetail.jsx';
 import { TILE_GRID } from './util.js';
 import { encodePath } from '../paths.js';
 import { navigate } from '@host/router.js';
-import { COVER_BTN_STYLE, COVER_PIC_STYLE, COVER_TILE_FACE_STYLE } from '../AnimeDetailHeader.jsx';
+import { COVER_BOX_STYLE, COVER_BTN_STYLE, COVER_PIC_STYLE, COVER_TILE_FACE_STYLE } from '../AnimeDetailHeader.jsx';
 
 const GRID = TILE_GRID;   // the module-wide cover-tile grid (util.js)
 
@@ -128,6 +128,7 @@ export function PlaylistCard({ playlist, accent, onOpen, pinned = false }) {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); }
   };
   return (
+    <div style={COVER_BOX_STYLE}>
     <div
       onClick={onOpen}
       onKeyDown={onKeyDown}
@@ -158,6 +159,7 @@ export function PlaylistCard({ playlist, accent, onOpen, pinned = false }) {
           <CollageCover image={playlist.image} urls={playlist.coverUrls} title={playlist.title} accent={accent} />
         </div>
       </div>
+    </div>
     </div>
   );
 }

@@ -494,11 +494,11 @@
                           so the title lands exactly on the start of the fade and
                           moving the fade moves the title with it.
    A pixel constant here (it was 234px) drifts the moment the window resizes. */
-.film-detail {
-  /* ONE knob for the whole film head -- title, byline, and the rating/genre/
-     runtime row all multiply their base size by it, so they grow together and
-     keep their relative weight instead of drifting apart as three numbers. */
-  --film-head: 1.3;
+/* The head's COLUMN -- side gutter + centred reading measure -- declared once
+   for .film-detail and .film-below, a section under the head that must share
+   its edges (the album page's More-from row, user-directed 2026-09-26). */
+.film-detail, .film-below {
+  --film-gutter: 28px;
   /* Reading measure for everything EXCEPT the backdrop, which stays full bleed.
      The NARROWEST value that still keeps the tab strip and the status/rating/
      download run on ONE line, measured 2026-09-13: tabs 307px + 12px gap + the
@@ -511,9 +511,17 @@
      Deliberate: covering them would cost nearly the whole narrowing, for a
      state that lasts as long as one download. */
   --film-measure: 915px;
+}
+.film-below { padding-inline: var(--film-gutter); }
+.film-below > * { max-width: var(--film-measure); margin-inline: auto; }
+.film-detail {
+  /* ONE knob for the whole film head -- title, byline, and the rating/genre/
+     runtime row all multiply their base size by it, so they grow together and
+     keep their relative weight instead of drifting apart as three numbers. */
+  --film-head: 1.3;
   --film-backdrop-ratio: 56.25%;   /* 9 / 16 */
   --film-backdrop-solid: 0.60;     /* unitless: the mask multiplies it by 100% */
-  padding: calc(var(--film-backdrop-ratio) * var(--film-backdrop-solid)) 28px 24px;
+  padding: calc(var(--film-backdrop-ratio) * var(--film-backdrop-solid)) var(--film-gutter) 24px;
 }
 .film-detail > *:not(.film-backdrop) { position: relative; z-index: 1; max-width: var(--film-measure); margin-inline: auto; }
 .film-detail > .film-backdrop {
