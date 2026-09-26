@@ -13,7 +13,7 @@
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -33,6 +33,11 @@ static LAST_AVAILABLE: AtomicBool = AtomicBool::new(false);
 static FOCUSED: AtomicBool = AtomicBool::new(true);
 static LAST_FOCUS_CHANGE_SECS: AtomicU64 = AtomicU64::new(0);
 static POLL_INTERVAL_SECS: AtomicU64 = AtomicU64::new(DEFAULT_POLL_INTERVAL_SECS);
+/// Last on-disk hash keyed by (size, mtime), so an unchanged binary is never
+/// re-hashed. Hashing the 68 MB debug exe took ~20s and, run on the main
+/// thread by every useUpdateStatus mount, froze all IPC (measured 2026-09-26).
+// ponytail: size+mtime key; a same-size, same-mtime swap would go unseen (a rebuild always moves mtime).
+static DISK_CACHE: Mutex<Option<(u64, Option<SystemTime>, String)>> = Mutex::new(None);
 
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -86,6 +91,9 @@ pub fn init_cache() {
     let canonical = fs::canonicalize(&exe).unwrap_or(exe);
     match hash_file(&canonical) {
         Ok((digest, _size)) => {
+            if let Ok(m) = fs::metadata(&canonical) {
+                *DISK_CACHE.lock().unwrap() = Some((m.len(), m.modified().ok(), digest.clone()));
+            }
             let _ = BINARY_PATH.set(canonical);
             let _ = CURRENT_SHA.set(digest);
         }
@@ -103,10 +111,23 @@ fn check_inner() -> Result<SelfUpdateStatus, String> {
         .get()
         .ok_or_else(|| "current hash not initialized".to_string())?;
 
-    let (disk_hash, disk_size) = hash_file(path).map_err(|e| format!("hash disk: {e}"))?;
-    let mtime_secs = fs::metadata(path)
-        .ok()
-        .and_then(|m| m.modified().ok())
+    let meta = fs::metadata(path).map_err(|e| format!("stat disk: {e}"))?;
+    let (disk_size, mtime) = (meta.len(), meta.modified().ok());
+    let cached = DISK_CACHE
+        .lock()
+        .unwrap()
+        .as_ref()
+        .filter(|c| c.0 == disk_size && c.1 == mtime)
+        .map(|c| c.2.clone());
+    let disk_hash = match cached {
+        Some(h) => h,
+        None => {
+            let (h, _) = hash_file(path).map_err(|e| format!("hash disk: {e}"))?;
+            *DISK_CACHE.lock().unwrap() = Some((disk_size, mtime, h.clone()));
+            h
+        }
+    };
+    let mtime_secs = mtime
         .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
         .map(|d| d.as_secs());
     let prev_exists = path
@@ -124,9 +145,13 @@ fn check_inner() -> Result<SelfUpdateStatus, String> {
     })
 }
 
+/// Async + blocking pool: a real re-hash (after a rebuild) must never run on
+/// the main thread, where sync commands execute.
 #[tauri::command]
-pub fn app_self_check_update() -> Result<SelfUpdateStatus, String> {
-    check_inner()
+pub async fn app_self_check_update() -> Result<SelfUpdateStatus, String> {
+    tauri::async_runtime::spawn_blocking(check_inner)
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
