@@ -138,8 +138,11 @@ function SourceBtn({ label, name = label, url, filmLayout }) {
 
 // Gap between the poster, the source run and whatever follows in the poster
 // column. Exported with the two parts below so the album page's column cannot
-// drift from the film's.
-export const POSTER_COL_GAP = 16;
+// drift from the film's. The poster's tile band paints outside layout, so the
+// gap is the album track list's own formula (--credit-gap + the band): the
+// visible space under the poster equals the space between two tracks (16 left
+// 5.5px against the tracks' 6, measured 2026-09-26).
+export const POSTER_COL_GAP = 'calc(var(--credit-gap) + var(--candy-tile-depth))';
 
 // The film's source buttons as one fused run, centred under the poster.
 // Exported: the album page puts Last.fm / MusicBrainz / RYM under its sleeve.
@@ -161,19 +164,27 @@ export function SourceRun({ sources }) {
 // border widths paint rounded DOWN to whole pixels, so a 95.8px tile's 3.99px
 // painted as 3px, thinner than before (photographed 2026-09-25). The button is
 // its own container, so its face and the picture resolve 100cqi against it.
-// The picture fills the face flush to the rim: no gap, no outline of its own
-// (both removed by him 2026-09-25). The face clips it, so its corners follow the
-// rim's own inner curve with nothing showing between. Rounded down to whole px
-// at the source, as borders paint floored anyway.
+// Rounded down to whole px at the source, as borders paint floored anyway.
 export const COVER_BTN_STYLE = {
   containerType: 'inline-size',
   '--cbtn-frame': 'round(down, max(4px, 2px + 100cqi / 48), 1px)',
 };
-export const COVER_FACE_STYLE = { padding: 0, overflow: 'hidden' };
+// The picture box inside every cover button: it sits in the face's own padding
+// and wears the button's exact outline (--cbtn-outline at --cbtn-frame, so it
+// darkens with the band on hover), and the button's own corner radius read
+// off the face, equal not concentric (user-directed 2026-09-26; concentric goes
+// square on big covers; the flush fill of 2026-09-25 is retired).
+export const COVER_PIC_STYLE = {
+  border: 'var(--cbtn-frame) solid var(--cbtn-outline)',
+  borderRadius: 'inherit', overflow: 'hidden',
+};
+// The small grid tiles (album + playlist) halve the tile face's 8px gap around
+// the picture; at ~96px the full 8px read too wide (user-directed 2026-09-26).
+export const COVER_TILE_FACE_STYLE = { padding: 4 };
 
 // The poster as a candy tile that opens the full picture. Exported: the album
 // page wears the same tile for its sleeve, at a square aspect, and matches the
-// music cover tiles: rim + flush picture as above (user-directed 2026-09-25).
+// music cover tiles (COVER_PIC_STYLE).
 export function PosterTile({ image, title, accent, aspect = '2 / 3' }) {
   const lb = useLightbox();
   return (
@@ -187,10 +198,11 @@ export function PosterTile({ image, title, accent, aspect = '2 / 3' }) {
         title={image ? `View ${title} cover` : title}
         style={{ ...COVER_BTN_STYLE, '--accent': accent, width: '100%', padding: 0, cursor: image ? 'zoom-in' : 'default' }}
       >
-        <span className="candy-face" style={COVER_FACE_STYLE}>
+        <span className="candy-face">
           <div style={{
+            ...COVER_PIC_STYLE,
             width: '100%', aspectRatio: aspect, background: 'var(--surface-3)',
-            overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
             {image
               ? <img src={image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />

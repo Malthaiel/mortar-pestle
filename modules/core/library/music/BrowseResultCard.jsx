@@ -4,6 +4,7 @@
 // (status dot, rating, play button). Click → preview (wired in SF2).
 
 import { useState } from 'react';
+import { COVER_PIC_STYLE } from '../AnimeDetailHeader.jsx';
 
 function initials(text) {
   const words = (text || '').trim().split(/\s+/).filter(Boolean);
@@ -28,10 +29,10 @@ export default function BrowseResultCard({ result, accent, onSelect, inLibrary }
   const body = (
     <>
       <div style={{
+        ...COVER_PIC_STYLE,
         position: 'relative',
         width: '100%', aspectRatio: '1 / 1',
         background: 'var(--surface-2)',
-        borderRadius: 6, overflow: 'hidden',
       }}>
         {showImg ? (
           <img

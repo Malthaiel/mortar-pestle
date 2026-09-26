@@ -203,10 +203,10 @@ export default function AlbumDetail({ accent, albumPath }) {
   const sources = [
     album.artist && album.title
       ? { label: 'Last.fm', url: `https://www.last.fm/music/${plus(album.artist)}/${plus(album.title)}` } : null,
+    { label: 'RYM', url: `https://rateyourmusic.com/search?searchtype=l&searchterm=${encodeURIComponent(named)}` },
     { label: 'MBrainz', name: 'MusicBrainz', url: album.providerId
       ? `https://musicbrainz.org/release-group/${album.providerId}`
       : `https://musicbrainz.org/search?type=release_group&query=${encodeURIComponent(named)}` },
-    { label: 'RYM', url: `https://rateyourmusic.com/search?searchtype=l&searchterm=${encodeURIComponent(named)}` },
   ].filter(Boolean);
 
   const enqueueAlbum = () => {

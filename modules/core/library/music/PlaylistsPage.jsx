@@ -12,7 +12,7 @@ import PlaylistDetail from './PlaylistDetail.jsx';
 import { TILE_GRID } from './util.js';
 import { encodePath } from '../paths.js';
 import { navigate } from '@host/router.js';
-import { COVER_BTN_STYLE, COVER_FACE_STYLE } from '../AnimeDetailHeader.jsx';
+import { COVER_BTN_STYLE, COVER_PIC_STYLE, COVER_TILE_FACE_STYLE } from '../AnimeDetailHeader.jsx';
 
 const GRID = TILE_GRID;   // the module-wide cover-tile grid (util.js)
 
@@ -146,12 +146,12 @@ export function PlaylistCard({ playlist, accent, onOpen, pinned = false }) {
       // artwork, decide how big the tile is.
       style={{ ...COVER_BTN_STYLE, width: '100%', '--accent': accent || 'var(--accent)' }}
     >
-      <div className="candy-face" style={COVER_FACE_STYLE}>
+      <div className="candy-face" style={COVER_TILE_FACE_STYLE}>
         <div
           style={{
+            ...COVER_PIC_STYLE,
             width: '100%',
             aspectRatio: '1 / 1',
-            overflow: 'hidden',
             background: 'var(--surface-2)',
           }}
         >

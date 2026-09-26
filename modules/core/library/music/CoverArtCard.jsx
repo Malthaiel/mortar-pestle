@@ -3,12 +3,13 @@
 // (user-directed: at the 93-143px tile widths the captions were unreadable clutter).
 // Hover overlays a circular play button. Right-click deletes the album (shared menu
 // — every grid that renders this tile gets it). Outline grows with the tile, as
-// the album/film poster's does, and the cover fills flush to it (COVER_BTN_STYLE).
+// the album/film poster's does (COVER_BTN_STYLE), and the cover sits inset in
+// the face wearing that outline (COVER_PIC_STYLE).
 
 import { useState } from 'react';
 import { coverSrc } from './util.js';
 import { useAlbumMenu } from './contextMenus.js';
-import { COVER_BTN_STYLE, COVER_FACE_STYLE } from '../AnimeDetailHeader.jsx';
+import { COVER_BTN_STYLE, COVER_PIC_STYLE, COVER_TILE_FACE_STYLE } from '../AnimeDetailHeader.jsx';
 
 export default function CoverArtCard({ album, accent, selected, onSelect, onPlay }) {
   const [hover, setHover] = useState(false);
@@ -36,12 +37,12 @@ export default function CoverArtCard({ album, accent, selected, onSelect, onPlay
       // and collapses to a dot; claiming the width lets the cell decide instead.
       style={{ ...COVER_BTN_STYLE, width: '100%', '--accent': accent || 'var(--accent)' }}
     >
-      <div className="candy-face" style={COVER_FACE_STYLE}>
+      <div className="candy-face" style={COVER_TILE_FACE_STYLE}>
       <div style={{
+        ...COVER_PIC_STYLE,
         position: 'relative',
         width: '100%', aspectRatio: '1 / 1',
         background: 'var(--surface-2)',
-        overflow: 'hidden',
       }}>
         {img && (
           <img src={img} alt="" loading="lazy" decoding="async" style={{
