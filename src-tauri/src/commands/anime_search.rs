@@ -26,15 +26,13 @@
 //! and on disk with status-aware TTLs (airing 1h / finished 7d) and
 //! stale-while-revalidate.
 
-use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, VecDeque};
-use std::hash::{Hash, Hasher};
-use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
+use crate::commands::http_cache::{now_secs, CacheEntry, HttpCache};
 use crate::commands::vault::VaultError;
 
 const ANILIST_URL: &str = "https://graphql.anilist.co";
@@ -53,7 +51,6 @@ const MAX_PER_MIN: usize = 28;
 // even while airing, so they get the long TTL regardless.
 const HOUR: u64 = 3600;
 const DAY: u64 = 86_400;
-const MEM_CAP: usize = 500;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -187,114 +184,20 @@ async fn admit() {
     }
 }
 
-// ── Response cache (in-memory LRU + on-disk JSON) ─────────────────────────────
-static CACHE_DIR: OnceLock<PathBuf> = OnceLock::new();
+// ── Response cache (shared http_cache: in-memory LRU + on-disk JSON) ─────────
+static CACHE: HttpCache = HttpCache::new("anime");
 
-/// Capture the per-app cache dir at startup (called from `lib.rs` setup). If the
-/// dir can't be resolved/created, the disk cache silently disables (mem-only).
+/// Capture the per-app cache dir at startup (called from `lib.rs` setup).
 pub fn init_cache_dir(app: &tauri::AppHandle) {
-    use tauri::Manager;
-    match app.path().app_cache_dir() {
-        Ok(dir) => {
-            let sub = dir.join("anime");
-            match std::fs::create_dir_all(&sub) {
-                Ok(()) => {
-                    let _ = CACHE_DIR.set(sub);
-                }
-                Err(e) => eprintln!("anime cache dir create failed: {e} — disk cache disabled"),
-            }
-        }
-        Err(e) => eprintln!("app_cache_dir unavailable: {e} — anime disk cache disabled"),
-    }
+    CACHE.init_dir(app);
 }
 
-#[derive(Clone, Serialize, Deserialize)]
-struct CacheEntry {
-    url: String,
-    value: serde_json::Value,
-    fetched_at: u64,
-    ttl_secs: u64,
-}
-
-struct MemCache {
-    map: HashMap<String, (CacheEntry, u64)>,
-    seq: u64,
-}
-
-fn mem() -> &'static Mutex<MemCache> {
-    static CELL: OnceLock<Mutex<MemCache>> = OnceLock::new();
-    CELL.get_or_init(|| {
-        Mutex::new(MemCache {
-            map: HashMap::new(),
-            seq: 0,
-        })
-    })
-}
-
-fn now_secs() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0)
-}
-
-fn cache_file(key: &str) -> Option<PathBuf> {
-    let dir = CACHE_DIR.get()?;
-    let mut h = DefaultHasher::new();
-    key.hash(&mut h);
-    Some(dir.join(format!("{:016x}.json", h.finish())))
-}
-
-fn mem_insert(key: &str, entry: CacheEntry) {
-    let mut m = mem().lock().unwrap_or_else(|e| e.into_inner());
-    m.seq += 1;
-    let seq = m.seq;
-    if !m.map.contains_key(key) && m.map.len() >= MEM_CAP {
-        if let Some(victim) = m
-            .map
-            .iter()
-            .min_by_key(|(_, (_, s))| *s)
-            .map(|(k, _)| k.clone())
-        {
-            m.map.remove(&victim);
-        }
-    }
-    m.map.insert(key.to_string(), (entry, seq));
-}
-
-/// Look up a cached entry (mem first, then disk → promoted into mem). Returns it
-/// regardless of freshness; callers decide via `fetched_at` + `ttl_secs`.
 fn cache_lookup(key: &str) -> Option<CacheEntry> {
-    {
-        let mut m = mem().lock().unwrap_or_else(|e| e.into_inner());
-        m.seq += 1;
-        let seq = m.seq;
-        if let Some(slot) = m.map.get_mut(key) {
-            slot.1 = seq;
-            return Some(slot.0.clone());
-        }
-    }
-    let path = cache_file(key)?;
-    let bytes = std::fs::read(&path).ok()?;
-    let entry: CacheEntry = serde_json::from_slice(&bytes).ok()?;
-    mem_insert(key, entry.clone());
-    Some(entry)
+    CACHE.lookup(key)
 }
 
 fn cache_store(key: &str, value: &serde_json::Value, ttl_secs: u64) {
-    let entry = CacheEntry {
-        url: key.to_string(),
-        value: value.clone(),
-        fetched_at: now_secs(),
-        ttl_secs,
-    };
-    mem_insert(key, entry.clone());
-    // Per-key filename → distinct files, no cross-write contention.
-    if let Some(path) = cache_file(key) {
-        if let Ok(bytes) = serde_json::to_vec(&entry) {
-            let _ = std::fs::write(&path, bytes);
-        }
-    }
+    CACHE.store(key, value, ttl_secs);
 }
 
 // ── Fetch + cache ─────────────────────────────────────────────────────────────

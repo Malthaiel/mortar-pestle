@@ -1,10 +1,12 @@
-// Browse-page result card. Square Cover Art Archive cover (hot-linked) with an
-// onError fallback to a styled initials placeholder, then title / artist / year
+// Browse-page result card. Square Cover Art Archive cover (saved to disk once
+// via music_cover) with a fallback to a styled initials placeholder, then title / artist / year
 // beneath. Modeled on CoverArtCard's tile, trimmed of library-only chrome
 // (status dot, rating, play button). Click → preview (wired in SF2).
 
 import { useState } from 'react';
 import { COVER_PIC_STYLE } from '../AnimeDetailHeader.jsx';
+import { useCaaCover } from './api.js';
+import { coverSrc } from './util.js';
 
 function initials(text) {
   const words = (text || '').trim().split(/\s+/).filter(Boolean);
@@ -17,9 +19,9 @@ export default function BrowseResultCard({ result, accent, onSelect, inLibrary }
   // 250px thumbnail (CAA serves these natively) instead of the full-size
   // `/front` original — cards render at ≤170px, so the original was ~10–30×
   // more pixels to download + decode, the main source of Music-tab lag.
-  const cover = result.mbid
-    ? `https://coverartarchive.org/release-group/${result.mbid}/front-250`
-    : null;
+  // undefined = still fetching: paint nothing rather than flash the initials.
+  const coverPath = useCaaCover('release-group', result.mbid, 250);
+  const cover = coverPath ? coverSrc(coverPath) : null;
   const showImg = cover && !imgFailed;
   const meta = [result.year || null, result.primaryType || null].filter(Boolean).join(' · ');
   const activate = () => onSelect && onSelect(result);
@@ -40,7 +42,7 @@ export default function BrowseResultCard({ result, accent, onSelect, inLibrary }
             onError={() => setImgFailed(true)}
             style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
           />
-        ) : (
+        ) : coverPath !== undefined && (
           <div style={{
             width: '100%', height: '100%',
             display: 'flex', alignItems: 'center', justifyContent: 'center',

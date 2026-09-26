@@ -28,6 +28,7 @@ pub mod feedback;
 pub mod folder;
 pub mod food;
 pub mod health;
+pub mod http_cache;
 pub mod job_queue;
 pub mod knowledge;
 pub mod library_import;

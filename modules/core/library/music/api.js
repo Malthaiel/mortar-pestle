@@ -3,6 +3,9 @@
 // (the host's request layer); only the module's own register() touches the
 // SDK instance via bindMusicApi.
 
+import { useEffect, useState } from 'react';
+import { listen } from '@tauri-apps/api/event';
+
 let _api = null;
 
 export function bindMusicApi(api) { _api = api; }
@@ -14,7 +17,7 @@ export const musicApi = {
   markAlbumRating:  (path, rating) => _api.invoke('music_mark_rating', { path, rating }),
   setNotes:         (path, notes, baseMtime) => _api.invoke('music_set_notes', { path, notes, baseMtime: baseMtime ?? null }),
   deleteAlbum:      (path) => _api.invoke('music_delete_album', { path }),
-  // Browse — MusicBrainz discovery (read-only; covers hot-linked from CAA).
+  // Browse — MusicBrainz discovery (read-only; covers saved to disk via music_cover).
   searchReleaseGroups: (query, limit, offset) => _api.invoke('music_search_releasegroups', { query, limit, offset }),
   searchArtists:       (query) => _api.invoke('music_search_artists', { query }),
   searchRecordings:    (query) => _api.invoke('music_search_recordings', { query }),
@@ -25,6 +28,8 @@ export const musicApi = {
   artistReleaseGroups: (artistMbid) => _api.invoke('music_artist_releasegroups', { artistMbid }),
   releaseGroupDetail:  (rgMbid) => _api.invoke('music_releasegroup_detail', { rgMbid }),
   releasePersonnel:    (rgMbid) => _api.invoke('music_release_personnel', { rgMbid }),
+  // Cover Art Archive thumbnail saved to disk once → local path, or null (none).
+  cover:               (kind, mbid, size) => _api.invoke('music_cover', { kind, mbid, size }),
   // Browse — download engine (script-backed, sequential, background).
   // One job shape covers three runs: a whole album (rgMbid), one album track
   // (rgMbid + trackN), and a loose single (no rgMbid — watchUrl, or artist + title).
@@ -52,4 +57,33 @@ export const musicApi = {
 
 export function subscribeManifest(handler) {
   return _api.vault.subscribe('manifest', handler);
+}
+
+// Bumps when a background MusicBrainz re-check changed an artist's album list
+// (`music-mb-refreshed`). Album-list screens put it in their fetch effect's deps
+// and re-read in place; the re-read is a saved answer, so it's instant.
+export function useMbRefreshTick() {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const un = listen('music-mb-refreshed', () => setTick(t => t + 1));
+    return () => { un.then(f => f()).catch(() => {}); };
+  }, []);
+  return tick;
+}
+
+// A saved Cover Art Archive thumbnail's local path (music_cover): undefined
+// while loading, null when there's no cover (or no mbid), else the path.
+export function useCaaCover(kind, mbid, size) {
+  const key = mbid ? `${kind}/${mbid}/${size}` : null;
+  const [res, setRes] = useState({ key: null, path: undefined });
+  useEffect(() => {
+    if (!key) return;
+    let live = true;
+    musicApi.cover(kind, mbid, size)
+      .then(p => { if (live) setRes({ key, path: p || null }); })
+      .catch(() => { if (live) setRes({ key, path: null }); });
+    return () => { live = false; };
+  }, [key]);
+  if (!key) return null;
+  return res.key === key ? res.path : undefined;
 }

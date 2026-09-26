@@ -8,18 +8,30 @@
 //! A process-global ≥1.1s throttle keeps us inside MusicBrainz's 1 req/s TOS
 //! limit; the `User-Agent` string is mandated by their TOS. Mirrors the curl
 //! calls in `Infrastructure/Skills/Ingest/ingest-musicbrainz.md`.
+//!
+//! Every answer is kept in the shared `http_cache` (`app_cache_dir()/musicbrainz`)
+//! and served from there first, so a repeat visit never waits on the gate. An
+//! artist's discography (`Fresh::Live`) is re-checked in the background on every
+//! read and a changed answer emits `music-mb-refreshed`, which the album-list
+//! screens re-read live. Everything else (`Fresh::Week`) is trusted 7 days, then
+//! refreshed in the background the same way, silently.
 
+use std::collections::HashSet;
+use std::path::PathBuf;
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
+use tauri::Emitter;
 use tokio::sync::Mutex;
 
+use crate::commands::http_cache::HttpCache;
 use crate::commands::vault::VaultError;
 
 const MB_BASE: &str = "https://musicbrainz.org/ws/2";
 const MB_USER_AGENT: &str = "Citadel/1.0 (altaccountrawr@proton.me)";
 const MB_MIN_INTERVAL: Duration = Duration::from_millis(1100);
+const WEEK_SECS: u64 = 7 * 86_400;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -58,27 +70,145 @@ pub struct RecordingHit {
     pub release_group_mbid: Option<String>,
 }
 
+static CACHE: HttpCache = HttpCache::new("musicbrainz");
+static APP: OnceLock<tauri::AppHandle> = OnceLock::new();
+
+static COVER_DIR: OnceLock<PathBuf> = OnceLock::new();
+
+/// Wire the disk cache, the cover folder and the event handle at startup
+/// (`lib.rs` setup).
+pub fn init(app: &tauri::AppHandle) {
+    use tauri::Manager;
+    CACHE.init_dir(app);
+    if let Ok(dir) = app.path().app_cache_dir() {
+        let dir = dir.join("music-covers");
+        if std::fs::create_dir_all(&dir).is_ok() {
+            let _ = COVER_DIR.set(dir);
+        }
+    }
+    let _ = APP.set(app.clone());
+}
+
+/// Saved-cover folder, for the asset protocol's allow-list (`media.rs`).
+pub fn cover_dir() -> Option<&'static PathBuf> {
+    COVER_DIR.get()
+}
+
+/// A Cover Art Archive thumbnail, saved to disk the first time it's asked for.
+/// CAA answers through three hosts (307 → 302 → 200) and the redirects aren't
+/// cacheable, so hot-linking re-walked all three on every visit. `kind` is
+/// `release-group` or `release`; `size` a CAA thumbnail width (always JPEG).
+/// `None` = CAA has no cover; that miss is remembered 7 days.
+#[tauri::command]
+pub async fn music_cover(kind: String, mbid: String, size: u32) -> Result<Option<String>, VaultError> {
+    let id_ok = !mbid.is_empty() && mbid.chars().all(|c| c.is_ascii_hexdigit() || c == '-');
+    if !matches!(kind.as_str(), "release-group" | "release") || !id_ok || !matches!(size, 250 | 500 | 1200) {
+        return Err(VaultError::Invalid("Bad cover request".into()));
+    }
+    let dir = COVER_DIR.get().ok_or_else(|| VaultError::Io("Cover folder unavailable".into()))?;
+    let stem = format!("{kind}-{mbid}-{size}");
+    let img = dir.join(format!("{stem}.jpg"));
+    if img.exists() {
+        return Ok(Some(img.to_string_lossy().into_owned()));
+    }
+    let miss = dir.join(format!("{stem}.miss"));
+    let miss_age = std::fs::metadata(&miss).and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok());
+    if miss_age.is_some_and(|age| age.as_secs() < WEEK_SECS) {
+        return Ok(None);
+    }
+    // Cards ask for every cover at mount (a discography grid can be 100), so cap
+    // the parallel downloads to stay polite to archive.org.
+    static SLOTS: OnceLock<tokio::sync::Semaphore> = OnceLock::new();
+    let _slot = SLOTS.get_or_init(|| tokio::sync::Semaphore::new(6)).acquire().await;
+    if img.exists() {
+        return Ok(Some(img.to_string_lossy().into_owned()));
+    }
+    let url = format!("https://coverartarchive.org/{kind}/{mbid}/front-{size}");
+    let resp = http_client()
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| VaultError::Io(format!("Cover request failed: {e}")))?;
+    if resp.status() == reqwest::StatusCode::NOT_FOUND {
+        let _ = std::fs::write(&miss, b"");
+        return Ok(None);
+    }
+    if !resp.status().is_success() {
+        return Err(VaultError::Io(format!("Cover Art Archive returned HTTP {}", resp.status().as_u16())));
+    }
+    let bytes = resp
+        .bytes()
+        .await
+        .map_err(|e| VaultError::Io(format!("Cover download failed: {e}")))?;
+    // Write-then-rename so a card asking for the same cover mid-download never
+    // gets a half-written file.
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let tmp = dir.join(format!("{stem}.{nonce}.tmp"));
+    std::fs::write(&tmp, &bytes).map_err(|e| VaultError::Io(format!("Cover save failed: {e}")))?;
+    let _ = std::fs::rename(&tmp, &img);
+    let _ = std::fs::remove_file(&tmp);
+    Ok(Some(img.to_string_lossy().into_owned()))
+}
+
+/// How long a saved answer is trusted before a background re-check.
+#[derive(Clone, Copy)]
+enum Fresh {
+    /// Re-checked on every read; a change emits `music-mb-refreshed`.
+    Live,
+    /// Trusted 7 days, then refreshed silently.
+    Week,
+}
+
+/// One keep-alive connection for every MusicBrainz call (no TLS handshake per
+/// request).
+fn http_client() -> &'static reqwest::Client {
+    static CELL: OnceLock<reqwest::Client> = OnceLock::new();
+    CELL.get_or_init(|| {
+        reqwest::Client::builder()
+            .user_agent(MB_USER_AGENT)
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new())
+    })
+}
+
 /// Process-global timestamp of the last MusicBrainz request. The lock is held
-/// across the sleep so concurrent callers serialize behind the 1 req/s gate.
+/// across the sleep AND the request so concurrent callers serialize behind the
+/// 1 req/s gate, and a caller that queued behind an identical miss finds the
+/// answer already saved instead of asking again.
 fn last_request() -> &'static Mutex<Option<Instant>> {
     static CELL: OnceLock<Mutex<Option<Instant>>> = OnceLock::new();
     CELL.get_or_init(|| Mutex::new(None))
 }
 
-async fn mb_get(url: &str) -> Result<serde_json::Value, VaultError> {
-    {
-        let mut guard = last_request().lock().await;
-        if let Some(prev) = *guard {
-            let elapsed = prev.elapsed();
-            if elapsed < MB_MIN_INTERVAL {
-                tokio::time::sleep(MB_MIN_INTERVAL - elapsed).await;
-            }
+/// URLs with a background re-check in flight (StrictMode double effects and
+/// back-to-back visits must not queue the same question twice).
+fn refreshing() -> &'static std::sync::Mutex<HashSet<String>> {
+    static CELL: OnceLock<std::sync::Mutex<HashSet<String>>> = OnceLock::new();
+    CELL.get_or_init(|| std::sync::Mutex::new(HashSet::new()))
+}
+
+/// One throttled network GET. `reuse_saved` returns an answer another caller
+/// saved while this one waited for the gate (the miss path); a background
+/// re-check passes false so it always asks.
+async fn mb_fetch(url: &str, reuse_saved: bool) -> Result<serde_json::Value, VaultError> {
+    let mut guard = last_request().lock().await;
+    if reuse_saved {
+        if let Some(entry) = CACHE.lookup(url) {
+            return Ok(entry.value);
         }
-        *guard = Some(Instant::now());
     }
-    let resp = reqwest::Client::new()
+    if let Some(prev) = *guard {
+        let elapsed = prev.elapsed();
+        if elapsed < MB_MIN_INTERVAL {
+            tokio::time::sleep(MB_MIN_INTERVAL - elapsed).await;
+        }
+    }
+    *guard = Some(Instant::now());
+    let resp = http_client()
         .get(url)
-        .header(reqwest::header::USER_AGENT, MB_USER_AGENT)
         .header(reqwest::header::ACCEPT, "application/json")
         .send()
         .await
@@ -92,6 +222,44 @@ async fn mb_get(url: &str) -> Result<serde_json::Value, VaultError> {
     resp.json::<serde_json::Value>()
         .await
         .map_err(|e| VaultError::Io(format!("MusicBrainz JSON parse failed: {e}")))
+}
+
+/// Saved answer first (instant); a stale one is returned as-is and re-checked in
+/// the background. Only a true miss waits on the network.
+// ponytail: every Live read queues a background call on the 1 req/s gate, so fast
+// back-and-forth browsing can make a typed search wait behind them. Add a
+// priority lane for foreground calls if that ever bites.
+async fn mb_get(url: &str, fresh: Fresh) -> Result<serde_json::Value, VaultError> {
+    let ttl = match fresh {
+        Fresh::Live => 0,
+        Fresh::Week => WEEK_SECS,
+    };
+    if let Some(entry) = CACHE.lookup(url) {
+        if !entry.is_fresh() {
+            spawn_recheck(url.to_string(), ttl, fresh, entry.value.clone());
+        }
+        return Ok(entry.value);
+    }
+    let v = mb_fetch(url, true).await?;
+    CACHE.store(url, &v, ttl);
+    Ok(v)
+}
+
+fn spawn_recheck(url: String, ttl: u64, fresh: Fresh, saved: serde_json::Value) {
+    if !refreshing().lock().unwrap_or_else(|e| e.into_inner()).insert(url.clone()) {
+        return;
+    }
+    tauri::async_runtime::spawn(async move {
+        if let Ok(v) = mb_fetch(&url, false).await {
+            CACHE.store(&url, &v, ttl);
+            if matches!(fresh, Fresh::Live) && v != saved {
+                if let Some(app) = APP.get() {
+                    let _ = app.emit("music-mb-refreshed", &url);
+                }
+            }
+        }
+        refreshing().lock().unwrap_or_else(|e| e.into_inner()).remove(&url);
+    });
 }
 
 /// Flatten an `artist-credit` array into a display string, preserving join
@@ -169,7 +337,7 @@ pub async fn music_search_releasegroups(
         limit,
         offset
     );
-    Ok(parse_release_groups(&mb_get(&url).await?))
+    Ok(parse_release_groups(&mb_get(&url, Fresh::Week).await?))
 }
 
 #[tauri::command]
@@ -182,7 +350,7 @@ pub async fn music_search_artists(query: String) -> Result<Vec<ArtistHit>, Vault
         "{MB_BASE}/artist?query={}&fmt=json&limit=25",
         urlencoding::encode(q)
     );
-    let v = mb_get(&url).await?;
+    let v = mb_get(&url, Fresh::Week).await?;
     let hits = v
         .get("artists")
         .and_then(|x| x.as_array())
@@ -223,7 +391,7 @@ pub async fn music_search_recordings(query: String) -> Result<Vec<RecordingHit>,
         "{MB_BASE}/recording?query={}&dismax=true&fmt=json&limit=25",
         urlencoding::encode(q)
     );
-    let v = mb_get(&url).await?;
+    let v = mb_get(&url, Fresh::Week).await?;
     let hits = v
         .get("recordings")
         .and_then(|x| x.as_array())
@@ -278,7 +446,7 @@ pub async fn music_artist_releasegroups(
         "{MB_BASE}/release-group?artist={}&type=album%7Cep&fmt=json&limit=100",
         urlencoding::encode(id)
     );
-    let mut hits = parse_release_groups(&mb_get(&url).await?);
+    let mut hits = parse_release_groups(&mb_get(&url, Fresh::Live).await?);
     // Newest first; undated last.
     hits.sort_by(|a, b| b.year.unwrap_or(0).cmp(&a.year.unwrap_or(0)));
     Ok(hits)
@@ -354,7 +522,7 @@ pub async fn music_releasegroup_detail(rg_mbid: String) -> Result<ReleaseDetail,
         "{MB_BASE}/release-group/{}?inc=releases+artist-credits&fmt=json",
         urlencoding::encode(id)
     );
-    let rg = mb_get(&rg_url).await?;
+    let rg = mb_get(&rg_url, Fresh::Week).await?;
     let meta = parse_release_group(&rg)
         .ok_or_else(|| VaultError::Io("MusicBrainz returned an unparseable release-group.".into()))?;
     let releases = rg
@@ -375,7 +543,7 @@ pub async fn music_releasegroup_detail(rg_mbid: String) -> Result<ReleaseDetail,
         "{MB_BASE}/release/{}?inc=recordings&fmt=json",
         urlencoding::encode(&release_mbid)
     );
-    let rel = mb_get(&rel_url).await?;
+    let rel = mb_get(&rel_url, Fresh::Week).await?;
     let media = rel.get("media").and_then(|x| x.as_array());
     let multi_disc = media.map(|m| m.len() > 1).unwrap_or(false);
 
@@ -587,7 +755,7 @@ pub async fn music_release_personnel(rg_mbid: String) -> Result<ReleasePersonnel
         "{MB_BASE}/release-group/{}?inc=releases&fmt=json",
         urlencoding::encode(id)
     );
-    let rg = mb_get(&rg_url).await?;
+    let rg = mb_get(&rg_url, Fresh::Week).await?;
     let releases = rg
         .get("releases")
         .and_then(|x| x.as_array())
@@ -605,7 +773,7 @@ pub async fn music_release_personnel(rg_mbid: String) -> Result<ReleasePersonnel
         "{MB_BASE}/release/{}?inc=artist-credits+artist-rels+recordings+recording-level-rels&fmt=json",
         urlencoding::encode(&release_mbid)
     );
-    let rel = mb_get(&rel_url).await?;
+    let rel = mb_get(&rel_url, Fresh::Week).await?;
     let mut credits = parse_artist_credits(&rel);
     credits.extend(collect_relations(&rel));        // release-level (often sparse)
     credits.extend(parse_recording_credits(&rel));  // recording-level (the rich set)

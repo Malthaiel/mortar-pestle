@@ -160,6 +160,7 @@ fn main() {
         "music_artist_releasegroups",
         "music_releasegroup_detail",
         "music_release_personnel",
+        "music_cover",
         "tmdb_set_api_key",
         "tmdb_has_api_key",
         "tmdb_movie_detail",

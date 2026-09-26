@@ -372,6 +372,14 @@ pub fn is_under_allowed_root(canonical: &std::path::Path) -> bool {
             return true;
         }
     }
+    // Music Browse covers saved from the Cover Art Archive (`music_cover`),
+    // under the app cache dir.
+    let covers = crate::commands::music_search::cover_dir().and_then(|d| std::fs::canonicalize(d).ok());
+    if let Some(c) = covers {
+        if canonical.starts_with(&c) {
+            return true;
+        }
+    }
     for root in media_roots() {
         if canonical.starts_with(root) {
             return true;

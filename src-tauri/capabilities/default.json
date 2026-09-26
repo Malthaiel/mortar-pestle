@@ -181,6 +181,7 @@
     "allow-music-artist-releasegroups",
     "allow-music-releasegroup-detail",
     "allow-music-release-personnel",
+    "allow-music-cover",
     "allow-tmdb-set-api-key",
     "allow-tmdb-has-api-key",
     "allow-tmdb-movie-detail",

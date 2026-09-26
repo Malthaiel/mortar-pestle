@@ -6,7 +6,8 @@
 // engine — it calls an optional onDownload(detail) if the parent supplies one.
 
 import { Fragment, useEffect, useRef, useState } from 'react';
-import { musicApi } from './api.js';
+import { musicApi, useCaaCover } from './api.js';
+import { coverSrc } from './util.js';
 import { useDownloads } from './DownloadProvider.jsx';
 import { useMusicPlayer } from './MusicPlayerProvider.jsx';
 import { AddToLibraryButton } from '../QuickAdd.jsx';
@@ -42,8 +43,9 @@ function errText(e, fallback) {
 
 // Cover with a two-step hot-link fallback. Keyed on its src list by the parent
 // so it resets cleanly when the release MBID arrives (enabling the 2nd source).
-function PreviewCover({ srcs, accent, alt }) {
+function PreviewCover({ srcs, pending, accent, alt }) {
   const [step, setStep] = useState(0);
+  if (pending) return null;   // still fetching — no initials flash
   const src = srcs[step];
   if (src) {
     return (
@@ -90,11 +92,13 @@ export default function BrowsePreview({ result, accent, onBack, libraryEntry }) 
   const typeLabel = [primaryType, ...secondaryTypes].filter(Boolean).join(' / ');
 
   // 500px thumbnails for the ~200px preview cover (retina-safe) instead of the
-  // full-size original. The download still grabs `/front` (full res) below.
-  const coverSrcs = [
-    result.mbid && `${CAA}/release-group/${result.mbid}/front-500`,
-    detail && detail.releaseMbid && `${CAA}/release/${detail.releaseMbid}/front-500`,
-  ].filter(Boolean);
+  // full-size original, saved to disk once (music_cover). The release's own
+  // cover is only asked for when the group has none. The download still grabs
+  // `/front` (full res) below.
+  const rgCover = useCaaCover('release-group', result.mbid, 500);
+  const relCover = useCaaCover('release', rgCover === null ? detail?.releaseMbid : null, 500);
+  const coverPending = rgCover === undefined || relCover === undefined || (rgCover === null && loading);
+  const coverSrcs = [rgCover, relCover].filter(Boolean).map(p => coverSrc(p));
 
   const metaBits = [
     year,
@@ -150,7 +154,7 @@ export default function BrowsePreview({ result, accent, onBack, libraryEntry }) 
   const queueItems = () => (detail?.tracks || []).map(t => ({
     albumPath:  null,
     albumTitle: detail.title,
-    albumImage: coverSrcs[0] || null,
+    albumImage: coverSrcs[0] || (result.mbid ? `${CAA}/release-group/${result.mbid}/front-500` : null),
     artist:     detail.artist,
     n:          t.position,
     title:      t.title,
@@ -206,6 +210,7 @@ export default function BrowsePreview({ result, accent, onBack, libraryEntry }) 
             <PreviewCover
               key={coverSrcs.join('|')}
               srcs={coverSrcs}
+              pending={coverPending}
               accent={accent}
               alt={artist || title}
             />

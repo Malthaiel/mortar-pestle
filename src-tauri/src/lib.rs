@@ -256,8 +256,10 @@ pub fn run() {
             }
 
             // In-app updater (Stage 2) — cache running binary SHA-256 and
-            // spawn the 30s poll loop emitting `update-available` events.
-            commands::self_update::init_cache();
+            // spawn the 30s poll loop emitting `update-available` events. The
+            // hash runs off the main thread: ~20 s on the debug exe froze
+            // startup. Checks before it lands return Err and the poll retries.
+            std::thread::spawn(commands::self_update::init_cache);
             commands::self_update::spawn_poll(app.handle().clone());
 
             // Feedback Board — 60s in-app notification poll (signed-in + focused only).
@@ -266,6 +268,9 @@ pub fn run() {
             // Anime Browse — capture the per-app cache dir for the AniList
             // response cache (in-memory LRU + on-disk JSON). Best-effort.
             commands::anime_search::init_cache_dir(app.handle());
+            // Music — same shared cache for MusicBrainz answers + the event
+            // handle for live discography refreshes.
+            commands::music_search::init(app.handle());
 
             // Sub-feature 8 — one-shot prune of skill-run logs older than 7
             // days. Mirrors Node's `server/src/skills/retention.js::startRetention`.
@@ -854,6 +859,7 @@ pub fn run() {
             commands::music_search::music_artist_releasegroups,
             commands::music_search::music_releasegroup_detail,
             commands::music_search::music_release_personnel,
+            commands::music_search::music_cover,
             commands::tmdb::tmdb_set_api_key,
             commands::tmdb::tmdb_has_api_key,
             commands::tmdb::tmdb_movie_detail,

@@ -13,7 +13,7 @@
 // the topbar popup renders the identical stacks.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { musicApi } from './api.js';
+import { musicApi, useMbRefreshTick } from './api.js';
 import { usePlaylists } from './PlaylistProvider.jsx';
 import CoverArtCard from './CoverArtCard.jsx';
 import BrowseResultCard from './BrowseResultCard.jsx';
@@ -169,6 +169,9 @@ function PlaylistMiniCard({ playlist, accent }) {
 // effort — hidden entirely if MusicBrainz is unreachable or returns nothing.
 function MoreFromYourArtists({ albums, ownedIds, accent }) {
   const [items, setItems] = useState(null);
+  // A background re-check that finds new releases bumps this; the row re-reads
+  // its saved answers in place (items are only replaced at the end, no blank).
+  const mbTick = useMbRefreshTick();
   useEffect(() => {
     if (albums === null) return;
     if (albums.length === 0) { setItems([]); return; }
@@ -194,7 +197,7 @@ function MoreFromYourArtists({ albums, ownedIds, accent }) {
       if (!cancelled) setItems(out.slice(0, 18));
     })();
     return () => { cancelled = true; };
-  }, [albums, ownedIds]);
+  }, [albums, ownedIds, mbTick]);
 
   if (!items || items.length === 0) return null;
   return (

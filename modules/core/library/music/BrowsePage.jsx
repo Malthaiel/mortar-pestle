@@ -5,7 +5,7 @@
 // grid + placeholder only.
 
 import { useEffect, useRef, useState } from 'react';
-import { musicApi } from './api.js';
+import { musicApi, useMbRefreshTick } from './api.js';
 import { FilterChip, TextInput } from '@host/components/ui/index.js';
 import { navigate as go } from '@host/router.js';
 import BrowseResultCard from './BrowseResultCard.jsx';
@@ -92,16 +92,21 @@ export default function BrowsePage({ accent, initialQuery = '', initialMode = MO
     return () => clearTimeout(t);
   }, [query, mode, selectedArtist]);
 
-  // Load a selected artist's discography.
+  // Load a selected artist's discography. A background re-check that finds new
+  // releases bumps mbTick and the grid re-reads in place (a saved answer, so
+  // instant); only picking another artist blanks it.
+  const mbTick = useMbRefreshTick();
+  useEffect(() => {
+    if (selectedArtist) { setLoading(true); setError(null); setResults(null); }
+  }, [selectedArtist]);
   useEffect(() => {
     if (!selectedArtist) return;
     const myId = ++reqId.current;
-    setLoading(true); setError(null); setResults(null);
     musicApi.artistReleaseGroups(selectedArtist.mbid)
       .then(r => { if (myId === reqId.current) setResults(r || []); })
       .catch(e => { if (myId === reqId.current) setError(errText(e, 'Failed to load discography.')); })
       .finally(() => { if (myId === reqId.current) setLoading(false); });
-  }, [selectedArtist]);
+  }, [selectedArtist, mbTick]);
 
   // Mirror the typed query + mode into the hash so Back out of a preview or a
   // discography returns to these results. replaceState, not navigate: a history

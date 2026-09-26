@@ -12,7 +12,7 @@
 //   • Release details — type / year / tracks / length / genres / MBID.
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { musicApi } from './api.js';
+import { musicApi, useMbRefreshTick } from './api.js';
 import BrowseResultCard from './BrowseResultCard.jsx';
 import CoverArtCard from './CoverArtCard.jsx';
 import PosterRow, { ROW_TITLE_STYLE, faceInset } from '@modules/core/library/PosterRow.jsx';
@@ -51,11 +51,15 @@ export default function MusicCredits({ album, accent }) {
     return () => { cancelled = true; };
   }, []);
 
-  // Resolve the artist on MusicBrainz, then pull their discography.
+  // Resolve the artist on MusicBrainz, then pull their discography. Both are
+  // saved answers after the first visit; a background re-check that finds new
+  // releases bumps mbTick and the row re-reads in place (blanked only when the
+  // artist itself changes).
+  const mbTick = useMbRefreshTick();
+  useEffect(() => { setDiscography(null); }, [artist]);
   useEffect(() => {
     if (!artist) { setDiscography([]); return; }
     const my = ++reqId.current;
-    setDiscography(null);
     (async () => {
       try {
         const hits = await musicApi.searchArtists(artist);
@@ -67,7 +71,7 @@ export default function MusicCredits({ album, accent }) {
         if (my === reqId.current) setDiscography([]);
       }
     })();
-  }, [artist]);
+  }, [artist, mbTick]);
 
   // Release-level credits for THIS album (selfId is the release-group MBID).
   useEffect(() => {
