@@ -897,14 +897,14 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
 /* Cover-card captions sit on the red face when the tile flips (hover / selected);
    flip their inline text colours to white for legibility. Excludes .rail-tile —
    the player keeps its own inline colours (SF15). */
-.candy-btn[data-shape="tile"]:not(.rail-tile):is(:hover, :active, .is-selected) .candy-face :where(div, span) {
+.candy-btn[data-shape="tile"]:not(.rail-tile):is(:hover, :active, [data-dock-hover], .is-selected) .candy-face :where(div, span) {
   color: #fff !important;
 }
 
 /* Dev-tab Tube: the flowing water is an SVG stroke, so the rule above (which only
    reaches div/span) can't flip it. Same face, same trigger, same #fff. */
 .tube-water { stroke: var(--accent); }
-.candy-btn:is(:hover, :active) .tube-water { stroke: #fff; }
+.candy-btn:is(:hover, :active, [data-dock-hover]) .tube-water { stroke: #fff; }
 
 /* candy-badge — the unread pip/count pinned to a titlebar button (Settings update
    dot, Processes, Downloads, Notifications). Colour lives here, not inline, for
@@ -912,7 +912,7 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
    press, or its panel open — an accent pip on an accent face reads as a smudge
    (photographed 2026-09-16). Lit, it inverts: white pill, accent number. */
 .candy-badge { background: var(--accent); color: #fff; }
-.candy-btn:is(:hover, :active, .is-active) .candy-badge {
+.candy-btn:is(:hover, :active, [data-dock-hover], .is-active) .candy-badge {
   background: #fff;
   /* !important for the same reason § candy-tile uses it: the per-shape
      base flood flips every div/span inside .candy-face to #fff, which would
@@ -1157,12 +1157,12 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
   /* resting face colour rides on inline style={{ background: c }} per swatch */
 }
 /* Keep band + frame neutral in every state (override the base --cbtn-band flip). */
-.candy-btn[data-shape="swatch"]:is(:hover, :active, .is-active, .is-selected) {
+.candy-btn[data-shape="swatch"]:is(:hover, :active, [data-dock-hover], .is-active, .is-selected) {
   --cbtn-band: var(--cbtn-rest);
 }
 /* Accent ring on hover + selected — reads --accent (this swatch's own colour),
    rides on the face so it slides with the press. */
-.candy-btn[data-shape="swatch"]:is(:hover, .is-active, .is-selected) > .candy-face {
+.candy-btn[data-shape="swatch"]:is(:hover, [data-dock-hover], .is-active, .is-selected) > .candy-face {
   box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent);
 }
 
@@ -1238,13 +1238,13 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
    accent commit; on hover it takes the normal full-accent flip (:not(:hover)). */
 .candy-btn[data-shape="row"][data-variant="palette"] { margin-bottom: 9px; }
 .candy-btn[data-shape="row"][data-variant="palette"] > .candy-face { justify-content: space-between; }
-.candy-btn[data-shape="row"][data-variant="palette"].is-active:not(:hover) { --cbtn-band: var(--cbtn-rest); }
-.candy-btn[data-shape="row"][data-variant="palette"].is-active:not(:hover) > .candy-face {
+.candy-btn[data-shape="row"][data-variant="palette"].is-active:not(:hover, [data-dock-hover]) { --cbtn-band: var(--cbtn-rest); }
+.candy-btn[data-shape="row"][data-variant="palette"].is-active:not(:hover, [data-dock-hover]) > .candy-face {
   color: var(--text);
   background: color-mix(in oklch, var(--surface-3), var(--accent) 16%);
   border-color: color-mix(in oklch, var(--accent), black 10%);
 }
-.candy-btn[data-shape="row"][data-variant="palette"].is-active:not(:hover) .candy-face :where(div, span) { color: var(--text); }
+.candy-btn[data-shape="row"][data-variant="palette"].is-active:not(:hover, [data-dock-hover]) .candy-face :where(div, span) { color: var(--text); }
 
 /* row-alias — keybind / alias chip on the right of a palette / menu row. */
 .candy-btn[data-shape="row"] .row-alias {
@@ -1699,11 +1699,6 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
 .candy-split > .candy-btn.is-active { z-index: 1; }
 .candy-split > .candy-btn:is(:hover, :active) { z-index: 2; }
 
-/* is-liquid - TEST ONLY (LiquidSplitTestPanel, dev tab). The parts never light on
-   their own: a lit copy of the run sits on top, cut to a moving window, and that
-   window is the only lit thing. Delete with the panel. */
-.candy-split.is-liquid > .candy-btn:is(:hover, :active) { --cbtn-band: var(--cbtn-rest); }
-.candy-split.is-liquid > .candy-btn:is(:hover, :active) > .candy-face { background: var(--cbtn-face); color: var(--cbtn-rest-text); }
 
 /* select — dropdown trigger (CandySelect.jsx). Neutral candy control like
    chip/icon: no accent flip (a dropdown trigger turning accent-red reads wrong,
@@ -1737,9 +1732,9 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
 /* Every select flips to the accent face on hover, like the menu rows it opens and
    the sidebar buttons (user-directed 2026-09-18; was fused-only since 2026-09-13,
    standalone selects stayed neutral). Gated :not(.is-active) like every shape. */
-.candy-btn[data-shape="select"]:is(:hover, :active):not(.is-active) { --cbtn-band: var(--accent); }
-.candy-btn[data-shape="select"]:is(:hover, :active):not(.is-active) > .candy-face { color: #fff; background: var(--accent); }
-.candy-btn[data-shape="select"]:is(:hover, :active):not(.is-active) .candy-face :where(div, span) { color: #fff; }
+.candy-btn[data-shape="select"]:is(:hover, :active, [data-dock-hover]):not(.is-active) { --cbtn-band: var(--accent); }
+.candy-btn[data-shape="select"]:is(:hover, :active, [data-dock-hover]):not(.is-active) > .candy-face { color: #fff; background: var(--accent); }
+.candy-btn[data-shape="select"]:is(:hover, :active, [data-dock-hover]):not(.is-active) .candy-face :where(div, span) { color: #fff; }
 .candy-btn[data-shape="select"].is-compact > .candy-face { padding: 0 8px; font-size: 11px; }
 
 /* dot — tiny rating circle (the two-layer form of the live `rating-dot`).
@@ -1824,7 +1819,7 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
 .candy-btn[data-shape="cta"] .cta-title { font-size: 12.5px; font-weight: 600; }
 .candy-btn[data-shape="cta"] .cta-sub { font-size: 10.5px; color: var(--text-muted); margin-top: 2px; }
 /* Hover/active: the base flips the face accent (white text); invert the icon badge to match. */
-.candy-btn[data-shape="cta"]:is(:hover, :active) .cta-icon { background: rgba(255, 255, 255, 0.2); color: #fff; }
+.candy-btn[data-shape="cta"]:is(:hover, :active, [data-dock-hover]) .cta-icon { background: rgba(255, 255, 255, 0.2); color: #fff; }
 
 /* card — DELETED 2026-09-18: shape had no consumer in the app. */
 /* track — full-width tracklist row (a <div role=button>, so it can hold nested
@@ -1901,7 +1896,7 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
    accent); a real press still slides the face. Works on any shape. */
 .candy-btn.is-primary { --cbtn-band: var(--accent); }
 .candy-btn.is-primary > .candy-face { color: #fff; background: var(--accent); }
-.candy-btn.is-primary:hover > .candy-face {
+.candy-btn.is-primary:is(:hover, [data-dock-hover]) > .candy-face {
   background: color-mix(in oklch, var(--accent), white 8%);
 }
 
@@ -1942,6 +1937,11 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
 /* Hover / press — colour flip via --cbtn-band; NO movement on the base. */
 .candy-btn:is(:hover, :active, [data-dock-hover]) { --cbtn-band: var(--accent); }
 .candy-btn:is(:hover, :active, [data-dock-hover]) > .candy-face { color: #fff; background: var(--accent); }
+/* Liquid hover (util/liquidHover.js): while a hovered host is being painted by
+   its two clones (a rest copy, and a lit copy cut to the moving window), the
+   real host paints nothing but still takes the pointer. Opacity, not
+   visibility: a visibility:hidden element stops being hit-tested. */
+[data-liquid-host] { opacity: 0 !important; }
 /* Press — only the face slides down --cbtn-depth, over the immovable base.
    data-candy-pressed is JS-held past mouseup (useGlobalCandyPressHold) so the
    150ms ease-down completes to full depth on a quick click; :active alone

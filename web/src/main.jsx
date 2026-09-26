@@ -6,6 +6,7 @@ import { loadAll } from './module-loader.js';
 import { initSmoothWheel } from './util/smoothWheel.js';
 import { installScrollMemory } from './util/scrollMemory.js';
 import { installTooltips } from './util/tooltips.js';
+import { installLiquidHover } from './util/liquidHover.js';
 import './pages/docs/register.jsx';   // side effect: registerPageSidebar('docs', …)
 import './fonts.css';
 import './styles.css';
@@ -46,6 +47,8 @@ loadAll().then(() => {
   installScrollMemory();
   // Every title="…" shows the app tooltip, in every window — see util/tooltips.js.
   installTooltips();
+  // Every candy button lights like liquid on hover, in every window — see util/liquidHover.js.
+  installLiquidHover();
   createRoot(document.getElementById('root')).render(
     <StrictMode>
       <LazyErrorBoundary full tag="[root]" label="Mortar & Pestle">

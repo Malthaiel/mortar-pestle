@@ -44,6 +44,7 @@
 const ANIM_TOGGLES = [
   ['clock-ambient',          'Clock breath + aura',    ['glow', 'aura', 'breathing', 'dial'],   'planner'],
   ['spring-press',           'Spring press',           ['button', 'depress', 'tactile', 'bounce'], 'appearance'],
+  ['liquid-hover',           'Liquid hover',           ['hover', 'button', 'fill', 'liquid'],    'appearance'],
   ['page-transitions',       'Page transitions',       ['route', 'navigate', 'slide'],          'navigation'],
   ['drawer-modal',           'Drawer + modal slides',  ['overlay', 'popup', 'fade'],            'appearance'],
   ['flyout',                 'Flyout pop-in/out',      ['collapsed', 'hover', 'spring'],        'navigation'],

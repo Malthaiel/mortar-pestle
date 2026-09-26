@@ -5,7 +5,6 @@
 import { Component } from 'react';
 import GpuSpikePanel from './GpuSpikePanel.jsx';
 import FlipTestPanel from './FlipTestPanel.jsx';
-import LiquidSplitTestPanel from './LiquidSplitTestPanel.jsx';
 // SttDevPanel retired in Voice Transcription Phase 3 — the real surface is the
 // /tools/overlay/transcription Voice module. The throwaway panel file is kept (no git) but no
 // longer mounted; delete it once Phase 3 has shipped a release.
@@ -43,9 +42,6 @@ export default function DevTab({ accent }) {
       }}>
         Dev runs via <code>npm run tauri dev</code> in a terminal.
       </div>
-      <PanelBoundary>
-        <LiquidSplitTestPanel />
-      </PanelBoundary>
       <PanelBoundary>
         <GpuSpikePanel accent={accent} />
       </PanelBoundary>

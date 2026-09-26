@@ -21,6 +21,7 @@ import { ANIMATION_KEYS, ANIMATION_KEY_CONFIG } from '../../hooks/useSettings.js
 const ROWS = [
   { key: 'clock-ambient',          label: 'Clock breath + aura',     description: 'Accent glow aura on the Planner dial arcs while a session is running.' },
   { key: 'spring-press',           label: 'Spring press',            description: 'Scales every button down to 0.97 on mousedown and springs back on release. The single largest "tactile" lever in the product.' },
+  { key: 'liquid-hover',           label: 'Liquid hover',            description: 'Buttons light up like liquid: a circle fills in from where the pointer enters, slides between the parts of a joined row, and shrinks out where it leaves. Off = buttons light up instantly.' },
   { key: 'page-transitions',       label: 'Page transitions',        description: 'Animate route changes (forward and backward) with the candy lift. Without this, the new route appears instantly.' },
   { key: 'drawer-modal',           label: 'Drawer + modal slides',   description: 'Slide-in for the settings drawer, scale-shrink for modals, backdrop and content fade. Without this, overlays snap in.' },
   { key: 'flyout',                 label: 'Flyout pop-in/out',       description: 'Spring snap-open for collapsed-sidebar hover flyouts; snap-closed on leave.' },
@@ -255,6 +256,13 @@ function AnimVisual({ animKey, value, accent }) {
         borderRadius: 'var(--radius-md)',
         background: a,
         animation: 'preview-press 1.4s cubic-bezier(0.16, 1, 0.3, 1) infinite',
+      }}/>;
+    case 'liquid-hover':
+      return <div style={{
+        width: 40, height: 28,
+        borderRadius: 'var(--radius-md)',
+        background: a,
+        animation: 'preview-smoothness 1.6s ease-in-out infinite',
       }}/>;
     case 'page-transitions':
       return <div style={{

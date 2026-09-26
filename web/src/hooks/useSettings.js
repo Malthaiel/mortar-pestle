@@ -17,6 +17,7 @@ import { paintTheme } from '../themes/applyTheme.js';
 export const ANIMATION_KEYS = [
   'clock-ambient',
   'spring-press',
+  'liquid-hover',
   'page-transitions',
   'drawer-modal',
   'flyout',

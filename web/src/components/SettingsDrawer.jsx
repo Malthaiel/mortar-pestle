@@ -715,7 +715,7 @@ function AppearanceTab({ settings, setSetting, setPreviewAccent, accent }) {
             <Seg value={animPreset} options={ANIM_PRESET_OPTIONS} onChange={applyAnimPreset} accent={accent}/>
           </div>
         </Row>
-        <AnimationField keys={['drawer-modal', 'theme-transition', 'spring-press']} settings={settings} setSetting={setSetting} accent={accent}/>
+        <AnimationField keys={['drawer-modal', 'theme-transition', 'spring-press', 'liquid-hover']} settings={settings} setSetting={setSetting} accent={accent}/>
         <StackedRow label="Preview follow drag" anchor="set-previewFollowDrag" hint="How much the hover-preview card lags behind your cursor as it trails it. None snaps instantly; higher = more drag. Honors the master animations toggle.">
           <Seg value={settings.previewFollowDrag || 'light'} options={FOLLOW_DRAG_OPTIONS} onChange={v => setSetting('previewFollowDrag', v)} accent={accent}/>
         </StackedRow>
