@@ -1,7 +1,9 @@
 // A fused candy run (.candy-split) that leads with a search field and behaves
-// as ONE button (user-directed 2026-09-24). Focusing the field slides every
-// part after it to the right, out through the run's own rounded end, and the
-// field takes the whole row. The row never changes size: the run grows past a
+// as ONE button (user-directed 2026-09-24). Once the typed text is about to
+// outgrow the field (user-directed 2026-09-25; focusing alone no longer does
+// it), every part after it slides to the right, out through the run's own
+// rounded end, and the field takes the whole row. Delete back until it fits
+// and the parts slide home. The row never changes size: the run grows past a
 // clipping window, not the window itself. Blur with an empty box, or Esc,
 // slides the parts back.
 //
@@ -12,16 +14,27 @@
 //                     seam, and the window's rounded end all derive from it
 //   children          the other fused parts -- bare .candy-btn elements
 //                     (CandySelect needs `fuse`), exactly as inside .candy-split
+//   leading           optional parts fused BEFORE the field; they never slide
+//                     (the Music bar's Home button, user-directed 2026-09-25)
 
 import { useEffect, useRef, useState } from 'react';
 import { IconSearch } from '../icons.jsx';
 import { GLIDE } from '../../util/motion.js';
 
-export default function SearchRun({ value, onChange, placeholder = 'Search', size, children }) {
+// Width of `text` in the input's own live font, read off a canvas.
+let ctx;
+function textWidth(el, text) {
+  ctx ??= document.createElement('canvas').getContext('2d');
+  ctx.font = getComputedStyle(el).font;
+  return ctx.measureText(text).width;
+}
+
+export default function SearchRun({ value, onChange, placeholder = 'Search', size, leading, children }) {
   const winRef = useRef(null);
   const runRef = useRef(null);
   const partRef = useRef(null);
   const inputRef = useRef(null);
+  const restRef = useRef(null);
   const waitRef = useRef(0);
   const [open, setOpen] = useState(false);
   // Read off the live rects the moment it opens, held until the glide back ends:
@@ -43,7 +56,7 @@ export default function SearchRun({ value, onChange, placeholder = 'Search', siz
   // The slide starts only once the pressed field is fully back up (user-directed
   // 2026-09-25): no press state left on it AND its face measured at rest.
   // Starting as the face began rising was tried the same day and read as too
-  // early. A keyboard focus has no press, so it opens on the first check.
+  // early. Typed without a press (keyboard focus), it opens on the first check.
   const openWhenUp = () => {
     cancelAnimationFrame(waitRef.current);
     const part = partRef.current;
@@ -67,7 +80,8 @@ export default function SearchRun({ value, onChange, placeholder = 'Search', siz
   // The parts pushed out of sight leave the Tab order and the accessibility tree.
   // Every render, so a part that remounts while open is caught too.
   useEffect(() => {
-    [...runRef.current.children].slice(1).forEach(el => { el.inert = open; });
+    const parts = [...runRef.current.children];
+    parts.slice(parts.indexOf(partRef.current) + 1).forEach(el => { el.inert = open; });
   });
 
   const endRadius = arrived ? 'calc(var(--corner) * var(--corner-max))' : undefined;
@@ -76,8 +90,8 @@ export default function SearchRun({ value, onChange, placeholder = 'Search', siz
     <div ref={winRef} style={{
       '--cbtn-size': size,
       width: geo ? geo.w : 'max-content',
-      // The window. Straight on the left (the field's own round end sits inside
-      // it), rounded on the right exactly like the run's end, and open below by
+      // The window. Straight on the left (the first part's own round end sits
+      // inside it), rounded on the right exactly like the run's end, and open below by
       // the parts' small lip so their depth band still shows.
       clipPath: 'inset(0 0 calc(var(--candy-depth-small) * -1) 0 round 0 calc(var(--corner) * var(--cbtn-size) / 2) calc(var(--corner) * var(--cbtn-size) / 2) 0)',
     }}>
@@ -95,6 +109,7 @@ export default function SearchRun({ value, onChange, placeholder = 'Search', siz
         }}
         onTransitionCancel={(e) => { if (e.target === e.currentTarget) settle(); }}
       >
+        {leading}
         {/* The text-field master (chip-field, as TaskChip / ChatInput), padded
             like the chips beside it so icon and word sit where theirs do. */}
         <span
@@ -119,16 +134,37 @@ export default function SearchRun({ value, onChange, placeholder = 'Search', siz
             inputRef.current.focus();
           }}
         >
-          <span className="candy-face" style={{ padding: '5px var(--chip-pad-x)', gap: 'var(--candy-face-gap)' }}>
+          {/* Grid, not the face's flex: a hidden copy of the placeholder and
+              the input share one cell, so at rest the field hugs the
+              placeholder whatever is typed, and a short word cannot shrink the
+              row (user-directed 2026-09-25). Open, the cell takes the rest. */}
+          <span className="candy-face" style={{
+            padding: '5px var(--chip-pad-x)', gap: 'var(--candy-face-gap)',
+            display: 'grid', gridTemplateColumns: 'auto 1fr', alignItems: 'center',
+          }}>
             <IconSearch size={14} />
+            {/* justifySelf start: the copy keeps its own width while the open
+                row stretches the cell, so it always reads the RESTING width. */}
+            <span ref={restRef} aria-hidden className="chip-field-input" style={{
+              gridArea: '1 / 2', justifySelf: 'start', visibility: 'hidden', whiteSpace: 'pre', padding: 0, lineHeight: 'normal',
+            }}>{placeholder}</span>
             <input
               ref={inputRef}
               className="chip-field-input"
               type="text"
               value={value}
-              onChange={(e) => onChange(e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value;
+                onChange(v);
+                // Opens a letter early: once one more of the last-typed letter
+                // would not fit the RESTING field (as wide as the hidden
+                // placeholder copy), so the text never runs under the edge.
+                // Back under that line, it slides home, even mid-wait.
+                if (textWidth(e.target, v + v.slice(-1)) > restRef.current.offsetWidth) {
+                  if (!open) openWhenUp();
+                } else closeRun();
+              }}
               placeholder={placeholder}
-              onFocus={openWhenUp}
               onBlur={() => { if (!value.trim()) closeRun(); }}
               onKeyDown={(e) => {
                 if (e.key !== 'Escape') return;
@@ -138,9 +174,10 @@ export default function SearchRun({ value, onChange, placeholder = 'Search', siz
               }}
               // padding 0: the face already carries the chips' padding. line-height
               // normal: the field's shared 1.4 painted the word a pixel above the
-              // chip labels beside it. field-sizing: the box is as wide as its
-              // placeholder, measured by the browser, so the part hugs "Search".
-              style={{ padding: 0, lineHeight: 'normal', fieldSizing: 'content' }}
+              // chip labels beside it. width 0 + minWidth 100%: the input adds
+              // nothing to the cell's size, then fills whatever the placeholder
+              // copy (or the open row) made it.
+              style={{ gridArea: '1 / 2', padding: 0, lineHeight: 'normal', width: 0, minWidth: '100%' }}
             />
           </span>
         </span>

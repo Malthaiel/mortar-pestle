@@ -12,6 +12,7 @@ import PlaylistDetail from './PlaylistDetail.jsx';
 import { TILE_GRID } from './util.js';
 import { encodePath } from '../paths.js';
 import { navigate } from '@host/router.js';
+import { COVER_BTN_STYLE, COVER_FACE_STYLE } from '../AnimeDetailHeader.jsx';
 
 const GRID = TILE_GRID;   // the module-wide cover-tile grid (util.js)
 
@@ -143,14 +144,13 @@ export function PlaylistCard({ playlist, accent, onOpen, pinned = false }) {
       // NO intrinsic content, and the whole card collapsed to a 24px dot
       // (Macroblank, 2026-09-10). Claiming the width makes the cell, not the
       // artwork, decide how big the tile is.
-      style={{ width: '100%', '--accent': accent || 'var(--accent)' }}
+      style={{ ...COVER_BTN_STYLE, width: '100%', '--accent': accent || 'var(--accent)' }}
     >
-      <div className="candy-face">
+      <div className="candy-face" style={COVER_FACE_STYLE}>
         <div
           style={{
             width: '100%',
             aspectRatio: '1 / 1',
-            borderRadius: 6,
             overflow: 'hidden',
             background: 'var(--surface-2)',
           }}

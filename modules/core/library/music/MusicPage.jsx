@@ -1,6 +1,6 @@
 // Music section page. The AlbumBrowser library column is docked to the left of
 // every mode (it used to exist only inside the `downloaded` route), and the
-// MusicSearchBar is pinned top-right over the right half on every mode (the
+// MusicSearchBar is pinned top-centre over the right half on every mode (the
 // topbar strip it rode was removed 2026-09-25). The mode picks what fills the
 // right half; it is parsed from the URL rest (everything after /tools/library/music/):
 //   ""                                   → MusicHome (combined search-first home)
@@ -275,17 +275,22 @@ export default function MusicPage({ accent, rest }) {
           display: 'flex', flexDirection: 'column', position: 'relative',
         }}>
           {content}
-          {/* Pinned top-right, the same TILE_GAP from the top and right edges
-              as the library column's run sits from its top (user-directed
-              2026-09-25). Over the page rather than above it, so the album's
-              full-bleed sleeve still reaches the top edge. zIndex 2 clears
-              .film-detail's children (z-index 1). */}
-          <div style={{ position: 'absolute', top: TILE_GAP, right: TILE_GAP, zIndex: 2 }}>
+          {/* Pinned top-centre (user-directed 2026-09-25), the same TILE_GAP
+              from the top as the library column's run sits from its top.
+              left/right 0 + fit-content + auto margins centres it without a
+              full-width strip over the page. Over the page rather than above
+              it, so the album's full-bleed sleeve still reaches the top edge.
+              zIndex 2 clears .film-detail's children (z-index 1). */}
+          <div style={{
+            position: 'absolute', top: TILE_GAP, left: 0, right: 0,
+            width: 'fit-content', margin: '0 auto', zIndex: 2,
+          }}>
             <MusicSearchBar
               accent={accent}
               query={query} setQuery={setQuery}
               albums={albums} ownedIds={ownedIds} onPlay={playAlbum}
               suppress={onSearchPage}
+              onHome={() => go(HOME_PATH)}
             />
           </div>
         </div>

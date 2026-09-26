@@ -124,11 +124,11 @@ function MetaChip({ kind, value, accent }) {
 // Download button, which is the size every control on that page shares. A film
 // draws them NEUTRAL (accent on hover, like every candy button); every other
 // domain keeps the standing-accent is-primary it always had.
-function SourceBtn({ label, url, filmLayout }) {
+function SourceBtn({ label, name = label, url, filmLayout }) {
   return (
     <button
       onClick={() => { window.location.hash = '/tools/browser/' + encodeURIComponent(url); }}
-      title={`Open this title on ${label} in the in-app browser`}
+      title={`Open this title on ${name} in the in-app browser`}
       data-shape={filmLayout ? 'chip' : undefined}
       className={filmLayout ? 'candy-btn' : 'candy-btn is-primary'}
       style={{ height: filmLayout ? 26 : 30 }}
@@ -142,7 +142,9 @@ function SourceBtn({ label, url, filmLayout }) {
 export const POSTER_COL_GAP = 16;
 
 // The film's source buttons as one fused run, centred under the poster.
-// Exported: the album page puts Last.fm / MusicBrainz / Discogs under its sleeve.
+// Exported: the album page puts Last.fm / MusicBrainz / RYM under its sleeve.
+// A source may carry a short `label` for the button and its full `name` for
+// the tooltip.
 export function SourceRun({ sources }) {
   return (
     <div className="candy-split" style={{ '--cbtn-size': '26px', alignSelf: 'center' }}>
@@ -151,8 +153,27 @@ export function SourceRun({ sources }) {
   );
 }
 
+// Every cover button (this poster, the album sleeve, the music cover tiles) grows
+// its outline with its own width, as the rail tiles scale theirs by --tile-px
+// (user-directed 2026-09-25) at HALF the rate of the width: 4px on a 96px music
+// tile, ~6.6px on the 221px sleeve. Fully in step (1/24 of the width, ~9px) was
+// tried the same day and read as far too thick. Floored at the tile shape's 4px:
+// border widths paint rounded DOWN to whole pixels, so a 95.8px tile's 3.99px
+// painted as 3px, thinner than before (photographed 2026-09-25). The button is
+// its own container, so its face and the picture resolve 100cqi against it.
+// The picture fills the face flush to the rim: no gap, no outline of its own
+// (both removed by him 2026-09-25). The face clips it, so its corners follow the
+// rim's own inner curve with nothing showing between. Rounded down to whole px
+// at the source, as borders paint floored anyway.
+export const COVER_BTN_STYLE = {
+  containerType: 'inline-size',
+  '--cbtn-frame': 'round(down, max(4px, 2px + 100cqi / 48), 1px)',
+};
+export const COVER_FACE_STYLE = { padding: 0, overflow: 'hidden' };
+
 // The poster as a candy tile that opens the full picture. Exported: the album
-// page wears the same tile for its sleeve, at a square aspect.
+// page wears the same tile for its sleeve, at a square aspect, and matches the
+// music cover tiles: rim + flush picture as above (user-directed 2026-09-25).
 export function PosterTile({ image, title, accent, aspect = '2 / 3' }) {
   const lb = useLightbox();
   return (
@@ -164,9 +185,9 @@ export function PosterTile({ image, title, accent, aspect = '2 / 3' }) {
         className="candy-btn"
         data-shape="tile"
         title={image ? `View ${title} cover` : title}
-        style={{ '--accent': accent, width: '100%', padding: 0, cursor: image ? 'zoom-in' : 'default' }}
+        style={{ ...COVER_BTN_STYLE, '--accent': accent, width: '100%', padding: 0, cursor: image ? 'zoom-in' : 'default' }}
       >
-        <span className="candy-face" style={{ padding: 0, overflow: 'hidden' }}>
+        <span className="candy-face" style={COVER_FACE_STYLE}>
           <div style={{
             width: '100%', aspectRatio: aspect, background: 'var(--surface-3)',
             overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center',

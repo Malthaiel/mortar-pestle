@@ -6,14 +6,19 @@
 //
 // Boxicons path data is read off disk, so the pack has to be present. It is NOT
 // a dependency of this repo (the app ships zero npm deps and that stays true) —
-// drop it somewhere throwaway and point the script at it:
+// install it OUTSIDE the repo and point the script at it. npm run in a folder
+// with no package.json walks UP to the nearest one, so `npm i` anywhere inside
+// this repo (the gitignored .iconpacks/ included) writes boxicons, and an old
+// React it drags in, into the app's own package.json and lock (2026-09-25):
 //
-//   mkdir /tmp/iconpacks && cd /tmp/iconpacks && npm i boxicons
-//   node web/scripts/gen-icons.mjs /tmp/iconpacks/node_modules/boxicons/svg
+//   mkdir <dir outside the repo> && echo {} > <dir>/package.json
+//   npm i boxicons --prefix <dir>
+//   node web/scripts/gen-icons.mjs <dir>/node_modules/boxicons/svg
 //
-// Default location if no argument is given: <repo>/.iconpacks/node_modules/
-// boxicons/svg (gitignored). The Font Awesome marks need no download — their
-// path data is inlined in OVERRIDES.
+// Then `git status package.json package-lock.json` must be clean. Default
+// location if no argument is given: <repo>/.iconpacks/node_modules/boxicons/svg
+// (gitignored), only safe to fill if that folder has its own package.json. The
+// Font Awesome marks need no download — their path data is inlined in OVERRIDES.
 //
 // Verify a run by diffing the result against the committed file; the generator
 // reproduces it exactly.
@@ -40,9 +45,9 @@ const MAP = {
   // Sidebar / chrome
   IconTimer: 'bx-time-five', IconChart: 'bx-bar-chart-alt-2', IconNotes: 'bx-file',
   IconTerminal: 'bx-terminal', IconBrush: 'bx-brush', IconConsole: 'bx-window-alt',
-  IconBookOpen: 'bx-book-open', IconLibrary: 'bx-collection', IconGraph: 'bx-network-chart',
+  IconBookOpen: 'bx-book-open', IconLibrary: 'bx-collection',
   IconActivity: 'bx-chart', IconStar: 'bx-star', IconCalendar: 'bx-calendar',
-  IconLayoutGrid: 'bx-grid-alt', IconHome: 'bx-home', IconRotateCw: 'bx-refresh',
+  IconLayoutGrid: 'bx-grid-alt', IconHome: 'bx-home', IconPin: 'bx-pin', IconRotateCw: 'bx-refresh',
   IconLayers: 'bx-layer', IconHardDrive: 'bx-hdd', IconSettings: 'bx-cog',
   IconBell: 'bx-bell', IconTrash: 'bx-trash', IconDownload: 'bx-download', IconSearch: 'bx-search',
   // Non-sidebar / inline
@@ -55,7 +60,9 @@ const MAP = {
   IconSkipBack: 'bx-skip-previous',
   IconRewind: 'bx-rewind', IconFastForward: 'bx-fast-forward', IconPause: 'bx-pause',
   IconStop: 'bx-stop',
-  IconMaximize: 'bx-fullscreen', IconX: 'bx-x', IconCheck: 'bx-check',
+  IconMaximize: 'bx-fullscreen', IconX: 'bx-x',
+  IconMinus: 'minus', IconSquare: 'bx-square', IconRestore: 'bx-copy',
+  IconCheck: 'bx-check',
   IconChevronLeft: 'bx-chevron-left', IconChevronRight: 'bx-chevron-right',
   IconSort: 'bx-sort-a-z', IconChevronsDownUp: 'bx-collapse-vertical', IconChevronsUpDown: 'bx-expand-vertical',
   IconSend: 'bx-send',
@@ -68,7 +75,7 @@ const MAP = {
   IconGamepad: 'bx-joystick', IconBroadcast: 'bx-radio',
   // Knowledge subfolders
   IconFolder: 'bx-folder', IconDatabase: 'bx-data', IconLock: 'bx-lock-alt',
-  IconMessageSquare: 'bx-message-square', IconUser: 'bx-user', IconUsers: 'bx-group',
+  IconMessageSquare: 'bx-message-square-dots', IconUser: 'bx-user', IconUsers: 'bx-group',
   IconSparkles: 'bx-bot', IconPackage: 'bx-package',
   IconHeart: 'bx-heart', IconWrench: 'bx-wrench',
   IconRepeat: 'bx-repeat', IconMap: 'bx-map-alt', IconBuilding: 'bx-building',
@@ -85,11 +92,13 @@ const MAP = {
   IconAppWindow: 'bx-window-alt', IconCamera: 'bx-camera', IconTypeText: 'bx-text',
   IconPalette: 'bx-palette', IconPlayCircle: 'bx-play-circle',
   // Dock chrome
-  IconDock: 'bx-dock-bottom', IconPlus: 'bx-plus',
+  IconDock: 'bx-dock-bottom', IconPlus: 'bx-plus', IconHelp: 'bx-help-circle',
   IconKeyboard: 'bx-keyboard', IconCommand: 'bx-command',
   IconSunMoon: 'bx-circle-half',
   // Folded in from modules/core/browser/vaultIcons.jsx + BrowserPage ShieldGlyph
   IconKey: 'bx-key', IconLockOpen: 'bx-lock-open-alt', IconCopy: 'bx-copy',
+  // Context-menu clipboard rows
+  IconCut: 'bx-cut', IconPaste: 'bx-paste', IconSelectAll: 'bx-select-multiple',
   IconShield: 'bx-shield', IconShieldOff: 'bx-shield-x',
   // Replacements for typed characters previously standing in for icons
   IconDot: 'bx-circle', IconAlert: 'bx-error',
@@ -104,6 +113,8 @@ const SIZES = {
   IconKey: 15, IconLockOpen: 15, IconCopy: 14, IconShield: 15, IconShieldOff: 15,
   IconDot: 14, IconSend: 14,
   IconRepeatSolid: 14, IconPlayMark: 14, IconSkipMark: 14, IconListPlus: 14,
+  IconMinus: 10, IconSquare: 10, IconRestore: 10,
+  IconCut: 14, IconPaste: 14, IconSelectAll: 14,
 };
 
 // Section banners, keyed by the icon that opens each block.
@@ -116,7 +127,25 @@ const SECTIONS = {
   IconEye:      'Broadcast source-type + tree glyphs',
   IconDock:     'Dock chrome icons',
   IconKey:      'Password-vault + browser-shield glyphs (folded in from vaultIcons.jsx)',
+  IconCut:      'Clipboard glyphs (context-menu rows: Cut / Paste / Select All)',
   IconDot:      'Menu / notification marks (replace typed characters)',
+};
+
+// Comment blocks printed right above an icon (after its section banner), for
+// icons whose source or fill rule needs explaining where the icon lives.
+const NOTES = {
+  IconMessageSquare: `// bxs-message-square-DOTS, not the bare bxs-message-square it was until
+// 2026-09-15: the plain one has no tail and no cut-outs, so at the 16px the
+// titlebar's Feedback button draws it, it read as a blank rounded blob rather
+// than a message. fillRule evenodd knocks the three dots out — the sub-paths
+// wind the same way as the shell, so the default nonzero fill would swallow
+// them and put the blob straight back.`,
+  IconHelp: `// The titlebar's Help button. bxs-help-circle is a filled disc with the query
+// mark CUT OUT of it, so it needs fillRule evenodd for the same reason
+// IconMessageSquare does — nonzero fill swallows the knock-out and leaves a
+// plain dot. Path copied from boxicons 2.1.4 solid.`,
+  IconCut: `// Cut is the ONE exception to the solid rule: Boxicons ships no bxs-cut, so the
+// Regular scissors is the only form of the mark that exists.`,
 };
 
 const HEADER = `// Icon pack. Every icon in the app comes from here — nothing is hand-drawn.
@@ -257,6 +286,34 @@ const OVERRIDES = {
     box: 'FA_BOX_512',
     pack: 'Font Awesome solid arrow-rotate-right (Boxicons bx-refresh is Basic-only)',
   },
+  // ── Hand-picked forms (titlebar marks, clipboard rows, knock-out fills) ──
+  // These were first hand-added to icons.jsx and folded back in here
+  // 2026-09-25, so a regeneration keeps them. Each carries its exact path.
+  IconMinus: {
+    d: '<path fill="currentColor" d="M432 256c0 17.7-14.3 32-32 32L48 288c-17.7 0-32-14.3-32-32s14.3-32 32-32l352 0c17.7 0 32 14.3 32 32z"/>',
+    box: 'FA_BOX_448',
+    pack: 'Font Awesome solid minus (bare mark — Boxicons has no bxs-minus)',
+  },
+  IconSquare: {
+    d: '<path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2zM4 4h16v16H4V4z"/>',
+    pack: 'bx-square (outlined by design — the titlebar maximize mark)',
+  },
+  IconRestore: {
+    d: '<path d="M20 2H10a2 2 0 0 0-2 2v4H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4h4a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zM4 20V10h10l.002 10H4zm16-6h-4v-4a2 2 0 0 0-2-2h-4V4h10v10z"/>',
+    pack: 'bx-copy (two offset frames — the titlebar restore mark)',
+  },
+  IconMessageSquare: {
+    d: '<path fillRule="evenodd" d="M16 2H8C4.691 2 2 4.691 2 8v13a1 1 0 0 0 1 1h13c3.309 0 6-2.691 6-6V8c0-3.309-2.691-6-6-6zM8 13a1.5 1.5 0 1 1 .001-3.001A1.5 1.5 0 0 1 8 13zm4 0a1.5 1.5 0 1 1 .001-3.001A1.5 1.5 0 0 1 12 13zm4 0a1.5 1.5 0 1 1 .001-3.001A1.5 1.5 0 0 1 16 13z"/>',
+    pack: 'bxs-message-square-dots',
+  },
+  IconHelp: {
+    d: '<path fillRule="evenodd" d="M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10 10-4.486 10-10S17.514 2 12 2zm1 16h-2v-2h2v2zm.976-4.885c-.196.158-.385.309-.535.459-.408.407-.44.777-.441.793v.133h-2v-.167c0-.118.029-1.177 1.026-2.174.195-.195.437-.393.691-.599.734-.595 1.216-1.029 1.216-1.627a1.934 1.934 0 0 0-3.867.001h-2C8.066 7.765 9.831 6 12 6s3.934 1.765 3.934 3.934c0 1.597-1.179 2.55-1.958 3.181z"/>',
+    pack: 'bxs-help-circle',
+  },
+  IconCut: {
+    d: '<path d="M10 6.5C10 4.57 8.43 3 6.5 3S3 4.57 3 6.5 4.57 10 6.5 10a3.45 3.45 0 0 0 1.613-.413l2.357 2.528-2.318 2.318A3.46 3.46 0 0 0 6.5 14C4.57 14 3 15.57 3 17.5S4.57 21 6.5 21s3.5-1.57 3.5-3.5c0-.601-.166-1.158-.434-1.652l2.269-2.268L17 19.121a3 3 0 0 0 2.121.879H22L9.35 8.518c.406-.572.65-1.265.65-2.018zM6.5 8C5.673 8 5 7.327 5 6.5S5.673 5 6.5 5 8 5.673 8 6.5 7.327 8 6.5 8zm0 11c-.827 0-1.5-.673-1.5-1.5S5.673 16 6.5 16s1.5.673 1.5 1.5S7.327 19 6.5 19z"/><path d="m17 4.879-3.707 4.414 1.414 1.414L22 4h-2.879A3 3 0 0 0 17 4.879z"/>',
+    pack: 'bx-cut (no solid form exists)',
+  },
 };
 
 const read = (dir, file) => {
@@ -289,17 +346,14 @@ const names = Object.keys(MAP);
 const pad = Math.max(...names.map((n) => n.length));
 for (const [icon, bx] of Object.entries(MAP)) {
   const over = OVERRIDES[icon];
-  if (over) {
-    if (SECTIONS[icon]) lines.push(rule(SECTIONS[icon]));
-    lines.push(`export function ${icon.padEnd(pad)}({ size = ${SIZES[icon] || 18} }) { return wrap(size, <>${over.d}</>, ${over.box}); } // ${over.pack}`);
-    continue;
-  }
-  const hit = body(bx);
+  const hit = over || body(bx);
   if (!hit) { missing.push(`${icon} -> ${bx}`); continue; }
-  if (hit.pack.includes('Basic')) fellBack.push(icon);
+  if (!over && hit.pack.includes('Basic')) fellBack.push(icon);
   if (SECTIONS[icon]) lines.push(rule(SECTIONS[icon]));
-  const size = SIZES[icon] || 18;
-  lines.push(`export function ${icon.padEnd(pad)}({ size = ${size} }) { return wrap(size, <>${hit.d}</>); } // ${hit.pack}`);
+  if (NOTES[icon]) lines.push(NOTES[icon]);
+  // An override on the plain 24 box leaves `box` out, so no third argument.
+  const box = hit.box ? `, ${hit.box}` : '';
+  lines.push(`export function ${icon.padEnd(pad)}({ size = ${SIZES[icon] || 18} }) { return wrap(size, <>${hit.d}</>${box}); } // ${hit.pack}`);
 }
 
 const out = HEADER + lines.join('\n') + '\n';
