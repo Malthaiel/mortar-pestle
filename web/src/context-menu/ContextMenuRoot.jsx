@@ -206,6 +206,9 @@ export default function ContextMenuRoot({ point, items = [], opts = {}, onClose 
         setOpenPath(next);
         setActiveIndex(firstNavigable(levelItemsFor(items, next)));
       } else {
+        // Left the panel inside the wait: the leave already cleared the cursor
+        // (the liquid drained it), so don't light the row again.
+        if (!panelEls.current.get(d)?.matches(':hover')) return;
         setOpenPath(base);
         setActiveIndex(i);
       }
@@ -256,6 +259,9 @@ export default function ContextMenuRoot({ point, items = [], opts = {}, onClose 
         openIndex={openPath[depth] != null ? openPath[depth] : -1}
         interactive={depth === 0}
         onKeyDown={depth === 0 ? onKeyDown : undefined}
+        // The mouse leaving the deepest card clears its cursor, so the lit row
+        // drains away (user-directed 2026-09-26; the arrow keys then start fresh).
+        onLeave={depth === deepest ? () => setActiveIndex(-1) : undefined}
         onRowHover={onRowHover}
         onRowClick={onRowClick}
         registerRowEl={registerRowEl}
@@ -268,7 +274,7 @@ export default function ContextMenuRoot({ point, items = [], opts = {}, onClose 
 function MenuPanel({
   depth, items, point, aboveY, align, anchorEl, header, accent, menuId,
   activeIndex, openIndex, interactive,
-  onKeyDown, onRowHover, onRowClick, registerRowEl, reportPanelEl,
+  onKeyDown, onLeave, onRowHover, onRowClick, registerRowEl, reportPanelEl,
 }) {
   const ref = useRef(null);
   const [pos, setPos] = useState({ left: -9999, top: -9999, ready: false });
@@ -319,6 +325,7 @@ function MenuPanel({
       tabIndex={interactive ? -1 : undefined}
       aria-activedescendant={interactive && activeIndex >= 0 ? `${menuId}-${depth}-${activeIndex}` : undefined}
       onKeyDown={onKeyDown}
+      onMouseLeave={onLeave}
       onContextMenu={(e) => {
         // Right-clicking the menu itself shouldn't re-trigger the suppressor.
         e.preventDefault();

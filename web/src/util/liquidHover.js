@@ -24,6 +24,9 @@
 // whose own hover does not flood the accent (measured, so every neutral hover
 // shape opts out with no list to keep).
 //
+// Menus and dropdowns: each row drains and fills on its own, driven by the
+// menu's own cursor, so the arrow keys light rows too (from their middle).
+//
 // Typing rows: a copy has no caret, but the caret only exists in the FOCUSED box,
 // and focus already lights that box. So a box is copied like any button until you
 // type in it; then that one part stays real ([data-liquid-live]) and both copies
@@ -41,9 +44,10 @@ export const TUNE = {
 };
 
 // Later phases of the plan, each with its own snag: rail tiles (card owns the
-// flood, nested controls hover neutral), the dock (sticky hover, widening
-// buttons), menus (rows light through .is-active, shared with the arrow keys).
-const SKIP = '.rail-tile, .dock-root, [role="menu"], [data-liquid-skip], [data-dragging]';
+// flood, nested controls hover neutral), the dock (sticky hover, widening buttons).
+const SKIP = '.rail-tile, .dock-root, [data-liquid-skip], [data-dragging]';
+// Right-click menus and dropdowns (one component): see watchMenu below.
+const MENU = '[role="menu"]';
 // A copy cannot show a canvas, a video or a frame (rail tiles, a later phase).
 const LIVE = 'canvas, video, iframe';
 const TYPING = 'input, textarea, [contenteditable]:not([contenteditable="false"])';
@@ -84,6 +88,7 @@ function copy(s, lit) {
     el.removeAttribute('id'); el.removeAttribute('title'); el.removeAttribute('data-tip');
   }
   if (lit) for (const p of partsOf(c, s.split)) p.dataset.dockHover = 'true';
+  else if (s.menu) c.classList.remove('is-active');   // a menu row's .is-active IS its hover
   return c;
 }
 
@@ -147,7 +152,7 @@ function build(host, btn) {
   if (!parent) return null;
   const split = host !== btn;
   const s = {
-    host, split, parts: partsOf(host, split), x: 0, y: 0, ox: 0, oy: 0, w: -1, h: -1,
+    host, split, menu: !!host.closest(MENU), parts: partsOf(host, split), x: 0, y: 0, ox: 0, oy: 0, w: -1, h: -1,
     L: 0, R: 0, vL: 0, vR: 0, bL: 0, bR: 0, i: -1, on: false, live: -1,
     p: 0, vp: 0, aL: 0, aR: 0, dir: 1, hit: true,
     fx: 0, fy: 0, rad: 0, vrad: 0, filling: false, out: false, checked: -1,
@@ -206,6 +211,7 @@ function build(host, btn) {
         const el = at(c, path);
         if (!el) { rebuild = true; continue; }
         if (v == null) el.removeAttribute(n); else el.setAttribute(n, v);
+        if (s.menu && n === 'class' && c === s.rest) el.classList.remove('is-active');
       }
       if (m.target === host && n === 'style') repin = true;   // the copied inline style undid the pin
     }
@@ -358,11 +364,51 @@ function leave(host, e) {   // the fill run backwards: shrink into where the poi
   kick();
 }
 
+// Menus (right-click menus and dropdowns, one component). A row is lit by the
+// menu's own cursor (.is-active: the mouse AND the arrow keys move it), so rows
+// are not driven by the pointer: every panel is watched from the moment it
+// mounts, and whenever a row's MEASURED lit state flips it fills or drains on
+// its own like a lone button, at the pointer, or at its middle after a keypress.
+const menus = new Map();   // panel -> { mo, seen: Map(row -> lit) }
+let keyed = false, pt = { clientX: 0, clientY: 0 };
+const rowsOf = (panel) => [...panel.querySelectorAll('.candy-btn[role^="menuitem"]')].filter((r) => !r.closest('[data-liquid-layer]'));
+const middle = (el) => { const r = el.getBoundingClientRect(); return { clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 }; };
+
+function watchMenu(panel) {
+  if (menus.has(panel)) return;
+  const m = { seen: new Map(rowsOf(panel).map((r) => [r, floods(r)])) };
+  m.mo = new MutationObserver(() => syncMenu(panel));
+  m.mo.observe(panel, { subtree: true, attributes: true, attributeFilter: ['class'] });
+  menus.set(panel, m);
+}
+function unwatchMenu(panel) { menus.get(panel)?.mo.disconnect(); menus.delete(panel); }
+
+function syncMenu(panel) {
+  const m = menus.get(panel);
+  if (!panel.isConnected) return unwatchMenu(panel);
+  for (const r of rowsOf(panel)) {
+    const lit = floods(r);
+    if (!m.seen.has(r)) { m.seen.set(r, lit); continue; }   // a row that just appeared is as it paints
+    if (lit === m.seen.get(r)) continue;
+    m.seen.set(r, lit);
+    const at = keyed ? middle(r) : pt;
+    let s = layers.get(r);
+    if (!s) {
+      if (off() || r.closest(SKIP) || r.querySelector(LIVE) || !(s = build(r, r))) continue;
+      // Lit with no layer yet (a submenu opens with its first row lit): start full.
+      if (!lit) { enter(s, r, at); s.filling = false; clip(s, 'cf', s.fill, 'none'); }
+    }
+    if (lit) enter(s, r, at); else leave(r, at);
+  }
+}
+
 function onOver(e) {
   if (e.pointerType === 'touch') return;
+  keyed = false; pt = { clientX: e.clientX, clientY: e.clientY };
   const btn = e.target.closest?.('.candy-btn');
-  const host = btn && hostOf(btn);
+  const host = btn && !btn.closest(MENU) && hostOf(btn);
   if (hot && hot !== host) { leave(hot, e); hot = null; }
+  for (const p of menus.keys()) syncMenu(p);   // :hover flips no class, so read it here
   if (!host) return;
   let s = layers.get(host);
   if (!s) {
@@ -383,4 +429,13 @@ export function installLiquidHover() {
   installed = true;
   document.addEventListener('pointerover', onOver, true);
   document.addEventListener('pointerout', onOut, true);
+  document.addEventListener('keydown', () => { keyed = true; }, true);
+  // Menu panels portal straight into <body>.
+  // ponytail: a menu portalled into a fullscreen element is not seen and keeps the instant hover.
+  new MutationObserver((recs) => {
+    for (const rec of recs) {
+      for (const n of rec.addedNodes) if (n.nodeType === 1 && n.matches(MENU)) watchMenu(n);
+      for (const n of rec.removedNodes) if (menus.has(n)) unwatchMenu(n);
+    }
+  }).observe(document.body, { childList: true });
 }
