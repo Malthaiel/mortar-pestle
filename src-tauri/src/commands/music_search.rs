@@ -98,15 +98,22 @@ pub fn cover_dir() -> Option<&'static PathBuf> {
 /// CAA answers through three hosts (307 → 302 → 200) and the redirects aren't
 /// cacheable, so hot-linking re-walked all three on every visit. `kind` is
 /// `release-group` or `release`; `size` a CAA thumbnail width (always JPEG).
-/// `None` = CAA has no cover; that miss is remembered 7 days.
+/// `None` = CAA has no cover; that miss is remembered 7 days. `image` picks one
+/// picture of a release by its CAA id (the album page's Artwork tab, from
+/// `music_release_artwork`); absent = the front cover.
 #[tauri::command]
-pub async fn music_cover(kind: String, mbid: String, size: u32) -> Result<Option<String>, VaultError> {
+pub async fn music_cover(kind: String, mbid: String, size: u32, image: Option<String>) -> Result<Option<String>, VaultError> {
     let id_ok = !mbid.is_empty() && mbid.chars().all(|c| c.is_ascii_hexdigit() || c == '-');
-    if !matches!(kind.as_str(), "release-group" | "release") || !id_ok || !matches!(size, 250 | 500 | 1200) {
+    let image_ok = image.as_deref().map_or(true, |i| !i.is_empty() && i.chars().all(|c| c.is_ascii_digit()));
+    if !matches!(kind.as_str(), "release-group" | "release") || !id_ok || !image_ok || !matches!(size, 250 | 500 | 1200) {
         return Err(VaultError::Invalid("Bad cover request".into()));
     }
     let dir = COVER_DIR.get().ok_or_else(|| VaultError::Io("Cover folder unavailable".into()))?;
-    let stem = format!("{kind}-{mbid}-{size}");
+    let pic = image.as_deref().unwrap_or("front");
+    let stem = match &image {
+        Some(i) => format!("{kind}-{mbid}-{i}-{size}"),
+        None => format!("{kind}-{mbid}-{size}"),
+    };
     let img = dir.join(format!("{stem}.jpg"));
     if img.exists() {
         return Ok(Some(img.to_string_lossy().into_owned()));
@@ -123,7 +130,7 @@ pub async fn music_cover(kind: String, mbid: String, size: u32) -> Result<Option
     if img.exists() {
         return Ok(Some(img.to_string_lossy().into_owned()));
     }
-    let url = format!("https://coverartarchive.org/{kind}/{mbid}/front-{size}");
+    let url = format!("https://coverartarchive.org/{kind}/{mbid}/{pic}-{size}");
     let resp = http_client()
         .get(&url)
         .send()
@@ -594,6 +601,111 @@ pub async fn music_releasegroup_detail(rg_mbid: String) -> Result<ReleaseDetail,
         multi_disc,
         tracks,
     })
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtImage {
+    /// CAA image id, for `music_cover(.., image)`.
+    pub id: String,
+    /// What the picture shows: Front, Back, Booklet, Disc, Tray, ...
+    pub kind: String,
+    /// The 1200px version, the viewer's big picture.
+    pub full: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReleaseArtwork {
+    pub release_mbid: Option<String>,
+    pub images: Vec<ArtImage>,
+}
+
+/// Every scanned picture of an album, for the viewer the album page's sleeve
+/// opens. Taken from whichever edition has the MOST pictures on the Cover Art
+/// Archive (the browse answer counts them per edition), not the canonical one,
+/// which is often a bare digital release with a front cover only.
+// ponytail: one browse page (100 editions); page with `offset` if an album
+// with more ever misses its best-scanned edition.
+#[tauri::command]
+pub async fn music_release_artwork(rg_mbid: String) -> Result<ReleaseArtwork, VaultError> {
+    let id = rg_mbid.trim();
+    if id.is_empty() {
+        return Err(VaultError::Invalid("Empty release-group MBID".into()));
+    }
+    let url = format!("{MB_BASE}/release?release-group={}&fmt=json&limit=100", urlencoding::encode(id));
+    let editions = mb_get(&url, Fresh::Live).await?;
+    let Some(rel) = most_pictured(&editions) else {
+        return Ok(ReleaseArtwork { release_mbid: None, images: Vec::new() });
+    };
+    // Through the same saved-answer cache and polite gate as MusicBrainz.
+    let listing = mb_get(&format!("https://coverartarchive.org/release/{rel}"), Fresh::Week).await?;
+    Ok(ReleaseArtwork { release_mbid: Some(rel), images: art_images(&listing) })
+}
+
+/// The edition with the most CAA pictures; the first one listed wins a tie.
+/// `None` when no edition has any.
+fn most_pictured(editions: &serde_json::Value) -> Option<String> {
+    let mut best: Option<(u64, &str)> = None;
+    for r in editions.get("releases").and_then(|x| x.as_array()).into_iter().flatten() {
+        let n = r.get("cover-art-archive").and_then(|c| c.get("count")).and_then(|c| c.as_u64()).unwrap_or(0);
+        let Some(id) = r.get("id").and_then(|x| x.as_str()) else { continue };
+        if n > 0 && best.map_or(true, |(b, _)| n > b) {
+            best = Some((n, id));
+        }
+    }
+    best.map(|(_, id)| id.to_string())
+}
+
+fn art_images(listing: &serde_json::Value) -> Vec<ArtImage> {
+    listing
+        .get("images")
+        .and_then(|x| x.as_array())
+        .into_iter()
+        .flatten()
+        .filter_map(|i| {
+            // CAA ids arrive as numbers, older answers as strings.
+            let id = i.get("id").and_then(|v| v.as_u64().map(|n| n.to_string()).or_else(|| v.as_str().map(str::to_string)))?;
+            let kind = match i.get("types").and_then(|t| t.as_array()).and_then(|t| t.first()).and_then(|t| t.as_str()) {
+                Some("Medium") => "Disc",
+                Some(t) => t,
+                None => "Other",
+            }
+            .to_string();
+            let th = i.get("thumbnails");
+            let full = ["1200", "large"]
+                .iter()
+                .find_map(|k| th.and_then(|t| t.get(*k)).and_then(|u| u.as_str()))
+                .or_else(|| i.get("image").and_then(|u| u.as_str()))?
+                .replacen("http://", "https://", 1);
+            Some(ArtImage { id, kind, full })
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod artwork_tests {
+    #[test]
+    fn picks_the_most_pictured_edition_and_names_each_picture() {
+        let eds = serde_json::json!({ "releases": [
+            { "id": "a", "cover-art-archive": { "count": 1 } },
+            { "id": "b", "cover-art-archive": { "count": 27 } },
+            { "id": "c", "cover-art-archive": { "count": 27 } },
+            { "id": "d" } ]});
+        assert_eq!(super::most_pictured(&eds).as_deref(), Some("b"));
+        assert_eq!(super::most_pictured(&serde_json::json!({ "releases": [{ "id": "a" }] })), None);
+        let listing = serde_json::json!({ "images": [
+            { "id": 6496048047u64, "types": ["Front"], "thumbnails": { "1200": "http://coverartarchive.org/x-1200.jpg" } },
+            { "id": "32966164370", "types": ["Medium"], "thumbnails": { "large": "http://coverartarchive.org/y-500.jpg" } },
+            { "id": 5, "types": [], "image": "https://coverartarchive.org/z.jpg" },
+            { "types": ["Back"], "image": "https://coverartarchive.org/no-id.jpg" } ]});
+        let got: Vec<(String, String, String)> = super::art_images(&listing).into_iter().map(|a| (a.id, a.kind, a.full)).collect();
+        assert_eq!(got, vec![
+            ("6496048047".into(), "Front".into(), "https://coverartarchive.org/x-1200.jpg".into()),
+            ("32966164370".into(), "Disc".into(), "https://coverartarchive.org/y-500.jpg".into()),
+            ("5".into(), "Other".into(), "https://coverartarchive.org/z.jpg".into()),
+        ]);
+    }
 }
 
 /// One credited contributor on a release: a person/group plus their role

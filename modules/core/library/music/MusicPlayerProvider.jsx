@@ -523,13 +523,17 @@ export function MusicPlayerProvider({ children }) {
     // Record the completed listen before queue advancement. Skip when the
     // track has no usable duration (some MusicBrainz entries omit it).
     // Streamed listens count too (decision 6) — logged under a stable
-    // `albumPath#n` key since there's no file on disk.
+    // `albumPath#n` key since there's no file on disk. A song with its own
+    // YouTube link is logged by that link: its n is a PLAYLIST row (or null),
+    // so `albumPath#n` named the row, not the song ("Saved Tracks.md#1",
+    // "null#null"; fixed 2026-09-26).
     const ended = queue[index];
     if ((ended?.audioPath || ended?.streamable)
         && typeof ended.duration === 'number' && ended.duration >= 1) {
       const secs = Math.round(ended.duration);
-      const trackPath = ended.audioPath || ended.streamKey || `${ended.albumPath}#${ended.n}`;
+      const trackPath = ended.audioPath || ended.streamKey || ended.watchUrl || `${ended.albumPath}#${ended.n}`;
       invoke('music_record_listen', { trackPath, durationSec: secs })
+        .then(() => window.dispatchEvent(new CustomEvent('music-listen-recorded')))
         .catch(err => console.warn('[music] record_listen failed', err));
       setListenMinutesThisMonth(prev => (prev ?? 0) + secs / 60);
     }

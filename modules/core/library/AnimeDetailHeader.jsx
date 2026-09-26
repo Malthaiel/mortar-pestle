@@ -47,6 +47,10 @@ const fmtNum = (n) => (n == null || n === '' ? null : Number(n).toLocaleString()
 // passes through as written rather than rendering "Invalid Date".
 export const prettyDate = (iso) => {
   if (iso == null || iso === '') return null;
+  // A MusicBrainz date can stop at the year or the month: name only what is
+  // known, never a made-up 1st of January.
+  const p = String(iso).match(/^(\d{4})(?:-(\d{2}))?$/);
+  if (p) return p[2] ? new Date(+p[1], +p[2] - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }) : p[1];
   const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
   const d = m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(iso);
   if (Number.isNaN(d.getTime())) return String(iso);
@@ -192,7 +196,10 @@ export const COVER_TILE_FACE_STYLE = { padding: 4 };
 // The poster as a candy tile that opens the full picture. Exported: the album
 // page wears the same tile for its sleeve, at a square aspect, and matches the
 // music cover tiles (COVER_PIC_STYLE).
-export function PosterTile({ image, title, accent, aspect = '2 / 3' }) {
+// `onClick` replaces opening the tile's own lightbox (the album sleeve opens
+// its picture viewer; each picture in that viewer's list picks itself), and
+// `active` lights the tile as the one on show.
+export function PosterTile({ image, title, accent, aspect = '2 / 3', onClick, active }) {
   const lb = useLightbox();
   return (
     <>
@@ -200,8 +207,8 @@ export function PosterTile({ image, title, accent, aspect = '2 / 3' }) {
       <button
         type="button"
         disabled={!image}
-        onClick={() => lb.show(image, title)}
-        className="candy-btn"
+        onClick={onClick || (() => lb.show(image, title))}
+        className={'candy-btn' + (active ? ' is-active' : '')}
         data-shape="tile"
         title={image ? `View ${title} cover` : title}
         style={{ ...COVER_BTN_STYLE, '--cbtn-depth': POSTER_DEPTH, '--accent': accent, width: '100%', padding: 0, cursor: image ? 'zoom-in' : 'default' }}
@@ -219,7 +226,7 @@ export function PosterTile({ image, title, accent, aspect = '2 / 3' }) {
         </span>
       </button>
       </div>
-      <ImageLightbox {...lb} accent={accent} />
+      {!onClick && <ImageLightbox {...lb} accent={accent} />}
     </>
   );
 }

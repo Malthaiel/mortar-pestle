@@ -2,6 +2,7 @@
 //! "hours this month" rail stat. Each line: { timestamp, trackPath, durationSec }.
 //! Stored at `<app_data>/listen-log.jsonl`. Append-only; never compacted.
 
+use std::collections::HashMap;
 use std::fs::{read_to_string, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
@@ -57,6 +58,44 @@ pub fn music_record_listen(
         .map_err(|e| format!("open: {e}"))?;
     writeln!(f, "{}", line).map_err(|e| format!("write: {e}"))?;
     Ok(())
+}
+
+/// Finished listens per `trackPath`, the whole log. The album page's Plays tab
+/// sums the keys one song can carry (its file, `albumPath#n`, `albumPath|title`,
+/// the Browse `rgMbid|disc|pos`).
+// ponytail: reads the whole log per call; index it if the log ever gets big
+// enough for the tab to lag.
+#[tauri::command]
+pub fn music_listen_counts(app: AppHandle) -> Result<HashMap<String, u32>, String> {
+    let path = log_path(&app)?;
+    if !path.exists() {
+        return Ok(HashMap::new());
+    }
+    let content = read_to_string(&path).map_err(|e| format!("read: {e}"))?;
+    Ok(count_listens(&content))
+}
+
+fn count_listens(content: &str) -> HashMap<String, u32> {
+    let mut counts = HashMap::new();
+    for ev in content.lines().filter_map(|l| serde_json::from_str::<ListenEvent>(l).ok()) {
+        *counts.entry(ev.track_path).or_insert(0) += 1;
+    }
+    counts
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn counts_each_key_and_skips_bad_lines() {
+        let log = concat!(
+            r#"{"timestamp":"t","trackPath":"a.mp3","durationSec":1}"#, "\n",
+            "not json\n",
+            r#"{"timestamp":"t","trackPath":"a.mp3","durationSec":2}"#, "\n",
+            r#"{"timestamp":"t","trackPath":"Music/X.md#3","durationSec":3}"#, "\n",
+        );
+        let c = super::count_listens(log);
+        assert_eq!((c["a.mp3"], c["Music/X.md#3"], c.len()), (2, 1, 2));
+    }
 }
 
 #[tauri::command]

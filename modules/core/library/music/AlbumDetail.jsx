@@ -4,13 +4,13 @@
 // Then the disc-grouped tracklist and credits.
 
 import { Fragment, useEffect, useRef, useState } from 'react';
-import { musicApi } from './api.js';
+import { musicApi, useMbRefreshTick, useCaaCover } from './api.js';
 import { useMusicPlayer } from './MusicPlayerProvider.jsx';
-import { IconPlay, IconStar, IconLayers, IconPlus, IconDownload, IconMusic, IconUsers } from '@host/components/icons.jsx';
+import { IconPlay, IconStar, IconSkipMark, IconPlus, IconDownload, IconMusic, IconUsers, IconVideo, IconChart } from '@host/components/icons.jsx';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
 import { statusLabel, STATUS_ICON } from '@host/util/media-status.js';
 import { libraryAbs } from '@host/api.js';
-import { coverSrc, STATUS_DOT_COLOR, resolveDot, toBrowse } from './util.js';
+import { coverSrc, STATUS_DOT_COLOR, resolveDot, toBrowse, TILE_MIN } from './util.js';
 import AddToPlaylistButton from './AddToPlaylistButton.jsx';
 import { useAddToPlaylistMenu } from './useAddToPlaylistMenu.jsx';
 import { refFromQueueItem } from './PlaylistProvider.jsx';
@@ -21,7 +21,8 @@ import { consumeTrackHighlight, fmtDuration } from './searchShared.jsx';
 import { useSongMenu } from './contextMenus.js';
 import { navigate } from '@host/router.js';
 import { useContextMenu } from '@host/context-menu/useContextMenu.js';
-import { FILM_POSTER_W, FILM_DOT, POSTER_COL_GAP, PosterTile, SourceRun } from '../AnimeDetailHeader.jsx';
+import { FILM_POSTER_W, FILM_DOT, POSTER_COL_GAP, POSTER_DEPTH, PosterTile, SourceRun } from '../AnimeDetailHeader.jsx';
+import ImageLightbox, { useLightbox } from '../ImageLightbox.jsx';
 import { artistImage } from './artistImage.js';
 
 // The header's text: type tag, title and fact line all in the title's colour,
@@ -37,6 +38,9 @@ const LISTEN_STATUSES = ['Plan-to-Listen', 'Currently-Listening', 'Listened', 'D
 // Icon + word, like Play; "Credits" because "Performers" ran too long
 // (user-directed 2026-09-26). Details was removed the same day (user-directed);
 // a persisted 'Details' falls back to Tracks through the includes() guard.
+// Releases and Artwork tabs were built and removed the same day (user-directed);
+// the artwork moved into the sleeve's own viewer.
+// A Plays tab went the same way: each song's count is a part of its own row.
 const ALBUM_TABS = ['Tracks', 'Credits'];
 const TAB_ICON = { Tracks: IconMusic, Credits: IconUsers };
 
@@ -137,7 +141,12 @@ export default function AlbumDetail({ accent, albumPath }) {
   const [tab, setTab] = usePersistedState('library:albumTab', 'Tracks');
   const active = ALBUM_TABS.includes(tab) ? tab : 'Tracks';
   const [highlight, setHighlight] = useState(null);
+  const videos = useTrackVideos(album);
   useEffect(() => { setHighlight(consumeTrackHighlight(albumPath)); }, [albumPath]);
+  // The sleeve's viewer: the big picture, and beside it every scanned picture.
+  const lb = useLightbox();
+  const art = useAlbumArtwork(lb.open ? album?.providerId : null);
+  const plays = usePlayCounts();
 
   const coverImgSrc = album ? coverSrc(album.image, 400, { library: true }) : null;
 
@@ -214,6 +223,50 @@ export default function AlbumDetail({ accent, albumPath }) {
       : `https://musicbrainz.org/search?type=release_group&query=${encodeURIComponent(named)}` },
   ].filter(Boolean);
 
+  // Each song's finished-listen count. The count part is as wide as the
+  // album's biggest count (in digits), so every row's parts line up.
+  const trackPlays = plays ? album.tracks.map(t => playCount(plays, album, t)) : null;
+  const playsDigits = trackPlays ? String(Math.max(0, ...trackPlays)).length : 1;
+  const trackRow = (t, idx) => {
+    const playingThis = currentTrack &&
+      currentTrack.albumPath === album.path &&
+      currentTrack.n === t.n;
+    const playlistRef = refFromQueueItem({
+      albumPath: album.path, albumTitle: album.title, albumImage: album.image,
+      artist: album.artist, wikilink: t.wikilink, audioPath: t.audioPath,
+      title: t.title, duration: t.duration,
+    });
+    return (
+      <TrackRow
+        key={t.n + ':' + t.title}
+        track={t}
+        plays={trackPlays?.[idx]}
+        playsDigits={playsDigits}
+        accent={accent}
+        highlighted={!!highlight && highlight.n === t.n && (highlight.disc ?? 1) === (t.disc || 1)}
+        playlistRef={playlistRef}
+        videoUrl={videos[squash(t.title)]}
+        playing={playingThis && isPlaying}
+        onMenu={(e) => songMenu.openMenu(e, {
+          albumPath: album.path, albumTitle: album.title, albumImage: album.image,
+          artist: album.artist, n: t.n, title: t.title,
+          audioPath: t.audioPath, wikilink: t.wikilink, duration: t.duration,
+          available: t.available, rgMbid: album.providerId || null,
+        }, t.wikilink ? [{ label: 'Open track page', onClick: () => openTrackPage(t) }] : [])}
+        onPlay={() => (playingThis ? toggle() : playFrom(idx))}
+        onEnqueue={() => {
+          enqueue([{
+            albumPath: album.path, albumTitle: album.title, albumImage: album.image,
+            artist: album.artist,
+            n: t.n, title: t.title, audioPath: t.audioPath,
+            available: t.available, streamable: !t.available,
+            wikilink: t.wikilink, duration: t.duration,
+          }]);
+        }}
+      />
+    );
+  };
+
   const enqueueAlbum = () => {
     const items = album.tracks.map(t => ({
       albumPath: album.path, albumTitle: album.title, albumImage: album.image,
@@ -283,7 +336,8 @@ export default function AlbumDetail({ accent, albumPath }) {
         {/* LEFT column: the film poster's column 1-1 -- the same candy tile
             (opens the full sleeve) and the same source run under it. */}
         <div style={{ width: FILM_POSTER_W, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: POSTER_COL_GAP }}>
-          <PosterTile image={img} title={album.title} accent={accent || 'var(--accent)'} aspect="1 / 1"/>
+          <PosterTile image={img} title={album.title} accent={accent || 'var(--accent)'} aspect="1 / 1"
+            onClick={() => lb.show(img, album.title)}/>
           <SourceRun sources={sources}/>
         </div>
 
@@ -321,11 +375,12 @@ export default function AlbumDetail({ accent, albumPath }) {
               uses for status / rating / Download / More. A disabled half keeps
               its paint and simply does nothing -- fading it punches a hole in
               the run. */}
-          {/* The film page's action-row shell, 1-1 (AnimeMainColumn.jsx): the run,
-              14px of air, one hairline, then 10px down to the body under it --
-              which on a film is the Cast/Crew panel and here is the tracklist. */}
+          {/* The film page's action-row shell (AnimeMainColumn.jsx): the run,
+              14px of air, then 10px down to the body under it -- which on a
+              film is the Cast/Crew panel and here is the tracklist. The film's
+              hairline between them is gone here (user-directed 2026-09-26). */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', paddingBottom: 14, borderBottom: 'var(--candy-frame) solid var(--border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', paddingBottom: 14 }}>
           <div className="candy-split" style={{ '--accent': accent || 'var(--accent)', '--cbtn-size': ROW_H }}>
             {ALBUM_TABS.map(t => {
               const Icon = TAB_ICON[t];
@@ -465,42 +520,7 @@ export default function AlbumDetail({ accent, albumPath }) {
                   borderBottom: 'var(--candy-frame) solid var(--border)',
                 }}>Disc {d}</div>
               )}
-              {groups.get(d).map(({ t, idx }) => {
-                const playingThis = currentTrack &&
-                  currentTrack.albumPath === album.path &&
-                  currentTrack.n === t.n;
-                const playlistRef = refFromQueueItem({
-                  albumPath: album.path, albumTitle: album.title, albumImage: album.image,
-                  artist: album.artist, wikilink: t.wikilink, audioPath: t.audioPath,
-                  title: t.title, duration: t.duration,
-                });
-                return (
-                  <TrackRow
-                    key={t.n + ':' + t.title}
-                    track={t}
-                    accent={accent}
-                    highlighted={!!highlight && highlight.n === t.n && (highlight.disc ?? 1) === (t.disc || 1)}
-                    playlistRef={playlistRef}
-                    playing={playingThis && isPlaying}
-                    onMenu={(e) => songMenu.openMenu(e, {
-                      albumPath: album.path, albumTitle: album.title, albumImage: album.image,
-                      artist: album.artist, n: t.n, title: t.title,
-                      audioPath: t.audioPath, wikilink: t.wikilink, duration: t.duration,
-                      available: t.available, rgMbid: album.providerId || null,
-                    }, t.wikilink ? [{ label: 'Open track page', onClick: () => openTrackPage(t) }] : [])}
-                    onPlay={() => (playingThis ? toggle() : playFrom(idx))}
-                    onEnqueue={() => {
-                      enqueue([{
-                        albumPath: album.path, albumTitle: album.title, albumImage: album.image,
-                        artist: album.artist,
-                        n: t.n, title: t.title, audioPath: t.audioPath,
-                        available: t.available, streamable: !t.available,
-                        wikilink: t.wikilink, duration: t.duration,
-                      }]);
-                    }}
-                  />
-                );
-              })}
+              {groups.get(d).map(({ t, idx }) => trackRow(t, idx))}
             </div>
           ));
         })()}
@@ -512,6 +532,7 @@ export default function AlbumDetail({ accent, albumPath }) {
 
       <MusicCredits album={album} accent={accent} />
 
+      <ArtworkViewer lb={lb} art={art} accent={accent || 'var(--accent)'} />
       {songMenu.modalEl}
       {playlistMenu.modalEl}
     </div>
@@ -523,7 +544,7 @@ export default function AlbumDetail({ accent, albumPath }) {
 // the same ones the album's own Playlist / Queue buttons wear at the top of the
 // page, so a row reads as a smaller copy of them. Every part is ROW_H tall
 // because the run declares --cbtn-size; nothing here restates a height.
-function TrackRow({ track, accent, playing, highlighted, onPlay, onEnqueue, onMenu, playlistRef }) {
+function TrackRow({ track, plays, playsDigits, accent, playing, highlighted, onPlay, onEnqueue, onMenu, playlistRef, videoUrl }) {
   const rowRef = useRef(null);
   // Scroll a song arrived-at from search into view; long tracklists otherwise
   // highlight a row sitting below the fold.
@@ -569,6 +590,38 @@ function TrackRow({ track, accent, playing, highlighted, onPlay, onEnqueue, onMe
         </span>
       </button>
 
+      {/* Finished listens, its own part of the run (user-directed 2026-09-26,
+          replacing a Plays tab). Shows only once the listen log is read, so
+          the run never jumps from a guess. */}
+      {plays != null && (
+        <button
+          type="button"
+          className="candy-btn"
+          data-shape="chip"
+          data-own-press
+          title={`Played ${plays} time${plays === 1 ? '' : 's'}`}
+        ><span className="candy-face"><IconChart size={14}/>
+          <span style={{ minWidth: `${playsDigits}ch`, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{plays}</span>
+        </span></button>
+      )}
+
+      {/* On every song, so Playlist / Queue stay lined up down the list;
+          greyed and inert when the song has no music video (user-directed
+          2026-09-26). styles.css fades a disabled / aria-disabled candy button
+          to 0.55, which paints a dark hole in the run (photographed
+          2026-09-26), so only the icon greys: opacity is held at 1 here.
+          Opens in the in-app browser, as a film trailer does (AnimeTrailer). */}
+      <button
+        type="button"
+        className="candy-btn"
+        data-shape="chip"
+        data-own-press
+        aria-disabled={!videoUrl}
+        onClick={() => { if (videoUrl) window.location.hash = '/tools/browser/' + encodeURIComponent(videoUrl); }}
+        title={videoUrl ? 'Watch the music video' : 'No music video found'}
+        style={videoUrl ? undefined : { opacity: 1, cursor: 'default' }}
+      ><span className="candy-face" style={videoUrl ? undefined : { color: 'var(--text-faint)' }}><IconVideo size={14}/></span></button>
+
       {/* Its own half now, not a child of the row -- so it needs no
           stopPropagation to keep the row from playing under it. */}
       <AddToPlaylistButton
@@ -588,9 +641,142 @@ function TrackRow({ track, accent, playing, highlighted, onPlay, onEnqueue, onMe
         data-own-press
         onClick={onEnqueue}
         title="Add to queue"
-      ><span className="candy-face"><IconLayers size={14}/></span></button>
+      ><span className="candy-face"><IconSkipMark size={14}/></span></button>
     </div>
   );
+}
+
+// Every finished listen, counted per logged key. Read once per page, and again
+// each time a song finishes (music-listen-recorded).
+function usePlayCounts() {
+  const [counts, setCounts] = useState(null);
+  useEffect(() => {
+    let live = true;
+    const load = () => musicApi.listenCounts()
+      .then(c => { if (live) setCounts(c || {}); })
+      .catch(() => { if (live) setCounts(c => c || {}); });
+    load();
+    window.addEventListener('music-listen-recorded', load);
+    return () => { live = false; window.removeEventListener('music-listen-recorded', load); };
+  }, []);
+  return counts;
+}
+
+// Every key one album song's listens can be logged under (MusicPlayerProvider
+// handleEnded): its file, the album page's `albumPath#n`, a playlist row's
+// `albumPath|title` (that path has no .md), Browse's `rgMbid|disc|position`.
+// Old playlist rows logged as `albumPath#<row>` without the .md are left out:
+// the row number is not this song's.
+// ponytail: assumes a card's n is the disc position Browse logs; if n counts
+// across discs, Browse plays of disc 2+ miss. Map by position if that shows up.
+export function playCount(counts, album, t) {
+  const keys = new Set([
+    t.audioPath,
+    `${album.path}#${t.n}`,
+    `${album.path.replace(/\.md$/, '')}|${t.title}`,
+    album.providerId && `${album.providerId}|${t.disc || 1}|${t.n}`,
+  ]);
+  let n = 0;
+  for (const k of keys) if (k) n += counts[k] || 0;
+  return n;
+}
+
+// Every scanned picture of the record (front, back, booklet pages, disc...),
+// from the edition with the most of them. Asked for only while the sleeve's
+// viewer is open, so a page visit costs MusicBrainz nothing. The saved answer
+// shows at once; a changed one repaints live (mbTick). Keyed to the album, so
+// the viewer never lists the previous album's pictures.
+function useAlbumArtwork(rgMbid) {
+  const [art, setArt] = useState(null);
+  const mbTick = useMbRefreshTick();
+  useEffect(() => {
+    if (!rgMbid) return;
+    let live = true;
+    musicApi.releaseArtwork(rgMbid)
+      .then(r => { if (live && r) setArt({ ...r, rgMbid }); })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [rgMbid, mbTick]);
+  return art && art.rgMbid === rgMbid ? art : null;
+}
+
+// The sleeve's lightbox, with every picture as a column of cover tiles on its
+// right (user-picked 2026-09-26, replacing the Artwork tab). Only a front, or
+// no MusicBrainz link: the plain big picture, no list. The lit tile is the one
+// on show; the sleeve itself counts as the Front.
+function ArtworkViewer({ lb, art, accent }) {
+  const pics = art?.images || [];
+  const shown = pics.findIndex(p => p.full === lb.src);
+  const lit = shown >= 0 ? shown : pics.findIndex(p => p.kind === 'Front');
+  const aside = pics.length > 1 && (
+    // The music grid tile's width; the bottom pad keeps the last tile's ledge
+    // inside the scroller.
+    <div style={{ width: TILE_MIN, display: 'flex', flexDirection: 'column', gap: POSTER_COL_GAP, paddingBottom: POSTER_DEPTH }}>
+      {pics.map((p, i) => (
+        <ArtThumb key={p.id} releaseMbid={art.releaseMbid} pic={p} accent={accent}
+          active={i === lit} onPick={() => lb.show(p.full, p.kind)} />
+      ))}
+    </div>
+  );
+  return <ImageLightbox {...lb} accent={accent} aside={aside} />;
+}
+
+function ArtThumb({ releaseMbid, pic, accent, active, onPick }) {
+  const path = useCaaCover('release', releaseMbid, 250, pic.id);
+  return (
+    <PosterTile image={path ? coverSrc(path) : null} title={pic.kind.toLowerCase()}
+      accent={accent} aspect="1 / 1" onClick={onPick} active={active} />
+  );
+}
+
+// Letters and digits only, lowercased: "Tyler, The Creator" matches the
+// uploader "TylerTheCreatorVEVO" and "Paranoid Android" the title
+// "Radiohead - Paranoid Android (Official Video)".
+const squash = (s) => String(s || '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+
+// A search for the record turns up fan uploads and other albums' songs. Keep a
+// hit only when the artist's own channel posted it (not the "- Topic" channel,
+// which is sound over the cover) and its title names one of THIS album's songs.
+// Longest song name wins, so a "Karma Police" video is never handed to a song
+// called "Police"; first video per song. Returns { squash(song title): watchUrl }.
+export function trackVideos(hits, album) {
+  const artist = squash(album.artist);
+  const names = album.tracks.map(t => squash(t.title))
+    .filter(n => n.length >= 3 && n !== artist)
+    .sort((a, b) => b.length - a.length);
+  const out = {};
+  if (!artist) return out;
+  for (const h of hits || []) {
+    const up = String(h.uploader || '');
+    if (/ - topic$/i.test(up) || !squash(up).includes(artist)) continue;
+    const name = names.find(n => squash(h.title).includes(n));
+    if (name && !out[name]) out[name] = h.watchUrl;
+  }
+  return out;
+}
+
+// Which songs have a music video: one YouTube search per album visit (~2 s).
+// The last answer is kept in localStorage, so the buttons show at once and
+// the rows repaint if the new search differs.
+// ponytail: one search, so a long album can miss some songs' videos; search
+// per track if that turns out to matter.
+function useTrackVideos(album) {
+  const key = album ? 'music:trackVideos:' + album.path : null;
+  const [videos, setVideos] = useState({});
+  useEffect(() => {
+    if (!key || !album.artist || !album.title) { setVideos({}); return; }
+    try { setVideos(JSON.parse(localStorage.getItem(key)) || {}); } catch { setVideos({}); }
+    let live = true;
+    musicApi.searchYoutube(`${album.artist} ${album.title} official video`, 20)
+      .then(r => {
+        const found = trackVideos(r, album);
+        try { localStorage.setItem(key, JSON.stringify(found)); } catch {}
+        if (live) setVideos(found);
+      })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [key, album?.artist, album?.title]); // eslint-disable-line react-hooks/exhaustive-deps
+  return videos;
 }
 
 function Centered({ children, tone }) {

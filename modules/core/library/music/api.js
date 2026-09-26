@@ -29,7 +29,12 @@ export const musicApi = {
   releaseGroupDetail:  (rgMbid) => _api.invoke('music_releasegroup_detail', { rgMbid }),
   releasePersonnel:    (rgMbid) => _api.invoke('music_release_personnel', { rgMbid }),
   // Cover Art Archive thumbnail saved to disk once → local path, or null (none).
-  cover:               (kind, mbid, size) => _api.invoke('music_cover', { kind, mbid, size }),
+  // `image` = one CAA picture id of a release (the sleeve viewer); absent = the front.
+  cover:               (kind, mbid, size, image) => _api.invoke('music_cover', { kind, mbid, size, image: image ?? null }),
+  // Finished listens per logged key, the whole listen log: { trackPath: count }.
+  listenCounts:        () => _api.invoke('music_listen_counts'),
+  // The most-scanned edition's pictures: { releaseMbid, images: [{ id, kind, full }] }.
+  releaseArtwork:      (rgMbid) => _api.invoke('music_release_artwork', { rgMbid }),
   // Browse — download engine (script-backed, sequential, background).
   // One job shape covers three runs: a whole album (rgMbid), one album track
   // (rgMbid + trackN), and a loose single (no rgMbid — watchUrl, or artist + title).
@@ -73,13 +78,13 @@ export function useMbRefreshTick() {
 
 // A saved Cover Art Archive thumbnail's local path (music_cover): undefined
 // while loading, null when there's no cover (or no mbid), else the path.
-export function useCaaCover(kind, mbid, size) {
-  const key = mbid ? `${kind}/${mbid}/${size}` : null;
+export function useCaaCover(kind, mbid, size, image) {
+  const key = mbid ? `${kind}/${mbid}/${size}/${image || 'front'}` : null;
   const [res, setRes] = useState({ key: null, path: undefined });
   useEffect(() => {
     if (!key) return;
     let live = true;
-    musicApi.cover(kind, mbid, size)
+    musicApi.cover(kind, mbid, size, image)
       .then(p => { if (live) setRes({ key, path: p || null }); })
       .catch(() => { if (live) setRes({ key, path: null }); });
     return () => { live = false; };
