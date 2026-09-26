@@ -82,7 +82,13 @@ export default function MusicSearchBar({ accent, query, setQuery, albums, ownedI
 
   return (
     <>
-      <div ref={btnRef} data-music-search onKeyDown={onKeyDown} onFocus={(e) => { if (isInput(e)) setOpen(!!q); }}>
+      {/* The island: the run sits on a plate in the left sidebar's colour that
+          hugs its width, like a MacBook notch (user-directed 2026-09-26). Even
+          6px all round, the chips' lip (--candy-depth-small) added under them;
+          --radius-lg follows the global corner setting and is concentric with
+          the chips at the default (6px chip + 6px pad = 12px). */}
+      <div ref={btnRef} data-music-search onKeyDown={onKeyDown} onFocus={(e) => { if (isInput(e)) setOpen(!!q); }}
+        style={{ background: 'var(--surface)', padding: '6px 6px calc(6px + var(--candy-depth-small))', borderRadius: 'var(--radius-lg)' }}>
         <SearchRun
           value={query || ''}
           onChange={(v) => { setQuery(v); setOpen(!!v.trim()); }}

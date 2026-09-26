@@ -11,15 +11,20 @@
 //   • Related — other owned albums that share a genre with this one.
 //   • Release details — type / year / tracks / length / genres / MBID.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { musicApi } from './api.js';
 import BrowseResultCard from './BrowseResultCard.jsx';
 import CoverArtCard from './CoverArtCard.jsx';
-import PosterRow from '@modules/core/library/PosterRow.jsx';
+import PosterRow, { ROW_TITLE_STYLE, faceInset } from '@modules/core/library/PosterRow.jsx';
 import { encodePath } from '../paths.js';
 import { navigate as go } from '@host/router.js';
-import { EyebrowHeading } from '@host/components/ui/Eyebrow.jsx';
 import { toBrowse } from './util.js';
+
+// Plain sections title themselves like the PosterRows between them (same
+// lettering, same 10px title-to-content gap as PosterRow's section), and all
+// four titles share ONE inset: the first button on the page's (see below).
+const SECTION_STYLE = { display: 'flex', flexDirection: 'column', gap: 10 };
+const SECTION_TITLE_STYLE = { ...ROW_TITLE_STYLE, paddingLeft: 'var(--row-title-inset, 0px)' };
 
 const toAlbum = (path) => go('/tools/library/music/downloaded/' + encodePath(path));
 
@@ -32,6 +37,11 @@ export default function MusicCredits({ album, accent }) {
   const [discography, setDiscography] = useState(null); // artist's MB release groups
   const [personnel, setPersonnel] = useState(null);     // null=loading, []=none/failed
   const [moreExpanded, setMoreExpanded] = useState(false);
+  // One title column: every heading takes the first button's inset (the first
+  // More-from cover), so rows whose covers wear a thicker outline still line up.
+  const rootRef = useRef(null);
+  const [titleInset, setTitleInset] = useState(0);
+  useLayoutEffect(() => { setTitleInset(faceInset(rootRef.current)); });
   const reqId = useRef(0);
   const persReq = useRef(0);
 
@@ -113,7 +123,7 @@ export default function MusicCredits({ album, accent }) {
   if (!album) return null;
 
   return (
-    <div style={{ padding: '22px 24px 8px', display: 'flex', flexDirection: 'column', gap: 28 }}>
+    <div ref={rootRef} style={{ padding: '22px 24px 8px', display: 'flex', flexDirection: 'column', gap: 28, '--row-title-inset': `${titleInset}px` }}>
       {/* More from this artist */}
       {more.length > 0 && (
         <PosterRow
@@ -141,8 +151,8 @@ export default function MusicCredits({ album, accent }) {
 
       {/* Performers & personnel — release-level credits (MusicBrainz). */}
       {(performers.length > 0 || artist) && (
-        <section>
-          <EyebrowHeading>Performers &amp; personnel</EyebrowHeading>
+        <section style={SECTION_STYLE}>
+          <h3 style={SECTION_TITLE_STYLE}>Performers &amp; personnel</h3>
           {personnel === null ? (
             <div style={{ fontSize: 11, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)' }}>
               Loading credits…
@@ -176,8 +186,8 @@ export default function MusicCredits({ album, accent }) {
       )}
 
       {/* Release details */}
-      <section>
-        <EyebrowHeading>Release details</EyebrowHeading>
+      <section style={SECTION_STYLE}>
+        <h3 style={SECTION_TITLE_STYLE}>Release details</h3>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {[
             { label: 'Type', value: album.releaseType || 'Album' },

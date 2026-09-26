@@ -11,11 +11,27 @@
 // the poster column width (default 150px; the Characters rail passes a smaller
 // value so its cards shrink without touching the home sliders).
 
-import { useRef } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
+
+// The row's title lettering. Exported so a plain section heading beside these
+// rows (MusicCredits' Performers / Release details) reads as the same title.
+export const ROW_TITLE_STYLE = { margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.01em' };
+// A title starts where the first card's face does, inside its outline, so it
+// has the same gap to its left as the button below it (user-directed
+// 2026-09-26): the first card's face border under `root`, never restated. A
+// tile first: a row's own See All / scrub chips sit before its cards.
+export const faceInset = (root) => {
+  const face = root?.querySelector('[data-shape="tile"] > .candy-face') || root?.querySelector('.candy-face');
+  return face ? parseFloat(getComputedStyle(face).borderLeftWidth) || 0 : 0;
+};
 
 export default function PosterRow({ title, subtitle, onSeeAll, seeAllLabel = 'See All →', layout = 'row', colWidth = 150, accent, children }) {
   const ref = useRef(null);
   const grid = layout === 'grid';
+  // Own first card's inset, unless a page lines several titles up on one value
+  // (--row-title-inset, set by MusicCredits).
+  const [inset, setInset] = useState(0);
+  useLayoutEffect(() => { setInset(faceInset(ref.current)); });
   const scrollByDir = (dir) => {
     const el = ref.current;
     if (el) el.scrollBy({ left: dir * Math.max(300, el.clientWidth * 0.82), behavior: 'smooth' });
@@ -41,10 +57,7 @@ export default function PosterRow({ title, subtitle, onSeeAll, seeAllLabel = 'Se
   return (
     <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
-        <h3 style={{
-          margin: 0, fontSize: 15, fontWeight: 700,
-          color: 'var(--text)', letterSpacing: '-0.01em',
-        }}>{title}</h3>
+        <h3 style={{ ...ROW_TITLE_STYLE, paddingLeft: `var(--row-title-inset, ${inset}px)` }}>{title}</h3>
         {subtitle && (
           <span style={{ fontSize: 11, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)' }}>
             {subtitle}
