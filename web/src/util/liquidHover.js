@@ -3,7 +3,9 @@
 //
 // Coming in, a circle grows from the exact point the pointer entered until the
 // part is covered, lip included. Inside a .candy-split the lit window slides from
-// part to part, both edges on ONE spring so they leave, bounce and land together.
+// part to part and swings past by the same few px on every slide, both edges
+// together, whatever the parts' widths (a plain spring swings a fixed FRACTION of
+// its travel, so a wide part -> a tiny one flew ~40px past).
 // Leaving runs the fill backwards: a circle centred on the exit point shrinks to
 // nothing. Signed off on the Dev-tab rig 2026-09-25 (Stretch row, k260 zeta 0.5).
 //
@@ -32,7 +34,8 @@
 // (after any HMR edit, reload first — the bare import returns the page-load instance).
 export const TUNE = {
   time: 1,                        // 1 = real time; lower it to film the motion
-  stretch: { k: 260, zeta: 0.5 }, // both window edges: one spring, ~16% overshoot
+  stretch: { k: 260, zeta: 0.5 }, // the slide: one spring, ~15% overshoot of `reach`
+  reach: 40,                      // px: every slide swings like one this long (~6px past)
   fill: { k: 300, zeta: 0.8 },    // the entry/exit circle's radius
   bulge: 0.012,                   // px of edge bulge per px/s of edge speed
 };
@@ -146,6 +149,7 @@ function build(host, btn) {
   const s = {
     host, split, parts: partsOf(host, split), x: 0, y: 0, ox: 0, oy: 0, w: -1, h: -1,
     L: 0, R: 0, vL: 0, vR: 0, bL: 0, bR: 0, i: -1, on: false, live: -1,
+    p: 0, vp: 0, aL: 0, aR: 0, dir: 1, hit: true,
     fx: 0, fy: 0, rad: 0, vrad: 0, filling: false, out: false, checked: -1,
   };
   s.layer = document.createElement('div');
@@ -275,12 +279,17 @@ function advance(s, dt) {
   if (!s.host.isConnected || s.host.closest('[data-dragging]') || off()) return drop(s);
   typing(s);
   const hr = place(s), t = rectOf(s, s.i, hr);
-  [s.L, s.vL] = step(s.L, s.vL, t.l, 'stretch', dt);
-  [s.R, s.vR] = step(s.R, s.vR, t.r, 'stretch', dt);
-  if (s.R < s.L) {   // two edges overshooting through each other collide instead
-    const m = (s.L + s.R) / 2, v = (s.vL + s.vR) / 2;
-    s.L = s.R = m; s.vL = s.vR = v;
-  }
+  // ONE spring p runs every slide as if it were TUNE.reach px long (p: -reach -> 0),
+  // so the swing past 0 is the same on every slide. Until p first arrives, each
+  // edge covers its OWN travel on a bent copy of p, t + dir*(p + a*p^2) (a set in
+  // enter): it starts where it was and arrives with p's own speed, so from then on
+  // both edges ride p exactly and swing together, with no kink.
+  [s.p, s.vp] = step(s.p, s.vp, 0, 'stretch', dt);
+  if (s.p >= 0) s.hit = true;
+  const bent = (a) => (s.hit ? s.p : s.p + a * s.p * s.p);
+  s.L = t.l + s.dir * bent(s.aL); s.R = t.r + s.dir * bent(s.aR);
+  s.vL = s.vR = s.dir * s.vp;   // the bulge reads the same fixed-size slide, not the real travel
+  if (s.R < s.L) s.L = s.R = (s.L + s.R) / 2;   // a retarget folding the window through itself
   if (s.filling) {
     // In: grow until the circle covers the part's farthest corner from its fixed
     // centre; moving on mid-fill re-aims it at the new part. Out: the same circle
@@ -310,14 +319,23 @@ const kick = () => { if (!raf) raf = requestAnimationFrame(tick); };
 function enter(s, btn, e) {
   const i = s.parts.indexOf(btn);
   if (i < 0 || (i === s.i && !s.out)) return;
+  const hr = place(s), r = rectOf(s, i, hr);
   if (!s.on) {   // first entry: the circle fills the part from where the pointer came in
-    const hr = place(s), r = rectOf(s, i, hr);
-    s.L = r.l; s.R = r.r; s.vL = s.vR = 0;
+    s.L = r.l; s.R = r.r;
     s.fx = clamp(e.clientX - hr.left, r.l, r.r);
     s.fy = clamp(e.clientY - hr.top, 0, hr.height);
     s.rad = s.vrad = 0;
     s.filling = s.on = true;
     clip(s, 'cf', s.fill, circle(s, 0));
+  } else if (i !== s.i) {   // a slide: p restarts a reach away; each edge's bend spans its real travel
+    const n = TUNE.reach, dir = Math.sign(r.l + r.r - s.L - s.R) || 1;
+    // bent(-n) must land on the edge's current spot: a = (n - travel) / n^2.
+    // ponytail: an edge travelling under n/2 dips the wrong way first (~2px at 20px);
+    // candy parts are wider than that today.
+    s.aL = (n - dir * (r.l - s.L)) / (n * n);
+    s.aR = (n - dir * (r.r - s.R)) / (n * n);
+    s.vp = Math.max(0, (dir === s.dir ? 1 : -1) * s.vp);   // keep only speed already heading there
+    s.dir = dir; s.p = -n; s.hit = false;
   }
   s.out = false;   // mid-shrink it just turns round on its own centre
   s.i = i;
