@@ -35,11 +35,13 @@ export default function TreeVaultSwitcher({ accent }) {
   // name that is already friendly has no separator and survives untouched.
   const name = (activeVault?.name || 'Citadel').split(/[\\/]/).filter(Boolean).pop();
 
-  // ToolBtn forwards only onClick, so the toggle's mousedown + keyboard open ride
-  // on this wrapper (both bubble up from the button).
+  // No wrapper: the button must be a DIRECT child of the toolbar's .candy-split
+  // run, so the toggle's mousedown + keyboard open go on ToolBtn itself.
+  // ConfirmModal portals (and renders nothing while closed), so it adds no part.
   return (
-    <span style={{ display: 'inline-flex' }} onMouseDown={menu.onMouseDown} onKeyDown={menu.onKeyDown}>
-      <ToolBtn title={`Vault: ${name}`} accent={accent} onClick={menu.onClick} active={menu['aria-expanded']}>
+    <>
+      <ToolBtn title={`Vault: ${name}`} accent={accent} onClick={menu.onClick}
+        onMouseDown={menu.onMouseDown} onKeyDown={menu.onKeyDown} active={menu['aria-expanded']}>
         <IconDatabase/>
       </ToolBtn>
 
@@ -52,6 +54,6 @@ export default function TreeVaultSwitcher({ accent }) {
         onConfirm={confirm}
         onCancel={cancel}
       />
-    </span>
+    </>
   );
 }

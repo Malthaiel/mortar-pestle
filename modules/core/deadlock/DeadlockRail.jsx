@@ -9,13 +9,14 @@
 // surfaces share one create path. No new primitives — the pill is the
 // ScrimRailHeader recipe, the toolbar is the shared TreeToolbar.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { navigate } from '@host/router.js';
 import { api, invoke } from '@host/api.js';
 import TreeToolbar from '@host/components/vault-tree/TreeToolbar.jsx';
 import { TOOLBAR_BAND } from '@host/components/vault-tree/treeKit.jsx';
 import { IconChevronRight } from '@host/components/icons.jsx';
 import { VAULT_SORT_MODES } from '@host/components/vault-tree/useVaultTree.js';
+import { searchView } from '@host/components/vault-tree/treeSearch.js';
 import DeadlockTree, { SCRIM_BASE } from './DeadlockTree.jsx';
 import { useDeadlockTree } from './useDeadlockTree.js';
 import NewScrimModal from './NewScrimModal.jsx';
@@ -42,6 +43,13 @@ export function RailHeaderPill({ label, title, accent, onClick, expanded = true 
 export default function DeadlockRail({ route, accent, nav = navigate, header }) {
   const tree = useDeadlockTree();
   const [modal, setModal] = useState(null);
+  // Toolbar search — the VaultTree recipe: the first search loads every folder
+  // once, then the tree renders through the filtered view.
+  const [query, setQuery] = useState('');
+  const searching = !!query.trim();
+  useEffect(() => { if (searching) tree.loadAll(); }, [searching, tree.roots]); // eslint-disable-line react-hooks/exhaustive-deps
+  const { view, keep } = searchView(tree, query, tree.roots);
+  const shown = keep ? { ...view, roots: tree.roots?.filter((g) => keep.has(g.vaultPath)) } : view;
 
   // No header pill by default — the main app's sidebar matches the vault +
   // Library shells (toolbar band first; duplicating the primary nav's brand
@@ -112,9 +120,10 @@ export default function DeadlockRail({ route, accent, nav = navigate, header }) 
     }}>
       {h && <RailHeaderPill label={h.label} title={h.title} accent={accent} onClick={h.onClick} expanded={h.expanded !== false}/>}
       <div style={{ flexShrink: 0, padding: TOOLBAR_BAND }}>
-        <TreeToolbar buttons={buttons} controller={controller} accent={accent}/>
+        <TreeToolbar buttons={buttons} controller={controller} accent={accent}
+          search={{ value: query, onChange: setQuery }}/>
       </div>
-      <DeadlockTree route={route} accent={accent} tree={tree} nav={nav}
+      <DeadlockTree route={route} accent={accent} tree={shown} nav={nav}
         onNewScrim={() => setModal({ kind: 'new-scrim' })}/>
       {modal?.kind === 'new-scrim' && (
         <NewScrimModal open error={modal.err} onCancel={() => setModal(null)} onSubmit={doCreate}/>

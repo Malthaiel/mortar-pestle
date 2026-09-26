@@ -135,14 +135,18 @@ function fill(el) {
 
 function place(el) {
   const r = el.getBoundingClientRect();
-  const lip = parseFloat(getComputedStyle(el).getPropertyValue('--cbtn-depth')) || 0;
+  // The lip comes back as CSS text with its var()s resolved -- often a calc()
+  // ("calc(7px * 0.85)" on the nav-depth tree buttons), which parseFloat read as
+  // 0 and sat the tip 6px high (2026-09-25). Hand the text to CSS, then read
+  // where the tip actually landed (offsetTop ignores the pop's scale).
+  const lip = getComputedStyle(el).getPropertyValue('--cbtn-depth').trim() || '0px';
   const tw = tip.offsetWidth, th = tip.offsetHeight;
-  const below = r.bottom + lip + GAP;
-  const side = below + th + EDGE <= innerHeight ? 'below' : 'above';
+  tip.style.top = `calc(${r.bottom + GAP}px + ${lip})`;
+  const side = tip.offsetTop + th + EDGE <= innerHeight ? 'below' : 'above';
   const left = Math.min(Math.max(r.left + r.width / 2 - tw / 2, EDGE), innerWidth - tw - EDGE);
   tip.dataset.place = side;
   tip.style.left = `${left}px`;
-  tip.style.top = `${side === 'below' ? below : r.top - GAP - th}px`;
+  if (side === 'above') tip.style.top = `${r.top - GAP - th}px`;
   tip.firstChild.style.left = `${Math.min(Math.max(r.left + r.width / 2 - left, 12), tw - 12)}px`;
 }
 

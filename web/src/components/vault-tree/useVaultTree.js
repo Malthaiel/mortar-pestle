@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, subscribeEvents } from '../../api.js';
 import { encodePagePath } from '../SidebarBrowser.jsx';
 import { navigate } from '../../router.js';
+import { walkFolders, mergeWalk } from './treeSearch.js';
 
 // Fired after any op that can change the vault's TOP level, for listeners that
 // cannot rely on the manifest watcher event (see regenManifest below).
@@ -157,31 +158,26 @@ export function useVaultTree(route) {
     setExpanded(() => { const n = new Set(); persist(n); return n; });
   }, []);
 
-  // Recursively load + expand every folder under the given section roots. Walks
-  // level by level (parallel fetch per level), accumulating into a local cache
-  // map + expand set so the two setStates fire once at the end (no per-folder
-  // re-render storm). rootPaths = the section vaultPaths (Knowledge, …).
-  const expandAll = useCallback(async (rootPaths) => {
-    const toExpand = new Set();
-    const fetched = {};
-    let frontier = (rootPaths || []).map(nodeFromPath);
-    while (frontier.length) {
-      for (const node of frontier) toExpand.add(node.vaultPath);
-      const results = await Promise.all(frontier.map(async (node) => {
-        const cached = cacheRef.current[node.vaultPath] || fetched[node.vaultPath];
-        if (cached?.nodes) return cached.nodes;
-        try {
-          const res = await api.getVaultFolder(node.section, node.rel || '');
-          const nodes = childNodes(node, res);
-          fetched[node.vaultPath] = { loading: false, nodes };
-          return nodes;
-        } catch { return []; }
-      }));
-      frontier = results.flat().filter((c) => c.isFolder);
-    }
-    if (Object.keys(fetched).length) setCache((c) => ({ ...c, ...fetched }));
-    setExpanded((prev) => { const n = new Set([...prev, ...toExpand]); persist(n); return n; });
+  // Load every folder under the given section roots into the cache without
+  // opening any (the toolbar search needs to see inside closed folders). One
+  // setCache at the end, so no per-folder re-render storm. rootPaths = the
+  // section vaultPaths (Knowledge, …). Returns the walk { vaultPath: nodes }.
+  const loadAll = useCallback(async (rootPaths) => {
+    const got = await walkFolders(rootPaths || [], async (vp) => {
+      const cached = cacheRef.current[vp]?.nodes;
+      if (cached) return cached;
+      const node = nodeFromPath(vp);
+      return childNodes(node, await api.getVaultFolder(node.section, node.rel || ''));
+    });
+    setCache((c) => mergeWalk(c, got));
+    return got;
   }, []);
+
+  // Load + expand every folder under the given section roots.
+  const expandAll = useCallback(async (rootPaths) => {
+    const got = await loadAll(rootPaths);
+    setExpanded((prev) => { const n = new Set([...prev, ...Object.keys(got)]); persist(n); return n; });
+  }, [loadAll]);
 
   // Expand the ancestor chain of a vault path (the "locate current file" toolbar
   // action, even after a manual collapse). The materialize effect below fetches
@@ -386,7 +382,7 @@ export function useVaultTree(route) {
   return {
     isOpen, toggle, childrenOf, fetchChildren, refresh, rootFiles,
     createNote, createFolder, renameNode, removeNode, movePath,
-    sortMode, setSortMode, expandAll, collapseAll, revealPath,
+    sortMode, setSortMode, expandAll, collapseAll, revealPath, loadAll,
     anyExpanded: expanded.size > 0,
   };
 }

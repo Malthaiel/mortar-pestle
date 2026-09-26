@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '@host/api.js';
 import { sortNodes } from '@host/components/vault-tree/useVaultTree.js';
+import { walkFolders, mergeWalk } from '@host/components/vault-tree/treeSearch.js';
 
 const LS_KEY = 'deadlock:tree:expanded';
 const LS_SORT = 'deadlock:tree:sort';
@@ -139,6 +140,14 @@ export function useDeadlockTree() {
     });
   }, [roots, fetchChildren]);
 
+  // Load every folder into the cache without opening any — only the toolbar
+  // search asks for it (it has to see inside closed folders), once per search.
+  const loadAll = useCallback(async () => {
+    const got = await walkFolders((roots || []).filter((g) => g.isFolder).map((g) => g.vaultPath), async (vp) =>
+      cacheRef.current[vp]?.nodes || childNodes(vp, await api.getVaultFolder(...slugRel(vp), 'deadlock')));
+    setCache((c) => mergeWalk(c, got));
+  }, [roots]);
+
   // Top level = everything at the deadlock vault root (slug ''): folders AND
   // loose pages, built through the same childNodes mapper as any other level.
   // Unsorted here; sorted at return by the live mode. refreshRoots re-lists
@@ -156,7 +165,7 @@ export function useDeadlockTree() {
 
   return {
     roots: roots && sortNodes(roots, sortMode),
-    isOpen, toggle, childrenOf, refresh, refreshRoots, reveal, collapseAll, expandAll,
+    isOpen, toggle, childrenOf, refresh, refreshRoots, reveal, collapseAll, expandAll, loadAll,
     sortMode, setSortMode,
     anyExpanded: expanded.size > 0,
   };

@@ -16,8 +16,11 @@
 //                     (CandySelect needs `fuse`), exactly as inside .candy-split
 //   leading           optional parts fused BEFORE the field; they never slide
 //                     (the Music bar's Home button, user-directed 2026-09-25)
+//   compact           the field rests as a square magnifier, one --cbtn-size
+//                     wide, and the parts slide as soon as it is clicked or
+//                     focused (the tree sidebars, user-directed 2026-09-25)
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { IconSearch } from '../icons.jsx';
 import { GLIDE } from '../../util/motion.js';
 
@@ -29,7 +32,10 @@ function textWidth(el, text) {
   return ctx.measureText(text).width;
 }
 
-export default function SearchRun({ value, onChange, placeholder = 'Search', size, leading, children }) {
+// Search icon size; compact centres it in a square part.
+const ICON = 14;
+
+export default function SearchRun({ value, onChange, placeholder = 'Search', size, leading, compact, children }) {
   const winRef = useRef(null);
   const runRef = useRef(null);
   const partRef = useRef(null);
@@ -84,7 +90,22 @@ export default function SearchRun({ value, onChange, placeholder = 'Search', siz
     parts.slice(parts.indexOf(partRef.current) + 1).forEach(el => { el.inert = open; });
   });
 
+  // The window opens below by the DEEPEST lip among the parts, read off them
+  // live -- a written-in depth cut the bottom off any part deeper than it (the
+  // tree toolbar's nav-depth buttons, 2026-09-25). Computed custom properties
+  // come back with their var()s resolved, so max() takes them as they are.
+  const [lip, setLip] = useState('var(--candy-depth-small)');
+  useLayoutEffect(() => {
+    const d = [...runRef.current.children]
+      .map((el) => getComputedStyle(el).getPropertyValue('--cbtn-depth').trim()).filter(Boolean);
+    const next = d.length ? `max(${d.join(', ')})` : 'var(--candy-depth-small)';
+    if (next !== lip) setLip(next);
+  });
+
   const endRadius = arrived ? 'calc(var(--corner) * var(--corner-max))' : undefined;
+  // compact at rest: the icon's side padding that makes the part a square.
+  // Only the right side changes on open, so the magnifier never moves.
+  const squarePad = `calc((var(--cbtn-size) - 2 * var(--cbtn-frame) - ${ICON}px) / 2)`;
 
   return (
     <div ref={winRef} style={{
@@ -93,7 +114,7 @@ export default function SearchRun({ value, onChange, placeholder = 'Search', siz
       // The window. Straight on the left (the first part's own round end sits
       // inside it), rounded on the right exactly like the run's end, and open below by
       // the parts' small lip so their depth band still shows.
-      clipPath: 'inset(0 0 calc(var(--candy-depth-small) * -1) 0 round 0 calc(var(--corner) * var(--cbtn-size) / 2) calc(var(--corner) * var(--cbtn-size) / 2) 0)',
+      clipPath: `inset(0 0 calc(${lip} * -1) 0 round 0 calc(var(--corner) * var(--cbtn-size) / 2) calc(var(--corner) * var(--cbtn-size) / 2) 0)`,
     }}>
       <div
         ref={runRef}
@@ -121,7 +142,7 @@ export default function SearchRun({ value, onChange, placeholder = 'Search', siz
             // while sliding or open does it take the row's growing width.
             // width auto beats chip-field's own `width: 100%`, which otherwise
             // takes the whole row the window sized from all four parts.
-            flex: geo ? '1 1 0' : 'none', width: 'auto', minWidth: 0,
+            flex: geo ? '1 1 0' : 'none', width: compact && !geo ? 'var(--cbtn-size)' : 'auto', minWidth: 0,
             // While open the field owns the seam, so the first hidden part's
             // left frame cannot show as a grey sliver at the row's end.
             zIndex: open ? 3 : undefined,
@@ -139,15 +160,16 @@ export default function SearchRun({ value, onChange, placeholder = 'Search', siz
               placeholder whatever is typed, and a short word cannot shrink the
               row (user-directed 2026-09-25). Open, the cell takes the rest. */}
           <span className="candy-face" style={{
-            padding: '5px var(--chip-pad-x)', gap: 'var(--candy-face-gap)',
+            padding: compact ? `5px ${geo ? 'var(--chip-pad-x)' : squarePad} 5px ${squarePad}` : '5px var(--chip-pad-x)',
+            gap: compact && !geo ? 0 : 'var(--candy-face-gap)',
             display: 'grid', gridTemplateColumns: 'auto 1fr', alignItems: 'center',
           }}>
-            <IconSearch size={14} />
+            <IconSearch size={ICON} />
             {/* justifySelf start: the copy keeps its own width while the open
                 row stretches the cell, so it always reads the RESTING width. */}
             <span ref={restRef} aria-hidden className="chip-field-input" style={{
               gridArea: '1 / 2', justifySelf: 'start', visibility: 'hidden', whiteSpace: 'pre', padding: 0, lineHeight: 'normal',
-            }}>{placeholder}</span>
+            }}>{compact ? '' : placeholder}</span>
             <input
               ref={inputRef}
               className="chip-field-input"
@@ -156,6 +178,7 @@ export default function SearchRun({ value, onChange, placeholder = 'Search', siz
               onChange={(e) => {
                 const v = e.target.value;
                 onChange(v);
+                if (compact) return; // compact slides on focus, not on overflow
                 // Opens a letter early: once one more of the last-typed letter
                 // would not fit the RESTING field (as wide as the hidden
                 // placeholder copy), so the text never runs under the edge.
@@ -164,7 +187,8 @@ export default function SearchRun({ value, onChange, placeholder = 'Search', siz
                   if (!open) openWhenUp();
                 } else closeRun();
               }}
-              placeholder={placeholder}
+              placeholder={compact && !open ? '' : placeholder}
+              onFocus={compact ? openWhenUp : undefined}
               onBlur={() => { if (!value.trim()) closeRun(); }}
               onKeyDown={(e) => {
                 if (e.key !== 'Escape') return;

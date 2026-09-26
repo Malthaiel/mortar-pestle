@@ -19,6 +19,7 @@ import { GLIDE } from '@host/util/motion.js';
 import TreeToolbar from '@host/components/vault-tree/TreeToolbar.jsx';
 import NameInputModal from '@host/components/vault-tree/NameInputModal.jsx';
 import { usePersistedState } from '@host/components/vault-tree/useTreeExpansion.js';
+import { hit } from '@host/components/vault-tree/treeSearch.js';
 import {
   AnimCtx, SuffixCtx, REVEAL, GAP, NAV_H, TOOLBAR_BAND,
   CandyHeader, Collapsible, StaggerChild, TreeChildren,
@@ -55,7 +56,13 @@ export default function TabSidebar({ api, accent }) {
 
   const closeTab = (id) => { store.closeTab(id); api.invoke('browser_close_tab', { id }).catch(() => {}); };
 
-  const topLevel = sortTabs(tabs.filter((t) => !t.folderId), sortMode);
+  // Toolbar search: tabs whose title holds the text; a group stays (forced open,
+  // matching tabs only) when any tab in it matches, or whole when its own name does.
+  const [query, setQuery] = useState('');
+  const q = query.trim();
+  const hitTab = (t) => !q || hit(titleOf(t), q);
+
+  const topLevel = sortTabs(tabs.filter((t) => !t.folderId && hitTab(t)), sortMode);
   const groupTabs = (fid) => sortTabs(tabs.filter((t) => t.folderId === fid), sortMode);
 
   const anyExpanded = folders.some((f) => !f.collapsed);
@@ -121,14 +128,17 @@ export default function TabSidebar({ api, accent }) {
       <div style={shell}>
         <style>{TAB_CSS}</style>
         <div style={{ flexShrink: 0, padding: TOOLBAR_BAND }}>
-          <TreeToolbar buttons={buttons} controller={controller} accent={accent}/>
+          <TreeToolbar buttons={buttons} controller={controller} accent={accent}
+            search={{ value: query, onChange: setQuery }}/>
         </div>
         <div data-top-level-drop style={list}>
           {topLevel.map((t) => renderRow(t, false))}
 
           {folders.map((f) => {
-            const fts = groupTabs(f.id);
-            const open = !f.collapsed;
+            const nameHit = !q || hit(f.name, q);
+            const fts = nameHit ? groupTabs(f.id) : groupTabs(f.id).filter(hitTab);
+            if (!nameHit && !fts.length) return null;
+            const open = !f.collapsed || !nameHit;
             const isDrop = drag?.target?.kind === 'into-folder' && drag.target.folderId === f.id;
             return (
               <div key={f.id} data-folder-drop={f.id} style={{

@@ -28,6 +28,7 @@ import {
 } from './treeKit.jsx';
 import TreeToolbar from './TreeToolbar.jsx';
 import TreeVaultSwitcher from './TreeVaultSwitcher.jsx';
+import { searchView } from './treeSearch.js';
 import { useTreeDrag } from './useTreeDrag.js';
 import { openInFiles } from './revealInFiles.js';
 import { useTreeIcons } from './treeIcons.jsx';
@@ -112,7 +113,15 @@ function TreeNode({ node, tree, sectionMeta, accent, currentPage, openMenu, drag
 }
 
 export default function VaultTree({ sections, route, accent }) {
-  const tree = useVaultTree(route);
+  const hookTree = useVaultTree(route);
+  // Toolbar search. The tree is lazy, so the first search loads every folder
+  // once; after that, `tree` is the hook seen through the search (matching rows
+  // + the folders holding them, forced open). File ops still go to the hook.
+  const [query, setQuery] = useState('');
+  const searching = !!query.trim();
+  const sectionNodes = (sections || []).map((s) => ({ vaultPath: s.section, name: s.label, isFolder: true }));
+  useEffect(() => { if (searching) hookTree.loadAll(sectionNodes.map((n) => n.vaultPath)); }, [searching]); // eslint-disable-line react-hooks/exhaustive-deps
+  const { view: tree, keep } = searchView(hookTree, query, [...sectionNodes, ...(hookTree.rootFiles || [])]);
   const { openContextMenu } = useContextMenu();
   const { settings } = useSettings();
   const anim = REVEAL[settings.vaultTreeReveal] || REVEAL.normal;
@@ -220,7 +229,8 @@ export default function VaultTree({ sections, route, accent }) {
             scroll body — rides the sidebar's circuit texture; rows scroll below.
             TOOLBAR_BAND pads it so the toolbar's painted gap above == below. */}
         <div style={{ flexShrink: 0, padding: TOOLBAR_BAND }}>
-          <TreeToolbar buttons={buttons} controller={controller} accent={accent}>
+          <TreeToolbar buttons={buttons} controller={controller} accent={accent}
+            search={{ value: query, onChange: setQuery }}>
             <TreeVaultSwitcher accent={accent}/>
           </TreeToolbar>
         </div>
@@ -234,7 +244,7 @@ export default function VaultTree({ sections, route, accent }) {
           outline: drag.over === '' ? `1px dashed ${accent || 'var(--accent)'}` : 'none',
           outlineOffset: -2,
         }}>
-        {(sections || []).map((s) => {
+        {(sections || []).filter((s) => !keep || keep.has(s.section)).map((s) => {
           const sectionNode = { vaultPath: s.section, section: s.section, rel: '', depth: -1, isFolder: true, name: s.label };
           const open = tree.isOpen(s.section);
           const entry = tree.childrenOf(s.section);
@@ -255,7 +265,7 @@ export default function VaultTree({ sections, route, accent }) {
         })}
 
         {/* Root-level files (e.g. CLAUDE.md) — flat leaves below the sections. */}
-        {sortNodes(tree.rootFiles || [], tree.sortMode).map((f) => (
+        {sortNodes(tree.rootFiles || [], tree.sortMode).filter((f) => !keep || keep.has(f.vaultPath)).map((f) => (
           <TreeRow key={f.vaultPath} node={f}
             selected={!!currentPage && norm(currentPage) === norm(f.vaultPath)}
             accent={accent} onClick={drag.guard(() => navigate(f.href))}

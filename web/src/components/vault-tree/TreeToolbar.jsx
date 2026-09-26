@@ -1,6 +1,8 @@
 // Tree sidebar toolbar — the Obsidian-style file-explorer header actions, pinned
 // above the tree (the shell mounts it in a non-scroll header). Each is the one
-// canonical candy button (data-shape="icon"). CONFIG-DRIVEN: every surface passes
+// canonical candy button (data-shape="icon"), all fused into ONE .candy-split run
+// (user-directed 2026-09-25) — so every part, `children` included, must be a
+// DIRECT child of the run: no wrapper spans. CONFIG-DRIVEN: every surface passes
 // a `buttons` feature-flag set + a `controller`; the shared shell wires them. Only
 // the requested buttons render, in the canonical order:
 //   New · New folder · Sort · Collapse/Expand all · Reveal current · Reveal in files
@@ -10,6 +12,7 @@
 // New folder, Reveal in files) carry their own `onClick` (+ optional title/icon).
 
 import { useContextMenu } from '../../context-menu/useContextMenu.js';
+import SearchRun from '../ui/SearchRun.jsx';
 // TEMPORARY icon picker — removed once the icon set is baked in. See IconPicker.jsx.
 // Hooked inside ToolBtn (not per call site) so `extra` buttons and surface-owned
 // ones passed through `children` are covered for free; the key is the tooltip.
@@ -27,28 +30,34 @@ const ROW_H = 26; // = treeKit NAV_H
 // Exported so a surface can mount its OWN toolbar control (one that carries its
 // own popover/state, e.g. TreeVaultSwitcher) through the `children` slot and still
 // render the identical square candy icon button. `title` is optional — omit it for
-// a button that should show no tooltip at all.
-export function ToolBtn({ title, accent, onClick, disabled, dataAttr, active, activeAccent, children }) {
+// a button that should show no tooltip at all. onMouseDown/onKeyDown ride on the
+// button itself so a menu trigger needs no wrapper (a wrapper breaks the run).
+// `disabled` never fades the button: a see-through part reads as a hole in the
+// fused run, so it stays fully painted and the click just no-ops (`tipDesc` can
+// say why).
+export function ToolBtn({ title, tipDesc, accent, onClick, onMouseDown, onKeyDown, disabled, dataAttr, active, activeAccent, children }) {
   const iconOverrides = useIconOverrides();
   const overrideKey = title ? `tree:${title}` : null;
   return (
     <button
-      type="button" data-own-press title={title} onClick={onClick} disabled={disabled}
+      type="button" data-own-press title={title} data-tip-desc={tipDesc}
+      onClick={disabled ? undefined : onClick} onMouseDown={onMouseDown} onKeyDown={onKeyDown}
+      aria-disabled={disabled || undefined}
       onContextMenu={overrideKey ? (e) => { e.preventDefault(); openIconPicker(overrideKey, title); } : undefined}
       aria-pressed={active ? true : undefined}
       className={`candy-btn${active ? ' is-active' : ''}`} data-shape="icon"
       {...(dataAttr ? { ['data-' + dataAttr]: '' } : {})}
       style={{
         flexShrink: 0,
-        // Size the BUTTON (square, at tree-row height) so the face fills it per the
-        // base .candy-btn[data-shape="icon"] rule. Depth = nav rows.
-        width: ROW_H, height: ROW_H, '--corner-max': `${ROW_H / 2}px`,
+        // Size through --cbtn-size, never an inline width/height: the icon shape
+        // derives its square + corner from it, and so does .candy-split's seam
+        // (an inline size would beat the run's rules and break the seam). Depth = nav rows.
+        '--cbtn-size': `${ROW_H}px`,
         '--cbtn-depth': 'var(--candy-depth-nav)',
         // An active toggle can override the fill colour (e.g. a red "live on" band):
         // is-active reads --accent, so a per-button activeAccent re-tints just this one.
         ...(accent ? { '--accent': accent } : {}),
         ...(active && activeAccent ? { '--accent': activeAccent } : {}),
-        ...(disabled ? { opacity: 0.45 } : {}),
       }}
     >
       <span className="candy-face">{overrideKey ? resolveIconEl(iconOverrides, overrideKey, children) : children}</span>
@@ -71,7 +80,10 @@ export function ToolBtn({ title, accent, onClick, disabled, dataAttr, active, ac
 //   fill (activeAccent re-tints it, e.g. red for a "live on" toggle)
 // children = surface-owned toolbar controls (each rendering its own <ToolBtn/>),
 //   appended after `extra` — for a control that needs its own popover/state.
-export default function TreeToolbar({ buttons, controller, accent, extra, children }) {
+// search = { value, onChange } → the run leads with a compact SearchRun field (a
+//   square magnifier; clicking it slides every button out for typing room). The
+//   surface owns the text and filters its own rows (treeSearch.js).
+export default function TreeToolbar({ buttons, controller, accent, extra, search, children }) {
   const { openContextMenu } = useContextMenu();
   const b = buttons || {};
   const c = controller || {};
@@ -90,8 +102,8 @@ export default function TreeToolbar({ buttons, controller, accent, extra, childr
     ], { accent });
   };
 
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+  const parts = (
+    <>
       {b.new?.show && (
         <ToolBtn title={b.new.title || 'New'} accent={accent} onClick={b.new.onClick}>
           {b.new.icon || <IconFileText/>}
@@ -115,7 +127,7 @@ export default function TreeToolbar({ buttons, controller, accent, extra, childr
       )}
       {b.revealCurrent?.show && (
         <ToolBtn title={b.revealCurrent.title || 'Reveal current file'} accent={accent}
-          onClick={c.revealCurrent} disabled={!c.canReveal}>
+          onClick={c.revealCurrent} disabled={!c.canReveal} tipDesc={c.canReveal ? undefined : 'Nothing open to show'}>
           <IconCrosshair/>
         </ToolBtn>
       )}
@@ -131,6 +143,14 @@ export default function TreeToolbar({ buttons, controller, accent, extra, childr
         </ToolBtn>
       ))}
       {children}
+    </>
+  );
+
+  return (
+    <div style={{ display: 'flex', justifyContent: 'center' }}>
+      {search
+        ? <SearchRun compact value={search.value} onChange={search.onChange} size={`${ROW_H}px`}>{parts}</SearchRun>
+        : <div className="candy-split">{parts}</div>}
     </div>
   );
 }

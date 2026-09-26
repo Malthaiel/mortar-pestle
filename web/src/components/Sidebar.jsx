@@ -35,12 +35,15 @@ import RailStack from './sidebar/RailStack.jsx';
 
 const RAIL_WIDTH        = 56;
 const EXPANDED_DEFAULT  = 280;
-const EXPANDED_MIN      = 200;
+// 224 = the widest tree toolbar (the vault's 8-part run: search + 7 buttons at
+// 26px) plus its 8px band padding each side. Narrower and that run spilled past
+// the sidebar's edges (user-directed 2026-09-25, was 200; Compact was 220).
+const EXPANDED_MIN      = 224;
 const EXPANDED_MAX      = 520;
 const COLLAPSE_TRIGGER  = 140;
 // The presets ARE the snap set — ResizeSeam derives it from them.
 const PRESETS = [
-  { label: 'Compact', value: 220 },
+  { label: 'Compact', value: 224 },
   { label: 'Default', value: 280 },
   { label: 'Wide',    value: 400 },
 ];

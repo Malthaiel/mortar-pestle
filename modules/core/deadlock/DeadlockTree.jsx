@@ -303,7 +303,8 @@ export default function DeadlockTree({ route, accent, tree, nav = navigate, onNe
     }
     const n = parseInt(want, 10);
     if (n === match) { setModal(null); return; }
-    const taken = (tree.childrenOf(`${SCRIM_BASE}/${scrim}`)?.nodes || [])
+    // raw: a toolbar search hides non-matching children, and this check must see them all.
+    const taken = ((tree.raw || tree).childrenOf(`${SCRIM_BASE}/${scrim}`)?.nodes || [])
       .some((c) => c.name === `Match ${n}`);
     if (taken) {
       setModal({ kind: 'renumber', scrim, match, err: `Match ${n} already exists in this scrim.` });

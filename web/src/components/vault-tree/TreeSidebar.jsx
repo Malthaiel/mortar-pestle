@@ -20,6 +20,7 @@ import {
   CandyHeader, TreeRow, TreeChildren, Collapsible, StaggerChild,
 } from './treeKit.jsx';
 import TreeToolbar from './TreeToolbar.jsx';
+import { searchTree } from './treeSearch.js';
 import { useTreeIcons } from './treeIcons.jsx';
 import TreeIconPicker from './TreeIconPicker.jsx';
 
@@ -105,6 +106,15 @@ export default function TreeSidebar({ nodes, controller, buttons, accent, showSu
   // Scroll position is remembered app-wide by util/scrollMemory.js — delegated,
   // so this shell (and every consumer of it) needs no prop and no ref.
 
+  // Toolbar search: the tree shrinks to matching rows + the folders holding
+  // them (forced open). The toolbar keeps the real controller.
+  const [query, setQuery] = useState('');
+  const found = query.trim() && searchTree(nodes, query, { id: (n) => n.id, text: (n) => n.label, kids: (n) => n.children });
+  const prune = (list) => (list || []).filter((n) => found.keep.has(n.id))
+    .map((n) => (found.open.has(n.id) ? { ...n, children: prune(n.children) } : n));
+  const shownNodes = found ? prune(nodes) : nodes;
+  const treeController = found ? { ...controller, isOpen: (id) => found.open.has(id) || controller.isOpen(id) } : controller;
+
   return (
     <AnimCtx.Provider value={anim}>
     <SuffixCtx.Provider value={showSuffix}>
@@ -116,7 +126,8 @@ export default function TreeSidebar({ nodes, controller, buttons, accent, showSu
             circuit texture; rows scroll in the box below. TOOLBAR_BAND pads it so the
             toolbar's painted gap above == its gap below == the tree row gap. */}
         <div style={{ flexShrink: 0, padding: TOOLBAR_BAND }}>
-          <TreeToolbar buttons={buttons} controller={controller} accent={accent} extra={toolbarExtra}/>
+          <TreeToolbar buttons={buttons} controller={controller} accent={accent} extra={toolbarExtra}
+            search={{ value: query, onChange: setQuery }}/>
         </div>
         {/* Scrolling tree body — the only scroller. overflowX hidden keeps long
             names ellipsizing (the min-width:0 chain). */}
@@ -124,8 +135,8 @@ export default function TreeSidebar({ nodes, controller, buttons, accent, showSu
           flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden',
           display: 'flex', flexDirection: 'column', gap: GAP, padding: '0 8px',
         }}>
-          {(nodes || []).map((node) => (
-            <TreeNode key={node.id} node={node} controller={controller} accent={accent} icons={icons} topLevel/>
+          {(shownNodes || []).map((node) => (
+            <TreeNode key={node.id} node={node} controller={treeController} accent={accent} icons={icons} topLevel/>
           ))}
           {/* Bottom dock clearance — an in-flow spacer that rides the scroll so the
               last row always clears the flush bottom dock. */}
