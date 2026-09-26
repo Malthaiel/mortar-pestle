@@ -18,9 +18,14 @@
 // is thrown away. Only hovered hosts ever have a layer.
 //
 // Skipped (today's instant hover): the switch in Settings > Appearance >
-// Animations, the SKIP list, hosts holding live content a copy cannot show, and
-// any part whose own hover does not flood the accent (measured, so every neutral
-// hover shape opts out with no list to keep).
+// Animations, the SKIP list, hosts holding media a copy cannot show, and any part
+// whose own hover does not flood the accent (measured, so every neutral hover
+// shape opts out with no list to keep).
+//
+// Typing rows: a copy has no caret, but the caret only exists in the FOCUSED box,
+// and focus already lights that box. So a box is copied like any button until you
+// type in it; then that one part stays real ([data-liquid-live]) and both copies
+// leave a hole for it.
 
 // Every knob in one object; the dev bridge can tune it live:
 //   (await import('/src/util/liquidHover.js')).TUNE.time = 0.15
@@ -36,8 +41,9 @@ export const TUNE = {
 // flood, nested controls hover neutral), the dock (sticky hover, widening
 // buttons), menus (rows light through .is-active, shared with the arrow keys).
 const SKIP = '.rail-tile, .dock-root, [role="menu"], [data-liquid-skip], [data-dragging]';
-// A copy cannot show a live caret, typing, a canvas, a video or a frame.
-const LIVE = 'input, textarea, [contenteditable], canvas, video, iframe';
+// A copy cannot show a canvas, a video or a frame (rail tiles, a later phase).
+const LIVE = 'canvas, video, iframe';
+const TYPING = 'input, textarea, [contenteditable]:not([contenteditable="false"])';
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const f = (n) => n.toFixed(2);
@@ -80,9 +86,11 @@ function copy(s, lit) {
 
 // The clones and the layer take the host's own used size; the layer is moved
 // until the REST COPY's rect sits exactly on the host's. Measured every frame, never kept.
+// transition none: a copied inline glide (SearchRun's `transition: width`) would
+// ease every pinned width in and leave the copy chasing the host.
 function pin(s) {
   const { width, height } = getComputedStyle(s.host);
-  for (const c of [s.rest, s.lit]) Object.assign(c.style, { width, height, margin: '0', flex: 'none' });
+  for (const c of [s.rest, s.lit]) Object.assign(c.style, { width, height, margin: '0', flex: 'none', transition: 'none' });
   Object.assign(s.layer.style, { width, height });
 }
 function place(s) {
@@ -137,7 +145,7 @@ function build(host, btn) {
   const split = host !== btn;
   const s = {
     host, split, parts: partsOf(host, split), x: 0, y: 0, ox: 0, oy: 0, w: -1, h: -1,
-    L: 0, R: 0, vL: 0, vR: 0, bL: 0, bR: 0, i: -1, on: false,
+    L: 0, R: 0, vL: 0, vR: 0, bL: 0, bR: 0, i: -1, on: false, live: -1,
     fx: 0, fy: 0, rad: 0, vrad: 0, filling: false, out: false, checked: -1,
   };
   s.layer = document.createElement('div');
@@ -184,7 +192,7 @@ function build(host, btn) {
   // TRANSITION runs on the copies too (a fresh copy would teleport the face);
   // anything structural rebuilds both copies inside the same clip wrappers.
   s.mo = new MutationObserver((recs) => {
-    let rebuild = false;
+    let rebuild = false, repin = false;
     for (const m of recs) {
       if (m.type !== 'attributes') { rebuild = true; continue; }
       const n = m.attributeName;
@@ -195,22 +203,50 @@ function build(host, btn) {
         if (!el) { rebuild = true; continue; }
         if (v == null) el.removeAttribute(n); else el.setAttribute(n, v);
       }
-      if (m.target === host && n === 'style') s.w = -1;   // re-pin over the copied inline style
+      if (m.target === host && n === 'style') repin = true;   // the copied inline style undid the pin
     }
     if (rebuild) {
       const rest = copy(s, false), lit = copy(s, true);
       s.rest.replaceWith(rest); s.lit.replaceWith(lit);
-      s.rest = rest; s.lit = lit; s.w = -1;
+      s.rest = rest; s.lit = lit; repin = true;
     }
+    if (repin) pin(s);   // now, not next frame: in between, the unpinned copy's glide would start
   });
   s.mo.observe(host, { subtree: true, attributes: true, childList: true, characterData: true });
   layers.set(host, s);
   return s;
 }
 
+// The part holding the focused typing box stays real (it has the caret and is lit
+// by its own focus rule). Setting the mark on the real part lets the mirror carry
+// it onto both copies, which hide that part (styles.css). Read every frame.
+// The copies' boxes must still read what the real ones hold once typing stops
+// (Esc, Enter, a click away with the pointer still on the row): text and scroll
+// are read off the real boxes every frame.
+function typing(s) {
+  const a = document.activeElement;
+  const live = a?.matches(TYPING) ? s.parts.findIndex((p) => p.contains(a)) : -1;
+  if (live !== s.live) {
+    s.parts[s.live]?.removeAttribute('data-liquid-live');
+    s.parts[live]?.setAttribute('data-liquid-live', '');
+    s.live = live;
+  }
+  for (const el of s.host.querySelectorAll('input:not([type="file"]), textarea')) {
+    const path = pathOf(s.host, el);
+    for (const c of [s.rest, s.lit]) {
+      const t = at(c, path);
+      if (!t) continue;
+      if (t.value !== el.value) t.value = el.value;
+      if (t.scrollLeft !== el.scrollLeft) t.scrollLeft = el.scrollLeft;
+      if (t.scrollTop !== el.scrollTop) t.scrollTop = el.scrollTop;
+    }
+  }
+}
+
 function drop(s) {
   s.mo.disconnect();
   s.layer.remove();
+  s.parts[s.live]?.removeAttribute('data-liquid-live');
   s.host.removeAttribute('data-liquid-host');
   layers.delete(s.host);
   if (hot === s.host) hot = null;
@@ -222,11 +258,14 @@ function drop(s) {
 function parity(s) {
   s.checked = s.i;
   const real = s.parts[s.i], twin = partsOf(s.lit, s.split)[s.i];
-  if (!real?.matches(':hover') || !twin) return;
+  if (!real?.matches(':hover') || !twin || s.i === s.live) return;   // a typed-in part is real, its copy hidden
   const face = (el) => el.querySelector(':scope > .candy-face') || el;
   const a = getComputedStyle(face(real)), b = getComputedStyle(face(twin));
   const bad = ['backgroundColor', 'color', 'borderTopColor'].filter((p) => a[p] !== b[p]);
   if (getComputedStyle(real).boxShadow !== getComputedStyle(twin).boxShadow) bad.push('boxShadow');
+  // A typing box paints its own text colour (chip-field's white-on-hover rule).
+  const box = (el) => el.querySelector('input, textarea');
+  if (box(real) && box(twin) && getComputedStyle(box(real)).color !== getComputedStyle(box(twin)).color) bad.push('typing text');
   if (!bad.length) return;
   (window.__liquidParity ||= []).push({ el: real, bad });
   console.warn('[liquidHover] lit copy paints differently from the real hover:', bad.join(', '), real);
@@ -234,6 +273,7 @@ function parity(s) {
 
 function advance(s, dt) {
   if (!s.host.isConnected || s.host.closest('[data-dragging]') || off()) return drop(s);
+  typing(s);
   const hr = place(s), t = rectOf(s, s.i, hr);
   [s.L, s.vL] = step(s.L, s.vL, t.l, 'stretch', dt);
   [s.R, s.vR] = step(s.R, s.vR, t.r, 'stretch', dt);

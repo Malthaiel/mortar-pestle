@@ -1365,13 +1365,15 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
    own `color` on the <input> outranked the face's white-flip, so the text sat
    white at rest and never moved. Rest colour is --text-muted now (the base
    .candy-face colour every other candy button rests at). */
-.candy-btn[data-shape="chip-field"]:hover:not(:focus-within) > .candy-face > .chip-field-input { color: #fff; }
+.candy-btn[data-shape="chip-field"]:is(:hover, [data-dock-hover]):not(:focus-within) > .candy-face > .chip-field-input { color: #fff; }
 /* The hover flip above sets `color`, which the placeholder does NOT inherit —
    ::placeholder's own rule wins — so an EMPTY chip-field stayed grey on hover
-   while a filled one went white (agent chat bar, 2026-09-13). Mirrors the
-   :focus-within placeholder rule below. */
-.candy-btn[data-shape="chip-field"]:hover:not(:focus-within) > .candy-face > .chip-field-input::placeholder {
-  color: color-mix(in oklch, #fff, transparent 35%);
+   while a filled one went white (agent chat bar, 2026-09-13). Full white, like
+   every other button's hovered label (user-directed 2026-09-25: the 65% it
+   wore read pink on the accent beside a pure-white magnifier). Only the
+   :focus-within rule below keeps it dim, to tell the hint from typed text. */
+.candy-btn[data-shape="chip-field"]:is(:hover, [data-dock-hover]):not(:focus-within) > .candy-face > .chip-field-input::placeholder {
+  color: #fff;
 }
 .candy-btn[data-shape="chip-field"]:focus-within { --cbtn-band: var(--accent); }
 /* color: a leading icon in the face (SearchRun's magnifier) goes white with the
@@ -1941,7 +1943,12 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
    its two clones (a rest copy, and a lit copy cut to the moving window), the
    real host paints nothing but still takes the pointer. Opacity, not
    visibility: a visibility:hidden element stops being hit-tested. */
-[data-liquid-host] { opacity: 0 !important; }
+[data-liquid-host]:not([data-liquid-live], :has(> [data-liquid-live])) { opacity: 0 !important; }
+/* ...except the part you are typing in: the caret lives only in the real box, and
+   focus already lights it. It stays real, its neighbours hide, and both copies
+   leave a hole for it (the mirror carries the mark onto them). */
+[data-liquid-host]:has(> [data-liquid-live]) > :not([data-liquid-live]) { opacity: 0 !important; }
+[data-liquid-layer] [data-liquid-live] { visibility: hidden !important; }
 /* Press — only the face slides down --cbtn-depth, over the immovable base.
    data-candy-pressed is JS-held past mouseup (useGlobalCandyPressHold) so the
    150ms ease-down completes to full depth on a quick click; :active alone
