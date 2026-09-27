@@ -286,6 +286,10 @@ export const SETTINGS_DEFAULTS = {
   // motifs switched via :root[data-sidebar-pattern]; see styles.css § Sidebar
   // background pattern. 'grid' | 'hatch' | 'arcs' | 'crosshatch' | 'none'.
   sidebarPattern: 'grid',
+  // Hover labels (Settings → Appearance → Tooltips). Off = no label at all, not
+  // even the native Windows box. Read by util/tooltips.js straight from
+  // localStorage at show time, so every webview obeys it without a provider.
+  showTooltips: true,
   // Sidebar group collapse behavior:
   //   'expanded'   — all groups always show their items
   //   'accordion'  — one group expanded at a time; clicking another switches

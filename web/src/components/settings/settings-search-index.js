@@ -84,6 +84,10 @@ export const SETTINGS_SEARCH_INDEX = [
   { id: 'appearance.sidebarPattern', label: 'Sidebar pattern', tabId: 'appearance', anchor: 'set-sidebarPattern',
     keywords: ['texture', 'background', 'lines', 'grid', 'hatch', 'arcs', 'crosshatch', 'rail', 'pattern'],
     description: 'Faint line texture behind the left + right sidebars.', settingsKey: 'sidebarPattern' },
+  { id: 'appearance.showTooltips', label: 'Show tooltips', tabId: 'appearance', anchor: 'set-showTooltips',
+    keywords: ['tooltip', 'hover', 'label', 'hint', 'popup', 'title'],
+    description: 'Labels that pop up when you hover a button.',
+    valueText: (s) => (s?.showTooltips !== false ? 'on' : 'off') },
 
   // ── Relocated motion scalars (was the Animations tab) ─────────────────────
   // ids keep their historical 'animations.*' prefix (stable React keys); tabId

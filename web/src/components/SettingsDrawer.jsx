@@ -720,6 +720,11 @@ function AppearanceTab({ settings, setSetting, setPreviewAccent, accent }) {
           <Seg value={settings.previewFollowDrag || 'light'} options={FOLLOW_DRAG_OPTIONS} onChange={v => setSetting('previewFollowDrag', v)} accent={accent}/>
         </StackedRow>
       </SectionBand>
+      <SectionBand title="Tooltips">
+        <StackedRow label="Show tooltips" anchor="set-showTooltips" hint="Labels that pop up when you hover a button. Off = nothing pops up.">
+          <EnableToggle enabled={settings.showTooltips !== false} accent={accent} onChange={v => setSetting('showTooltips', v)} title="Show tooltips"/>
+        </StackedRow>
+      </SectionBand>
       <SectionBand title="Press & depth">
         <StackedRow label="Hover press strength" anchor="set-hoverPressIntensity" hint="How far candy buttons (brand pills, dock icons, transport, tabs, every chip) depress when hovered. 100% = full press, off = no movement.">
           <Seg value={settings.hoverPressIntensity || '50'} options={HOVER_PRESS_OPTIONS} onChange={v => setSetting('hoverPressIntensity', v)} accent={accent}/>

@@ -150,8 +150,15 @@ function place(el) {
   tip.firstChild.style.left = `${Math.min(Math.max(r.left + r.width / 2 - left, 12), tw - 12)}px`;
 }
 
+// Settings → Appearance → Tooltips. Read at show time from the shared settings
+// blob, so a flip reaches every window at once. Harvesting still runs while off,
+// which keeps the native Windows box away too.
+function off() {
+  try { return JSON.parse(localStorage.getItem('focus_settings') || '{}').showTooltips === false; } catch { return false; }
+}
+
 function show(el, hop) {
-  if (!el.isConnected || !el.dataset.tip) return;
+  if (!el.isConnected || !el.dataset.tip || off()) return;
   tip.classList.toggle('is-hop', hop && shown);
   fill(el);
   place(el);
