@@ -44,9 +44,47 @@ const LISTEN_STATUSES = ['Plan-to-Listen', 'Currently-Listening', 'Listened', 'D
 // A Plays tab went the same way: each song's count is a part of its own row.
 // Discography is the artist's other records, moved up from the "More from"
 // rail under the header (user-directed 2026-09-26, named over "Albums"),
-// second in the strip (user-directed the same day).
-const ALBUM_TABS = ['Tracks', 'Discography', 'Credits'];
+// last in the strip (user-directed 2026-09-27; second before). Names must not
+// shrink left to right: opening a tab shuts the open one's name, so a long name
+// left of a shorter one slides the shorter tab wholly out from under a pointer on
+// it (its hover shrinks the run off the pointer, the picked tab reopens under it,
+// and the pair twitches: filmed 2026-09-27).
+const ALBUM_TABS = ['Tracks', 'Credits', 'Discography'];
 const TAB_ICON = { Tracks: IconMusic, Credits: IconGroup, Discography: IconRadio };
+// Which tab a gliding pointer opens (now at `x`, last at `px`), starting from the one
+// open now (`cur`): the open tab hands over when the pointer crosses the line half an
+// icon inside its edge, the same lead at every edge whatever the tab's width
+// (user-directed 2026-09-27), or when it is past the edge. Crossed, not inside: a
+// pointer that lands in that band has not glided there, and keeps the tab it landed
+// on. Rejected the same day: a swap at the midpoint of the two open centres
+// ("switches too early"), then a lead only where a slide forced one (small tabs
+// waited for the edge). It holds while every name is wider than two leads (else the
+// walk would step back); the walk goes one way, so it always ends. Layouts are
+// rebuilt from the live parts (shut width = width minus what its name adds right
+// now), because live rects lie mid-glide.
+function tabUnder(run, x, px, cur) {
+  const parts = [...run.children], shut = [], name = [], lap = [];
+  for (const p of parts) {
+    const lbl = p.querySelector('.split-label'), cs = getComputedStyle(lbl);
+    const gap = parseFloat(getComputedStyle(lbl.parentElement).columnGap) || 0;
+    shut.push(p.getBoundingClientRect().width - (lbl.getBoundingClientRect().width + parseFloat(cs.marginLeft) + gap));
+    name.push(lbl.firstElementChild.getBoundingClientRect().width + gap);
+    lap.push(parseFloat(getComputedStyle(p).marginLeft) || 0);
+  }
+  const l0 = parts[0].getBoundingClientRect().left - lap[0];
+  // Part j's [left, right] in the layout where part k is open.
+  const at = (k, j) => {
+    let l = l0;
+    for (let i = 0; i < j; i++) l += lap[i] + shut[i] + (i === k ? name[i] : 0);
+    l += lap[j];
+    return [l, l + shut[j] + (j === k ? name[j] : 0)];
+  };
+  const lead = shut[0] / 2;
+  let k = cur;
+  while (k + 1 < parts.length && (x >= at(k, k)[1] || (px < at(k, k)[1] - lead && x >= at(k, k)[1] - lead))) k++;
+  if (k === cur) while (k > 0 && (x < at(k, k)[0] || (px >= at(k, k)[0] + lead && x < at(k, k)[0] + lead))) k--;
+  return k;
+}
 
 // The photo rides the fact line, so it is sized to that line: an even number of
 // pixels, so the circle has no half-pixel edge.
@@ -56,6 +94,14 @@ const ARTIST_PFP = 22;
 // never drift from the run it sits under (.candy-split derives the seam, the
 // corners and every part's height from it). Change this and both change.
 const ROW_H = '26px';
+
+// The header column's line gap (type tag, title, fact line), and the air above and
+// below the action runs: the fact line down to them and them down to the body are
+// the SAME air (user-directed 2026-09-27; measured 12px from the artist photo's
+// bottom to the run's top). The runs' lip paints outside layout, so the gap under
+// them adds it back.
+const HEAD_GAP = 8;
+const RUN_AIR = 12;
 
 // The track's own page: an md sibling of the audio file, falling back to the
 // pipeline's Tracks folder for a card with no audio on disk. `wikilink` is the
@@ -144,6 +190,10 @@ export default function AlbumDetail({ accent, albumPath }) {
   // navigating elsewhere.
   const [tab, setTab] = usePersistedState('library:albumTab', 'Tracks');
   const active = ALBUM_TABS.includes(tab) ? tab : 'Tracks';
+  // The tab showing its name: the hovered one, else the picked one.
+  const [hoverTab, setHoverTab] = useState(null);
+  const openTab = hoverTab ?? active;
+  const lastX = useRef(null);   // the pointer's last x on the run; null = not on it
   const [highlight, setHighlight] = useState(null);
   const videos = useTrackVideos(album);
   const world = useWorldPlays(album);
@@ -157,6 +207,10 @@ export default function AlbumDetail({ accent, albumPath }) {
   usePrefetchStreams(album ? albumToQueueItems(album) : []);
 
   const coverImgSrc = album ? coverSrc(album.image, 400, { library: true }) : null;
+  // The backdrop (drawn ~900px wide) and the sleeve's viewer take the file itself,
+  // not the 400px thumbnail (measured 2026-09-27: a 1500px cover shown as a 400px
+  // copy at 904px).
+  const fullImg = album ? coverSrc(album.image, 0, { library: true }) : null;
 
   if (loading) return <Centered>Loading</Centered>;
   if (error)   return <Centered tone="error">Failed to load: {error}</Centered>;
@@ -346,7 +400,7 @@ export default function AlbumDetail({ accent, albumPath }) {
             {/* A real <img>, like the film still: the box takes its height from
                 the file rather than restating an aspect here. is-square adds
                 the one crop a square sleeve needs. */}
-            <img src={img} alt=""/>
+            <img src={fullImg} alt=""/>
           </div>
         )}
         {/* One wrapper for both columns: .film-detail centres its children at
@@ -356,12 +410,12 @@ export default function AlbumDetail({ accent, albumPath }) {
             (opens the full sleeve) and the same source run under it. */}
         <div style={{ width: FILM_POSTER_W, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: POSTER_COL_GAP }}>
           <PosterTile image={img} title={album.title} accent={accent || 'var(--accent)'} aspect="1 / 1"
-            onClick={() => lb.show(img, album.title)}/>
+            onClick={() => lb.show(fullImg, album.title)}/>
           <SourceRun sources={sources}/>
         </div>
 
         <div style={{
-          flex: 1, minWidth: 320, display: 'flex', flexDirection: 'column', gap: 8,
+          flex: 1, minWidth: 320, display: 'flex', flexDirection: 'column', gap: HEAD_GAP,
         }}>
           {/* Type tag. The film has none, but nothing else on the page tells an
               EP from an album. The title's colour at the fact line's size
@@ -394,12 +448,12 @@ export default function AlbumDetail({ accent, albumPath }) {
               uses for status / rating / Download / More. A disabled half keeps
               its paint and simply does nothing -- fading it punches a hole in
               the run. */}
-          {/* The film page's action-row shell (AnimeMainColumn.jsx): the run,
-              14px of air, then 10px down to the body under it -- which on a
-              film is the Cast/Crew panel and here is the tracklist. The film's
-              hairline between them is gone here (user-directed 2026-09-26). */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', paddingBottom: 14 }}>
+          {/* The film page's action-row shell (AnimeMainColumn.jsx), minus its
+              hairline (user-directed 2026-09-26). RUN_AIR above and below the
+              runs (user-directed 2026-09-27; the film's 14px of air plus 10px
+              painted 19px under them). */}
+          <div data-spacing-intent="run-air" style={{ display: 'flex', flexDirection: 'column', gap: `calc(${RUN_AIR}px + var(--candy-depth-small))`, marginTop: RUN_AIR - HEAD_GAP }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           {/* The action run leads, the tabs follow it (user-directed 2026-09-26). */}
           <div className="candy-split" style={{
             position: 'relative', '--cbtn-size': ROW_H,
@@ -472,7 +526,6 @@ export default function AlbumDetail({ accent, albumPath }) {
               className="candy-btn"
               data-shape="chip"
               data-own-press
-              title="More"
               onClick={(e) => {
                 const r = e.currentTarget.getBoundingClientRect();
                 const items = [];
@@ -492,10 +545,24 @@ export default function AlbumDetail({ accent, albumPath }) {
                 items.push({ label: 'Delete album', onClick: onDelete });
                 openContextMenu({ x: r.left, y: r.bottom + 4 }, items, { accent });
               }}
-            >{/* The swatch, not a ⋯ (user-directed 2026-09-26). */}
-              <span className="candy-face"><IconSwatch size={14}/></span></button>
+            >{/* The swatch, not a ⋯ (user-directed 2026-09-26), and its name,
+                like Play (user-directed 2026-09-27). No tooltip: the name shows itself. */}
+              <span className="candy-face"><IconSwatch size={14}/>More</span></button>
           </div>
-          <div className="candy-split" style={{ '--accent': accent || 'var(--accent)', '--cbtn-size': ROW_H }}>
+          {/* The open tab follows the pointer by tabUnder, not by hit-test; the
+              liquid follows [data-open] while the run is hovered (liquidHover.js).
+              The updater form, so a swap not yet rendered is still `cur`. A pointer
+              arriving (no hover yet) opens the tab under it: the names never shrink
+              left to right, so that tab, opened, is still under it. */}
+          <div className="candy-split"
+            onPointerMove={(e) => {
+              const run = e.currentTarget, x = e.clientX, px = lastX.current;
+              const under = [...run.children].indexOf(e.target.closest('.candy-btn'));
+              lastX.current = x;
+              setHoverTab(h => h ? ALBUM_TABS[tabUnder(run, x, px ?? x, ALBUM_TABS.indexOf(h))] : ALBUM_TABS[under] ?? active);
+            }}
+            onPointerLeave={() => { setHoverTab(null); lastX.current = null; }}
+            style={{ '--accent': accent || 'var(--accent)', '--cbtn-size': ROW_H }}>
             {ALBUM_TABS.map(t => {
               const Icon = TAB_ICON[t];
               return (
@@ -505,12 +572,13 @@ export default function AlbumDetail({ accent, albumPath }) {
                   data-own-press
                   data-shape="chip"
                   className={'candy-btn' + (t === active ? ' is-active' : '')}
+                  data-open={t === openTab ? '' : undefined}
                   onClick={() => setTab(t)}
-                  title={t}
                   aria-label={t}
-                >{/* Icons only, the name is the tooltip (user-directed
-                    2026-09-26) so the tabs share one line with the actions. */}
-                  <span className="candy-face"><Icon size={14}/></span></button>
+                >{/* Icons, and ONE name: the picked tab's, or the hovered one's,
+                    opening like a dock button (.split-label, user-directed
+                    2026-09-27). No tooltip: the name shows itself. */}
+                  <span className="candy-face"><Icon size={14}/><span className="split-label"><span>{t}</span></span></span></button>
               );
             })}
           </div>

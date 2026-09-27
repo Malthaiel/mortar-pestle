@@ -843,6 +843,15 @@ export function useSettings(pageKey = 'pulse') {
     document.documentElement.style.setProperty('--cbtn-press-dur', (globalSettings.pressSpeed || 70) + 'ms');
   }, [globalSettings.pressSpeed]);
 
+  // Dock hover-expand speeds → :root --dock-expand-ms / --dock-collapse-ms. On
+  // :root, not the dock, so a name opening anywhere else (.split-label) grows at
+  // the dock's speed too.
+  useEffect(() => {
+    const root = document.documentElement.style, d = globalSettings.dock || {};
+    root.setProperty('--dock-expand-ms', `${d.expandMs ?? DOCK_DEFAULT.expandMs}ms`);
+    root.setProperty('--dock-collapse-ms', `${d.collapseMs ?? DOCK_DEFAULT.collapseMs}ms`);
+  }, [globalSettings.dock?.expandMs, globalSettings.dock?.collapseMs]);
+
   // Page transition variant. data-page-tx-style drives which enter keyframes
   // play on route change (styles.css § Page transitions). On/off is the separate
   // `page-transitions` bucket (data-anim-page-transitions); style is independent.

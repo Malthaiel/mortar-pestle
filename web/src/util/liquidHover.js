@@ -25,6 +25,11 @@
 // whose own hover does not flood the accent (measured, so every neutral hover
 // shape opts out with no list to keep).
 //
+// A split with ONE part lit at rest (a selected tab, a toggle that is on): that
+// colour IS the liquid. It does not fill; it is already full on that part and
+// slides to the hovered one, and on leave slides back before the real row takes
+// over. So the rest copy goes without the part's mark. Two lit parts keep the fill.
+//
 // Menus and dropdowns: each row drains and fills on its own, driven by the
 // menu's own cursor, so the arrow keys light rows too (from their middle).
 //
@@ -67,6 +72,8 @@ const TILE = '.rail-tile';
 // A copy cannot show a canvas, a video or a frame (a tile's empty copies never try).
 const LIVE = 'canvas, video, iframe';
 const TYPING = 'input, textarea, [contenteditable]:not([contenteditable="false"])';
+// The marks that light a split part at rest (styles.css § States).
+const MARKS = ['is-active', 'is-selected'];
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const f = (n) => n.toFixed(2);
@@ -94,6 +101,10 @@ let raf = 0, last = 0;
 
 const hostOf = (btn) => (btn.parentElement?.classList.contains('candy-split') ? btn.parentElement : btn);
 const partsOf = (root, split) => (split ? [...root.children].filter((el) => el.classList.contains('candy-btn')) : [root]);
+// A split that picks its own lit part (the album tabs can open a name early, by
+// tabUnder, before the pointer reaches that tab) marks it [data-open]; while the
+// split is hovered the window sits there, not under the pointer.
+const steer = (s) => s.split && s.parts.find((p) => p.hasAttribute('data-open'));
 const pathOf = (root, node) => { const p = []; for (; node !== root; node = node.parentElement) p.unshift([...node.parentElement.children].indexOf(node)); return p; };
 const at = (root, path) => path.reduce((el, i) => el?.children[i], root);
 
@@ -175,7 +186,7 @@ function build(host, btn) {
   const s = {
     host, split, shell, face, menu: !!host.closest(MENU), parts: partsOf(host, split), x: 0, y: 0, ox: 0, oy: 0, w: -1, h: -1,
     L: 0, R: 0, vL: 0, vR: 0, bL: 0, bR: 0, i: -1, on: false, live: -1,
-    p: 0, vp: 0, aL: 0, aR: 0, dir: 1, hit: true,
+    p: 0, vp: 0, aL: 0, aR: 0, dir: 1, hit: true, home: -1, back: false,
     fx: 0, fy: 0, rad: 0, vrad: 0, filling: false, out: false, pend: null, checked: -1, twins: [],
   };
   s.layer = document.createElement('div');
@@ -215,6 +226,7 @@ function build(host, btn) {
   }
   // A lone button already lit at rest has nothing to fill; its own hover runs.
   if (!split && floods(s.rest)) { s.layer.remove(); return null; }
+  unmark(s);
   place(s);
   host.setAttribute('data-liquid-host', '');
 
@@ -223,7 +235,7 @@ function build(host, btn) {
   // TRANSITION runs on the copies too (a fresh copy would teleport the face);
   // anything structural rebuilds both copies inside the same clip wrappers.
   s.mo = new MutationObserver((recs) => {
-    let rebuild = false, repin = false;
+    let rebuild = false, repin = false, to = null;
     for (const m of recs) {
       if (m.type !== 'attributes') { rebuild = true; continue; }
       const n = m.attributeName;
@@ -231,7 +243,10 @@ function build(host, btn) {
       // button, or off the dock) is that button's leave.
       if (n === 'data-dock-hover') { if (m.target === host && !host.hasAttribute(n) && host !== hot) leave(host, pt); continue; }
       if (n === 'id' || n === 'title' || n === 'data-tip' || (m.target === host && n === 'data-liquid-host')) continue;
+      // A click moved a split's mark: the rest copy must be measured afresh (unmark).
+      if (s.split && n === 'class' && m.target.parentElement === host) { rebuild = true; continue; }
       const path = s.shell && m.target !== host ? [0] : pathOf(host, m.target), v = m.target.getAttribute(n);
+      if (n === 'data-open' && v != null && m.target.parentElement === host) to = m.target;
       for (const c of [s.rest, s.lit]) {
         const el = at(c, path);
         if (!el) { rebuild = true; continue; }
@@ -244,14 +259,28 @@ function build(host, btn) {
       const rest = copy(s, false), lit = copy(s, true);
       s.rest.replaceWith(rest); s.lit.replaceWith(lit);
       s.rest = rest; s.lit = lit; repin = true;
+      unmark(s);
     }
     if (repin) pin(s);   // now, not next frame: in between, the unpinned copy's glide would start
+    if (to && host === hot) enter(s, to, pt);   // the split moved its own lit part
   });
   // A tile's contents stay real: only the tile and its face (press, flavour) are copied.
   if (shell) { s.mo.observe(host, { attributes: true }); s.mo.observe(face, { attributes: true }); }
   else s.mo.observe(host, { subtree: true, attributes: true, childList: true, characterData: true });
   layers.set(host, s);
   return s;
+}
+
+// Measured on the fresh rest copy (in the layer, never hovered): the split's home is
+// its ONE lit part, if a mark lights it. The rest copy loses that mark, so the only
+// colour left on the row is the moving window.
+function unmark(s) {
+  const parts = partsOf(s.rest, s.split), lit = s.split ? parts.filter(floods) : [];
+  s.home = lit.length === 1 && MARKS.some((c) => lit[0].classList.contains(c)) ? parts.indexOf(lit[0]) : -1;
+  if (s.home < 0) return;
+  lit[0].classList.remove(...MARKS);
+  // Measuring resolved its lit style, so dropping the mark would fade it out: land it.
+  for (const a of s.rest.getAnimations({ subtree: true })) a.finish();
 }
 
 // The part holding the focused typing box stays real (it has the caret and is lit
@@ -334,7 +363,9 @@ function drop(s) {
 // The part being typed in is real either way (lit by its own focus).
 // A tile's own paint fading back in is on the tile and its face alone (its
 // contents may animate forever: the music meter).
-const still = (s) => s.parts.every((p, k) => k === s.live || floods(p) === floods(partsOf(s.rest, s.split)[k]))
+// Back home, the window shows the lit copy's home part over the rest copy's.
+const still = (s) => s.parts.every((p, k) => k === s.live
+  || floods(p) === floods(partsOf(s.back && k === s.i ? s.lit : s.rest, s.split)[k]))
   && !(s.shell ? [s.host, s.face].flatMap((el) => el.getAnimations()) : s.host.getAnimations({ subtree: true }))
     .some((a) => a instanceof CSSTransition);
 
@@ -393,6 +424,8 @@ function advance(s, dt) {
     if (!s.filling && s.pend) { const e = s.pend; s.pend = null; leave(s.host, e); }
     clip(s, 'cf', s.fill, s.filling ? circle(s, s.rad) : 'none');
   }
+  // The colour is home and still: the real row paints it again.
+  if (s.back && s.hit && !s.p && !s.vp && !s.filling && still(s)) return drop(s);
   if (s.shell) wet(s, hr);
   draw(s, hr);
   if (import.meta.env.DEV && !s.filling && !s.out && s.checked !== s.i && s.L === t.l && s.R === t.r) parity(s);
@@ -409,37 +442,57 @@ function tick(now) {
 }
 const kick = () => { if (!raf) raf = requestAnimationFrame(tick); };
 
+// A slide to part i: p restarts a reach away; each edge's bend spans its real travel.
+function slide(s, i, hr) {
+  const r = rectOf(s, i, hr), n = TUNE.reach, dir = Math.sign(r.l + r.r - s.L - s.R) || 1;
+  // bent(-n) must land on the edge's current spot: a = (n - travel) / n^2.
+  // ponytail: an edge travelling under n/2 dips the wrong way first (~2px at 20px);
+  // candy parts are wider than that today.
+  s.aL = (n - dir * (r.l - s.L)) / (n * n);
+  s.aR = (n - dir * (r.r - s.R)) / (n * n);
+  s.vp = Math.max(0, (dir === s.dir ? 1 : -1) * s.vp);   // keep only speed already heading there
+  s.dir = dir; s.p = -n; s.hit = false; s.i = i;
+}
+
 function enter(s, btn, e) {
   const i = s.parts.indexOf(btn);
-  s.pend = null;   // back before the fill finished: no drain owed
+  s.pend = null;    // back before the fill finished: no drain owed
+  s.back = false;   // back before the colour got home: it turns round
   if (i < 0 || (i === s.i && !s.out)) return;
-  const hr = place(s), r = rectOf(s, i, hr);
-  if (!s.on) {   // first entry: the circle fills the part from where the pointer came in
+  const hr = place(s);
+  if (!s.on) {
     s.host.setAttribute('data-liquid-host', '');   // a tile back mid hand-back gives its paint up again
-    s.L = r.l; s.R = r.r;
-    s.fx = clamp(e.clientX - hr.left, r.l, r.r);
-    s.fy = clamp(e.clientY - hr.top, 0, hr.height);
-    s.rad = s.vrad = 0;
-    s.filling = s.on = true;
-    clip(s, 'cf', s.fill, circle(s, 0));
-  } else if (i !== s.i) {   // a slide: p restarts a reach away; each edge's bend spans its real travel
-    const n = TUNE.reach, dir = Math.sign(r.l + r.r - s.L - s.R) || 1;
-    // bent(-n) must land on the edge's current spot: a = (n - travel) / n^2.
-    // ponytail: an edge travelling under n/2 dips the wrong way first (~2px at 20px);
-    // candy parts are wider than that today.
-    s.aL = (n - dir * (r.l - s.L)) / (n * n);
-    s.aR = (n - dir * (r.r - s.R)) / (n * n);
-    s.vp = Math.max(0, (dir === s.dir ? 1 : -1) * s.vp);   // keep only speed already heading there
-    s.dir = dir; s.p = -n; s.hit = false;
+    s.on = true;
+    if (s.home >= 0) {   // already full on the selected part: it slides over from there
+      const r = rectOf(s, s.home, hr);
+      s.L = r.l; s.R = r.r; s.i = s.home; s.p = s.vp = 0; s.hit = true;
+      s.filling = false; s.rad = s.vrad = 0;
+      clip(s, 'cf', s.fill, 'none');
+      draw(s, hr);   // now: the rest copy has no mark, so an undrawn window is an unlit frame
+    } else {   // the circle fills the part from where the pointer came in
+      const r = rectOf(s, i, hr);
+      s.L = r.l; s.R = r.r; s.i = i;
+      s.fx = clamp(e.clientX - hr.left, r.l, r.r);
+      s.fy = clamp(e.clientY - hr.top, 0, hr.height);
+      s.rad = s.vrad = 0;
+      s.filling = true;
+      clip(s, 'cf', s.fill, circle(s, 0));
+    }
   }
+  if (i !== s.i) slide(s, i, hr);
   s.out = false;   // mid-shrink it just turns round on its own centre
-  s.i = i;
   kick();
 }
 
 function leave(host, e) {   // the fill run backwards: shrink into where the pointer left
   const s = layers.get(host);
   if (!s?.on) return;
+  // A selected part's colour slides home instead; advance() hands back once it is still.
+  if (s.home >= 0) {
+    if (s.i !== s.home) slide(s, s.home, s.host.getBoundingClientRect());
+    s.back = true;
+    return kick();
+  }
   // Still filling in: it finishes first, then advance() drains it from here.
   if (s.filling && !s.out) { s.pend = { clientX: e.clientX, clientY: e.clientY }; return; }
   if (!s.filling) {
@@ -528,7 +581,7 @@ function onOver(e) {
     if (!s) return;
   }
   hot = host;
-  enter(s, btn, e);
+  enter(s, steer(s) || btn, e);
 }
 function onOut(e) {   // the pointer left the window altogether
   if (e.relatedTarget) return;

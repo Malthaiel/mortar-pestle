@@ -326,8 +326,7 @@ export default function Dock({
           width: '100%',
           padding: '8px',
           pointerEvents: 'auto',
-          '--dock-expand-ms':   `${dock.expandMs ?? DOCK_DEFAULT.expandMs}ms`,
-          '--dock-collapse-ms': `${dock.collapseMs ?? DOCK_DEFAULT.collapseMs}ms`,
+          // --dock-expand-ms / --dock-collapse-ms come from :root (useSettings).
         }}
       >
         <DraggableSidebarList
