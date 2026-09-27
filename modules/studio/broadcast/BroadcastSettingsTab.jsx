@@ -13,7 +13,7 @@ import { createApi } from '@host/module-sdk/index.js';
 import { Topbar, Slider, StatChip, TextInput, Seg } from '@host/components/ui';
 import { OutlinedBtn } from '@host/components/ui/Button.jsx';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
-import { IconSparkles, IconCpu, IconPackage, IconMonitor, IconFilm, IconCut, IconClock, IconHardDrive, IconBroadcast, IconGlobe } from '@host/components/icons.jsx';
+import { IconBot, IconCpu, IconPackage, IconMonitor, IconFilm, IconCut, IconClock, IconHardDrive, IconBroadcast, IconGlobe } from '@host/components/icons.jsx';
 import EnableToggle from '@host/components/ui/EnableToggle.jsx';
 import { SectionBand, Row } from '@host/components/settings/section-primitives.jsx';
 import { verb } from './broadcastStore.js';
@@ -323,7 +323,7 @@ export default function BroadcastSettingsTab({ accent, initialSection, onNavigat
               onChange={(v) => { const a = v === 'advanced'; setAdvanced(a); api.settings.set('advancedMode', a); }}
             />
           </Row>
-          <Row label="Quality"><CandySelect icon={IconSparkles} value={g('SimpleOutput', 'RecQuality', 'HQ')} options={QUALITY_OPTS} onChange={(v) => set('SimpleOutput', 'RecQuality', v)} disabled={locked} title="Recording quality" /></Row>
+          <Row label="Quality"><CandySelect icon={IconBot} value={g('SimpleOutput', 'RecQuality', 'HQ')} options={QUALITY_OPTS} onChange={(v) => set('SimpleOutput', 'RecQuality', v)} disabled={locked} title="Recording quality" /></Row>
           {!advanced && (
             <Row label="Encoder"><CandySelect icon={IconCpu} value={g('SimpleOutput', 'RecEncoder', 'x264')} options={[{ value: 'x264', label: 'x264 (H.264)' }]} onChange={(v) => set('SimpleOutput', 'RecEncoder', v)} disabled={locked} title="Video encoder" /></Row>
           )}

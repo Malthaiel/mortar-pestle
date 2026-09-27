@@ -1745,6 +1745,19 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
   width: auto; opacity: 1; margin-left: 0;
   transition-duration: var(--dock-expand-ms, 240ms);
 }
+/* is-rest — the reverse: open at rest, shut while the part is open, so a short
+   form swaps for the long one beside it (a song row's 12.4M for 12,431,882,
+   user-approved 2026-09-27). Same curve and speeds; after the rule above so it
+   wins on source order at equal weight. */
+.candy-face > .split-label.is-rest {
+  width: auto; opacity: 1; margin-left: 0;
+  transition-duration: var(--dock-expand-ms, 240ms);
+}
+[data-open] > .candy-face > .split-label.is-rest {
+  width: 0; opacity: 0;
+  margin-left: calc(var(--candy-face-gap) * -1);
+  transition-duration: var(--dock-collapse-ms, 240ms);
+}
 
 
 /* select — dropdown trigger (CandySelect.jsx). Neutral candy control like

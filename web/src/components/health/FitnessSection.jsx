@@ -20,7 +20,7 @@ import { useTodayWorkout, isRestDay } from '../../hooks/useTodayWorkout.js';
 import { useCardioPresets } from '../../hooks/useCardioPresets.js';
 import { computeFitnessStreak } from '../../util/fitnessStreak.js';
 import PaneHeader from '../planner/PaneHeader.jsx';
-import { IconCheck, IconTrash, IconDumbbell, IconPlus, IconHeartPulse, IconSparkles } from '../icons.jsx';
+import { IconCheck, IconTrash, IconDumbbell, IconPlus, IconHeartPulse, IconBot } from '../icons.jsx';
 import SplitChooserPopover from './SplitChooserPopover.jsx';
 import SplitEditorWindow from './SplitEditorWindow.jsx';
 import CardioChooserPopover from './CardioChooserPopover.jsx';
@@ -145,7 +145,7 @@ export default function FitnessSection({ accent = 'var(--accent)', isToday = fal
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {streak && streak.current > 0 && (
               <span title={`Current streak ${streak.current} day${streak.current === 1 ? '' : 's'} · longest ${streak.longest}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontFamily: 'var(--font-mono)', fontSize: 11.5, color: accent }}>
-                <IconSparkles size={12} /> {streak.current}
+                <IconBot size={12} /> {streak.current}
               </span>
             )}
             <button ref={splitBtnRef} type="button" data-own-press className="candy-btn health-split-trigger" data-shape="chip" title="Workout splits" onClick={() => setChooserOpen((v) => !v)}>

@@ -21,6 +21,8 @@ export default function AddToPlaylistButton({
   // Leading mark for the `form` trigger, so a fused one reads like the icon-led
   // parts it is welded to. The face is already inline-flex with its own gap.
   icon: Icon = null,
+  // Anything else (data-open, for a name that opens on hover) lands on the form trigger.
+  ...rest
 }) {
   const { openMenu, modalEl, canAdd } = useAddToPlaylistMenu(accent);
   const [hover, setHover] = useState(false);
@@ -31,6 +33,7 @@ export default function AddToPlaylistButton({
   const trigger =
     variant === 'form' ? (
       <button
+        {...rest}
         type="button"
         className="candy-btn"
         data-shape={fuse ? 'chip' : undefined}

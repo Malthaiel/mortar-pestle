@@ -6,7 +6,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { musicApi, useMbRefreshTick, useCaaCover } from './api.js';
 import { useMusicPlayer } from './MusicPlayerProvider.jsx';
-import { IconPlay, IconStar, IconTrophyStar, IconMedalStar, IconRadio, IconSwatch, IconBookmarkPlus, IconDownload, IconMusic, IconGroup, IconCopyPlus, IconCamcorder, IconEarAlt, IconAnnouncement } from '@host/components/icons.jsx';
+import { IconPlay, IconFire, IconRadio, IconSwatch, IconPaperPlane, IconDownload, IconMusic, IconGroup, IconFingerUp, IconCamcorder, IconEarAlt, IconAnnouncement, IconTag } from '@host/components/icons.jsx';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
 import { statusLabel, STATUS_ICON } from '@host/util/media-status.js';
 import { libraryAbs } from '@host/api.js';
@@ -33,6 +33,8 @@ const HEAD_COLOR = 'var(--text)';
 const FACT_SIZE = 'calc(12px * var(--film-head))';
 
 const LISTEN_STATUSES = ['Plan-to-Listen', 'Currently-Listening', 'Listened', 'Dropped'];
+// The status part's resting word; the full one opens on hover (user-directed 2026-09-27).
+const STATUS_SHORT = { 'Plan-to-Listen': 'Plan', 'Currently-Listening': 'Cnty', Listened: 'Lstn', Dropped: 'Drop' };
 
 // The film's tab strip (AnimeMainColumn FILM_TABS), for a record: one section
 // under the hairline at a time (user-directed 2026-09-26).
@@ -58,17 +60,22 @@ const TAB_ICON = { Tracks: IconMusic, Credits: IconGroup, Discography: IconRadio
 // pointer that lands in that band has not glided there, and keeps the tab it landed
 // on. Rejected the same day: a swap at the midpoint of the two open centres
 // ("switches too early"), then a lead only where a slide forced one (small tabs
-// waited for the edge). It holds while every name is wider than two leads (else the
+// waited for the edge). It holds while every name adds more than two leads (else the
 // walk would step back); the walk goes one way, so it always ends. Layouts are
 // rebuilt from the live parts (shut width = width minus what its name adds right
 // now), because live rects lie mid-glide.
 function tabUnder(run, x, px, cur) {
   const parts = [...run.children], shut = [], name = [], lap = [];
   for (const p of parts) {
-    const lbl = p.querySelector('.split-label'), cs = getComputedStyle(lbl);
+    // A part may carry a short form (.is-rest) that shows while it is shut and
+    // swaps for the name as it opens: shut = name closed + short form showing,
+    // and opening adds the name's width minus the short form's.
+    const lbl = p.querySelector('.split-label:not(.is-rest)'), rest = p.querySelector('.split-label.is-rest');
     const gap = parseFloat(getComputedStyle(lbl.parentElement).columnGap) || 0;
-    shut.push(p.getBoundingClientRect().width - (lbl.getBoundingClientRect().width + parseFloat(cs.marginLeft) + gap));
-    name.push(lbl.firstElementChild.getBoundingClientRect().width + gap);
+    const adds = (el) => el ? el.getBoundingClientRect().width + parseFloat(getComputedStyle(el).marginLeft) + gap : 0;   // now
+    const full = (el) => el ? el.firstElementChild.getBoundingClientRect().width + gap : 0;                               // fully open
+    shut.push(p.getBoundingClientRect().width - adds(lbl) - adds(rest) + full(rest));
+    name.push(full(lbl) - full(rest));
     lap.push(parseFloat(getComputedStyle(p).marginLeft) || 0);
   }
   const l0 = parts[0].getBoundingClientRect().left - lap[0];
@@ -84,6 +91,24 @@ function tabUnder(run, x, px, cur) {
   while (k + 1 < parts.length && (x >= at(k, k)[1] || (px < at(k, k)[1] - lead && x >= at(k, k)[1] - lead))) k++;
   if (k === cur) while (k > 0 && (x < at(k, k)[0] || (px >= at(k, k)[0] + lead && x < at(k, k)[0] + lead))) k--;
   return k;
+}
+
+// The index of the part showing its name in a run whose every part carries a
+// .split-label: the hovered one by tabUnder, not by hit-test, else `pick` (the
+// picked tab; Play for the action run). The updater form, so a swap not yet
+// rendered is still `cur`. A pointer arriving (no hover yet) opens the part under it.
+function useOpenPart(pick) {
+  const [hover, setHover] = useState(null);
+  const lastX = useRef(null);   // the pointer's last x on the run; null = not on it
+  return [hover ?? pick, {
+    onPointerMove: (e) => {
+      const run = e.currentTarget, x = e.clientX, px = lastX.current;
+      const under = [...run.children].indexOf(e.target.closest('.candy-btn'));
+      lastX.current = x;
+      setHover(h => h != null ? tabUnder(run, x, px ?? x, h) : under >= 0 ? under : pick);
+    },
+    onPointerLeave: () => { setHover(null); lastX.current = null; },
+  }];
 }
 
 // The photo rides the fact line, so it is sized to that line: an even number of
@@ -190,10 +215,13 @@ export default function AlbumDetail({ accent, albumPath }) {
   // navigating elsewhere.
   const [tab, setTab] = usePersistedState('library:albumTab', 'Tracks');
   const active = ALBUM_TABS.includes(tab) ? tab : 'Tracks';
-  // The tab showing its name: the hovered one, else the picked one.
-  const [hoverTab, setHoverTab] = useState(null);
-  const openTab = hoverTab ?? active;
-  const lastX = useRef(null);   // the pointer's last x on the run; null = not on it
+  // The tab showing its name: the hovered one, else the picked one. The action
+  // run's the same, with Play (part 0) as its picked one: Play Album shows at
+  // rest and shrinks to its icon while another part is hovered (user-directed
+  // 2026-09-27).
+  const [openTabIdx, tabRun] = useOpenPart(ALBUM_TABS.indexOf(active));
+  const openTab = ALBUM_TABS[openTabIdx];
+  const [openAct, actRun] = useOpenPart(0);
   const [highlight, setHighlight] = useState(null);
   const videos = useTrackVideos(album);
   const world = useWorldPlays(album);
@@ -380,6 +408,22 @@ export default function AlbumDetail({ accent, albumPath }) {
     }
   };
 
+  // The action run: every part an icon whose name opens on hover, like the tabs
+  // (user-directed 2026-09-27). act() numbers the parts in render order (Download
+  // is not always there), so data-open lands on the hovered one.
+  let actN = 0;
+  const act = () => ({ 'data-open': actN++ === openAct ? '' : undefined });
+  const splitName = (t) => <span className="split-label"><span>{t}</span></span>;
+  const trackRefs = () => album.tracks.map(t => refFromQueueItem({
+    albumPath: album.path, albumTitle: album.title, albumImage: album.image,
+    artist: album.artist, wikilink: t.wikilink, audioPath: t.audioPath,
+    title: t.title, duration: t.duration,
+  }));
+  const menuUnder = (e, items, opts) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    openContextMenu({ x: r.left, y: r.bottom + 4 }, items, { accent, ...opts });
+  };
+
   // scrollbar-gutter keeps the scrollbar's lane even when nothing scrolls, so
   // the right edge (lane + gutter) always matches the left (the ResizeSeam
   // grab strip + gutter): 34px both sides, measured 2026-09-26.
@@ -455,18 +499,24 @@ export default function AlbumDetail({ accent, albumPath }) {
           <div data-spacing-intent="run-air" style={{ display: 'flex', flexDirection: 'column', gap: `calc(${RUN_AIR}px + var(--candy-depth-small))`, marginTop: RUN_AIR - HEAD_GAP }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           {/* The action run leads, the tabs follow it (user-directed 2026-09-26). */}
-          <div className="candy-split" style={{
+          <div className="candy-split" {...actRun} style={{
             position: 'relative', '--cbtn-size': ROW_H,
           }}>
             {/* Play leads the run (user-directed 2026-09-26; the film's too).
                 Never disabled: a track not on disk streams (playAlbumTracks
                 marks it streamable), so an undownloaded album plays too. */}
+            {/* Lit and named at rest, like the picked tab (user-directed
+                2026-09-27); useOpenPart(0) shuts the name while another part
+                is hovered. */}
             <button
-              className="candy-btn"
+              className="candy-btn is-active"
               data-shape="chip"
               data-own-press
               onClick={playAll}
-            ><span className="candy-face"><IconPlay size={14}/>Play</span></button>
+              aria-label="Play Album"
+              style={{ '--accent': accent || 'var(--accent)' }}
+              {...act()}
+            ><span className="candy-face"><IconPlay size={14}/>{splitName('Play Album')}</span></button>
 
             {/* Icon only, right after Play (user-directed 2026-09-26); the
                 job's state (Queued, Downloading 3/11, Failed) is its tooltip,
@@ -478,32 +528,41 @@ export default function AlbumDetail({ accent, albumPath }) {
                 data-own-press
                 onClick={startDownload}
                 disabled={dlBusy}
-                title={dlJob ? dlLabel : playable.length > 0 ? `Download the ${missing} missing track${missing === 1 ? '' : 's'}` : 'Download this album'}
-              ><span className="candy-face"><IconDownload size={14}/>{dlJob?.state === 'downloading' && `${dlJob.trackIndex || 0}/${dlJob.trackTotal || '?'}`}</span></button>
+                aria-label={dlLabel}
+                {...act()}
+              >{/* The 3/11 count stays at rest while it downloads and gives way
+                  to the job's words on hover (.is-rest). */}
+                <span className="candy-face"><IconDownload size={14}/>
+                {dlJob?.state === 'downloading' && <span className="split-label is-rest"><span>{`${dlJob.trackIndex || 0}/${dlJob.trackTotal || '?'}`}</span></span>}
+                {splitName(dlLabel)}</span></button>
             )}
 
+            {/* A picked status shows its short form at rest and opens to the
+                full word (user-directed 2026-09-27). */}
             <CandySelect
               value={album.status || ''}
               accent={accent}
-              fuse shape="chip"
+              fuse shape="chip" nameOnHover {...act()}
+              icon={IconTag}
               title="Mark status"
               placeholder="Status"
-              options={LISTEN_STATUSES.map(s => ({ value: s, label: statusLabel(s), icon: STATUS_ICON[s], dot: resolveDot(STATUS_DOT_COLOR, s, accent) }))}
+              options={LISTEN_STATUSES.map(s => ({ value: s, label: statusLabel(s), short: STATUS_SHORT[s], icon: STATUS_ICON[s], dot: resolveDot(STATUS_DOT_COLOR, s, accent) }))}
               clearable
               disabled={busy}
               onChange={setStatus}
             />
 
             {/* The film's rating control, 1-1: re-picking the current value
-                clears it, exactly as the dot strip did. 10 and 9 wear a
-                trophy and a medal, the rest the star (user-directed 2026-09-26). */}
-            <CandySelect icon={IconStar}
+                clears it, exactly as the dot strip did. Every rating wears the
+                fire; a picked one shows its number at rest and opens to
+                "8 out of 10" (user-directed 2026-09-27). */}
+            <CandySelect icon={IconFire}
               value={album.personalRating ? String(album.personalRating) : ''}
               accent={accent}
-              fuse shape="chip"
+              fuse shape="chip" nameOnHover {...act()}
               title="Your rating out of 10"
-              placeholder="Rate"
-              options={Array.from({ length: 10 }, (_, n) => ({ value: String(10 - n), label: String(10 - n), dot: accent, icon: [IconTrophyStar, IconMedalStar][n] }))}
+              placeholder="Rate out of 10"
+              options={Array.from({ length: 10 }, (_, n) => ({ value: String(10 - n), label: String(10 - n), short: String(10 - n), long: `${10 - n} out of 10` }))}
               clearable
               disabled={busy}
               onChange={(v) => {
@@ -519,49 +578,38 @@ export default function AlbumDetail({ accent, albumPath }) {
               }}
             />
 
-            {/* Add to Queue / Playlist, Reveal and Delete live in here, as Uninstall does on a film --
-                the run stays short enough to fit the reading measure. */}
-            <button
-              type="button"
-              className="candy-btn"
-              data-shape="chip"
-              data-own-press
-              onClick={(e) => {
-                const r = e.currentTarget.getBoundingClientRect();
-                const items = [];
-                // Always offered: off-disk tracks stream from the queue too.
-                items.push({ label: 'Add to Queue', onClick: enqueueAlbum });
-                const refs = album.tracks.map(t => refFromQueueItem({
-                  albumPath: album.path, albumTitle: album.title, albumImage: album.image,
-                  artist: album.artist, wikilink: t.wikilink, audioPath: t.audioPath,
-                  title: t.title, duration: t.duration,
-                }));
-                if (playlistMenu.canAdd(refs)) items.push({ label: 'Add to Playlist', children: playlistMenu.buildItems(refs) });
-                if (album.trackFolder) items.push({
+            {/* Queue and Playlist left the More menu for parts of their own
+                (user-directed 2026-09-27), wearing the song rows' marks. Always
+                offered: off-disk tracks stream from the queue too. Playlist
+                before Queue, as on a song row (user-directed 2026-09-27). */}
+            <button type="button" className="candy-btn" data-shape="chip" data-own-press
+              onClick={(e) => menuUnder(e, playlistMenu.buildItems(trackRefs()), { header: 'Add to playlist' })}
+              aria-label="Add to Playlist" {...act()}
+            ><span className="candy-face"><IconFingerUp size={14}/>{splitName('Add to Playlist')}</span></button>
+            <button type="button" className="candy-btn" data-shape="chip" data-own-press
+              onClick={enqueueAlbum} aria-label="Add to Queue" {...act()}
+            ><span className="candy-face"><IconPaperPlane size={14}/>{splitName('Add to Queue')}</span></button>
+
+            {/* Reveal and Delete live in here, as Uninstall does on a film. The
+                swatch, not a ⋯ (user-directed 2026-09-26). */}
+            <button type="button" className="candy-btn" data-shape="chip" data-own-press
+              onClick={(e) => menuUnder(e, [
+                album.trackFolder && {
                   label: 'Reveal in files',
                   onClick: () => musicApi.revealInFiles(libraryAbs(album.trackFolder))
                     .catch(err => alert('Reveal failed: ' + err.message)),
-                });
-                items.push({ label: 'Delete album', onClick: onDelete });
-                openContextMenu({ x: r.left, y: r.bottom + 4 }, items, { accent });
-              }}
-            >{/* The swatch, not a ⋯ (user-directed 2026-09-26), and its name,
-                like Play (user-directed 2026-09-27). No tooltip: the name shows itself. */}
-              <span className="candy-face"><IconSwatch size={14}/>More</span></button>
+                },
+                { label: 'Delete album', onClick: onDelete },
+              ].filter(Boolean))}
+              aria-label="More Options" {...act()}
+            ><span className="candy-face"><IconSwatch size={14}/>{splitName('More Options')}</span></button>
           </div>
           {/* The open tab follows the pointer by tabUnder, not by hit-test; the
               liquid follows [data-open] while the run is hovered (liquidHover.js).
               The updater form, so a swap not yet rendered is still `cur`. A pointer
               arriving (no hover yet) opens the tab under it: the names never shrink
               left to right, so that tab, opened, is still under it. */}
-          <div className="candy-split"
-            onPointerMove={(e) => {
-              const run = e.currentTarget, x = e.clientX, px = lastX.current;
-              const under = [...run.children].indexOf(e.target.closest('.candy-btn'));
-              lastX.current = x;
-              setHoverTab(h => h ? ALBUM_TABS[tabUnder(run, x, px ?? x, ALBUM_TABS.indexOf(h))] : ALBUM_TABS[under] ?? active);
-            }}
-            onPointerLeave={() => { setHoverTab(null); lastX.current = null; }}
+          <div className="candy-split" {...tabRun}
             style={{ '--accent': accent || 'var(--accent)', '--cbtn-size': ROW_H }}>
             {ALBUM_TABS.map(t => {
               const Icon = TAB_ICON[t];
@@ -656,10 +704,28 @@ function TrackRow({ track, plays, playsDigits, accent, playing, highlighted, onP
   // `.is-active` is the split's own lit-half state; the loaded track wears it.
   const lit = playing || highlighted;
 
+  // Playlist, Queue and Video are icons that open their name under the pointer
+  // (.split-label, the album tabs' name; user-directed 2026-09-27), none at rest.
+  // The row is pinned at both ends, so a name opens LEFTWARD: the song's name half
+  // gives up the room and the parts before it slide left. Open = [data-open] from
+  // here, never :hover (liquidHover.js copies attributes, not hover). A name wider
+  // than its left neighbour's open width would let a pointer sliding left skip
+  // that neighbour; keep each name no wider than the open part to its left.
+  // The two counts do the same, but swap: their short form (.split-label.is-rest)
+  // shuts as the long one opens (user-picked 2026-09-27).
+  const [open, setOpen] = useState(null);   // the open part's name
+  const named = (t) => ({ 'data-open': open === t ? '' : undefined });
+  const label = (t) => <span className="split-label"><span>{t}</span></span>;
+  const videoName = videoUrl ? 'Open Video' : 'No Video';
+  const worldName = world && `${world.playcount.toLocaleString('en')} Globally`;
+  const playsName = `Played ${plays} Time${plays === 1 ? '' : 's'}`;
+
   return (
     <div
       ref={rowRef}
       className="candy-split"
+      onPointerMove={(e) => setOpen(e.target.closest('.candy-btn')?.querySelector('.split-label:not(.is-rest)')?.textContent ?? null)}
+      onPointerLeave={() => setOpen(null)}
       style={{
         display: 'flex', width: '100%',
         '--cbtn-size': ROW_H, '--accent': accent || 'var(--accent)',
@@ -713,13 +779,15 @@ function TrackRow({ track, plays, playsDigits, accent, playing, highlighted, onP
         data-own-press
         aria-disabled={!world}
         onClick={() => { if (world?.url) window.location.hash = '/tools/browser/' + encodeURIComponent(world.url); }}
-        title={world ? `${world.playcount.toLocaleString('en')} plays on Last.fm` : 'No Last.fm play count'}
-        style={world ? undefined : { opacity: 1, cursor: 'default' }}
-      ><span className="candy-face" style={world ? undefined : { color: 'var(--text-faint)' }}><IconAnnouncement size={14}/>
-        <span style={{ display: 'inline-grid', justifyItems: 'end', fontVariantNumeric: 'tabular-nums' }}>
+        title={world ? undefined : 'No Last.fm play count'}
+        style={world ? undefined : { opacity: 1, cursor: 'default', '--cbtn-rest-text': 'var(--text-faint)' }}
+        {...(world && named(worldName))}
+      ><span className="candy-face"><IconAnnouncement size={14}/>
+        <span className="split-label is-rest"><span style={{ display: 'inline-grid', justifyItems: 'end', fontVariantNumeric: 'tabular-nums' }}>
           {worldSizers.map(s => <span key={s} aria-hidden style={{ gridArea: '1 / 1', visibility: 'hidden' }}>{s}</span>)}
           <span style={{ gridArea: '1 / 1' }}>{worldText}</span>
-        </span>
+        </span></span>
+        {world && label(worldName)}
       </span></button>
 
       {/* Finished listens, its own part of the run (user-directed 2026-09-26,
@@ -731,22 +799,25 @@ function TrackRow({ track, plays, playsDigits, accent, playing, highlighted, onP
           className="candy-btn"
           data-shape="chip"
           data-own-press
-          title={`Played ${plays} time${plays === 1 ? '' : 's'}`}
+          {...named(playsName)}
         ><span className="candy-face"><IconEarAlt size={14}/>
-          <span style={{ minWidth: `${playsDigits}ch`, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{plays}</span>
+          <span className="split-label is-rest"><span style={{ display: 'inline-block', minWidth: `${playsDigits}ch`, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{plays}</span></span>
+          {label(playsName)}
         </span></button>
       )}
 
       {/* Its own half now, not a child of the row -- so it needs no
           stopPropagation to keep the row from playing under it. */}
+      {/* No tooltips on the named three: the name shows itself. */}
       <AddToPlaylistButton
         variant="form"
         fuse
-        icon={IconBookmarkPlus}
-        label=""
+        icon={IconFingerUp}
+        label={label('Add to Playlist')}
         accent={accent}
-        title="Add to playlist"
+        title={null}
         refs={playlistRef ? [playlistRef] : []}
+        {...named('Add to Playlist')}
       />
 
       <button
@@ -755,14 +826,16 @@ function TrackRow({ track, plays, playsDigits, accent, playing, highlighted, onP
         data-shape="chip"
         data-own-press
         onClick={onEnqueue}
-        title="Add to queue"
-      ><span className="candy-face"><IconCopyPlus size={14}/></span></button>
+        {...named('Add to Queue')}
+      ><span className="candy-face"><IconPaperPlane size={14}/>{label('Add to Queue')}</span></button>
 
       {/* On every song, so the parts line up down the list;
           greyed and inert when the song has no music video (user-directed
           2026-09-26). styles.css fades a disabled / aria-disabled candy button
           to 0.55, which paints a dark hole in the run (photographed
           2026-09-26), so only the icon greys: opacity is held at 1 here.
+          The grey is the REST text colour, so hover still floods the accent
+          with a white icon like every part (user-directed 2026-09-27).
           Opens in the in-app browser, as a film trailer does (AnimeTrailer). */}
       <button
         type="button"
@@ -771,9 +844,9 @@ function TrackRow({ track, plays, playsDigits, accent, playing, highlighted, onP
         data-own-press
         aria-disabled={!videoUrl}
         onClick={() => { if (videoUrl) window.location.hash = '/tools/browser/' + encodeURIComponent(videoUrl); }}
-        title={videoUrl ? 'Watch the music video' : 'No music video found'}
-        style={videoUrl ? undefined : { opacity: 1, cursor: 'default' }}
-      ><span className="candy-face" style={videoUrl ? undefined : { color: 'var(--text-faint)' }}><IconCamcorder size={14}/></span></button>
+        style={videoUrl ? undefined : { opacity: 1, cursor: 'default', '--cbtn-rest-text': 'var(--text-faint)' }}
+        {...named(videoName)}
+      ><span className="candy-face"><IconCamcorder size={14}/>{label(videoName)}</span></button>
     </div>
   );
 }

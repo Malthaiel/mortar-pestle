@@ -16,7 +16,7 @@
 import {
   IconCut, IconCopy, IconPaste, IconSelectAll, IconTrash, IconX, IconDot,
   IconFileText, IconFolder, IconFile, IconExternal, IconLink, IconPlus,
-  IconSearch, IconSparkles, IconCommand, IconSettings, IconRotateCw, IconWrench,
+  IconSearch, IconBot, IconCommand, IconSettings, IconRotateCw, IconWrench,
   IconMove, IconSend, IconCards, IconHeart, IconDownload,
   IconSort, IconLayers, IconLayoutGrid, IconVolume, IconMonitor, IconEyeOff,
   IconTerminal, IconTypeText,
@@ -39,7 +39,7 @@ const EXACT = {
   Reload: IconRotateCw,
   'Inspect Element': IconTerminal,
   'Search vault': IconSearch,
-  'Ask Concierge': IconSparkles,
+  'Ask Concierge': IconBot,
   'Quick actions': IconCommand,
   Window: IconMonitor,
   // links + files

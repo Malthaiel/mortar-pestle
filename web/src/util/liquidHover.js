@@ -235,7 +235,7 @@ function build(host, btn) {
   // TRANSITION runs on the copies too (a fresh copy would teleport the face);
   // anything structural rebuilds both copies inside the same clip wrappers.
   s.mo = new MutationObserver((recs) => {
-    let rebuild = false, repin = false, to = null;
+    let rebuild = false, repin = false, steered = false;
     for (const m of recs) {
       if (m.type !== 'attributes') { rebuild = true; continue; }
       const n = m.attributeName;
@@ -246,7 +246,7 @@ function build(host, btn) {
       // A click moved a split's mark: the rest copy must be measured afresh (unmark).
       if (s.split && n === 'class' && m.target.parentElement === host) { rebuild = true; continue; }
       const path = s.shell && m.target !== host ? [0] : pathOf(host, m.target), v = m.target.getAttribute(n);
-      if (n === 'data-open' && v != null && m.target.parentElement === host) to = m.target;
+      if (n === 'data-open' && m.target.parentElement === host) steered = true;
       for (const c of [s.rest, s.lit]) {
         const el = at(c, path);
         if (!el) { rebuild = true; continue; }
@@ -262,7 +262,10 @@ function build(host, btn) {
       unmark(s);
     }
     if (repin) pin(s);   // now, not next frame: in between, the unpinned copy's glide would start
-    if (to && host === hot) enter(s, to, pt);   // the split moved its own lit part
+    // The split moved its own lit part, or let go of it: a mark only removed (a song
+    // row's name shutting as the pointer reaches the title, which has none) hands the
+    // colour to the part the pointer last came over, else it stays steered away.
+    if (steered && host === hot) enter(s, steer(s) || s.under, pt);
   });
   // A tile's contents stay real: only the tile and its face (press, flavour) are copied.
   if (shell) { s.mo.observe(host, { attributes: true }); s.mo.observe(face, { attributes: true }); }
@@ -581,6 +584,7 @@ function onOver(e) {
     if (!s) return;
   }
   hot = host;
+  s.under = btn;
   enter(s, steer(s) || btn, e);
 }
 function onOut(e) {   // the pointer left the window altogether

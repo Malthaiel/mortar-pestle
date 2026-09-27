@@ -11,13 +11,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { videoApi, prefetchCredits } from './api.js';
 import { coverSrc, STATUS_DOT_COLOR, resolveDot } from './util.js';
 import { FilterChip as Pill } from '@host/components/ui/index.js';
+import { IconFire } from '@host/components/icons.jsx';
 import { useContextMenu } from '@host/context-menu/useContextMenu.js';
 
 // Single pill per sort dimension; click activates with the default direction,
 // click again flips direction. Active pill renders the direction arrow.
 const SORT_DIMENSIONS = [
   { key: 'added',    label: 'Date Added', defaultDir: 'desc', value: s => s.mtime || 0 },
-  { key: 'personal', label: '★ Personal', defaultDir: 'desc', value: s => Number(s.personalRating) || 0 },
+  // Your rating wears the fire, as the rating picker does (user-directed 2026-09-27).
+  { key: 'personal', label: <><IconFire size={12}/>Personal</>, defaultDir: 'desc', value: s => Number(s.personalRating) || 0 },
   { key: 'mal',      label: '★ MAL',      defaultDir: 'desc', value: s => Number(s.onlineRating)   || 0 },
   { key: 'year',     label: 'Year',       defaultDir: 'desc', value: s => s.year || 0 },
   { key: 'title',    label: 'Title',      defaultDir: 'asc',  value: s => (s.title || '').toLowerCase() },
@@ -278,7 +280,8 @@ export function SeriesCard({ series, accent, selected, onSelect, domain = 'Anime
             <span style={{
               color: accent, marginLeft: 'auto', fontWeight: 600,
               fontVariantNumeric: 'tabular-nums',
-            }}>★{series.personalRating}</span>
+              display: 'inline-flex', alignItems: 'center', gap: 2,
+            }}><IconFire size={11}/>{series.personalRating}</span>
           )}
         </div>
       </div>

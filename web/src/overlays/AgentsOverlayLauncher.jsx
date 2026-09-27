@@ -1,6 +1,6 @@
 // Agents launcher — a host-level candy chip in the Overlay Host that summons the
 // Concierge chat over the game. The host has no dock, so this is the overlay's
-// equivalent of the main-window DockAgentsButton (same IconSparkles + the
+// equivalent of the main-window DockAgentsButton (same IconBot + the
 // openConcierge/closeConcierge helpers). Fixed to the viewport corner (NOT inside a
 // CSS-transformed panel, like the host toast) so position:fixed anchors correctly.
 //
@@ -14,7 +14,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSettings } from '@host/hooks/useSettings.js';
 import { openConcierge, closeConcierge } from '@host/agents/concierge/ConciergeProvider.jsx';
-import { IconSparkles } from '@host/components/icons.jsx';
+import { IconBot } from '@host/components/icons.jsx';
 
 const OPEN_KEY = 'overlay-agents-open';
 const wasOpen = () => { try { return localStorage.getItem(OPEN_KEY) === '1'; } catch { return false; } };
@@ -61,7 +61,7 @@ export default function AgentsOverlayLauncher({ visible }) {
       onClick={toggle}
       style={{ position: 'fixed', left: 16, bottom: 16, zIndex: 30 }}
     >
-      <span className="candy-face"><IconSparkles size={18} /></span>
+      <span className="candy-face"><IconBot size={18} /></span>
     </button>
   );
 }

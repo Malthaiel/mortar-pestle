@@ -3,7 +3,7 @@
 // The music + video modules keep their own copies under modules/core/<name>/
 // util.js so they remain decoupled from host shape per the module-SDK rules.
 
-import { IconClock, IconPlay, IconCheck, IconPause, IconX } from '../components/icons.jsx';
+import { IconClock, IconRocket, IconCheck, IconPause, IconX } from '../components/icons.jsx';
 
 export const STATUS_DOT_COLOR = {
   // Video / film / TV
@@ -39,7 +39,7 @@ export const statusLabel = (s) => STATUS_LABEL[s] || s;
 
 // Menu icon per stored status, one meaning per verb across every medium. Keyed on
 // the STORED value, never on the shortened label.
-const PLAN = IconClock, NOW = IconPlay, DONE = IconCheck;
+const PLAN = IconClock, NOW = IconRocket, DONE = IconCheck;
 export const STATUS_ICON = {
   'Plan-to-Watch': PLAN, 'Plan-to-Listen': PLAN, 'Plan-to-Read': PLAN, 'Plan-to-Play': PLAN,
   'Currently-Watching': NOW, 'Currently-Listening': NOW, 'Currently-Reading': NOW, 'Currently-Playing': NOW,

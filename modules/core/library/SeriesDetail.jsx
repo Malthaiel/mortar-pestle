@@ -11,7 +11,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { videoApi } from './api.js';
 import { useVideoPlayer } from './VideoPlayerProvider.jsx';
 import EpisodeRow from './EpisodeRow.jsx';
-import { IconFolder, IconDownload, IconPlay, IconStar, IconTrophyStar, IconMedalStar, IconSwatch } from '@host/components/icons.jsx';
+import { IconFolder, IconDownload, IconPlay, IconFire, IconSwatch } from '@host/components/icons.jsx';
 import { coverSrc, STATUS_DOT_COLOR, DOWNLOAD_DOT_COLOR, resolveDot } from './util.js';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
 import { statusLabel, STATUS_ICON } from '@host/util/media-status.js';
@@ -499,16 +499,16 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
             />
             {/* Rating as a peer of the status chip. The values are the schema
                 numbers; re-picking the current one clears it, as the dot strip did.
-                10 and 9 wear a trophy and a medal, the rest the star
-                (user-directed 2026-09-26; the album's copy matches). */}
+                Every rating wears the fire (user-directed 2026-09-27; the
+                album's copy matches). */}
             {isMovie && (
-              <CandySelect icon={IconStar}
+              <CandySelect icon={IconFire}
                 value={series.personalRating ? String(series.personalRating) : ''}
                 accent={accent}
                 fuse shape="chip"
                 title="Your rating out of 10"
                 placeholder="Rate"
-                options={Array.from({ length: 10 }, (_, n) => ({ value: String(10 - n), label: String(10 - n), dot: accent, icon: [IconTrophyStar, IconMedalStar][n] }))}
+                options={Array.from({ length: 10 }, (_, n) => ({ value: String(10 - n), label: String(10 - n) }))}
                 clearable
                 onChange={(v) => {
                   const r = Number(v) || 0;

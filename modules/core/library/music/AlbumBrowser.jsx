@@ -12,7 +12,7 @@ import SearchRun from '@host/components/ui/SearchRun.jsx';
 import {
   IconLayers, IconDownload, IconGlobe,
   IconNotes, IconMusic, IconLayoutGrid,
-  IconCalendar, IconStar, IconMic, IconTag, IconTypeText, IconSort,
+  IconCalendar, IconFire, IconMic, IconTag, IconTypeText, IconSort,
 } from '@host/components/icons.jsx';
 import { statusLabel, STATUS_ICON } from '@host/util/media-status.js';
 import { Cluster, useRailOrder } from '@host/components/ui/Rail.jsx';
@@ -29,7 +29,7 @@ const SORT_DIMENSIONS = [
   { key: 'added',    label: 'Date Added', icon: IconCalendar, defaultDir: 'desc', value: a => a.mtime || 0 },
   // The typed ★ is gone with the glyph gutter — it was a stand-in for exactly
   // the icon the row now carries, and kept both would read as two stars.
-  { key: 'personal', label: 'Personal',   icon: IconStar,     defaultDir: 'desc', value: a => Number(a.personalRating) || 0 },
+  { key: 'personal', label: 'Personal',   icon: IconFire,     defaultDir: 'desc', value: a => Number(a.personalRating) || 0 },
   { key: 'artist',   label: 'Artist',     icon: IconMic,      defaultDir: 'asc',  value: a => (a.artist || '').toLowerCase() },
   { key: 'year',     label: 'Year',       icon: IconTag,      defaultDir: 'desc', value: a => a.year || 0 },
   { key: 'title',    label: 'Title',      icon: IconTypeText, defaultDir: 'asc',  value: a => (a.title || '').toLowerCase() },

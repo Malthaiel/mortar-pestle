@@ -30,6 +30,11 @@
 //   className    extra classes on the trigger
 //   style        extra inline style on the trigger -- `pointerEvents: 'none'`
 //                leaves one part of a run drawn but inert (disabled fades it)
+//   nameOnHover  the icon alone, its label a .split-label that opens while the
+//                trigger carries [data-open] (the run sets it); no tooltip. An
+//                option's `short` shows at rest and swaps for its `long` (else
+//                its label) as the name opens (.split-label.is-rest)
+//   ...rest      any other attribute (data-open) lands on the trigger
 
 import { useMenuTrigger } from '../../context-menu/useContextMenu.js';
 import { TREE_TEXT } from '../vault-tree/treeKit.jsx';
@@ -37,7 +42,7 @@ import { TREE_TEXT } from '../vault-tree/treeKit.jsx';
 export default function CandySelect({
   value, options, onChange, title, placeholder = '', clearable = false, accent, icon,
   compact = false, disabled = false, fuse = false,
-  shape = 'select', className = '', style,
+  shape = 'select', className = '', style, nameOnHover = false, ...rest
 }) {
   // `value` may be an ARRAY: several independent picks in one menu (a status AND
   // a downloaded/not state, say). The FIRST match in option order drives the
@@ -65,11 +70,12 @@ export default function CandySelect({
   const cls = 'candy-btn' + (compact ? ' is-compact' : '') + (fuse ? ' is-fused' : '') + (className ? ' ' + className : '');
   const button = (
     <button
+      {...rest}
       type="button"
       className={cls}
       data-shape={shape}
       data-own-press
-      title={title}
+      title={nameOnHover ? undefined : title}
       aria-label={title}
       disabled={disabled}
       style={{ ...(accent && { '--accent': accent }), ...style }}
@@ -78,6 +84,14 @@ export default function CandySelect({
       {/* Same lettering as the menu rows this button opens (TREE_TEXT, the
           sidebar tree's) so the trigger and its options read as one thing —
           user-directed 2026-09-19. */}
+      {nameOnHover ? (
+        // .split-label must be the face's direct child (styles.css).
+        <span className="candy-face" style={TREE_TEXT}>
+          {CurIcon && <CurIcon size={14} />}
+          {current?.short && <span className="split-label is-rest"><span>{current.short}</span></span>}
+          <span className="split-label"><span>{current ? (current.long ?? current.label) : placeholder}</span></span>
+        </span>
+      ) : (
       <span className="candy-face" style={TREE_TEXT}>
         {/* inline-flex so a JSX label (leading icon + text) sits on the row's
             centre line instead of the text baseline. No-op for plain strings. */}
@@ -93,6 +107,7 @@ export default function CandySelect({
           {extras.map(o => o.icon ? <o.icon key={o.value} size={12}/> : null)}
         </span>
       </span>
+      )}
     </button>
   );
   // A fused trigger is the bare button: .candy-split fuses only its DIRECT

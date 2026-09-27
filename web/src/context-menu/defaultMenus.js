@@ -9,7 +9,7 @@
 // Richer file actions (sidebar files/folders) arrive in SF9; SF1 added icons +
 // danger, SF7 fleshed out the link menu.
 
-import { IconCommand, IconSettings, IconRotateCw, IconExternal, IconFolder, IconLink, IconFileText, IconFile, IconPlus, IconX, IconSearch, IconSparkles, IconBrush, IconCopy } from '../components/icons.jsx';
+import { IconCommand, IconSettings, IconRotateCw, IconExternal, IconFolder, IconLink, IconFileText, IconFile, IconPlus, IconX, IconSearch, IconBot, IconBrush, IconCopy } from '../components/icons.jsx';
 import { invoke, api } from '../api.js';
 import { navigate } from '../router.js';
 import { obsidianHref } from '../util/obsidian.js';
@@ -111,7 +111,7 @@ export function buildEditableMenu(target, ctx) {
   // helper with the quoted selection) and Search vault (Command Palette seed).
   if (sel && selText.trim()) {
     items.push({ divider: true });
-    items.push({ label: 'Ask Concierge', icon: IconSparkles, onClick: () => openConcierge({ prefill: toBlockquote(selText) }) });
+    items.push({ label: 'Ask Concierge', icon: IconBot, onClick: () => openConcierge({ prefill: toBlockquote(selText) }) });
     if (ctx && ctx.openCommandPalette) {
       items.push({ label: 'Search Vault', icon: IconSearch, onClick: () => ctx.openCommandPalette(selText.trim()) });
     }
@@ -127,7 +127,7 @@ export function buildSelectionMenu(text, ctx) {
   const t = (text || '').trim();
   const items = [{ label: 'Copy', onClick: () => copyText(t) }];
   items.push({ divider: true });
-  items.push({ label: 'Ask Concierge', icon: IconSparkles, onClick: () => openConcierge({ prefill: toBlockquote(t) }) });
+  items.push({ label: 'Ask Concierge', icon: IconBot, onClick: () => openConcierge({ prefill: toBlockquote(t) }) });
   if (ctx && ctx.openCommandPalette) {
     items.push({ label: 'Search Vault', icon: IconSearch, onClick: () => ctx.openCommandPalette(t) });
   }

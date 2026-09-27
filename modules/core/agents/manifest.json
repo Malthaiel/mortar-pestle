@@ -9,7 +9,7 @@
   "requires": [],
   "license": "MIT",
   "tier": "core",
-  "iconKey": "IconSparkles",
+  "iconKey": "IconBot",
   "settingsTarget": { "tab": "agents" },
   "setupRequired": false
 }

@@ -17,7 +17,7 @@ import { Popover } from '../ui';
 import DockButton from './DockButton.jsx';
 import { CircleChip } from '../ui/Button.jsx';
 import { candyCenterOffset } from '../../util/candy.js';
-import { IconSparkles } from '../icons.jsx';
+import { IconBot } from '../icons.jsx';
 import { listAgents } from '../../agents/agents-registry.js';
 import { openConcierge } from '../../agents/concierge/ConciergeProvider.jsx';
 import { openAnalyst } from '../../agents/analyst/AnalystProvider.jsx';
@@ -73,10 +73,10 @@ export default function DockAgentsButton({ label, tipDesc, accent, onContextMenu
       className={open ? 'is-active' : ''}
       style={candyCenterOffset()}
       onContextMenu={onContextMenu}
-    ><IconSparkles size={16}/></CircleChip>
+    ><IconBot size={16}/></CircleChip>
   ) : (
     <DockButton
-      Icon={IconSparkles}
+      Icon={IconBot}
       label={label}
       onClick={toggle}
       isActive={open}

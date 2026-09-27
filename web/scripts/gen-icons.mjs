@@ -60,6 +60,7 @@ const MAP = {
   IconEarAlt: 'ear-alt', IconAnnouncement: 'announcement',
   IconGroup: 'group', IconCopyPlus: 'copy-plus', IconTrophyStar: 'trophy-star', IconMedalStar: 'medal-star', IconRadio: 'radio',
   IconListPlus: 'list-plus',
+  IconRocket: 'rocket', IconFire: 'fire', IconPaperPlane: 'paper-plane', IconFingerUp: 'finger-up',
   IconSkipBack: 'bx-skip-previous',
   IconRewind: 'bx-rewind', IconFastForward: 'bx-fast-forward', IconPause: 'bx-pause',
   IconStop: 'bx-stop',
@@ -79,7 +80,7 @@ const MAP = {
   // Knowledge subfolders
   IconFolder: 'bx-folder', IconDatabase: 'bx-data', IconLock: 'bx-lock-alt',
   IconUser: 'bx-user', IconUsers: 'bx-group',
-  IconSparkles: 'bx-bot', IconPackage: 'bx-package',
+  IconBot: 'bx-bot', IconPackage: 'bx-package',
   IconHeart: 'bx-heart', IconWrench: 'bx-wrench',
   IconRepeat: 'bx-repeat', IconMap: 'bx-map-alt', IconBuilding: 'bx-building',
   IconCalculator: 'bx-calculator', IconMove: 'bx-move', IconBrain: 'bx-brain',
@@ -117,6 +118,7 @@ const SIZES = {
   IconDot: 14, IconSend: 14,
   IconRepeatSolid: 14, IconPlayMark: 14, IconSkipMark: 14, IconListPlus: 14,
   IconBookmarkPlus: 14, IconSwatch: 14, IconDiscussion: 14, IconCamcorder: 14, IconEarAlt: 14, IconAnnouncement: 14,
+  IconRocket: 14, IconFire: 14, IconPaperPlane: 14, IconFingerUp: 14,
   IconGroup: 14, IconCopyPlus: 14, IconTrophyStar: 14, IconMedalStar: 14, IconRadio: 14,
   IconMinus: 10, IconSquare: 10, IconRestore: 10,
   IconCut: 14, IconPaste: 14, IconSelectAll: 14,
@@ -364,6 +366,28 @@ const OVERRIDES = {
   IconCut: {
     d: '<path d="M10 6.5C10 4.57 8.43 3 6.5 3S3 4.57 3 6.5 4.57 10 6.5 10a3.45 3.45 0 0 0 1.613-.413l2.357 2.528-2.318 2.318A3.46 3.46 0 0 0 6.5 14C4.57 14 3 15.57 3 17.5S4.57 21 6.5 21s3.5-1.57 3.5-3.5c0-.601-.166-1.158-.434-1.652l2.269-2.268L17 19.121a3 3 0 0 0 2.121.879H22L9.35 8.518c.406-.572.65-1.265.65-2.018zM6.5 8C5.673 8 5 7.327 5 6.5S5.673 5 6.5 5 8 5.673 8 6.5 7.327 8 6.5 8zm0 11c-.827 0-1.5-.673-1.5-1.5S5.673 16 6.5 16s1.5.673 1.5 1.5S7.327 19 6.5 19z"/><path d="m17 4.879-3.707 4.414 1.414 1.414L22 4h-2.879A3 3 0 0 0 17 4.879z"/>',
     pack: 'bx-cut (no solid form exists)',
+  },
+  // Album page (2026-09-27), picked live from Boxicons v3 SVGs in Downloads:
+  // Currently status, rating, Add to Queue, Add to Playlist.
+  IconRocket: {
+    d: '<path d="M5 16c-2 1-2 5-2 5s3 0 5-2zM21 2h-3.69c-2.4 0-4.66.94-6.36 2.64L8.69 6.9a8.4 8.4 0 0 0-6.24 1.27c-.25.17-.41.44-.44.73s.08.59.29.81l12 12c.2.2.45.29.71.29s.51-.1.71-.29c1.9-1.9 1.6-5.08 1.38-6.38l2.28-2.28c1.7-1.7 2.64-3.96 2.64-6.36V3c0-.55-.45-1-1-1Zm-3.59 7.41c-.78.78-2.05.78-2.83 0s-.78-2.05 0-2.83 2.05-.78 2.83 0 .78 2.05 0 2.83"/>',
+    box: "'0 0 24 24'",
+    pack: 'Boxicons v3 rocket',
+  },
+  IconFire: {
+    d: '<path d="M14.5 18.56c0-2.05-1.68-3.38-2.5-3.91-.82.53-2.5 1.86-2.5 3.91 0 1.62 1.12 2.94 2.5 2.94s2.5-1.32 2.5-2.94"/><path d="M18.78 7.39a.99.99 0 0 0-.83.32c-.77.84-1.82 1.31-2.94 1.31-2.21 0-4.01-1.8-4.01-4.01 0-.27.03-.56.1-.87.08-.39-.07-.79-.38-1.02a.98.98 0 0 0-1.09-.06C7.16 4.48 3 7.67 3 13.01c0 3.59 2.12 6.7 5.18 8.14-.42-.75-.68-1.63-.68-2.57 0-3.96 3.9-5.88 4.07-5.96.28-.13.59-.13.87 0 .17.08 4.07 2.01 4.07 5.96 0 .95-.26 1.82-.68 2.57 3.05-1.44 5.18-4.54 5.18-8.14 0-1.82-.49-3.55-1.47-5.14a.98.98 0 0 0-.76-.47Z"/>',
+    box: "'0 0 24 24'",
+    pack: 'Boxicons v3 fire',
+  },
+  IconPaperPlane: {
+    d: '<path d="M20.56 3.17c-.29-.2-.67-.23-.99-.08l-17 8.01c-.36.17-.58.53-.57.92 0 .39.24.75.6.9l3.36 1.47L16 8l-7 8v6l5.46-3.9 4.14 1.81c.13.06.26.08.4.08.18 0 .36-.05.52-.15a.99.99 0 0 0 .48-.79l1-15c.02-.35-.14-.69-.43-.89Z"/>',
+    box: "'0 0 24 24'",
+    pack: 'Boxicons v3 paper-plane',
+  },
+  IconFingerUp: {
+    d: '<path d="M12 9.57V4c0-1.1-.9-2-2-2s-2 .9-2 2v11.87l-3.06-1.15c-1.06-.4-2.24.16-2.6 1.24l-.13.38c-.13.39 0 .82.31 1.08l5.2 4.33c.18.15.41.23.64.23H21c.55 0 1-.45 1-1v-8.27c0-1-.73-1.84-1.72-1.98L12 9.55Z"/>',
+    box: "'0 0 24 24'",
+    pack: 'Boxicons v3 finger-up',
   },
 };
 
