@@ -7,7 +7,8 @@
 // together, whatever the parts' widths (a plain spring swings a fixed FRACTION of
 // its travel, so a wide part -> a tiny one flew ~40px past).
 // Leaving runs the fill backwards: a circle centred on the exit point shrinks to
-// nothing. Signed off on the Dev-tab rig 2026-09-25 (Stretch row, k260 zeta 0.5).
+// nothing. Leaving mid-fill lets the fill finish first, then drains from the exit
+// point. Signed off on the Dev-tab rig 2026-09-25 (Stretch row, k260 zeta 0.5).
 //
 // How (Emil Kowalski's clip-path tabs, made app-wide): one set of document
 // listeners, installed from main.jsx like tooltips.js, so every webview gets it
@@ -175,7 +176,7 @@ function build(host, btn) {
     host, split, shell, face, menu: !!host.closest(MENU), parts: partsOf(host, split), x: 0, y: 0, ox: 0, oy: 0, w: -1, h: -1,
     L: 0, R: 0, vL: 0, vR: 0, bL: 0, bR: 0, i: -1, on: false, live: -1,
     p: 0, vp: 0, aL: 0, aR: 0, dir: 1, hit: true,
-    fx: 0, fy: 0, rad: 0, vrad: 0, filling: false, out: false, checked: -1, twins: [],
+    fx: 0, fy: 0, rad: 0, vrad: 0, filling: false, out: false, pend: null, checked: -1, twins: [],
   };
   s.layer = document.createElement('div');
   s.layer.dataset.liquidLayer = '';
@@ -388,6 +389,8 @@ function advance(s, dt) {
       if (still(s)) return drop(s);
     }
     if (!s.out && s.rad >= goal) s.filling = false;
+    // A leave that came mid-fill drains now, from where the pointer left.
+    if (!s.filling && s.pend) { const e = s.pend; s.pend = null; leave(s.host, e); }
     clip(s, 'cf', s.fill, s.filling ? circle(s, s.rad) : 'none');
   }
   if (s.shell) wet(s, hr);
@@ -408,6 +411,7 @@ const kick = () => { if (!raf) raf = requestAnimationFrame(tick); };
 
 function enter(s, btn, e) {
   const i = s.parts.indexOf(btn);
+  s.pend = null;   // back before the fill finished: no drain owed
   if (i < 0 || (i === s.i && !s.out)) return;
   const hr = place(s), r = rectOf(s, i, hr);
   if (!s.on) {   // first entry: the circle fills the part from where the pointer came in
@@ -436,6 +440,8 @@ function enter(s, btn, e) {
 function leave(host, e) {   // the fill run backwards: shrink into where the pointer left
   const s = layers.get(host);
   if (!s?.on) return;
+  // Still filling in: it finishes first, then advance() drains it from here.
+  if (s.filling && !s.out) { s.pend = { clientX: e.clientX, clientY: e.clientY }; return; }
   if (!s.filling) {
     const hr = s.host.getBoundingClientRect();
     s.fx = clamp(e.clientX - hr.left, s.L, s.R);
