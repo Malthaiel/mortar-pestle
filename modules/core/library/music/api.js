@@ -5,6 +5,7 @@
 
 import { useEffect, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
+import { askCover } from './coverLine.js';
 
 let _api = null;
 
@@ -31,7 +32,9 @@ export const musicApi = {
   releasePersonnel:    (rgMbid) => _api.invoke('music_release_personnel', { rgMbid }),
   // Cover Art Archive thumbnail saved to disk once → local path, or null (none).
   // `image` = one CAA picture id of a release (the sleeve viewer); absent = the front.
-  cover:               (kind, mbid, size, image) => _api.invoke('music_cover', { kind, mbid, size, image: image ?? null }),
+  // `signal` aborts = this asker left; see coverLine.js.
+  cover: (kind, mbid, size, image, signal) =>
+    askCover(a => _api.invoke('music_cover', a), { kind, mbid, size, image: image ?? null }, signal),
   // Finished listens per logged key, the whole listen log: { trackPath: count }.
   listenCounts:        () => _api.invoke('music_listen_counts'),
   // Last.fm is the user's own key, kept in the OS keychain (no getter, like TMDb's).
@@ -90,10 +93,11 @@ export function useCaaCover(kind, mbid, size, image) {
   useEffect(() => {
     if (!key) return;
     let live = true;
-    musicApi.cover(kind, mbid, size, image)
+    const left = new AbortController();
+    musicApi.cover(kind, mbid, size, image, left.signal)
       .then(p => { if (live) setRes({ key, path: p || null }); })
       .catch(() => { if (live) setRes({ key, path: null }); });
-    return () => { live = false; };
+    return () => { live = false; left.abort(); };
   }, [key]);
   if (!key) return null;
   return res.key === key ? res.path : undefined;

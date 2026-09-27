@@ -460,7 +460,8 @@ pub async fn music_artist_releasegroups(
     // A browse answers at most 100; with singles, page on to MusicBrainz's own
     // count (Deftones: 114). The first page keeps the plain URL, so saved
     // answers from before paging still hit.
-    // ponytail: albums + EPs alone still stop at 100, as they always have.
+    // ponytail: albums + EPs alone stop at 100; Browse is being reworked to
+    // show ~30 (user-directed 2026-09-27), so paging it would be wasted calls.
     let mut hits = Vec::new();
     let mut seen = 0;
     loop {
@@ -470,13 +471,28 @@ pub async fn music_artist_releasegroups(
         let total = v.get("release-group-count").and_then(|x| x.as_u64()).unwrap_or(0) as usize;
         hits.extend(parse_release_groups(&v));
         seen += got;
-        if !singles || got == 0 || seen >= total {
+        if !singles || paging_done(seen, got, total) {
             break;
         }
     }
     // Newest first; undated last.
     hits.sort_by(|a, b| b.year.unwrap_or(0).cmp(&a.year.unwrap_or(0)));
     Ok(hits)
+}
+
+/// Most release groups the Discography tab's paged browse will fetch. Every
+/// page waits its turn at the 1 req/s gate and is re-checked live on each
+/// visit, and "Various Artists" alone has 273,435 with singles (Bach 6,145;
+/// measured 2026-09-27), so an unbounded browse would hold every MusicBrainz
+/// call hostage for ~50 minutes.
+// ponytail: a capped catalog shows its first 1,000 with no on-screen note
+// (user-directed 2026-09-27); return the real total if a note is ever wanted.
+const RG_CAP: usize = 1000;
+
+/// Stop paging once MusicBrainz's count (or the cap) is reached, or a page
+/// comes back empty.
+fn paging_done(seen: usize, got: usize, total: usize) -> bool {
+    got == 0 || seen >= total.min(RG_CAP)
 }
 
 /// How many times each of an artist's release groups has been played on
@@ -736,6 +752,22 @@ fn art_images(listing: &serde_json::Value) -> Vec<ArtImage> {
             Some(ArtImage { id, kind, full })
         })
         .collect()
+}
+
+#[cfg(test)]
+mod paging_tests {
+    use super::paging_done;
+
+    #[test]
+    fn pages_to_the_count_but_never_past_the_cap() {
+        assert!(paging_done(4, 4, 4)); // one short page
+        assert!(!paging_done(100, 100, 114)); // Deftones: a second page
+        assert!(paging_done(114, 14, 114));
+        assert!(paging_done(200, 0, 300)); // an empty page ends it early
+        assert!(!paging_done(900, 100, 6111)); // Bach: stops at the cap
+        assert!(paging_done(1000, 100, 6111));
+        assert!(paging_done(1000, 100, 271_372)); // Various Artists
+    }
 }
 
 #[cfg(test)]
