@@ -53,10 +53,6 @@ const ARTIST_PFP = 22;
 // corners and every part's height from it). Change this and both change.
 const ROW_H = '26px';
 
-// A song row's width, the same on every album so rows never change length
-// between records; narrower only when the page is (user-directed 2026-09-26).
-const TRACK_ROW_W = 512;
-
 // The track's own page: an md sibling of the audio file, falling back to the
 // pipeline's Tracks folder for a card with no audio on disk. `wikilink` is the
 // base filename with no extension.
@@ -510,7 +506,7 @@ export default function AlbumDetail({ accent, albumPath }) {
           {/* Track list — grouped by disc when the album has more than one.
               It rides IN the right column, under the hairline, exactly where a
               film's Cast panel sits: same reading width as the title above it.
-              Each row is TRACK_ROW_W wide (user-directed 2026-09-26). */}
+              Each row fills the column's width (uncapped, user-directed 2026-09-26). */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {active === 'Credits' && <AlbumPerformers album={album} accent={accent} />}
         {active === 'Tracks' && (() => {
@@ -555,7 +551,7 @@ export default function AlbumDetail({ accent, albumPath }) {
 }
 
 // One row = ONE fused run (.candy-split, Component Map § Default Components)
-// TRACK_ROW_W wide: the name half (number, name, length) plays and pauses,
+// as wide as the column: the name half (number, name, length) plays and pauses,
 // then World plays, Plays, Playlist, Queue, Video (user-directed 2026-09-26).
 // Every part is ROW_H tall because the run declares --cbtn-size; nothing here
 // restates a height.
@@ -577,7 +573,7 @@ function TrackRow({ track, plays, playsDigits, accent, playing, highlighted, onP
       ref={rowRef}
       className="candy-split"
       style={{
-        display: 'flex', width: TRACK_ROW_W, maxWidth: '100%',
+        display: 'flex', width: '100%',
         '--cbtn-size': ROW_H, '--accent': accent || 'var(--accent)',
       }}
     >

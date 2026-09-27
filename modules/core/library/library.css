@@ -498,7 +498,7 @@
    for .film-detail and .film-below, a section under the head that must share
    its edges (the album page's More-from row, user-directed 2026-09-26). */
 .film-detail, .film-below {
-  --film-gutter: 28px;
+  --film-gutter: 40px;   /* user-directed 2026-09-26 (was 28) */
   /* Reading measure for everything EXCEPT the backdrop, which stays full bleed.
      The NARROWEST value that still keeps the tab strip and the status/rating/
      download run on ONE line, measured 2026-09-13: tabs 307px + 12px gap + the
