@@ -6,7 +6,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { musicApi, useMbRefreshTick, useCaaCover } from './api.js';
 import { useMusicPlayer } from './MusicPlayerProvider.jsx';
-import { IconPlay, IconStar, IconSkipMark, IconPlus, IconDownload, IconMusic, IconUsers, IconVideo, IconChart } from '@host/components/icons.jsx';
+import { IconPlay, IconStar, IconSwatch, IconBookmarkPlus, IconDownload, IconMusic, IconUsers, IconCamcorder, IconEarAlt, IconAnnouncement } from '@host/components/icons.jsx';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
 import { statusLabel, STATUS_ICON } from '@host/util/media-status.js';
 import { libraryAbs } from '@host/api.js';
@@ -52,6 +52,10 @@ const ARTIST_PFP = 22;
 // never drift from the run it sits under (.candy-split derives the seam, the
 // corners and every part's height from it). Change this and both change.
 const ROW_H = '26px';
+
+// A song row's width, the same on every album so rows never change length
+// between records; narrower only when the page is (user-directed 2026-09-26).
+const TRACK_ROW_W = 512;
 
 // The track's own page: an md sibling of the audio file, falling back to the
 // pipeline's Tracks folder for a card with no audio on disk. `wikilink` is the
@@ -142,6 +146,7 @@ export default function AlbumDetail({ accent, albumPath }) {
   const active = ALBUM_TABS.includes(tab) ? tab : 'Tracks';
   const [highlight, setHighlight] = useState(null);
   const videos = useTrackVideos(album);
+  const world = useWorldPlays(album);
   useEffect(() => { setHighlight(consumeTrackHighlight(albumPath)); }, [albumPath]);
   // The sleeve's viewer: the big picture, and beside it every scanned picture.
   const lb = useLightbox();
@@ -227,6 +232,14 @@ export default function AlbumDetail({ accent, albumPath }) {
   // album's biggest count (in digits), so every row's parts line up.
   const trackPlays = plays ? album.tracks.map(t => playCount(plays, album, t)) : null;
   const playsDigits = trackPlays ? String(Math.max(0, ...trackPlays)).length : 1;
+  // Worldwide plays: every distinct number this album shows rides hidden in
+  // each row's slot, so the browser sizes all the slots to the widest one and
+  // the parts line up (12.4M and 812 are not the same width in any font).
+  const worldText = (t) => {
+    const w = world[squash(t.title)];
+    return w ? compactPlays.format(w.playcount) : '–';
+  };
+  const worldSizers = [...new Set(album.tracks.map(worldText))];
   const trackRow = (t, idx) => {
     const playingThis = currentTrack &&
       currentTrack.albumPath === album.path &&
@@ -246,6 +259,9 @@ export default function AlbumDetail({ accent, albumPath }) {
         highlighted={!!highlight && highlight.n === t.n && (highlight.disc ?? 1) === (t.disc || 1)}
         playlistRef={playlistRef}
         videoUrl={videos[squash(t.title)]}
+        world={world[squash(t.title)]}
+        worldText={worldText(t)}
+        worldSizers={worldSizers}
         playing={playingThis && isPlaying}
         onMenu={(e) => songMenu.openMenu(e, {
           albumPath: album.path, albumTitle: album.title, albumImage: album.image,
@@ -494,8 +510,7 @@ export default function AlbumDetail({ accent, albumPath }) {
           {/* Track list — grouped by disc when the album has more than one.
               It rides IN the right column, under the hairline, exactly where a
               film's Cast panel sits: same reading width as the title above it.
-              Full column width, no longer capped at the two runs' width
-              (user-directed 2026-09-26). */}
+              Each row is TRACK_ROW_W wide (user-directed 2026-09-26). */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {active === 'Credits' && <AlbumPerformers album={album} accent={accent} />}
         {active === 'Tracks' && (() => {
@@ -539,12 +554,12 @@ export default function AlbumDetail({ accent, albumPath }) {
   );
 }
 
-// One row = ONE fused run (.candy-split, Component Map § Default Components):
-// the name half plays and pauses, then Playlist, then Queue. The two marks are
-// the same ones the album's own Playlist / Queue buttons wear at the top of the
-// page, so a row reads as a smaller copy of them. Every part is ROW_H tall
-// because the run declares --cbtn-size; nothing here restates a height.
-function TrackRow({ track, plays, playsDigits, accent, playing, highlighted, onPlay, onEnqueue, onMenu, playlistRef, videoUrl }) {
+// One row = ONE fused run (.candy-split, Component Map § Default Components)
+// TRACK_ROW_W wide: the name half (number, name, length) plays and pauses,
+// then World plays, Plays, Playlist, Queue, Video (user-directed 2026-09-26).
+// Every part is ROW_H tall because the run declares --cbtn-size; nothing here
+// restates a height.
+function TrackRow({ track, plays, playsDigits, accent, playing, highlighted, onPlay, onEnqueue, onMenu, playlistRef, videoUrl, world, worldText, worldSizers }) {
   const rowRef = useRef(null);
   // Scroll a song arrived-at from search into view; long tracklists otherwise
   // highlight a row sitting below the fold.
@@ -561,7 +576,10 @@ function TrackRow({ track, plays, playsDigits, accent, playing, highlighted, onP
     <div
       ref={rowRef}
       className="candy-split"
-      style={{ display: 'flex', '--cbtn-size': ROW_H, '--accent': accent || 'var(--accent)' }}
+      style={{
+        display: 'flex', width: TRACK_ROW_W, maxWidth: '100%',
+        '--cbtn-size': ROW_H, '--accent': accent || 'var(--accent)',
+      }}
     >
       <button
         type="button"
@@ -590,9 +608,31 @@ function TrackRow({ track, plays, playsDigits, accent, playing, highlighted, onP
         </span>
       </button>
 
+      {/* Worldwide plays on Last.fm (Last.fm World Plays plan, user-picked
+          2026-09-26), right after the name (user-directed 2026-09-26). On
+          every song so the parts line up: a grey dash while loading, with no
+          key, or when Last.fm doesn't know the song -- the video part's
+          disabled treatment. Opens the song's Last.fm page in the in-app
+          browser. */}
+      <button
+        type="button"
+        className="candy-btn"
+        data-shape="chip"
+        data-own-press
+        aria-disabled={!world}
+        onClick={() => { if (world?.url) window.location.hash = '/tools/browser/' + encodeURIComponent(world.url); }}
+        title={world ? `${world.playcount.toLocaleString('en')} plays on Last.fm` : 'No Last.fm play count'}
+        style={world ? undefined : { opacity: 1, cursor: 'default' }}
+      ><span className="candy-face" style={world ? undefined : { color: 'var(--text-faint)' }}><IconAnnouncement size={14}/>
+        <span style={{ display: 'inline-grid', justifyItems: 'end', fontVariantNumeric: 'tabular-nums' }}>
+          {worldSizers.map(s => <span key={s} aria-hidden style={{ gridArea: '1 / 1', visibility: 'hidden' }}>{s}</span>)}
+          <span style={{ gridArea: '1 / 1' }}>{worldText}</span>
+        </span>
+      </span></button>
+
       {/* Finished listens, its own part of the run (user-directed 2026-09-26,
-          replacing a Plays tab). Shows only once the listen log is read, so
-          the run never jumps from a guess. */}
+          replacing a Plays tab), beside the world count. Shows only once the
+          listen log is read, so the run never jumps from a guess. */}
       {plays != null && (
         <button
           type="button"
@@ -600,12 +640,33 @@ function TrackRow({ track, plays, playsDigits, accent, playing, highlighted, onP
           data-shape="chip"
           data-own-press
           title={`Played ${plays} time${plays === 1 ? '' : 's'}`}
-        ><span className="candy-face"><IconChart size={14}/>
+        ><span className="candy-face"><IconEarAlt size={14}/>
           <span style={{ minWidth: `${playsDigits}ch`, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{plays}</span>
         </span></button>
       )}
 
-      {/* On every song, so Playlist / Queue stay lined up down the list;
+      {/* Its own half now, not a child of the row -- so it needs no
+          stopPropagation to keep the row from playing under it. */}
+      <AddToPlaylistButton
+        variant="form"
+        fuse
+        icon={IconBookmarkPlus}
+        label=""
+        accent={accent}
+        title="Add to playlist"
+        refs={playlistRef ? [playlistRef] : []}
+      />
+
+      <button
+        type="button"
+        className="candy-btn"
+        data-shape="chip"
+        data-own-press
+        onClick={onEnqueue}
+        title="Add to queue"
+      ><span className="candy-face"><IconSwatch size={14}/></span></button>
+
+      {/* On every song, so the parts line up down the list;
           greyed and inert when the song has no music video (user-directed
           2026-09-26). styles.css fades a disabled / aria-disabled candy button
           to 0.55, which paints a dark hole in the run (photographed
@@ -620,28 +681,7 @@ function TrackRow({ track, plays, playsDigits, accent, playing, highlighted, onP
         onClick={() => { if (videoUrl) window.location.hash = '/tools/browser/' + encodeURIComponent(videoUrl); }}
         title={videoUrl ? 'Watch the music video' : 'No music video found'}
         style={videoUrl ? undefined : { opacity: 1, cursor: 'default' }}
-      ><span className="candy-face" style={videoUrl ? undefined : { color: 'var(--text-faint)' }}><IconVideo size={14}/></span></button>
-
-      {/* Its own half now, not a child of the row -- so it needs no
-          stopPropagation to keep the row from playing under it. */}
-      <AddToPlaylistButton
-        variant="form"
-        fuse
-        icon={IconPlus}
-        label=""
-        accent={accent}
-        title="Add to playlist"
-        refs={playlistRef ? [playlistRef] : []}
-      />
-
-      <button
-        type="button"
-        className="candy-btn"
-        data-shape="chip"
-        data-own-press
-        onClick={onEnqueue}
-        title="Add to queue"
-      ><span className="candy-face"><IconSkipMark size={14}/></span></button>
+      ><span className="candy-face" style={videoUrl ? undefined : { color: 'var(--text-faint)' }}><IconCamcorder size={14}/></span></button>
     </div>
   );
 }
@@ -777,6 +817,44 @@ function useTrackVideos(album) {
     return () => { live = false; };
   }, [key, album?.artist, album?.title]); // eslint-disable-line react-hooks/exhaustive-deps
   return videos;
+}
+
+// 12.4M, 34K, 812 (user-picked 2026-09-26); the exact number is the hover.
+const compactPlays = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
+
+// Each song's worldwide play count on Last.fm (the user's own key, Settings >
+// Library > Music), kept the video part's way: the last answer per album sits
+// in localStorage so the numbers show at once, then every song is asked again,
+// one at a time, and repaints as its answer lands. Returns
+// { squash(song title): { playcount, url } }; a song Last.fm doesn't know, or
+// no key, stays absent (a grey dash).
+function useWorldPlays(album) {
+  const key = album ? 'music:worldPlays:' + album.path : null;
+  const [world, setWorld] = useState({});
+  useEffect(() => {
+    let next = {};
+    if (key) try { next = JSON.parse(localStorage.getItem(key)) || {}; } catch {}
+    setWorld(next);
+    if (!key || !album.artist) return;
+    let live = true;
+    (async () => {
+      if (!(await musicApi.lastfmHasApiKey().catch(() => false))) return;
+      for (const t of album.tracks) {
+        const r = await musicApi.lastfmTrackPlays(album.artist, t.title).catch(() => undefined);
+        if (!live) return;
+        if (r === undefined) continue; // no answer this time: keep the saved number
+        next = { ...next };
+        if (r) next[squash(t.title)] = r; else delete next[squash(t.title)];
+        setWorld(next);
+        try { localStorage.setItem(key, JSON.stringify(next)); } catch {}
+        // ponytail: a fixed gap keeps one album under Last.fm's ~5 calls/s; move
+        // it to a shared gate in lastfm.rs if two pages ever ask at once.
+        await new Promise(res => setTimeout(res, 200));
+      }
+    })();
+    return () => { live = false; };
+  }, [key, album?.artist]); // eslint-disable-line react-hooks/exhaustive-deps
+  return world;
 }
 
 function Centered({ children, tone }) {

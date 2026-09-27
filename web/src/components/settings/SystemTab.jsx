@@ -62,6 +62,14 @@ function CreditsSection() {
           This product uses the TMDB API but is not endorsed or certified by TMDB.
         </div>
       </StackedRow>
+      <StackedRow
+        label="Last.fm"
+        hint="Worldwide song play counts on album pages, when you supply your own Last.fm key in Modules > Library > Music > Last.fm."
+      >
+        <div style={{ fontSize: 11.5, lineHeight: 1.6, color: 'var(--text-muted)' }}>
+          Play counts powered by Last.fm.
+        </div>
+      </StackedRow>
     </SectionBand>
   );
 }

@@ -155,7 +155,8 @@ async fn get_json(path: &str, key: &str) -> Result<Value, String> {
         .get(&url)
         .send()
         .await
-        .map_err(|e| format!("tmdb request failed: {e}"))?;
+        // Never print the URL: it carries the key (reqwest's error text appends it).
+        .map_err(|e| format!("tmdb request failed: {}", e.without_url()))?;
     if !resp.status().is_success() {
         // Never include the URL: it carries the key.
         return Err(format!("tmdb answered {}", resp.status()));

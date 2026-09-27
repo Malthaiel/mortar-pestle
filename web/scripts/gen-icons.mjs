@@ -52,10 +52,12 @@ const MAP = {
   IconBell: 'bx-bell', IconTrash: 'bx-trash', IconDownload: 'bx-download', IconSearch: 'bx-search',
   // Non-sidebar / inline
   IconReset: 'bx-reset', IconSkip: 'bx-skip-next',
-  // Boxicons v3 bare marks, all four carried in OVERRIDES — the pack read off
+  // Boxicons v3 icons, all carried in OVERRIDES — the pack read off
   // disk is v2 and has none of them. The names here are their v3 names and are
   // never looked up; an override short-circuits the disk read.
   IconRepeatSolid: 'repeat', IconPlayMark: 'play', IconSkipMark: 'skip-next',
+  IconBookmarkPlus: 'bookmark-plus-alt', IconSwatch: 'swatch', IconCamcorder: 'camcoder',
+  IconEarAlt: 'ear-alt', IconAnnouncement: 'announcement',
   IconListPlus: 'list-plus',
   IconSkipBack: 'bx-skip-previous',
   IconRewind: 'bx-rewind', IconFastForward: 'bx-fast-forward', IconPause: 'bx-pause',
@@ -113,6 +115,7 @@ const SIZES = {
   IconKey: 15, IconLockOpen: 15, IconCopy: 14, IconShield: 15, IconShieldOff: 15,
   IconDot: 14, IconSend: 14,
   IconRepeatSolid: 14, IconPlayMark: 14, IconSkipMark: 14, IconListPlus: 14,
+  IconBookmarkPlus: 14, IconSwatch: 14, IconCamcorder: 14, IconEarAlt: 14, IconAnnouncement: 14,
   IconMinus: 10, IconSquare: 10, IconRestore: 10,
   IconCut: 14, IconPaste: 14, IconSelectAll: 14,
 };
@@ -230,6 +233,33 @@ const OVERRIDES = {
     d: '<path d="M4 11h11v2H4zm0-5h16v2H4zm0 10h8v2H4zm15-3h-2v3h-3v2h3v3h2v-3h3v-2h-3z"/>',
     box: "'0 0 24 24'",
     pack: 'Boxicons v3 list-plus',
+  },
+  // Album song-row parts (2026-09-26), picked live from Boxicons v3 SVGs in
+  // Downloads: playlist, queue, video, own listens, world plays.
+  IconBookmarkPlus: {
+    d: '<path d="M18.5 2h-12C4.57 2 3 3.57 3 5.5V21c0 .35.18.67.47.85s.66.2.97.04l5.55-2.78 5.55 2.78a.997.997 0 0 0 1.45-.89v-8h4c.55 0 1-.45 1-1V5.5c0-1.93-1.57-3.5-3.5-3.5ZM13 11h-2v2H9v-2H7V9h2V7h2v2h2zm7 0h-3V5.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5z"/>',
+    box: "'0 0 24 24'",
+    pack: 'Boxicons v3 bookmark-plus-alt',
+  },
+  IconSwatch: {
+    d: '<path d="M10 5.51V4c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v9.51l1.85-1.85zM18.16 3c-.78-.78-2.05-.78-2.83 0l-8.99 9h11.33l3.34-3.34c.78-.78.78-2.05 0-2.83l-2.84-2.84ZM6 22h14c1.1 0 2-.9 2-2v-4c0-1.1-.9-2-2-2H6c-2.21 0-4 1.79-4 4s1.79 4 4 4m0-5.5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5-1.5-.67-1.5-1.5.67-1.5 1.5-1.5"/>',
+    box: "'0 0 24 24'",
+    pack: 'Boxicons v3 swatch',
+  },
+  IconCamcorder: {
+    d: '<path d="M18 10c0-1.1-.9-2-2-2h-1.43l-2.71-4.51c-.18-.3-.51-.49-.86-.49H5v2h5.43l1.8 3H4c-1.1 0-2 .9-2 2v9c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-3l4 2v-7l-4 2zm-6 7H6v-2h6z"/>',
+    box: "'0 0 24 24'",
+    pack: 'Boxicons v3 camcoder',
+  },
+  IconEarAlt: {
+    d: '<path d="M12 2c-4.41 0-8 3.59-8 8v7c0 2.76 2.24 5 5 5 1.91 0 2.99-1.25 4.25-2.69.45-.51.91-1.04 1.46-1.6.47-.47 1.04-.83 1.63-1.21C18.06 15.41 20 14.17 20 10c0-4.41-3.59-8-8-8m3 8c0-1.65-1.35-3-3-3s-3 1.35-3 3c2.76 0 5 2.24 5 5h-2c0-1.65-1.35-3-3-3v3H7v-5c0-2.76 2.24-5 5-5s5 2.24 5 5z"/>',
+    box: "'0 0 24 24'",
+    pack: 'Boxicons v3 ear-alt',
+  },
+  IconAnnouncement: {
+    d: '<path d="M18.5 10H22v2h-3.5zm.05-1.17 1.5-1 1.5-1L21 6l-.55-.83-1.5 1-1.5 1L18 8zm0 4.34L18 14l-.55.83 1.5 1 1.5 1L21 16l.55-.83-1.5-1zM15 8.18V4c0-.37-.2-.71-.53-.88-.32-.17-.72-.16-1.03.05L7.69 7h-1.7c-2.21 0-4 1.79-4 4 0 1.52.86 2.82 2.1 3.5l1.94 6.77 1.92-.55-1.64-5.73h1.37l5.75 3.83c.17.11.36.17.55.17.16 0 .32-.04.47-.12.33-.17.53-.51.53-.88v-4.18c1.16-.41 2-1.51 2-2.82s-.84-2.4-2-2.82Z"/>',
+    box: "'0 0 24 24'",
+    pack: 'Boxicons v3 announcement',
   },
   IconX: {
     d: '<path fill="currentColor" d="M55.1 73.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L147.2 256 9.9 393.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L192.5 301.3 329.9 438.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L237.8 256 375.1 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L192.5 210.7 55.1 73.4z"/>',

@@ -33,6 +33,11 @@ export const musicApi = {
   cover:               (kind, mbid, size, image) => _api.invoke('music_cover', { kind, mbid, size, image: image ?? null }),
   // Finished listens per logged key, the whole listen log: { trackPath: count }.
   listenCounts:        () => _api.invoke('music_listen_counts'),
+  // Last.fm is the user's own key, kept in the OS keychain (no getter, like TMDb's).
+  // trackPlays → { playcount, url }, or null (no key / song unknown to Last.fm).
+  lastfmSetApiKey:     (key) => _api.invoke('lastfm_set_api_key', { key }),
+  lastfmHasApiKey:     () => _api.invoke('lastfm_has_api_key', {}),
+  lastfmTrackPlays:    (artist, title) => _api.invoke('lastfm_track_plays', { artist, title }),
   // The most-scanned edition's pictures: { releaseMbid, images: [{ id, kind, full }] }.
   releaseArtwork:      (rgMbid) => _api.invoke('music_release_artwork', { rgMbid }),
   // Browse — download engine (script-backed, sequential, background).

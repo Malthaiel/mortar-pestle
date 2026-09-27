@@ -14,10 +14,11 @@
 // rejected token-proxy alternative live in Plans/Spotify Token Proxy.md.)
 // Primitives (SectionBand/Field) copied from VideoSettingsTab per convention.
 
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { Seg } from '@host/components/ui/index.js';
 import { useImportJobs } from '../ImportProvider.jsx';
+import { musicApi } from './api.js';
 import { ModuleSectionBand as SectionBand } from '@host/components/settings/section-primitives.jsx';
 
 const inputStyle = { color: 'var(--text)', padding: '5px 8px', fontSize: 12, outline: 'none', width: '100%' };
@@ -32,7 +33,70 @@ export default function MusicSettingsTab({ accent }) {
     <div style={{ color: 'var(--text)', fontSize: 12 }}>
       <ImportSection accent={accent}/>
       <ExportSection/>
+      <LastfmSection/>
     </div>
+  );
+}
+
+// ── Last.fm key ─────────────────────────────────────────────────────────────
+// Copied from VideoSettingsTab's Film info (TMDb) section: the user's own free
+// key, kept in the OS keychain; the UI only learns whether one is stored. It
+// feeds the worldwide play count on every album song row.
+
+function LastfmSection() {
+  const [has, setHas] = useState(null);
+  const [key, setKey] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const load = useCallback(() => (
+    musicApi.lastfmHasApiKey().then(setHas).catch(() => setHas(false))
+  ), []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const save = async (value) => {
+    setBusy(true); setErr(null);
+    try { await musicApi.lastfmSetApiKey(value); setKey(''); await load(); }
+    catch (e) { setErr(String(e?.message || e) || 'Could not save the key.'); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <SectionBand gap={12} title="Last.fm">
+      <div data-search-anchor="set-music-lastfmKey" style={{ fontSize: 11, color: 'var(--text-2)', lineHeight: 1.5 }}>
+        Album pages show how many times each song has been played worldwide when you add your
+        own free Last.fm key. The key stays on this computer; without one the rows show a dash.
+        {' '}
+        <a href="https://www.last.fm/api/account/create" target="_blank" rel="noreferrer"
+           style={{ color: 'var(--accent)' }}>Make a free Last.fm key</a>, then paste only the API key below.
+      </div>
+      <Field label={has ? 'Last.fm key (stored)' : 'Last.fm key'}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input
+            className="candy-input"
+            type="password"
+            value={key}
+            onChange={e => setKey(e.target.value)}
+            placeholder={has ? 'A key is saved' : 'Not set'}
+            spellCheck={false}
+            style={{ ...inputStyle, flex: 1 }}
+          />
+          <button onClick={() => save(key)} disabled={!key.trim() || busy} className="candy-btn">
+            <span className="candy-face">{busy ? 'Saving' : 'Save'}</span>
+          </button>
+          {has && (
+            <button onClick={() => save('')} disabled={busy} className="candy-btn">
+              <span className="candy-face">Remove</span>
+            </button>
+          )}
+        </div>
+      </Field>
+      <div style={{ fontSize: 10, color: 'var(--text-faint)', lineHeight: 1.5 }}>
+        Play counts powered by Last.fm.
+      </div>
+      {err && <div style={{ fontSize: 11, color: 'var(--text-2)' }}>{err}</div>}
+    </SectionBand>
   );
 }
 
