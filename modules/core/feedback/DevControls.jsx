@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { PrimaryBtn, OutlinedBtn } from '@host/components/ui/Button.jsx';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
-import { IconMessageSquare, IconEye, IconClock, IconWrench, IconCheck, IconX } from '@host/components/icons.jsx';
+import { IconDiscussion, IconEye, IconClock, IconWrench, IconCheck, IconX } from '@host/components/icons.jsx';
 
 // Role-gated dev powers on a post: set roadmap status (the shared
 // CandySelect), pin, hide, and post an official reply. The real gate is RLS
@@ -14,7 +14,7 @@ const HUE = {
   in_progress: 'var(--accent)', done: 'var(--hue-green)', declined: 'var(--error)',
 };
 const ICON = {
-  open: IconMessageSquare, under_review: IconEye, planned: IconClock,
+  open: IconDiscussion, under_review: IconEye, planned: IconClock,
   in_progress: IconWrench, done: IconCheck, declined: IconX,
 };
 

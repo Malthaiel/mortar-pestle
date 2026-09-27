@@ -30,7 +30,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { invoke } from '@tauri-apps/api/core';
 import {
   IconMinus, IconSquare, IconRestore, IconX, IconSettings, IconTrash, IconChart,
-  IconDownload, IconCommand, IconHelp, IconMessageSquare,
+  IconDownload, IconCommand, IconHelp, IconDiscussion,
 } from './icons.jsx';
 import { CircleChip, Badge } from './ui/Button.jsx';
 import { candyCenterOffset } from '../util/candy.js';
@@ -273,7 +273,7 @@ export default function TitleBar({
           <CircleChip title="Feedback" data-tip-desc="Report a bug or ask for something" size={BTN}
             className={feedbackActive ? 'is-active' : ''}
             style={CENTER} onClick={() => sharedEvents.emit('feedback:open', {})}>
-            <IconMessageSquare size={16}/>
+            <IconDiscussion size={16}/>
           </CircleChip>
 
           {/* Help — a query mark, not the keyboard glyph it wore for one

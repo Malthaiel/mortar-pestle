@@ -3,7 +3,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useVideoPlayer } from './VideoPlayerProvider.jsx';
-import { IconVolume, IconPlay, IconPause, IconSkip, IconSkipBack, IconRewind, IconFastForward, IconSettings, IconMaximize, IconRotateCw, IconClock, IconMessageSquare, IconBookOpen } from '@host/components/icons.jsx';
+import { IconVolume, IconPlay, IconPause, IconSkip, IconSkipBack, IconRewind, IconFastForward, IconSettings, IconMaximize, IconRotateCw, IconClock, IconDiscussion, IconBookOpen } from '@host/components/icons.jsx';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
 import SubtitleSettingsPanel from './SubtitleSettingsPanel.jsx';
 
@@ -113,7 +113,7 @@ export default function VideoControls() {
 
         {/* Subtitle track */}
         {v.probe && v.probe.subtitles && v.probe.subtitles.length > 0 && (
-          <CandySelect icon={IconMessageSquare}
+          <CandySelect icon={IconDiscussion}
             value={String(v.subIdx)}
             options={[
               { value: '-1', label: 'Subs off' },

@@ -10,6 +10,6 @@
   "license": "MIT",
   "tier": "core",
   "platforms": ["linux", "windows"],
-  "iconKey": "IconMessageSquare",
+  "iconKey": "IconDiscussion",
   "setupRequired": false
 }
