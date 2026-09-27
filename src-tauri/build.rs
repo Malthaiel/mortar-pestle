@@ -158,6 +158,7 @@ fn main() {
         "music_search_artists",
         "music_search_recordings",
         "music_artist_releasegroups",
+        "music_artist_popularity",
         "music_releasegroup_detail",
         "music_release_personnel",
         "music_release_artwork",

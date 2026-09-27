@@ -25,7 +25,8 @@ export const musicApi = {
   searchYoutube:       (query, limit) => _api.invoke('music_search_youtube', { query, limit: limit ?? null }),
   // Local track-title search across every album page's tracklist.
   searchTracks:        (query, limit) => _api.invoke('music_search_tracks', { query, limit: limit ?? null }),
-  artistReleaseGroups: (artistMbid) => _api.invoke('music_artist_releasegroups', { artistMbid }),
+  artistReleaseGroups: (artistMbid, singles) => _api.invoke('music_artist_releasegroups', { artistMbid, singles: singles ?? null }),
+  artistPopularity:    (artistMbid) => _api.invoke('music_artist_popularity', { artistMbid }),
   releaseGroupDetail:  (rgMbid) => _api.invoke('music_releasegroup_detail', { rgMbid }),
   releasePersonnel:    (rgMbid) => _api.invoke('music_release_personnel', { rgMbid }),
   // Cover Art Archive thumbnail saved to disk once → local path, or null (none).

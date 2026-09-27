@@ -80,6 +80,25 @@ export function resolveDot(map, value, accent) {
   return map[value] === null ? accent : map[value];
 }
 
+// Album card -> player queue items (playAlbumTracks), shared with the album
+// page, which hands the same items to usePrefetchStreams so the links it
+// fetches ahead are keyed exactly as the player will ask for them.
+export function albumToQueueItems(album) {
+  return album.tracks.map(t => ({
+    albumPath:  album.path,
+    albumTitle: album.title,
+    albumImage: album.image,
+    artist:     album.artist,
+    n:          t.n,
+    title:      t.title,
+    audioPath:  t.audioPath,
+    available:  t.available,
+    streamable: !t.available,
+    wikilink:   t.wikilink,
+    duration:   t.duration,
+  }));
+}
+
 // PlaylistTrack -> player queue item. Each track keeps its own album cover/artist
 // (playlists span albums), which is why playback uses playTracks, not
 // playAlbumTracks. Lives here rather than in PlaylistDetail because the player's
@@ -101,8 +120,9 @@ export function trackToQueueItem(t, pl) {
     streamable: !!t.watchUrl || (!t.available && !!t.albumPath && t.n != null),
     // A playlist row's n is its place in the PLAYLIST, not the album's track
     // number, so the album-card resolve (albumPath + n) would fetch the wrong
-    // song. A row not on disk streams by artist + title instead: streamKey
-    // names it and routes streamResolveArgs to that branch.
+    // song. A row not on disk streams by album card + TITLE instead (Rust finds
+    // the album's n, else searches): streamKey names it and routes
+    // streamResolveArgs to that branch.
     streamKey: !t.available && !t.watchUrl ? `${t.albumPath}|${t.title}` : null,
     watchUrl: t.watchUrl || null,
     wikilink: t.wikilink || null,

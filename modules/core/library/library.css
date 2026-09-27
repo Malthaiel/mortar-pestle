@@ -575,3 +575,12 @@
   inset: 0;
   background: color-mix(in oklch, var(--surface), transparent 45%);
 }
+
+/* Album track row: the number turns into a play mark only where the hover's
+ * red has reached. liquidHover.js paints a lit COPY of the row, revealed in a
+ * growing circle, and marks it [data-dock-hover]; swapping the two there means
+ * the mark appears exactly under the liquid, with no timing of its own. :hover
+ * covers the instant hover (Animations off), where no copy is made. */
+.track-n-play { visibility: hidden; }
+.candy-btn:is(:hover, [data-dock-hover]) .track-n-play { visibility: visible; }
+.candy-btn:is(:hover, [data-dock-hover]) .track-n-num { visibility: hidden; }

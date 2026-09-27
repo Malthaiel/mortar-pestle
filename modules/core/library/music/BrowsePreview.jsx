@@ -10,6 +10,7 @@ import { musicApi, useCaaCover } from './api.js';
 import { coverSrc } from './util.js';
 import { useDownloads } from './DownloadProvider.jsx';
 import { useMusicPlayer } from './MusicPlayerProvider.jsx';
+import { usePrefetchStreams } from './streamCache.js';
 import { AddToLibraryButton } from '../QuickAdd.jsx';
 
 const CAA = 'https://coverartarchive.org';
@@ -164,6 +165,8 @@ export default function BrowsePreview({ result, accent, onBack, libraryEntry }) 
     streamKey:  `${detail.releaseGroupMbid}|${t.disc}|${t.position}`,
     duration:   t.lengthMs != null ? Math.round(t.lengthMs / 1000) : null,
   }));
+  // Links fetched ahead (first 30), so a click plays at once (user-directed 2026-09-26).
+  usePrefetchStreams(queueItems());
 
   // Button reflects, in priority: an in-session job → the library state
   // (in-library / repair) → a fresh download.

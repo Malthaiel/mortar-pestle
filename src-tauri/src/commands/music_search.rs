@@ -16,7 +16,7 @@
 //! screens re-read live. Everything else (`Fresh::Week`) is trusted 7 days, then
 //! refreshed in the background the same way, silently.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
@@ -442,21 +442,76 @@ pub async fn music_search_recordings(query: String) -> Result<Vec<RecordingHit>,
 #[tauri::command]
 pub async fn music_artist_releasegroups(
     artist_mbid: String,
+    singles: Option<bool>,
 ) -> Result<Vec<ReleaseGroupHit>, VaultError> {
     let id = artist_mbid.trim();
     if id.is_empty() {
         return Ok(Vec::new());
     }
-    // Browse request: all album + EP release-groups for this artist. `%7C` is a
+    // Browse request: all album + EP release-groups for this artist, plus
+    // singles when asked (the album page's Discography tab). `%7C` is a
     // URL-encoded pipe — MusicBrainz reads `type=album|ep` as a union filter.
-    let url = format!(
-        "{MB_BASE}/release-group?artist={}&type=album%7Cep&fmt=json&limit=100",
+    let singles = singles.unwrap_or(false);
+    let types = if singles { "album%7Cep%7Csingle" } else { "album%7Cep" };
+    let base = format!(
+        "{MB_BASE}/release-group?artist={}&type={types}&fmt=json&limit=100",
         urlencoding::encode(id)
     );
-    let mut hits = parse_release_groups(&mb_get(&url, Fresh::Live).await?);
+    // A browse answers at most 100; with singles, page on to MusicBrainz's own
+    // count (Deftones: 114). The first page keeps the plain URL, so saved
+    // answers from before paging still hit.
+    // ponytail: albums + EPs alone still stop at 100, as they always have.
+    let mut hits = Vec::new();
+    let mut seen = 0;
+    loop {
+        let url = if seen == 0 { base.clone() } else { format!("{base}&offset={seen}") };
+        let v = mb_get(&url, Fresh::Live).await?;
+        let got = v.get("release-groups").and_then(|x| x.as_array()).map_or(0, |a| a.len());
+        let total = v.get("release-group-count").and_then(|x| x.as_u64()).unwrap_or(0) as usize;
+        hits.extend(parse_release_groups(&v));
+        seen += got;
+        if !singles || got == 0 || seen >= total {
+            break;
+        }
+    }
     // Newest first; undated last.
     hits.sort_by(|a, b| b.year.unwrap_or(0).cmp(&a.year.unwrap_or(0)));
     Ok(hits)
+}
+
+/// How many times each of an artist's release groups has been played on
+/// ListenBrainz (MusicBrainz's sister site, keyed by the same MBIDs, no key
+/// needed): { release-group MBID: total listens }. A group nobody has played is
+/// absent. Sorts the album page's Discography tab.
+// ponytail: rides mb_get for its saved answer + live re-check, so it also waits
+// on MusicBrainz's 1 req/s gate and saves ListenBrainz's whole ~170 KB answer
+// per artist; give it its own client and a trimmed store if either bites.
+#[tauri::command]
+pub async fn music_artist_popularity(
+    artist_mbid: String,
+) -> Result<HashMap<String, u64>, VaultError> {
+    let id = artist_mbid.trim();
+    if id.is_empty() {
+        return Ok(HashMap::new());
+    }
+    let url = format!(
+        "https://api.listenbrainz.org/1/popularity/top-release-groups-for-artist/{}",
+        urlencoding::encode(id)
+    );
+    Ok(parse_popularity(&mb_get(&url, Fresh::Live).await?))
+}
+
+fn parse_popularity(v: &serde_json::Value) -> HashMap<String, u64> {
+    v.as_array()
+        .map(|rows| {
+            rows.iter()
+                .filter_map(|r| {
+                    let id = r.get("release_group_mbid")?.as_str()?.to_string();
+                    Some((id, r.get("total_listen_count")?.as_u64()?))
+                })
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 #[derive(Debug, Serialize)]
@@ -681,6 +736,23 @@ fn art_images(listing: &serde_json::Value) -> Vec<ArtImage> {
             Some(ArtImage { id, kind, full })
         })
         .collect()
+}
+
+#[cfg(test)]
+mod popularity_tests {
+    #[test]
+    fn maps_each_group_to_its_listens_and_skips_broken_rows() {
+        let v = serde_json::json!([
+            { "release_group_mbid": "a", "total_listen_count": 5890165 },
+            { "release_group_mbid": "b", "total_listen_count": 12 },
+            { "total_listen_count": 3 },
+            { "release_group_mbid": "c" } ]);
+        let p = super::parse_popularity(&v);
+        assert_eq!(p.len(), 2);
+        assert_eq!(p["a"], 5890165);
+        assert_eq!(p["b"], 12);
+        assert!(super::parse_popularity(&serde_json::json!({ "error": "x" })).is_empty());
+    }
 }
 
 #[cfg(test)]

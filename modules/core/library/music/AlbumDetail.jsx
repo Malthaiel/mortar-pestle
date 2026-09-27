@@ -6,15 +6,16 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { musicApi, useMbRefreshTick, useCaaCover } from './api.js';
 import { useMusicPlayer } from './MusicPlayerProvider.jsx';
-import { IconPlay, IconStar, IconSwatch, IconBookmarkPlus, IconDownload, IconMusic, IconUsers, IconCamcorder, IconEarAlt, IconAnnouncement } from '@host/components/icons.jsx';
+import { IconPlay, IconStar, IconTrophyStar, IconMedalStar, IconRadio, IconSwatch, IconBookmarkPlus, IconDownload, IconMusic, IconGroup, IconCopyPlus, IconCamcorder, IconEarAlt, IconAnnouncement } from '@host/components/icons.jsx';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
 import { statusLabel, STATUS_ICON } from '@host/util/media-status.js';
 import { libraryAbs } from '@host/api.js';
-import { coverSrc, STATUS_DOT_COLOR, resolveDot, toBrowse, TILE_MIN } from './util.js';
+import { coverSrc, STATUS_DOT_COLOR, resolveDot, toBrowse, TILE_MIN, albumToQueueItems } from './util.js';
+import { usePrefetchStreams } from './streamCache.js';
 import AddToPlaylistButton from './AddToPlaylistButton.jsx';
 import { useAddToPlaylistMenu } from './useAddToPlaylistMenu.jsx';
 import { refFromQueueItem } from './PlaylistProvider.jsx';
-import MusicCredits, { AlbumPerformers } from './MusicCredits.jsx';
+import { AlbumPerformers, ArtistAlbums } from './MusicCredits.jsx';
 import { usePersistedState } from '@host/components/vault-tree/useTreeExpansion.js';
 import { useDownloads } from './DownloadProvider.jsx';
 import { consumeTrackHighlight, fmtDuration } from './searchShared.jsx';
@@ -41,8 +42,11 @@ const LISTEN_STATUSES = ['Plan-to-Listen', 'Currently-Listening', 'Listened', 'D
 // Releases and Artwork tabs were built and removed the same day (user-directed);
 // the artwork moved into the sleeve's own viewer.
 // A Plays tab went the same way: each song's count is a part of its own row.
-const ALBUM_TABS = ['Tracks', 'Credits'];
-const TAB_ICON = { Tracks: IconMusic, Credits: IconUsers };
+// Discography is the artist's other records, moved up from the "More from"
+// rail under the header (user-directed 2026-09-26, named over "Albums"),
+// second in the strip (user-directed the same day).
+const ALBUM_TABS = ['Tracks', 'Discography', 'Credits'];
+const TAB_ICON = { Tracks: IconMusic, Credits: IconGroup, Discography: IconRadio };
 
 // The photo rides the fact line, so it is sized to that line: an even number of
 // pixels, so the circle has no half-pixel edge.
@@ -148,6 +152,9 @@ export default function AlbumDetail({ accent, albumPath }) {
   const lb = useLightbox();
   const art = useAlbumArtwork(lb.open ? album?.providerId : null);
   const plays = usePlayCounts();
+  // Not-downloaded tracks get their links ahead (first 30), so Play is instant.
+  // ponytail: no scroll watch here, an album past 30 tracks is rare.
+  usePrefetchStreams(album ? albumToQueueItems(album) : []);
 
   const coverImgSrc = album ? coverSrc(album.image, 400, { library: true }) : null;
 
@@ -393,21 +400,7 @@ export default function AlbumDetail({ accent, albumPath }) {
               hairline between them is gone here (user-directed 2026-09-26). */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', paddingBottom: 14 }}>
-          <div className="candy-split" style={{ '--accent': accent || 'var(--accent)', '--cbtn-size': ROW_H }}>
-            {ALBUM_TABS.map(t => {
-              const Icon = TAB_ICON[t];
-              return (
-                <button
-                  key={t}
-                  type="button"
-                  data-own-press
-                  data-shape="chip"
-                  className={'candy-btn' + (t === active ? ' is-active' : '')}
-                  onClick={() => setTab(t)}
-                ><span className="candy-face"><Icon size={14}/>{t}</span></button>
-              );
-            })}
-          </div>
+          {/* The action run leads, the tabs follow it (user-directed 2026-09-26). */}
           <div className="candy-split" style={{
             position: 'relative', '--cbtn-size': ROW_H,
           }}>
@@ -420,6 +413,20 @@ export default function AlbumDetail({ accent, albumPath }) {
               data-own-press
               onClick={playAll}
             ><span className="candy-face"><IconPlay size={14}/>Play</span></button>
+
+            {/* Icon only, right after Play (user-directed 2026-09-26); the
+                job's state (Queued, Downloading 3/11, Failed) is its tooltip,
+                plus a bare 3/11 count on the face while it downloads. */}
+            {album.providerId && (missing > 0 || dlJob) && (
+              <button
+                className="candy-btn"
+                data-shape="chip"
+                data-own-press
+                onClick={startDownload}
+                disabled={dlBusy}
+                title={dlJob ? dlLabel : playable.length > 0 ? `Download the ${missing} missing track${missing === 1 ? '' : 's'}` : 'Download this album'}
+              ><span className="candy-face"><IconDownload size={14}/>{dlJob?.state === 'downloading' && `${dlJob.trackIndex || 0}/${dlJob.trackTotal || '?'}`}</span></button>
+            )}
 
             <CandySelect
               value={album.status || ''}
@@ -434,14 +441,15 @@ export default function AlbumDetail({ accent, albumPath }) {
             />
 
             {/* The film's rating control, 1-1: re-picking the current value
-                clears it, exactly as the dot strip did. */}
+                clears it, exactly as the dot strip did. 10 and 9 wear a
+                trophy and a medal, the rest the star (user-directed 2026-09-26). */}
             <CandySelect icon={IconStar}
               value={album.personalRating ? String(album.personalRating) : ''}
               accent={accent}
               fuse shape="chip"
               title="Your rating out of 10"
               placeholder="Rate"
-              options={Array.from({ length: 10 }, (_, n) => ({ value: String(10 - n), label: String(10 - n), dot: accent }))}
+              options={Array.from({ length: 10 }, (_, n) => ({ value: String(10 - n), label: String(10 - n), dot: accent, icon: [IconTrophyStar, IconMedalStar][n] }))}
               clearable
               disabled={busy}
               onChange={(v) => {
@@ -456,17 +464,6 @@ export default function AlbumDetail({ accent, albumPath }) {
                   .catch(err => alert('Rating failed: ' + err.message));
               }}
             />
-
-            {album.providerId && (missing > 0 || dlJob) && (
-              <button
-                className="candy-btn"
-                data-shape="chip"
-                data-own-press
-                onClick={startDownload}
-                disabled={dlBusy}
-                title={playable.length > 0 ? `Download the ${missing} missing track${missing === 1 ? '' : 's'}` : 'Download this album'}
-              ><span className="candy-face"><IconDownload size={14}/>{dlLabel}</span></button>
-            )}
 
             {/* Add to Queue / Playlist, Reveal and Delete live in here, as Uninstall does on a film --
                 the run stays short enough to fit the reading measure. */}
@@ -495,7 +492,27 @@ export default function AlbumDetail({ accent, albumPath }) {
                 items.push({ label: 'Delete album', onClick: onDelete });
                 openContextMenu({ x: r.left, y: r.bottom + 4 }, items, { accent });
               }}
-            ><span className="candy-face">⋯</span></button>
+            >{/* The swatch, not a ⋯ (user-directed 2026-09-26). */}
+              <span className="candy-face"><IconSwatch size={14}/></span></button>
+          </div>
+          <div className="candy-split" style={{ '--accent': accent || 'var(--accent)', '--cbtn-size': ROW_H }}>
+            {ALBUM_TABS.map(t => {
+              const Icon = TAB_ICON[t];
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  data-own-press
+                  data-shape="chip"
+                  className={'candy-btn' + (t === active ? ' is-active' : '')}
+                  onClick={() => setTab(t)}
+                  title={t}
+                  aria-label={t}
+                >{/* Icons only, the name is the tooltip (user-directed
+                    2026-09-26) so the tabs share one line with the actions. */}
+                  <span className="candy-face"><Icon size={14}/></span></button>
+              );
+            })}
           </div>
           </div>
 
@@ -509,6 +526,11 @@ export default function AlbumDetail({ accent, albumPath }) {
               Each row fills the column's width (uncapped, user-directed 2026-09-26). */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {active === 'Credits' && <AlbumPerformers album={album} accent={accent} />}
+        {/* Mounted with the page and only hidden, so switching tabs shows the
+            last answer at once instead of re-asking and re-painting the covers
+            (filmed 2026-09-26: a remount flashed "Loading albums" and blank
+            tiles on every visit). */}
+        <div hidden={active !== 'Discography'}><ArtistAlbums album={album} accent={accent} /></div>
         {active === 'Tracks' && (() => {
           const groups = new Map();
           album.tracks.forEach((t, idx) => {
@@ -540,8 +562,6 @@ export default function AlbumDetail({ accent, albumPath }) {
         </div>
         </div>
       </div>
-
-      <MusicCredits album={album} accent={accent} />
 
       <ArtworkViewer lb={lb} art={art} accent={accent || 'var(--accent)'} />
       {songMenu.modalEl}
@@ -588,9 +608,17 @@ function TrackRow({ track, plays, playsDigits, accent, playing, highlighted, onP
         style={{ flex: 1, minWidth: 0 }}
       >
         <span className="candy-face" style={{ width: '100%', justifyContent: 'flex-start' }}>
-          <span style={{
+          {/* The number turns into ▶ only where the hover's red has reached:
+              the lit copy liquidHover.js clones wears [data-dock-hover], and
+              library.css swaps the two there (user-directed 2026-09-26). Both
+              share one grid cell, so the swap never shifts the name. */}
+          <span className="track-n" style={{
             flexShrink: 0, fontVariantNumeric: 'tabular-nums', opacity: 0.7,
-          }}>{playing ? '▶' : String(track.n).padStart(2, '0')}</span>
+            display: 'inline-grid', justifyItems: 'center',
+          }}>{playing ? '▶' : <>
+            <span className="track-n-num" style={{ gridArea: '1 / 1' }}>{String(track.n).padStart(2, '0')}</span>
+            <span className="track-n-play" style={{ gridArea: '1 / 1' }}>▶</span>
+          </>}</span>
 
           <span style={{
             flex: 1, minWidth: 0, textAlign: 'left',
@@ -660,7 +688,7 @@ function TrackRow({ track, plays, playsDigits, accent, playing, highlighted, onP
         data-own-press
         onClick={onEnqueue}
         title="Add to queue"
-      ><span className="candy-face"><IconSwatch size={14}/></span></button>
+      ><span className="candy-face"><IconCopyPlus size={14}/></span></button>
 
       {/* On every song, so the parts line up down the list;
           greyed and inert when the song has no music video (user-directed

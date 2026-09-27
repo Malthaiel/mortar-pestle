@@ -275,6 +275,17 @@ pub async fn music_stream_resolve(
         return run_resolve_cmd(cmd).await;
     }
 
+    // A playlist row names its album card and title but not the album's track
+    // number (its n is the playlist position): find n by title, so it takes the
+    // card path below (remembered watch URL, no search). No card, or no title
+    // match, falls through to the search.
+    let n = n.or_else(|| {
+        let (ap, tt) = (album_path.as_deref()?, track_title.as_deref()?.trim());
+        let album = crate::parsers::albums::read_album(ap).ok()?;
+        album.tracks.iter().find(|t| t.title.trim().eq_ignore_ascii_case(tt)).map(|t| t.n)
+    });
+    let album_path = album_path.filter(|_| n.is_some());
+
     // No album card on disk — a Browse-preview track, which exists only as
     // MusicBrainz metadata. Hand the script the search inputs directly; there's
     // no page to read a cached watch URL from or to write one back to.

@@ -1,11 +1,8 @@
-// Credits for one album. The default export mounts below the album header in
-// AlbumDetail and is now only "More from this artist" (the artist's MusicBrainz
-// discography; owned ones link to the library detail, the rest seed a Browse
-// search). Performers moved into the header's tab strip (AlbumPerformers
-// below); Related and the Release details tab were deleted, all
+// Two of the album page's header tabs: Discography (ArtistAlbums) and Credits
+// (AlbumPerformers). Related and the Release details tab were deleted, all
 // user-directed 2026-09-26.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { musicApi, useMbRefreshTick } from './api.js';
 import BrowseResultCard from './BrowseResultCard.jsx';
 import PosterRow from '@modules/core/library/PosterRow.jsx';
@@ -15,14 +12,21 @@ import { toBrowse } from './util.js';
 
 const toAlbum = (path) => go('/tools/library/music/downloaded/' + encodePath(path));
 
+const NOTE_STYLE = { fontSize: 11, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)' };
 
-export default function MusicCredits({ album, accent }) {
+// The Discography tab: the artist's other albums, EPs and singles (their
+// MusicBrainz discography), most played first, in a sliding row two covers
+// tall (user-directed 2026-09-26).
+// Owned ones open the library page, the rest seed a Browse search. It was a
+// "More from" rail under the header until it became a tab (user-directed
+// 2026-09-26).
+export function ArtistAlbums({ album, accent }) {
   const artist = album?.artist || '';
   const selfId = album?.providerId || null;
 
   const [library, setLibrary] = useState([]);    // owned albums (for the owned map)
   const [discography, setDiscography] = useState(null); // artist's MB release groups
-  const [moreExpanded, setMoreExpanded] = useState(false);
+  const [all, setAll] = useState(false);          // Show All pressed
   const reqId = useRef(0);
 
   useEffect(() => {
@@ -36,7 +40,7 @@ export default function MusicCredits({ album, accent }) {
   // releases bumps mbTick and the row re-reads in place (blanked only when the
   // artist itself changes).
   const mbTick = useMbRefreshTick();
-  useEffect(() => { setDiscography(null); }, [artist]);
+  useEffect(() => { setDiscography(null); setAll(false); }, [artist]);
   useEffect(() => {
     if (!artist) { setDiscography([]); return; }
     const my = ++reqId.current;
@@ -45,8 +49,15 @@ export default function MusicCredits({ album, accent }) {
         const hits = await musicApi.searchArtists(artist);
         const mbid = hits && hits[0] && hits[0].mbid;
         if (!mbid) { if (my === reqId.current) setDiscography([]); return; }
-        const rgs = await musicApi.artistReleaseGroups(mbid);
-        if (my === reqId.current) setDiscography(rgs || []);
+        const [rgs, listens] = await Promise.all([
+          musicApi.artistReleaseGroups(mbid, true),
+          musicApi.artistPopularity(mbid).catch(() => ({})),
+        ]);
+        // Most played first (ListenBrainz listens, user-directed 2026-09-26).
+        // The sort is stable, so records nobody has played keep MusicBrainz's
+        // newest-first order after them.
+        const plays = (r) => listens[r.mbid] || 0;
+        if (my === reqId.current) setDiscography([...(rgs || [])].sort((a, b) => plays(b) - plays(a)));
       } catch {
         if (my === reqId.current) setDiscography([]);
       }
@@ -60,44 +71,85 @@ export default function MusicCredits({ album, accent }) {
   }, [library]);
 
   const more = useMemo(
-    () => (discography || []).filter(r => r.mbid && r.mbid !== selfId),
+    // No live recordings: official or not, they crowd the studio records out
+    // of the most-played top (user-directed 2026-09-26).
+    () => (discography || []).filter(r => r.mbid && r.mbid !== selfId && !r.secondaryTypes?.includes('Live')),
     [discography, selfId],
   );
-  // The rail renders the first MORE_CAP; "See All" expands to the full grid
-  // in place (AnimeCredits' Staff pattern). User-directed 2026-09-26.
-  const MORE_CAP = 10;
-  const shownMore = moreExpanded ? more : more.slice(0, MORE_CAP);
+  const boxRef = useRef(null);
+  const col = useFitColumn(boxRef, SLIDER_ROWS, more.length > 0);
 
-  if (!album || more.length === 0) return null;
+  if (discography === null) return <div style={NOTE_STYLE}>Loading albums</div>;
+  if (more.length === 0) return <div style={NOTE_STYLE}>No other albums found</div>;
 
   return (
-    // .film-below (library.css) = the header's own column: its side gutter and
-    // centred measure, so the row's edges line up with the sleeve and the
-    // tracklist at every pane width (user-directed 2026-09-26).
-    <div className="film-below" style={{ paddingTop: 22, paddingBottom: 8 }}>
-      <PosterRow
-        title={`More from ${artist}`}
-        accent={accent}
-        colWidth={150}
-        layout={moreExpanded ? 'grid' : 'row'}
-        seeAllLabel={moreExpanded ? 'Show Less ↑' : 'See All →'}
-        onSeeAll={more.length > MORE_CAP ? () => setMoreExpanded(e => !e) : undefined}
-      >
-        {shownMore.map(r => {
-          const ownedPath = ownedByProvider.get(r.mbid);
-          return (
-            <BrowseResultCard
-              key={r.mbid}
-              result={r}
-              accent={accent}
-              inLibrary={!!ownedPath}
-              onSelect={() => ownedPath ? toAlbum(ownedPath) : toBrowse(`${r.title} ${artist}`.trim())}
-            />
-          );
-        })}
-      </PosterRow>
+    <div ref={boxRef}>
+    <PosterRow accent={accent} colWidth={col} rows={SLIDER_ROWS} arrows={false}>
+      {(all ? more : more.slice(0, SLIDER_CAP)).map(r => {
+        const ownedPath = ownedByProvider.get(r.mbid);
+        return (
+          <BrowseResultCard
+            key={r.mbid}
+            result={r}
+            accent={accent}
+            inLibrary={!!ownedPath}
+            onSelect={() => ownedPath ? toAlbum(ownedPath) : toBrowse(`${r.title} ${artist}`.trim())}
+          />
+        );
+      })}
+      {/* The app's See All chip (MusicHome), as the slider's last column,
+          both rows tall (user-directed 2026-09-26). */}
+      {!all && more.length > SLIDER_CAP && (
+        <div style={{ gridRow: `span ${SLIDER_ROWS}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <button onClick={() => setAll(true)} data-own-press
+                  className="candy-btn" data-shape="chip" style={{ '--accent': accent || 'var(--accent)' }}>
+            <span className="candy-face" style={{ fontSize: 11 }}>Show All</span>
+          </button>
+        </div>
+      )}
+    </PosterRow>
     </div>
   );
+}
+
+const SLIDER_ROWS = 2;
+const SLIDER_CAP = 12; // before Show All (user-picked 2026-09-26, 18 then 12)
+// The old rail's cover width is the ceiling; the floor only stops a very short
+// window from shrinking covers to nothing.
+const COL_MAX = 150;
+const COL_MIN = 60;
+
+// The covers' width, sized so the page never scrolls down past the slider
+// (user-directed 2026-09-26). Read off the live page each time the pane or the
+// slider changes size: how far the page's content runs past the scroller's
+// bottom (negative = room to spare). A cover is square and as wide as its
+// column, so the slider grows exactly `rows` px per px of column: that
+// overrun / rows is the width to give back (or take).
+// ponytail: assumes the album header is the scroller's only in-flow child that
+// holds the slider; measure the scroller's content box if a sibling ever lands.
+function useFitColumn(boxRef, rows, ready) {
+  const [col, setCol] = useState(COL_MAX);
+  useLayoutEffect(() => {
+    const box = boxRef.current;
+    if (!ready || !box) return;
+    let scroller = box.parentElement;
+    while (scroller && !/auto|scroll/.test(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement;
+    const page = scroller && [...scroller.children].find(ch => ch.contains(box));
+    if (!page) return;
+    const fit = () => {
+      // Hidden (another tab is showing): there is no slider to fit, and the
+      // page's height belongs to that tab. The box's own resize on show refits.
+      if (!box.offsetParent) return;
+      const over = page.getBoundingClientRect().bottom + scroller.scrollTop - scroller.getBoundingClientRect().bottom;
+      setCol(c => Math.max(COL_MIN, Math.min(COL_MAX, Math.floor(c - over / rows))));
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(scroller);
+    ro.observe(box);
+    return () => ro.disconnect();
+  }, [boxRef, rows, ready]);
+  return col;
 }
 
 // The Performers tab: release-level credits from MusicBrainz

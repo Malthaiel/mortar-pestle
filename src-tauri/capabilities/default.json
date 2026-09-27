@@ -179,6 +179,7 @@
     "allow-music-search-artists",
     "allow-music-search-recordings",
     "allow-music-artist-releasegroups",
+    "allow-music-artist-popularity",
     "allow-music-releasegroup-detail",
     "allow-music-release-personnel",
     "allow-music-release-artwork",

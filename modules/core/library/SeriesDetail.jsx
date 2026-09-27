@@ -11,7 +11,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { videoApi } from './api.js';
 import { useVideoPlayer } from './VideoPlayerProvider.jsx';
 import EpisodeRow from './EpisodeRow.jsx';
-import { IconFolder, IconDownload, IconPlay, IconStar } from '@host/components/icons.jsx';
+import { IconFolder, IconDownload, IconPlay, IconStar, IconTrophyStar, IconMedalStar, IconSwatch } from '@host/components/icons.jsx';
 import { coverSrc, STATUS_DOT_COLOR, DOWNLOAD_DOT_COLOR, resolveDot } from './util.js';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
 import { statusLabel, STATUS_ICON } from '@host/util/media-status.js';
@@ -498,7 +498,9 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
               }}
             />
             {/* Rating as a peer of the status chip. The values are the schema
-                numbers; re-picking the current one clears it, as the dot strip did. */}
+                numbers; re-picking the current one clears it, as the dot strip did.
+                10 and 9 wear a trophy and a medal, the rest the star
+                (user-directed 2026-09-26; the album's copy matches). */}
             {isMovie && (
               <CandySelect icon={IconStar}
                 value={series.personalRating ? String(series.personalRating) : ''}
@@ -506,7 +508,7 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
                 fuse shape="chip"
                 title="Your rating out of 10"
                 placeholder="Rate"
-                options={Array.from({ length: 10 }, (_, n) => ({ value: String(10 - n), label: String(10 - n), dot: accent }))}
+                options={Array.from({ length: 10 }, (_, n) => ({ value: String(10 - n), label: String(10 - n), dot: accent, icon: [IconTrophyStar, IconMedalStar][n] }))}
                 clearable
                 onChange={(v) => {
                   const r = Number(v) || 0;
@@ -547,7 +549,8 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
                 if (items.length === 0) return;
                 openContextMenu({ x: r.left, y: r.bottom + 4 }, items, { accent });
               }}>
-              <span className="candy-face">⋯</span>
+              {/* The swatch, not a ⋯ (user-directed 2026-09-26; the album's copy matches). */}
+              <span className="candy-face"><IconSwatch size={14}/></span>
             </button>
             </div>
             {!isMovie && (

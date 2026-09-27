@@ -6,7 +6,8 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { mediaUrl, mediaHttpUrl, streamHttpUrl, awaitMediaBaseUrl, invoke } from '@host/api.js';
 import { musicApi } from './api.js';
-import { trackToQueueItem } from './util.js';
+import { trackToQueueItem, albumToQueueItems } from './util.js';
+import { streamKeyOf, resolveStream, hasStream, dropStream, prefetchStreams } from './streamCache.js';
 
 const Ctx = createContext(null);
 
@@ -167,28 +168,18 @@ export function MusicPlayerProvider({ children }) {
 
   // ── Streaming (not-downloaded tracks) ────────────────────────────────────
   // A queue item with no audio on disk but album metadata (`streamable`) plays
-  // via a fresh googlevideo URL from `music_stream_resolve` — resolved per
-  // play, never persisted (the URLs are IP + time-bound). Resolve failures are
-  // remembered for the session so skip logic walks past them.
+  // via a googlevideo URL from `music_stream_resolve`, held in memory until it
+  // expires and usually fetched before the click (streamCache.js). Resolve
+  // failures are remembered for the session so skip logic walks past them.
   const failedStreamsRef = useRef(new Set());
   const [resolvingStream, setResolvingStream] = useState(false);
   const resolveSeqRef = useRef(0);
   const streamSrcKeyRef = useRef(null); // stream key currently loaded in <audio>
-  // Loose YouTube hits carry no album card, so albumPath|n would be "null|null"
-  // for every one of them — key those by their watch URL instead.
-  // A Browse-preview track has no album card either, so albumPath|n would be
-  // "null|3" for every one of them too — those carry their own streamKey.
-  const streamKeyOf = (t) => (t ? (t.watchUrl || t.streamKey || `${t.albumPath}|${t.n}`) : '');
-
-  // Which shape `music_stream_resolve` gets: an exact YouTube upload, a library
-  // album card (cached watch URL + writeback), or bare MusicBrainz metadata.
-  // A streamKey means n is not the album's track number (Browse preview,
-  // playlist rows), so those always take the metadata branch.
-  const streamResolveArgs = (t) =>
-    t.watchUrl ? { watchUrl: t.watchUrl }
-      : t.albumPath && !t.streamKey ? { albumPath: t.albumPath, n: t.n }
-        : { artist: t.artist, albumTitle: t.albumTitle, trackTitle: t.title,
-            durationSec: t.duration || 0 };
+  // The loaded link came from the cache, so a load failure may just mean it went
+  // stale (network change): onError drops it and bumps streamRetry for one
+  // fresh resolve instead of toasting.
+  const streamFromCacheRef = useRef(false);
+  const [streamRetry, setStreamRetry] = useState(0);
   const isPlayable = (t) =>
     !!t && (t.available || (t.streamable && !failedStreamsRef.current.has(streamKeyOf(t))));
 
@@ -231,6 +222,15 @@ export function MusicPlayerProvider({ children }) {
       // own teardown talking, not a failed track, and toasting it named a song
       // that had just played fine (user-reported 2026-09-16).
       if (!a.getAttribute('src') && !a.currentSrc) return;
+      // A remembered stream link that no longer loads (network changed, died
+      // early): forget it and fetch a fresh one, once, before calling it failed.
+      if (streamFromCacheRef.current && currentTrack?.streamable && !currentTrack.audioPath) {
+        streamFromCacheRef.current = false;
+        dropStream(currentTrack);
+        streamSrcKeyRef.current = null;
+        setStreamRetry(n => n + 1);
+        return;
+      }
       const err = a.error;
       const codeMap = { 1: 'aborted', 2: 'network', 3: 'decode', 4: 'src not supported' };
       const cls = codeMap[err?.code] || `code ${err?.code}`;
@@ -411,8 +411,9 @@ export function MusicPlayerProvider({ children }) {
         return;
       }
       const seq = ++resolveSeqRef.current;
-      setResolvingStream(true);
-      invoke('music_stream_resolve', streamResolveArgs(currentTrack))
+      const ready = hasStream(currentTrack);
+      if (!ready) setResolvingStream(true); // a waiting link plays with no "Finding track" flash
+      resolveStream(currentTrack)
         .then(async res => {
           if (seq !== resolveSeqRef.current) return; // track changed mid-resolve
           // googlevideo sends no Access-Control-Allow-Origin, so the URL can't be
@@ -425,6 +426,7 @@ export function MusicPlayerProvider({ children }) {
           const want = streamHttpUrl(res.streamUrl) || res.streamUrl;
           setResolvingStream(false);
           streamSrcKeyRef.current = key;
+          streamFromCacheRef.current = ready;
           a.crossOrigin = 'anonymous';
           a.src = want;
           a.load();
@@ -451,7 +453,15 @@ export function MusicPlayerProvider({ children }) {
     streamSrcKeyRef.current = null;
     setResolvingStream(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentTrackKey, isPlaying, index, mediaReadyTick]);
+  }, [currentTrackKey, isPlaying, index, mediaReadyTick, streamRetry]);
+
+  // While one song plays, have the next one's link waiting.
+  useEffect(() => {
+    if (!isPlaying || index < 0) return;
+    const nxt = nextIndexFrom(index);
+    if (nxt >= 0 && nxt !== index) prefetchStreams([queue[nxt]]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index, isPlaying, queue]);
 
   // Build a shuffle order whenever the queue changes (or shuffle is toggled
   // on). Only the available tracks participate; missing-audio tracks are
@@ -548,19 +558,7 @@ export function MusicPlayerProvider({ children }) {
 
   // ── Actions ────────────────────────────────────────────────────────────
   const playAlbumTracks = useCallback((album, startIndex = 0) => {
-    const items = album.tracks.map(t => ({
-      albumPath:  album.path,
-      albumTitle: album.title,
-      albumImage: album.image,
-      artist:     album.artist,
-      n:          t.n,
-      title:      t.title,
-      audioPath:  t.audioPath,
-      available:  t.available,
-      streamable: !t.available,
-      wikilink:   t.wikilink,
-      duration:   t.duration,
-    }));
+    const items = albumToQueueItems(album);
     let start = startIndex;
     if (!isPlayable(items[start])) {
       // skip forward to first playable

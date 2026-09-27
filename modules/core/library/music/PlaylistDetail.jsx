@@ -20,6 +20,7 @@ import { navigate } from '@host/router.js';
 import { fmtDuration } from './searchShared.jsx';
 import { useSongMenu } from './contextMenus.js';
 import { trackToQueueItem, coverSrc } from './util.js';
+import { usePrefetchStreams } from './streamCache.js';
 import { useContextMenu } from '@host/context-menu/useContextMenu.js';
 import { FILM_POSTER_W, FILM_DOT } from '../AnimeDetailHeader.jsx';
 import { BODY_COLOR } from '../AnimeMainColumn.jsx';
@@ -91,6 +92,10 @@ export default function PlaylistDetail({ path, accent }) {
     return () => window.removeEventListener('music-playlists-changed', h);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path]);
+
+  // Not-downloaded songs get their links ahead: first 30, then as rows scroll
+  // into view (user-directed 2026-09-26), so a click plays at once.
+  usePrefetchStreams(pl ? (pl.tracks || []).map((t) => trackToQueueItem(t, pl)) : [], rowRefs);
 
   if (loading) return <Centered>Loading</Centered>;
   if (error) return <Centered tone="error">Failed to load: {error}</Centered>;

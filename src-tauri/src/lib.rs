@@ -858,6 +858,7 @@ pub fn run() {
             commands::music_search::music_search_artists,
             commands::music_search::music_search_recordings,
             commands::music_search::music_artist_releasegroups,
+            commands::music_search::music_artist_popularity,
             commands::music_search::music_releasegroup_detail,
             commands::music_search::music_release_personnel,
             commands::music_search::music_release_artwork,

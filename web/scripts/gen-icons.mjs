@@ -56,8 +56,9 @@ const MAP = {
   // disk is v2 and has none of them. The names here are their v3 names and are
   // never looked up; an override short-circuits the disk read.
   IconRepeatSolid: 'repeat', IconPlayMark: 'play', IconSkipMark: 'skip-next',
-  IconBookmarkPlus: 'bookmark-plus-alt', IconSwatch: 'swatch', IconCamcorder: 'camcoder',
+  IconBookmarkPlus: 'bookmark-plus-alt', IconSwatch: 'swatch', IconDiscussion: 'discussion', IconCamcorder: 'camcoder',
   IconEarAlt: 'ear-alt', IconAnnouncement: 'announcement',
+  IconGroup: 'group', IconCopyPlus: 'copy-plus', IconTrophyStar: 'trophy-star', IconMedalStar: 'medal-star', IconRadio: 'radio',
   IconListPlus: 'list-plus',
   IconSkipBack: 'bx-skip-previous',
   IconRewind: 'bx-rewind', IconFastForward: 'bx-fast-forward', IconPause: 'bx-pause',
@@ -77,7 +78,7 @@ const MAP = {
   IconGamepad: 'bx-joystick', IconBroadcast: 'bx-radio',
   // Knowledge subfolders
   IconFolder: 'bx-folder', IconDatabase: 'bx-data', IconLock: 'bx-lock-alt',
-  IconMessageSquare: 'bx-message-square-dots', IconUser: 'bx-user', IconUsers: 'bx-group',
+  IconUser: 'bx-user', IconUsers: 'bx-group',
   IconSparkles: 'bx-bot', IconPackage: 'bx-package',
   IconHeart: 'bx-heart', IconWrench: 'bx-wrench',
   IconRepeat: 'bx-repeat', IconMap: 'bx-map-alt', IconBuilding: 'bx-building',
@@ -115,7 +116,8 @@ const SIZES = {
   IconKey: 15, IconLockOpen: 15, IconCopy: 14, IconShield: 15, IconShieldOff: 15,
   IconDot: 14, IconSend: 14,
   IconRepeatSolid: 14, IconPlayMark: 14, IconSkipMark: 14, IconListPlus: 14,
-  IconBookmarkPlus: 14, IconSwatch: 14, IconCamcorder: 14, IconEarAlt: 14, IconAnnouncement: 14,
+  IconBookmarkPlus: 14, IconSwatch: 14, IconDiscussion: 14, IconCamcorder: 14, IconEarAlt: 14, IconAnnouncement: 14,
+  IconGroup: 14, IconCopyPlus: 14, IconTrophyStar: 14, IconMedalStar: 14, IconRadio: 14,
   IconMinus: 10, IconSquare: 10, IconRestore: 10,
   IconCut: 14, IconPaste: 14, IconSelectAll: 14,
 };
@@ -137,16 +139,9 @@ const SECTIONS = {
 // Comment blocks printed right above an icon (after its section banner), for
 // icons whose source or fill rule needs explaining where the icon lives.
 const NOTES = {
-  IconMessageSquare: `// bxs-message-square-DOTS, not the bare bxs-message-square it was until
-// 2026-09-15: the plain one has no tail and no cut-outs, so at the 16px the
-// titlebar's Feedback button draws it, it read as a blank rounded blob rather
-// than a message. fillRule evenodd knocks the three dots out — the sub-paths
-// wind the same way as the shell, so the default nonzero fill would swallow
-// them and put the blob straight back.`,
   IconHelp: `// The titlebar's Help button. bxs-help-circle is a filled disc with the query
-// mark CUT OUT of it, so it needs fillRule evenodd for the same reason
-// IconMessageSquare does — nonzero fill swallows the knock-out and leaves a
-// plain dot. Path copied from boxicons 2.1.4 solid.`,
+// mark CUT OUT of it, so it needs fillRule evenodd: nonzero fill swallows the
+// knock-out and leaves a plain dot. Path copied from boxicons 2.1.4 solid.`,
   IconCut: `// Cut is the ONE exception to the solid rule: Boxicons ships no bxs-cut, so the
 // Regular scissors is the only form of the mark that exists.`,
 };
@@ -246,6 +241,11 @@ const OVERRIDES = {
     box: "'0 0 24 24'",
     pack: 'Boxicons v3 swatch',
   },
+  IconDiscussion: {
+    d: '<path d="M15.5 14c.83 0 1.5-.67 1.5-1.5v-9c0-.83-.67-1.5-1.5-1.5h-12C2.67 2 2 2.67 2 3.5v9c0 .83.67 1.5 1.5 1.5H5v2.96c0 .42.48.65.81.39L10 14z"/><path d="M20.5 8H19v4.5c0 1.93-1.57 3.5-3.5 3.5h-4.8l-1.51 1.21c.25.47.74.79 1.31.79H14l4.19 3.35c.33.26.81.03.81-.39V18h1.5c.83 0 1.5-.67 1.5-1.5v-7c0-.83-.67-1.5-1.5-1.5"/>',
+    box: "'0 0 24 24'",
+    pack: 'Boxicons v3 discussion',
+  },
   IconCamcorder: {
     d: '<path d="M18 10c0-1.1-.9-2-2-2h-1.43l-2.71-4.51c-.18-.3-.51-.49-.86-.49H5v2h5.43l1.8 3H4c-1.1 0-2 .9-2 2v9c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-3l4 2v-7l-4 2zm-6 7H6v-2h6z"/>',
     box: "'0 0 24 24'",
@@ -260,6 +260,31 @@ const OVERRIDES = {
     d: '<path d="M18.5 10H22v2h-3.5zm.05-1.17 1.5-1 1.5-1L21 6l-.55-.83-1.5 1-1.5 1L18 8zm0 4.34L18 14l-.55.83 1.5 1 1.5 1L21 16l.55-.83-1.5-1zM15 8.18V4c0-.37-.2-.71-.53-.88-.32-.17-.72-.16-1.03.05L7.69 7h-1.7c-2.21 0-4 1.79-4 4 0 1.52.86 2.82 2.1 3.5l1.94 6.77 1.92-.55-1.64-5.73h1.37l5.75 3.83c.17.11.36.17.55.17.16 0 .32-.04.47-.12.33-.17.53-.51.53-.88v-4.18c1.16-.41 2-1.51 2-2.82s-.84-2.4-2-2.82Z"/>',
     box: "'0 0 24 24'",
     pack: 'Boxicons v3 announcement',
+  },
+  IconGroup: {
+    d: '<path d="M9 4a4 4 0 1 0 0 8 4 4 0 1 0 0-8m1 9H8c-2.76 0-5 2.24-5 5v1c0 .55.45 1 1 1h10c.55 0 1-.45 1-1v-1c0-2.76-2.24-5-5-5m5-9c-.47 0-.9.09-1.31.22C14.51 5.24 15 6.55 15 8s-.49 2.75-1.31 3.78c.41.13.84.22 1.31.22 2.28 0 4-1.72 4-4s-1.72-4-4-4m1 9h-1.11A6.97 6.97 0 0 1 17 18v1c0 .35-.07.69-.18 1H20c.55 0 1-.45 1-1v-1c0-2.76-2.24-5-5-5"/>',
+    box: "'0 0 24 24'",
+    pack: 'Boxicons v3 group',
+  },
+  IconCopyPlus: {
+    d: '<path d="M20 2H10c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2m-1 8h-3v3h-2v-3h-3V8h3V5h2v3h3z"/><path d="M4 22h10c1.1 0 2-.9 2-2v-2H8.5A2.5 2.5 0 0 1 6 15.5V8H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2"/>',
+    box: "'0 0 24 24'",
+    pack: 'Boxicons v3 copy-plus (filled)',
+  },
+  IconTrophyStar: {
+    d: '<path d="m21,4h-3v-1c0-.55-.45-1-1-1H7c-.55,0-1,.45-1,1v1h-3c-.55,0-1,.45-1,1v3c0,4.29,1.79,6.88,4.81,6.99.88,1.52,2.4,2.62,4.19,2.92v2.09h-3v2h8v-2h-3v-2.09c1.79-.3,3.32-1.4,4.19-2.92,3.01-.11,4.81-2.7,4.81-6.99v-3c0-.55-.45-1-1-1ZM4,8v-2h2v6c0,.28.03.56.06.83-1.84-.71-2.06-3.52-2.06-4.83Zm9.85,3.62l-1.85-.97-1.85.97.35-2.06-1.5-1.46,2.07-.3.93-1.88.93,1.88,2.07.3-1.5,1.46.35,2.06Zm6.15-3.62c0,1.31-.22,4.12-2.06,4.83.04-.27.06-.55.06-.83v-6h2v2Z"/>',
+    box: "'0 0 24 24'",
+    pack: 'Boxicons v3 trophy-star (filled)',
+  },
+  IconMedalStar: {
+    d: '<path d="m12,22c3.86,0,7-3.14,7-7s-3.14-7-7-7-7,3.14-7,7,3.14,7,7,7Zm-1.08-8.37l1.08-2.19,1.08,2.19,2.42.35-1.75,1.71.41,2.41-2.16-1.14-2.16,1.14.41-2.41-1.75-1.71,2.42-.35Z"/><path d="m11,2h-4c-.55,0-1,.45-1,1v6.73c1.26-1.43,3.02-2.41,5-2.66V2Z"/><path d="m18,9.73V3c0-.55-.45-1-1-1h-4v5.07c1.98.25,3.74,1.23,5,2.66Z"/>',
+    box: "'0 0 24 24'",
+    pack: 'Boxicons v3 medal-star (filled)',
+  },
+  IconRadio: {
+    d: '<path d="m20.25,5.03l-7.9-2.96-.7,1.87,2.84,1.06H4c-1.1,0-2,.9-2,2v12c0,1.1.9,2,2,2h16c1.1,0,2-.9,2-2V7c0-1.02-.77-1.85-1.75-1.97Zm-14.25,11.97v-2h6v2h-6Zm10,1c-1.1,0-2-.9-2-2s.9-2,2-2,2,.9,2,2-.9,2-2,2Zm4-7H4v-4h16v4Z"/>',
+    box: "'0 0 24 24'",
+    pack: 'Boxicons v3 radio (filled)',
   },
   IconX: {
     d: '<path fill="currentColor" d="M55.1 73.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L147.2 256 9.9 393.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L192.5 301.3 329.9 438.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L237.8 256 375.1 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L192.5 210.7 55.1 73.4z"/>',
@@ -331,10 +356,6 @@ const OVERRIDES = {
   IconRestore: {
     d: '<path d="M20 2H10a2 2 0 0 0-2 2v4H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4h4a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zM4 20V10h10l.002 10H4zm16-6h-4v-4a2 2 0 0 0-2-2h-4V4h10v10z"/>',
     pack: 'bx-copy (two offset frames — the titlebar restore mark)',
-  },
-  IconMessageSquare: {
-    d: '<path fillRule="evenodd" d="M16 2H8C4.691 2 2 4.691 2 8v13a1 1 0 0 0 1 1h13c3.309 0 6-2.691 6-6V8c0-3.309-2.691-6-6-6zM8 13a1.5 1.5 0 1 1 .001-3.001A1.5 1.5 0 0 1 8 13zm4 0a1.5 1.5 0 1 1 .001-3.001A1.5 1.5 0 0 1 12 13zm4 0a1.5 1.5 0 1 1 .001-3.001A1.5 1.5 0 0 1 16 13z"/>',
-    pack: 'bxs-message-square-dots',
   },
   IconHelp: {
     d: '<path fillRule="evenodd" d="M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10 10-4.486 10-10S17.514 2 12 2zm1 16h-2v-2h2v2zm.976-4.885c-.196.158-.385.309-.535.459-.408.407-.44.777-.441.793v.133h-2v-.167c0-.118.029-1.177 1.026-2.174.195-.195.437-.393.691-.599.734-.595 1.216-1.029 1.216-1.627a1.934 1.934 0 0 0-3.867.001h-2C8.066 7.765 9.831 6 12 6s3.934 1.765 3.934 3.934c0 1.597-1.179 2.55-1.958 3.181z"/>',

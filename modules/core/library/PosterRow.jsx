@@ -9,7 +9,10 @@
 // hides the scrub arrows (used by AnimeCredits' Characters "See all" expand);
 // seeAllLabel overrides the chip text for that in-place toggle. colWidth sets
 // the poster column width (default 150px; the Characters rail passes a smaller
-// value so its cards shrink without touching the home sliders).
+// value so its cards shrink without touching the home sliders). rows stacks
+// that many cards per column of the sliding track (the album Discography tab
+// uses 2); title is optional, and arrows={false} drops the scrub buttons. A
+// row with no title, See All or arrows renders no head at all.
 
 import { useLayoutEffect, useRef, useState } from 'react';
 
@@ -24,11 +27,12 @@ export const faceInset = (root) => {
   return face ? parseFloat(getComputedStyle(face).borderLeftWidth) || 0 : 0;
 };
 
-export default function PosterRow({ title, subtitle, onSeeAll, seeAllLabel = 'See All →', layout = 'row', colWidth = 150, accent, children }) {
+export default function PosterRow({ title, subtitle, onSeeAll, seeAllLabel = 'See All →', layout = 'row', colWidth = 150, rows = 1, arrows = true, accent, children }) {
   const ref = useRef(null);
   const grid = layout === 'grid';
+  const scrub = !grid && arrows;
   // Own first card's inset, unless a page lines several titles up on one value
-  // (--row-title-inset, set by MusicCredits).
+  // (--row-title-inset; nothing sets it today).
   const [inset, setInset] = useState(0);
   // How far the title's line box runs below its letters (a zero-size probe
   // sits on the baseline). The button run is lifted by that plus its own lip,
@@ -49,6 +53,7 @@ export default function PosterRow({ title, subtitle, onSeeAll, seeAllLabel = 'Se
     ? { display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(${colWidth}px, 1fr))`, gap: 14 }
     : {
         display: 'grid', gridAutoFlow: 'column', gridAutoColumns: `${colWidth}px`,
+        gridTemplateRows: `repeat(${rows}, auto)`,
         gap: 14, overflowX: 'auto', overflowY: 'hidden',
         // Deliberately NO `scrollbar-width` here: WebKitGTK honors that standard
         // property and would draw a native overlay bar, diverging from the rest
@@ -65,8 +70,9 @@ export default function PosterRow({ title, subtitle, onSeeAll, seeAllLabel = 'Se
       };
   return (
     <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {(title || subtitle || onSeeAll || scrub) && (
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12 }}>
-        <h3 style={{ ...ROW_TITLE_STYLE, paddingLeft: `var(--row-title-inset, ${inset}px)` }}>{title}<span ref={baseRef} style={{ display: 'inline-block' }}/></h3>
+        {title && <h3 style={{ ...ROW_TITLE_STYLE, paddingLeft: `var(--row-title-inset, ${inset}px)` }}>{title}<span ref={baseRef} style={{ display: 'inline-block' }}/></h3>}
         {subtitle && (
           <span style={{ fontSize: 11, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)' }}>
             {subtitle}
@@ -75,14 +81,14 @@ export default function PosterRow({ title, subtitle, onSeeAll, seeAllLabel = 'Se
         {/* One fused run at the source run's height (Last.fm / RYM, 26px),
             user-directed 2026-09-26. ponytail: 26px restated from SourceRun;
             lift to a shared export if a third run needs it. */}
-        {(onSeeAll || !grid) && (
+        {(onSeeAll || scrub) && (
         <div className="candy-split" style={{ marginLeft: 'auto', marginBottom: `calc(${descent}px + var(--candy-depth-small))`, '--cbtn-size': '26px', '--accent': accent }}>
           {onSeeAll && (
             <button onClick={onSeeAll} data-own-press className="candy-btn" data-shape="chip">
               <span className="candy-face" style={{ fontSize: 11 }}>{seeAllLabel}</span>
             </button>
           )}
-          {!grid && (
+          {scrub && (
             <>
               <Scrub accent={accent} onClick={() => scrollByDir(-1)} label="Scroll left">‹</Scrub>
               <Scrub accent={accent} onClick={() => scrollByDir(1)} label="Scroll right">›</Scrub>
@@ -91,6 +97,7 @@ export default function PosterRow({ title, subtitle, onSeeAll, seeAllLabel = 'Se
         </div>
         )}
       </div>
+      )}
       <div ref={ref} style={track}>
         {children}
       </div>
