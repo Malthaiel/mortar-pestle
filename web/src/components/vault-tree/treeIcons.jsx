@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import * as Icons from '../icons.jsx';
+import { NAV_ICON } from './treeKit.jsx';
 
 const KEY = 'tree_icons';
 
@@ -19,8 +20,8 @@ export const ICON_CATALOG = Object.entries(Icons)
   .filter(([n, v]) => n.startsWith('Icon') && typeof v === 'function')
   .sort((a, b) => a[0].localeCompare(b[0]));
 
-// Sized against the row's 10.5px mono label, not the 18px default.
-export const ICON_SIZE = 13;
+// The nav icon size (treeKit NAV_ICON), not the icons' 18px default.
+export const ICON_SIZE = NAV_ICON;
 
 function loadAll() {
   try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch { return {}; }

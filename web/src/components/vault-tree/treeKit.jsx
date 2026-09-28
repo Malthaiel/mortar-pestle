@@ -21,9 +21,18 @@ export const GUIDE = 'color-mix(in oklch, var(--text-faint) 40%, transparent)';
 export const GUIDE_INSET = 2;
 export const MUTED = { fontSize: 10, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)', padding: '4px 12px' };
 
-// Every nav button is this tall (face min-height; box-sizing border-box, so it
-// includes the 2px frame). One value → folders + files all match.
-export const NAV_H = 26;
+// THE nav size knob: every nav button's height (face min-height; box-sizing
+// border-box, so it includes the 2px frame), its lettering, and its icons. The
+// library album action run (RecordPage RUN_SIZE) reads these same three, so the
+// sidebars and that run can never drift (user-directed 2026-09-28: every left
+// sidebar matches the album run, 26/10.5/13 -> 30/12/16). Change it here only.
+export const NAV_H = 30;
+export const NAV_TEXT = 12;
+export const NAV_ICON = 16;
+// Row face left pad + child-group indent. The indent guide is derived from these
+// and the caret size, so it stays under the caret centre whatever they become.
+const PAD_X = 11;
+const INDENT = 14;
 // THE universal tree gap — EVERY vertical gap uses this: section↔section,
 // header↔first-child (TreeChildren marginTop), and sibling↔sibling. 4px of visible
 // separation PLUS the nav candy-depth slab (which hangs below each button, outside
@@ -68,10 +77,10 @@ export function Caret({ open }) {
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      width: 12, height: 12, flexShrink: 0,
+      width: NAV_ICON, height: NAV_ICON, flexShrink: 0,
       transform: open ? 'rotate(90deg)' : 'rotate(0deg)',
       transition: 'transform 140ms ease',
-    }}><IconChevronRight/></span>
+    }}><IconChevronRight size={NAV_ICON}/></span>
   );
 }
 
@@ -143,14 +152,14 @@ export function StaggerChild({ index, count, open, children }) {
 export const TREE_TEXT = {
   // The vars live on :root in styles.css; every .candy-face is forced to them.
   fontFamily: 'var(--tree-font-family)',
-  fontSize: 10.5, fontWeight: 'var(--tree-font-weight)', letterSpacing: 'var(--tree-letter-spacing)', textTransform: 'none',
+  fontSize: NAV_TEXT, fontWeight: 'var(--tree-font-weight)', letterSpacing: 'var(--tree-letter-spacing)', textTransform: 'none',
 };
 
 // Shared candy-face for both folder headers and leaf rows — the inline overrides
-// (mono / title-case / 10.5px / radius 999) keep the tree's compact pill geometry.
+// (mono / title-case / NAV_TEXT / full-round corner) keep the tree's pill geometry.
 const FACE = {
   justifyContent: 'flex-start', gap: 6, minWidth: 0,
-  minHeight: NAV_H, boxSizing: 'border-box', padding: '0 11px',
+  minHeight: NAV_H, boxSizing: 'border-box', padding: `0 ${PAD_X}px`,
   ...TREE_TEXT,
 };
 
@@ -183,6 +192,8 @@ export function CandyHeader({ label, open, onToggle, accent, onContextMenu, lead
       data-shape="row"
       style={{
         '--cbtn-depth': 'var(--candy-depth-nav)',
+        // Fully round at NAV_H — the row shape's own 13px only rounds a 26px pill.
+        '--corner-max': `${NAV_H / 2}px`,
         ...(accent ? { '--accent': accent } : {}),
         // Hug content: each pill is only as wide as its text + caret, capped at the
         // sidebar width (override data-shape="row"'s width:100%).
@@ -236,6 +247,7 @@ export function TreeRow({ node, label, selected, accent, onClick, onContextMenu,
       data-shape="row"
       style={{
         '--cbtn-depth': 'var(--candy-depth-nav)',
+        '--corner-max': `${NAV_H / 2}px`,
         ...(accent ? { '--accent': accent } : {}),
         alignSelf: 'flex-start', width: 'fit-content', maxWidth: '100%',
       }}
@@ -258,14 +270,13 @@ export function TreeChildren({ children }) {
   return (
     <div style={{
       position: 'relative',
-      marginLeft: 14, paddingLeft: 8, marginTop: GAP,
+      marginLeft: INDENT, paddingLeft: 8, marginTop: GAP,
       display: 'flex', flexDirection: 'column', gap: GAP,
     }}>
-      {/* left:3 lands the 1px line under the folder caret's center (caret center sits
-          ~17px from the header's left: 11px padding + 6px half-caret; TreeChildren's
-          border box starts at column-x 14). */}
+      {/* Lands the 1px line under the folder caret's centre: the caret centre sits
+          PAD_X + half a caret from the header's left, and this box starts INDENT in. */}
       <div aria-hidden style={{
-        position: 'absolute', left: 3, top: GUIDE_INSET, bottom: GUIDE_INSET,
+        position: 'absolute', left: PAD_X + NAV_ICON / 2 - INDENT, top: GUIDE_INSET, bottom: GUIDE_INSET,
         width: 1, background: GUIDE,
       }}/>
       {children}

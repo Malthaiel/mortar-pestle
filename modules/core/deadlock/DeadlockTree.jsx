@@ -26,7 +26,7 @@ import { IconPlus, IconFolder, IconLink, IconFile, IconX, IconSettings, IconBrus
 import { CircleChip } from '@host/components/ui/Button.jsx';
 import CoachPopup from './CoachPopup.jsx';
 import {
-  AnimCtx, SuffixCtx, REVEAL, GAP, MUTED, NAV_H,
+  AnimCtx, SuffixCtx, REVEAL, GAP, MUTED, NAV_H, NAV_ICON,
   CandyHeader, TreeRow, TreeChildren, Collapsible, StaggerChild,
 } from '@host/components/vault-tree/treeKit.jsx';
 import { useTreeIcons } from '@host/components/vault-tree/treeIcons.jsx';
@@ -130,7 +130,7 @@ function TreeNode({ node, tree, accent, currentPath, openMenu, nav, onGear, icon
               height. Buttons in a row match each other's size. */}
           {gear && (
             <CircleChip size={NAV_H} title="Coaching notes" style={{ flexShrink: 0 }} onClick={() => onGear?.(gear)}>
-              <IconSettings size={13}/>
+              <IconSettings size={NAV_ICON}/>
             </CircleChip>
           )}
         </div>

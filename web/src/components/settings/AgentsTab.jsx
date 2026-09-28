@@ -1,4 +1,4 @@
-// Settings → Agents tab. Three sub-tabs on the shared Topbar: General (auth
+// Settings → Agents tab. Three sections, picked from the Settings tree: General (auth
 // backend, API key / Claude Code CLI, model, agent reach), Chat window (drag
 // tuning shared by every agent's floating window), and Concierge. The settings
 // bag renamed design → agents; the Rust design_* IPC names, the
@@ -6,24 +6,14 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Seg, OutlinedBtn, TextInput, Topbar } from '../ui/index.js';
-import { AGENTS_DEFAULT, SETTINGS_DEFAULTS } from '../../hooks/useSettings.js';
-import { TAB_SECTIONS, scopeFor, scopeModified } from './settings-registry.js';
+import { Seg, OutlinedBtn, TextInput } from '../ui/index.js';
+import { AGENTS_DEFAULT } from '../../hooks/useSettings.js';
+import { TAB_SECTIONS } from './settings-registry.js';
 
-export default function AgentsTab({ settings, setSetting, accent, section, onSectionChange }) {
+export default function AgentsTab({ settings, setSetting, accent, section }) {
   const active = section || TAB_SECTIONS.agents.default;
   return (
     <div>
-      <Topbar
-        tiles={TAB_SECTIONS.agents.sections.map(s => ({
-          id: s.id, label: s.label,
-          dot: scopeModified(scopeFor({ tab: 'agents', section: s.id }), settings, SETTINGS_DEFAULTS),
-        }))}
-        activeId={active}
-        accent={accent}
-        onSelect={onSectionChange}
-        style={{ padding: '0 0 12px', background: 'transparent', marginBottom: 16 }}
-      />
       {active === 'general'     && <GeneralPanel settings={settings} setSetting={setSetting} accent={accent}/>}
       {active === 'chat-window' && <ChatWindowPanel settings={settings} setSetting={setSetting} accent={accent}/>}
       {active === 'concierge'   && <ConciergePanel/>}

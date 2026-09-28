@@ -4,7 +4,6 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFileSync, writeFileSync, mkdirSync, statSync } from 'node:fs';
 import aosComponentId from './vite-plugins/aos-component-id.js';
-import moduleSizes from './vite-plugins/module-sizes.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(path.resolve(__dirname, 'package.json'), 'utf-8'));
@@ -89,7 +88,7 @@ const targetOs = process.env.VITE_TARGET_OS
     : process.platform === 'darwin' ? 'macos' : 'linux');
 
 export default defineConfig({
-  plugins: [aosComponentId({ enabled: aosDesignEnabled }), react(), moduleSizes(), auditSink(), cmdSlot()],
+  plugins: [aosComponentId({ enabled: aosDesignEnabled }), react(), auditSink(), cmdSlot()],
   define: {
     'import.meta.env.PACKAGE_VERSION': JSON.stringify(pkg.version),
     'import.meta.env.VITE_TARGET_OS': JSON.stringify(targetOs),

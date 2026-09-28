@@ -106,13 +106,16 @@ export default function OverlaySettingsTab({ settings, setSetting, accent, initi
 
   return (
     <div>
-      <div className="candy-split" style={{ marginBottom: 16 }}>
-        {SECTIONS.map(s => (
-          <FilterChip key={s.id} active={section === s.id} accent={accent} onClick={() => select(s.id)}>
-            <s.Icon size={12} />{s.label}
-          </FilterChip>
-        ))}
-      </div>
+      {/* Inside Settings the tree holds these sections; the strip shows only standalone. */}
+      {!onNavigateSection && (
+        <div className="candy-split" style={{ marginBottom: 16 }}>
+          {SECTIONS.map(s => (
+            <FilterChip key={s.id} active={section === s.id} accent={accent} onClick={() => select(s.id)}>
+              <s.Icon size={12} />{s.label}
+            </FilterChip>
+          ))}
+        </div>
+      )}
       {section === 'capture' && <CaptureSettingsTab settings={settings} setSetting={setSetting} accent={accent} />}
       {section === 'voice' && <SttSettingsTab settings={settings} setSetting={setSetting} accent={accent} />}
       {section === 'agents' && <AgentsOverlaySettingsTab settings={settings} setSetting={setSetting} accent={accent} />}

@@ -8,6 +8,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { IconStarMark, IconSwatch, IconPaperPlane, IconArrowBigDown, IconPlusBig, IconBookmarkAlt, IconHandRock, IconCamcorder, IconEarAlt, IconAnnouncement, IconTag, IconHot, IconBrush } from '@host/components/icons.jsx';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
+import { NAV_H, NAV_TEXT, NAV_ICON } from '@host/components/vault-tree/treeKit.jsx';
 import { statusLabel, STATUS_ICON } from '@host/util/media-status.js';
 import { useContextMenu } from '@host/context-menu/useContextMenu.js';
 import { STATUS_DOT_COLOR, resolveDot, toBrowse } from './util.js';
@@ -38,8 +39,10 @@ const ARTIST_PFP = 22;
 // 30, up from the film's 26 (user-directed 2026-09-28: "slightly larger").
 // The names and icons grow with it (same day), 10.5 -> 12 and 14 -> 16: the
 // run's own vars, which library.css [data-record-run] lays on every face.
-const ROW_H = '30px';
-const RUN_SIZE = { '--cbtn-size': ROW_H, '--chip-label-size': '12px', '--record-icon': '16px' };
+// The three numbers are the app's nav size knob (treeKit NAV_H / NAV_TEXT /
+// NAV_ICON), shared with every left sidebar (user-directed 2026-09-28).
+const ROW_H = `${NAV_H}px`;
+const RUN_SIZE = { '--cbtn-size': ROW_H, '--chip-label-size': `${NAV_TEXT}px`, '--record-icon': `${NAV_ICON}px` };
 
 // The header column's line gap (type tag, title, fact line), and the air above and
 // below the action runs: the fact line down to them and them down to the body are

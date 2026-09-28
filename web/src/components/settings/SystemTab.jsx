@@ -1,4 +1,4 @@
-// System settings tab — three sub-tabs on the shared Topbar: System (the
+// System settings tab — three sections, picked from the Settings tree (SettingsNav): System (the
 // in-app Build pipeline + the update loop, merged), Downloads (history
 // retention, moved from the retired top-level Downloads tab), and Recycling
 // Bin (retention sliders). The Vault status strip moved to the Vaults tab.
@@ -8,27 +8,16 @@ import { useEffect, useRef, useState } from 'react';
 import { invoke, subscribeBuildEvents } from '../../api.js';
 import { playReorderDrop } from '../../hooks/useTactileSound.js';
 import { useUpdateStatus, applyUpdate, revertUpdate, setPollInterval } from '../../hooks/useUpdateStatus.js';
-import { Seg, OutlinedBtn, Slider, Topbar } from '../ui/index.js';
+import { Seg, OutlinedBtn, Slider } from '../ui/index.js';
 import EnableToggle from '../ui/EnableToggle.jsx';
 import { SectionBand, Row, StackedRow } from './section-primitives.jsx';
 import { useNetworkUpdate } from '../../hooks/useNetworkUpdate.js';
-import { TAB_SECTIONS, scopeFor, scopeModified } from './settings-registry.js';
-import { SETTINGS_DEFAULTS } from '../../hooks/useSettings.js';
+import { TAB_SECTIONS } from './settings-registry.js';
 
-export default function SystemTab({ settings, setSetting, accent, section, onSectionChange }) {
+export default function SystemTab({ settings, setSetting, accent, section }) {
   const active = section || TAB_SECTIONS.system.default;
   return (
     <div>
-      <Topbar
-        tiles={TAB_SECTIONS.system.sections.map(s => ({
-          id: s.id, label: s.label,
-          dot: scopeModified(scopeFor({ tab: 'system', section: s.id }), settings, SETTINGS_DEFAULTS),
-        }))}
-        activeId={active}
-        accent={accent}
-        onSelect={onSectionChange}
-        style={{ padding: '0 0 12px', background: 'transparent', marginBottom: 16 }}
-      />
       {active === 'system' && (
         <>
           <BuildSection accent={accent}/>

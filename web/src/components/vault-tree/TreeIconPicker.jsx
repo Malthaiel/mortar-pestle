@@ -10,9 +10,10 @@ import { TextInput } from '../ui/Input.jsx';
 import { IconX } from '../icons.jsx';
 import { ToolBtn } from './TreeToolbar.jsx';
 import { ICON_CATALOG, ICON_SIZE } from './treeIcons.jsx';
+import { NAV_H } from './treeKit.jsx';
 
 const COLS = 7;
-const CELL = 26;   // = TreeToolbar ROW_H = treeKit NAV_H
+const CELL = NAV_H;
 const GAP = 6;
 const PAD = 12;    // body padding — the SAME on all four sides
 const RING = 4;    // slack for the candy hover ring, cancelled by a negative margin

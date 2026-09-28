@@ -85,7 +85,11 @@ function TreeNode({ node, controller, accent, icons, topLevel = false }) {
   );
 }
 
-export default function TreeSidebar({ nodes, controller, buttons, accent, showSuffix = false, toolbarExtra, iconScope }) {
+// `search` (optional) = { value, onChange, onKeyDown?, inputRef?, placeholder?,
+// match? }: the surface owns the toolbar search instead of the shell (the
+// Settings tree, whose field searches every setting). `match(node)` picks the
+// rows to keep; without it rows are kept by name as usual.
+export default function TreeSidebar({ nodes, controller, buttons, accent, showSuffix = false, toolbarExtra, iconScope, search }) {
   const { settings } = useSettings();
   // Right-click icons. `iconScope` (e.g. 'docs:tree') namespaces the store and
   // turns the feature on; omitted → nothing changes for that surface.
@@ -108,8 +112,9 @@ export default function TreeSidebar({ nodes, controller, buttons, accent, showSu
 
   // Toolbar search: the tree shrinks to matching rows + the folders holding
   // them (forced open). The toolbar keeps the real controller.
-  const [query, setQuery] = useState('');
-  const found = query.trim() && searchTree(nodes, query, { id: (n) => n.id, text: (n) => n.label, kids: (n) => n.children });
+  const [ownQuery, setOwnQuery] = useState('');
+  const query = search ? search.value : ownQuery;
+  const found = query.trim() && searchTree(nodes, query, { id: (n) => n.id, text: (n) => n.label, kids: (n) => n.children, match: search?.match });
   const prune = (list) => (list || []).filter((n) => found.keep.has(n.id))
     .map((n) => (found.open.has(n.id) ? { ...n, children: prune(n.children) } : n));
   const shownNodes = found ? prune(nodes) : nodes;
@@ -127,7 +132,7 @@ export default function TreeSidebar({ nodes, controller, buttons, accent, showSu
             toolbar's painted gap above == its gap below == the tree row gap. */}
         <div style={{ flexShrink: 0, padding: TOOLBAR_BAND }}>
           <TreeToolbar buttons={buttons} controller={controller} accent={accent} extra={toolbarExtra}
-            search={{ value: query, onChange: setQuery }}/>
+            search={search || { value: ownQuery, onChange: setOwnQuery }}/>
         </div>
         {/* Scrolling tree body — the only scroller. overflowX hidden keeps long
             names ellipsizing (the min-width:0 chain). */}

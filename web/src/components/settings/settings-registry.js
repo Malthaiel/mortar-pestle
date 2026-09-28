@@ -31,12 +31,11 @@ export const TAB_SECTIONS = {
       { id: 'recycle',   label: 'Recycling Bin' },
     ],
   },
+  // The Core / Studio / Widget tier pages retired 2026-09-28: tiers are folders
+  // of module rows in the Settings tree, not pages.
   modules: {
-    default: 'core',
+    default: 'tools',
     sections: [
-      { id: 'core',      label: 'Core' },
-      { id: 'studio',    label: 'Studio' },
-      { id: 'widget',    label: 'Widget' },
       { id: 'tools',     label: 'Tools' },
       { id: 'community', label: 'Community' },
     ],
@@ -138,10 +137,9 @@ export function normalizeAddress(input, validTabIds) {
   return withDefaults(a);
 }
 
-// Exclusive tier homes. A module with no app surface beyond its widget
-// (no route / left-sidebar / overlay) counts as a standalone widget.
-// Lives here (not ModulesTab) so resolveOpenAddress can bucket card-flash
-// targets without importing a component.
+// Exclusive tier homes (the Settings tree's Core / Studio / Widget folders). A
+// module with no app surface beyond its widget (no route / left-sidebar /
+// overlay) counts as a standalone widget.
 export function tierOf(m) {
   if (m.tier === 'studio') return 'studio';
   const slots = m.slots || [];
@@ -160,10 +158,10 @@ const ROUTE_OVERRIDES = [
 
 // Context-aware open: resolve the landing address for a context-less open
 // (no explicit deep link) from the current hash route. Route overrides →
-// longest enabled routeBase boundary-prefix → module settings page, or the
-// Modules tab with the module's card flagged for scroll+flash. Returns
-// { addr, highlight? } or null (caller falls back to lastTab + search focus).
-export function resolveOpenAddress({ route, manifests, enabledMap, hasPage }) {
+// longest enabled routeBase boundary-prefix → that module's settings home (its
+// settingsTarget, else its module page — blank when it has no settings yet).
+// Returns { addr } or null (caller falls back to lastTab + search focus).
+export function resolveOpenAddress({ route, manifests, enabledMap }) {
   if (!route) return null;
   const matches = (base) => route === base || route.startsWith(base + '/');
   for (const o of ROUTE_OVERRIDES) {
@@ -177,8 +175,7 @@ export function resolveOpenAddress({ route, manifests, enabledMap, hasPage }) {
     if (!best || m.routeBase.length > best.routeBase.length) best = m;
   }
   if (!best) return null;
-  if (hasPage?.(best.id)) return { addr: withDefaults({ tab: 'modules', page: best.id }) };
-  return { addr: withDefaults({ tab: 'modules', section: tierOf(best) }), highlight: best.id };
+  return { addr: withDefaults(best.settingsTarget || { tab: 'modules', page: best.id }) };
 }
 
 // Scoped reset: what the footer Reset button restores for each visible

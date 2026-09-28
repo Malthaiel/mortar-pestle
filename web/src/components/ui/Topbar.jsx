@@ -7,6 +7,17 @@
 
 const fmt = (v) => (typeof v === 'number' ? v.toLocaleString() : v);
 
+// The modified-from-default marker. Exported so the Settings tree's rows wear
+// the same dot the strip tiles did.
+export function ModifiedDot() {
+  return (
+    <span aria-hidden title="Modified from default" style={{
+      width: 5, height: 5, borderRadius: '50%', background: 'currentColor',
+      opacity: 0.8, marginLeft: 6, flexShrink: 0, display: 'inline-block',
+    }}/>
+  );
+}
+
 export default function Topbar({ tiles, activeId, onSelect, accent, leading, style }) {
   return (
     <div style={{
@@ -63,12 +74,7 @@ function Tile({ tile, accent, active, onSelect }) {
       style={btnStyle}
     ><span className="candy-face" style={faceStyle}>
       {text}
-      {tile.dot && (
-        <span aria-hidden title="Modified from default" style={{
-          width: 5, height: 5, borderRadius: '50%', background: 'currentColor',
-          opacity: 0.8, marginLeft: 6, flexShrink: 0, display: 'inline-block',
-        }}/>
-      )}
+      {tile.dot && <ModifiedDot/>}
     </span></button>
   );
 }

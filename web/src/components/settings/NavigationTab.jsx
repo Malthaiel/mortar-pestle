@@ -1,13 +1,12 @@
-// Navigation settings tab — four sub-tabs on the shared Topbar: Dock (the
+// Navigation settings tab — four sections, picked from the Settings tree (SettingsNav): Dock (the
 // dock band rows), Left Sidebar (group collapse, vault file tree, rearrange),
 // Right Sidebar (Mini Rails), and General (navigation motion toggles).
 // Extracted from SettingsDrawer.jsx; row internals unchanged.
 
-import { Seg, Topbar } from '../ui/index.js';
+import { Seg } from '../ui/index.js';
 import EnableToggle from '../ui/EnableToggle.jsx';
 import { SectionBand, StackedRow } from './section-primitives.jsx';
-import { TAB_SECTIONS, scopeFor, scopeModified } from './settings-registry.js';
-import { SETTINGS_DEFAULTS } from '../../hooks/useSettings.js';
+import { TAB_SECTIONS } from './settings-registry.js';
 import { AnimationField } from './AnimationRows.jsx';
 import DockTab from './DockTab.jsx';
 import RailsTab from './RailsTab.jsx';
@@ -19,20 +18,10 @@ const TREE_REVEAL_OPTIONS = [
   { value: 'slow',   label: 'Slow'   },
 ];
 
-export default function NavigationTab({ settings, setSetting, accent, section, onSectionChange }) {
+export default function NavigationTab({ settings, setSetting, accent, section }) {
   const active = section || TAB_SECTIONS.navigation.default;
   return (
     <div>
-      <Topbar
-        tiles={TAB_SECTIONS.navigation.sections.map(s => ({
-          id: s.id, label: s.label,
-          dot: scopeModified(scopeFor({ tab: 'navigation', section: s.id }), settings, SETTINGS_DEFAULTS),
-        }))}
-        activeId={active}
-        accent={accent}
-        onSelect={onSectionChange}
-        style={{ padding: '0 0 12px', background: 'transparent', marginBottom: 16 }}
-      />
       {active === 'dock' && (
         <SectionBand title="Dock">
           <DockTab settings={settings} setSetting={setSetting} accent={accent}/>

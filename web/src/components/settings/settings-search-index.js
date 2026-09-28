@@ -209,15 +209,15 @@ export const SETTINGS_SEARCH_INDEX = [
   { id: 'browser.sidebar', label: 'Browser sidebar', tabId: 'modules', page: 'browser', section: 'sidebar', anchor: 'set-browser-sidebar',
     keywords: ['panel', 'sidebar', 'web', 'mail', 'browser'] },
 
-  // ── Module cards (Install/Uninstall + cog live on the card) ───────────────
+  // ── Modules (each is a Settings-tree row; Install/Uninstall on right-click) ─
   ...[
-    ['browser', 'Browser', 'core'], ['domain-builder', 'Domain Builder', 'core'],
-    ['library', 'Library', 'core'], ['planner', 'Planner', 'core'],
-    ['pulse', 'Pulse', 'core'], ['skills', 'Skills', 'core'],
-    ['skills-browser', 'Skills Browser', 'core'], ['terminal', 'Terminal', 'core'],
-    ['vault', 'Vault', 'core'], ['video-editor', 'Video Editor', 'studio'],
-  ].map(([id, name, tier]) => ({
-    id: `module.${id}`, label: `Install ${name}`, tabId: 'modules', section: tier, anchor: `module-card-${id}`,
+    ['browser', 'Browser'], ['domain-builder', 'Domain Builder'],
+    ['library', 'Library'], ['planner', 'Planner'],
+    ['pulse', 'Pulse'], ['skills', 'Skills'],
+    ['skills-browser', 'Skills Browser'], ['terminal', 'Terminal'],
+    ['vault', 'Vault'], ['video-editor', 'Video Editor'],
+  ].map(([id, name]) => ({
+    id: `module.${id}`, label: `Install ${name}`, tabId: 'modules', page: id,
     keywords: ['module', 'install', 'uninstall', 'enable', 'disable', name.toLowerCase()],
   })),
 

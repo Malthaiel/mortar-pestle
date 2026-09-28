@@ -8,12 +8,15 @@
 export const hit = (text, q) => typeof text === 'string' && text.toLowerCase().includes(q.trim().toLowerCase());
 
 // -> { keep, open }: Sets of node ids to show / folders to force open.
-export function searchTree(roots, q, { id, text, kids }) {
+// `match(n)` (optional) replaces the name test, for a tree whose search finds
+// things other than its row names (the Settings tree keeps the pages holding a
+// matching setting).
+export function searchTree(roots, q, { id, text, kids, match }) {
   const keep = new Set(), open = new Set();
   const visit = (n) => {
     const inside = (kids(n) || []).map(visit).some(Boolean); // map, not some: every branch
     if (inside) open.add(id(n));
-    const k = inside || hit(text(n), q);
+    const k = inside || (match ? match(n) : hit(text(n), q));
     if (k) keep.add(id(n));
     return k;
   };

@@ -1,20 +1,20 @@
 // Module settings page rendered inside the Modules tab at address
-// {tab:'modules', page:<moduleId>}. Header = back chip + "Modules › Name"
-// breadcrumb; body = the module's registered settings-tab render (or a
-// host-provided page), with content empty states for settings-less and
-// uninstalled modules. Pages receive additive {initialSection,
-// onNavigateSection} props so a page with its own sub-tab strip stays
-// controlled by the drawer address (deep links + search land exactly).
+// {tab:'modules', page:<moduleId>}: the module's registered settings-tab render
+// (or a host-provided page); an uninstalled module gets a notice, and a module
+// with no settings yet gets a blank page until it gets a real one
+// (user-directed 2026-09-28). No header — the Settings tree shows where you are (the
+// back chip + "Modules › Name" breadcrumb went with Settings Tree Navigation,
+// 2026-09-28). Pages receive additive {initialSection, onNavigateSection}
+// props; a page's sections are rows in the Settings tree, so a page hides its
+// own strip whenever onNavigateSection is passed (it keeps it standalone).
 
-import { IconChevronLeft } from '../icons.jsx';
 import { areaForModule } from '../../hooks/useModuleAreas.js';
 import AreaReleasesView from '../../pages/docs/AreaReleasesView.jsx';
-import { eyebrowStyle } from '../ui/Eyebrow.jsx';
 
 export default function ModulePage({
   manifest, pageEntry, enabled,
   settings, setSetting, accent,
-  section, onSectionChange, onBack,
+  section, onSectionChange,
 }) {
   const name = manifest?.name || pageEntry?.label || 'Module';
   const PageRender = pageEntry?.render || null;
@@ -22,12 +22,12 @@ export default function ModulePage({
   let body;
   if (section === 'releases') {
     // Release history is not module settings — show it regardless of install
-    // state (the tag button is on every card, installed or not).
+    // state (Releases is on every module row's right-click, installed or not).
     body = <AreaReleasesView area={areaForModule(manifest)} accent={accent} />;
   } else if (!enabled) {
     body = (
       <EmptyBox>
-        {name} is not installed. Install it from the Modules list to configure it.
+        {name} is not installed. Right-click it in the Settings list to install it.
       </EmptyBox>
     );
   } else if (PageRender) {
@@ -41,38 +41,10 @@ export default function ModulePage({
       />
     );
   } else {
-    body = (
-      <EmptyBox>
-        {name} has no settings yet — its behavior is configured inside the module itself.
-      </EmptyBox>
-    );
+    body = null;
   }
 
-  return (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
-        <button
-          type="button"
-          onClick={onBack}
-          data-own-press
-          title="Back to Modules"
-          aria-label="Back to Modules"
-          className="candy-btn"
-          data-shape="row"
-          style={{ '--accent': accent, width: 'auto', flexShrink: 0 }}
-        >
-          <span className="candy-face" style={{ justifyContent: 'center', padding: '6px 8px' }}>
-            <IconChevronLeft/>
-          </span>
-        </button>
-        <span style={{ ...eyebrowStyle }}>
-          Modules <span style={{ opacity: 0.6 }}>›</span>{' '}
-          <span style={{ color: 'var(--text-muted)' }}>{name}</span>
-        </span>
-      </div>
-      {body}
-    </div>
-  );
+  return body;
 }
 
 function EmptyBox({ children }) {

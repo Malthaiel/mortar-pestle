@@ -83,13 +83,16 @@ export default function BrowserSettingsTab({ accent, initialSection, onNavigateS
 
   return (
     <div>
-      <Topbar
-        tiles={SECTIONS.map(s => ({ id: s.id, label: s.label }))}
-        activeId={section}
-        accent={accent}
-        onSelect={select}
-        style={{ padding: '0 0 12px', background: 'transparent', marginBottom: 16 }}
-      />
+      {/* Inside Settings the tree holds these sections; the strip shows only standalone. */}
+      {!onNavigateSection && (
+        <Topbar
+          tiles={SECTIONS.map(s => ({ id: s.id, label: s.label }))}
+          activeId={section}
+          accent={accent}
+          onSelect={select}
+          style={{ padding: '0 0 12px', background: 'transparent', marginBottom: 16 }}
+        />
+      )}
       {section === 'adblock' && <AdBlockPanel accent={accent}/>}
       {section === 'data'    && <BrowsingDataPanel accent={accent}/>}
       {section === 'vault'   && <VaultPanel accent={accent}/>}

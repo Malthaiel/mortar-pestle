@@ -1,11 +1,12 @@
 // Full-screen centered settings modal.
 //
-// Layout: 960px wide, resizable left rail (default 180px, collapsible to a
-// 64px icon-only strip) + content pane on the right. Final 9-tab rail:
-// Appearance, Sounds, Navigation, Modules, Agents, Keybinds, Vaults, System
-// (+ Dev in dev builds only). Module-contributed settings render as pages
-// inside the Modules tab; sub-tab strips and pages are addressed via the
-// drawer-level { tab, page, section } address (settings-registry.js).
+// Layout: 960px wide, resizable left rail (default 260px) + content pane on the
+// right. The rail is the shared candy tree (SettingsNav): Appearance, Sounds,
+// Navigation, Modules, Releases, Agents, Keybinds, Vaults, System (+ Dev in dev
+// builds only), with every sub-section and module-contributed page as tree
+// rows (Settings Tree Navigation, 2026-09-28 — no sub-tab strips, no icon-only
+// collapse). Everything is addressed via the drawer-level { tab, page, section }
+// address (settings-registry.js); the tree's toolbar field is the settings search.
 //
 // Backdrop click + Esc close the modal. Reset button in the footer restores
 // defaults for the currently-visible scope.
@@ -23,7 +24,6 @@ import { moduleIdForArea } from '../hooks/useModuleAreas.js';
 import { AREA_PALETTE } from '../hooks/useReleaseQueue.js';
 import SystemTab from './settings/SystemTab.jsx';
 import { useModuleEnabledMap } from '../hooks/useModuleEnabled.js';
-import { candyGap } from '../util/candy.js';
 import ModulesTab from './settings/ModulesTab.jsx';
 import { AnimationField } from './settings/AnimationRows.jsx';
 import { ANIMATION_KEYS, ANIMATION_PRESETS, ANIMATION_KEY_CONFIG, SETTINGS_DEFAULTS, cornerPercent } from '../hooks/useSettings.js';
@@ -35,8 +35,8 @@ import VaultsTab from './settings/VaultsTab.jsx';
 import ThemePicker from './settings/ThemePicker.jsx';
 import { THEME_BY_ID } from '../themes/registry.js';
 import ResizeSeam, { DRAG_EASE } from './ui/ResizeSeam.jsx';
+import SettingsNav from './settings/SettingsNav.jsx';
 import {
-  IconSearch,
   IconBot,
   IconLayers,
   IconPackage,
@@ -48,7 +48,7 @@ import {
   IconCpu,
   IconTag,
 } from './icons.jsx';
-import { Seg, OutlinedBtn, Slider, AppWindow, Topbar } from './ui/index.js';
+import { Seg, OutlinedBtn, Slider, AppWindow } from './ui/index.js';
 import { AccentGrid, HexInput } from './ui/AccentPicker.jsx';
 import EnableToggle from './ui/EnableToggle.jsx';
 import PatternSwatchPicker from './ui/PatternSwatchPicker.jsx';
@@ -116,19 +116,19 @@ const FOLLOW_DRAG_OPTIONS = [
   { value: 'medium', label: 'Medium' },
   { value: 'heavy',  label: 'Heavy'  },
 ];
-const RAIL_COLLAPSED       = 64;
-const RAIL_EXPANDED_DEFAULT = 180;
+// Starts at the old Wide (user-directed 2026-09-28: the tree rail truncates at
+// 180), so the ladder shifted up one: old Default is Compact, max is Wide.
+const RAIL_EXPANDED_DEFAULT = 260;
 const RAIL_EXPANDED_MIN     = 120;
 const RAIL_EXPANDED_MAX     = 320;
-const RAIL_COLLAPSE_TRIGGER = 90;
 // The presets ARE the snap set — ResizeSeam derives it from them.
 const RAIL_PRESETS = [
-  { label: 'Compact', value: 140 },
-  { label: 'Default', value: 180 },
-  { label: 'Wide',    value: 260 },
+  { label: 'Compact', value: 180 },
+  { label: 'Default', value: RAIL_EXPANDED_DEFAULT },
+  { label: 'Wide',    value: RAIL_EXPANDED_MAX },
 ];
-const STORAGE_RAIL_WIDTH    = 'settings:railWidth';
-const STORAGE_RAIL_COLLAPSED = 'settings:railCollapsed';
+// v2: drops every width saved before the default moved, so the new one shows.
+const STORAGE_RAIL_WIDTH    = 'settings:railWidth:v2';
 
 function readStoredWidth() {
   try {
@@ -136,14 +136,6 @@ function readStoredWidth() {
     if (Number.isFinite(v) && v >= RAIL_EXPANDED_MIN && v <= RAIL_EXPANDED_MAX) return v;
   } catch {}
   return RAIL_EXPANDED_DEFAULT;
-}
-
-function readStoredCollapsed() {
-  try { return localStorage.getItem(STORAGE_RAIL_COLLAPSED) === '1'; } catch { return false; }
-}
-
-function writeStoredCollapsed(v) {
-  try { localStorage.setItem(STORAGE_RAIL_COLLAPSED, v ? '1' : '0'); } catch {}
 }
 
 // Mirror of App.jsx's editable-target guard so '/' doesn't hijack typing.
@@ -172,11 +164,9 @@ export default function SettingsDrawer({ open, onClose, settings, setSetting, se
 
   // Rail state — MUST be before early return
   const [railWidth, setRailWidth] = useState(readStoredWidth);
-  const [railCollapsed, setRailCollapsed] = useState(readStoredCollapsed);
-  // This rail's width transition is always on (it animates the collapse too),
-  // so a drag used to inherit the collapse's 200ms and lagged noticeably
-  // heavier than every other seam. It runs on ResizeSeam's shared clock while
-  // dragging now, and keeps the 200ms for the collapse.
+  // This rail's width transition is always on (it animates a preset snap), so
+  // a drag used to inherit its 200ms and lagged noticeably heavier than every
+  // other seam. It runs on ResizeSeam's shared clock while dragging.
   const [railResizing, setRailResizing] = useState(false);
 
   // "Keybinds →" card links open the Keybinds tab pre-filtered to one group;
@@ -218,12 +208,8 @@ export default function SettingsDrawer({ open, onClose, settings, setSetting, se
     }));
   }, []);
 
-  // Context-aware open target for modules without a settings page — their
-  // cards carry the module-card-<id> anchor.
-  const flashModuleCard = useCallback((id) => flashAnchor(`module-card-${id}`), [flashAnchor]);
-
   // Resolve the landing address on each open: explicit deep link → the
-  // current route's settings surface (module page, card flash, or override)
+  // current route's settings surface (module page or override)
   // → last-visited tab. Search only auto-focuses on context-less opens.
   useEffect(() => {
     if (open && !wasOpen.current) {
@@ -234,18 +220,16 @@ export default function SettingsDrawer({ open, onClose, settings, setSetting, se
             route: route?.path,
             manifests,
             enabledMap,
-            hasPage: (id) => !!pagesByModuleId[id],
           })
         : null;
       const last = readLastTab();
       setAddr(explicit || ctx?.addr || withDefaults({ tab: validIds.has(last) ? last : 'appearance' }));
       setQuery('');
       setSelResult(0);
-      if (ctx?.highlight) flashModuleCard(ctx.highlight);
       if (!explicit && !ctx) requestAnimationFrame(() => searchRef.current?.focus());
     }
     wasOpen.current = open;
-  }, [open, route?.path, manifests, enabledMap, pagesByModuleId, initialAddress, flashModuleCard]);
+  }, [open, route?.path, manifests, enabledMap, initialAddress]);
 
   // Remember the last-visited top-level tab for context-less reopens.
   useEffect(() => { if (open) writeLastTab(addr.tab); }, [open, addr.tab]);
@@ -267,16 +251,6 @@ export default function SettingsDrawer({ open, onClose, settings, setSetting, se
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose, query]);
-
-  const handleCollapse = () => {
-    setRailCollapsed(true);
-    writeStoredCollapsed(true);
-  };
-
-  const handleUncollapse = () => {
-    setRailCollapsed(false);
-    writeStoredCollapsed(false);
-  };
 
   // ── Search (Feature 2) ──────────────────────────────────────────────────
   const searching = query.trim().length > 0;
@@ -360,23 +334,6 @@ export default function SettingsDrawer({ open, onClose, settings, setSetting, se
       width={960}
       height="min(680px, 85vh)"
       escToClose={false}
-      headerContent={(
-        <div style={{ display: 'flex', justifyContent: 'center', minWidth: 0 }}>
-          <SettingsSearchPill
-            inputRef={searchRef}
-            value={query}
-            onChange={(v) => { setQuery(v); setSelResult(0); }}
-            resultCount={results.length}
-            onArrow={(dir) => setSelResult(s => {
-              if (results.length === 0) return 0;
-              return dir === 'down'
-                ? Math.min(results.length - 1, s + 1)
-                : Math.max(0, s - 1);
-            })}
-            onEnter={() => jumpToResult(results[selResult])}
-          />
-        </div>
-      )}
       footer={(
         <>
           <OutlinedBtn small onClick={handleReset} disabled={!resetScope}>
@@ -387,36 +344,44 @@ export default function SettingsDrawer({ open, onClose, settings, setSetting, se
       )}
       bodyStyle={{ padding: 0, overflowY: 'hidden', display: 'flex' }}
     >
-      {/* Rail */}
+      {/* Rail — the settings tree. The tree scrolls itself; the rail only sizes. */}
           <div
             style={{
-              width: railCollapsed ? RAIL_COLLAPSED : railWidth,
-              padding: railCollapsed ? '14px 6px' : '14px 10px',
+              width: railWidth,
               borderRight: 'var(--candy-frame) solid var(--border)',
               flexShrink: 0,
-              display: 'flex', flexDirection: 'column', gap: candyGap(8),
+              display: 'flex', flexDirection: 'column', minHeight: 0,
               background: 'var(--surface-2)',
-              overflowX: 'hidden',
-              overflowY: 'auto',
-              transition: railResizing
-                ? `width ${DRAG_EASE}, padding 200ms ease`
-                : 'width 200ms cubic-bezier(0.16, 1, 0.3, 1), padding 200ms ease',
+              overflow: 'hidden',
+              transition: railResizing ? `width ${DRAG_EASE}` : 'width 200ms cubic-bezier(0.16, 1, 0.3, 1)',
             }}
           >
-            {visibleTabs.map((t) => {
-              const Icon = t.icon;
-              return (
-                <TabButton
-                  key={t.id}
-                  active={t.id === activeTab}
-                  accent={accent}
-                  onClick={() => { setQuery(''); navigateTo({ tab: t.id }); }}
-                  icon={Icon}
-                  iconOnly={railCollapsed}
-                  updateDot={t.id === 'system' && showUpdateDot}
-                >{t.label}</TabButton>
-              );
-            })}
+            <SettingsNav
+              tabs={visibleTabs}
+              addr={{ ...addr, tab: activeTab }}
+              onNavigate={(target) => { setQuery(''); navigateTo(target); }}
+              pagesByModuleId={pagesByModuleId}
+              settings={settings}
+              accent={accent}
+              updateDot={showUpdateDot}
+              onOpenKeybinds={(group) => { setQuery(''); setKeybindsFilter(group); navigateTo({ tab: 'keybinds' }); }}
+              query={query}
+              onQueryChange={(v) => { setQuery(v); setSelResult(0); }}
+              onSearchKeyDown={(e) => {
+                if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                  e.preventDefault();
+                  const down = e.key === 'ArrowDown';
+                  setSelResult(s => (results.length === 0 ? 0
+                    : down ? Math.min(results.length - 1, s + 1) : Math.max(0, s - 1)));
+                } else if (e.key === 'Enter') {
+                  e.preventDefault();
+                  jumpToResult(results[selResult]);
+                }
+                // Esc: the field clears itself; the window listener then closes on the next one.
+              }}
+              searchRef={searchRef}
+              results={results}
+            />
           </div>
 
           <ResizeSeam
@@ -426,10 +391,6 @@ export default function SettingsDrawer({ open, onClose, settings, setSetting, se
             defaultWidth={RAIL_EXPANDED_DEFAULT}
             minWidth={RAIL_EXPANDED_MIN}
             maxWidth={RAIL_EXPANDED_MAX}
-            collapseThreshold={RAIL_COLLAPSE_TRIGGER}
-            collapsed={railCollapsed}
-            onCollapse={handleCollapse}
-            onUncollapse={handleUncollapse}
             onDragStart={() => setRailResizing(true)}
             onDragEnd={() => setRailResizing(false)}
             presets={RAIL_PRESETS}
@@ -457,7 +418,7 @@ export default function SettingsDrawer({ open, onClose, settings, setSetting, se
               <>
                 {activeTab === 'appearance' && <AppearanceTab settings={settings} setSetting={setSetting} setPreviewAccent={setPreviewAccent} accent={accent}/>}
                 {activeTab === 'sounds'     && <SoundsTab     settings={settings} setSetting={setSetting} accent={accent}/>}
-                {activeTab === 'navigation' && <NavigationTab settings={settings} setSetting={setSetting} accent={accent} section={addr.section} onSectionChange={(id) => navigateTo({ tab: 'navigation', section: id })}/>}
+                {activeTab === 'navigation' && <NavigationTab settings={settings} setSetting={setSetting} accent={accent} section={addr.section}/>}
                 {activeTab === 'modules' && (addr.page && (manifests[addr.page] || pagesByModuleId[addr.page])
                   ? <ModulePage
                       manifest={manifests[addr.page]}
@@ -466,17 +427,13 @@ export default function SettingsDrawer({ open, onClose, settings, setSetting, se
                       settings={settings} setSetting={setSetting} accent={accent}
                       section={addr.section}
                       onSectionChange={(id) => navigateTo({ tab: 'modules', page: addr.page, section: id })}
-                      onBack={() => navigateTo({ tab: 'modules' })}
                     />
-                  : <ModulesTab accent={accent} section={addr.section}
-                      onSectionChange={(id) => navigateTo({ tab: 'modules', section: id })}
-                      onOpenModule={(id, section) => { const target = manifests[id]?.settingsTarget; if (target && !section) navigateTo(withDefaults(target)); else navigateTo({ tab: 'modules', page: id, section }); }}
-                      onOpenKeybinds={(group) => { setKeybindsFilter(group); navigateTo({ tab: 'keybinds' }); }}/>)}
-                {activeTab === 'releases' && <ReleasesTab accent={accent} section={addr.section} onSectionChange={(id) => navigateTo({ tab: 'releases', section: id })}/>}
-                {activeTab === 'agents'     && <AgentsTab     settings={settings} setSetting={setSetting} accent={accent} section={addr.section} onSectionChange={(id) => navigateTo({ tab: 'agents', section: id })}/>}
+                  : <ModulesTab accent={accent} section={addr.section}/>)}
+                {activeTab === 'releases' && <ReleasesTab accent={accent} section={addr.section}/>}
+                {activeTab === 'agents'     && <AgentsTab     settings={settings} setSetting={setSetting} accent={accent} section={addr.section}/>}
                 {activeTab === 'keybinds'   && <KeybindsTab   settings={settings} setSetting={setSetting} accent={accent} initialFilter={keybindsFilter} onClearFilter={() => setKeybindsFilter(null)}/>}
                 {activeTab === 'vaults'     && <VaultsTab     accent={accent}/>}
-                {activeTab === 'system'     && <SystemTab     settings={settings} setSetting={setSetting} accent={accent} section={addr.section} onSectionChange={(id) => navigateTo({ tab: 'system', section: id })}/>}
+                {activeTab === 'system'     && <SystemTab     settings={settings} setSetting={setSetting} accent={accent} section={addr.section}/>}
                 {(import.meta.env.DEV || import.meta.env.VITE_DEV_TOOLS === '1') && DevTab && activeTab === 'dev' && (
                   <Suspense fallback={null}><DevTab accent={accent}/></Suspense>
                 )}
@@ -492,9 +449,9 @@ export default function SettingsDrawer({ open, onClose, settings, setSetting, se
 // Standalone home for release Areas that aren't backed by a module (Dock,
 // Design, Music, Pomodoro, Shield, Release Pipeline, Settings, System,
 // General). Module-backed Areas live on their module's Releases sub-page; this
-// tab's strip is the module-LESS subset of the Area palette, built live from
+// tab's Areas (rows in the Settings tree) are the module-LESS subset of the Area palette, built live from
 // the manifest registry. Each tile renders the shared per-Area history view.
-function ReleasesTab({ accent, section, onSectionChange }) {
+function ReleasesTab({ accent, section }) {
   const manifests = useManifests();
   const areas = useMemo(
     () => AREA_PALETTE.filter(a => !moduleIdForArea(a, manifests)),
@@ -503,98 +460,10 @@ function ReleasesTab({ accent, section, onSectionChange }) {
   const active = section && areas.includes(section)
     ? section
     : (areas.includes('General') ? 'General' : areas[0]);
-  return (
-    <div>
-      <Topbar
-        tiles={areas.map(a => ({ id: a, label: a }))}
-        activeId={active}
-        accent={accent}
-        onSelect={onSectionChange}
-        style={{ padding: '0 0 12px', background: 'transparent', marginBottom: 16 }}
-      />
-      <AreaReleasesView key={active} area={active} accent={accent}/>
-    </div>
-  );
+  return <AreaReleasesView key={active} area={active} accent={accent}/>;
 }
 
-// ── Tab navigation ──────────────────────────────────────────────────────────
-
-function TabButton({ active, accent, onClick, icon: Icon, children, iconOnly = false, updateDot = false }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={iconOnly ? children : undefined}
-      data-own-press
-      className={`candy-btn${active ? ' is-active' : ''}`}
-      data-shape="row"
-      style={{ ...(accent ? { '--accent': accent } : {}), position: 'relative' }}
-    >
-      {updateDot && (
-        <span aria-hidden title="Update available" style={{
-          position: 'absolute', top: 6, right: 6, width: 7, height: 7,
-          borderRadius: '50%', background: accent || 'var(--accent, #c0392b)',
-          boxShadow: '0 0 0 2px var(--surface-2)',
-          animation: 'newBadgePulse 2.5s ease-in-out infinite',
-          pointerEvents: 'none', zIndex: 2,
-        }}/>
-      )}
-      <span
-        className="candy-face"
-        style={iconOnly ? { padding: '8px 6px', justifyContent: 'center' } : undefined}
-      >
-        {Icon && <Icon size={18}/>}
-        {!iconOnly && (
-          <span style={{ overflow: 'hidden', whiteSpace: 'nowrap' }}>{children}</span>
-        )}
-      </span>
-    </button>
-  );
-}
-
-// ── Header search pill + results view (Feature 2) ───────────────────────────
-
-function SettingsSearchPill({ inputRef, value, onChange, resultCount, onArrow, onEnter }) {
-  return (
-    <div style={{ position: 'relative', width: 'min(100%, 300px)' }}>
-      <span aria-hidden style={{
-        position: 'absolute', left: 10, top: 0, bottom: 0,
-        display: 'flex', alignItems: 'center',
-        color: 'var(--text-faint)', pointerEvents: 'none',
-      }}><IconSearch size={14}/></span>
-      <input
-        ref={inputRef}
-        type="text"
-        className="candy-input"
-        value={value}
-        placeholder="Search settings"
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'ArrowDown') { e.preventDefault(); onArrow('down'); }
-          else if (e.key === 'ArrowUp') { e.preventDefault(); onArrow('up'); }
-          else if (e.key === 'Enter') { e.preventDefault(); onEnter(); }
-          // Esc intentionally bubbles to the window listener (clear-then-close).
-        }}
-        style={{
-          width: '100%',
-          padding: '7px 28px 7px 30px',
-          fontSize: 12,
-          color: 'var(--text)',
-          fontFamily: 'var(--font-body)',
-          outline: 'none',
-        }}
-      />
-      {resultCount > 0 && (
-        <span style={{
-          position: 'absolute', right: 10, top: 0, bottom: 0,
-          display: 'flex', alignItems: 'center',
-          fontSize: 10, fontFamily: 'var(--font-mono)',
-          color: 'var(--text-faint)', pointerEvents: 'none',
-        }}>{resultCount}</span>
-      )}
-    </div>
-  );
-}
+// ── Search results view (Feature 2) ─────────────────────────────────────────
 
 function SearchResultsView({ results, selected, breadcrumbFor, accent, onHover, onPick }) {
   const accentColor = accent || 'var(--text)';

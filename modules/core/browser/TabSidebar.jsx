@@ -21,7 +21,7 @@ import NameInputModal from '@host/components/vault-tree/NameInputModal.jsx';
 import { usePersistedState } from '@host/components/vault-tree/useTreeExpansion.js';
 import { hit } from '@host/components/vault-tree/treeSearch.js';
 import {
-  AnimCtx, SuffixCtx, REVEAL, GAP, NAV_H, TOOLBAR_BAND,
+  AnimCtx, SuffixCtx, REVEAL, GAP, NAV_H, NAV_TEXT, NAV_ICON, TOOLBAR_BAND,
   CandyHeader, Collapsible, StaggerChild, TreeChildren,
 } from '@host/components/vault-tree/treeKit.jsx';
 
@@ -190,7 +190,7 @@ export default function TabSidebar({ api, accent }) {
           zIndex: 9999, pointerEvents: 'none',
           background: 'var(--bg, #1b1b1f)', color: 'var(--text, #eee)',
           border: '1px solid var(--accent)', borderRadius: 999, padding: '4px 11px',
-          fontFamily: 'var(--font-mono)', fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em',           maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          fontFamily: 'var(--font-mono)', fontSize: NAV_TEXT, fontWeight: 700, letterSpacing: '0.06em',           maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           boxShadow: '0 6px 16px rgba(0,0,0,0.35)',
         }}>{drag.label}</div>
       )}
@@ -232,11 +232,11 @@ function TabRow({ tab, accent, active, dragging, dropBefore, onClick, onClose, o
         <span className="candy-face" style={{
           justifyContent: 'flex-start', gap: 6, minWidth: 0,
           minHeight: NAV_H, boxSizing: 'border-box', padding: '0 28px 0 11px',
-          fontFamily: 'var(--font-mono)', fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em',         }}>
+          fontFamily: 'var(--font-mono)', fontSize: NAV_TEXT, fontWeight: 700, letterSpacing: '0.06em',         }}>
           <span style={favWrap}>
             {tab.favicon
-              ? <img src={tab.favicon} width={16} height={16} alt="" style={{ borderRadius: 3 }} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-              : <IconGlobe size={14} />}
+              ? <img src={tab.favicon} width={NAV_ICON} height={NAV_ICON} alt="" style={{ borderRadius: 3 }} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+              : <IconGlobe size={NAV_ICON} />}
           </span>
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{titleOf(tab)}</span>
         </span>
@@ -257,7 +257,7 @@ function TabRow({ tab, accent, active, dragging, dropBefore, onClick, onClose, o
 const shell = { display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, '--candy-depth-nav': 'calc(var(--candy-depth) * 0.85)' };
 const list = { flex: '1 1 auto', minHeight: 0, overflowY: 'auto', overflowX: 'hidden', display: 'flex', flexDirection: 'column', gap: GAP, padding: '0 8px' };
 const plusWrap = { display: 'grid', placeItems: 'center', padding: '4px 0 2px' };
-const favWrap = { flexShrink: 0, width: 16, height: 16, display: 'grid', placeItems: 'center' };
+const favWrap = { flexShrink: 0, width: NAV_ICON, height: NAV_ICON, display: 'grid', placeItems: 'center' };
 const EMPTY = { fontSize: 10, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)', padding: '4px 12px' };
 const closeX = { position: 'absolute', right: 5, top: 0, bottom: 0, margin: 'auto 0', width: 18, height: 18, minWidth: 0, borderRadius: 6, cursor: 'pointer' };
 

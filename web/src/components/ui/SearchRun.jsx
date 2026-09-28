@@ -19,6 +19,9 @@
 //   compact           the field rests as a square magnifier, one --cbtn-size
 //                     wide, and the parts slide as soon as it is clicked or
 //                     focused (the tree sidebars, user-directed 2026-09-25)
+//   inputRef          optional ref the caller gets the <input> through (focus it
+//                     from a hotkey -- the Settings tree's `/`)
+//   onKeyDown         optional key handler run before the field's own Esc
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { IconSearch } from '../icons.jsx';
@@ -35,7 +38,7 @@ function textWidth(el, text) {
 // Search icon size; compact centres it in a square part.
 const ICON = 14;
 
-export default function SearchRun({ value, onChange, placeholder = 'Search', size, leading, compact, children }) {
+export default function SearchRun({ value, onChange, placeholder = 'Search', size, leading, compact, inputRef: outerInputRef, onKeyDown, children }) {
   const winRef = useRef(null);
   const runRef = useRef(null);
   const partRef = useRef(null);
@@ -171,7 +174,7 @@ export default function SearchRun({ value, onChange, placeholder = 'Search', siz
               gridArea: '1 / 2', justifySelf: 'start', visibility: 'hidden', whiteSpace: 'pre', padding: 0, lineHeight: 'normal',
             }}>{compact ? '' : placeholder}</span>
             <input
-              ref={inputRef}
+              ref={(el) => { inputRef.current = el; if (outerInputRef) outerInputRef.current = el; }}
               className="chip-field-input"
               type="text"
               value={value}
@@ -191,6 +194,7 @@ export default function SearchRun({ value, onChange, placeholder = 'Search', siz
               onFocus={compact ? openWhenUp : undefined}
               onBlur={() => { if (!value.trim()) closeRun(); }}
               onKeyDown={(e) => {
+                onKeyDown?.(e);
                 if (e.key !== 'Escape') return;
                 onChange('');
                 closeRun();

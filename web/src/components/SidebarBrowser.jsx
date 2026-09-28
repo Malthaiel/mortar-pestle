@@ -17,6 +17,7 @@ import { useSidebarGroupMode } from '../hooks/useSidebarGroupMode.js';
 import { useContextMenu } from '../context-menu/useContextMenu.js';
 import { buildFileItemMenu } from '../context-menu/defaultMenus.js';
 import { IconChevronRight } from './icons.jsx';
+import { NAV_H } from './vault-tree/treeKit.jsx';
 
 const CAPTION_STYLE = {
   fontSize: 9,
@@ -206,6 +207,8 @@ function SidebarNavItem({ item, selected, accent, onClick, onItemContextMenu }) 
         margin: '0 6px',
         // Candy depth scaled to match the nav token set on the scroll parent.
         '--candy-depth': 'var(--candy-depth-nav)',
+        // Fully round at NAV_H (the row shape's own 13px only rounds 26px).
+        '--corner-max': `${NAV_H / 2}px`,
         ...(accent ? { '--accent': accent } : {}),
       }}
     >
@@ -213,8 +216,9 @@ function SidebarNavItem({ item, selected, accent, onClick, onItemContextMenu }) 
         className="candy-face"
         style={{
           justifyContent: 'center', textAlign: 'center',
-          // Height −15%: vertical padding 9px→6px (horizontal 12px from the row recipe).
-          paddingTop: 6, paddingBottom: 6,
+          // Same height as the tree rows (treeKit NAV_H, the app's nav size knob),
+          // set by min-height, not padding, so it can't drift from them.
+          minHeight: NAV_H, boxSizing: 'border-box', paddingTop: 0, paddingBottom: 0,
           ...(item.mono ? { fontFamily: 'var(--font-mono)' } : {}),
         }}
       >

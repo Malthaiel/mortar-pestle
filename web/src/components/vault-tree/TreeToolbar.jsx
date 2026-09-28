@@ -13,6 +13,7 @@
 
 import { useContextMenu } from '../../context-menu/useContextMenu.js';
 import SearchRun from '../ui/SearchRun.jsx';
+import { NAV_H } from './treeKit.jsx';
 // TEMPORARY icon picker — removed once the icon set is baked in. See IconPicker.jsx.
 // Hooked inside ToolBtn (not per call site) so `extra` buttons and surface-owned
 // ones passed through `children` are covered for free; the key is the tooltip.
@@ -25,7 +26,6 @@ import {
 // Toolbar buttons are candy icon buttons (data-shape="icon") sized to the tree
 // rows' height (NAV_H) so they read as candy pills like the folder/file rows. The
 // header band is transparent, so they ride the sidebar's circuit texture.
-const ROW_H = 26; // = treeKit NAV_H
 
 // Exported so a surface can mount its OWN toolbar control (one that carries its
 // own popover/state, e.g. TreeVaultSwitcher) through the `children` slot and still
@@ -52,7 +52,7 @@ export function ToolBtn({ title, tipDesc, accent, onClick, onMouseDown, onKeyDow
         // Size through --cbtn-size, never an inline width/height: the icon shape
         // derives its square + corner from it, and so does .candy-split's seam
         // (an inline size would beat the run's rules and break the seam). Depth = nav rows.
-        '--cbtn-size': `${ROW_H}px`,
+        '--cbtn-size': `${NAV_H}px`,
         '--cbtn-depth': 'var(--candy-depth-nav)',
         // An active toggle can override the fill colour (e.g. a red "live on" band):
         // is-active reads --accent, so a per-button activeAccent re-tints just this one.
@@ -149,7 +149,8 @@ export default function TreeToolbar({ buttons, controller, accent, extra, search
   return (
     <div style={{ display: 'flex', justifyContent: 'center' }}>
       {search
-        ? <SearchRun compact value={search.value} onChange={search.onChange} size={`${ROW_H}px`}>{parts}</SearchRun>
+        ? <SearchRun compact value={search.value} onChange={search.onChange} size={`${NAV_H}px`}
+            onKeyDown={search.onKeyDown} inputRef={search.inputRef} placeholder={search.placeholder}>{parts}</SearchRun>
         : <div className="candy-split">{parts}</div>}
     </div>
   );
