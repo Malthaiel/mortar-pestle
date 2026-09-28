@@ -11,7 +11,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { videoApi } from './api.js';
 import { useVideoPlayer } from './VideoPlayerProvider.jsx';
 import EpisodeRow from './EpisodeRow.jsx';
-import { IconFolder, IconDownload, IconPlay, IconFire, IconSwatch } from '@host/components/icons.jsx';
+import { IconFolder, IconDownload, IconPlay, IconStarMark, IconSwatch } from '@host/components/icons.jsx';
 import { coverSrc, STATUS_DOT_COLOR, DOWNLOAD_DOT_COLOR, resolveDot } from './util.js';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
 import { statusLabel, STATUS_ICON } from '@host/util/media-status.js';
@@ -499,10 +499,10 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
             />
             {/* Rating as a peer of the status chip. The values are the schema
                 numbers; re-picking the current one clears it, as the dot strip did.
-                Every rating wears the fire (user-directed 2026-09-27; the
+                Every rating wears the star (user-directed 2026-09-27; the
                 album's copy matches). */}
             {isMovie && (
-              <CandySelect icon={IconFire}
+              <CandySelect icon={IconStarMark}
                 value={series.personalRating ? String(series.personalRating) : ''}
                 accent={accent}
                 fuse shape="chip"

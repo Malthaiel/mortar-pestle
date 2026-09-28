@@ -11,15 +11,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { videoApi, prefetchCredits } from './api.js';
 import { coverSrc, STATUS_DOT_COLOR, resolveDot } from './util.js';
 import { FilterChip as Pill } from '@host/components/ui/index.js';
-import { IconFire } from '@host/components/icons.jsx';
-import { useContextMenu } from '@host/context-menu/useContextMenu.js';
+import { IconStarMark } from '@host/components/icons.jsx';
+import { useSeriesMenu } from './useSeriesMenu.js';
 
 // Single pill per sort dimension; click activates with the default direction,
 // click again flips direction. Active pill renders the direction arrow.
 const SORT_DIMENSIONS = [
   { key: 'added',    label: 'Date Added', defaultDir: 'desc', value: s => s.mtime || 0 },
-  // Your rating wears the fire, as the rating picker does (user-directed 2026-09-27).
-  { key: 'personal', label: <><IconFire size={12}/>Personal</>, defaultDir: 'desc', value: s => Number(s.personalRating) || 0 },
+  // Your rating wears the star, as the rating picker does (user-directed 2026-09-27).
+  { key: 'personal', label: <><IconStarMark size={12}/>Personal</>, defaultDir: 'desc', value: s => Number(s.personalRating) || 0 },
   { key: 'mal',      label: '★ MAL',      defaultDir: 'desc', value: s => Number(s.onlineRating)   || 0 },
   { key: 'year',     label: 'Year',       defaultDir: 'desc', value: s => s.year || 0 },
   { key: 'title',    label: 'Title',      defaultDir: 'asc',  value: s => (s.title || '').toLowerCase() },
@@ -158,40 +158,6 @@ export default function SeriesBrowser({ accent, onSelect, selectedPath, initialS
   );
 }
 
-// Right-click menu for a series tile. Two rows because anime_uninstall's
-// delete_files flag is the only real choice the detail page's confirm dialog
-// offers — exposing both here avoids lifting that dialog out of SeriesDetail.
-// Exported so AnimeHome's ContinueCard shares one implementation.
-//
-// Anime only: `anime_uninstall` also clears the title's torrents and cover, so
-// pointing it at a TV card would be a guess. Other domains get no menu until
-// they have a remover of their own — returning null so the caller can leave
-// onContextMenu unbound rather than opening a menu that does nothing.
-export function useSeriesMenu(accent, domain = 'Anime') {
-  const { openContextMenu } = useContextMenu();
-  const uninstall = async (series, deleteFiles) => {
-    // eslint-disable-next-line no-alert
-    if (!window.confirm(
-      `Remove “${series.title}” from your library?` +
-      (deleteFiles ? ' Its video files are deleted too.' : ' Downloaded video files are kept on disk.') +
-      ' The card goes to the recycling bin.'
-    )) return;
-    try {
-      const rep = await videoApi.seriesUninstall(series.path, deleteFiles);
-      window.dispatchEvent(new CustomEvent('video-library-changed', { detail: {} }));
-      // eslint-disable-next-line no-alert
-      if (rep && !rep.ok) window.alert((rep.warnings || [])[0] || 'Could not remove the library card.');
-    } catch (err) {
-      // eslint-disable-next-line no-alert
-      window.alert(`Remove failed: ${err?.message || err}`);
-    }
-  };
-  return (e, series) => openContextMenu(e, [
-    { label: 'Remove from Library', danger: true, onClick: () => uninstall(series, false) },
-    { label: 'Remove + Delete Files', danger: true, onClick: () => uninstall(series, true) },
-  ], { accent, header: series.title });
-}
-
 export function SeriesCard({ series, accent, selected, onSelect, domain = 'Anime' }) {
   const img = coverSrc(series.image);
   const seriesMenu = useSeriesMenu(accent, domain);
@@ -281,7 +247,7 @@ export function SeriesCard({ series, accent, selected, onSelect, domain = 'Anime
               color: accent, marginLeft: 'auto', fontWeight: 600,
               fontVariantNumeric: 'tabular-nums',
               display: 'inline-flex', alignItems: 'center', gap: 2,
-            }}><IconFire size={11}/>{series.personalRating}</span>
+            }}><IconStarMark size={11}/>{series.personalRating}</span>
           )}
         </div>
       </div>

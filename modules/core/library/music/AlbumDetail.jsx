@@ -6,7 +6,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { musicApi, useMbRefreshTick, useCaaCover } from './api.js';
 import { useMusicPlayer } from './MusicPlayerProvider.jsx';
-import { IconPlay, IconFire, IconRadio, IconSwatch, IconPaperPlane, IconDownload, IconMusic, IconGroup, IconFingerUp, IconCamcorder, IconEarAlt, IconAnnouncement, IconTag } from '@host/components/icons.jsx';
+import { IconStarMark, IconRadio, IconSwatch, IconPaperPlane, IconDownload, IconMusic, IconGroup, IconBookmarkAlt, IconHandRock, IconCamcorder, IconEarAlt, IconAnnouncement, IconTag } from '@host/components/icons.jsx';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
 import { statusLabel, STATUS_ICON } from '@host/util/media-status.js';
 import { libraryAbs } from '@host/api.js';
@@ -33,8 +33,6 @@ const HEAD_COLOR = 'var(--text)';
 const FACT_SIZE = 'calc(12px * var(--film-head))';
 
 const LISTEN_STATUSES = ['Plan-to-Listen', 'Currently-Listening', 'Listened', 'Dropped'];
-// The status part's resting word; the full one opens on hover (user-directed 2026-09-27).
-const STATUS_SHORT = { 'Plan-to-Listen': 'Plan', 'Currently-Listening': 'Cnty', Listened: 'Lstn', Dropped: 'Drop' };
 
 // The film's tab strip (AnimeMainColumn FILM_TABS), for a record: one section
 // under the hairline at a time (user-directed 2026-09-26).
@@ -516,7 +514,7 @@ export default function AlbumDetail({ accent, albumPath }) {
               aria-label="Play Album"
               style={{ '--accent': accent || 'var(--accent)' }}
               {...act()}
-            ><span className="candy-face"><IconPlay size={14}/>{splitName('Play Album')}</span></button>
+            ><span className="candy-face"><IconHandRock size={14}/>{splitName('Play Album')}</span></button>
 
             {/* Icon only, right after Play (user-directed 2026-09-26); the
                 job's state (Queued, Downloading 3/11, Failed) is its tooltip,
@@ -537,8 +535,8 @@ export default function AlbumDetail({ accent, albumPath }) {
                 {splitName(dlLabel)}</span></button>
             )}
 
-            {/* A picked status shows its short form at rest and opens to the
-                full word (user-directed 2026-09-27). */}
+            {/* A picked status shows its icon alone at rest; the word opens on
+                hover (user-directed 2026-09-27). */}
             <CandySelect
               value={album.status || ''}
               accent={accent}
@@ -546,7 +544,7 @@ export default function AlbumDetail({ accent, albumPath }) {
               icon={IconTag}
               title="Mark status"
               placeholder="Status"
-              options={LISTEN_STATUSES.map(s => ({ value: s, label: statusLabel(s), short: STATUS_SHORT[s], icon: STATUS_ICON[s], dot: resolveDot(STATUS_DOT_COLOR, s, accent) }))}
+              options={LISTEN_STATUSES.map(s => ({ value: s, label: statusLabel(s), icon: STATUS_ICON[s], dot: resolveDot(STATUS_DOT_COLOR, s, accent) }))}
               clearable
               disabled={busy}
               onChange={setStatus}
@@ -554,9 +552,9 @@ export default function AlbumDetail({ accent, albumPath }) {
 
             {/* The film's rating control, 1-1: re-picking the current value
                 clears it, exactly as the dot strip did. Every rating wears the
-                fire; a picked one shows its number at rest and opens to
+                star; a picked one shows its number at rest and opens to
                 "8 out of 10" (user-directed 2026-09-27). */}
-            <CandySelect icon={IconFire}
+            <CandySelect icon={IconStarMark}
               value={album.personalRating ? String(album.personalRating) : ''}
               accent={accent}
               fuse shape="chip" nameOnHover {...act()}
@@ -585,7 +583,7 @@ export default function AlbumDetail({ accent, albumPath }) {
             <button type="button" className="candy-btn" data-shape="chip" data-own-press
               onClick={(e) => menuUnder(e, playlistMenu.buildItems(trackRefs()), { header: 'Add to playlist' })}
               aria-label="Add to Playlist" {...act()}
-            ><span className="candy-face"><IconFingerUp size={14}/>{splitName('Add to Playlist')}</span></button>
+            ><span className="candy-face"><IconBookmarkAlt size={14}/>{splitName('Add to Playlist')}</span></button>
             <button type="button" className="candy-btn" data-shape="chip" data-own-press
               onClick={enqueueAlbum} aria-label="Add to Queue" {...act()}
             ><span className="candy-face"><IconPaperPlane size={14}/>{splitName('Add to Queue')}</span></button>
@@ -812,7 +810,7 @@ function TrackRow({ track, plays, playsDigits, accent, playing, highlighted, onP
       <AddToPlaylistButton
         variant="form"
         fuse
-        icon={IconFingerUp}
+        icon={IconBookmarkAlt}
         label={label('Add to Playlist')}
         accent={accent}
         title={null}
@@ -874,7 +872,7 @@ function usePlayCounts() {
 // the row number is not this song's.
 // ponytail: assumes a card's n is the disc position Browse logs; if n counts
 // across discs, Browse plays of disc 2+ miss. Map by position if that shows up.
-export function playCount(counts, album, t) {
+function playCount(counts, album, t) {
   const keys = new Set([
     t.audioPath,
     `${album.path}#${t.n}`,
@@ -944,7 +942,7 @@ const squash = (s) => String(s || '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '
 // which is sound over the cover) and its title names one of THIS album's songs.
 // Longest song name wins, so a "Karma Police" video is never handed to a song
 // called "Police"; first video per song. Returns { squash(song title): watchUrl }.
-export function trackVideos(hits, album) {
+function trackVideos(hits, album) {
   const artist = squash(album.artist);
   const names = album.tracks.map(t => squash(t.title))
     .filter(n => n.length >= 3 && n !== artist)
