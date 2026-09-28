@@ -120,6 +120,26 @@ export function MusicPlayerProvider({ children }) {
     if (ctx?.state === 'suspended') ctx.resume().catch(() => {});
   }, []);
 
+  // Tearing this provider down (the root error boundary catching, the Library
+  // module switched off, a vault-mapping re-key of MainApp, a dev remount) must
+  // silence its element: a detached new Audio() that is still playing is
+  // unreachable afterwards, so it played on while the fresh provider's widget
+  // showed paused (user-reported 2026-09-28). StrictMode and Fast Refresh re-run
+  // this effect on the SAME instance, so the silence waits one task and fires
+  // only if no re-run followed — i.e. a real unmount.
+  const mountGenRef = useRef(0);
+  useEffect(() => {
+    const gen = ++mountGenRef.current;
+    const a = audioRef.current;
+    return () => setTimeout(() => {
+      if (mountGenRef.current !== gen) return;
+      a?.pause();
+      a?.removeAttribute('src');
+      a?.load();
+      audioContextRef.current?.close().catch(() => {});
+    });
+  }, []);
+
   // Queue is an array of { albumPath, albumTitle, albumImage, artist, n, title, audioPath, available, wikilink, duration }.
   const [queue, setQueue] = useState([]);
   // Index into the queue (the currently selected / loaded track).
