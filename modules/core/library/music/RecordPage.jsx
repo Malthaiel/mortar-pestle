@@ -6,7 +6,7 @@
 // live in recordHooks.js.
 
 import { Fragment, useEffect, useRef, useState } from 'react';
-import { IconStarMark, IconSwatch, IconPaperPlane, IconArrowBigDown, IconPlusBig, IconBookmarkAlt, IconHandRock, IconCamcorder, IconEarAlt, IconAnnouncement, IconTag, IconHot } from '@host/components/icons.jsx';
+import { IconStarMark, IconSwatch, IconPaperPlane, IconArrowBigDown, IconPlusBig, IconBookmarkAlt, IconHandRock, IconCamcorder, IconEarAlt, IconAnnouncement, IconTag, IconHot, IconBrush } from '@host/components/icons.jsx';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
 import { statusLabel, STATUS_ICON } from '@host/util/media-status.js';
 import { useContextMenu } from '@host/context-menu/useContextMenu.js';
@@ -358,12 +358,13 @@ export function TabRun({ accent, tabs, icons, active, onPick }) {
 }
 
 // One row = ONE fused run (.candy-split, Component Map § Default Components)
-// as wide as the column: the name half (number, name, [artist], length) plays
-// and pauses, then World plays, Plays, Playlist, Queue, Video, [Remove]
-// (user-directed 2026-09-26; artist + Remove for playlists 2026-09-27).
+// as wide as the column: the name half (number, name, length) plays and
+// pauses, then Artist, World plays, Plays, Playlist, Queue, Video, [Remove]
+// (user-directed 2026-09-26; Remove for playlists 2026-09-27; Artist on every
+// row 2026-09-28).
 // Every part is ROW_H tall because the run declares --cbtn-size; nothing here
 // restates a height.
-export function TrackRow({ track, artist, plays, playsDigits, accent, playing, highlighted, onPlay, onEnqueue, onMenu, onRemove, playlistRef, videoUrl, world, worldText, worldSizers }) {
+export function TrackRow({ track, artist, artistSizers, plays, playsDigits, accent, playing, highlighted, onPlay, onEnqueue, onMenu, onRemove, playlistRef, videoUrl, world, worldText, worldSizers }) {
   const rowRef = useRef(null);
   // Scroll a song arrived-at from search into view; long tracklists otherwise
   // highlight a row sitting below the fold.
@@ -427,12 +428,10 @@ export function TrackRow({ track, artist, plays, playsDigits, accent, playing, h
             <span className="track-n-play" style={{ gridArea: '1 / 1' }}>▶</span>
           </>}</span>
 
-          {/* A playlist mixes artists, so its rows add the artist after the
-              song, dimmer, on the same line (user-picked 2026-09-27). */}
           <span style={{
             flex: 1, minWidth: 0, textAlign: 'left',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          }}>{track.title}{artist && <span style={{ opacity: 0.55, marginLeft: 8 }}>{artist}</span>}</span>
+          }}>{track.title}</span>
 
           {/* Duration, at the far end of the half that carries the name. */}
           <span style={{
@@ -440,6 +439,27 @@ export function TrackRow({ track, artist, plays, playsDigits, accent, playing, h
           }}>{fmtDuration(track.duration)}</span>
         </span>
       </button>
+
+      {/* The artist, by name, right after the song (user-picked 2026-09-28):
+          opens the artist the way the fact line's name does. Every row's slot
+          holds every artist on the page as hidden sizers, so the parts after it
+          line up; a long name is capped at a quarter of the row and cut. No
+          artist = the World-plays grey dash. */}
+      <button
+        type="button"
+        className="candy-btn"
+        data-shape="chip"
+        data-own-press
+        aria-disabled={!artist}
+        onClick={() => { if (artist) toBrowse(artist); }}
+        title={artist ? `Find ${artist}` : undefined}
+        style={{ flexShrink: 0, maxWidth: '25%', ...(artist ? null : { opacity: 1, cursor: 'default', '--cbtn-rest-text': 'var(--text-faint)' }) }}
+      ><span className="candy-face" style={{ width: '100%' }}><IconBrush size={14}/>
+        <span style={{ display: 'inline-grid', minWidth: 0, flex: 1 }}>
+          {artistSizers.map(s => <span key={s} aria-hidden style={{ gridArea: '1 / 1', visibility: 'hidden', overflow: 'hidden', whiteSpace: 'nowrap' }}>{s}</span>)}
+          <span style={{ gridArea: '1 / 1', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left' }}>{artist || '–'}</span>
+        </span>
+      </span></button>
 
       {/* Worldwide plays on Last.fm (Last.fm World Plays plan, user-picked
           2026-09-26), right after the name (user-directed 2026-09-26). On

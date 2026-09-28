@@ -52,16 +52,28 @@ function readLocal(key) {
 //
 // Both paths keep an OPTIMISTIC local order: the write is async, and without it
 // the tiles snap back to the old order for the round trip.
-export function useRailOrder(items, key, { idOf = (it) => it.id, local = false } = {}) {
+//
+// `show` is for a filtered view of one order: pass the FULL list and a
+// predicate, get back only the shown items, and a drop among them keeps every
+// hidden item in its slot. Pre-filtering `items` instead saves only the visible
+// ids, so whatever a search or filter hid fell to the end (found 2026-09-28).
+export function useRailOrder(items, key, { idOf = (it) => it.id, local = false, show } = {}) {
   // Unconditional, per the rules of hooks. A null key makes it inert, which is
   // exactly what the local path wants — it reads browser storage instead.
   const { order: savedOrder } = useSidebarOrder(local ? null : key);
   const [localOrder, setLocalOrder] = useState(() => (local ? readLocal(key) : null));
 
-  const ordered = applyOrder(items, localOrder ?? savedOrder, idOf);
+  const all = applyOrder(items, localOrder ?? savedOrder, idOf);
+  const ordered = show ? all.filter(show) : all;
 
   const onReorder = useCallback((from, to) => {
-    const moved = reindex(ordered.map(idOf), from, to);
+    if (to === from || to === from + 1) return;
+    // Shown slots onto the full list: land just before the shown item at `to`,
+    // or just after the last shown one. Without `show` the two are the same.
+    const ids = all.map(idOf);
+    const vis = ordered.map(idOf);
+    const at = (i) => ids.indexOf(vis[i]);
+    const moved = reindex(ids, at(from), to < vis.length ? at(to) : at(vis.length - 1) + 1);
     if (!moved) return;
     setLocalOrder(moved.next);
     if (local) {
@@ -77,7 +89,7 @@ export function useRailOrder(items, key, { idOf = (it) => it.id, local = false }
         }));
       })
       .catch(() => { /* the optimistic order stays; the next fetch corrects it */ });
-  }, [ordered, idOf, key, local]);
+  }, [all, ordered, idOf, key, local]);
 
   return { ordered, onReorder };
 }

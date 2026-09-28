@@ -241,6 +241,8 @@ export default function PlaylistDetail({ path, accent }) {
   const trackPlays = plays ? tracks.map((t, i) => countPlays(plays, [t.audioPath, t.watchUrl, items[i].streamKey])) : null;
   const playsDigits = trackPlays ? String(Math.max(0, ...trackPlays)).length : 1;
   const cells = worldCells(world, songs.map((s) => s.id));
+  // Every artist on the page, for TrackRow's artist slot to size to.
+  const artistSizers = [...new Set(tracks.map((t) => t.artist || '–'))];
 
   return (
     <RecordPage
@@ -313,6 +315,7 @@ export default function PlaylistDetail({ path, accent }) {
               <TrackRow
                 track={{ ...t, n: i + 1 }}
                 artist={t.artist}
+                artistSizers={artistSizers}
                 plays={trackPlays?.[i]}
                 playsDigits={playsDigits}
                 accent={accent}

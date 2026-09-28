@@ -269,6 +269,8 @@ export default function AlbumDetail({ accent, albumPath, rgMbid }) {
       <TrackRow
         key={t.n + ':' + t.title}
         track={t}
+        artist={album.artist}
+        artistSizers={[album.artist || '–']}
         plays={trackPlays?.[idx]}
         playsDigits={playsDigits}
         accent={accent}
