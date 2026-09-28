@@ -51,7 +51,8 @@ const EXACT = {
   'New domain': IconPlus,
   'Reconfigure': IconWrench,
   // library / music
-  'Add to playlist': IconCards,
+  // Exact, so the "Save to" heart pattern (Saved Tracks) never claims it.
+  'Save to Playlist': IconCards,
   Download: IconDownload,
   // planner / studio / editor
   'Edit': IconTypeText,

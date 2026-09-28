@@ -305,6 +305,12 @@ fn track_page_duration(wikilink_no_ext: &str) -> Option<i64> {
     parse_duration_to_seconds(&len)
 }
 
+/// `Source URL` off a loose song's track page: the link it was downloaded from.
+fn track_page_source_url(wikilink_no_ext: &str) -> Option<String> {
+    let text = fs::read_to_string(root().join(format!("{wikilink_no_ext}.md"))).ok()?;
+    meta_str(&parse_frontmatter(&text).0, "Source URL")
+}
+
 fn title_from_audio_leaf(audio_path: &str) -> String {
     let leaf = Path::new(audio_path)
         .file_name()
@@ -336,6 +342,14 @@ fn row_to_track(
         CellLink::Url { target, display } => (None, None, Some(target.clone()), display.clone()),
         CellLink::Plain { text } => (None, None, None, text.clone()),
     };
+    // A downloaded loose song (no album card) keeps its link, read off its own
+    // page: the row is both its file and its link whether or not the file is on
+    // disk, so its play count, streaming and re-download survive an uninstall.
+    let watch_url = watch_url.or_else(|| match (&row.title, &row.album) {
+        (CellLink::Link { .. }, CellLink::Link { .. }) => None,
+        (CellLink::Link { target, .. }, _) => track_page_source_url(target),
+        _ => None,
+    });
     let available = audio_path
         .as_ref()
         .map(|a| root().join(a).exists())

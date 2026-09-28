@@ -22,6 +22,22 @@ function announce() {
   window.dispatchEvent(new CustomEvent(PLAYLISTS_CHANGED));
 }
 
+// Rewrites rows in EVERY playlist: `swap(row)` returns the new row, or a falsy
+// value to keep it. Only changed pages are written.
+// ponytail: reads every playlist per call; fine at a handful.
+async function rewriteRows(swap) {
+  let changed = false;
+  for (const s of (await musicApi.listPlaylists()) || []) {
+    const cur = await musicApi.readPlaylist(s.path);
+    const rows = (cur.tracks || []).map(refFromPlaylistTrack);
+    const next = rows.map((r) => swap(r) || r);
+    if (next.every((r, i) => r === rows[i])) continue;
+    await musicApi.writePlaylist(cur.title, next, cur.path, cur.image || null);
+    changed = true;
+  }
+  if (changed) announce();
+}
+
 export function usePlaylists() {
   return (
     useContext(Ctx) || {
@@ -242,7 +258,8 @@ export function PlaylistProvider({ children }) {
   // playlist knows it is on disk; then it auto-saves -- Saved Tracks is the only
   // place it could ever appear, and a switched Saved row de-dupes the add.
   // Album-track downloads never touch either.
-  // ponytail: reads every playlist per finished song; fine at a handful.
+  // The switched row keeps the link anyway: read_playlist reads it back off
+  // the song's page (Source URL), with the file on disk or not.
   useEffect(() => {
     const h = async (e) => {
       const j = e.detail || {};
@@ -259,17 +276,8 @@ export function PlaylistProvider({ children }) {
       };
       try {
         if (j.watchUrl) {
-          let changed = false;
-          for (const s of (await musicApi.listPlaylists()) || []) {
-            const cur = await musicApi.readPlaylist(s.path);
-            const rows = (cur.tracks || []).map(refFromPlaylistTrack);
-            if (!rows.some((r) => r.watchUrl === j.watchUrl)) continue;
-            await musicApi.writePlaylist(cur.title,
-              rows.map((r) => (r.watchUrl === j.watchUrl ? { ...ref, title: r.title || ref.title, artist: r.artist || ref.artist } : r)),
-              cur.path, cur.image || null);
-            changed = true;
-          }
-          if (changed) announce();
+          await rewriteRows((r) => r.watchUrl === j.watchUrl
+            && { ...ref, title: r.title || ref.title, artist: r.artist || ref.artist });
         }
         await ensureSavedRef.current(ref);
       } catch { /* the song is on disk either way; the rows stay links */ }

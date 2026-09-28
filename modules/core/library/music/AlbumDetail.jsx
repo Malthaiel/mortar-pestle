@@ -149,23 +149,21 @@ export default function AlbumDetail({ accent, albumPath, rgMbid }) {
   const playable = album.tracks.filter(t => t.available);
 
   // Download / repair — the owned-page path into the same Rust job the Browse
-  // preview uses. Visible only when the card knows its release-group id and
-  // tracks are missing (metadata-only cards: all of them).
+  // preview uses. Needs the card's release-group id; always shown (greyed
+  // without one), and Uninstall once nothing is missing.
   const dlJob = dlJobId ? dlJobs.find(j => j.id === dlJobId) : null;
   const dlBusy = !!(dlJob && (dlJob.state === 'queued' || dlJob.state === 'downloading'));
   const missing = album.tracks.length - playable.length;
   const dlLabel = (() => {
-    if (dlJob) {
-      switch (dlJob.state) {
-        case 'queued': return 'Queued';
-        case 'downloading': return `Downloading ${dlJob.trackIndex || 0}/${dlJob.trackTotal || '?'}`;
-        case 'done': return 'Downloaded ✓';
-        case 'error': return 'Failed — Retry';
-        case 'cancelled': return 'Cancelled — Retry';
-        default: return 'Download';
-      }
+    // A finished job says nothing: an Uninstall after it must read Download,
+    // not "Downloaded" (user-directed 2026-09-28).
+    switch (dlJob?.state) {
+      case 'queued': return 'Queued';
+      case 'downloading': return `Downloading ${dlJob.trackIndex || 0}/${dlJob.trackTotal || '?'}`;
+      case 'error': return 'Failed — Retry';
+      case 'cancelled': return 'Cancelled — Retry';
     }
-    return playable.length > 0 ? `Repair · ${missing} Missing` : 'Download';
+    return playable.length > 0 ? `Repair · ${missing} Missing` : 'Download Album';
   })();
   // A Browse album downloads the full-size front, as the old preview did.
   const dlCover = !owned ? `${CAA}/release-group/${album.providerId}/front`
@@ -182,19 +180,49 @@ export default function AlbumDetail({ accent, albumPath, rgMbid }) {
     } catch (err) { setDlError(err.message || 'Failed to start download.'); }
   };
   // Add to Library: the metadata-only job the old Browse preview ran, landing
-  // the card with the picked status. Its finish re-reads this page in place.
+  // the card with NO status ('' -- the Status part then asks "Set a Status").
+  // Its finish re-reads this page in place.
   const addBusy = !owned && dlJobs.some(j => j.rgMbid === album.providerId && j.metadataOnly
     && (j.state === 'queued' || j.state === 'downloading'));
-  const addToLibrary = async (status) => {
+  const addToLibrary = async () => {
     if (addBusy) return;
     setDlError(null);
     try {
       await enqueueDownload({
         rgMbid: album.providerId, title: album.title, artist: album.artist,
-        cover: dlCover, metadataOnly: true, initialStatus: status,
+        cover: dlCover, metadataOnly: true, initialStatus: '',
       });
     } catch (err) { setDlError(err.message || 'Failed to add to library.'); }
   };
+
+  // Every song on disk: the Download part becomes Uninstall, which sends the
+  // song folder to the recycling bin and keeps the card, its status and rating
+  // (user-picked 2026-09-28). A half-downloaded album keeps Download (Repair).
+  const installed = owned && missing === 0 && album.tracks.length > 0;
+  const onUninstall = async () => {
+    const n = playable.length;
+    // eslint-disable-next-line no-alert
+    if (!window.confirm(
+      `Uninstall “${album.title}”? Its ${n} song${n === 1 ? '' : 's'} go to the recycling bin — ` +
+      `restorable until it's purged. The album stays in your library.`
+    )) return;
+    setBusy(true);
+    setDlError(null);
+    try {
+      await musicApi.trashFolder(album.trackFolder);
+      window.dispatchEvent(new CustomEvent('music-library-changed'));
+    } catch (err) {
+      setDlError('Uninstall failed: ' + (err.message || err));
+    } finally { setBusy(false); }
+  };
+  const download = installed && !dlBusy
+    ? { label: 'Uninstall Album', hot: true, busy, onClick: onUninstall }
+    : album.providerId
+      ? {
+          label: dlLabel, busy: dlBusy, onClick: startDownload,
+          rest: dlJob?.state === 'downloading' ? `${dlJob.trackIndex || 0}/${dlJob.trackTotal || '?'}` : null,
+        }
+      : { label: 'No Download Source', inert: true };
 
   // The fact line, in the film's order and shape. Length is SUMMED off the real
   // tracks rather than trusting the frontmatter "Length" string, which is often
@@ -237,8 +265,16 @@ export default function AlbumDetail({ accent, albumPath, rgMbid }) {
   // the album's biggest count (in digits), so every row's parts line up.
   // ponytail: assumes a card's n is the disc position Browse logs; if n counts
   // across discs, Browse plays of disc 2+ miss. Map by position if that shows up.
+  // The file's listens are found by folder + leading track number (the album
+  // parser's own match), not by audioPath: Uninstall nulls audioPath, and the
+  // counts must not drop and move every row (user-directed 2026-09-28: "zero
+  // movement"). ponytail: scans every logged key per track; fine at hundreds.
+  const folder = album.trackFolder ? album.trackFolder + '/' : null;
+  const fileKeys = (n) => folder
+    ? Object.keys(plays).filter(k => k.startsWith(folder) && parseInt(k.slice(folder.length), 10) === n)
+    : [];
   const trackPlays = plays ? album.tracks.map(t => countPlays(plays, [
-    t.audioPath,
+    ...fileKeys(t.n),
     owned && `${album.path}#${t.n}`,
     owned && `${album.path.replace(/\.md$/, '')}|${t.title}`,
     owned && `${album.path}|${t.title}`,
@@ -349,10 +385,7 @@ export default function AlbumDetail({ accent, albumPath, rgMbid }) {
           accent={accent}
           playLabel="Play Album"
           onPlay={() => playAlbumTracks(album, 0)}
-          download={album.providerId && (missing > 0 || dlJob) ? {
-            label: dlLabel, busy: dlBusy, onClick: startDownload,
-            rest: dlJob?.state === 'downloading' ? `${dlJob.trackIndex || 0}/${dlJob.trackTotal || '?'}` : null,
-          } : null}
+          download={download}
           status={album.status}
           rating={album.personalRating}
           busy={busy}

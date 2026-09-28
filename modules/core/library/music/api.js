@@ -18,6 +18,10 @@ export const musicApi = {
   markAlbumRating:  (path, rating) => _api.invoke('music_mark_rating', { path, rating }),
   setNotes:         (path, notes, baseMtime) => _api.invoke('music_set_notes', { path, notes, baseMtime: baseMtime ?? null }),
   deleteAlbum:      (path) => _api.invoke('music_delete_album', { path }),
+  // Uninstall: the audio goes to the recycling bin (restorable); cards and
+  // playlist rows stay. Paths are library-relative.
+  trashFolder:      (path) => _api.invoke('vault_delete_folder', { path, root: 'library' }),
+  trashFile:        (path) => _api.invoke('vault_delete_file', { path, root: 'library' }),
   // Browse — MusicBrainz discovery (read-only; covers saved to disk via music_cover).
   searchReleaseGroups: (query, limit, offset) => _api.invoke('music_search_releasegroups', { query, limit, offset }),
   searchArtists:       (query) => _api.invoke('music_search_artists', { query }),
@@ -51,7 +55,8 @@ export const musicApi = {
     _api.invoke('music_download_enqueue', {
       rgMbid: rgMbid || '', title: title || '', artist: artist || '',
       cover: cover || null, onlyMissing: !!onlyMissing,
-      metadataOnly: !!metadataOnly, initialStatus: initialStatus || null,
+      // '' is kept: Add to Library lands with no status (null = the script's default).
+      metadataOnly: !!metadataOnly, initialStatus: initialStatus ?? null,
       trackN: trackN ?? null, watchUrl: watchUrl || null,
     }),
   downloadStatus:  () => _api.invoke('music_download_status', {}),

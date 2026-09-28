@@ -157,12 +157,37 @@ export default function PlaylistDetail({ path, accent }) {
     }
     setDlJobIds(ids);
   };
+  // Nothing missing and songs on disk: Uninstall. Every on-disk song goes to
+  // the recycling bin, album songs included; every row stays and streams
+  // instead (user-picked 2026-09-28): an album song by its album, a loose song
+  // by the link read_playlist reads off its page.
+  // ponytail: one bin item per song; a loose song with no link is kept, since
+  // its row could never play again.
+  // One per file: a song listed twice is still one file.
+  const onDisk = [...new Map(tracks.filter((t) => t.available && t.audioPath).map((t) => [t.audioPath, t])).values()];
+  const onUninstall = async () => {
+    const n = onDisk.length;
+    // eslint-disable-next-line no-alert
+    if (!window.confirm(`Uninstall “${pl.title}”? Its ${n} downloaded song${n === 1 ? '' : 's'} go to the recycling bin, `
+      + `including songs that belong to an album. Every row stays in the playlist.`)) return;
+    setBusy(true);
+    try {
+      for (const t of onDisk) if (t.albumPath || t.watchUrl) await musicApi.trashFile(t.audioPath);
+    } catch (e) {
+      alert('Uninstall failed: ' + (e?.message || e));
+    } finally {
+      window.dispatchEvent(new CustomEvent('music-library-changed'));
+      setBusy(false);
+    }
+  };
   const download = (missing.length || dlBusy) ? {
-    label: dlBusy ? `Downloading ${dlDone}/${myJobs.length}` : `Download ${missing.length} Missing`,
+    // Nothing on disk yet = the whole playlist; some = what's missing (the album's Repair).
+    label: dlBusy ? `Downloading ${dlDone}/${myJobs.length}` : onDisk.length ? `Download ${missing.length} Missing` : 'Download Playlist',
     rest: dlBusy ? `${dlDone}/${myJobs.length}` : null,
     busy: dlBusy,
     onClick: startDownload,
-  } : null;
+  } : onDisk.length ? { label: 'Uninstall Playlist', hot: true, busy, onClick: onUninstall }
+    : { label: 'Nothing to Download', inert: true };
 
   const onEdit = async ({ title, coverFile }) => {
     setEditBusy(true);
@@ -238,7 +263,10 @@ export default function PlaylistDetail({ path, accent }) {
     secs ? `${Math.round(secs / 60)}m` : null,
   ].filter(Boolean);
 
-  const trackPlays = plays ? tracks.map((t, i) => countPlays(plays, [t.audioPath, t.watchUrl, items[i].streamKey])) : null;
+  // Every key a row's listens can carry, whether its file is on disk or not
+  // (the album-and-title key is only its streamKey while off disk), so a
+  // download or an uninstall never moves the count (user-directed 2026-09-28).
+  const trackPlays = plays ? tracks.map((t) => countPlays(plays, [t.audioPath, t.watchUrl, `${t.albumPath}|${t.title}`])) : null;
   const playsDigits = trackPlays ? String(Math.max(0, ...trackPlays)).length : 1;
   const cells = worldCells(world, songs.map((s) => s.id));
   // Every artist on the page, for TrackRow's artist slot to size to.
@@ -297,7 +325,7 @@ export default function PlaylistDetail({ path, accent }) {
     >
       {tracks.length === 0 && (
         <div style={{ color: 'var(--text-faint)', fontSize: 13, textAlign: 'center', padding: '36px 24px' }}>
-          Empty playlist. Add songs with Add to Playlist on any song or album.
+          Empty playlist. Add songs with Save to Playlist on any song or album.
         </div>
       )}
       {/* The album's row gap: the film Cast list's (--credit-gap) plus the chip

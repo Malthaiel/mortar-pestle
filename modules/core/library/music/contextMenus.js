@@ -39,7 +39,7 @@ export function useAlbumMenu(accent) {
 }
 
 // The one right-click menu every song surface shares: Save/Unsave (always),
-// Download (only when the file isn't already on disk), Add to playlist (the
+// Download (only when the file isn't already on disk), Save to Playlist (the
 // existing add-menu's own rows, nested), plus whatever the surface adds.
 //
 // `song` is a player queue item (`{ title, artist, n, available, watchUrl,
@@ -91,7 +91,7 @@ export function useSongMenu(accent) {
         label: saved ? `Remove from ${SAVED_TITLE}` : `Save to ${SAVED_TITLE}`,
         onClick: () => toggleSaved(ref).catch((err) => fail('Save', err)),
       },
-      { label: 'Add to Playlist', children: buildItems([ref]) },
+      { label: 'Save to Playlist', children: buildItems([ref]) },
     ];
     // A song already on disk gets no Download row at all — not greyed, not
     // "Re-download".

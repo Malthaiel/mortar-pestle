@@ -15,7 +15,7 @@ export default function AddToPlaylistButton({
   accent,
   label = '+ Playlist',
   variant = 'pill',
-  title = 'Add to playlist',
+  title = 'Save to Playlist',
   disabled,
   fuse = false,
   // Leading mark for the `form` trigger, so a fused one reads like the icon-led

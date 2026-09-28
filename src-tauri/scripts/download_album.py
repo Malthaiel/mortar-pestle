@@ -696,7 +696,8 @@ def write_album_page(abs_path, fm, tracks_meta, image_url, failed, multi_disc):
     lines.append(f"Provider ID: {fm['rg_mbid']}")
     lines.append(f"Release ID: {fm['release_mbid']}")
     lines.append(f"Title: {yaml_str(fm['title'])}")
-    lines.append(f"Status: {fm.get('status') or 'Plan-to-Listen'}")
+    # An explicit empty --status (Add to Library) writes no status.
+    lines.append(f"Status: {fm.get('status', 'Plan-to-Listen')}")
     lines.append(f"Created: {today}")
     lines.append(f"Ingested: {today}")
     lines.append("Enriched: false")

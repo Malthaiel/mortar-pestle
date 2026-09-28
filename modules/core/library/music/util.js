@@ -120,7 +120,9 @@ export function trackToQueueItem(t, pl) {
     artist: t.artist || '',
     n: t.n,
     title: t.title,
-    audioPath: t.audioPath,
+    // A linked row keeps its audioPath with the file gone (an uninstall); the
+    // player takes any audioPath as a file to play, so only an on-disk one goes.
+    audioPath: t.available ? t.audioPath : null,
     available: t.available,
     // A row carrying its own source link streams from that link directly;
     // otherwise streaming needs a real album card to resolve against, so rows

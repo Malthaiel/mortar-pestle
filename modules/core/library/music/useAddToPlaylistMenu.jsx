@@ -62,7 +62,7 @@ export function useAddToPlaylistMenu(accent) {
         ];
   };
 
-  const openMenu = (e, refs, header = 'Add to playlist') => {
+  const openMenu = (e, refs, header = 'Save to Playlist') => {
     e.stopPropagation();
     e.preventDefault();
     openContextMenu({ x: e.clientX, y: e.clientY }, buildItems(refs), { header, accent });
@@ -73,7 +73,7 @@ export function useAddToPlaylistMenu(accent) {
       const n = await addTracks(pl, list);
       notify({
         type: 'info',
-        title: n > 1 ? `Added ${n} tracks to ${pl.title}` : `Added to ${pl.title}`,
+        title: n > 1 ? `Saved ${n} tracks to ${pl.title}` : `Saved to ${pl.title}`,
         iconKey: 'bell',
         accent: accent || 'var(--accent)',
         transient: true,
@@ -85,7 +85,7 @@ export function useAddToPlaylistMenu(accent) {
       } else {
         notify({
           type: 'music-error',
-          title: 'Couldn’t add to playlist',
+          title: 'Couldn’t save to playlist',
           message: String(e?.message || e),
           iconKey: 'alert',
           accent: 'var(--error)',

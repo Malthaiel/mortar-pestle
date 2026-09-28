@@ -113,7 +113,7 @@ export default function MusicPlayerWidget() {
   const stop = (e) => e.stopPropagation();
 
   // Right-click anywhere on the tile for the shared song menu on what's playing
-  // (Save / Download / Add to playlist). No track playing → return before
+  // (Save / Download / Save to Playlist). No track playing → return before
   // openMenu so the app-wide default menu still appears.
   const { openMenu: openSongMenu, modalEl: playlistModal } = useSongMenu(accent);
   const onTileContextMenu = (e) => {

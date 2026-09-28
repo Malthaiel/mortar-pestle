@@ -204,14 +204,16 @@ export function RecordPage({ accent, backdrop, picture, cover, onPictureClick, s
 // Every action as ONE control, the same fused shell the film page uses for
 // status / rating / Download / More. Every part an icon whose name opens on
 // hover, like the tabs (user-directed 2026-09-27). act() numbers the parts in
-// render order (Download is not always there), so data-open lands on the
+// render order (Add swaps for Rating + Status), so data-open lands on the
 // hovered one. A disabled part keeps its paint and simply does nothing --
 // fading it punches a hole in the run.
-// `download` = { label, rest, busy, onClick } or null; `playlistRefs()` gives
-// the refs Add to Playlist writes; `moreItems` fills More Options.
+// `download` = { label, rest, busy, onClick, hot, inert }, always given: `hot`
+// = it uninstalls (the hot mark), `inert` = nothing to download (greyed).
+// `playlistRefs()` gives the refs Save to Playlist writes; `moreItems` fills
+// More Options after Send to Queue.
 export function ActionRun({ accent, playLabel, onPlay, download, status, rating, busy, onStatus, onRating, onAdd, addBusy, playlistRefs, onQueue, moreItems }) {
   const [openAct, actRun] = useOpenPart(0);
-  // Add to Playlist opens the same sub-menu a song's right-click menu carries.
+  // Save to Playlist opens the same sub-menu a song's right-click menu carries.
   const playlistMenu = useAddToPlaylistMenu(accent);
   const { openContextMenu } = useContextMenu();
   const menuUnder = (e, items, opts) => {
@@ -241,32 +243,14 @@ export function ActionRun({ accent, playLabel, onPlay, download, status, rating,
         {...act()}
       ><span className="candy-face"><IconHandRock size={14}/>{splitName(playLabel)}</span></button>
 
-      {/* Icon only, right after Play (user-directed 2026-09-26); the job's
-          state (Queued, Downloading 3/11, Failed) is its name, plus a bare 3/11
-          count on the face while it downloads (.is-rest), which gives way to
-          the words on hover. */}
-      {download && (
-        <button
-          className="candy-btn"
-          data-shape="chip"
-          data-own-press
-          onClick={download.onClick}
-          disabled={download.busy}
-          aria-label={download.label}
-          {...act()}
-        ><span className="candy-face"><IconArrowBigDown size={14}/>
-          {download.rest && <span className="split-label is-rest"><span>{download.rest}</span></span>}
-          {splitName(download.label)}</span></button>
-      )}
-
       {/* An album nobody owns has no card to hold a rating or a status, so
-          one part adds it instead, with the status picked from its menu
-          (user-directed 2026-09-28). Big plus mark, and Download wears
-          the big down arrow (user-picked 2026-09-28). */}
+          one part adds it instead: one press, no status (user-directed
+          2026-09-28: setting a status must not be what adds it). Big plus
+          mark (user-picked 2026-09-28). */}
       {onAdd ? (
         <button type="button" className="candy-btn" data-shape="chip" data-own-press
           disabled={addBusy}
-          onClick={(e) => menuUnder(e, LISTEN_STATUSES.map(s => ({ label: statusLabel(s), onClick: () => onAdd(s) })), { header: 'Add to library as' })}
+          onClick={() => onAdd()}
           aria-label="Add to Library" {...act()}
         ><span className="candy-face"><IconPlusBig size={14}/>{splitName(addBusy ? 'Adding' : 'Add to Library')}</span></button>
       ) : (<>
@@ -294,7 +278,7 @@ export function ActionRun({ accent, playLabel, onPlay, download, status, rating,
           fuse shape="chip" nameOnHover {...act()}
           icon={IconTag}
           title="Mark status"
-          placeholder="Status"
+          placeholder="Set a Status"
           options={LISTEN_STATUSES.map(s => ({ value: s, label: statusLabel(s), icon: STATUS_ICON[s], dot: resolveDot(STATUS_DOT_COLOR, s, accent) }))}
           clearable
           disabled={busy}
@@ -302,26 +286,43 @@ export function ActionRun({ accent, playLabel, onPlay, download, status, rating,
         />
       </>)}
 
-      {/* Queue and Playlist left the More menu for parts of their own
-          (user-directed 2026-09-27), wearing the song rows' marks. Always
-          offered: off-disk tracks stream from the queue too. Playlist before
-          Queue, as on a song row (user-directed 2026-09-27). */}
+      {/* Playlist left the More menu for a part of its own (user-directed
+          2026-09-27), wearing the song rows' mark. */}
       <button type="button" className="candy-btn" data-shape="chip" data-own-press
-        onClick={(e) => menuUnder(e, playlistMenu.buildItems(playlistRefs()), { header: 'Add to playlist' })}
-        aria-label="Add to Playlist" {...act()}
-      ><span className="candy-face"><IconBookmarkAlt size={14}/>{splitName('Add to Playlist')}</span></button>
-      <button type="button" className="candy-btn" data-shape="chip" data-own-press
-        onClick={onQueue} aria-label="Add to Queue" {...act()}
-      ><span className="candy-face"><IconPaperPlane size={14}/>{splitName('Add to Queue')}</span></button>
+        onClick={(e) => menuUnder(e, playlistMenu.buildItems(playlistRefs()), { header: 'Save to Playlist' })}
+        aria-label="Save to Playlist" {...act()}
+      ><span className="candy-face"><IconBookmarkAlt size={14}/>{splitName('Save to Playlist')}</span></button>
 
-      {/* The page's own rarer actions live in here, as Uninstall does on a
-          film. The swatch, not a ⋯ (user-directed 2026-09-26). */}
-      {moreItems.length > 0 && (
-        <button type="button" className="candy-btn" data-shape="chip" data-own-press
-          onClick={(e) => menuUnder(e, moreItems)}
-          aria-label="More Options" {...act()}
-        ><span className="candy-face"><IconSwatch size={14}/>{splitName('More Options')}</span></button>
-      )}
+      {/* Always there, right before More (user-directed 2026-09-28): the
+          big down arrow while anything is left to get, the hot mark once
+          every song is on disk (it uninstalls). The job's state (Queued,
+          Downloading 3/11, Failed) is its name, plus a bare 3/11 count on
+          the face while it downloads (.is-rest), which gives way to the words
+          on hover. Nothing to get = the song rows' greyed "No Video"
+          treatment. */}
+      {/* Busy (downloading, uninstalling) = lit in the accent like Play, never
+          greyed (user-directed 2026-09-28); presses do nothing meanwhile. */}
+      <button
+        className={'candy-btn' + (download.busy ? ' is-active' : '')}
+        data-shape="chip"
+        data-own-press
+        onClick={download.inert || download.busy ? undefined : download.onClick}
+        aria-busy={download.busy || undefined}
+        aria-disabled={download.inert || undefined}
+        aria-label={download.label}
+        style={download.inert ? { opacity: 1, cursor: 'default', '--cbtn-rest-text': 'var(--text-faint)' } : undefined}
+        {...act()}
+      ><span className="candy-face">{download.hot ? <IconHot size={14}/> : <IconArrowBigDown size={14}/>}
+        {download.rest && <span className="split-label is-rest"><span>{download.rest}</span></span>}
+        {splitName(download.label)}</span></button>
+
+      {/* The page's rarer actions, Send to Queue first (moved in here,
+          user-directed 2026-09-28; off-disk tracks stream from the queue
+          too). The swatch, not a ⋯ (user-directed 2026-09-26). */}
+      <button type="button" className="candy-btn" data-shape="chip" data-own-press
+        onClick={(e) => menuUnder(e, [{ label: 'Send to Queue', icon: IconPaperPlane, onClick: onQueue }, ...moreItems])}
+        aria-label="More Options" {...act()}
+      ><span className="candy-face"><IconSwatch size={14}/>{splitName('More Options')}</span></button>
     </div>
     {playlistMenu.modalEl}
   </>);
@@ -511,11 +512,11 @@ export function TrackRow({ track, artist, artistSizers, plays, playsDigits, acce
         variant="form"
         fuse
         icon={IconBookmarkAlt}
-        label={splitName('Add to Playlist')}
+        label={splitName('Save to Playlist')}
         accent={accent}
         title={null}
         refs={playlistRef ? [playlistRef] : []}
-        {...named('Add to Playlist')}
+        {...named('Save to Playlist')}
       />
 
       <button
@@ -524,8 +525,8 @@ export function TrackRow({ track, artist, artistSizers, plays, playsDigits, acce
         data-shape="chip"
         data-own-press
         onClick={onEnqueue}
-        {...named('Add to Queue')}
-      ><span className="candy-face"><IconPaperPlane size={14}/>{splitName('Add to Queue')}</span></button>
+        {...named('Send to Queue')}
+      ><span className="candy-face"><IconPaperPlane size={14}/>{splitName('Send to Queue')}</span></button>
 
       {/* On every song, so the parts line up down the list;
           greyed and inert when the song has no music video (user-directed
