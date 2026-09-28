@@ -56,7 +56,7 @@ function parseMusicRoute(rest) {
     // Identity routes — open the thing itself rather than re-searching for its
     // name. Without these a picked album/artist could only be handed over as a
     // text query, which lands you on the Browse grid needing a second click.
-    //   browse/rg/<releaseGroupMbid>       → straight into BrowsePreview
+    //   browse/rg/<releaseGroupMbid>       → straight into AlbumDetail
     //   browse/artist/<mbid>/<name?>       → straight into that discography
     if (segs[1] === 'rg' && segs[2]) {
       return { mode: 'browse', album: '', browseMode: 'albums', browseQuery: '', browseRg: segs[2] };
@@ -213,14 +213,17 @@ export default function MusicPage({ accent, rest }) {
         albums={albums} ownedIds={ownedIds} onPlay={playAlbum}
       />
     );
+  } else if (mode === 'browse' && browseRg) {
+    // A Browse album is the ONE album page, fed by its release group
+    // (user-directed 2026-09-28: "all album pages are the same").
+    content = <AlbumDetail key={'rg:' + browseRg} accent={accent} rgMbid={browseRg}/>;
   } else if (mode === 'browse') {
     content = (
       <BrowsePage
-        key={'browse:' + (browseMode || '') + ':' + (browseQuery || '') + ':' + (browseRg || '') + ':' + (browseArtist?.mbid || '')}
+        key={'browse:' + (browseMode || '') + ':' + (browseQuery || '') + ':' + (browseArtist?.mbid || '')}
         accent={accent}
         initialQuery={browseQuery}
         initialMode={browseMode === 'artists' ? 'artists' : 'albums'}
-        initialResultMbid={browseRg}
         initialArtist={browseArtist}
       />
     );

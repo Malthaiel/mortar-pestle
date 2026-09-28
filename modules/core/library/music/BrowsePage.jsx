@@ -9,7 +9,6 @@ import { musicApi, useMbRefreshTick } from './api.js';
 import { FilterChip, TextInput } from '@host/components/ui/index.js';
 import { navigate as go } from '@host/router.js';
 import BrowseResultCard from './BrowseResultCard.jsx';
-import BrowsePreview from './BrowsePreview.jsx';
 import { TILE_GRID } from './util.js';
 
 const MODE_ALBUMS = 'albums';
@@ -30,7 +29,7 @@ function errText(e, fallback) {
 }
 
 export default function BrowsePage({ accent, initialQuery = '', initialMode = MODE_ALBUMS,
-                                     initialResultMbid = '', initialArtist = null }) {
+                                     initialArtist = null }) {
   const [mode, setMode] = useState(initialMode === MODE_ARTISTS ? MODE_ARTISTS : MODE_ALBUMS);
   const [query, setQuery] = useState(initialQuery || '');
   const [results, setResults] = useState(null);   // albums / discography; null = idle
@@ -38,11 +37,9 @@ export default function BrowsePage({ accent, initialQuery = '', initialMode = MO
   // Seeded from an identity route (browse/artist/<mbid>) when we arrived by
   // clicking a specific artist, so no search re-run is needed to get here.
   const [selectedArtist, setSelectedArtist] = useState(initialArtist || null); // { mbid, name }
-  // The preview is a ROUTE (browse/rg/<mbid>), never local state: picking a card
-  // navigates, so it gets a real history entry and the mouse Back button returns
-  // to the grid instead of leaving Music. The mbid alone is enough — BrowsePreview
-  // fetches the rest via releaseGroupDetail and shows its own loading state.
-  const selectedResult = initialResultMbid ? { mbid: initialResultMbid } : null;
+  // A picked card is a ROUTE (browse/rg/<mbid>), never local state: it gets a
+  // real history entry, and MusicPage opens the one album page for it
+  // (AlbumDetail rgMbid), so the mouse Back button returns to this grid.
   const [libraryMap, setLibraryMap] = useState(() => new Map()); // providerId → { present, total }
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -114,7 +111,7 @@ export default function BrowsePage({ accent, initialQuery = '', initialMode = MO
   // identity route (rg / artist) owns the hash, and once we've navigated away.
   useEffect(() => {
     const t = setTimeout(() => {
-      if (selectedResult || selectedArtist) return;
+      if (selectedArtist) return;
       const cur = (window.location.hash || '').replace(/^#/, '');
       if (!cur.startsWith(BROWSE)) return;
       const q = query.trim();
@@ -124,7 +121,7 @@ export default function BrowsePage({ accent, initialQuery = '', initialMode = MO
       window.history.replaceState(null, '', window.location.href.split('#')[0] + '#' + want);
     }, 250);
     return () => clearTimeout(t);
-  }, [query, mode, selectedArtist, selectedResult]);
+  }, [query, mode, selectedArtist]);
 
   const switchMode = (m) => {
     if (m === mode) return;
@@ -140,19 +137,6 @@ export default function BrowsePage({ accent, initialQuery = '', initialMode = MO
 
   const showArtistList = mode === MODE_ARTISTS && !selectedArtist;
 
-  // A picked result takes over the whole page. Both ways out — the in-app arrow
-  // and the mouse Back button — are the same history pop, so the grid we came
-  // from (or wherever the link came from) is restored either way.
-  if (selectedResult) {
-    return (
-      <BrowsePreview
-        result={selectedResult}
-        accent={accent}
-        onBack={() => window.history.back()}
-        libraryEntry={libraryMap.get(selectedResult.mbid) || null}
-      />
-    );
-  }
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>

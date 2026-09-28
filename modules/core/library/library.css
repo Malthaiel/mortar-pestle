@@ -565,6 +565,12 @@
   aspect-ratio: 16 / 9;
   object-fit: cover;
 }
+/* The record page's runs (RecordPage.jsx RUN_SIZE) are a size up from the
+   film's: names and icons ride the run's own vars (user-directed 2026-09-28).
+   !important: CandySelect writes TREE_TEXT's 10.5px on its face inline. The
+   svg rule beats every icon's size={14} attribute, which CSS always outranks. */
+.candy-split[data-record-run] .candy-face { font-size: var(--chip-label-size) !important; }
+.candy-split[data-record-run] .candy-face > svg { width: var(--record-icon); height: var(--record-icon); }
 /* An EVEN scrim over the photo -- masking alone still let bright frames wash out
  * the title. Flat, not a left-to-right gradient: the gradient hid the left of
  * the still and left the right clear, so a photo drawn at full width with no

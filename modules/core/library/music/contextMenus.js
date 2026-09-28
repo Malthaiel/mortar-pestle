@@ -11,6 +11,7 @@ import { musicApi } from './api.js';
 import { usePlaylists, isSavedTracks, refFromQueueItem, SAVED_TITLE } from './PlaylistProvider.jsx';
 import { useDownloads } from './DownloadProvider.jsx';
 import { useAddToPlaylistMenu } from './useAddToPlaylistMenu.jsx';
+import { squash } from './util.js';
 
 function fail(what, err) {
   // eslint-disable-next-line no-alert
@@ -52,26 +53,32 @@ export function useSongMenu(accent) {
   const { enqueue } = useDownloads();
   const { buildItems, modalEl } = useAddToPlaylistMenu(accent);
 
+  // Returns the job id (null on failure), so a page queueing many can follow them.
   const download = async (song) => {
     let rgMbid = song.rgMbid || '';
+    let trackN = rgMbid ? song.n : null;
     // A row that knows only its album card (playlist / queue) still belongs on
     // the album-track path — its release-group id is one card read away, and
-    // only on click. A miss (or a row whose "album" is really a playlist) falls
-    // through to the loose-single path.
-    if (!rgMbid && song.n && song.albumPath) {
+    // only on click. Its n is NOT the album's (a playlist row's n is its place
+    // in the playlist, which downloaded the wrong song until 2026-09-27), so
+    // the track is found on the card by title. A miss (or a row whose "album"
+    // is really a playlist) falls through to the loose-single path.
+    if (!rgMbid && song.albumPath) {
       try {
-        rgMbid = (await musicApi.readAlbum(song.albumPath))?.providerId || '';
+        const card = await musicApi.readAlbum(song.albumPath);
+        rgMbid = card?.providerId || '';
+        trackN = (card?.tracks || []).find(t => squash(t.title) === squash(song.title))?.n ?? null;
       } catch { /* not an album card — treat as loose */ }
     }
     try {
-      await (rgMbid && song.n
+      return await (rgMbid && trackN
         ? enqueue({
-            rgMbid, trackN: song.n,
+            rgMbid, trackN,
             title: song.albumTitle || song.title, artist: song.artist,
             cover: song.albumImage || null,
           })
         : enqueue({ title: song.title, artist: song.artist, watchUrl: song.watchUrl || null }));
-    } catch (err) { fail('Download', err); }
+    } catch (err) { fail('Download', err); return null; }
   };
 
   const openMenu = (e, song, extra = []) => {
@@ -93,7 +100,7 @@ export function useSongMenu(accent) {
     openContextMenu({ x: e.clientX, y: e.clientY }, items, { accent, header: song.title });
   };
 
-  return { openMenu, modalEl };
+  return { openMenu, modalEl, download };
 }
 
 // (e, playlist) => same shape for playlist tiles.

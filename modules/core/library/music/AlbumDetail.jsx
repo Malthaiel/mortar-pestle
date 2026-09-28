@@ -1,38 +1,27 @@
-// RIGHT pane of the Music page. The film page's header, wearing an album: the
-// sleeve full-bleed behind a sleeve tile, the title at the film's derived
-// scale, one fact line, and every action fused into one .candy-split run.
-// Then the disc-grouped tracklist and credits.
+// RIGHT pane of the Music page for an album. Feeds the shared record page
+// (RecordPage.jsx, the same page a playlist wears): the sleeve, the fact line,
+// the action run, the Tracks / Credits / Discography tabs, and the disc-grouped
+// tracklist. The ONE album page (user-directed 2026-09-28: "all album pages are
+// the same"): a library card by `albumPath`, or a Browse album by `rgMbid`.
 
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { musicApi, useMbRefreshTick, useCaaCover } from './api.js';
 import { useMusicPlayer } from './MusicPlayerProvider.jsx';
-import { IconStarMark, IconRadio, IconSwatch, IconPaperPlane, IconDownload, IconMusic, IconGroup, IconBookmarkAlt, IconHandRock, IconCamcorder, IconEarAlt, IconAnnouncement, IconTag } from '@host/components/icons.jsx';
-import CandySelect from '@host/components/ui/CandySelect.jsx';
-import { statusLabel, STATUS_ICON } from '@host/util/media-status.js';
+import { IconRadio, IconMusic, IconGroup } from '@host/components/icons.jsx';
 import { libraryAbs } from '@host/api.js';
-import { coverSrc, STATUS_DOT_COLOR, resolveDot, toBrowse, TILE_MIN, albumToQueueItems } from './util.js';
+import { coverSrc, TILE_MIN, albumToQueueItems, squash } from './util.js';
 import { usePrefetchStreams } from './streamCache.js';
-import AddToPlaylistButton from './AddToPlaylistButton.jsx';
-import { useAddToPlaylistMenu } from './useAddToPlaylistMenu.jsx';
 import { refFromQueueItem } from './PlaylistProvider.jsx';
 import { AlbumPerformers, ArtistAlbums } from './MusicCredits.jsx';
 import { usePersistedState } from '@host/components/vault-tree/useTreeExpansion.js';
 import { useDownloads } from './DownloadProvider.jsx';
-import { consumeTrackHighlight, fmtDuration } from './searchShared.jsx';
+import { consumeTrackHighlight } from './searchShared.jsx';
 import { useSongMenu } from './contextMenus.js';
 import { navigate } from '@host/router.js';
-import { useContextMenu } from '@host/context-menu/useContextMenu.js';
-import { FILM_POSTER_W, FILM_DOT, POSTER_COL_GAP, POSTER_DEPTH, PosterTile, SourceRun } from '../AnimeDetailHeader.jsx';
+import { POSTER_COL_GAP, POSTER_DEPTH, PosterTile } from '../AnimeDetailHeader.jsx';
 import ImageLightbox, { useLightbox } from '../ImageLightbox.jsx';
-import { artistImage } from './artistImage.js';
-
-// The header's text: type tag, title and fact line all in the title's colour,
-// the tag at the fact line's size (user-directed 2026-09-26). The size rides
-// --film-head, the film's one head knob.
-const HEAD_COLOR = 'var(--text)';
-const FACT_SIZE = 'calc(12px * var(--film-head))';
-
-const LISTEN_STATUSES = ['Plan-to-Listen', 'Currently-Listening', 'Listened', 'Dropped'];
+import { RecordPage, ActionRun, TabRun, TrackRow, ArtistLink, Centered } from './RecordPage.jsx';
+import { usePlayCounts, countPlays, useWorldPlays, useTrackVideos, worldCells } from './recordHooks.js';
 
 // The film's tab strip (AnimeMainColumn FILM_TABS), for a record: one section
 // under the hairline at a time (user-directed 2026-09-26).
@@ -51,80 +40,6 @@ const LISTEN_STATUSES = ['Plan-to-Listen', 'Currently-Listening', 'Listened', 'D
 // and the pair twitches: filmed 2026-09-27).
 const ALBUM_TABS = ['Tracks', 'Credits', 'Discography'];
 const TAB_ICON = { Tracks: IconMusic, Credits: IconGroup, Discography: IconRadio };
-// Which tab a gliding pointer opens (now at `x`, last at `px`), starting from the one
-// open now (`cur`): the open tab hands over when the pointer crosses the line half an
-// icon inside its edge, the same lead at every edge whatever the tab's width
-// (user-directed 2026-09-27), or when it is past the edge. Crossed, not inside: a
-// pointer that lands in that band has not glided there, and keeps the tab it landed
-// on. Rejected the same day: a swap at the midpoint of the two open centres
-// ("switches too early"), then a lead only where a slide forced one (small tabs
-// waited for the edge). It holds while every name adds more than two leads (else the
-// walk would step back); the walk goes one way, so it always ends. Layouts are
-// rebuilt from the live parts (shut width = width minus what its name adds right
-// now), because live rects lie mid-glide.
-function tabUnder(run, x, px, cur) {
-  const parts = [...run.children], shut = [], name = [], lap = [];
-  for (const p of parts) {
-    // A part may carry a short form (.is-rest) that shows while it is shut and
-    // swaps for the name as it opens: shut = name closed + short form showing,
-    // and opening adds the name's width minus the short form's.
-    const lbl = p.querySelector('.split-label:not(.is-rest)'), rest = p.querySelector('.split-label.is-rest');
-    const gap = parseFloat(getComputedStyle(lbl.parentElement).columnGap) || 0;
-    const adds = (el) => el ? el.getBoundingClientRect().width + parseFloat(getComputedStyle(el).marginLeft) + gap : 0;   // now
-    const full = (el) => el ? el.firstElementChild.getBoundingClientRect().width + gap : 0;                               // fully open
-    shut.push(p.getBoundingClientRect().width - adds(lbl) - adds(rest) + full(rest));
-    name.push(full(lbl) - full(rest));
-    lap.push(parseFloat(getComputedStyle(p).marginLeft) || 0);
-  }
-  const l0 = parts[0].getBoundingClientRect().left - lap[0];
-  // Part j's [left, right] in the layout where part k is open.
-  const at = (k, j) => {
-    let l = l0;
-    for (let i = 0; i < j; i++) l += lap[i] + shut[i] + (i === k ? name[i] : 0);
-    l += lap[j];
-    return [l, l + shut[j] + (j === k ? name[j] : 0)];
-  };
-  const lead = shut[0] / 2;
-  let k = cur;
-  while (k + 1 < parts.length && (x >= at(k, k)[1] || (px < at(k, k)[1] - lead && x >= at(k, k)[1] - lead))) k++;
-  if (k === cur) while (k > 0 && (x < at(k, k)[0] || (px >= at(k, k)[0] + lead && x < at(k, k)[0] + lead))) k--;
-  return k;
-}
-
-// The index of the part showing its name in a run whose every part carries a
-// .split-label: the hovered one by tabUnder, not by hit-test, else `pick` (the
-// picked tab; Play for the action run). The updater form, so a swap not yet
-// rendered is still `cur`. A pointer arriving (no hover yet) opens the part under it.
-function useOpenPart(pick) {
-  const [hover, setHover] = useState(null);
-  const lastX = useRef(null);   // the pointer's last x on the run; null = not on it
-  return [hover ?? pick, {
-    onPointerMove: (e) => {
-      const run = e.currentTarget, x = e.clientX, px = lastX.current;
-      const under = [...run.children].indexOf(e.target.closest('.candy-btn'));
-      lastX.current = x;
-      setHover(h => h != null ? tabUnder(run, x, px ?? x, h) : under >= 0 ? under : pick);
-    },
-    onPointerLeave: () => { setHover(null); lastX.current = null; },
-  }];
-}
-
-// The photo rides the fact line, so it is sized to that line: an even number of
-// pixels, so the circle has no half-pixel edge.
-const ARTIST_PFP = 22;
-
-// The rows and the action run above them are the SAME size knob, so a row can
-// never drift from the run it sits under (.candy-split derives the seam, the
-// corners and every part's height from it). Change this and both change.
-const ROW_H = '26px';
-
-// The header column's line gap (type tag, title, fact line), and the air above and
-// below the action runs: the fact line down to them and them down to the body are
-// the SAME air (user-directed 2026-09-27; measured 12px from the artist photo's
-// bottom to the run's top). The runs' lip paints outside layout, so the gap under
-// them adds it back.
-const HEAD_GAP = 8;
-const RUN_AIR = 12;
 
 // The track's own page: an md sibling of the audio file, falling back to the
 // pipeline's Tracks folder for a card with no audio on disk. `wikilink` is the
@@ -138,48 +53,23 @@ function openTrackPage(track) {
   window.location.hash = '/page/' + target.split('/').map(encodeURIComponent).join('/');
 }
 
-// The artist, leading the fact line: a round press photo and the name, which
-// opens the only artist surface the app has (a Browse search). The photo comes
-// from TheAudioDB (artistImage.js) and is often absent, so the initials circle
-// is the normal case, not an error state.
-function ArtistLink({ name, accent }) {
-  const [src, setSrc] = useState('');
-  useEffect(() => {
-    let live = true;
-    setSrc('');
-    artistImage(name).then(url => { if (live) setSrc(url); });
-    return () => { live = false; };
-  }, [name]);
-  const a = accent || 'var(--accent)';
-  const initials = String(name || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase();
-  return (
-    <span
-      onClick={() => toBrowse(name)}
-      title={`Find ${name}`}
-      style={{ display: 'inline-flex', alignItems: 'center', gap: 7, cursor: 'pointer' }}
-      onMouseEnter={e => { e.currentTarget.style.color = a; }}
-      onMouseLeave={e => { e.currentTarget.style.color = ''; }}
-    >
-      {src
-        ? <img src={src} alt="" onError={() => setSrc('')}
-            style={{ width: ARTIST_PFP, height: ARTIST_PFP, borderRadius: '50%', objectFit: 'cover', display: 'block', flexShrink: 0 }}/>
-        : <span style={{
-            width: ARTIST_PFP, height: ARTIST_PFP, borderRadius: '50%', flexShrink: 0,
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            background: `color-mix(in oklch, ${a} 16%, var(--surface-2))`,
-            fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 600,
-            color: 'var(--text-muted)', letterSpacing: '0.02em', userSelect: 'none',
-          }}>{initials}</span>}
-      {name}
-    </span>
-  );
-}
+const CAA = 'https://coverartarchive.org';
 
-// The recessed tray and its averaged-pixel cover tint were replaced 2026-09-19
-// by the film page's full-bleed backdrop (.film-detail / .film-backdrop in
-// library.css), which shows the sleeve itself instead of one colour taken off it.
+// A Browse album nobody owns yet, shaped like a card with no file behind it: no
+// path, every track off disk. streamKey is Browse's stream identity, so the
+// playing row, the queue and the listen log key as they always have.
+const browseAlbum = (d) => ({
+  path: null, providerId: d.releaseGroupMbid, releaseMbid: d.releaseMbid,
+  title: d.title, artist: d.artist, year: d.year, releaseType: d.primaryType,
+  image: `${CAA}/release-group/${d.releaseGroupMbid}/front-500`,
+  tracks: d.tracks.map(t => ({
+    n: t.position, disc: t.disc, title: t.title, available: false, audioPath: null,
+    duration: t.lengthMs != null ? Math.round(t.lengthMs / 1000) : null,
+    streamKey: `${d.releaseGroupMbid}|${t.disc}|${t.position}`,
+  })),
+});
 
-export default function AlbumDetail({ accent, albumPath }) {
+export default function AlbumDetail({ accent, albumPath, rgMbid }) {
   const [album, setAlbum] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -187,16 +77,21 @@ export default function AlbumDetail({ accent, albumPath }) {
   const { playAlbumTracks, enqueue, currentTrack, isPlaying, toggle } = useMusicPlayer();
   const { jobs: dlJobs, enqueue: enqueueDownload } = useDownloads();
   const songMenu = useSongMenu(accent);
-  // The album's Add to Playlist rides the More menu (user-directed 2026-09-26),
-  // the same sub-menu a song's right-click menu carries.
-  const playlistMenu = useAddToPlaylistMenu(accent);
-  const { openContextMenu } = useContextMenu();
   const [dlJobId, setDlJobId] = useState(null);
   const [dlError, setDlError] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
-    const load = () => musicApi.readAlbum(albumPath)
+    // A Browse album is the owned card when the library has one, else the
+    // release group. Re-run on every library change, so an add or a download
+    // turns this very page into the owned one in place: no page switch
+    // (user-directed 2026-09-28).
+    const read = async () => {
+      if (!rgMbid) return musicApi.readAlbum(albumPath);
+      const own = ((await musicApi.listAlbums()) || []).find(a => a.providerId === rgMbid);
+      return own ? musicApi.readAlbum(own.path) : browseAlbum(await musicApi.releaseGroupDetail(rgMbid));
+    };
+    const load = () => read()
       .then(d => { if (!cancelled) { setAlbum(d); setLoading(false); } })
       .catch(err => { if (!cancelled) { setError(err.message); setLoading(false); } });
     setLoading(true); setError(null); setAlbum(null);
@@ -206,24 +101,26 @@ export default function AlbumDetail({ accent, albumPath }) {
     const onChanged = () => load();
     window.addEventListener('music-library-changed', onChanged);
     return () => { cancelled = true; window.removeEventListener('music-library-changed', onChanged); };
-  }, [albumPath]);
+  }, [albumPath, rgMbid]);
 
+  const [tab, setTab] = usePersistedState('library:albumTab', 'Tracks');
+  const active = ALBUM_TABS.includes(tab) ? tab : 'Tracks';
   // A song picked from the browser's Songs tab parks its track number for us;
   // we claim it on mount. Re-runs per album, so the highlight can't survive
   // navigating elsewhere.
-  const [tab, setTab] = usePersistedState('library:albumTab', 'Tracks');
-  const active = ALBUM_TABS.includes(tab) ? tab : 'Tracks';
-  // The tab showing its name: the hovered one, else the picked one. The action
-  // run's the same, with Play (part 0) as its picked one: Play Album shows at
-  // rest and shrinks to its icon while another part is hovered (user-directed
-  // 2026-09-27).
-  const [openTabIdx, tabRun] = useOpenPart(ALBUM_TABS.indexOf(active));
-  const openTab = ALBUM_TABS[openTabIdx];
-  const [openAct, actRun] = useOpenPart(0);
   const [highlight, setHighlight] = useState(null);
-  const videos = useTrackVideos(album);
-  const world = useWorldPlays(album);
   useEffect(() => { setHighlight(consumeTrackHighlight(albumPath)); }, [albumPath]);
+  // Songs keyed by squashed title: the saved world-plays and video answers
+  // were stored under that key, so they still show at once.
+  const songs = album ? album.tracks.map(t => ({ id: squash(t.title), artist: album.artist, title: t.title })) : [];
+  const owned = !!album?.path;
+  const store = album && (album.path || 'rg:' + album.providerId);
+  const world = useWorldPlays(album ? 'music:worldPlays:' + store : null, songs);
+  // One YouTube search for the whole record (~2 s).
+  const videos = useTrackVideos(album ? 'music:trackVideos:' + store : null,
+    album?.artist && album.title
+      ? [{ q: `${album.artist} ${album.title} official video`, artist: album.artist, songs, limit: 20 }]
+      : []);
   // The sleeve's viewer: the big picture, and beside it every scanned picture.
   const lb = useLightbox();
   const art = useAlbumArtwork(lb.open ? album?.providerId : null);
@@ -232,11 +129,17 @@ export default function AlbumDetail({ accent, albumPath }) {
   // ponytail: no scroll watch here, an album past 30 tracks is rare.
   usePrefetchStreams(album ? albumToQueueItems(album) : []);
 
-  const coverImgSrc = album ? coverSrc(album.image, 400, { library: true }) : null;
+  // A Browse album's sleeve: the release group's front, else its release's,
+  // saved to disk once (music_cover), as the old Browse preview drew it.
+  // ponytail: 500px serves the backdrop too; ask a bigger size if it reads soft.
+  const rgCover = useCaaCover('release-group', album && !owned ? album.providerId : null, 500);
+  const relCover = useCaaCover('release', rgCover === null ? album?.releaseMbid : null, 500);
+  const caa = rgCover || relCover;
+  const coverImgSrc = !album ? null : owned ? coverSrc(album.image, 400, { library: true }) : (caa ? coverSrc(caa) : null);
   // The backdrop (drawn ~900px wide) and the sleeve's viewer take the file itself,
   // not the 400px thumbnail (measured 2026-09-27: a 1500px cover shown as a 400px
   // copy at 904px).
-  const fullImg = album ? coverSrc(album.image, 0, { library: true }) : null;
+  const fullImg = !album ? null : owned ? coverSrc(album.image, 0, { library: true }) : coverImgSrc;
 
   if (loading) return <Centered>Loading</Centered>;
   if (error)   return <Centered tone="error">Failed to load: {error}</Centered>;
@@ -264,20 +167,34 @@ export default function AlbumDetail({ accent, albumPath }) {
     }
     return playable.length > 0 ? `Repair · ${missing} Missing` : 'Download';
   })();
+  // A Browse album downloads the full-size front, as the old preview did.
+  const dlCover = !owned ? `${CAA}/release-group/${album.providerId}/front`
+    : (album.image && album.image.startsWith('http')) ? album.image : null;
   const startDownload = async () => {
     if (dlBusy || !album.providerId) return;
     setDlError(null);
     try {
       const id = await enqueueDownload({
         rgMbid: album.providerId, title: album.title, artist: album.artist,
-        cover: (album.image && album.image.startsWith('http')) ? album.image : null,
-        onlyMissing: playable.length > 0,
+        cover: dlCover, onlyMissing: playable.length > 0,
       });
       setDlJobId(id);
     } catch (err) { setDlError(err.message || 'Failed to start download.'); }
   };
-
-  const playAll = () => playAlbumTracks(album, 0);
+  // Add to Library: the metadata-only job the old Browse preview ran, landing
+  // the card with the picked status. Its finish re-reads this page in place.
+  const addBusy = !owned && dlJobs.some(j => j.rgMbid === album.providerId && j.metadataOnly
+    && (j.state === 'queued' || j.state === 'downloading'));
+  const addToLibrary = async (status) => {
+    if (addBusy) return;
+    setDlError(null);
+    try {
+      await enqueueDownload({
+        rgMbid: album.providerId, title: album.title, artist: album.artist,
+        cover: dlCover, metadataOnly: true, initialStatus: status,
+      });
+    } catch (err) { setDlError(err.message || 'Failed to add to library.'); }
+  };
 
   // The fact line, in the film's order and shape. Length is SUMMED off the real
   // tracks rather than trusting the frontmatter "Length" string, which is often
@@ -311,27 +228,43 @@ export default function AlbumDetail({ accent, albumPath }) {
       : `https://musicbrainz.org/search?type=release_group&query=${encodeURIComponent(named)}` },
   ].filter(Boolean);
 
-  // Each song's finished-listen count. The count part is as wide as the
-  // album's biggest count (in digits), so every row's parts line up.
-  const trackPlays = plays ? album.tracks.map(t => playCount(plays, album, t)) : null;
+  // Each song's finished-listen count, over every key an album song's listens
+  // can be logged under (MusicPlayerProvider handleEnded): its file, the album
+  // page's `albumPath#n`, a playlist row's `albumPath|title` (spelled both with
+  // and without the .md: the playlist row's albumPath carries it), Browse's
+  // `rgMbid|disc|position`. Old playlist rows logged as `albumPath#<row>` are
+  // left out: the row number is not this song's. The count part is as wide as
+  // the album's biggest count (in digits), so every row's parts line up.
+  // ponytail: assumes a card's n is the disc position Browse logs; if n counts
+  // across discs, Browse plays of disc 2+ miss. Map by position if that shows up.
+  const trackPlays = plays ? album.tracks.map(t => countPlays(plays, [
+    t.audioPath,
+    owned && `${album.path}#${t.n}`,
+    owned && `${album.path.replace(/\.md$/, '')}|${t.title}`,
+    owned && `${album.path}|${t.title}`,
+    album.providerId && `${album.providerId}|${t.disc || 1}|${t.n}`,
+  ])) : null;
   const playsDigits = trackPlays ? String(Math.max(0, ...trackPlays)).length : 1;
-  // Worldwide plays: every distinct number this album shows rides hidden in
-  // each row's slot, so the browser sizes all the slots to the widest one and
-  // the parts line up (12.4M and 812 are not the same width in any font).
-  const worldText = (t) => {
-    const w = world[squash(t.title)];
-    return w ? compactPlays.format(w.playcount) : '–';
-  };
-  const worldSizers = [...new Set(album.tracks.map(worldText))];
+  const cells = worldCells(world, songs.map(s => s.id));
+  const queueItem = (t) => ({
+    albumPath: album.path, albumTitle: album.title, albumImage: album.image,
+    artist: album.artist,
+    n: t.n, title: t.title, audioPath: t.audioPath,
+    available: t.available, streamable: !t.available,
+    wikilink: t.wikilink, duration: t.duration, streamKey: t.streamKey,
+  });
+  const trackRef = (t) => refFromQueueItem({
+    albumPath: album.path, albumTitle: album.title, albumImage: album.image,
+    artist: album.artist, wikilink: t.wikilink, audioPath: t.audioPath,
+    title: t.title, duration: t.duration,
+  });
   const trackRow = (t, idx) => {
-    const playingThis = currentTrack &&
-      currentTrack.albumPath === album.path &&
-      currentTrack.n === t.n;
-    const playlistRef = refFromQueueItem({
-      albumPath: album.path, albumTitle: album.title, albumImage: album.image,
-      artist: album.artist, wikilink: t.wikilink, audioPath: t.audioPath,
-      title: t.title, duration: t.duration,
-    });
+    // Every Browse track's albumPath is null, so a Browse album matches on
+    // its stream identity instead.
+    const playingThis = currentTrack && (owned
+      ? currentTrack.albumPath === album.path && currentTrack.n === t.n
+      : currentTrack.streamKey === t.streamKey);
+    const id = songs[idx].id;
     return (
       <TrackRow
         key={t.n + ':' + t.title}
@@ -340,11 +273,11 @@ export default function AlbumDetail({ accent, albumPath }) {
         playsDigits={playsDigits}
         accent={accent}
         highlighted={!!highlight && highlight.n === t.n && (highlight.disc ?? 1) === (t.disc || 1)}
-        playlistRef={playlistRef}
-        videoUrl={videos[squash(t.title)]}
-        world={world[squash(t.title)]}
-        worldText={worldText(t)}
-        worldSizers={worldSizers}
+        playlistRef={trackRef(t)}
+        videoUrl={videos[id]}
+        world={world[id]}
+        worldText={cells.text(id)}
+        worldSizers={cells.sizers}
         playing={playingThis && isPlaying}
         onMenu={(e) => songMenu.openMenu(e, {
           albumPath: album.path, albumTitle: album.title, albumImage: album.image,
@@ -353,28 +286,9 @@ export default function AlbumDetail({ accent, albumPath }) {
           available: t.available, rgMbid: album.providerId || null,
         }, t.wikilink ? [{ label: 'Open track page', onClick: () => openTrackPage(t) }] : [])}
         onPlay={() => (playingThis ? toggle() : playFrom(idx))}
-        onEnqueue={() => {
-          enqueue([{
-            albumPath: album.path, albumTitle: album.title, albumImage: album.image,
-            artist: album.artist,
-            n: t.n, title: t.title, audioPath: t.audioPath,
-            available: t.available, streamable: !t.available,
-            wikilink: t.wikilink, duration: t.duration,
-          }]);
-        }}
+        onEnqueue={() => enqueue([queueItem(t)])}
       />
     );
-  };
-
-  const enqueueAlbum = () => {
-    const items = album.tracks.map(t => ({
-      albumPath: album.path, albumTitle: album.title, albumImage: album.image,
-      artist: album.artist,
-      n: t.n, title: t.title, audioPath: t.audioPath,
-      available: t.available, streamable: !t.available,
-      wikilink: t.wikilink, duration: t.duration,
-    }));
-    enqueue(items);
   };
 
   const setStatus = async (status) => {
@@ -386,6 +300,17 @@ export default function AlbumDetail({ accent, albumPath }) {
     } catch (err) {
       setError(err.message);
     } finally { setBusy(false); }
+  };
+
+  const setRating = (r) => {
+    musicApi.markAlbumRating(album.path, r)
+      .then(() => {
+        setAlbum(a => ({ ...a, personalRating: r }));
+        window.dispatchEvent(new CustomEvent('album-updated', {
+          detail: { path: album.path, personalRating: r },
+        }));
+      })
+      .catch(err => alert('Rating failed: ' + err.message));
   };
 
   const onDelete = async () => {
@@ -406,482 +331,85 @@ export default function AlbumDetail({ accent, albumPath }) {
     }
   };
 
-  // The action run: every part an icon whose name opens on hover, like the tabs
-  // (user-directed 2026-09-27). act() numbers the parts in render order (Download
-  // is not always there), so data-open lands on the hovered one.
-  let actN = 0;
-  const act = () => ({ 'data-open': actN++ === openAct ? '' : undefined });
-  const splitName = (t) => <span className="split-label"><span>{t}</span></span>;
-  const trackRefs = () => album.tracks.map(t => refFromQueueItem({
-    albumPath: album.path, albumTitle: album.title, albumImage: album.image,
-    artist: album.artist, wikilink: t.wikilink, audioPath: t.audioPath,
-    title: t.title, duration: t.duration,
-  }));
-  const menuUnder = (e, items, opts) => {
-    const r = e.currentTarget.getBoundingClientRect();
-    openContextMenu({ x: r.left, y: r.bottom + 4 }, items, { accent, ...opts });
-  };
-
-  // scrollbar-gutter keeps the scrollbar's lane even when nothing scrolls, so
-  // the right edge (lane + gutter) always matches the left (the ResizeSeam
-  // grab strip + gutter): 34px both sides, measured 2026-09-26.
   return (
-    <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', scrollbarGutter: 'stable' }}>
-      {/* Header: cover + meta, over the sleeve painted full-bleed behind them.
-          .film-detail is the film page's own header shell (library.css) -- it
-          owns the deep top padding derived from the still's aspect, the reading
-          measure, and the layering that keeps the content clickable. Used here
-          verbatim, exactly as AnimeDetailHeader uses it for a film. */}
-      {/* No sleeve, no shell: .film-detail's top padding is reserved FOR the
-          picture, so applying it without one leaves 266px of empty page.
-          .film-below keeps the same column (gutter + measure) without it. */}
-      <div className={img ? 'film-detail' : 'film-below'}
-           style={img ? undefined : { paddingTop: 32, paddingBottom: 26, borderBottom: 'var(--candy-frame) solid var(--border)' }}>
-        {img && (
-          <div className="film-backdrop is-square" aria-hidden>
-            {/* A real <img>, like the film still: the box takes its height from
-                the file rather than restating an aspect here. is-square adds
-                the one crop a square sleeve needs. */}
-            <img src={fullImg} alt=""/>
-          </div>
-        )}
-        {/* One wrapper for both columns: .film-detail centres its children at
-            the reading measure, so the flex row has to BE a single child. */}
-        <div style={{ display: 'flex', gap: 28 }}>
-        {/* LEFT column: the film poster's column 1-1 -- the same candy tile
-            (opens the full sleeve) and the same source run under it. */}
-        <div style={{ width: FILM_POSTER_W, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: POSTER_COL_GAP }}>
-          <PosterTile image={img} title={album.title} accent={accent || 'var(--accent)'} aspect="1 / 1"
-            onClick={() => lb.show(fullImg, album.title)}/>
-          <SourceRun sources={sources}/>
-        </div>
-
-        <div style={{
-          flex: 1, minWidth: 320, display: 'flex', flexDirection: 'column', gap: HEAD_GAP,
-        }}>
-          {/* Type tag. The film has none, but nothing else on the page tells an
-              EP from an album. The title's colour at the fact line's size
-              (user-directed 2026-09-26). */}
-          <div style={{
-            fontSize: FACT_SIZE, fontFamily: 'var(--font-mono)', color: HEAD_COLOR,
-            letterSpacing: '0.08em',           }}>{album.releaseType || 'Album'}</div>
-
-          {/* Title and fact line both multiply by --film-head, the film's one
-              head knob -- never type a size here that ignores it. */}
-          <h2 style={{
-            margin: 0, fontSize: 'calc(28px * var(--film-head))', fontWeight: 700,
-            color: HEAD_COLOR, lineHeight: 1.12, letterSpacing: '-0.015em',
-          }}>
-            {album.title}
-          </h2>
-
-          {/* White like the title (user-directed 2026-09-26); ArtistLink
-              inherits it and only tints on hover. */}
-          {facts.length > 0 && (
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
-              fontSize: FACT_SIZE, color: HEAD_COLOR,
-            }}>
-              {facts.map((f, i) => <Fragment key={i}>{i > 0 && FILM_DOT}{f}</Fragment>)}
-            </div>
-          )}
-
-          {/* Every action as ONE control, the same fused shell the film page
-              uses for status / rating / Download / More. A disabled half keeps
-              its paint and simply does nothing -- fading it punches a hole in
-              the run. */}
-          {/* The film page's action-row shell (AnimeMainColumn.jsx), minus its
-              hairline (user-directed 2026-09-26). RUN_AIR above and below the
-              runs (user-directed 2026-09-27; the film's 14px of air plus 10px
-              painted 19px under them). */}
-          <div data-spacing-intent="run-air" style={{ display: 'flex', flexDirection: 'column', gap: `calc(${RUN_AIR}px + var(--candy-depth-small))`, marginTop: RUN_AIR - HEAD_GAP }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          {/* The action run leads, the tabs follow it (user-directed 2026-09-26). */}
-          <div className="candy-split" {...actRun} style={{
-            position: 'relative', '--cbtn-size': ROW_H,
-          }}>
-            {/* Play leads the run (user-directed 2026-09-26; the film's too).
-                Never disabled: a track not on disk streams (playAlbumTracks
-                marks it streamable), so an undownloaded album plays too. */}
-            {/* Lit and named at rest, like the picked tab (user-directed
-                2026-09-27); useOpenPart(0) shuts the name while another part
-                is hovered. */}
-            <button
-              className="candy-btn is-active"
-              data-shape="chip"
-              data-own-press
-              onClick={playAll}
-              aria-label="Play Album"
-              style={{ '--accent': accent || 'var(--accent)' }}
-              {...act()}
-            ><span className="candy-face"><IconHandRock size={14}/>{splitName('Play Album')}</span></button>
-
-            {/* Icon only, right after Play (user-directed 2026-09-26); the
-                job's state (Queued, Downloading 3/11, Failed) is its tooltip,
-                plus a bare 3/11 count on the face while it downloads. */}
-            {album.providerId && (missing > 0 || dlJob) && (
-              <button
-                className="candy-btn"
-                data-shape="chip"
-                data-own-press
-                onClick={startDownload}
-                disabled={dlBusy}
-                aria-label={dlLabel}
-                {...act()}
-              >{/* The 3/11 count stays at rest while it downloads and gives way
-                  to the job's words on hover (.is-rest). */}
-                <span className="candy-face"><IconDownload size={14}/>
-                {dlJob?.state === 'downloading' && <span className="split-label is-rest"><span>{`${dlJob.trackIndex || 0}/${dlJob.trackTotal || '?'}`}</span></span>}
-                {splitName(dlLabel)}</span></button>
-            )}
-
-            {/* A picked status shows its icon alone at rest; the word opens on
-                hover (user-directed 2026-09-27). */}
-            <CandySelect
-              value={album.status || ''}
-              accent={accent}
-              fuse shape="chip" nameOnHover {...act()}
-              icon={IconTag}
-              title="Mark status"
-              placeholder="Status"
-              options={LISTEN_STATUSES.map(s => ({ value: s, label: statusLabel(s), icon: STATUS_ICON[s], dot: resolveDot(STATUS_DOT_COLOR, s, accent) }))}
-              clearable
-              disabled={busy}
-              onChange={setStatus}
-            />
-
-            {/* The film's rating control, 1-1: re-picking the current value
-                clears it, exactly as the dot strip did. Every rating wears the
-                star; a picked one shows its number at rest and opens to
-                "8 out of 10" (user-directed 2026-09-27). */}
-            <CandySelect icon={IconStarMark}
-              value={album.personalRating ? String(album.personalRating) : ''}
-              accent={accent}
-              fuse shape="chip" nameOnHover {...act()}
-              title="Your rating out of 10"
-              placeholder="Rate out of 10"
-              options={Array.from({ length: 10 }, (_, n) => ({ value: String(10 - n), label: String(10 - n), short: String(10 - n), long: `${10 - n} out of 10` }))}
-              clearable
-              disabled={busy}
-              onChange={(v) => {
-                const r = Number(v) || 0;
-                musicApi.markAlbumRating(album.path, r)
-                  .then(() => {
-                    setAlbum(a => ({ ...a, personalRating: r }));
-                    window.dispatchEvent(new CustomEvent('album-updated', {
-                      detail: { path: album.path, personalRating: r },
-                    }));
-                  })
-                  .catch(err => alert('Rating failed: ' + err.message));
-              }}
-            />
-
-            {/* Queue and Playlist left the More menu for parts of their own
-                (user-directed 2026-09-27), wearing the song rows' marks. Always
-                offered: off-disk tracks stream from the queue too. Playlist
-                before Queue, as on a song row (user-directed 2026-09-27). */}
-            <button type="button" className="candy-btn" data-shape="chip" data-own-press
-              onClick={(e) => menuUnder(e, playlistMenu.buildItems(trackRefs()), { header: 'Add to playlist' })}
-              aria-label="Add to Playlist" {...act()}
-            ><span className="candy-face"><IconBookmarkAlt size={14}/>{splitName('Add to Playlist')}</span></button>
-            <button type="button" className="candy-btn" data-shape="chip" data-own-press
-              onClick={enqueueAlbum} aria-label="Add to Queue" {...act()}
-            ><span className="candy-face"><IconPaperPlane size={14}/>{splitName('Add to Queue')}</span></button>
-
-            {/* Reveal and Delete live in here, as Uninstall does on a film. The
-                swatch, not a ⋯ (user-directed 2026-09-26). */}
-            <button type="button" className="candy-btn" data-shape="chip" data-own-press
-              onClick={(e) => menuUnder(e, [
-                album.trackFolder && {
-                  label: 'Reveal in files',
-                  onClick: () => musicApi.revealInFiles(libraryAbs(album.trackFolder))
-                    .catch(err => alert('Reveal failed: ' + err.message)),
-                },
-                { label: 'Delete album', onClick: onDelete },
-              ].filter(Boolean))}
-              aria-label="More Options" {...act()}
-            ><span className="candy-face"><IconSwatch size={14}/>{splitName('More Options')}</span></button>
-          </div>
-          {/* The open tab follows the pointer by tabUnder, not by hit-test; the
-              liquid follows [data-open] while the run is hovered (liquidHover.js).
-              The updater form, so a swap not yet rendered is still `cur`. A pointer
-              arriving (no hover yet) opens the tab under it: the names never shrink
-              left to right, so that tab, opened, is still under it. */}
-          <div className="candy-split" {...tabRun}
-            style={{ '--accent': accent || 'var(--accent)', '--cbtn-size': ROW_H }}>
-            {ALBUM_TABS.map(t => {
-              const Icon = TAB_ICON[t];
-              return (
-                <button
-                  key={t}
-                  type="button"
-                  data-own-press
-                  data-shape="chip"
-                  className={'candy-btn' + (t === active ? ' is-active' : '')}
-                  data-open={t === openTab ? '' : undefined}
-                  onClick={() => setTab(t)}
-                  aria-label={t}
-                >{/* Icons, and ONE name: the picked tab's, or the hovered one's,
-                    opening like a dock button (.split-label, user-directed
-                    2026-09-27). No tooltip: the name shows itself. */}
-                  <span className="candy-face"><Icon size={14}/><span className="split-label"><span>{t}</span></span></span></button>
-              );
-            })}
-          </div>
-          </div>
-
-          {dlError && (
-            <div style={{ fontSize: 11, color: 'var(--error)' }}>{dlError}</div>
-          )}
-
-          {/* Track list — grouped by disc when the album has more than one.
-              It rides IN the right column, under the hairline, exactly where a
-              film's Cast panel sits: same reading width as the title above it.
-              Each row fills the column's width (uncapped, user-directed 2026-09-26). */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {active === 'Credits' && <AlbumPerformers album={album} accent={accent} />}
-        {/* Mounted with the page and only hidden, so switching tabs shows the
-            last answer at once instead of re-asking and re-painting the covers
-            (filmed 2026-09-26: a remount flashed "Loading albums" and blank
-            tiles on every visit). */}
-        <div hidden={active !== 'Discography'}><ArtistAlbums album={album} accent={accent} /></div>
-        {active === 'Tracks' && (() => {
-          const groups = new Map();
-          album.tracks.forEach((t, idx) => {
-            const d = t.disc || 1;
-            if (!groups.has(d)) groups.set(d, []);
-            groups.get(d).push({ t, idx });
-          });
-          const discNumbers = [...groups.keys()].sort((a, b) => a - b);
-          const multiDisc = discNumbers.length > 1;
-          return discNumbers.map((d, di) => (
-            // Row gap = the film Cast list's (library.css --credit-gap) plus the
-            // chip lip, which paints outside layout -- same formula, same gap.
-            // Off the 4px grid on purpose (6px, user-picked 2026-09-24).
-            <div key={d} data-spacing-intent="credit-gap" style={{ display: 'flex', flexDirection: 'column', gap: 'calc(var(--credit-gap) + var(--candy-depth-small))' }}>
-              {multiDisc && (
-                <div style={{
-                  padding: di === 0 ? '4px 14px 6px' : '14px 14px 6px',
-                  fontSize: 10, fontFamily: 'var(--font-mono)',
-                  letterSpacing: '0.12em',                   color: 'var(--text-faint)',
-                  borderBottom: 'var(--candy-frame) solid var(--border)',
-                }}>Disc {d}</div>
-              )}
-              {groups.get(d).map(({ t, idx }) => trackRow(t, idx))}
-            </div>
-          ));
-        })()}
-          </div>
-          </div>
-        </div>
-        </div>
-      </div>
-
-      <ArtworkViewer lb={lb} art={art} accent={accent || 'var(--accent)'} />
-      {songMenu.modalEl}
-      {playlistMenu.modalEl}
-    </div>
-  );
-}
-
-// One row = ONE fused run (.candy-split, Component Map § Default Components)
-// as wide as the column: the name half (number, name, length) plays and pauses,
-// then World plays, Plays, Playlist, Queue, Video (user-directed 2026-09-26).
-// Every part is ROW_H tall because the run declares --cbtn-size; nothing here
-// restates a height.
-function TrackRow({ track, plays, playsDigits, accent, playing, highlighted, onPlay, onEnqueue, onMenu, playlistRef, videoUrl, world, worldText, worldSizers }) {
-  const rowRef = useRef(null);
-  // Scroll a song arrived-at from search into view; long tracklists otherwise
-  // highlight a row sitting below the fold.
-  useEffect(() => {
-    if (highlighted) rowRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  }, [highlighted]);
-
-  // Same parts the run above is built from -- plain chips, not a shape of their
-  // own -- so a row IS the action run, carrying a track instead of an action.
-  // `.is-active` is the split's own lit-half state; the loaded track wears it.
-  const lit = playing || highlighted;
-
-  // Playlist, Queue and Video are icons that open their name under the pointer
-  // (.split-label, the album tabs' name; user-directed 2026-09-27), none at rest.
-  // The row is pinned at both ends, so a name opens LEFTWARD: the song's name half
-  // gives up the room and the parts before it slide left. Open = [data-open] from
-  // here, never :hover (liquidHover.js copies attributes, not hover). A name wider
-  // than its left neighbour's open width would let a pointer sliding left skip
-  // that neighbour; keep each name no wider than the open part to its left.
-  // The two counts do the same, but swap: their short form (.split-label.is-rest)
-  // shuts as the long one opens (user-picked 2026-09-27).
-  const [open, setOpen] = useState(null);   // the open part's name
-  const named = (t) => ({ 'data-open': open === t ? '' : undefined });
-  const label = (t) => <span className="split-label"><span>{t}</span></span>;
-  const videoName = videoUrl ? 'Open Video' : 'No Video';
-  const worldName = world && `${world.playcount.toLocaleString('en')} Globally`;
-  const playsName = `Played ${plays} Time${plays === 1 ? '' : 's'}`;
-
-  return (
-    <div
-      ref={rowRef}
-      className="candy-split"
-      onPointerMove={(e) => setOpen(e.target.closest('.candy-btn')?.querySelector('.split-label:not(.is-rest)')?.textContent ?? null)}
-      onPointerLeave={() => setOpen(null)}
-      style={{
-        display: 'flex', width: '100%',
-        '--cbtn-size': ROW_H, '--accent': accent || 'var(--accent)',
-      }}
+    <RecordPage
+      accent={accent}
+      backdrop={img ? fullImg : null}
+      picture={img}
+      onPictureClick={() => lb.show(fullImg, album.title)}
+      sources={sources}
+      tag={album.releaseType || 'Album'}
+      title={album.title}
+      facts={facts}
+      error={dlError}
+      actions={
+        <ActionRun
+          accent={accent}
+          playLabel="Play Album"
+          onPlay={() => playAlbumTracks(album, 0)}
+          download={album.providerId && (missing > 0 || dlJob) ? {
+            label: dlLabel, busy: dlBusy, onClick: startDownload,
+            rest: dlJob?.state === 'downloading' ? `${dlJob.trackIndex || 0}/${dlJob.trackTotal || '?'}` : null,
+          } : null}
+          status={album.status}
+          rating={album.personalRating}
+          busy={busy}
+          onStatus={setStatus}
+          onRating={setRating}
+          onAdd={owned ? null : addToLibrary}
+          addBusy={addBusy}
+          playlistRefs={() => album.tracks.map(trackRef)}
+          onQueue={() => enqueue(album.tracks.map(queueItem))}
+          moreItems={!owned ? [] : [
+            album.trackFolder && {
+              label: 'Reveal in files',
+              onClick: () => musicApi.revealInFiles(libraryAbs(album.trackFolder))
+                .catch(err => alert('Reveal failed: ' + err.message)),
+            },
+            { label: 'Delete album', onClick: onDelete },
+          ].filter(Boolean)}
+        />
+      }
+      tabs={<TabRun accent={accent} tabs={ALBUM_TABS} icons={TAB_ICON} active={active} onPick={setTab} />}
+      after={<>
+        <ArtworkViewer lb={lb} art={art} accent={accent || 'var(--accent)'} />
+        {songMenu.modalEl}
+      </>}
     >
-      <button
-        type="button"
-        className={'candy-btn' + (lit ? ' is-active' : '')}
-        data-shape="chip"
-        data-own-press
-        onClick={onPlay}
-        onContextMenu={onMenu}
-        title={playing ? 'Pause' : 'Play'}
-        style={{ flex: 1, minWidth: 0 }}
-      >
-        <span className="candy-face" style={{ width: '100%', justifyContent: 'flex-start' }}>
-          {/* The number turns into ▶ only where the hover's red has reached:
-              the lit copy liquidHover.js clones wears [data-dock-hover], and
-              library.css swaps the two there (user-directed 2026-09-26). Both
-              share one grid cell, so the swap never shifts the name. */}
-          <span className="track-n" style={{
-            flexShrink: 0, fontVariantNumeric: 'tabular-nums', opacity: 0.7,
-            display: 'inline-grid', justifyItems: 'center',
-          }}>{playing ? '▶' : <>
-            <span className="track-n-num" style={{ gridArea: '1 / 1' }}>{String(track.n).padStart(2, '0')}</span>
-            <span className="track-n-play" style={{ gridArea: '1 / 1' }}>▶</span>
-          </>}</span>
-
-          <span style={{
-            flex: 1, minWidth: 0, textAlign: 'left',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          }}>{track.title}</span>
-
-          {/* Duration, at the far end of the half that carries the name. */}
-          <span style={{
-            flexShrink: 0, fontVariantNumeric: 'tabular-nums', opacity: 0.7,
-          }}>{fmtDuration(track.duration)}</span>
-        </span>
-      </button>
-
-      {/* Worldwide plays on Last.fm (Last.fm World Plays plan, user-picked
-          2026-09-26), right after the name (user-directed 2026-09-26). On
-          every song so the parts line up: a grey dash while loading, with no
-          key, or when Last.fm doesn't know the song -- the video part's
-          disabled treatment. Opens the song's Last.fm page in the in-app
-          browser. */}
-      <button
-        type="button"
-        className="candy-btn"
-        data-shape="chip"
-        data-own-press
-        aria-disabled={!world}
-        onClick={() => { if (world?.url) window.location.hash = '/tools/browser/' + encodeURIComponent(world.url); }}
-        title={world ? undefined : 'No Last.fm play count'}
-        style={world ? undefined : { opacity: 1, cursor: 'default', '--cbtn-rest-text': 'var(--text-faint)' }}
-        {...(world && named(worldName))}
-      ><span className="candy-face"><IconAnnouncement size={14}/>
-        <span className="split-label is-rest"><span style={{ display: 'inline-grid', justifyItems: 'end', fontVariantNumeric: 'tabular-nums' }}>
-          {worldSizers.map(s => <span key={s} aria-hidden style={{ gridArea: '1 / 1', visibility: 'hidden' }}>{s}</span>)}
-          <span style={{ gridArea: '1 / 1' }}>{worldText}</span>
-        </span></span>
-        {world && label(worldName)}
-      </span></button>
-
-      {/* Finished listens, its own part of the run (user-directed 2026-09-26,
-          replacing a Plays tab), beside the world count. Shows only once the
-          listen log is read, so the run never jumps from a guess. */}
-      {plays != null && (
-        <button
-          type="button"
-          className="candy-btn"
-          data-shape="chip"
-          data-own-press
-          {...named(playsName)}
-        ><span className="candy-face"><IconEarAlt size={14}/>
-          <span className="split-label is-rest"><span style={{ display: 'inline-block', minWidth: `${playsDigits}ch`, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{plays}</span></span>
-          {label(playsName)}
-        </span></button>
-      )}
-
-      {/* Its own half now, not a child of the row -- so it needs no
-          stopPropagation to keep the row from playing under it. */}
-      {/* No tooltips on the named three: the name shows itself. */}
-      <AddToPlaylistButton
-        variant="form"
-        fuse
-        icon={IconBookmarkAlt}
-        label={label('Add to Playlist')}
-        accent={accent}
-        title={null}
-        refs={playlistRef ? [playlistRef] : []}
-        {...named('Add to Playlist')}
-      />
-
-      <button
-        type="button"
-        className="candy-btn"
-        data-shape="chip"
-        data-own-press
-        onClick={onEnqueue}
-        {...named('Add to Queue')}
-      ><span className="candy-face"><IconPaperPlane size={14}/>{label('Add to Queue')}</span></button>
-
-      {/* On every song, so the parts line up down the list;
-          greyed and inert when the song has no music video (user-directed
-          2026-09-26). styles.css fades a disabled / aria-disabled candy button
-          to 0.55, which paints a dark hole in the run (photographed
-          2026-09-26), so only the icon greys: opacity is held at 1 here.
-          The grey is the REST text colour, so hover still floods the accent
-          with a white icon like every part (user-directed 2026-09-27).
-          Opens in the in-app browser, as a film trailer does (AnimeTrailer). */}
-      <button
-        type="button"
-        className="candy-btn"
-        data-shape="chip"
-        data-own-press
-        aria-disabled={!videoUrl}
-        onClick={() => { if (videoUrl) window.location.hash = '/tools/browser/' + encodeURIComponent(videoUrl); }}
-        style={videoUrl ? undefined : { opacity: 1, cursor: 'default', '--cbtn-rest-text': 'var(--text-faint)' }}
-        {...named(videoName)}
-      ><span className="candy-face"><IconCamcorder size={14}/>{label(videoName)}</span></button>
-    </div>
+      {active === 'Credits' && <AlbumPerformers album={album} accent={accent} />}
+      {/* Mounted with the page and only hidden, so switching tabs shows the
+          last answer at once instead of re-asking and re-painting the covers
+          (filmed 2026-09-26: a remount flashed "Loading albums" and blank
+          tiles on every visit). */}
+      <div hidden={active !== 'Discography'}><ArtistAlbums album={album} accent={accent} /></div>
+      {active === 'Tracks' && (() => {
+        const groups = new Map();
+        album.tracks.forEach((t, idx) => {
+          const d = t.disc || 1;
+          if (!groups.has(d)) groups.set(d, []);
+          groups.get(d).push({ t, idx });
+        });
+        const discNumbers = [...groups.keys()].sort((a, b) => a - b);
+        const multiDisc = discNumbers.length > 1;
+        return discNumbers.map((d, di) => (
+          // Row gap = the film Cast list's (library.css --credit-gap) plus the
+          // chip lip, which paints outside layout -- same formula, same gap.
+          // Off the 4px grid on purpose (6px, user-picked 2026-09-24).
+          <div key={d} data-spacing-intent="credit-gap" style={{ display: 'flex', flexDirection: 'column', gap: 'calc(var(--credit-gap) + var(--candy-depth-small))' }}>
+            {multiDisc && (
+              <div style={{
+                padding: di === 0 ? '4px 14px 6px' : '14px 14px 6px',
+                fontSize: 10, fontFamily: 'var(--font-mono)',
+                letterSpacing: '0.12em',                   color: 'var(--text-faint)',
+                borderBottom: 'var(--candy-frame) solid var(--border)',
+              }}>Disc {d}</div>
+            )}
+            {groups.get(d).map(({ t, idx }) => trackRow(t, idx))}
+          </div>
+        ));
+      })()}
+    </RecordPage>
   );
-}
-
-// Every finished listen, counted per logged key. Read once per page, and again
-// each time a song finishes (music-listen-recorded).
-function usePlayCounts() {
-  const [counts, setCounts] = useState(null);
-  useEffect(() => {
-    let live = true;
-    const load = () => musicApi.listenCounts()
-      .then(c => { if (live) setCounts(c || {}); })
-      .catch(() => { if (live) setCounts(c => c || {}); });
-    load();
-    window.addEventListener('music-listen-recorded', load);
-    return () => { live = false; window.removeEventListener('music-listen-recorded', load); };
-  }, []);
-  return counts;
-}
-
-// Every key one album song's listens can be logged under (MusicPlayerProvider
-// handleEnded): its file, the album page's `albumPath#n`, a playlist row's
-// `albumPath|title` (that path has no .md), Browse's `rgMbid|disc|position`.
-// Old playlist rows logged as `albumPath#<row>` without the .md are left out:
-// the row number is not this song's.
-// ponytail: assumes a card's n is the disc position Browse logs; if n counts
-// across discs, Browse plays of disc 2+ miss. Map by position if that shows up.
-function playCount(counts, album, t) {
-  const keys = new Set([
-    t.audioPath,
-    `${album.path}#${t.n}`,
-    `${album.path.replace(/\.md$/, '')}|${t.title}`,
-    album.providerId && `${album.providerId}|${t.disc || 1}|${t.n}`,
-  ]);
-  let n = 0;
-  for (const k of keys) if (k) n += counts[k] || 0;
-  return n;
 }
 
 // Every scanned picture of the record (front, back, booklet pages, disc...),
@@ -931,106 +459,3 @@ function ArtThumb({ releaseMbid, pic, accent, active, onPick }) {
       accent={accent} aspect="1 / 1" onClick={onPick} active={active} />
   );
 }
-
-// Letters and digits only, lowercased: "Tyler, The Creator" matches the
-// uploader "TylerTheCreatorVEVO" and "Paranoid Android" the title
-// "Radiohead - Paranoid Android (Official Video)".
-const squash = (s) => String(s || '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
-
-// A search for the record turns up fan uploads and other albums' songs. Keep a
-// hit only when the artist's own channel posted it (not the "- Topic" channel,
-// which is sound over the cover) and its title names one of THIS album's songs.
-// Longest song name wins, so a "Karma Police" video is never handed to a song
-// called "Police"; first video per song. Returns { squash(song title): watchUrl }.
-function trackVideos(hits, album) {
-  const artist = squash(album.artist);
-  const names = album.tracks.map(t => squash(t.title))
-    .filter(n => n.length >= 3 && n !== artist)
-    .sort((a, b) => b.length - a.length);
-  const out = {};
-  if (!artist) return out;
-  for (const h of hits || []) {
-    const up = String(h.uploader || '');
-    if (/ - topic$/i.test(up) || !squash(up).includes(artist)) continue;
-    const name = names.find(n => squash(h.title).includes(n));
-    if (name && !out[name]) out[name] = h.watchUrl;
-  }
-  return out;
-}
-
-// Which songs have a music video: one YouTube search per album visit (~2 s).
-// The last answer is kept in localStorage, so the buttons show at once and
-// the rows repaint if the new search differs.
-// ponytail: one search, so a long album can miss some songs' videos; search
-// per track if that turns out to matter.
-function useTrackVideos(album) {
-  const key = album ? 'music:trackVideos:' + album.path : null;
-  const [videos, setVideos] = useState({});
-  useEffect(() => {
-    if (!key || !album.artist || !album.title) { setVideos({}); return; }
-    try { setVideos(JSON.parse(localStorage.getItem(key)) || {}); } catch { setVideos({}); }
-    let live = true;
-    musicApi.searchYoutube(`${album.artist} ${album.title} official video`, 20)
-      .then(r => {
-        const found = trackVideos(r, album);
-        try { localStorage.setItem(key, JSON.stringify(found)); } catch {}
-        if (live) setVideos(found);
-      })
-      .catch(() => {});
-    return () => { live = false; };
-  }, [key, album?.artist, album?.title]); // eslint-disable-line react-hooks/exhaustive-deps
-  return videos;
-}
-
-// 12.4M, 34K, 812 (user-picked 2026-09-26); the exact number is the hover.
-const compactPlays = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
-
-// Each song's worldwide play count on Last.fm (the user's own key, Settings >
-// Library > Music), kept the video part's way: the last answer per album sits
-// in localStorage so the numbers show at once, then every song is asked again,
-// one at a time, and repaints as its answer lands. Returns
-// { squash(song title): { playcount, url } }; a song Last.fm doesn't know, or
-// no key, stays absent (a grey dash).
-function useWorldPlays(album) {
-  const key = album ? 'music:worldPlays:' + album.path : null;
-  const [world, setWorld] = useState({});
-  useEffect(() => {
-    let next = {};
-    if (key) try { next = JSON.parse(localStorage.getItem(key)) || {}; } catch {}
-    setWorld(next);
-    if (!key || !album.artist) return;
-    let live = true;
-    (async () => {
-      if (!(await musicApi.lastfmHasApiKey().catch(() => false))) return;
-      for (const t of album.tracks) {
-        const r = await musicApi.lastfmTrackPlays(album.artist, t.title).catch(() => undefined);
-        if (!live) return;
-        if (r === undefined) continue; // no answer this time: keep the saved number
-        next = { ...next };
-        if (r) next[squash(t.title)] = r; else delete next[squash(t.title)];
-        setWorld(next);
-        try { localStorage.setItem(key, JSON.stringify(next)); } catch {}
-        // ponytail: a fixed gap keeps one album under Last.fm's ~5 calls/s; move
-        // it to a shared gate in lastfm.rs if two pages ever ask at once.
-        await new Promise(res => setTimeout(res, 200));
-      }
-    })();
-    return () => { live = false; };
-  }, [key, album?.artist]); // eslint-disable-line react-hooks/exhaustive-deps
-  return world;
-}
-
-function Centered({ children, tone }) {
-  return (
-    <div style={{
-      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-      color: tone === 'error' ? 'var(--text)' : 'var(--text-faint)',
-      fontSize: 13,
-    }}>{children}</div>
-  );
-}
-
-// RatingStrip moved to ../RatingStrip.jsx — shared with the film / series detail
-// page, which used to carry a separate dropdown for the same value.
-
-// The status picker is the shared CandySelect (clearable, with status dots).

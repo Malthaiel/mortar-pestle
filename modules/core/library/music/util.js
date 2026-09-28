@@ -10,6 +10,12 @@ import { navigate } from '@host/router.js';
 // name clickable (the credits panel, the album header) goes through this.
 export const toBrowse = (q) => navigate('/tools/library/music/browse/q/' + encodeURIComponent(q));
 
+// Letters and digits only, lowercased: "Tyler, The Creator" matches the
+// uploader "TylerTheCreatorVEVO" and "Paranoid Android" the title
+// "Radiohead - Paranoid Android (Official Video)". Also how a playlist row
+// finds its song on the album card (by title, never by its row number).
+export const squash = (s) => String(s || '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+
 // The one cover-tile grid for the whole music module (album browser panel, home,
 // library, browse, playlists). Two rules are baked in, both easy to get wrong:
 //
@@ -96,6 +102,8 @@ export function albumToQueueItems(album) {
     streamable: !t.available,
     wikilink:   t.wikilink,
     duration:   t.duration,
+    // A Browse album's tracks carry their stream identity (AlbumDetail).
+    streamKey:  t.streamKey,
   }));
 }
 

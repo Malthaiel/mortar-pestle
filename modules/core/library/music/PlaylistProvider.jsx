@@ -157,7 +157,11 @@ export function PlaylistProvider({ children }) {
 
   // Rename: re-emit under the new name (Rust moves the cover + deletes the old
   // file). Returns the playlist at its new path.
+  // Saved Tracks is found by its name, so it keeps it (its cover can change).
   const rename = useCallback(async (playlist, newTitle) => {
+    if (isSavedTracks(playlist) && (newTitle || '').trim() !== SAVED_TITLE) {
+      throw new Error(`“${SAVED_TITLE}” can’t be renamed.`);
+    }
     const cur = await musicApi.readPlaylist(playlist.path);
     const refs = (cur.tracks || []).map(refFromPlaylistTrack);
     const pl = await musicApi.writePlaylist(newTitle, refs, cur.path, cur.image || null);
@@ -233,13 +237,17 @@ export function PlaylistProvider({ children }) {
   const ensureSavedRef = useRef(ensureSaved);
   ensureSavedRef.current = ensureSaved;
 
-  // A downloaded LOOSE song (no album card) auto-saves — Saved Tracks is the only
-  // place it could ever appear. Album-track downloads never touch it.
+  // A downloaded LOOSE song (no album card): first every playlist row pointing
+  // at its link switches to the saved file (user-picked 2026-09-27), so the
+  // playlist knows it is on disk; then it auto-saves -- Saved Tracks is the only
+  // place it could ever appear, and a switched Saved row de-dupes the add.
+  // Album-track downloads never touch either.
+  // ponytail: reads every playlist per finished song; fine at a handful.
   useEffect(() => {
-    const h = (e) => {
+    const h = async (e) => {
       const j = e.detail || {};
       if (!j.audioPath) return;
-      ensureSavedRef.current({
+      const ref = {
         wikilink: j.audioPath.replace(/\.opus$/i, ''),
         audioPath: j.audioPath,
         title: j.title || '',
@@ -248,7 +256,23 @@ export function PlaylistProvider({ children }) {
         albumTitle: null,
         duration: j.duration ?? null,
         watchUrl: j.watchUrl || null,
-      }).catch(() => {});
+      };
+      try {
+        if (j.watchUrl) {
+          let changed = false;
+          for (const s of (await musicApi.listPlaylists()) || []) {
+            const cur = await musicApi.readPlaylist(s.path);
+            const rows = (cur.tracks || []).map(refFromPlaylistTrack);
+            if (!rows.some((r) => r.watchUrl === j.watchUrl)) continue;
+            await musicApi.writePlaylist(cur.title,
+              rows.map((r) => (r.watchUrl === j.watchUrl ? { ...ref, title: r.title || ref.title, artist: r.artist || ref.artist } : r)),
+              cur.path, cur.image || null);
+            changed = true;
+          }
+          if (changed) announce();
+        }
+        await ensureSavedRef.current(ref);
+      } catch { /* the song is on disk either way; the rows stay links */ }
     };
     window.addEventListener('music-single-downloaded', h);
     return () => window.removeEventListener('music-single-downloaded', h);

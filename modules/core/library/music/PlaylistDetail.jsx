@@ -1,64 +1,46 @@
-// One playlist, wearing the film page's header (the same shell the album page
-// uses): the cover full-bleed behind it, one fact line, one fused action run --
-// a drag-reorderable tracklist (pointer-drag via a per-row grip handle; HTML5
-// DnD doesn't fire in the Tauri WebKitGTK webview). Clicking a
-// row plays from there; the per-row × removes it from the playlist (never
-// touches the underlying track/.opus). Edits persist by re-emitting the whole
-// page through the provider. Reloads on `music-playlists-changed` so external
-// edits and our own writes stay in sync.
+// One playlist, on the shared record page (RecordPage.jsx) -- the exact page an
+// album wears (user-directed 2026-09-27): the cover full-bleed behind it, one
+// fact line, the same action run, the same song rows plus the artist and a
+// Remove part. No tabs (Credits and Discography are one artist's), no reorder.
+// Edits persist by re-emitting the whole page through the provider. Reloads on
+// `music-playlists-changed` (our writes, a downloaded song's row switch) and
+// `music-library-changed` (an album download flips rows to on-disk).
 
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { musicApi } from './api.js';
 import { useMusicPlayer } from './MusicPlayerProvider.jsx';
 import { usePlaylists, refFromPlaylistTrack, isSavedTracks } from './PlaylistProvider.jsx';
-import { Seg } from '@host/components/ui/index.js';
+import { useDownloads } from './DownloadProvider.jsx';
 import PlaylistModal from './PlaylistModal.jsx';
 import CollageCover from './CollageCover.jsx';
-import { IconPlay, IconLayers, IconBrush } from '@host/components/icons.jsx';
 import { encodePath } from '../paths.js';
 import { navigate } from '@host/router.js';
-import { fmtDuration } from './searchShared.jsx';
 import { useSongMenu } from './contextMenus.js';
-import { trackToQueueItem, coverSrc } from './util.js';
+import { trackToQueueItem, coverSrc, squash, TILE_MIN } from './util.js';
 import { usePrefetchStreams } from './streamCache.js';
-import { useContextMenu } from '@host/context-menu/useContextMenu.js';
-import { FILM_POSTER_W, FILM_DOT } from '../AnimeDetailHeader.jsx';
-import { BODY_COLOR } from '../AnimeMainColumn.jsx';
+import { POSTER_COL_GAP, POSTER_DEPTH, PosterTile } from '../AnimeDetailHeader.jsx';
+import ImageLightbox, { useLightbox } from '../ImageLightbox.jsx';
+import { RecordPage, ActionRun, TrackRow, ArtistLink, Centered } from './RecordPage.jsx';
+import { usePlayCounts, countPlays, useWorldPlays, useTrackVideos, worldCells } from './recordHooks.js';
 
-const DL_FILTER_KEY = 'tools:savedTracksFilter';
-const DL_FILTER_OPTIONS = [
-  { value: 'both', label: 'Both' },
-  { value: 'yes', label: 'Downloaded' },
-  { value: 'no', label: 'Not downloaded' },
-];
+// A song's identity on this page: two artists' "Intro" are different songs.
+const songId = (t) => `${squash(t.artist)}|${squash(t.title)}`;
 
 export default function PlaylistDetail({ path, accent }) {
   const [pl, setPl] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editBusy, setEditBusy] = useState(false);
   const [editErr, setEditErr] = useState(null);
-  const [dragIdx, setDragIdx] = useState(null);
-  const [overIdx, setOverIdx] = useState(null);
-  const [hoverIdx, setHoverIdx] = useState(null);
-  // Saved Tracks mixes songs on disk with songs that only stream, so it gets the
-  // same downloaded/not-downloaded split the album panel has. Rows are hidden,
-  // never re-indexed — reorder/remove keep addressing the real track list.
-  const [dlFilter, setDlFilter] = useState(() => {
-    try { return localStorage.getItem(DL_FILTER_KEY) || 'both'; } catch { return 'both'; }
-  });
-  useEffect(() => {
-    try { localStorage.setItem(DL_FILTER_KEY, dlFilter); } catch {}
-  }, [dlFilter]);
+  const [dlJobIds, setDlJobIds] = useState([]);
   const reqId = useRef(0);
-  const rowRefs = useRef([]);
-  const dragRef = useRef({ from: null, to: null });
 
-  const { playTracks, enqueue, currentTrack, isPlaying } = useMusicPlayer();
+  const { playTracks, enqueue, currentTrack, isPlaying, toggle } = useMusicPlayer();
   const { saveTracks, rename, setCover, deletePlaylist } = usePlaylists();
+  const { jobs: dlJobs } = useDownloads();
   const songMenu = useSongMenu(accent);
-  const { openContextMenu } = useContextMenu();
 
   const load = () => {
     const myId = ++reqId.current;
@@ -82,44 +64,50 @@ export default function PlaylistDetail({ path, accent }) {
     setLoading(true);
     setError(null);
     setPl(null);
+    setDlJobIds([]);
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path]);
-
-  useEffect(() => {
     const h = () => load();
     window.addEventListener('music-playlists-changed', h);
-    return () => window.removeEventListener('music-playlists-changed', h);
+    window.addEventListener('music-library-changed', h);
+    return () => {
+      window.removeEventListener('music-playlists-changed', h);
+      window.removeEventListener('music-library-changed', h);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path]);
 
+  const tracks = pl?.tracks || [];
+  const songs = tracks.map((t) => ({ id: songId(t), artist: t.artist, title: t.title }));
+  const world = useWorldPlays(pl ? 'music:worldPlays:' + pl.path : null, songs);
+  // A YouTube-link row IS its video; every other song gets its own search
+  // (a playlist's artists differ, so the album's one search can't cover it).
+  const videos = useTrackVideos(pl ? 'music:trackVideos:' + pl.path : null,
+    tracks.filter((t) => !t.watchUrl && t.artist).map((t) => ({
+      q: `${t.artist} ${t.title} official video`, artist: t.artist,
+      songs: [{ id: songId(t), title: t.title }], limit: 5,
+    })));
+  const plays = usePlayCounts();
+  // The cover's viewer: the playlist's own picture, or its collage's sleeves.
+  const lb = useLightbox();
   // Not-downloaded songs get their links ahead: first 30, then as rows scroll
   // into view (user-directed 2026-09-26), so a click plays at once.
-  usePrefetchStreams(pl ? (pl.tracks || []).map((t) => trackToQueueItem(t, pl)) : [], rowRefs);
+  const rowRefs = useRef([]);
+  usePrefetchStreams(pl ? tracks.map((t) => trackToQueueItem(t, pl)) : [], rowRefs);
 
   if (loading) return <Centered>Loading</Centered>;
   if (error) return <Centered tone="error">Failed to load: {error}</Centered>;
   if (!pl) return <Centered>Not found</Centered>;
 
-  const tracks = pl.tracks || [];
   const items = tracks.map((t) => trackToQueueItem(t, pl));
   const saved = isSavedTracks(pl);
-  const rowVisible = (i) =>
-    !saved || dlFilter === 'both' || (dlFilter === 'yes') === !!items[i]?.available;
   const rowPlayable = (i) => !!(items[i] && (items[i].available || items[i].streamable));
   const playable = items.filter((it) => it.available || it.streamable);
 
-  const playAll = () => {
-    if (playable.length) playTracks(items, 0);
-  };
   const playFrom = (i) => {
     if (rowPlayable(i)) playTracks(items, i);
   };
-  const addToQueue = () => {
-    if (playable.length) enqueue(playable);
-  };
 
-  // Optimistic local update + persist (reorder / remove). On failure, reload.
+  // Optimistic local update + persist (remove). On failure, reload.
   const persist = (nextTracks) => {
     setPl((p) => ({ ...p, tracks: nextTracks }));
     saveTracks(pl, nextTracks.map(refFromPlaylistTrack)).catch((e) => {
@@ -133,49 +121,48 @@ export default function PlaylistDetail({ path, accent }) {
   const rowMenu = (e, i) => songMenu.openMenu(e, items[i], [
     { label: 'Remove from Playlist', danger: true, onClick: () => removeAt(i) },
   ]);
-  const drop = (to) => {
-    if (dragIdx == null || dragIdx === to) return;
-    const next = tracks.slice();
-    const [moved] = next.splice(dragIdx, 1);
-    next.splice(to, 0, moved);
-    persist(next);
+
+  // The album's two fields, patched onto this page by the same commands.
+  const setStatus = async (status) => {
+    setBusy(true);
+    try {
+      await musicApi.markAlbumStatus(pl.path, status);
+      setPl((p) => ({ ...p, status }));
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally { setBusy(false); }
+  };
+  const setRating = (r) => {
+    musicApi.markAlbumRating(pl.path, r)
+      .then(() => setPl((p) => ({ ...p, personalRating: r })))
+      .catch((e) => alert('Rating failed: ' + (e?.message || e)));
   };
 
-  // Pointer-drag reorder (HTML5 DnD is dead in the WebKitGTK webview). A per-row
-  // grip handle starts the drag; we track the pointer against row rects to pick
-  // the insertion target, then reuse drop() so the reorder is identical to the
-  // old behaviour. dragIdx state stays === `from` for the whole drag, so drop()
-  // reads the right source on release.
-  const startReorder = (e, i) => {
-    e.preventDefault();
-    e.stopPropagation();
-    dragRef.current = { from: i, to: i };
-    setDragIdx(i);
-    setOverIdx(i);
-    const onMove = (ev) => {
-      const y = ev.clientY;
-      let target = tracks.length - 1;
-      for (let k = 0; k < tracks.length; k++) {
-        const r = rowRefs.current[k]?.getBoundingClientRect();
-        if (!r) continue;
-        if (y < r.top + r.height / 2) { target = k; break; }
-      }
-      if (target !== dragRef.current.to) {
-        dragRef.current.to = target;
-        setOverIdx(target);
-      }
-    };
-    const onUp = () => {
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-      drop(dragRef.current.to);
-      dragRef.current = { from: null, to: null };
-      setDragIdx(null);
-      setOverIdx(null);
-    };
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
+  // Download missing: one job per song not on disk, each the song menu's own
+  // Download. A YouTube row's finished download switches the row to the saved
+  // file (PlaylistProvider), so it stops counting as missing.
+  // ponytail: a plain (off-disk) album row never flips to on-disk after its
+  // download -- the row has no file link to find. Link it on album download
+  // if such rows turn up (none on 2026-09-27).
+  const missing = tracks.map((t, i) => i).filter((i) => !tracks[i].available && (tracks[i].watchUrl || tracks[i].albumPath));
+  const myJobs = dlJobs.filter((j) => dlJobIds.includes(j.id));
+  const dlBusy = myJobs.some((j) => j.state === 'queued' || j.state === 'downloading');
+  const dlDone = myJobs.filter((j) => j.state === 'done').length;
+  const startDownload = async () => {
+    if (dlBusy) return;
+    const ids = [];
+    for (const i of missing) {
+      const id = await songMenu.download(items[i]);
+      if (id) ids.push(id);
+    }
+    setDlJobIds(ids);
   };
+  const download = (missing.length || dlBusy) ? {
+    label: dlBusy ? `Downloading ${dlDone}/${myJobs.length}` : `Download ${missing.length} Missing`,
+    rest: dlBusy ? `${dlDone}/${myJobs.length}` : null,
+    busy: dlBusy,
+    onClick: startDownload,
+  } : null;
 
   const onEdit = async ({ title, coverFile }) => {
     setEditBusy(true);
@@ -205,240 +192,145 @@ export default function PlaylistDetail({ path, accent }) {
     }
   };
 
-  const a = accent || 'var(--accent)';
-  // The playlist's own chosen cover when it has one; otherwise the first sleeve
-  // its collage is built from, so a collage playlist still gets a backdrop.
-  // With neither there is no picture, and .film-detail's top padding is
-  // reserved FOR one -- so a pictureless playlist keeps the flat header.
-  const backdrop = coverSrc(pl.image || (pl.coverUrls || []).filter(Boolean)[0], 400, { library: true });
-  // Summed off the real rows, never a stored total.
+  // The picture: the playlist's own cover, else the collage built from its
+  // first sleeves (CollageCover), whose first sleeve is also the backdrop.
+  // With neither there is no backdrop, and the page takes the flat header.
+  const sleeves = (pl.coverUrls || []).filter(Boolean);
+  const own = pl.image ? coverSrc(pl.image, 400, { library: true }) : null;
+  const ownFull = pl.image ? coverSrc(pl.image, 0, { library: true }) : null;
+  const sleeveFull = (u) => coverSrc(u, 0, { library: true });
+  const backdrop = ownFull || (sleeves[0] ? sleeveFull(sleeves[0]) : null);
+  const openPicture = () => {
+    if (ownFull) lb.show(ownFull, pl.title);
+    else if (sleeves[0]) lb.show(sleeveFull(sleeves[0]), pl.title);
+  };
+  // A collage opens its first sleeve with every sleeve in the viewer's side
+  // column, the album's artwork viewer shape.
+  const aside = !pl.image && sleeves.length > 1 && (
+    <div style={{ width: TILE_MIN, display: 'flex', flexDirection: 'column', gap: POSTER_COL_GAP, paddingBottom: POSTER_DEPTH }}>
+      {sleeves.map((u) => (
+        <PosterTile key={u} image={coverSrc(u, 250, { library: true })} title={pl.title}
+          accent={accent || 'var(--accent)'} aspect="1 / 1"
+          active={lb.src === sleeveFull(u)} onClick={() => lb.show(sleeveFull(u), pl.title)} />
+      ))}
+    </div>
+  );
+
+  // The fact line, in the album's order: the top two artists (the first with
+  // its photo), the day it was made, the song count, the length summed off the
+  // real rows (user-picked 2026-09-27).
+  const byArtist = new Map();
+  for (const t of tracks) if (t.artist) byArtist.set(t.artist, (byArtist.get(t.artist) || 0) + 1);
+  const top = [...byArtist.entries()].sort((a, b) => b[1] - a[1]).map(([name]) => name);
+  const more = top.length - 2;
   const secs = tracks.reduce((t, x) => t + (x.duration || 0), 0);
+  const made = pl.created ? new Date(pl.created + 'T00:00').toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' }) : null;
   const facts = [
+    top.length ? (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <ArtistLink name={top[0]} accent={accent}/>
+        {top[1] && <>, <ArtistLink name={top[1]} accent={accent} photo={false}/></>}
+        {more > 0 && ` + ${more} more`}
+      </span>
+    ) : null,
+    made,
     `${tracks.length} track${tracks.length === 1 ? '' : 's'}`,
     secs ? `${Math.round(secs / 60)}m` : null,
   ].filter(Boolean);
+
+  const trackPlays = plays ? tracks.map((t, i) => countPlays(plays, [t.audioPath, t.watchUrl, items[i].streamKey])) : null;
+  const playsDigits = trackPlays ? String(Math.max(0, ...trackPlays)).length : 1;
+  const cells = worldCells(world, songs.map((s) => s.id));
+
   return (
-    <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-      {/* Header: the film page's shell (library.css .film-detail /
-          .film-backdrop), used verbatim as the album page uses it. */}
-      <div className={backdrop ? 'film-detail' : undefined}
-           style={backdrop ? undefined : {
-             display: 'flex', gap: 24, padding: '28px 26px 22px',
-             borderBottom: 'var(--candy-frame) solid var(--border)', alignItems: 'flex-end',
-           }}>
-        {backdrop && (
-          <div className="film-backdrop is-square" aria-hidden>
-            <img src={backdrop} alt=""/>
-          </div>
-        )}
-        {/* One wrapper for both columns: .film-detail centres its children at
-            the reading measure, so the flex row has to BE a single child. */}
-        <div style={{ display: 'flex', gap: 28 }}>
-        <div style={{ width: FILM_POSTER_W, flexShrink: 0 }}>
-          <div style={{ width: '100%', aspectRatio: '1 / 1', borderRadius: 8, overflow: 'hidden', boxShadow: '0 10px 32px rgba(0,0,0,0.34)', background: 'var(--surface-2)' }}>
-            <CollageCover image={pl.image} urls={pl.coverUrls} title={pl.title} accent={accent} />
-          </div>
-        </div>
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: BODY_COLOR, letterSpacing: '0.08em'}}>Playlist</div>
-
-          <h2 style={{
-            margin: 0, fontSize: 'calc(28px * var(--film-head))', fontWeight: 700,
-            color: 'var(--text)', lineHeight: 1.12, letterSpacing: '-0.015em',
-          }}>{pl.title}</h2>
-
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
-            fontSize: 'calc(12px * var(--film-head))', color: BODY_COLOR,
-            fontVariantNumeric: 'tabular-nums',
-          }}>
-            {facts.map((f, i) => <Fragment key={i}>{i > 0 && FILM_DOT}{f}</Fragment>)}
-          </div>
-
-          {/* One fused run, as on the album and film pages. Delete lives in the
-              "more" menu and Saved Tracks cannot be deleted at all. */}
-          <div className="candy-split" style={{
-            position: 'relative', '--cbtn-size': '26px',
-            marginTop: 4, alignSelf: 'flex-start',
-            ...(accent ? { '--accent': accent } : {}),
-          }}>
-            <button
-              className="candy-btn"
-              data-shape="chip"
-              data-own-press
-              onClick={playAll}
-              disabled={playable.length === 0}
-            ><span className="candy-face"><IconPlay size={14}/>Play</span></button>
-            <button
-              className="candy-btn"
-              data-shape="chip"
-              data-own-press
-              onClick={addToQueue}
-              disabled={playable.length === 0}
-            ><span className="candy-face"><IconLayers size={14}/>Queue</span></button>
-            <button
-              className="candy-btn"
-              data-shape="chip"
-              data-own-press
-              onClick={() => setEditOpen(true)}
-            ><span className="candy-face"><IconBrush size={14}/>Edit</span></button>
-            {!saved && (
-              <button
-                type="button"
-                className="candy-btn"
-                data-shape="chip"
-                data-own-press
-                title="More"
-                onClick={(e) => {
-                  const r = e.currentTarget.getBoundingClientRect();
-                  openContextMenu({ x: r.left, y: r.bottom + 4 },
-                    [{ label: 'Delete playlist', onClick: onDelete }], { accent });
-                }}
-              ><span className="candy-face">⋯</span></button>
-            )}
-          </div>
-        </div>
-        </div>
-      </div>
-
-      {saved && tracks.length > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px 0' }}>
-          <Seg options={DL_FILTER_OPTIONS} value={dlFilter} onChange={setDlFilter} accent={accent} />
+    <RecordPage
+      accent={accent}
+      backdrop={backdrop}
+      picture={own}
+      cover={own ? null : <CollageCover image={null} urls={pl.coverUrls} title={pl.title} accent={accent} />}
+      onPictureClick={openPicture}
+      tag="Playlist"
+      title={pl.title}
+      facts={facts}
+      actions={
+        <ActionRun
+          accent={accent}
+          playLabel="Play Playlist"
+          onPlay={() => { if (playable.length) playTracks(items, 0); }}
+          download={download}
+          status={pl.status}
+          rating={pl.personalRating}
+          busy={busy}
+          onStatus={setStatus}
+          onRating={setRating}
+          playlistRefs={() => tracks.map(refFromPlaylistTrack)}
+          onQueue={() => { if (playable.length) enqueue(playable); }}
+          moreItems={[
+            { label: 'Edit Details', onClick: () => setEditOpen(true) },
+            // Saved Tracks cannot be deleted at all.
+            !saved && { label: 'Delete playlist', onClick: onDelete },
+          ].filter(Boolean)}
+        />
+      }
+      after={<>
+        <ImageLightbox {...lb} accent={accent || 'var(--accent)'} aside={aside} />
+        <PlaylistModal
+          open={editOpen}
+          mode="edit"
+          initialTitle={pl.title}
+          initialImage={pl.image}
+          accent={accent}
+          onSubmit={onEdit}
+          onClose={() => {
+            if (!editBusy) {
+              setEditOpen(false);
+              setEditErr(null);
+            }
+          }}
+          busy={editBusy}
+          error={editErr}
+        />
+        {songMenu.modalEl}
+      </>}
+    >
+      {tracks.length === 0 && (
+        <div style={{ color: 'var(--text-faint)', fontSize: 13, textAlign: 'center', padding: '36px 24px' }}>
+          Empty playlist. Add songs with Add to Playlist on any song or album.
         </div>
       )}
-
-      {/* Tracklist */}
-      <div style={{ padding: '12px 14px 32px', display: 'flex', flexDirection: 'column', gap: 2 }}>
-        {tracks.length === 0 && (
-          <div style={{ color: 'var(--text-faint)', fontSize: 13, textAlign: 'center', padding: '36px 24px' }}>
-            Empty playlist. Add tracks with <b>+ Playlist</b> from the Downloaded tab.
-          </div>
-        )}
-        {tracks.length > 0 && !tracks.some((_, i) => rowVisible(i)) && (
-          <div style={{ color: 'var(--text-faint)', fontSize: 13, textAlign: 'center', padding: '36px 24px' }}>
-            No tracks match this filter.
-          </div>
-        )}
+      {/* The album's row gap: the film Cast list's (--credit-gap) plus the chip
+          lip, which paints outside layout. */}
+      <div data-spacing-intent="credit-gap" style={{ display: 'flex', flexDirection: 'column', gap: 'calc(var(--credit-gap) + var(--candy-depth-small))' }}>
         {tracks.map((t, i) => {
-          if (!rowVisible(i)) return null;
           // Stream tracks have no audioPath (null === null would light every
           // stream row) — fall back to album+track identity.
           const playingThis = !!currentTrack && (currentTrack.audioPath
             ? currentTrack.audioPath === t.audioPath
             : currentTrack.albumPath === (t.albumPath || pl.path) && currentTrack.n === t.n);
-          const dragging = dragIdx === i;
-          const dropOver = overIdx === i && dragIdx !== null && dragIdx !== i;
-          const hovering = hoverIdx === i;
+          const id = songs[i].id;
           return (
-            <div
-              key={i + ':' + (t.audioPath || t.title)}
-              ref={(el) => { rowRefs.current[i] = el; }}
-              onMouseEnter={() => setHoverIdx(i)}
-              onMouseLeave={() => setHoverIdx((o) => (o === i ? null : o))}
-              onClick={() => rowPlayable(i) && playFrom(i)}
-              onContextMenu={(e) => rowMenu(e, i)}
-              title={rowPlayable(i) ? '' : 'audio not downloaded'}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                padding: '8px 12px',
-                borderRadius: 6,
-                cursor: rowPlayable(i) ? 'pointer' : 'not-allowed',
-                background: playingThis
-                  ? `color-mix(in oklch, ${a} 12%, transparent)`
-                  : dropOver || hovering
-                    ? 'var(--surface-2)'
-                    : 'transparent',
-                borderTop: dropOver && dragIdx > i ? `2px solid ${a}` : '2px solid transparent',
-                borderBottom: dropOver && dragIdx < i ? `2px solid ${a}` : '2px solid transparent',
-                opacity: dragging ? 0.4 : rowPlayable(i) ? 1 : 0.5,
-                transition: 'background 120ms ease',
-              }}
-            >
-              <span
-                onPointerDown={(e) => startReorder(e, i)}
-                onClick={(e) => e.stopPropagation()}
-                title="Drag to reorder"
-                style={{ flexShrink: 0, width: 14, textAlign: 'center', cursor: 'grab', touchAction: 'none', color: 'var(--text-faint)', fontSize: 13, lineHeight: 1, opacity: hovering ? 0.7 : 0, transition: 'opacity 120ms ease' }}
-              >
-                ⠿
-              </span>
-              <span style={{ width: 22, textAlign: 'center', flexShrink: 0, fontSize: 11, fontFamily: 'var(--font-mono)', color: playingThis ? a : 'var(--text-faint)', fontVariantNumeric: 'tabular-nums' }}>
-                {playingThis && isPlaying ? '▸' : i + 1}
-              </span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, color: playingThis ? a : 'var(--text)', fontWeight: playingThis ? 600 : 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {t.title}
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {[t.artist, t.albumTitle].filter(Boolean).join(' · ')}
-                </div>
-              </div>
-              <span style={{ flexShrink: 0, fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-faint)', fontVariantNumeric: 'tabular-nums' }}>{fmtDuration(t.duration)}</span>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  removeAt(i);
-                }}
-                title="Remove from playlist"
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: 'var(--text-faint)',
-                  cursor: 'pointer',
-                  fontSize: 14,
-                  lineHeight: 1,
-                  padding: 4,
-                  borderRadius: 4,
-                  flexShrink: 0,
-                  opacity: hovering ? 1 : 0,
-                  pointerEvents: hovering ? 'auto' : 'none',
-                  transition: 'opacity 120ms ease',
-                }}
-              >
-                ×
-              </button>
+            <div key={i + ':' + (t.audioPath || t.watchUrl || t.title)} ref={(el) => { rowRefs.current[i] = el; }}>
+              <TrackRow
+                track={{ ...t, n: i + 1 }}
+                artist={t.artist}
+                plays={trackPlays?.[i]}
+                playsDigits={playsDigits}
+                accent={accent}
+                playlistRef={refFromPlaylistTrack(t)}
+                videoUrl={t.watchUrl || videos[id]}
+                world={world[id]}
+                worldText={cells.text(id)}
+                worldSizers={cells.sizers}
+                playing={playingThis && isPlaying}
+                onMenu={(e) => rowMenu(e, i)}
+                onPlay={() => (playingThis ? toggle() : playFrom(i))}
+                onEnqueue={() => enqueue([items[i]])}
+                onRemove={() => removeAt(i)}
+              />
             </div>
           );
         })}
       </div>
-
-      <PlaylistModal
-        open={editOpen}
-        mode="edit"
-        initialTitle={pl.title}
-        initialImage={pl.image}
-        accent={accent}
-        onSubmit={onEdit}
-        onClose={() => {
-          if (!editBusy) {
-            setEditOpen(false);
-            setEditErr(null);
-          }
-        }}
-        busy={editBusy}
-        error={editErr}
-      />
-      {songMenu.modalEl}
-    </div>
-  );
-}
-
-function Centered({ children, tone }) {
-  return (
-    <div
-      style={{
-        flex: 1,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: tone === 'error' ? 'var(--text)' : 'var(--text-faint)',
-        fontSize: 13,
-        padding: 40,
-      }}
-    >
-      {children}
-    </div>
+    </RecordPage>
   );
 }

@@ -199,14 +199,16 @@ export const COVER_TILE_FACE_STYLE = { padding: 4 };
 // `onClick` replaces opening the tile's own lightbox (the album sleeve opens
 // its picture viewer; each picture in that viewer's list picks itself), and
 // `active` lights the tile as the one on show.
-export function PosterTile({ image, title, accent, aspect = '2 / 3', onClick, active }) {
+// `children` stand in for the picture (a playlist's collage) and keep the tile
+// pressable.
+export function PosterTile({ image, title, accent, aspect = '2 / 3', onClick, active, children }) {
   const lb = useLightbox();
   return (
     <>
       <div style={COVER_BOX_STYLE}>
       <button
         type="button"
-        disabled={!image}
+        disabled={!image && !children}
         onClick={onClick || (() => lb.show(image, title))}
         className={'candy-btn' + (active ? ' is-active' : '')}
         data-shape="tile"
@@ -219,9 +221,9 @@ export function PosterTile({ image, title, accent, aspect = '2 / 3', onClick, ac
             width: '100%', aspectRatio: aspect, background: 'var(--surface-3)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            {image
+            {children || (image
               ? <img src={image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              : <span style={{ fontFamily: 'var(--font-mono)', fontSize: 24, color: 'var(--text-muted)' }}>—</span>}
+              : <span style={{ fontFamily: 'var(--font-mono)', fontSize: 24, color: 'var(--text-muted)' }}>—</span>)}
           </div>
         </span>
       </button>

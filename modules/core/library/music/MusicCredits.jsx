@@ -2,7 +2,7 @@
 // (AlbumPerformers). Related and the Release details tab were deleted, all
 // user-directed 2026-09-26.
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { musicApi, useMbRefreshTick } from './api.js';
 import BrowseResultCard from './BrowseResultCard.jsx';
 import PosterRow from '@modules/core/library/PosterRow.jsx';
@@ -76,15 +76,12 @@ export function ArtistAlbums({ album, accent }) {
     () => (discography || []).filter(r => r.mbid && r.mbid !== selfId && !r.secondaryTypes?.includes('Live')),
     [discography, selfId],
   );
-  const boxRef = useRef(null);
-  const col = useFitColumn(boxRef, SLIDER_ROWS, more.length > 0);
 
   if (discography === null) return <div style={NOTE_STYLE}>Loading albums</div>;
   if (more.length === 0) return <div style={NOTE_STYLE}>No other albums found</div>;
 
   return (
-    <div ref={boxRef}>
-    <PosterRow accent={accent} colWidth={col} rows={SLIDER_ROWS} arrows={false}>
+    <PosterRow accent={accent} colWidth={COL} rows={SLIDER_ROWS} arrows={false}>
       {(all ? more : more.slice(0, SLIDER_CAP)).map(r => {
         const ownedPath = ownedByProvider.get(r.mbid);
         return (
@@ -108,49 +105,15 @@ export function ArtistAlbums({ album, accent }) {
         </div>
       )}
     </PosterRow>
-    </div>
   );
 }
 
 const SLIDER_ROWS = 2;
 const SLIDER_CAP = 12; // before Show All (user-picked 2026-09-26, 18 then 12)
-// The old rail's cover width is the ceiling; the floor only stops a very short
-// window from shrinking covers to nothing.
-const COL_MAX = 150;
-const COL_MIN = 60;
-
-// The covers' width, sized so the page never scrolls down past the slider
-// (user-directed 2026-09-26). Read off the live page each time the pane or the
-// slider changes size: how far the page's content runs past the scroller's
-// bottom (negative = room to spare). A cover is square and as wide as its
-// column, so the slider grows exactly `rows` px per px of column: that
-// overrun / rows is the width to give back (or take).
-// ponytail: assumes the album header is the scroller's only in-flow child that
-// holds the slider; measure the scroller's content box if a sibling ever lands.
-function useFitColumn(boxRef, rows, ready) {
-  const [col, setCol] = useState(COL_MAX);
-  useLayoutEffect(() => {
-    const box = boxRef.current;
-    if (!ready || !box) return;
-    let scroller = box.parentElement;
-    while (scroller && !/auto|scroll/.test(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement;
-    const page = scroller && [...scroller.children].find(ch => ch.contains(box));
-    if (!page) return;
-    const fit = () => {
-      // Hidden (another tab is showing): there is no slider to fit, and the
-      // page's height belongs to that tab. The box's own resize on show refits.
-      if (!box.offsetParent) return;
-      const over = page.getBoundingClientRect().bottom + scroller.scrollTop - scroller.getBoundingClientRect().bottom;
-      setCol(c => Math.max(COL_MIN, Math.min(COL_MAX, Math.floor(c - over / rows))));
-    };
-    fit();
-    const ro = new ResizeObserver(fit);
-    ro.observe(scroller);
-    ro.observe(box);
-    return () => ro.disconnect();
-  }, [boxRef, rows, ready]);
-  return col;
-}
+// The old rail's cover width. The page scrolls past the slider: covers used to
+// shrink to fit the window (2026-09-26), dropped as scrolling is fine
+// (user-directed 2026-09-28).
+const COL = 150;
 
 // The Performers tab: release-level credits from MusicBrainz
 // (music_release_personnel), main/featured artists plus producer, mixing,

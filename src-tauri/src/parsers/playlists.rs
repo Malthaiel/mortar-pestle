@@ -98,7 +98,16 @@ pub struct Playlist {
     pub image: Option<String>,
     pub cover_urls: Vec<String>,
     pub tracks: Vec<PlaylistTrack>,
+    /// The album page's own two fields (music_mark_status / music_mark_rating
+    /// patch them onto any Library page), so a playlist rates like an album.
+    pub status: Option<String>,
+    pub personal_rating: f64,
+    pub created: Option<String>,
 }
+
+/// Fields set by patching the page in place, not by `write_playlist`, which
+/// emits from scratch -- so every rewrite must carry them across.
+const KEPT_FIELDS: [&str; 2] = ["Status", "Personal Rating"];
 
 /// Track reference sent by the frontend when writing a playlist. The frontend
 /// has all of this from the album/queue context it adds the track from.
@@ -449,6 +458,12 @@ pub fn read_playlist(playlist_path: &str) -> Result<Playlist, VaultError> {
         image: meta_str(&meta, "Image"),
         cover_urls: collage_urls(&tracks),
         tracks,
+        status: meta_str(&meta, "Status"),
+        personal_rating: meta_str(&meta, "Personal Rating")
+            .and_then(|s| s.parse::<f64>().ok())
+            .filter(|f| f.is_finite())
+            .unwrap_or(0.0),
+        created: meta_str(&meta, "Created"),
     })
 }
 
@@ -483,7 +498,13 @@ fn album_cell(r: &TrackRefInput) -> String {
     }
 }
 
-fn emit_canonical(title: &str, image: Option<&str>, created: &str, tracks: &[TrackRefInput]) -> String {
+fn emit_canonical(
+    title: &str,
+    image: Option<&str>,
+    created: &str,
+    kept: &[(&str, String)],
+    tracks: &[TrackRefInput],
+) -> String {
     let mut s = String::new();
     s.push_str("---\n");
     s.push_str("Type: Music-Playlist\n");
@@ -494,6 +515,10 @@ fn emit_canonical(title: &str, image: Option<&str>, created: &str, tracks: &[Tra
     }
     s.push_str(&format!("Track Count: {}\n", tracks.len()));
     s.push_str(&format!("Created: {created}\n"));
+    // Written bare, as set_frontmatter_field writes them.
+    for (k, v) in kept {
+        s.push_str(&format!("{k}: {v}\n"));
+    }
     s.push_str("---\n\n");
     if let Some(img) = image {
         s.push_str(&format!("## Cover\n\n![[{img}]]\n\n"));
@@ -514,11 +539,10 @@ fn emit_canonical(title: &str, image: Option<&str>, created: &str, tracks: &[Tra
     s
 }
 
-fn read_created(rel: &str) -> Option<String> {
-    let abs = root().join(rel);
-    fs::read_to_string(&abs)
-        .ok()
-        .and_then(|t| meta_str(&parse_frontmatter(&t).0, "Created"))
+fn read_meta(rel: &str) -> Map<String, Value> {
+    fs::read_to_string(root().join(rel))
+        .map(|t| parse_frontmatter(&t).0)
+        .unwrap_or_default()
 }
 
 /// Create / edit / rename a playlist page. `original_path` distinguishes edit
@@ -567,10 +591,12 @@ pub fn write_playlist(
         _ => None,
     };
 
-    let created = original_path
-        .as_deref()
-        .and_then(read_created)
-        .unwrap_or_else(today_str);
+    let old = original_path.as_deref().map(read_meta).unwrap_or_default();
+    let created = meta_str(&old, "Created").unwrap_or_else(today_str);
+    let kept: Vec<(&str, String)> = KEPT_FIELDS
+        .iter()
+        .filter_map(|k| meta_str(&old, k).map(|v| (*k, v)))
+        .collect();
 
     // Callers that only have a job/search result (the loose-single auto-save)
     // carry no duration, leaving the Length cell blank forever — the owned track
@@ -580,7 +606,7 @@ pub fn write_playlist(
         t.duration = t.wikilink.as_deref().and_then(track_page_duration);
     }
 
-    let content = emit_canonical(title, image.as_deref(), &created, &tracks);
+    let content = emit_canonical(title, image.as_deref(), &created, &kept, &tracks);
     atomic_write(&new_abs, content.as_bytes())?;
 
     if renaming {
@@ -708,7 +734,7 @@ mod tests {
         // audio_path, nothing for the player to load.
         let wl = "Music/Tracks/Singles/midxs - daft punk - voyager [slowed]";
         let page = emit_canonical(
-            "S", None, "2026-09-08",
+            "S", None, "2026-09-08", &[],
             &[r(Some(wl), None, "daft punk - voyager [slowed]", None, None, Some(280))],
         );
         let rows = parse_tracks_table(&page);
@@ -727,7 +753,7 @@ mod tests {
         // come back as an owned track (no wikilink, no audio_path).
         let mut ref_ = r(None, None, "Obnyal Potseloval", None, Some("YouTube"), Some(176));
         ref_.watch_url = Some("https://www.youtube.com/watch?v=pEW8FbqIUII".into());
-        let page = emit_canonical("Streamed", None, "2026-08-08", &[ref_]);
+        let page = emit_canonical("Streamed", None, "2026-08-08", &[], &[ref_]);
         assert!(page.contains("[Obnyal Potseloval](https://www.youtube.com/watch?v=pEW8FbqIUII)"));
         let rows = parse_tracks_table(&page);
         assert_eq!(rows.len(), 1);
@@ -738,7 +764,7 @@ mod tests {
         assert!(t.wikilink.is_none() && t.audio_path.is_none() && !t.available);
 
         // A plain-title row (no link of any kind) still parses as before.
-        let plain = emit_canonical("Plain", None, "2026-08-08", &[r(None, None, "Just A Title", None, None, None)]);
+        let plain = emit_canonical("Plain", None, "2026-08-08", &[], &[r(None, None, "Just A Title", None, None, None)]);
         let prows = parse_tracks_table(&plain);
         let pt = row_to_track(1, &prows[0], &mut cache);
         assert!(pt.watch_url.is_none());
@@ -755,7 +781,7 @@ mod tests {
             Some("Selected Ambient Works 85-92"),
             Some(291),
         )];
-        let page = emit_canonical("Late Night", None, "2026-05-28", &refs);
+        let page = emit_canonical("Late Night", None, "2026-05-28", &[], &refs);
         assert!(page.contains("Type: Music-Playlist"));
         assert!(page.contains("Title: \"Late Night\""));
         let rows = parse_tracks_table(&page);
@@ -782,7 +808,7 @@ mod tests {
             // Path is pipe-free (filenames are sanitized); only the display title carries a pipe.
             r(Some("X/Y/04 - AB Song"), Some("X/Y/04 - AB Song.opus"), "A|B Song", None, None, None),
         ];
-        let page = emit_canonical("P", None, "2026-05-28", &refs);
+        let page = emit_canonical("P", None, "2026-05-28", &[], &refs);
         let rows = parse_tracks_table(&page);
         assert_eq!(rows.len(), 2);
         assert!(matches!(&rows[0].title, CellLink::Embed { .. }));
@@ -794,8 +820,22 @@ mod tests {
     }
 
     #[test]
+    fn kept_fields_survive_a_rewrite() {
+        // Status / Personal Rating are patched onto the page, never written by
+        // write_playlist -- a rewrite that dropped them would wipe the rating
+        // every time a song is added or removed.
+        let kept = [("Status", "Listened".to_string()), ("Personal Rating", "8".to_string())];
+        let page = emit_canonical("P", None, "2026-09-27", &kept, &[]);
+        let meta = parse_frontmatter(&page).0;
+        assert_eq!(meta_str(&meta, "Status").as_deref(), Some("Listened"));
+        assert_eq!(meta_str(&meta, "Personal Rating").as_deref(), Some("8"));
+        let bare = emit_canonical("P", None, "2026-09-27", &[], &[]);
+        assert!(!bare.contains("Status:") && !bare.contains("Personal Rating:"));
+    }
+
+    #[test]
     fn cover_section_emitted_when_image_set() {
-        let page = emit_canonical("P", Some("Knowledge/Music/Playlists/Covers/P.png"), "2026-05-28", &[]);
+        let page = emit_canonical("P", Some("Knowledge/Music/Playlists/Covers/P.png"), "2026-05-28", &[], &[]);
         assert!(page.contains("## Cover"));
         assert!(page.contains("![[Knowledge/Music/Playlists/Covers/P.png]]"));
     }
