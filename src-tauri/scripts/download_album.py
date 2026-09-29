@@ -803,7 +803,8 @@ def write_track_page(folder_abs, album_link, t, fm):
     lines.append(f"Album: {yaml_str(fm['title'])}")
     lines.append(f"Artist: {yaml_str(t.get('artist') or fm['artists'][0])}")
     lines.append("Artists:")
-    lines.append(f"  - {yaml_str(t.get('artist') or fm['artists'][0])}")
+    for name in t.get("artists") or [t.get("artist") or fm["artists"][0]]:
+        lines.append(f"  - {yaml_str(name)}")
     lines.append(f"Track Number: {t['n']}")
     lines.append(f"Disc Number: {t['disc']}")
     lines.append(f"Length: {t['duration'] or ''}")
@@ -980,7 +981,10 @@ def main():
                 "title": t.get("title") or rec.get("title") or "Untitled",
                 "length_ms": t.get("length") or rec.get("length"),
                 "rec_id": rec.get("id"),
-                "artist": " ".join(names) or None,
+                # Comma-joined for the one-line Artist field and the ARTIST
+                # tag; space-joined read as a single name (2026-09-29).
+                "artist": ", ".join(names) or None,
+                "artists": names,
                 # The search uses the lead credit alone: the whole credit
                 # ("ippo.tsk Eleanor Forte R1", singers included) is a query
                 # YouTube matches nothing to (2026-09-29).
