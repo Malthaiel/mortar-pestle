@@ -103,3 +103,13 @@ base64 = "0.22"
 [dev-dependencies]
 tempfile = "3"
 similar = "2"
+
+# Privacy: vendored wry 0.55.1 with ONE added line in src/webview2/mod.rs
+# `create_environment` (grep "mortar-pestle patch") that sets WebView2's
+# IsCustomCrashReportingEnabled, so engine crash dumps stay on disk instead of
+# uploading to Microsoft. wry builds the environment options internally with no
+# hook, so a patch is the only way in. On a wry bump: re-copy the new version
+# from ~/.cargo/registry and re-add that line. (SmartScreen needs no patch: wry's
+# default browser args already disable msSmartScreenProtection.)
+[patch.crates-io]
+wry = { path = "vendor/wry" }
