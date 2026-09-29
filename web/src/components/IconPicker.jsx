@@ -1,19 +1,26 @@
-// TEMPORARY icon picker. Right-click any dock button or file-tree toolbar button
-// to swap its icon; overrides live in localStorage under ICON_OVERRIDE_KEY.
+// TEMPORARY icon picker. Right-click any candy button with an icon → Change Icon;
+// overrides live in localStorage under ICON_OVERRIDE_KEY.
 //
 // This is a staging tool, NOT a feature. Once the icon set is final the chosen
-// values get baked into icons.jsx / dock-buttons.js / the module manifests / the
-// TreeToolbar call sites, and this file plus its five call-site hooks are deleted:
-//   Dock.jsx, DownloadsDockButton.jsx, DockAgentsButton.jsx, TreeToolbar.jsx, App.jsx
+// values get baked into source, and this file plus its call-site hooks are deleted:
+//   App.jsx, main.jsx, Dock.jsx, ContextMenuProvider.jsx, styles.css ([data-icon-swapped])
 // (ConfirmModal's `width` prop can stay — it's generally useful.)
 //
+// Keys and where to bake them:
+//   dock:<id>  → dock-buttons.js `Icon:` / the module manifest's `iconKey`
+//   btn:<Component>|<label>|<icon hash> → grep <Component> for the button whose
+//     title/tooltip is <label>, swap its icon import. The hash only tells two icons
+//     of one button apart (play vs pause); the value is what to bake.
+//
 // An override value is either a pack export name ('IconStar') or raw <svg> markup
-// (a pick from the full Boxicons folder, or pasted).
+// (a pick from the full Boxicons folder, or pasted — add it to icons.jsx first).
 
 import { useEffect, useState, useSyncExternalStore } from 'react';
+import { flushSync } from 'react-dom';
+import { createRoot } from 'react-dom/client';
 import * as icons from './icons.jsx';
 import ConfirmModal from './ui/ConfirmModal.jsx';
-import { useIconLibrary, svgComponent, isMarkup, iconWords } from './iconLibrary.jsx';
+import { useIconLibrary, svgComponent, sizeSvg, isMarkup, iconWords } from './iconLibrary.jsx';
 import { TextInput, OutlinedBtn } from './ui';
 
 export const ICON_OVERRIDE_KEY = 'iconOverrides:v1';
@@ -58,10 +65,84 @@ export function useIconOverrides() {
 // → an icon COMPONENT (the dock's buttons take `Icon`).
 export const resolveIcon = (map, key, Fallback) => resolve(map[key], Fallback);
 
-// → an icon ELEMENT (TreeToolbar's buttons take children).
-export function resolveIconEl(map, key, fallbackEl) {
-  const C = resolve(map[key], null);
-  return C ? <C/> : fallbackEl;
+// ── every other candy button: btn: keys, swapped in the DOM ──────────────────
+// No call site renders these, so the swap happens after React: the original svg
+// is hidden ([data-icon-swapped], styles.css) and the pick sits right after it.
+// React's own nodes are never removed, so a re-render can't break. The liquid
+// hover rebuilds its copies on any child change, so they carry the pick too.
+const hash = (s) => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0; return h.toString(36); };
+// Tree rows keep their own per-file picker; the dock has its own row.
+const SKIP = new Set(['CandyHeader', 'TreeRow']);
+const labelOf = (btn) => btn.getAttribute('title') || btn.getAttribute('data-tip') || btn.getAttribute('aria-label') || '';
+const faceSvg = (btn) => [...btn.querySelectorAll('.candy-face svg:not([data-icon-override])')]
+  .find((s) => s.closest('.candy-btn') === btn);
+const svgHash = new WeakMap();
+// ponytail: two untitled buttons with the same icon in one component share a key.
+function btnKey(btn, svg) {
+  if (!svgHash.has(svg)) svgHash.set(svg, hash(svg.innerHTML));
+  return `btn:${btn.getAttribute('data-aos-component') || ''}|${labelOf(btn)}|${svgHash.get(svg)}`;
+}
+
+// The Change Icon row for a right-clicked candy icon button (ContextMenuProvider), or null.
+export function iconRowFor(target) {
+  const btn = target?.closest?.('.candy-btn');
+  if (!btn || btn.closest('[role="menu"], [data-liquid-layer]') || SKIP.has(btn.getAttribute('data-aos-component'))) return null;
+  const svg = faceSvg(btn);
+  return svg ? changeIconItem(btnKey(btn, svg), labelOf(btn) || btn.getAttribute('data-aos-component') || 'Button') : null;
+}
+
+// A pack name is drawn once, off-screen, to get its markup.
+const packMarkup = new Map();
+function markupOf(value) {
+  if (isMarkup(value)) return value.trim();
+  if (!packMarkup.has(value)) {
+    const C = icons[value], el = document.createElement('div'), root = createRoot(el);
+    flushSync(() => root.render(C ? <C/> : null));
+    packMarkup.set(value, el.innerHTML);
+    root.unmount();
+  }
+  return packMarkup.get(value);
+}
+
+// The pick takes the original's own size attributes (or its painted size).
+function pickSvg(value, orig, id) {
+  const t = document.createElement('template');
+  t.innerHTML = sizeSvg(markupOf(value), 1);
+  const ov = t.content.querySelector('svg');
+  if (!ov) return null;
+  const r = orig.getBoundingClientRect();
+  ov.setAttribute('width', orig.getAttribute('width') || r.width);
+  ov.setAttribute('height', orig.getAttribute('height') || r.height);
+  if (orig.hasAttribute('style')) ov.setAttribute('style', orig.getAttribute('style'));
+  ov.setAttribute('data-icon-override', id);
+  return ov;
+}
+
+function applyOverrides() {
+  const map = readMap();
+  if (!Object.keys(map).some((k) => k.startsWith('btn:')) && !document.querySelector('[data-icon-override]')) return;
+  for (const btn of document.querySelectorAll('.candy-btn')) {
+    if (btn.closest('[data-liquid-layer]')) continue;
+    const svg = faceSvg(btn), value = svg && map[btnKey(btn, svg)];
+    const id = value ? hash(value) : null;
+    const ovs = [...btn.querySelectorAll('[data-icon-override]')].filter((o) => o.closest('.candy-btn') === btn);
+    const keep = id && ovs.find((o) => o.getAttribute('data-icon-override') === id && o.previousElementSibling === svg);
+    for (const o of ovs) if (o !== keep) o.remove();
+    const ov = id && !keep && pickSvg(value, svg, id);
+    if (svg) svg.toggleAttribute('data-icon-swapped', !!(keep || ov));
+    if (ov) svg.after(ov);
+  }
+}
+
+// Once, at boot (main.jsx). Re-runs on a pick and after any DOM change, batched per
+// frame; a pass that changes nothing ends the loop its own inserts start.
+// ponytail: every pass scans every candy button; scope it to the mutated subtrees if hover lags.
+export function installIconOverrides() {
+  let raf = 0;
+  const run = () => { raf ||= requestAnimationFrame(() => { raf = 0; applyOverrides(); }); };
+  subscribe(run);
+  new MutationObserver(run).observe(document.body, { childList: true, subtree: true });
+  run();
 }
 
 // ── the picker itself ────────────────────────────────────────────────────────

@@ -7,6 +7,8 @@ import { initSmoothWheel } from './util/smoothWheel.js';
 import { installScrollMemory } from './util/scrollMemory.js';
 import { installTooltips } from './util/tooltips.js';
 import { installLiquidHover } from './util/liquidHover.js';
+// TEMPORARY — removed with IconPicker.jsx once the icons are baked in.
+import { installIconOverrides } from './components/IconPicker.jsx';
 import './pages/docs/register.jsx';   // side effect: registerPageSidebar('docs', …)
 import './fonts.css';
 import './styles.css';
@@ -49,6 +51,8 @@ loadAll().then(() => {
   installTooltips();
   // Every candy button lights like liquid on hover, in every window — see util/liquidHover.js.
   installLiquidHover();
+  // Right-click picks for every candy icon button, swapped in after React.
+  installIconOverrides();
   createRoot(document.getElementById('root')).render(
     <StrictMode>
       <LazyErrorBoundary full tag="[root]" label="Mortar & Pestle">

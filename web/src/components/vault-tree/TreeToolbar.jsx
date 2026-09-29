@@ -14,10 +14,6 @@
 import { useContextMenu } from '../../context-menu/useContextMenu.js';
 import SearchRun from '../ui/SearchRun.jsx';
 import { NAV_H } from './treeKit.jsx';
-// TEMPORARY icon picker — removed once the icon set is baked in. See IconPicker.jsx.
-// Hooked inside ToolBtn (not per call site) so `extra` buttons and surface-owned
-// ones passed through `children` are covered for free; the key is the tooltip.
-import { useIconOverrides, resolveIconEl, openIconPicker } from '../IconPicker.jsx';
 import {
   IconFileText, IconFolder, IconSort, IconCrosshair, IconCheck,
   IconChevronsDownUp, IconChevronsUpDown, IconHardDrive,
@@ -36,14 +32,11 @@ import {
 // fused run, so it stays fully painted and the click just no-ops (`tipDesc` can
 // say why).
 export function ToolBtn({ title, tipDesc, accent, onClick, onMouseDown, onKeyDown, disabled, dataAttr, active, activeAccent, children }) {
-  const iconOverrides = useIconOverrides();
-  const overrideKey = title ? `tree:${title}` : null;
   return (
     <button
       type="button" data-own-press title={title} data-tip-desc={tipDesc}
       onClick={disabled ? undefined : onClick} onMouseDown={onMouseDown} onKeyDown={onKeyDown}
       aria-disabled={disabled || undefined}
-      onContextMenu={overrideKey ? (e) => { e.preventDefault(); openIconPicker(overrideKey, title); } : undefined}
       aria-pressed={active ? true : undefined}
       className={`candy-btn${active ? ' is-active' : ''}`} data-shape="icon"
       {...(dataAttr ? { ['data-' + dataAttr]: '' } : {})}
@@ -60,7 +53,7 @@ export function ToolBtn({ title, tipDesc, accent, onClick, onMouseDown, onKeyDow
         ...(active && activeAccent ? { '--accent': activeAccent } : {}),
       }}
     >
-      <span className="candy-face">{overrideKey ? resolveIconEl(iconOverrides, overrideKey, children) : children}</span>
+      <span className="candy-face">{children}</span>
     </button>
   );
 }

@@ -15,6 +15,7 @@ import { ContextMenuCtx } from './useContextMenu.js';
 import ContextMenuRoot from './ContextMenuRoot.jsx';
 import { classifyTarget, buildEditableMenu, buildLinkMenu, buildGenericMenu, buildSelectionMenu } from './defaultMenus.js';
 import { invoke } from '../api.js';
+import { iconRowFor } from '../components/IconPicker.jsx';
 
 // Dev builds append Inspect Element to EVERY menu (custom + default): the
 // suppressor above kills the native WebKit menu app-wide, which also kills
@@ -29,6 +30,14 @@ const withDevRows = (items) => {
   ];
 };
 
+// TEMPORARY icon picker (see IconPicker.jsx): a right-clicked candy icon button gets
+// a Change Icon row, unless its own menu already carries one (dock, tree rows).
+const withIconRow = (items, target) => {
+  const list = items || [];
+  const row = target && !list.some((it) => it?.label === 'Change Icon') && iconRowFor(target);
+  return row ? [...list, { sep: true }, row] : list;
+};
+
 export function ContextMenuProvider({ openCommandPalette, openSettings, accent, children }) {
   const [menu, setMenu] = useState(null);
 
@@ -39,10 +48,11 @@ export function ContextMenuProvider({ openCommandPalette, openSettings, accent, 
 
   const openContextMenu = useCallback((evtOrPoint, items, opts = {}) => {
     const accentNow = ctxRef.current.accent;
-    let point;
+    let point, target = null;
     const isEvent = evtOrPoint && (evtOrPoint.nativeEvent || typeof evtOrPoint.clientX === 'number');
     if (isEvent) {
       const native = evtOrPoint.nativeEvent || evtOrPoint;
+      if (native.type === 'contextmenu') target = native.target;
       try { evtOrPoint.preventDefault && evtOrPoint.preventDefault(); } catch (e) {}
       try { native.preventDefault && native.preventDefault(); } catch (e) {}
       try { native.__agenticCtxHandled = true; } catch (e) {}
@@ -59,7 +69,7 @@ export function ContextMenuProvider({ openCommandPalette, openSettings, accent, 
     } else {
       point = { x: (evtOrPoint && evtOrPoint.x) || 0, y: (evtOrPoint && evtOrPoint.y) || 0 };
     }
-    setMenu({ point, items: opts.dropdown ? (items || []) : withDevRows(items), opts: { accent: accentNow, ...opts } });
+    setMenu({ point, items: opts.dropdown ? (items || []) : withDevRows(withIconRow(items, target)), opts: { accent: accentNow, ...opts } });
   }, []);
 
   const closeContextMenu = useCallback(() => setMenu(null), []);
@@ -88,7 +98,7 @@ export function ContextMenuProvider({ openCommandPalette, openSettings, accent, 
       } else {
         items = buildGenericMenu({ openCommandPalette: c.openCommandPalette, openSettings: c.openSettings });
       }
-      setMenu({ point: { x: ev.clientX, y: ev.clientY }, items: withDevRows(items), opts: { accent: c.accent, source } });
+      setMenu({ point: { x: ev.clientX, y: ev.clientY }, items: withDevRows(withIconRow(items, ev.target)), opts: { accent: c.accent, source } });
     }
     window.addEventListener('contextmenu', onNativeContextMenu);
     return () => window.removeEventListener('contextmenu', onNativeContextMenu);

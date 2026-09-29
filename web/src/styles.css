@@ -861,6 +861,8 @@ body[data-surface-depth="high"]   { --candy-surface-depth: 7px; }
     background 150ms cubic-bezier(0, 0, 0.58, 1),
     border-color 150ms cubic-bezier(0, 0, 0.58, 1);
 }
+/* TEMPORARY icon picker (IconPicker.jsx): a picked icon hides the original it replaces. */
+.candy-face svg[data-icon-swapped] { display: none !important; }
 
 /* ONE lettering for every candy button in the app: the left sidebar tree's.
    The tree reads these same vars (treeKit.jsx TREE_TEXT), so changing the
