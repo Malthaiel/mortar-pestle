@@ -8,10 +8,9 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { IconStarMark, IconSwatch, IconPaperPlane, IconArrowBigDown, IconPlusBig, IconBookmarkAlt, IconHandRock, IconCamcorder, IconEarAlt, IconAnnouncement, IconTag, IconHot, IconBrush, IconPlayMark } from '@host/components/icons.jsx';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
-import { NAV_H, NAV_TEXT, NAV_ICON } from '@host/components/vault-tree/treeKit.jsx';
 import { statusLabel, STATUS_ICON } from '@host/util/media-status.js';
 import { useContextMenu } from '@host/context-menu/useContextMenu.js';
-import { STATUS_DOT_COLOR, resolveDot, toBrowse } from './util.js';
+import { STATUS_DOT_COLOR, resolveDot, toBrowse, RUN_VARS } from './util.js';
 import AddToPlaylistButton from './AddToPlaylistButton.jsx';
 import { useAddToPlaylistMenu } from './useAddToPlaylistMenu.jsx';
 import { fmtDuration } from './searchShared.jsx';
@@ -33,16 +32,10 @@ const LISTEN_STATUSES = ['Plan-to-Listen', 'Currently-Listening', 'Listened', 'D
 // pixels, so the circle has no half-pixel edge.
 const ARTIST_PFP = 22;
 
-// The rows and the action run above them are the SAME size knob, so a row can
-// never drift from the run it sits under (.candy-split derives the seam, the
-// corners and every part's height from it). Change this and both change.
-// 30, up from the film's 26 (user-directed 2026-09-28: "slightly larger").
-// The names and icons grow with it (same day), 10.5 -> 12 and 14 -> 16: the
-// run's own vars, which library.css [data-record-run] lays on every face.
-// The three numbers are the app's nav size knob (treeKit NAV_H / NAV_TEXT /
-// NAV_ICON), shared with every left sidebar (user-directed 2026-09-28).
-const ROW_H = `${NAV_H}px`;
-const RUN_SIZE = { '--cbtn-size': ROW_H, '--chip-label-size': `${NAV_TEXT}px`, '--record-icon': `${NAV_ICON}px` };
+// The rows and the action run above them wear the music module's ONE run knob
+// (util.js RUN_VARS), so a row can never drift from the run it sits under.
+// 30, up from the film's 26 (user-directed 2026-09-28: "slightly larger"); the
+// names and icons grow with it, 10.5 -> 12 and 14 -> 16.
 
 // The header column's line gap (type tag, title, fact line), and the air above and
 // below the action runs: the fact line down to them and them down to the body are
@@ -226,7 +219,7 @@ export function ActionRun({ accent, playLabel, onPlay, download, status, rating,
   // children are its parts (tabUnder counts them).
   return (<>
     <div className="candy-split" data-record-run {...actRun} style={{
-      position: 'relative', ...RUN_SIZE,
+      position: 'relative', ...RUN_VARS,
     }}>
       {/* Play leads the run (user-directed 2026-09-26; the film's too). Never
           disabled: a track not on disk streams, so an undownloaded record plays
@@ -338,7 +331,7 @@ export function TabRun({ accent, tabs, icons, active, onPick }) {
   const [openIdx, tabRun] = useOpenPart(tabs.indexOf(active));
   return (
     <div className="candy-split" data-record-run {...tabRun}
-      style={{ '--accent': accent || 'var(--accent)', ...RUN_SIZE }}>
+      style={{ '--accent': accent || 'var(--accent)', ...RUN_VARS }}>
       {tabs.map((t, i) => {
         const Icon = icons[t];
         return (
@@ -366,7 +359,7 @@ export function TabRun({ accent, tabs, icons, active, onPick }) {
 // pauses, then Artist, World plays, Plays, Playlist, Queue, Video, [Remove]
 // (user-directed 2026-09-26; Remove for playlists 2026-09-27; Artist on every
 // row 2026-09-28).
-// Every part is ROW_H tall because the run declares --cbtn-size; nothing here
+// Every part is RUN_SIZE tall because the run declares --cbtn-size; nothing here
 // restates a height.
 export function TrackRow({ track, artist, artistSizers, plays, playsDigits, accent, playing, highlighted, onPlay, onEnqueue, onMenu, onRemove, playlistRef, videoUrl, world, worldText, worldSizers }) {
   const rowRef = useRef(null);
@@ -406,7 +399,7 @@ export function TrackRow({ track, artist, artistSizers, plays, playsDigits, acce
       onPointerLeave={() => setOpen(null)}
       style={{
         display: 'flex', width: '100%',
-        ...RUN_SIZE, '--accent': accent || 'var(--accent)',
+        ...RUN_VARS, '--accent': accent || 'var(--accent)',
       }}
     >
       <button

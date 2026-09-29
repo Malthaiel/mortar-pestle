@@ -8,7 +8,7 @@ import BrowseResultCard from './BrowseResultCard.jsx';
 import PosterRow from '@modules/core/library/PosterRow.jsx';
 import { encodePath } from '../paths.js';
 import { navigate as go } from '@host/router.js';
-import { toBrowse } from './util.js';
+import { toBrowse, toRelease } from './util.js';
 
 const toAlbum = (path) => go('/tools/library/music/downloaded/' + encodePath(path));
 
@@ -17,7 +17,8 @@ const NOTE_STYLE = { fontSize: 11, color: 'var(--text-faint)', fontFamily: 'var(
 // The Discography tab: the artist's other albums, EPs and singles (their
 // MusicBrainz discography), most played first, in a sliding row two covers
 // tall (user-directed 2026-09-26).
-// Owned ones open the library page, the rest seed a Browse search. It was a
+// Owned ones open the library page, the rest open their own album page
+// (user-directed 2026-09-29; they used to seed a Browse search). It was a
 // "More from" rail under the header until it became a tab (user-directed
 // 2026-09-26).
 export function ArtistAlbums({ album, accent }) {
@@ -90,7 +91,7 @@ export function ArtistAlbums({ album, accent }) {
             result={r}
             accent={accent}
             inLibrary={!!ownedPath}
-            onSelect={() => ownedPath ? toAlbum(ownedPath) : toBrowse(`${r.title} ${artist}`.trim())}
+            onSelect={() => ownedPath ? toAlbum(ownedPath) : toRelease(r.mbid)}
           />
         );
       })}

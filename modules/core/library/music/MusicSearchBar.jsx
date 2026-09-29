@@ -23,7 +23,7 @@ import { ChipIconBtn } from '@host/components/planner/ItemChips.jsx';
 import { navigate as go } from '@host/router.js';
 import { SEARCH_TABS, useSearchTab, SEARCH_SOURCES, useSearchSource } from './searchShared.jsx';
 import { SearchResults } from './MusicHome.jsx';
-import { RUN_SIZE } from './util.js';
+import { RUN_SIZE, RUN_VARS } from './util.js';
 
 const PLACEHOLDER = 'What do you want to play?';
 const PANEL_W = 560;
@@ -82,7 +82,7 @@ export default function MusicSearchBar({ accent, query, setQuery, albums, ownedI
 
   return (
     <>
-      <div ref={btnRef} data-music-search onKeyDown={onKeyDown} onFocus={(e) => { if (isInput(e)) setOpen(!!q); }}>
+      <div ref={btnRef} data-music-search data-record-run style={RUN_VARS} onKeyDown={onKeyDown} onFocus={(e) => { if (isInput(e)) setOpen(!!q); }}>
         <SearchRun
           value={query || ''}
           onChange={(v) => { setQuery(v); setOpen(!!v.trim()); }}

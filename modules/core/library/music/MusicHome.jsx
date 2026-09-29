@@ -27,7 +27,7 @@ import {
 import ResultRow from './ResultRow.jsx';
 import { usePlaylistMenu, useSongMenu } from './contextMenus.js';
 import { useMusicPlayer } from './MusicPlayerProvider.jsx';
-import { youtubeQueueItem, TILE_GRID } from './util.js';
+import { youtubeQueueItem, TILE_GRID, toRelease } from './util.js';
 import { encodePath } from '../paths.js';
 import { navigate as go } from '@host/router.js';
 import { IconArrowRight } from '@host/components/icons.jsx';
@@ -35,10 +35,10 @@ import { IconArrowRight } from '@host/components/icons.jsx';
 const toAlbum = (path) => go('/tools/library/music/downloaded/' + encodePath(path));
 const toBrowse = (q, mode) =>
   go('/tools/library/music/browse/' + (mode === 'artists' ? 'artists/' : '') + 'q/' + encodeURIComponent(q));
-// Identity links: open the album/artist itself. Clicking a specific result used
-// to hand Browse only its NAME as a fresh query, so you landed on the Browse
-// grid and had to click the same thing a second time.
-const toRelease = (mbid) => go('/tools/library/music/browse/rg/' + encodeURIComponent(mbid));
+// Identity links: open the album/artist itself (toRelease lives in util.js).
+// Clicking a specific result used to hand Browse only its NAME as a fresh
+// query, so you landed on the Browse grid and had to click the same thing a
+// second time.
 const toArtistPage = (mbid, name) =>
   go('/tools/library/music/browse/artist/' + encodeURIComponent(mbid) +
      (name ? '/' + encodeURIComponent(name) : ''));

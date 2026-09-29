@@ -66,6 +66,12 @@ ALBUMS_REL = "Music/Albums"
 TRACKS_REL = "Music/Tracks"
 SINGLES_REL = f"{TRACKS_REL}/Singles"
 EXCLUDE_WORDS = ["live", "remix", "cover", "karaoke", "instrumental", "demo"]
+# MusicBrainz writes typographic dashes and quotes ("rose‐tinted", U+2010).
+# In a YouTube search they match nothing, so the right upload never comes back
+# and a same-length stranger wins (2026-09-29).
+PLAIN_PUNCT = str.maketrans({"‐": "-", "‑": "-", "‒": "-", "–": "-",
+                             "—": "-", "‘": "'", "’": "'",
+                             "“": '"', "”": '"'})
 # A pasted YouTube link in the search box is a source, not a search term.
 YT_URL_RE = re.compile(
     r"^(?:https?://)?(?:www\.|m\.|music\.)?(?:youtube\.com/|youtu\.be/)", re.I
@@ -248,15 +254,27 @@ def token_match(c, tokens):
     return any(t in hay for t in tokens)
 
 
+def names_track(c, words):
+    """Every word of the track title appears in the upload's title. Duration
+    alone let another song on the same album win: 'JKTmelts' (206s) was saved
+    as 'rose-tinted bitter grudge' (209s), 2026-09-29. A title with no Latin
+    words (Japanese, say) yields no words and passes; duration still decides."""
+    title_low = (c.get("title") or "").lower()
+    return all(w in title_low for w in words)
+
+
 def score_candidates(cands, expected_sec, track_title):
     """Phase 2 Step B. Returns (best, delta) or (None, None). Rejects exclusion
-    words (unless in the MB title) and any duration delta > 30s; prefers '- Topic'
-    channels, breaks ties by view count."""
+    words (unless in the MB title), uploads not naming the track, and any
+    duration delta > 30s; prefers '- Topic' channels, breaks ties by view count."""
     tl = (track_title or "").lower()
+    words = tokens_of(track_title)
     scored = []
     for c in cands:
         title_low = (c.get("title") or "").lower()
         if any(w in title_low and w not in tl for w in EXCLUDE_WORDS):
+            continue
+        if not names_track(c, words):
             continue
         dur = c.get("duration")
         if expected_sec and dur:
@@ -285,8 +303,8 @@ def resolve_source(track, album_artist, album_title, artist_mbid):
     plausibility gate → artist-channel fallback → album-mix fallback. Returns
     (url, flag) where flag is a soft warning string or None; (None, reason) on
     failure."""
-    track_title = track["title"]
-    track_artist = track.get("artist") or album_artist
+    track_title = track["title"].translate(PLAIN_PUNCT)
+    track_artist = track.get("lead_artist") or track.get("artist") or album_artist
     expected = round(track["length_ms"] / 1000) if track.get("length_ms") else None
     tokens = tokens_of(album_artist)
 
@@ -365,12 +383,14 @@ def album_mix_fallback(album_artist, album_title, track, tokens, expected):
     target = anchor or expected
     if not target:
         return None
-    cands = ytdlp_json(f"ytsearch5:{album_artist} {track['title']}")
+    title = track["title"].translate(PLAIN_PUNCT)
+    cands = ytdlp_json(f"ytsearch5:{album_artist} {title}")
+    words = tokens_of(title)
     best = None
     best_delta = 3
     for c in cands:
         dur = c.get("duration")
-        if dur and abs(dur - target) <= best_delta:
+        if dur and abs(dur - target) <= best_delta and names_track(c, words):
             best, best_delta = c, abs(dur - target)
     return watch_url(best) if best else None
 
@@ -953,13 +973,18 @@ def main():
         for t in medium.get("tracks", []) or []:
             flat_n += 1
             rec = t.get("recording") or {}
+            names = artist_credit_names(t)
             tracks.append({
                 "n": flat_n,
                 "disc": disc,
                 "title": t.get("title") or rec.get("title") or "Untitled",
                 "length_ms": t.get("length") or rec.get("length"),
                 "rec_id": rec.get("id"),
-                "artist": " ".join(artist_credit_names(t)) or None,
+                "artist": " ".join(names) or None,
+                # The search uses the lead credit alone: the whole credit
+                # ("ippo.tsk Eleanor Forte R1", singers included) is a query
+                # YouTube matches nothing to (2026-09-29).
+                "lead_artist": names[0] if names else None,
             })
     if not tracks:
         fatal("MusicBrainz release has no tracklist.")

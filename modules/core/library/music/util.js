@@ -4,11 +4,16 @@
 
 import { mediaUrl } from '@host/api.js';
 import { navigate } from '@host/router.js';
+import { NAV_H, NAV_TEXT, NAV_ICON } from '@host/components/vault-tree/treeKit.jsx';
 
 // The one route to an artist. Music has no artist PAGE — the Browse search is
 // the only artist surface the app has — so every place that makes an artist
 // name clickable (the credits panel, the album header) goes through this.
 export const toBrowse = (q) => navigate('/tools/library/music/browse/q/' + encodeURIComponent(q));
+
+// The one route to an album you don't own: its release-group page (MusicPage
+// browse/rg/<mbid> -> AlbumDetail), straight in, never a search for its name.
+export const toRelease = (mbid) => navigate('/tools/library/music/browse/rg/' + encodeURIComponent(mbid));
 
 // Letters and digits only, lowercased: "Tyler, The Creator" matches the
 // uploader "TylerTheCreatorVEVO" and "Paranoid Android" the title
@@ -42,10 +47,14 @@ export const TILE_GRID = {
   rowGap: `calc(${TILE_GAP}px + var(--candy-tile-depth))`,
 };
 
-// Height of every part of the library column's fused run, search field
-// included (.candy-split derives corner, seam, overlap and part height from
-// it — see styles.css § candy-split). The top-right search field shares it.
-export const RUN_SIZE = '27px';
+// The ONE size knob for every music run: the album page's action run and track
+// rows, the library column's run and the top-right search field, all 1-1
+// (user-directed 2026-09-29). .candy-split derives corner, seam, overlap and
+// part height from --cbtn-size; library.css [data-record-run] lays the label
+// and icon sizes on every face under it. The three numbers are the app's nav
+// knob (treeKit NAV_H / NAV_TEXT / NAV_ICON), shared with every left sidebar.
+export const RUN_SIZE = `${NAV_H}px`;
+export const RUN_VARS = { '--cbtn-size': RUN_SIZE, '--chip-label-size': `${NAV_TEXT}px`, '--record-icon': `${NAV_ICON}px` };
 
 export function coverSrc(image, width, opts) {
   if (!image) return null;

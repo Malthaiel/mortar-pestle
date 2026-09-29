@@ -555,21 +555,27 @@
   height: auto;
 }
 /* An album sleeve is SQUARE, and a square at full width is a 1:1 wall that
-   buries the page. This is the one and only difference from a film still:
-   crop it to the same 16:9 the mask stops and the derived padding above
-   already assume. Everything else about the rule -- mask, scrim, the
-   ratio-derived padding -- is shared with films untouched. 3:2 was tried and
-   rejected 2026-09-26. */
+   buries the page. Crop it to the same 16:9 the mask stops and the derived
+   padding above already assume. Mask and ratio-derived padding are shared
+   with films untouched. 3:2 was tried and rejected 2026-09-26. */
 .film-detail > .film-backdrop.is-square > img {
   aspect-ratio: 16 / 9;
   object-fit: cover;
 }
-/* The record page's runs (RecordPage.jsx RUN_SIZE) are a size up from the
-   film's: names and icons ride the run's own vars (user-directed 2026-09-28).
-   !important: CandySelect writes TREE_TEXT's 10.5px on its face inline. The
-   svg rule beats every icon's size={14} attribute, which CSS always outranks. */
-.candy-split[data-record-run] .candy-face { font-size: var(--chip-label-size) !important; }
-.candy-split[data-record-run] .candy-face > svg { width: var(--record-icon); height: var(--record-icon); }
+/* The sleeve's scrim is a touch lighter than a film's (user-directed
+   2026-09-29: the picture "slightly" stronger, then "slightly more"),
+   45% -> 55% -> 65% clear. */
+.film-detail > .film-backdrop.is-square::after {
+  background: color-mix(in oklch, var(--surface), transparent 65%);
+}
+/* Every music run (music/util.js RUN_VARS) is a size up from the film's: names
+   and icons ride the run's own vars (user-directed 2026-09-28). The attribute
+   sits on the split itself or on a wrapper round one (SearchRun owns its split,
+   so the library column and the search field mark their wrapper; 2026-09-29).
+   !important: CandySelect writes TREE_TEXT's size on its face inline. The svg
+   rule beats every icon's size={14} attribute, which CSS always outranks. */
+[data-record-run] .candy-face { font-size: var(--chip-label-size) !important; }
+[data-record-run] .candy-face > svg { width: var(--record-icon); height: var(--record-icon); }
 /* An EVEN scrim over the photo -- masking alone still let bright frames wash out
  * the title. Flat, not a left-to-right gradient: the gradient hid the left of
  * the still and left the right clear, so a photo drawn at full width with no

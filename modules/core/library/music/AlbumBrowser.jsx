@@ -20,7 +20,7 @@ import { Cluster, useRailOrder } from '@host/components/ui/Rail.jsx';
 import { useSidebarOrder, applyOrder } from '@host/hooks/useSidebarOrder.js';
 import { usePlaylists, isSavedTracks } from './PlaylistProvider.jsx';
 import { PlaylistCard } from './PlaylistsPage.jsx';
-import { TILE_GRID, TILE_GAP, RUN_SIZE } from './util.js';
+import { TILE_GRID, TILE_GAP, RUN_SIZE, RUN_VARS } from './util.js';
 import { encodePath } from '../paths.js';
 import { navigate as go } from '@host/router.js';
 
@@ -239,7 +239,8 @@ export default function AlbumBrowser({ accent, onSelect, selectedPath }) {
           both equal the tiles' own side margin, TILE_GAP (user-directed
           2026-09-25): the bottom reserves only the band, and the body's
           TILE_GAP padding supplies the gap under it. */}
-      <div data-spacing-intent="centred-run" style={{
+      <div data-spacing-intent="centred-run" data-record-run style={{
+        ...RUN_VARS,
         padding: `${TILE_GAP}px 18px var(--candy-depth-small)`,
         display: 'flex', justifyContent: 'safe center',
         flexShrink: 0,
