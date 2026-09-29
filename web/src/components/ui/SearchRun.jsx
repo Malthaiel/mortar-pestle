@@ -99,7 +99,9 @@ export default function SearchRun({ value, onChange, placeholder = 'Search', siz
   // come back with their var()s resolved, so max() takes them as they are.
   const [lip, setLip] = useState('var(--candy-depth-small)');
   useLayoutEffect(() => {
-    const d = [...runRef.current.children]
+    // The field itself is skipped: it wears this same value (below), so reading it
+    // back would feed the max() into itself on every render.
+    const d = [...runRef.current.children].filter((el) => el !== partRef.current)
       .map((el) => getComputedStyle(el).getPropertyValue('--cbtn-depth').trim()).filter(Boolean);
     const next = d.length ? `max(${d.join(', ')})` : 'var(--candy-depth-small)';
     if (next !== lip) setLip(next);
@@ -149,6 +151,10 @@ export default function SearchRun({ value, onChange, placeholder = 'Search', siz
             // While open the field owns the seam, so the first hidden part's
             // left frame cannot show as a grey sliver at the row's end.
             zIndex: open ? 3 : undefined,
+            // As deep as its deepest neighbour: chip-field's own small lip ended
+            // the magnifier 1px above the tree toolbar's nav-depth buttons
+            // (photographed 2026-09-29). With no neighbours, lip is its own depth.
+            '--cbtn-depth': lip,
             borderStartEndRadius: endRadius,
             borderEndEndRadius: endRadius,
           }}

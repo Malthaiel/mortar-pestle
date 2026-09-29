@@ -1718,9 +1718,19 @@ body[data-music-tile-depth="small"] .candy-btn[data-shape="tile"].rail-tile:is(.
    a hovered trailing half showed all four (photographed 2026-09-04, Planner
    "Tasks List" + "+" and the music transport row). Whichever half is lit floats
    above its neighbours so its own frame owns the seam; hover outranks a merely
-   open half when both apply. .candy-btn is already position: relative. */
+   open half when both apply. .candy-btn is already position: relative.
+   A JS-held press counts too: liquidHover's lit copy carries the hold as
+   [data-candy-pressed] (never :active) and dims the neighbours, so without it
+   the held part lost its right edge under the next part's grey frame
+   (filmed 2026-09-29, Save to Playlist). */
 .candy-split > .candy-btn.is-active { z-index: 1; }
-.candy-split > .candy-btn:is(:hover, :active) { z-index: 2; }
+.candy-split > .candy-btn:is(:hover, :active, .is-pressed, [data-candy-pressed]) { z-index: 2; }
+
+/* A greyed part of a run keeps its paint: the 0.55 fade below reads as a hole
+   in the run (photographed 2026-09-26 on the song rows, audited 2026-09-29 on
+   the tree toolbar's Reveal current). Only its label greys, as the song rows'
+   "No Video" always did by hand. */
+.candy-split > .candy-btn:is(:disabled, [aria-disabled="true"]) { opacity: 1; --cbtn-rest-text: var(--text-faint); }
 
 /* split-label — a name that opens beside a split part's icon (the album page's
    Tracks / Credits / Discography). The dock's grow (§ Dock hover-expand): same

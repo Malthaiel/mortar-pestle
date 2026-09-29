@@ -41,7 +41,8 @@ export default function AddToPlaylistButton({
         onClick={open}
         disabled={isDisabled}
         title={title}
-        style={fuse ? { opacity: isDisabled ? 0.4 : 1 } : { height: 36, opacity: isDisabled ? 0.4 : 1 }}
+        // Fused, a greyed part keeps its paint (.candy-split rule in styles.css).
+        style={fuse ? undefined : { height: 36, opacity: isDisabled ? 0.4 : 1 }}
       >
         <span className="candy-face" style={fuse ? undefined : { padding: '0 16px' }}>{Icon && <Icon size={14}/>}{label}</span>
       </button>

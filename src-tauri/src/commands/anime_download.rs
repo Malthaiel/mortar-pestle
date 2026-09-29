@@ -538,6 +538,7 @@ pub async fn series_uninstall(
     app: AppHandle,
     series_path: String,
     delete_files: bool,
+    keep_card: Option<bool>,
 ) -> Result<UninstallReport, String> {
     let domain = domain_of(&series_path);
     let card_abs = PathBuf::from(vault::library_vault_root()).join(&series_path);
@@ -685,6 +686,27 @@ pub async fn series_uninstall(
         }
     }
 
+    // Uninstall proper (`keep_card`): only the videos go to the bin; the card and
+    // cover stay, so the show stays in the library (user-directed 2026-09-29).
+    // The airing poll only watches cards with files on disk, so nothing comes back
+    // on its own.
+    if keep_card.unwrap_or(false) {
+        if let Some((key, abs)) = video_folder {
+            match crate::commands::recycle_bin::trash_folder(&app, Some("library".into()), &key, &abs) {
+                Ok(()) => report.deleted_files = true,
+                Err(e) => report.warnings.push(format!("recycling-bin capture failed: {e:?}")),
+            }
+        }
+        report.ok = report.deleted_files;
+        log::info!(
+            "[series_uninstall] {domain} {title:?} kept card; torrents={} files={} warns={}",
+            report.removed_torrents,
+            report.deleted_files,
+            report.warnings.len()
+        );
+        return Ok(report);
+    }
+
     // Irreversible side effects (torrents / RSS) → the bin item's warning text.
     let mut ext_parts: Vec<String> = Vec::new();
     if report.removed_torrents > 0 {
@@ -741,7 +763,7 @@ pub async fn anime_uninstall(
     series_path: String,
     delete_files: bool,
 ) -> Result<UninstallReport, String> {
-    series_uninstall(app, series_path, delete_files).await
+    series_uninstall(app, series_path, delete_files, None).await
 }
 
 async fn run_worker(app: AppHandle) {

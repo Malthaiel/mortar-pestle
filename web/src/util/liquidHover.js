@@ -122,6 +122,23 @@ function copy(s, lit) {
   return c;
 }
 
+// A held part's face sinks and uncovers its neighbours' overlapping seam frames. In
+// the lit copy every part wears the hover paint, so those frames showed red above
+// the sunk face (user-reported 2026-09-29, filmed). While a part is held, only it
+// and the part the colour sits on stay lit; the rest show their resting frames, as
+// they do with the liquid off. Changes land at once (a fading red is the same leak).
+const HELD = '.is-pressed, [data-candy-pressed]';
+function lightParts(s) {
+  if (!s.split) return;
+  const parts = partsOf(s.lit, true), held = parts.findIndex((p) => p.matches(HELD));
+  parts.forEach((p, k) => {
+    const lit = held < 0 || k === held || k === s.i;
+    if (lit === (p.dataset.dockHover === 'true')) return;
+    if (lit) p.dataset.dockHover = 'true'; else delete p.dataset.dockHover;
+    for (const a of p.getAnimations({ subtree: true })) a.finish();
+  });
+}
+
 // The clones and the layer take the host's own used size; the layer is moved
 // until the REST COPY's rect sits exactly on the host's. Measured every frame, never kept.
 // transition none: a copied inline glide (SearchRun's `transition: width`) would
@@ -235,7 +252,7 @@ function build(host, btn) {
   // TRANSITION runs on the copies too (a fresh copy would teleport the face);
   // anything structural rebuilds both copies inside the same clip wrappers.
   s.mo = new MutationObserver((recs) => {
-    let rebuild = false, repin = false, steered = false;
+    let rebuild = false, repin = false, steered = false, held = false;
     for (const m of recs) {
       if (m.type !== 'attributes') { rebuild = true; continue; }
       const n = m.attributeName;
@@ -247,6 +264,7 @@ function build(host, btn) {
       if (s.split && n === 'class' && m.target.parentElement === host) { rebuild = true; continue; }
       const path = s.shell && m.target !== host ? [0] : pathOf(host, m.target), v = m.target.getAttribute(n);
       if (n === 'data-open' && m.target.parentElement === host) steered = true;
+      if (n === 'data-candy-pressed') held = true;
       for (const c of [s.rest, s.lit]) {
         const el = at(c, path);
         if (!el) { rebuild = true; continue; }
@@ -261,6 +279,7 @@ function build(host, btn) {
       s.rest = rest; s.lit = lit; repin = true;
       unmark(s);
     }
+    if (rebuild || held) lightParts(s);
     if (repin) pin(s);   // now, not next frame: in between, the unpinned copy's glide would start
     // The split moved its own lit part, or let go of it: a mark only removed (a song
     // row's name shutting as the pointer reaches the title, which has none) hands the

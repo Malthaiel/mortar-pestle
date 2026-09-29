@@ -96,7 +96,6 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
   // Which season/episode the picker is open for (TV Shows lane only).
   const [tvPick, setTvPick] = useState(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [deleteFiles, setDeleteFiles] = useState(true);
   const [uninstalling, setUninstalling] = useState(false);
   const [detail, setDetail] = useState(null);
 
@@ -237,6 +236,8 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
   // (nothing to grab), so offer a re-download path in the ⋯ menu for re-grabbing a
   // corrupt or better rip.
   const canRedownload = flatStartIdx >= 0 && !dlActive && !canGrabMore && !!series.providerId;
+  // Uninstall only has something to do while a video is on disk.
+  const onDisk = [series, ...(series.seasons || [])].some((x) => (x.episodes || []).some((ep) => ep.fileAbs));
   // The engine is in-process, so the picker opens straight away (no pre-flight).
   // Anime searches Nyaa by title and needs a MAL id; a film searches Torrentio
   // by IMDb id and needs that instead.
@@ -304,16 +305,16 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
     if (uninstalling) return;
     setUninstalling(true);
     try {
-      const rep = await videoApi.seriesUninstall(series.path, deleteFiles);
+      // keepCard: only the videos go; the show stays in the library (2026-09-29).
+      const rep = await videoApi.seriesUninstall(series.path, true, true);
       setConfirmOpen(false);
       window.dispatchEvent(new CustomEvent('video-library-changed', { detail: {} }));
       const warns = (rep && rep.warnings) || [];
       if (rep && rep.ok) {
-        notify({ type: 'info', title: 'Moved to recycling bin', message: series.title, accent: accent || 'var(--accent)', duration: 4000 });
+        notify({ type: 'info', title: 'Videos moved to recycling bin', message: series.title, accent: accent || 'var(--accent)', duration: 4000 });
         if (warns.length) notify({ type: 'anime-download', title: 'Uninstall warnings', message: warns.join('  •  '), accent: '#d9a55a', iconKey: 'alert', duration: 9000 });
-        window.location.hash = '/tools/library/anime';
       } else {
-        notify({ type: 'anime-download', title: 'Uninstall incomplete', message: warns[0] || 'Could not remove the library card.', accent: 'var(--text)', iconKey: 'alert', duration: 9000 });
+        notify({ type: 'anime-download', title: 'Uninstall incomplete', message: warns[0] || 'Could not remove the videos.', accent: 'var(--text)', iconKey: 'alert', duration: 9000 });
       }
     } catch (e) {
       setConfirmOpen(false);
@@ -541,11 +542,8 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
                 // anime lane (those cards come from MAL via download_anime.py).
                 if (!isAnime) items.push({ label: 'Refresh details', onClick: onRefreshDetails });
                 // Every room: series_uninstall works out which one from the
-                // card path, so a film and a show remove like an anime does.
-                items.push({ label: 'Uninstall', onClick: () => {
-                  setDeleteFiles(true);
-                  setConfirmOpen(true);
-                } });
+                // card path, so a film and a show uninstall like an anime does.
+                if (onDisk) items.push({ label: 'Uninstall', onClick: () => setConfirmOpen(true) });
                 if (items.length === 0) return;
                 openContextMenu({ x: r.left, y: r.bottom + 4 }, items, { accent });
               }}>
@@ -687,27 +685,19 @@ export default function SeriesDetail({ accent, seriesPath, domain = 'Anime' }) {
         danger
         title={`Uninstall ${series.title}?`}
         message={isFranchise
-          ? `Removes the entire ${series.title} entry — all ${series.seasons.length} parts.`
-          : `Removes ${series.title} from your library.`}
-        confirmLabel={uninstalling ? 'Working' : (deleteFiles ? 'Delete everything' : 'Remove from library')}
+          ? `Removes the downloaded videos for all ${series.seasons.length} parts. ${series.title} stays in your library.`
+          : `Removes the downloaded videos. ${series.title} stays in your library.`}
+        confirmLabel={uninstalling ? 'Working' : 'Uninstall'}
         cancelLabel="Cancel"
         onCancel={() => { if (!uninstalling) setConfirmOpen(false); }}
         onConfirm={handleUninstall}
       >
         <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.65 }}>
-          <li>The library card &amp; cover → <b>recycling bin</b> (restorable)</li>
-          {deleteFiles && series.localPath && (
-            <li>The downloaded video → <b>recycling bin</b> (restorable)</li>
-          )}
+          <li>The downloaded videos → <b>recycling bin</b> (restorable)</li>
           <li style={{ color: '#d9a55a' }}>
-            Its torrent{(series.relatedIds && series.relatedIds.length > 1) ? 's' : ''} — removed, <b>not</b> restorable{series.airing ? '. New episodes stop arriving.' : ''}
+            Its torrent{(series.relatedIds && series.relatedIds.length > 1) ? 's' : ''} — removed, <b>not</b> restorable{series.airing ? '. New episodes stop arriving until you download again.' : ''}
           </li>
         </ul>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text)' }}>
-          <input type="checkbox" checked={deleteFiles} onChange={(e) => setDeleteFiles(e.target.checked)} />
-          Also send the downloaded video to the recycling bin
-        </label>
-        <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>Card, cover &amp; video go to the recycling bin; the torrents themselves are removed and can't be restored.</div>
       </ConfirmModal>
       </div>
     </div>

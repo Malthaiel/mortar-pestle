@@ -25,6 +25,11 @@ let _menuSeq = 0;
 
 const isSep = (it) => !!(it && (it.sep || it.divider));
 const isHeader = (it) => !!(it && (it.header || it.section));
+// A separator or a section header is a break: it draws ONE hairline, and only
+// between two rows (no leading, trailing or doubled lines). Headers print no
+// label any more (user-directed 2026-09-29).
+const isBreak = (it) => isSep(it) || isHeader(it);
+const lineAt = (arr, i) => i > 0 && !isBreak(arr[i - 1]) && arr.slice(i + 1).some((it) => !isBreak(it));
 const hasKids = (it) => !!(it && it.children && it.children.length);
 const isNavigable = (it) => !!it && !isSep(it) && !isHeader(it) && !it.disabled;
 const firstNavigable = (arr) => {
@@ -252,7 +257,6 @@ export default function ContextMenuRoot({ point, items = [], opts = {}, onClose 
         aboveY={depth === 0 ? opts.aboveY : undefined}
         align={depth === 0 ? opts.align : undefined}
         anchorEl={anchorEl}
-        header={depth === 0 ? opts.header : undefined}
         accent={accent}
         menuId={menuId}
         activeIndex={depth === deepest ? activeIndex : -1}
@@ -272,7 +276,7 @@ export default function ContextMenuRoot({ point, items = [], opts = {}, onClose 
 }
 
 function MenuPanel({
-  depth, items, point, aboveY, align, anchorEl, header, accent, menuId,
+  depth, items, point, aboveY, align, anchorEl, accent, menuId,
   activeIndex, openIndex, interactive,
   onKeyDown, onLeave, onRowHover, onRowClick, registerRowEl, reportPanelEl,
 }) {
@@ -351,15 +355,13 @@ function MenuPanel({
         ['--accent']: accent,
       }}
     >
-      {header && <MenuHeader label={header} first />}
       {/* Candy rows cast a --candy-depth downward shadow outside layout — a flat
           margin gets eaten. candyGap() adds the depth so ~base px stays visible
           and tracks the user's depth picker; paddingBottom clears the last row's
           slab so it doesn't spill past the menu's bottom edge. See util/candy.js. */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: candyGap(3), paddingBottom: 'var(--candy-depth)' }}>
         {items.map((it, i) => {
-          if (isSep(it)) return <MenuSep key={i} />;
-          if (isHeader(it)) return <MenuHeader key={i} label={it.header || it.label} inline newSection={i > 0} />;
+          if (isBreak(it)) return lineAt(items, i) ? <MenuSep key={i} /> : null;
           const kids = hasKids(it);
           return (
             <MenuRow
@@ -379,23 +381,6 @@ function MenuPanel({
     // Into the fullscreen element when there is one (the video player goes
     // fullscreen on its own subtree) -- a body portal would render outside it.
     document.fullscreenElement || document.body
-  );
-}
-
-function MenuHeader({ label, first, inline, newSection }) {
-  return (
-    <div style={{
-      padding: inline ? '0 10px' : (first ? '2px 10px 4px' : '8px 10px 4px'),
-      fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em',
-      textTransform: 'none', color: 'var(--text-faint)', fontWeight: 600,
-      // Inline headers cast no candy shadow: cancel the depth-gap below so the
-      // label hugs its rows, and add a little space above a mid-menu header so a
-      // fresh section reads without a separator.
-      ...(inline ? {
-        marginTop: newSection ? 5 : 0,
-        marginBottom: 'calc(-1 * var(--candy-depth))',
-      } : null),
-    }}>{label}</div>
   );
 }
 
