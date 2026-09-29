@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { IconCheck } from './icons.jsx';
+import { IconCheck, IconGrip } from './icons.jsx';
 
 function VaultTaskRow({ task, active, onSelect, onToggle, accent, onDragStart }) {
   const [hover, setHover] = useState(false);
@@ -20,7 +20,7 @@ function VaultTaskRow({ task, active, onSelect, onToggle, accent, onDragStart })
         borderRadius: 0, transition: 'background 80ms',
       }}>
       <span style={{ fontSize: 8, color: 'var(--text-faint)', fontFamily: 'var(--font-mono), monospace', width: 14, flexShrink: 0, textAlign: 'right' }}>
-        {hover ? '⋮⋮' : ''}
+        {hover ? <IconGrip size="1.2em"/> : ''}
       </span>
       <span style={{ width: 2, height: 2, borderRadius: '50%', background: priorityColor, flexShrink: 0 }}/>
       <button onClick={e => { e.stopPropagation(); onSelect?.(); }} style={{

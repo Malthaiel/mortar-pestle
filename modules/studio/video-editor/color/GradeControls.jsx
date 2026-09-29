@@ -10,6 +10,7 @@ import CurveEditor from './CurveEditor.jsx';
 import { lutState, registerLutText, lastCompileMs } from './gradePipeline.js';
 import { OutlinedBtn } from '@host/components/ui/Button.jsx';
 import { Seg } from '@host/components/ui/Pill.jsx';
+import { IconX } from '@host/components/icons.jsx';
 
 const mono = { fontFamily: 'var(--font-mono), monospace' };
 
@@ -148,7 +149,7 @@ export function SatLutColumn({
                 onClick={() => commitPatch({ lut: null }, 'Remove LUT')}
                 style={{ ...mono, fontSize: 11, background: 'none', border: '1px solid var(--border)', borderRadius: 5, color: 'var(--text-faint)', cursor: 'pointer', padding: '0 5px', flexShrink: 0 }}
               >
-                ×
+                <IconX size="0.65em"/>
               </button>
             </div>
             <SliderRow

@@ -4,6 +4,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMusicPlayer } from './MusicPlayerProvider.jsx';
+import { IconX } from '@host/components/icons.jsx';
 
 const DOCK_WIDTH = 300;
 
@@ -88,7 +89,7 @@ export default function LyricsPanel({ open, onClose, accent }) {
         }}>
           Lyrics{currentTrack ? ' · ' + currentTrack.title : ''}
         </span>
-        <button onClick={onClose} title="Close" data-own-press className="candy-btn" data-shape="circle" style={{ flexShrink: 0 }}><span className="candy-face">×</span></button>
+        <button onClick={onClose} title="Close" data-own-press className="candy-btn" data-shape="circle" style={{ flexShrink: 0 }}><span className="candy-face"><IconX/></span></button>
       </div>
 
       <div ref={scrollRef} style={{ overflowY: 'auto', flex: 1, padding: '14px 18px' }}>

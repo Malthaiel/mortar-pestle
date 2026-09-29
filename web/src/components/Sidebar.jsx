@@ -163,7 +163,7 @@ export default function Sidebar({ accent, settings }) {
           onToggle={handleBrandClick}
           settings={settings}
           label={pageSidebar?.label || activeModule?.name || 'Mortar & Pestle'}
-          iconKey={pageSidebar ? null : activeModule?.iconKey}
+          iconKey={pageSidebar ? pageSidebar.iconKey : activeModule ? activeModule.iconKey : 'IconHome'}
         />
       }
       railContent={railContent}

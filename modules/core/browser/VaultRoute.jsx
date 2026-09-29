@@ -9,7 +9,7 @@ import { useCredsStore } from './useCredsStore.js';
 import { readModuleBag, writeModuleSetting } from '@host/module-sdk/index.js';
 import VaultEntryEditor from './VaultEntryEditor.jsx';
 import PasswordGenerator from './PasswordGenerator.jsx';
-import { IconLockOpen } from '@host/components/icons.jsx';
+import { IconLockOpen, IconPencil, IconX } from '@host/components/icons.jsx';
 
 const wrap = { display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, background: 'var(--bg)', position: 'relative' };
 const bar = { display: 'flex', alignItems: 'center', gap: 8, padding: 10, borderBottom: 'var(--candy-frame) solid var(--border)', background: 'var(--surface)', flex: '0 0 auto' };
@@ -71,7 +71,7 @@ export default function VaultRoute({ api, accent, onClose }) {
         <button type="button" style={view === 'entries' ? primary(accent) : ghost} onClick={() => setView('entries')}>Logins</button>
         <button type="button" style={view === 'tools' ? primary(accent) : ghost} onClick={() => setView('tools')}>Tools</button>
         <button type="button" style={ghost} onClick={() => creds.lock()}>Lock</button>
-        <button type="button" style={ghost} onClick={onClose} title="Back to browser">✕</button>
+        <button type="button" style={ghost} onClick={onClose} title="Back to browser"><IconX size="0.8em"/></button>
       </div>
 
       <BackupNudge accent={accent} onExport={() => setView('tools')} />
@@ -135,8 +135,8 @@ function FolderRow({ active, label, accent, onClick, onRename, onDelete }) {
         style={{ flex: 1, textAlign: 'left', padding: '6px 8px', borderRadius: 'var(--radius-sm)', border: '1px solid transparent', background: active ? 'var(--surface-2)' : 'transparent', color: active ? accent : 'var(--text)', cursor: 'pointer', font: 'inherit', fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {label}
       </button>
-      {onRename && <button type="button" title="Rename" onClick={onRename} style={miniBtn}>✎</button>}
-      {onDelete && <button type="button" title="Delete" onClick={onDelete} style={miniBtn}>✕</button>}
+      {onRename && <button type="button" title="Rename" onClick={onRename} style={miniBtn}><IconPencil size="1em"/></button>}
+      {onDelete && <button type="button" title="Delete" onClick={onDelete} style={miniBtn}><IconX size="0.8em"/></button>}
     </div>
   );
 }
@@ -156,7 +156,7 @@ function Centered({ children, onClose }) {
   return (
     <div style={wrap}>
       <div style={bar}><strong style={{ fontSize: 14, flex: 1 }}>Password Vault</strong>
-        <button type="button" style={ghost} onClick={onClose}>✕</button></div>
+        <button type="button" style={ghost} onClick={onClose}><IconX size="0.8em"/></button></div>
       <div style={{ flex: 1, display: 'grid', placeItems: 'center', color: 'var(--text-muted)' }}>{children}</div>
     </div>
   );
@@ -184,7 +184,7 @@ function LockedView({ initialized, accent, onClose }) {
   return (
     <div style={wrap}>
       <div style={bar}><strong style={{ fontSize: 14, flex: 1 }}>Password Vault</strong>
-        <button type="button" style={ghost} onClick={onClose}>✕</button></div>
+        <button type="button" style={ghost} onClick={onClose}><IconX size="0.8em"/></button></div>
       <div style={{ flex: 1, display: 'grid', placeItems: 'center', padding: 24 }}>
         <div style={{ width: 'min(360px,100%)', display: 'flex', flexDirection: 'column', gap: 12 }}>
           <strong style={{ fontSize: 15 }}>{initialized ? 'Unlock vault' : 'Create your vault'}</strong>

@@ -6,6 +6,7 @@
 // old pages/docs/DocsHeader — reuses the same docs-* CSS so it renders identically.
 
 import { useState, useRef, useEffect } from 'react';
+import { IconDot } from './icons.jsx';
 
 function formatMtime(mtime) {
   if (!mtime) return '';
@@ -55,7 +56,7 @@ export default function PageTitleHeader({ title, breadcrumb, mtime, accent, edit
         )}
         {updated && (
           <span className="docs-updated-chip" title={`Last updated ${updated}`}>
-            <span style={{ color: accent }}>●</span> Updated {updated}
+            <span style={{ color: accent }}><IconDot size="0.6em"/></span> Updated {updated}
           </span>
         )}
         {actions && <div className="docs-title-actions">{actions}</div>}

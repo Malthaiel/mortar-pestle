@@ -11,7 +11,7 @@
 import { useState } from 'react';
 import { useVideoPlayer } from './VideoPlayerProvider.jsx';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
-import { IconPalette, IconSquare, IconTypeText } from '@host/components/icons.jsx';
+import { IconPalette, IconSquare, IconTypeText, IconReset } from '@host/components/icons.jsx';
 import { candyCenterOffset } from '@host/util/candy.js';
 
 export default function SubtitleSettingsPanel() {
@@ -132,7 +132,7 @@ export default function SubtitleSettingsPanel() {
             {sync > 0 ? '+' : ''}{sync.toFixed(1)}s
           </span>
           <NudgeBtn onClick={() => v.nudgeSubSync(+0.1)}>+</NudgeBtn>
-          <NudgeBtn onClick={() => v.resetSubSync()} title="Reset sync">↺</NudgeBtn>
+          <NudgeBtn onClick={() => v.resetSubSync()} title="Reset sync"><IconReset size="0.9em"/></NudgeBtn>
         </div>
       </Row>
 

@@ -7,6 +7,7 @@ import PostIdentity from './PostIdentity.jsx';
 import MetaRun from './MetaRun.jsx';
 import UserAvatar from './UserAvatar.jsx';
 import DevControls from './DevControls.jsx';
+import { IconArrowLeft } from '@host/components/icons.jsx';
 
 export default function PostDetail({ fb, accent, postId, onBack }) {
   const { session, refresh: refreshSession, ensureHandle } = useSession(fb);
@@ -74,7 +75,7 @@ export default function PostDetail({ fb, accent, postId, onBack }) {
 
   return (
     <div style={{ padding: 20 }}>
-      <FilterChip onClick={onBack}>← Board</FilterChip>
+      <FilterChip onClick={onBack}><IconArrowLeft size="1.3em"/> Board</FilterChip>
 
       {needsHandle && (
         <div style={{

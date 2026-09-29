@@ -10,6 +10,6 @@
   "license": "MIT",
   "tier": "core",
   "routeBase": "/vault",
-  "iconKey": "IconLibrary",
+  "iconKey": "IconNotebook",
   "setupRequired": false
 }

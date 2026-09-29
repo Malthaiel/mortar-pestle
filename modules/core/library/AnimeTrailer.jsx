@@ -4,6 +4,8 @@
 // ({ youtubeId, url, image }) arrives already resolved. Renders nothing without
 // a URL to open.
 
+import { IconPlayMark } from '@host/components/icons.jsx';
+
 // A card's `Trailer:` frontmatter is a plain YouTube URL string (written by
 // tv_library.rs); the live MAL detail hands over a resolved object instead.
 // Normalise here, beside the only consumer, so both callers pass the same shape.
@@ -39,6 +41,7 @@ export default function AnimeTrailer({ trailer, accent, fill }) {
     >
       <div className={fill ? 'anime-trailer-card is-fill' : 'anime-trailer-card'}>
         {trailer.image && <img src={trailer.image} alt="" loading="lazy" />}
+        <span><IconPlayMark size={22}/></span>
       </div>
     </button>
   );

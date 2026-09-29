@@ -9,6 +9,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { Seg, OutlinedBtn, TextInput } from '../ui/index.js';
 import { AGENTS_DEFAULT } from '../../hooks/useSettings.js';
 import { TAB_SECTIONS } from './settings-registry.js';
+import { IconAlert, IconBlock, IconCheck } from '../icons.jsx';
 
 export default function AgentsTab({ settings, setSetting, accent, section }) {
   const active = section || TAB_SECTIONS.agents.default;
@@ -371,14 +372,14 @@ function CliStatusBanner({ status, busy, onRefresh, onCopyLogin }) {
 
 function ReachSummary({ backend }) {
   const cliRows = [
-    { glyph: '✓', tone: 'var(--text-muted)', label: 'Read',  detail: 'Read/Glob/Grep over the repo (Claude Code native)' },
-    { glyph: '✓', tone: 'var(--text-muted)', label: 'Edit',  detail: 'web/src/, web/styles/ (system-prompt scope rule)' },
-    { glyph: '⊘', tone: 'var(--text-faint)', label: 'Block', detail: 'No Bash, no WebSearch — pure read+edit' },
+    { glyph: <IconCheck size="0.9em"/>, tone: 'var(--text-muted)', label: 'Read',  detail: 'Read/Glob/Grep over the repo (Claude Code native)' },
+    { glyph: <IconCheck size="0.9em"/>, tone: 'var(--text-muted)', label: 'Edit',  detail: 'web/src/, web/styles/ (system-prompt scope rule)' },
+    { glyph: <IconBlock size="0.9em"/>, tone: 'var(--text-faint)', label: 'Block', detail: 'No Bash, no WebSearch — pure read+edit' },
   ];
   const apiRows = [
-    { glyph: '✓', tone: 'var(--text-muted)', label: 'Read',  detail: 'all of C:\\Users\\malth\\Code\\mortar-pestle\\' },
-    { glyph: '✓', tone: 'var(--text-muted)', label: 'Write', detail: 'web/src/, web/styles/' },
-    { glyph: '⚠', tone: '#d9a55a', label: 'Confirm', detail: 'src-tauri/, tauri.conf.json, modules/, package.json' },
+    { glyph: <IconCheck size="0.9em"/>, tone: 'var(--text-muted)', label: 'Read',  detail: 'all of C:\\Users\\malth\\Code\\mortar-pestle\\' },
+    { glyph: <IconCheck size="0.9em"/>, tone: 'var(--text-muted)', label: 'Write', detail: 'web/src/, web/styles/' },
+    { glyph: <IconAlert size="0.9em"/>, tone: '#d9a55a', label: 'Confirm', detail: 'src-tauri/, tauri.conf.json, modules/, package.json' },
   ];
   const rows = backend === 'claude-cli' ? cliRows : apiRows;
   return (

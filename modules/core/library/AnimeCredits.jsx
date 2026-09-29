@@ -12,6 +12,7 @@ import { videoApi } from './api.js';
 import PosterRow from './PosterRow.jsx';
 import useInView from './useInView.js';
 import { EyebrowHeading } from '@host/components/ui/Eyebrow.jsx';
+import { IconArrowRight, IconArrowUp } from '@host/components/icons.jsx';
 
 function initials(text) {
   const w = (text || '').trim().split(/\s+/).filter(Boolean);
@@ -107,7 +108,7 @@ export default function AnimeCredits({ malId, accent }) {
                   <button onClick={() => setCharsExpanded(e => !e)} data-own-press
                           className="candy-btn" data-shape="chip" style={{ '--accent': accent }}>
                     <span className="candy-face" style={{ fontSize: 11 }}>
-                      {charsExpanded ? 'Show Less ↑' : 'See All →'}
+                      {charsExpanded ? <>Show Less <IconArrowUp size="1.2em"/></> : <>See All <IconArrowRight size="1.3em"/></>}
                     </span>
                   </button>
                 </div>
@@ -128,7 +129,7 @@ export default function AnimeCredits({ malId, accent }) {
             accent={accent}
             colWidth={112}
             layout={staffExpanded ? 'grid' : 'row'}
-            seeAllLabel={staffExpanded ? 'Show Less ↑' : 'See All →'}
+            seeAllLabel={staffExpanded ? <>Show Less <IconArrowUp size="1.2em"/></> : <>See All <IconArrowRight size="1.3em"/></>}
             onSeeAll={() => setStaffExpanded(e => !e)}
           >
             {shownStaff.map(p => <StaffCard key={p.malId || p.name} p={p} accent={accent} />)}

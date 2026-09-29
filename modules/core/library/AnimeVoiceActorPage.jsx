@@ -15,6 +15,7 @@ import { videoApi } from './api.js';
 import { FilterChip as Pill } from '@host/components/ui/index.js';
 import LoadingScreen from './LoadingScreen.jsx';
 import ImageLightbox, { useLightbox } from './ImageLightbox.jsx';
+import { IconArrowDown, IconArrowLeft, IconArrowUp, IconCaretDown, IconHeart } from '@host/components/icons.jsx';
 
 const ENRICH_STEP = 30;
 const STAFF_CAP = 30;
@@ -134,7 +135,7 @@ export default function AnimeVoiceActorPage({ malId, accent }) {
           background: 'none', border: 'none', cursor: 'pointer', padding: 0,
           color: 'var(--text-muted)', fontSize: 12, fontFamily: 'var(--font-mono)',
           letterSpacing: '0.04em',
-        }}>← Back</button>
+        }}><IconArrowLeft size="1.3em"/> Back</button>
       </div>
 
       {/* Header */}
@@ -192,7 +193,7 @@ export default function AnimeVoiceActorPage({ malId, accent }) {
                 background: 'none', border: 'none', cursor: 'pointer', padding: 0,
                 color: accent || 'var(--text-muted)', fontSize: 11, fontFamily: 'var(--font-mono)',
                 letterSpacing: '0.04em',
-              }}>{staffExpanded ? 'See less ↑' : `See all (${staffRoles.length}) ↓`}</button>
+              }}>{staffExpanded ? <>See less <IconArrowUp size="1.2em"/></> : <>See all ({staffRoles.length}) <IconArrowDown size="1.2em"/></>}</button>
             </div>
           )}
         </div>
@@ -228,7 +229,7 @@ export default function AnimeVoiceActorPage({ malId, accent }) {
                 background: 'none', border: 'none', cursor: 'pointer', padding: 0,
                 color: accent || 'var(--text-muted)', fontSize: 11, fontFamily: 'var(--font-mono)',
                 letterSpacing: '0.04em',
-              }}>Show more ▾</button>
+              }}>Show more <IconCaretDown size="0.7em"/></button>
             )}
           </div>
         </div>
@@ -281,7 +282,7 @@ function RoleCard({ role, meta, accent }) {
             display: 'flex', gap: 6, flexWrap: 'wrap', fontVariantNumeric: 'tabular-nums',
           }}>
             {year && <span>{year}</span>}
-            {members && <span>{members}♥</span>}
+            {members && <span>{members}<IconHeart size="0.9em"/></span>}
             {role.role && <span style={{ textTransform: 'uppercase' }}>{role.role}</span>}
           </div>
         )}

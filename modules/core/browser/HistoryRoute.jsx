@@ -81,7 +81,7 @@ export default function HistoryRoute({ api, accent, onClose, onOpenUrl }) {
           onClick={clearAll} title="Clear all history">
           {confirmClear ? 'Confirm clear' : 'Clear history'}
         </button>
-        <button type="button" style={ghost} onClick={onClose} title="Back to browser">✕</button>
+        <button type="button" style={ghost} onClick={onClose} title="Back to browser"><IconX size="0.8em"/></button>
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0 16px' }}>

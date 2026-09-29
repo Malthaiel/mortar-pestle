@@ -15,6 +15,7 @@ import { videoApi } from './api.js';
 import { useVideoPlayer } from './VideoPlayerProvider.jsx';
 import { useImportJobs } from './ImportProvider.jsx';
 import { ModuleSectionBand as SectionBand } from '@host/components/settings/section-primitives.jsx';
+import { IconSettings } from '@host/components/icons.jsx';
 
 function basename(p) {
   if (!p) return '';
@@ -485,7 +486,7 @@ function SubtitleSection({ accent }) {
       <RangeRow label="Line height" value={s.lineHeight} min={0.9} max={2.0} step={0.05}
                 onChange={x => set('lineHeight', x)} format={x => x.toFixed(2)} accent={accent}/>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-        <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>Per-episode Sync lives in the player ⚙.</span>
+        <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>Per-episode Sync lives in the player <IconSettings size="1em"/>.</span>
         <OutlinedBtn small onClick={v.resetSubSettings}>Reset</OutlinedBtn>
       </div>
     </SectionBand>

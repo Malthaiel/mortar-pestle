@@ -11,7 +11,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { videoApi, prefetchCredits } from './api.js';
 import { coverSrc, STATUS_DOT_COLOR, resolveDot } from './util.js';
 import { FilterChip as Pill } from '@host/components/ui/index.js';
-import { IconStarMark } from '@host/components/icons.jsx';
+import { IconStarMark, IconArrowDown, IconArrowUp } from '@host/components/icons.jsx';
 import { useSeriesMenu } from './useSeriesMenu.js';
 
 // Single pill per sort dimension; click activates with the default direction,
@@ -20,7 +20,7 @@ const SORT_DIMENSIONS = [
   { key: 'added',    label: 'Date Added', defaultDir: 'desc', value: s => s.mtime || 0 },
   // Your rating wears the star, as the rating picker does (user-directed 2026-09-27).
   { key: 'personal', label: <><IconStarMark size={12}/>Personal</>, defaultDir: 'desc', value: s => Number(s.personalRating) || 0 },
-  { key: 'mal',      label: '★ MAL',      defaultDir: 'desc', value: s => Number(s.onlineRating)   || 0 },
+  { key: 'mal',      label: <><IconStarMark size="0.95em"/> MAL</>,      defaultDir: 'desc', value: s => Number(s.onlineRating)   || 0 },
   { key: 'year',     label: 'Year',       defaultDir: 'desc', value: s => s.year || 0 },
   { key: 'title',    label: 'Title',      defaultDir: 'asc',  value: s => (s.title || '').toLowerCase() },
 ];
@@ -46,7 +46,7 @@ export default function SeriesBrowser({ accent, onSelect, selectedPath, initialS
   // Same dimensions, one label: the online score comes from MAL for anime and
   // from IMDb for TV, and it reads as a lie under the wrong name.
   const dimensions = useMemo(
-    () => SORT_DIMENSIONS.map(d => (d.key === 'mal' && domain !== 'Anime' ? { ...d, label: '★ IMDb' } : d)),
+    () => SORT_DIMENSIONS.map(d => (d.key === 'mal' && domain !== 'Anime' ? { ...d, label: <><IconStarMark size="0.95em"/> IMDb</> } : d)),
     [domain],
   );
 
@@ -261,7 +261,7 @@ function SortPillRow({ dimensions, sortDim, sortDir, onPillClick, accent }) {
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
       {dimensions.map(dim => {
         const active = sortDim === dim.key;
-        const arrow = active ? (sortDir === 'desc' ? ' ↓' : ' ↑') : '';
+        const arrow = active ? (sortDir === 'desc' ? <>{' '}<IconArrowDown size="1.2em"/></> : <>{' '}<IconArrowUp size="1.2em"/></>) : '';
         return (
           <Pill key={dim.key} active={active} accent={accent} onClick={() => onPillClick(dim)}>
             {dim.label}{arrow}

@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react';
 import * as creds from './credsStore.js';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
-import { IconFolder } from '@host/components/icons.jsx';
+import { IconFolder, IconLock, IconX } from '@host/components/icons.jsx';
 import PasswordField from './PasswordField.jsx';
 
 const overlay = {
@@ -121,7 +121,7 @@ export default function VaultEntryEditor({ entryId, prefillOrigin, folders = [],
       <div style={card} onClick={e => e.stopPropagation()}>
         <div style={head}>
           <strong style={{ fontSize: 14, flex: 1 }}>{isEdit ? 'Edit login' : 'New login'}</strong>
-          <button type="button" style={ghost} onClick={onClose}>✕</button>
+          <button type="button" style={ghost} onClick={onClose}><IconX size="0.8em"/></button>
         </div>
         <div style={body}>
           <div><label style={label}>Name</label>
@@ -150,9 +150,9 @@ export default function VaultEntryEditor({ entryId, prefillOrigin, folders = [],
                 <input style={{ ...input, flex: 1 }} placeholder="name" value={c.name} onChange={e => setField(i, 'name', e.target.value)} />
                 <input style={{ ...input, flex: 1 }} type={c.hidden ? 'password' : 'text'} placeholder="value" value={c.value} onChange={e => setField(i, 'value', e.target.value)} />
                 <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', gap: 4, alignItems: 'center' }} title="Hide value">
-                  <input type="checkbox" checked={c.hidden} onChange={e => setField(i, 'hidden', e.target.checked)} />🔒
+                  <input type="checkbox" checked={c.hidden} onChange={e => setField(i, 'hidden', e.target.checked)} /><IconLock size="1em"/>
                 </label>
-                <button type="button" style={ghost} onClick={() => rmField(i)}>✕</button>
+                <button type="button" style={ghost} onClick={() => rmField(i)}><IconX size="0.8em"/></button>
               </div>
             ))}
             <button type="button" style={ghost} onClick={addField}>＋ Add field</button>

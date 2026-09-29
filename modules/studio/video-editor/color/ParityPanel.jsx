@@ -22,7 +22,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import AppWindow from '@host/components/ui/AppWindow.jsx';
 import { PrimaryBtn, OutlinedBtn } from '@host/components/ui/Button.jsx';
-import { IconClapperboard } from '@host/components/icons.jsx';
+import { IconClapperboard, IconCheck, IconX } from '@host/components/icons.jsx';
 import { createGlDisplay } from './glDisplay.js';
 import { remuxWithProcess } from '../remuxJob.js';
 import { parseCube, compileGrade, toRGBA8, serializeCube, LUT_N } from './gradeLut.js';
@@ -437,7 +437,7 @@ export default function ParityPanel({ onClose, api, accent }) {
                       cursor: clickable ? 'pointer' : 'default',
                     }}
                   >
-                    {!r ? '—' : r.error ? 'ERR' : `${r.pass ? '✓' : '✗'} ${fmtCell(r)}`}
+                    {!r ? '—' : r.error ? 'ERR' : <>{r.pass ? <IconCheck size="0.9em"/> : <IconX size="0.8em"/>} {fmtCell(r)}</>}
                   </div>
                 );
               })}

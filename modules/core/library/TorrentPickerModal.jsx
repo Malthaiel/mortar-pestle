@@ -14,6 +14,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { videoApi } from './api.js';
 import { FilterChip, OutlinedBtn, PrimaryBtn } from '@host/components/ui/index.js';
+import { IconRadioOff, IconRadioOn } from '@host/components/icons.jsx';
 
 // nyaa_search.py --type only accepts these; anything else (ONA/Music/…) → TV.
 const NYAA_TYPES = ['Movie', 'OVA', 'Special'];
@@ -129,7 +130,7 @@ export default function TorrentPickerModal({ open, title, englishTitle, type, ac
             const active = i === sel;
             return (
               <button key={(c.magnet || '') + i} type="button" onClick={() => setSel(i)} style={S.row(active, a)}>
-                <span style={{ flexShrink: 0, color: active ? a : 'var(--text-faint)', fontSize: 13 }}>{active ? '●' : '○'}</span>
+                <span style={{ flexShrink: 0, color: active ? a : 'var(--text-faint)', fontSize: 13 }}>{active ? <IconRadioOn size="1em"/> : <IconRadioOff size="1em"/>}</span>
                 <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
                   <span style={S.title} title={c.title}>{c.title}</span>
                   <span style={S.meta}>

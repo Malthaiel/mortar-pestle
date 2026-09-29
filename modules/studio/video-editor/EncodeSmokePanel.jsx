@@ -8,7 +8,7 @@
 import { useState } from 'react';
 import AppWindow from '@host/components/ui/AppWindow.jsx';
 import { PrimaryBtn } from '@host/components/ui/Button.jsx';
-import { IconClapperboard } from '@host/components/icons.jsx';
+import { IconClapperboard, IconCheck, IconX } from '@host/components/icons.jsx';
 
 const mono = { fontFamily: 'var(--font-mono), monospace' };
 
@@ -46,7 +46,7 @@ export default function EncodeSmokePanel({ onClose, api, accent }) {
           {rows.map((r) => (
             <div key={r.codec} style={{ ...mono, fontSize: 11.5, display: 'flex', gap: 8, alignItems: 'center', color: r.encoder ? (r.ok ? 'var(--text)' : 'var(--error)') : 'var(--text-faint)' }}>
               <span style={{ minWidth: 48 }}>{r.codec}</span>
-              <span style={{ minWidth: 14 }}>{!r.encoder ? '—' : r.ok ? '✓' : '✗'}</span>
+              <span style={{ minWidth: 14 }}>{!r.encoder ? '—' : r.ok ? <IconCheck size="0.9em"/> : <IconX size="0.8em"/>}</span>
               <span style={{ flex: 1 }}>{r.detail}</span>
             </div>
           ))}

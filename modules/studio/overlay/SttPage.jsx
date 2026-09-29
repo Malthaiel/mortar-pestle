@@ -3,6 +3,7 @@ import { OutlinedBtn } from '@host/components/ui/Button.jsx';
 import TranscriptView from './TranscriptView.jsx';
 import ControlBar from './ControlBar.jsx';
 import './stt.css';
+import { IconX } from '@host/components/icons.jsx';
 
 // Composer-bar layout (Voice Transcription Phase 3): a header (title + live
 // status), the transcript body (live → editable), an error banner, and the
@@ -119,7 +120,7 @@ export default function SttPage({ accent }) {
       {modelReady && error && (
         <div className="stt-errorbar" role="alert">
           <span>{friendlyError(error)}</span>
-          <button type="button" className="stt-errorbar-x" onClick={clearError} title="Dismiss">✕</button>
+          <button type="button" className="stt-errorbar-x" onClick={clearError} title="Dismiss"><IconX size="0.8em"/></button>
         </div>
       )}
 

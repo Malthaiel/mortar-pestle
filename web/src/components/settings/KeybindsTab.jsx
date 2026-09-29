@@ -30,7 +30,7 @@ import { formatBinding, IS_MAC } from '../../keybinds/format.js';
 import { bindingsEqual } from '../../keybinds/match.js';
 import { OutlinedBtn, IconBtn } from '../ui/Button.jsx';
 
-import { IconRotateCw } from '../icons.jsx';
+import { IconRotateCw, IconX } from '../icons.jsx';
 const HOLD_MS = 1000;
 
 const MODIFIER_KEYS = new Set(['Shift', 'Alt', 'Control', 'Meta']);
@@ -135,7 +135,7 @@ export default function KeybindsTab({ settings, setSetting, accent, initialFilte
               fontSize: 11, fontFamily: 'var(--font-mono)', letterSpacing: '0.04em',
               color: 'var(--text-muted)',
             }}>Showing {initialFilter} keybinds only</span>
-            <OutlinedBtn small onClick={onClearFilter}>Show All ✕</OutlinedBtn>
+            <OutlinedBtn small onClick={onClearFilter}>Show All <IconX size="0.8em"/></OutlinedBtn>
           </div>
         )}
 

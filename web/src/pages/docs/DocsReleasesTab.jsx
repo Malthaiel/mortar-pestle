@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { IconSearch } from '../../components/icons.jsx';
+import { IconSearch, IconCaretDown, IconCheck, IconX } from '../../components/icons.jsx';
 import { useReleases, latestPublishedVersion, bumpVersion, inferBumpLevel, maxSemver } from '../../hooks/useReleases.js';
 import {
   useReleaseQueue, mergeQueue, parseReleaseQueue,
@@ -383,7 +383,7 @@ export default function DocsReleasesTab({ accent }) {
                           ? 'chevronFlipDown 280ms cubic-bezier(0.32, 0.72, 0, 1) forwards'
                           : 'chevronFlipUp 280ms cubic-bezier(0.32, 0.72, 0, 1) forwards',
                       }}>
-                        ▼
+                        <IconCaretDown size="0.9em"/>
                       </span>
                     </div>
 
@@ -493,7 +493,7 @@ function ReleaseQueuePanel({ accent, queue, latestVersion, tag, onShipped }) {
           marginTop: 10, fontSize: 12, color: '#2a9d4a',
           display: 'flex', alignItems: 'center', gap: 6,
         }}>
-          ✓ Shipped <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>v{shipped}</span> — queue cleared.
+          <IconCheck size="0.9em"/> Shipped <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>v{shipped}</span> — queue cleared.
         </div>
       )}
 
@@ -700,7 +700,7 @@ function ShipReleaseModal({ accent, queue, latestVersion, tag, onClose, onShippe
             }}
             aria-label="Close"
           >
-            ✕
+            <IconX size="0.8em"/>
           </button>
         </div>
 

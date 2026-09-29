@@ -31,7 +31,7 @@ import TreeVaultSwitcher from './TreeVaultSwitcher.jsx';
 import { searchView } from './treeSearch.js';
 import { useTreeDrag } from './useTreeDrag.js';
 import { openInFiles } from './revealInFiles.js';
-import { useTreeIcons } from './treeIcons.jsx';
+import { useTreeIcons, renderTreeIcon } from './treeIcons.jsx';
 import TreeIconPicker from './TreeIconPicker.jsx';
 import NameInputModal from './NameInputModal.jsx';
 import ConfirmModal from '../ui/ConfirmModal.jsx';
@@ -73,7 +73,8 @@ function TreeBody({ node, tree, sectionMeta, accent, currentPage, openMenu, drag
   else inner = items.map((it, i) => (
     <StaggerChild key={it.key} index={i} count={n} open={shown}>
       {it.kind === 'pin'
-        ? <TreeRow node={{ title: it.pin.label }} selected={pinActive(it.pin)} accent={accent} noSuffix onClick={() => navigate(it.pin.hash)}/>
+        ? <TreeRow node={{ title: it.pin.label }} selected={pinActive(it.pin)} accent={accent} noSuffix onClick={() => navigate(it.pin.hash)}
+            leadIcon={renderTreeIcon(it.pin.icon || 'IconFile')}/>
         : <TreeNode node={it.node} tree={tree} sectionMeta={sectionMeta}
             accent={accent} currentPage={currentPage} openMenu={openMenu} drag={drag} icons={icons}/>}
     </StaggerChild>
@@ -94,7 +95,7 @@ function TreeNode({ node, tree, sectionMeta, accent, currentPage, openMenu, drag
     return (
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         <CandyHeader label={node.name} open={open} onToggle={drag.guard(() => tree.toggle(node))}
-          accent={accent} onContextMenu={onContextMenu} leadIcon={icons.leadIcon(node.vaultPath)}
+          accent={accent} onContextMenu={onContextMenu} leadIcon={icons.leadIcon(node.vaultPath, 'IconFolder')}
           dropPath={node.vaultPath} activeFill={open || drag.over === node.vaultPath}
           onPointerDown={drag.start(node)}/>
         <Collapsible open={open} count={count}>
@@ -109,7 +110,7 @@ function TreeNode({ node, tree, sectionMeta, accent, currentPage, openMenu, drag
   const selected = !!currentPage && norm(currentPage) === norm(node.vaultPath);
   return <TreeRow node={node} selected={selected} accent={accent}
     onClick={drag.guard(() => navigate(node.href))} onContextMenu={onContextMenu}
-    leadIcon={icons.leadIcon(node.vaultPath)} onPointerDown={drag.start(node)}/>;
+    leadIcon={icons.leadIcon(node.vaultPath, 'IconFile')} onPointerDown={drag.start(node)}/>;
 }
 
 export default function VaultTree({ sections, route, accent }) {
@@ -253,7 +254,7 @@ export default function VaultTree({ sections, route, accent }) {
           return (
             <div key={s.key} style={{ display: 'flex', flexDirection: 'column' }}>
               <CandyHeader label={s.label} open={open} onToggle={drag.guard(() => tree.toggle(sectionNode))}
-                accent={accent} onContextMenu={(e) => openMenu(e, sectionNode, s)} leadIcon={icons.leadIcon(s.section)}
+                accent={accent} onContextMenu={(e) => openMenu(e, sectionNode, s)} leadIcon={icons.leadIcon(s.section, s.icon || 'IconFolder')}
                 dropPath={s.section} activeFill={open || drag.over === s.section}
                 onPointerDown={s.fixed ? undefined : drag.start(sectionNode)}/>
               <Collapsible open={open} count={count}>
@@ -269,7 +270,7 @@ export default function VaultTree({ sections, route, accent }) {
           <TreeRow key={f.vaultPath} node={f}
             selected={!!currentPage && norm(currentPage) === norm(f.vaultPath)}
             accent={accent} onClick={drag.guard(() => navigate(f.href))}
-            onContextMenu={(e) => openMenu(e, f, null)} leadIcon={icons.leadIcon(f.vaultPath)}
+            onContextMenu={(e) => openMenu(e, f, null)} leadIcon={icons.leadIcon(f.vaultPath, 'IconFile')}
             onPointerDown={drag.start(f)}/>
         ))}
 
@@ -289,8 +290,8 @@ export default function VaultTree({ sections, route, accent }) {
             '--candy-depth-nav': 'calc(var(--candy-depth) * 0.85)',
           }}>
             {drag.node.isFolder
-              ? <CandyHeader label={drag.node.name} open={false} accent={accent} leadIcon={icons.leadIcon(drag.node.vaultPath)}/>
-              : <TreeRow node={drag.node} accent={accent} leadIcon={icons.leadIcon(drag.node.vaultPath)}/>}
+              ? <CandyHeader label={drag.node.name} open={false} accent={accent} leadIcon={icons.leadIcon(drag.node.vaultPath, 'IconFolder')}/>
+              : <TreeRow node={drag.node} accent={accent} leadIcon={icons.leadIcon(drag.node.vaultPath, 'IconFile')}/>}
           </div>,
           document.body,
         )}

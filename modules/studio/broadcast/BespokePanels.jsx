@@ -15,6 +15,7 @@ import PropertiesForm, { NumField } from './PropertiesForm.jsx';
 import { verb } from './broadcastStore.js';
 import { pushUndo } from './broadcastUndo.js';
 import { glyphFor } from './sourceGlyphs.jsx';
+import { IconDot, IconRadioOff } from '@host/components/icons.jsx';
 
 const SMALL = { fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', color: 'var(--text-faint)' };
 
@@ -197,7 +198,7 @@ function GamePanel({ api, sceneName, node, accent }) {
           fontFamily: 'var(--font-mono)', fontSize: 10.5, fontWeight: 700,
           letterSpacing: '0.06em',           color: hooked ? 'var(--text)' : 'var(--text-muted)',
         }}>
-          {hooked ? `● hooked ${node.width}×${node.height}` : '○ waiting for game'}
+          {hooked ? <><IconDot size="0.6em"/> hooked {node.width}×{node.height}</> : <><IconRadioOff size="1em"/> waiting for game</>}
         </span>
       </div>
       <PropertiesForm api={api} sceneName={sceneName} node={node} accent={accent} />

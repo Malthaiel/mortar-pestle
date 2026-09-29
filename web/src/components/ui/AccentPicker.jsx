@@ -5,6 +5,7 @@
 
 import { useEffect, useState } from 'react';
 import { TextInput } from './index.js';
+import { IconAlert, IconCheck } from '../icons.jsx';
 
 export const ACCENT_PRESETS = [
   '#7c2d2d', '#9c4a1a', '#a0552b', '#b8860b',
@@ -97,7 +98,7 @@ export function HexInput({ value, onChange, accent }) {
           ? (dirty ? (accent || 'var(--text-muted)') : 'var(--text-faint)')
           : 'var(--text)',
         fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700,
-      }}>{valid ? '✓' : '!'}</span>
+      }}>{valid ? <IconCheck size="1.1em"/> : <IconAlert size="1.1em"/>}</span>
     </div>
   );
 }

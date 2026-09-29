@@ -2,6 +2,7 @@
 // manifest order across categories.
 
 import { navigate } from '../../router.js';
+import { IconArrowLeft, IconArrowRight } from '../../components/icons.jsx';
 
 export default function DocsPrevNext({ prev, next, accent }) {
   if (!prev && !next) return null;
@@ -13,7 +14,7 @@ export default function DocsPrevNext({ prev, next, accent }) {
           className="docs-pn-card docs-pn-prev"
           onClick={() => navigate(`/docs/${prev.category.id}/${prev.id}`)}
         >
-          <span className="docs-pn-direction">← Previous</span>
+          <span className="docs-pn-direction"><IconArrowLeft size="1.3em"/> Previous</span>
           <span className="docs-pn-cat" style={{ color: accent }}>{prev.category.label}</span>
           <span className="docs-pn-title">{prev.title}</span>
         </button>
@@ -24,7 +25,7 @@ export default function DocsPrevNext({ prev, next, accent }) {
           className="docs-pn-card docs-pn-next"
           onClick={() => navigate(`/docs/${next.category.id}/${next.id}`)}
         >
-          <span className="docs-pn-direction">Next →</span>
+          <span className="docs-pn-direction">Next <IconArrowRight size="1.3em"/></span>
           <span className="docs-pn-cat" style={{ color: accent }}>{next.category.label}</span>
           <span className="docs-pn-title">{next.title}</span>
         </button>

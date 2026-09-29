@@ -9,7 +9,7 @@ import PostIdentity from './PostIdentity.jsx';
 import MetaRun from './MetaRun.jsx';
 import { candyGap } from '@host/util/candy.js';
 import { useContextMenu } from '@host/context-menu/useContextMenu.js';
-import { IconLayoutGrid, IconAlert, IconPackage, IconWrench, IconTag, IconSort, IconChart } from '@host/components/icons.jsx';
+import { IconLayoutGrid, IconAlert, IconPackage, IconWrench, IconTag, IconSort, IconChart, IconPin } from '@host/components/icons.jsx';
 
 // Leading icons follow Seg's shape ({ value, label, Icon } rendered at size 12
 // inside .candy-face, which is already an inline-flex with a 6px gap).
@@ -235,7 +235,7 @@ function PostRow({ post, myVote, onVote, onOpen, onContextMenu }) {
         {/* marginLeft: the title is bare text with no frame around it, so it reads a
             touch further left than the framed avatar and vote run beside it. */}
         <span style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 5, maxWidth: '100%', minWidth: 0 }}>
-          {post.pinned && <span title="Pinned" style={{ fontSize: 12 }}>📌</span>}
+          {post.pinned && <span title="Pinned" style={{ fontSize: 12 }}><IconPin size="1em"/></span>}
           <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {post.title}
           </span>

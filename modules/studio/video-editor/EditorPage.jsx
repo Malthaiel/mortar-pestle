@@ -3,7 +3,7 @@ import AppWindow from '@host/components/ui/AppWindow.jsx';
 import Toast from '@host/components/ui/Toast.jsx';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
 import { PrimaryBtn, OutlinedBtn, IconBtn } from '@host/components/ui/Button.jsx';
-import { IconClapperboard, IconTrash, IconTypeText } from '@host/components/icons.jsx';
+import { IconClapperboard, IconTrash, IconTypeText, IconCaretLeft, IconCaretRight, IconKeyframe } from '@host/components/icons.jsx';
 import { newProject, normalizeProject, newId, defaultTitle, TITLE_FONTS } from './project.js';
 import { evaluate, transformAtFrame, gainAtFrame } from './keyframes/engine.js';
 import useAutosave from './useAutosave.js';
@@ -209,9 +209,9 @@ function KeyframeStrip({ clip, laneIdx, ph, accent, seekToFrame, applyOp, projec
       ))}
       {armedParams.length > 0 && (
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, marginLeft: 4 }}>
-          <button style={navStyle(prevF != null, false)} disabled={prevF == null} onClick={() => prevF != null && seekToFrame(prevF)} title="Previous keyframe">◄</button>
-          <button style={navStyle(true, onKf)} onClick={toggleKey} title={onKf ? 'Delete keyframe at playhead' : 'Set keyframe at playhead'}>◆</button>
-          <button style={navStyle(nextF != null, false)} disabled={nextF == null} onClick={() => nextF != null && seekToFrame(nextF)} title="Next keyframe">►</button>
+          <button style={navStyle(prevF != null, false)} disabled={prevF == null} onClick={() => prevF != null && seekToFrame(prevF)} title="Previous keyframe"><IconCaretLeft size="0.8em"/></button>
+          <button style={navStyle(true, onKf)} onClick={toggleKey} title={onKf ? 'Delete keyframe at playhead' : 'Set keyframe at playhead'}><IconKeyframe size="0.8em"/></button>
+          <button style={navStyle(nextF != null, false)} disabled={nextF == null} onClick={() => nextF != null && seekToFrame(nextF)} title="Next keyframe"><IconCaretRight size="0.8em"/></button>
           {onKf && <button style={armStyle(false)} onClick={cycle} title="Cycle keyframe easing">{easeName}</button>}
         </span>
       )}

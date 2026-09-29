@@ -352,6 +352,7 @@ export default function BroadcastSidebar({ api, accent }) {
     return scenes.map((scene) => ({
       id: `s:${scene.name}`,
       label: scene.name,
+      leadIcon: glyphFor('scene'),
       isFolder: true,
       activeFill: snapshot.current_scene === scene.name,
       trailing: snapshot.current_scene === scene.name ? <ProgramDot /> : null,

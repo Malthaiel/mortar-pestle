@@ -9,5 +9,6 @@
   "requires": [],
   "license": "MIT",
   "tier": "core",
+  "iconKey": "IconBlocks",
   "setupRequired": false
 }

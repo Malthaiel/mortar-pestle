@@ -4,7 +4,7 @@
 // (tray-centric flow), so this tray — not the chat transcript — is where the
 // proposal is reviewed and applied.
 
-import { IconX } from '../icons.jsx';
+import { IconX, IconSparkle } from '../icons.jsx';
 
 function basename(p) {
   if (!p) return '';
@@ -43,7 +43,7 @@ export default function RecipeTray({ recipeState, def, accent, onApply, onDiscar
         borderBottom: 'var(--candy-frame) solid var(--border-soft)', gap: 6,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-          <span style={{ color: accentColor, fontSize: 11 }}>✦</span>
+          <span style={{ color: accentColor, fontSize: 11 }}><IconSparkle size="1em"/></span>
           <span style={{
             fontSize: 10.5, fontWeight: 700, color: 'var(--text)',
             fontFamily: 'var(--font-mono)', letterSpacing: '0.04em',           }}>{def?.label || 'Recipe'}</span>

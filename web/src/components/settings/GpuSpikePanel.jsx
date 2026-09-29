@@ -15,6 +15,7 @@ import {
   webCodecsSupport, webCodecsDecodeBench, MAX_LAYERS,
 } from './gpuSpikeLib.js';
 import { eyebrowStyle } from '../ui/Eyebrow.jsx';
+import { IconAlert } from '../icons.jsx';
 
 const FIXTURES = {
   '1080p30': {
@@ -536,7 +537,7 @@ export default function GpuSpikePanel({ accent }) {
         {e.hi?.ok && <div>{e.hi.version} · GLSL {e.hi.glsl}</div>}
         {e.hi?.ok && <div>maxTex {e.hi.maxTex} · max3D {e.hi.max3d} · timerQuery {String(e.hi.timerQuery)}</div>}
         <div>WebGPU {String(e.webgpu)} · WebCodecs {String(e.videoDecoder)} · dpr {e.dpr}</div>
-        {swWarn && <div style={{ color: '#e66', fontWeight: 700 }}>⚠ SOFTWARE RENDERER — plan A measures CPU rasterization on this box</div>}
+        {swWarn && <div style={{ color: '#e66', fontWeight: 700 }}><IconAlert size="1em"/> SOFTWARE RENDERER — plan A measures CPU rasterization on this box</div>}
         <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
           <OutlinedBtn small onClick={() => probe('high-performance')} disabled={running}>Probe GL hi-perf</OutlinedBtn>
           <OutlinedBtn small onClick={() => probe('low-power')} disabled={running}>Probe GL low-power</OutlinedBtn>

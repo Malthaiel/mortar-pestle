@@ -15,6 +15,7 @@ import { coverSrc } from '../util.js';
 import { encodePath } from '../paths.js';
 import LoadingScreen from '../LoadingScreen.jsx';
 import { room, roomHome, go } from './util.js';
+import { IconArrowRight, IconStarMark } from '@host/components/icons.jsx';
 
 const ANIME_HOME = '/tools/library/anime';
 
@@ -87,14 +88,14 @@ export default function RoomTitle({ accent, kind = 'series', imdbId }) {
     detail.year,
     seasons ? `${seasons} season${seasons === 1 ? '' : 's'}` : null,
     detail.episodes && detail.episodes.length ? `${detail.episodes.length} episodes` : null,
-    detail.imdbRating ? `★ ${detail.imdbRating}` : null,
+    detail.imdbRating ? <><IconStarMark size="0.95em"/> {detail.imdbRating}</> : null,
     detail.status,
   ] : [
     detail.year,
     detail.runtime,
-    detail.imdbRating ? `★ ${detail.imdbRating}` : null,
+    detail.imdbRating ? <><IconStarMark size="0.95em"/> {detail.imdbRating}</> : null,
     detail.director && detail.director.length ? detail.director.join(', ') : null,
-  ]).filter(Boolean).join('  ·  ');
+  ]).filter(Boolean).map((f, i) => <span key={i}>{i ? '  ·  ' : ''}{f}</span>);
 
   return (
     <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '22px 24px 40px' }}>
@@ -107,7 +108,7 @@ export default function RoomTitle({ accent, kind = 'series', imdbId }) {
           <h2 style={{ margin: 0, fontSize: 24, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.01em' }}>
             {detail.name}
           </h2>
-          {facts && (
+          {facts.length > 0 && (
             <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', letterSpacing: '0.04em', color: 'var(--text-faint)' }}>
               {facts}
             </div>
@@ -160,13 +161,13 @@ function Refused({ refused, accent, home }) {
       {toAnime && (
         <button onClick={() => go(owned ? `${ANIME_HOME}/${encodePath(owned)}` : ANIME_HOME)}
           data-own-press className="candy-btn" data-shape="chip" style={{ marginLeft: 'auto', '--accent': accent }}>
-          <span className="candy-face" style={{ fontSize: 11 }}>Go to Anime →</span>
+          <span className="candy-face" style={{ fontSize: 11 }}>Go to Anime <IconArrowRight size="1.3em"/></span>
         </button>
       )}
       {!toAnime && owned && (
         <button onClick={() => go(`${home}/${encodePath(owned)}`)}
           data-own-press className="candy-btn" data-shape="chip" style={{ marginLeft: 'auto', '--accent': accent }}>
-          <span className="candy-face" style={{ fontSize: 11 }}>Open It →</span>
+          <span className="candy-face" style={{ fontSize: 11 }}>Open It <IconArrowRight size="1.3em"/></span>
         </button>
       )}
     </div>

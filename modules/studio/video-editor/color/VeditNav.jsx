@@ -16,9 +16,9 @@ export default function VeditNav({ route, accent }) {
   return (
     <SidebarNav
       groups={[{ items: [
-        { path: EDIT, title: 'Edit' },
-        { path: COLOR, title: 'Color' },
-        { path: MIX, title: 'Mix' },
+        { path: EDIT, title: 'Edit', icon: 'IconCut' },
+        { path: COLOR, title: 'Color', icon: 'IconPalette' },
+        { path: MIX, title: 'Mix', icon: 'IconEqualizer' },
       ] }]}
       selectedPath={selected}
       accent={accent}

@@ -1,6 +1,7 @@
 // Per-row icons for any candy tree — the vault file tree AND every module
 // TreeSidebar. One localStorage blob keyed scope → row key → icon EXPORT NAME
-// from icons.jsx (a name, never a component, so it survives a reload). Same
+// from icons.jsx, or the SVG markup of a pick from the full Boxicons folder (a
+// string either way, never a component, so it survives a reload). Same
 // storage habit as useTreeExpansion; nothing here knows about the vault.
 //
 // The icon renders through the rows' EXISTING `leadIcon` slot (treeKit), which
@@ -10,12 +11,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import * as Icons from '../icons.jsx';
 import { NAV_ICON } from './treeKit.jsx';
+import { svgComponent, isMarkup } from '../iconLibrary.jsx';
 
 const KEY = 'tree_icons';
 
-// The picker's catalog — every icon the pack exports, as [name, Component].
-// Swapping in the full Boxicons set later replaces THIS constant and nothing
-// else: the store, the picker and the rows all speak export names.
+// The app's own icons, as [name, Component]. The picker lists these first, then
+// the full folder (iconLibrary.jsx).
 export const ICON_CATALOG = Object.entries(Icons)
   .filter(([n, v]) => n.startsWith('Icon') && typeof v === 'function')
   .sort((a, b) => a[0].localeCompare(b[0]));
@@ -29,7 +30,7 @@ function loadAll() {
 
 // flexShrink:0 — the label truncates before the icon does.
 export function renderTreeIcon(name) {
-  const C = name && Icons[name];
+  const C = isMarkup(name) ? svgComponent(name.trim()) : name && Icons[name];
   if (!C) return null;
   return <span style={{ display: 'inline-flex', flexShrink: 0 }}><C size={ICON_SIZE}/></span>;
 }
@@ -61,7 +62,8 @@ export function useTreeIcons(scope) {
 
   return useMemo(() => ({
     nameOf: (key) => map[key] || null,
-    leadIcon: (key) => renderTreeIcon(map[key]),
+    // `fallback` = the export name a row shows until the user picks one.
+    leadIcon: (key, fallback) => renderTreeIcon(map[key] || fallback),
     set,
   }), [map, set]);
 }

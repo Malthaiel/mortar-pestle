@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { COVER_PIC_STYLE } from '../AnimeDetailHeader.jsx';
 import { useCaaCover } from './api.js';
 import { coverSrc } from './util.js';
+import { IconCheck } from '@host/components/icons.jsx';
 
 function initials(text) {
   const words = (text || '').trim().split(/\s+/).filter(Boolean);
@@ -61,7 +62,7 @@ export default function BrowseResultCard({ result, accent, onSelect, inLibrary }
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             background: accent || 'var(--text-muted)', color: 'white', fontSize: 12,
             boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
-          }} title="Already in your library">✓</span>
+          }} title="Already in your library"><IconCheck size="0.9em"/></span>
         )}
       </div>
       <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>

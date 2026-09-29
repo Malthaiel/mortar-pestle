@@ -13,8 +13,8 @@ import { useEffect, useState } from 'react';
 import { navigate } from '@host/router.js';
 import { api, invoke } from '@host/api.js';
 import TreeToolbar from '@host/components/vault-tree/TreeToolbar.jsx';
-import { TOOLBAR_BAND } from '@host/components/vault-tree/treeKit.jsx';
-import { IconChevronRight } from '@host/components/icons.jsx';
+import { TOOLBAR_BAND, NAV_ICON } from '@host/components/vault-tree/treeKit.jsx';
+import { IconChevronRight, IconGamepad } from '@host/components/icons.jsx';
 import { VAULT_SORT_MODES } from '@host/components/vault-tree/useVaultTree.js';
 import { searchView } from '@host/components/vault-tree/treeSearch.js';
 import DeadlockTree, { SCRIM_BASE } from './DeadlockTree.jsx';
@@ -32,7 +32,7 @@ export function RailHeaderPill({ label, title, accent, onClick, expanded = true 
         style={accent ? { '--accent': accent } : undefined}>
         <span className="candy-face" style={{ justifyContent: 'center', padding: expanded ? '0 12px' : 0 }}>
           {expanded
-            ? <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+            ? <><IconGamepad size={NAV_ICON}/><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span></>
             : <IconChevronRight size={16}/>}
         </span>
       </button>

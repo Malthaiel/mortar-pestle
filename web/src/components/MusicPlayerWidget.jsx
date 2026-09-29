@@ -14,6 +14,7 @@ import QueuePanel from '@modules/core/library/music/QueuePanel.jsx';
 import { useSongMenu } from '@modules/core/library/music/contextMenus.js';
 import CollageCover from '@modules/core/library/music/CollageCover.jsx';
 import { navigate } from '../router.js';
+import { IconPause, IconPlayMark, IconRepeat, IconShuffle, IconSkip, IconSkipBack } from './icons.jsx';
 
 const BAR_COUNT = 12;   // 36 → 18 → 12 over 2026-09-03 — fewer, chunkier bars
 // Cover edge length in tile-px. The info column next to it is given the SAME
@@ -451,14 +452,14 @@ export default function MusicPlayerWidget() {
                 onClick={(e) => { stop(e); toggleShuffle(); }}
                 style={primarySize}
                 title={`Shuffle: ${shuffle ? 'on' : 'off'}`}
-                aria-pressed={shuffle}><span className="candy-face" style={tileGlyph}>⤮</span></button>
+                aria-pressed={shuffle}><span className="candy-face" style={tileGlyph}><IconShuffle size="1em"/></span></button>
               <button type="button" data-own-press
                 className="candy-btn"
                 data-shape="icon"
                 onClick={(e) => { stop(e); prev(); }}
                 disabled={!hasTrack}
                 style={primarySize}
-                title="Previous"><span className="candy-face" style={tileGlyph}>⏮</span></button>
+                title="Previous"><span className="candy-face" style={tileGlyph}><IconSkipBack size="1.4em"/></span></button>
               {/* No is-active while playing (user-directed 2026-09-03): the glyph
                   already flips play/pause, so lighting the half too is redundant. */}
               <button type="button" data-own-press
@@ -469,7 +470,7 @@ export default function MusicPlayerWidget() {
                 style={primarySize}
                 title={isPlaying ? 'Pause' : 'Play'}
                 aria-label={isPlaying ? 'Pause' : 'Play'}>
-                <span className="candy-face" style={tileGlyph}>{isPlaying ? '⏸' : '▶'}</span>
+                <span className="candy-face" style={tileGlyph}>{isPlaying ? <IconPause size="0.8em"/> : <IconPlayMark size="1.1em"/>}</span>
               </button>
               <button type="button" data-own-press
                 className="candy-btn"
@@ -477,7 +478,7 @@ export default function MusicPlayerWidget() {
                 onClick={(e) => { stop(e); next(); }}
                 disabled={!hasTrack}
                 style={primarySize}
-                title="Next"><span className="candy-face" style={tileGlyph}>⏭</span></button>
+                title="Next"><span className="candy-face" style={tileGlyph}><IconSkip size="1.4em"/></span></button>
               <button type="button" data-own-press
                 className={`candy-btn${repeat !== 'off' ? ' is-active' : ''}`}
                 data-shape="icon"
@@ -485,7 +486,7 @@ export default function MusicPlayerWidget() {
                 style={primarySize}
                 title={`Repeat: ${repeat}`}
                 aria-pressed={repeat !== 'off'}>
-                <span className="candy-face" style={tileGlyph}>{repeat === 'one' ? '↻¹' : '↻'}</span>
+                <span className="candy-face" style={tileGlyph}><IconRepeat size="1em"/>{repeat === 'one' ? '¹' : ''}</span>
               </button>
               <button type="button" data-own-press data-music-toggle
                 className={`candy-btn${openPanel === 'queue' ? ' is-active' : ''}`}

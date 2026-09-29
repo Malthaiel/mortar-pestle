@@ -7,6 +7,7 @@
 // click-outside can't reach); close via the ✕, re-toggling the trigger, or Esc.
 
 import { useEffect } from 'react';
+import { IconX } from '@host/components/icons.jsx';
 
 export const POPOVER_HEIGHT = 360;
 
@@ -46,7 +47,7 @@ export default function BrowserPopover({ title, host, onClose, scroll = true, ch
       <div style={head}>
         <strong style={{ fontSize: 13, flex: '0 0 auto' }}>{title}</strong>
         <span style={hostSpan}>{hostText}</span>
-        <button type="button" style={closeBtn} title="Close" aria-label="Close" onClick={onClose}>✕</button>
+        <button type="button" style={closeBtn} title="Close" aria-label="Close" onClick={onClose}><IconX size="0.8em"/></button>
       </div>
       <div style={scroll ? bodyScroll : bodyFixed}>{children}</div>
     </div>

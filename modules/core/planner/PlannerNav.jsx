@@ -76,8 +76,8 @@ export default function PlannerNav({ route, accent }) {
   const selectedId = selectedIdFor(route);
 
   const nodes = useMemo(() => {
-    const leaf = (id, label, path) => ({
-      id, label, isFolder: false,
+    const leaf = (id, label, path, icon) => ({
+      id, label, icon, isFolder: false,
       active: selectedId === id,
       onActivate: () => navigate(path),
     });
@@ -89,19 +89,19 @@ export default function PlannerNav({ route, accent }) {
       onActivate: () => navigate('/page/' + encodePagePath(p.path)),
     }));
     return [
-      leaf('planner:dashboard', 'Dashboard', '/planner'),
+      leaf('planner:dashboard', 'Dashboard', '/planner', 'IconDashboard'),
       {
-        id: 'planning', label: 'Planning', isFolder: true,
+        id: 'planning', label: 'Planning', icon: 'IconChecklist', isFolder: true,
         children: [
-          leaf('/planner/calendar', 'Calendar', '/planner/calendar'),
-          { id: 'planning:ideas', label: 'Ideas', isFolder: true, children: ideaLeaves },
+          leaf('/planner/calendar', 'Calendar', '/planner/calendar', 'IconCalendar'),
+          { id: 'planning:ideas', label: 'Ideas', icon: 'IconLightbulb', isFolder: true, children: ideaLeaves },
         ],
       },
       {
-        id: 'health', label: 'Health', isFolder: true,
+        id: 'health', label: 'Health', icon: 'IconHeartPulse', isFolder: true,
         children: [
-          leaf('/planner/nutrition', 'Nutrition', '/planner/nutrition'),
-          leaf('/planner/fitness', 'Fitness', '/planner/fitness'),
+          leaf('/planner/nutrition', 'Nutrition', '/planner/nutrition', 'IconForkKnife'),
+          leaf('/planner/fitness', 'Fitness', '/planner/fitness', 'IconDumbbell'),
         ],
       },
     ];

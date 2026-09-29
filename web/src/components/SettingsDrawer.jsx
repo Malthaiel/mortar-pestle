@@ -37,7 +37,6 @@ import { THEME_BY_ID } from '../themes/registry.js';
 import ResizeSeam, { DRAG_EASE } from './ui/ResizeSeam.jsx';
 import SettingsNav from './settings/SettingsNav.jsx';
 import {
-  IconBot,
   IconLayers,
   IconPackage,
   IconSpeaker,
@@ -47,6 +46,7 @@ import {
   IconDatabase,
   IconCpu,
   IconTag,
+  IconPalette,
 } from './icons.jsx';
 import { Seg, OutlinedBtn, Slider, AppWindow } from './ui/index.js';
 import { AccentGrid, HexInput } from './ui/AccentPicker.jsx';
@@ -55,7 +55,7 @@ import PatternSwatchPicker from './ui/PatternSwatchPicker.jsx';
 import { eyebrowStyle } from './ui/Eyebrow.jsx';
 
 const TABS = [
-  { id: 'appearance', label: 'Appearance',  icon: IconBot },
+  { id: 'appearance', label: 'Appearance',  icon: IconPalette },
   { id: 'sounds',     label: 'Sounds',      icon: IconSpeaker },
   { id: 'navigation', label: 'Navigation',  icon: IconLayers },
   { id: 'modules',    label: 'Modules',     icon: IconPackage },

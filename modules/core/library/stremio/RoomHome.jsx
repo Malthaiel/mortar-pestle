@@ -18,6 +18,7 @@ import { SeriesCard } from '../SeriesBrowser.jsx';
 import { coverSrc } from '../util.js';
 import { encodePath } from '../paths.js';
 import { room, roomHome, toResultCard, go, toTitle } from './util.js';
+import { IconArrowRight, IconPlayMark } from '@host/components/icons.jsx';
 
 const GRID = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 14 };
 
@@ -145,7 +146,7 @@ function ContinueCard({ series, accent, kind }) {
             background: 'color-mix(in oklch, black 24%, transparent)',
             opacity: hover ? 1 : 0, transition: 'opacity 120ms ease',
           }}>
-            <span style={{ fontSize: 26, color: 'white' }}>▶</span>
+            <span style={{ fontSize: 26, color: 'white' }}><IconPlayMark size="1.1em"/></span>
           </div>
           {progress > 0 && (
             <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, background: `color-mix(in oklch, ${accent} 18%, transparent)` }}>
@@ -292,7 +293,7 @@ function SearchResults({ query, accent, kind = 'series', series }) {
               className="candy-btn"
               data-shape="chip"
               style={{ marginLeft: 'auto' }}
-            ><span className="candy-face" style={{ fontSize: 11 }}>See All →</span></button>
+            ><span className="candy-face" style={{ fontSize: 11 }}>See All <IconArrowRight size="1.3em"/></span></button>
           )}
         </div>
         {loading && <Muted>Searching</Muted>}

@@ -7,6 +7,7 @@ import {
   IconGlobe, IconImage, IconLayers, IconMic, IconMonitor, IconPalette,
   IconSpeaker, IconTypeText, IconVideo,
 } from '@host/components/icons.jsx';
+import { NAV_ICON } from '@host/components/vault-tree/treeKit.jsx';
 
 const MAP = {
   monitor_capture: IconMonitor,
@@ -27,7 +28,8 @@ const MAP = {
   group: IconFolder,
 };
 
-export function glyphFor(typeId, size = 12) {
+// Default = the tree's nav icon size, so a source row matches every other row.
+export function glyphFor(typeId, size = NAV_ICON) {
   const base = (typeId || '').replace(/_v\d+$/, '');
   const Icon = MAP[typeId] || MAP[base] || IconLayers;
   return <Icon size={size} />;

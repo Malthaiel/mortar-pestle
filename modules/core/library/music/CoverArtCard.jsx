@@ -10,6 +10,7 @@ import { useState } from 'react';
 import { coverSrc } from './util.js';
 import { useAlbumMenu } from './contextMenus.js';
 import { COVER_BOX_STYLE, COVER_BTN_STYLE, COVER_PIC_STYLE, COVER_TILE_FACE_STYLE } from '../AnimeDetailHeader.jsx';
+import { IconPlayMark } from '@host/components/icons.jsx';
 
 export default function CoverArtCard({ album, accent, selected, onSelect, onPlay }) {
   const [hover, setHover] = useState(false);
@@ -72,7 +73,7 @@ export default function CoverArtCard({ album, accent, selected, onSelect, onPlay
               transform: hover ? 'scale(1)' : 'scale(0.85)',
               transition: 'transform 0.14s ease',
             }}
-          >▶</button>
+          ><IconPlayMark size="1.1em"/></button>
         </div>
       </div>
       </div>

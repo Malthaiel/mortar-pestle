@@ -16,9 +16,9 @@ export default function TerminalSidebar({ route, accent }) {
   return (
     <SidebarNav
       groups={[{ items: [
-        { path: TERMINAL,  title: 'Terminal' },
-        { path: DASHBOARD, title: 'Token Dashboard' },
-        { path: SKILLS,    title: 'Skills Runner' },
+        { path: TERMINAL,  title: 'Terminal',        icon: 'IconTerminal' },
+        { path: DASHBOARD, title: 'Token Dashboard', icon: 'IconChart' },
+        { path: SKILLS,    title: 'Skills Runner',   icon: 'IconRocket' },
       ] }]}
       selectedPath={selected}
       accent={accent}

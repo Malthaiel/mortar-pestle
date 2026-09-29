@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { IconChevronLeft, IconChevronRight, IconX, IconRepeat, IconNotes, IconLayers, IconPlus, IconCalendar, IconReset } from '@host/components/icons.jsx';
+import { IconChevronLeft, IconChevronRight, IconX, IconRepeat, IconNotes, IconLayers, IconPlus, IconCalendar, IconReset, IconCheck } from '@host/components/icons.jsx';
 import { IconBtn, HeaderChip, Seg, FilterChip } from '@host/components/ui/index.js';
 import { fmtHHMMString, fmtHHMMFromHM, fmtClockCompact, fmtHourLabel } from '@host/util/time.js';
 import { useContextMenu } from '@host/context-menu/useContextMenu.js';
@@ -359,7 +359,7 @@ function PlanBlock({ block, hourHeight, accent, onSelect, isActive, dayDateKey, 
         <span aria-hidden style={{
           position: 'absolute', top: 1, right: 5, fontSize: 10, fontWeight: 700,
           color: 'var(--accent)', lineHeight: 1,
-        }}>✓</span>
+        }}><IconCheck size="0.9em"/></span>
       )}
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, minWidth: 0 }}>
         <span style={{
@@ -765,7 +765,7 @@ function SessionBlock({ session, hourHeight, accent, readOnly = false, onDelete,
         <span aria-hidden style={{
           position: 'absolute', top: 1, right: 5, fontSize: 10, fontWeight: 700,
           color: 'var(--on-accent)', lineHeight: 1,
-        }}>✓</span>
+        }}><IconCheck size="0.9em"/></span>
       )}
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, minWidth: 0 }}>
         <span style={{
@@ -847,7 +847,7 @@ function SessionBlock({ session, hourHeight, accent, readOnly = false, onDelete,
           }}
           onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.4)'}
           onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,0,0,0.22)'}>
-          ↺
+          <IconReset size="1em"/>
         </button>
       )}
       {hovered && !readOnly && !editing && !session.meta?.segment && (

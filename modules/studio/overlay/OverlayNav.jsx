@@ -19,10 +19,10 @@ export default function OverlayNav({ route, accent }) {
   return (
     <SidebarNav
       groups={[{ items: [
-        { path: BROWSER, title: 'Browser' },
-        { path: CAPTURE, title: 'Capture' },
-        { path: STT, title: 'STT' },
-        { path: SCRIM, title: 'Scrim' },
+        { path: BROWSER, title: 'Browser', icon: 'IconGlobe' },
+        { path: CAPTURE, title: 'Capture', icon: 'IconCamcorder' },
+        { path: STT, title: 'STT', icon: 'IconMic' },
+        { path: SCRIM, title: 'Scrim', icon: 'IconCrosshair' },
       ] }]}
       selectedPath={selected}
       accent={accent}

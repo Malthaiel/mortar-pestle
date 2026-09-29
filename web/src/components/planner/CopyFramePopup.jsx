@@ -10,7 +10,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { OutlinedBtn, PrimaryBtn } from '../ui/index.js';
-import { IconX } from '../icons.jsx';
+import { IconX, IconCheck } from '../icons.jsx';
 import { DAY_ORDER } from '../../util/frames.js';
 
 const DAY_FULL = { mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday', fri: 'Friday', sat: 'Saturday', sun: 'Sunday' };
@@ -131,7 +131,7 @@ export default function CopyFramePopup({ open, onClose, onCopy, sourceDay, accen
                   background: isChecked ? accent : 'transparent',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   color: 'var(--surface)', fontSize: 11, lineHeight: 1, fontWeight: 800,
-                }}>{isChecked ? '✓' : ''}</span>
+                }}>{isChecked ? <IconCheck size="0.9em"/> : ''}</span>
                 <span style={{ fontSize: 12.5, fontWeight: 500, flex: 1 }}>{DAY_FULL[wd]}</span>
                 {isSource && (
                   <span style={{

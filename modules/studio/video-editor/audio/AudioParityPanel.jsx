@@ -26,7 +26,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import AppWindow from '@host/components/ui/AppWindow.jsx';
 import { PrimaryBtn, OutlinedBtn } from '@host/components/ui/Button.jsx';
-import { IconClapperboard } from '@host/components/icons.jsx';
+import { IconClapperboard, IconCheck, IconKeyframe, IconX } from '@host/components/icons.jsx';
 import { parseWav, wavToAudioBuffer } from './wav.js';
 import { mkEq, chainEq, applyEqNodes, applyCompNode, mkPan, setPan } from './mixerGraph.js';
 import { resolveTrackParams } from './mix.js';
@@ -393,7 +393,7 @@ export default function AudioParityPanel({ onClose, api, accent }) {
                     color: !r ? 'var(--text-faint)' : r.documented ? 'var(--text-faint)' : r.pass ? 'var(--text)' : 'var(--error)',
                   }}
                 >
-                  {!r ? '—' : `${r.documented ? '◆' : r.pass ? '✓' : '✗'} ${fmtCell(r)}`}
+                  {!r ? '—' : <>{r.documented ? <IconKeyframe size="0.8em"/> : r.pass ? <IconCheck size="0.9em"/> : <IconX size="0.8em"/>} {fmtCell(r)}</>}
                 </div>
               </React.Fragment>
             );

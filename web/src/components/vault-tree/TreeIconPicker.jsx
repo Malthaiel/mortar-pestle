@@ -9,6 +9,7 @@ import Popover from '../ui/Popover.jsx';
 import { TextInput } from '../ui/Input.jsx';
 import { IconX } from '../icons.jsx';
 import { ToolBtn } from './TreeToolbar.jsx';
+import { useIconLibrary, svgComponent, iconWords } from '../iconLibrary.jsx';
 import { ICON_CATALOG, ICON_SIZE } from './treeIcons.jsx';
 import { NAV_H } from './treeKit.jsx';
 
@@ -20,15 +21,20 @@ const RING = 4;    // slack for the candy hover ring, cancelled by a negative ma
 const W = COLS * CELL + (COLS - 1) * GAP + PAD * 2;
 const H = 320;
 
-// "IconBookOpen" → "book open", so typing "book" finds it.
-const words = (n) => n.replace(/^Icon/, '').replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase();
-
 // `at` = the click point ({x, y} from the context-menu event). `current` = the
-// row's icon name, or null.
+// row's saved icon (an export name or folder markup), or null.
 export default function TreeIconPicker({ at, current, accent, onPick, onClose }) {
   const [q, setQ] = useState('');
+  const folder = useIconLibrary();
   const term = q.trim().toLowerCase();
-  const list = term ? ICON_CATALOG.filter(([n]) => words(n).includes(term)) : ICON_CATALOG;
+  // [key, search words, saved value, Component]: the app's own icons (saved by
+  // name), then the whole folder (saved as markup, drawn on demand).
+  // ponytail: every cell renders unfiltered; window the grid if opening lags.
+  const cells = [
+    ...ICON_CATALOG.map(([n, C]) => [n, iconWords(n), n, C]),
+    ...folder.map(([stem, svg]) => [stem, iconWords(stem), svg, null]),
+  ];
+  const list = term ? cells.filter(([, w]) => w.includes(term)) : cells;
   // Clamp so the panel never opens off-screen.
   const left = Math.max(8, Math.min(at.x, window.innerWidth - W - 8));
   const top = Math.max(8, Math.min(at.y, window.innerHeight - H - 8));
@@ -71,12 +77,15 @@ export default function TreeIconPicker({ at, current, accent, onPick, onClose })
         <ToolBtn title="No icon" accent={accent} active={!current} onClick={() => onPick(null)}>
           <IconX size={ICON_SIZE}/>
         </ToolBtn>
-        {list.map(([name, C]) => (
-          <ToolBtn key={name} title={words(name)} accent={accent} active={current === name}
-            onClick={() => onPick(name)}>
-            <C size={ICON_SIZE}/>
-          </ToolBtn>
-        ))}
+        {list.map(([key, w, value, C]) => {
+          const Icon = C || svgComponent(value);
+          return (
+            <ToolBtn key={key} title={w} accent={accent} active={current === value}
+              onClick={() => onPick(value)}>
+              <Icon size={ICON_SIZE}/>
+            </ToolBtn>
+          );
+        })}
       </div>
     </Popover>
   );

@@ -8,5 +8,6 @@ import { registerPageSidebar } from '../../module-sdk/registry.js';
 
 registerPageSidebar('docs', {
   label: 'Docs',
+  iconKey: 'IconBookOpen',
   renderSecondary: ({ route, accent }) => <DocsNav route={route} accent={accent} />,
 });

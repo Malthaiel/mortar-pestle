@@ -8,7 +8,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Channel } from '@tauri-apps/api/core';
 import { invoke } from '../../api.js';
 
-import { IconSend, IconMic, IconBrain } from '../icons.jsx';
+import { IconSend, IconMic, IconBrain, IconX } from '../icons.jsx';
 import CandySelect from '../ui/CandySelect.jsx';
 import { ChipIconBtn } from '../planner/ItemChips.jsx';
 
@@ -300,7 +300,7 @@ function MentionChip({ mention, accent, onClear }) {
         }}
         onMouseEnter={(e) => { e.currentTarget.style.opacity = 1; }}
         onMouseLeave={(e) => { e.currentTarget.style.opacity = 0.6; }}
-      >×</button>
+      ><IconX size="0.65em"/></button>
     </span>
   );
 }

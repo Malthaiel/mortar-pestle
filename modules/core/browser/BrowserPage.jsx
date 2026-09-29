@@ -12,7 +12,7 @@ import { useVaultLock } from './useVaultLock.js';
 import { useCredsStore } from './useCredsStore.js';
 import VaultRoute from './VaultRoute.jsx';
 import HistoryRoute from './HistoryRoute.jsx';
-import { IconClock, IconShield, IconShieldOff } from '@host/components/icons.jsx';
+import { IconClock, IconShield, IconShieldOff, IconRotateCw } from '@host/components/icons.jsx';
 import { candyCenterOffset } from '@host/util/candy.js';
 import { POPOVER_HEIGHT } from './BrowserPopover.jsx';
 import HistoryPopover from './HistoryPopover.jsx';
@@ -361,7 +361,7 @@ export default function BrowserPage({ api, accent, rest, inOverlay = false, sync
         </button>
         <button className="candy-btn" data-shape="icon" data-own-press title="Reload" style={candyNav}
           onClick={() => { if (tabId) { store.setTabMeta(tabId, { loading: true }); api.invoke('browser_reload', { id: tabId }).catch(() => {}); } }}>
-          <span className="candy-face">⟳</span>
+          <span className="candy-face"><IconRotateCw size="0.9em"/></span>
         </button>
         <button
           className={`candy-btn${shieldActive ? ' is-active' : ''}`} data-shape="icon" data-own-press

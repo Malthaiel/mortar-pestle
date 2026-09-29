@@ -17,7 +17,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import AppWindow from '@host/components/ui/AppWindow.jsx';
 import { PrimaryBtn } from '@host/components/ui/Button.jsx';
-import { IconClapperboard } from '@host/components/icons.jsx';
+import { IconClapperboard, IconCheck, IconX } from '@host/components/icons.jsx';
 import { createGlDisplay } from './color/glDisplay.js';
 import { drawTitle } from './drawTitle.js';
 
@@ -273,7 +273,7 @@ export default function CompositeParityPanel({ onClose, api, accent }) {
                 style={{ ...mono, fontSize: 10.5, textAlign: 'center', padding: '6px 2px', border: '1px solid var(--border)', borderRadius: 6,
                   color: !r ? 'var(--text-faint)' : r.pass ? 'var(--text)' : 'var(--error)', cursor: clickable ? 'pointer' : 'default' }}>
                 <div style={{ color: 'var(--text-faint)', marginBottom: 2 }}>{key}</div>
-                {!r ? '—' : r.error ? 'ERR' : `${r.pass ? '✓' : '✗'} ${fmtCell(r)}`}
+                {!r ? '—' : r.error ? 'ERR' : <>{r.pass ? <IconCheck size="0.9em"/> : <IconX size="0.8em"/>} {fmtCell(r)}</>}
               </div>
             );
           })}

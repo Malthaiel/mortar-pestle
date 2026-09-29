@@ -26,6 +26,7 @@ import { candyCenterOffset } from '@host/util/candy.js';
 import ImageLightbox, { useLightbox } from './ImageLightbox.jsx';
 import AnimeStatistics from './AnimeStatistics.jsx';
 import AnimeTrailer, { normalizeTrailer } from './AnimeTrailer.jsx';
+import { IconStarMark } from '@host/components/icons.jsx';
 
 // 15% off the 260 the film poster shipped at (2026-09-12).
 // Exported: the music detail pages size their sleeve column off the same
@@ -441,7 +442,7 @@ export default function AnimeDetailHeader({
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 'calc(12px * var(--film-head))', color: FILM_BODY_COLOR }}>
                   {scoreShown && (
                     <span>
-                      <span className="anime-hero-star" aria-hidden="true">★ </span>{score}
+                      <span className="anime-hero-star" aria-hidden="true"><IconStarMark size="0.95em"/> </span>{score}
                     </span>
                   )}
                   {scoreShown && (filmGenres.length > 0 || has(duration)) ? dot : null}
@@ -475,7 +476,7 @@ export default function AnimeDetailHeader({
                     <div className="candy-panel anime-unified-panel" style={{ flex: 1.4, minWidth: 280 }}>
                       <div className="anime-hero-row">
                         <HeroStat k="Score" v={scoreShown ? score : null}
-                          lead={<span className="anime-hero-star" aria-hidden="true">★ </span>}
+                          lead={<span className="anime-hero-star" aria-hidden="true"><IconStarMark size="0.95em"/> </span>}
                           sub={scoredBy != null ? fmtNum(scoredBy) : null} />
                         <HeroStat k="Ranked" v={rank != null ? `#${fmtNum(rank)}` : null} />
                         <HeroStat k="Popularity" v={popularity != null ? `#${fmtNum(popularity)}` : null} />

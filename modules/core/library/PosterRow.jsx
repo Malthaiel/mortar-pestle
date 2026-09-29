@@ -15,6 +15,7 @@
 // row with no title, See All or arrows renders no head at all.
 
 import { useLayoutEffect, useRef, useState } from 'react';
+import { IconArrowRight } from '@host/components/icons.jsx';
 
 // The row's title lettering.
 export const ROW_TITLE_STYLE = { margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.01em' };
@@ -27,7 +28,7 @@ export const faceInset = (root) => {
   return face ? parseFloat(getComputedStyle(face).borderLeftWidth) || 0 : 0;
 };
 
-export default function PosterRow({ title, subtitle, onSeeAll, seeAllLabel = 'See All →', layout = 'row', colWidth = 150, rows = 1, arrows = true, accent, children }) {
+export default function PosterRow({ title, subtitle, onSeeAll, seeAllLabel = <>See All <IconArrowRight size="1.3em"/></>, layout = 'row', colWidth = 150, rows = 1, arrows = true, accent, children }) {
   const ref = useRef(null);
   const grid = layout === 'grid';
   const scrub = !grid && arrows;

@@ -65,10 +65,10 @@ export function registerLeftSidebar(moduleId, { id, isActive, renderSecondary, r
 // renderRail + label for the collapsed rail). Keyed by pageKey = route.page;
 // Sidebar.jsx resolves the current route's page sidebar with priority over the
 // active module, so leaving the route restores the module automatically.
-export function registerPageSidebar(pageKey, { label, renderSecondary, renderRail } = {}) {
+export function registerPageSidebar(pageKey, { label, iconKey, renderSecondary, renderRail } = {}) {
   if (typeof pageKey !== 'string' || !pageKey) throw new Error('registerPageSidebar requires a string pageKey');
   if (_pageSidebar.has(pageKey)) throw new Error(`duplicate page-sidebar "${pageKey}"`);
-  _pageSidebar.set(pageKey, { pageKey, label, renderSecondary, renderRail });
+  _pageSidebar.set(pageKey, { pageKey, label, iconKey, renderSecondary, renderRail });
   notify();
 }
 

@@ -27,6 +27,7 @@ import {
 } from '@modules/core/library/VideoPlayerProvider.jsx';
 import VideoControls from '@modules/core/library/VideoControls.jsx';
 import { candyGap } from '@host/util/candy.js';
+import { IconCaretDown, IconPause, IconPlayMark, IconX } from '../components/icons.jsx';
 
 // mpv owns the clock. Poll it rather than running a local timer that drifts
 // against real playback.
@@ -330,8 +331,8 @@ export default function PlayerControlsView() {
             <PiPBtn onClick={(e) => {
               e.stopPropagation();
               cmd(['set_property', 'pause', !live.paused]).catch(() => {});
-            }}>{live.paused ? '▶' : '❚❚'}</PiPBtn>
-            <PiPBtn onClick={(e) => { e.stopPropagation(); send('close'); }}>×</PiPBtn>
+            }}>{live.paused ? <IconPlayMark size="1.1em"/> : <IconPause size="0.8em"/>}</PiPBtn>
+            <PiPBtn onClick={(e) => { e.stopPropagation(); send('close'); }}><IconX size="0.65em"/></PiPBtn>
           </div>
         </div>
       </VideoPlayerContext.Provider>
@@ -406,8 +407,8 @@ export default function PlayerControlsView() {
             {/* No pop-out button: `window.open` creates no OS window in this
                 WebView2 config, so the pop-out has to be rebuilt as a real
                 Tauri window before a button for it means anything. */}
-            <HeaderBtn onClick={() => send('minimise')} title="Minimize to mini player">▾</HeaderBtn>
-            <HeaderBtn onClick={() => send('close')} title="Close player">×</HeaderBtn>
+            <HeaderBtn onClick={() => send('minimise')} title="Minimize to mini player"><IconCaretDown size="0.7em"/></HeaderBtn>
+            <HeaderBtn onClick={() => send('close')} title="Close player"><IconX size="0.65em"/></HeaderBtn>
           </div>
         </div>
 

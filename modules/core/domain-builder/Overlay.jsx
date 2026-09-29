@@ -13,6 +13,7 @@ import {
   defaultTranscriptSlug,
   PRESET_PACKS,
 } from './state.jsx';
+import { IconAlert, IconCheck, IconX } from '@host/components/icons.jsx';
 
 const STEPS = ['Identity', 'Pipeline', 'Extraction', 'Transcript', 'Glossary', 'Preview'];
 
@@ -122,7 +123,7 @@ function StepPipeline() {
           <div key={i} className="candy-chip-row" style={{ '--candy-gap': '6px' }}>
             <TextInput value={c.name} onChange={(v) => setCf(cf.map((x, j) => (j === i ? { ...x, name: v } : x)))} placeholder="Folder name" />
             <TextInput value={c.typeFrontmatter} onChange={(v) => setCf(cf.map((x, j) => (j === i ? { ...x, typeFrontmatter: v } : x)))} placeholder="Type:" />
-            <IconBtn onClick={() => setCf(cf.filter((_, j) => j !== i))} title="Remove" size={28}>✕</IconBtn>
+            <IconBtn onClick={() => setCf(cf.filter((_, j) => j !== i))} title="Remove" size={28}><IconX size="0.8em"/></IconBtn>
           </div>
         ))}
         <OutlinedBtn small onClick={() => setCf([...cf, { name: '', typeFrontmatter: '' }])}>+ Add folder</OutlinedBtn>
@@ -183,7 +184,7 @@ function StepExtraction() {
           <div key={i} className="candy-chip-row" style={{ '--candy-gap': '6px', alignItems: 'center' }}>
             <TextInput value={t.name} onChange={(v) => setTypes(types.map((x, j) => (j === i ? { ...x, name: v } : x)))} placeholder="Type name" />
             <FilterChip active={t.promote} onClick={() => setTypes(types.map((x, j) => (j === i ? { ...x, promote: !x.promote } : x)))} title="Own folder">Folder</FilterChip>
-            <IconBtn onClick={() => setTypes(types.filter((_, j) => j !== i))} title="Remove" size={28}>✕</IconBtn>
+            <IconBtn onClick={() => setTypes(types.filter((_, j) => j !== i))} title="Remove" size={28}><IconX size="0.8em"/></IconBtn>
           </div>
         ))}
         <OutlinedBtn small onClick={() => setTypes([...types, { name: '', promote: false }])}>+ Add type</OutlinedBtn>
@@ -241,7 +242,7 @@ function StepGlossary() {
               <TextInput value={s.canonical} onChange={(v) => setSeeds(seeds.map((x, j) => (j === i ? { ...x, canonical: v } : x)))} placeholder="Canonical" />
               <TextInput value={s.filename} onChange={(v) => setSeeds(seeds.map((x, j) => (j === i ? { ...x, filename: v } : x)))} placeholder="Filename" />
               <TextInput value={(s.misspellings || []).join(', ')} onChange={(v) => setSeeds(seeds.map((x, j) => (j === i ? { ...x, misspellings: splitList(v) } : x)))} placeholder="Misspellings" />
-              <IconBtn onClick={() => setSeeds(seeds.filter((_, j) => j !== i))} title="Remove" size={28}>✕</IconBtn>
+              <IconBtn onClick={() => setSeeds(seeds.filter((_, j) => j !== i))} title="Remove" size={28}><IconX size="0.8em"/></IconBtn>
             </div>
           ))}
           <OutlinedBtn small onClick={() => setSeeds([...seeds, { canonical: '', filename: '', misspellings: [] }])}>+ Add term</OutlinedBtn>
@@ -264,7 +265,7 @@ function StepPreview() {
       {plan.warnings?.length > 0 && (
         <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '8px 10px', fontSize: 12, color: 'var(--text-muted)' }}>
           {plan.warnings.map((w, i) => (
-            <div key={i}>⚠ {w}</div>
+            <div key={i}><IconAlert size="1em"/> {w}</div>
           ))}
         </div>
       )}
@@ -300,7 +301,7 @@ function ResultScreen() {
   const { result, plan } = useDomainBuilder();
   return (
     <div className="candy-stack" style={{ '--candy-gap': '8px' }}>
-      <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)' }}>✓ {result?.name} created</div>
+      <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)' }}><IconCheck size="0.9em"/> {result?.name} created</div>
       <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
         {plan?.createdDirs?.length} folders · {plan?.newFiles?.length} files · {plan?.edits?.length} doc edits. The{' '}
         <code>/transcript {result?.slug}</code> command is live.
@@ -314,7 +315,7 @@ function ResultScreen() {
         <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '8px 10px', fontSize: 12, color: 'var(--text-muted)' }}>
           <div style={{ fontWeight: 600, marginBottom: 2 }}>{plan.warnings.length} warning(s) — skipped:</div>
           {plan.warnings.map((w, i) => (
-            <div key={i}>⚠ {w}</div>
+            <div key={i}><IconAlert size="1em"/> {w}</div>
           ))}
         </div>
       )}
@@ -383,7 +384,7 @@ export function DomainBuilderOverlay() {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {!onResult && <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>{STEPS[step]} · {step + 1}/{STEPS.length}</div>}
-            <IconBtn onClick={close} title="Close" size={28}>✕</IconBtn>
+            <IconBtn onClick={close} title="Close" size={28}><IconX size="0.8em"/></IconBtn>
           </div>
         </div>
 

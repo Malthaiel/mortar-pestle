@@ -22,12 +22,12 @@ const MOVIES = '/tools/library/movies';
 const MUSIC = '/tools/library/music';
 
 // Rows that sit directly under the media pill (no count).
-const animeTopRows = [{ label: 'Homepage', path: ANIME }];
+const animeTopRows = [{ label: 'Homepage', path: ANIME, icon: 'IconHome' }];
 // Playlists lost its row 2026-08-08: the Music library column is permanent now
 // and lists playlists itself, so the tree entry was a second door to one room.
-const musicTopRows = [{ label: 'Homepage', path: MUSIC }];
-const tvTopRows = [{ label: 'Homepage', path: TV }];
-const movieTopRows = [{ label: 'Homepage', path: MOVIES }];
+const musicTopRows = [{ label: 'Homepage', path: MUSIC, icon: 'IconHome' }];
+const tvTopRows = [{ label: 'Homepage', path: TV, icon: 'IconHome' }];
+const movieTopRows = [{ label: 'Homepage', path: MOVIES, icon: 'IconHome' }];
 
 // Status-count rows for each media type's nested "Library" folder. status keys
 // match the frontmatter Status values (and URL segments) the topbar tiles used.
@@ -69,6 +69,13 @@ function movieRows(s) {
   ];
 }
 
+// Status rows share one icon per label across Anime / TV / Movies.
+const STATUS_ICON = {
+  Watching: 'IconPlayCircle', Completed: 'IconCheckCircle', 'On-Hold': 'IconPauseCircle',
+  Dropped: 'IconXCircle', Plan: 'IconListPlus', Total: 'IconList',
+  Downloaded: 'IconDownload', 'Not Downloaded': 'IconCloud',
+};
+
 // The "· count" that rides after the label (preserves the hug-width pill style).
 function Count({ value }) {
   return <span style={{ flexShrink: 0, opacity: 0.65 }}>· {value}</span>;
@@ -88,23 +95,24 @@ export default function LibraryNav({ route, accent }) {
     const toNode = (r) => ({
       id: r.path,
       label: r.label,
+      icon: r.icon || STATUS_ICON[r.label],
       isFolder: false,
       active: currentPath === r.path,
       onActivate: () => navigate(r.path),
       trailing: r.count == null ? null : <Count value={loading ? '—' : r.count}/>,
     });
-    const libFolder = (id, rows) => ({ id, label: 'Library', isFolder: true, children: rows.map(toNode) });
+    const libFolder = (id, rows) => ({ id, label: 'Library', icon: 'IconLibrary', isFolder: true, children: rows.map(toNode) });
     return [
-      { id: 'anime', label: 'Anime', isFolder: true,
+      { id: 'anime', label: 'Anime', icon: 'IconSparkle', isFolder: true,
         children: [...animeTopRows.map(toNode), libFolder('anime:library', animeRows(anime))] },
-      { id: 'tv', label: 'TV Shows', isFolder: true,
+      { id: 'tv', label: 'TV Shows', icon: 'IconTv', isFolder: true,
         children: [...tvTopRows.map(toNode), libFolder('tv:library', tvRows(tv))] },
-      { id: 'movies', label: 'Movies', isFolder: true,
+      { id: 'movies', label: 'Movies', icon: 'IconClapperboard', isFolder: true,
         children: [...movieTopRows.map(toNode), libFolder('movies:library', movieRows(movies))] },
       // Music has no Library folder: its status / Downloaded rows were a second
       // door to the filters the album column's own Status dropdown now owns
       // (user-directed 2026-09-20). Homepage only.
-      { id: 'music', label: 'Music', isFolder: true,
+      { id: 'music', label: 'Music', icon: 'IconMusic', isFolder: true,
         children: musicTopRows.map(toNode) },
     ];
   }, [anime, tv, movies, currentPath, loading]);

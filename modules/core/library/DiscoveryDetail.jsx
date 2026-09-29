@@ -18,7 +18,7 @@ import AnimeMainColumn from './AnimeMainColumn.jsx';
 import AnimeDetailHeader from './AnimeDetailHeader.jsx';
 import LoadingScreen from './LoadingScreen.jsx';
 import { AddToLibraryButton } from './QuickAdd.jsx';
-import { IconDownload } from '@host/components/icons.jsx';
+import { IconDownload, IconCheck } from '@host/components/icons.jsx';
 
 const ANIME_STATUSES = ['Plan-to-Watch', 'Currently-Watching', 'Completed', 'On-Hold', 'Dropped'];
 
@@ -102,23 +102,12 @@ export default function DiscoveryDetail({ malId, accent, onResolveTitle }) {
 
   const title = (detail && detail.title) || 'untitled';
   const sub = detail && detail.titleEnglish && detail.titleEnglish !== title ? detail.titleEnglish : null;
-  const year = detail && detail.year;
   const type = detail && detail.type;
   const epCount = detail && detail.episodes;
-  const score = detail && detail.score;
-  const status = detail && detail.status;
   const airing = detail && detail.airing;
   const premiered = detail && detail.season
     ? `${detail.season.charAt(0).toUpperCase()}${detail.season.slice(1)}${detail.year ? ` ${detail.year}` : ''}`
     : null;
-
-  const metaBits = [
-    year,
-    type,
-    epCount && `${epCount} ep`,
-    score && `★ ${score}`,
-    status,
-  ].filter(Boolean);
 
   const coverSrcs = [detail && detail.image].filter(Boolean);
 
@@ -167,13 +156,13 @@ export default function DiscoveryDetail({ malId, accent, onResolveTitle }) {
         case 'queued': return { label: job.queuePosition > 0 ? `Queued — #${job.queuePosition}` : 'Queued', busy: true };
         case 'preparing': return { label: 'Preparing', busy: true };
         case 'downloading': return { label: `Downloading ${Math.round(job.progressPct || 0)}%`, busy: true };
-        case 'done': return { label: 'Downloaded ✓', done: true };
+        case 'done': return { label: 'Downloaded', done: true };
         case 'error': return { label: 'Failed — Retry' };
         case 'cancelled': return { label: 'Cancelled — Retry' };
         default: return { label: 'Download' };
       }
     }
-    if (libraryEntry) return { label: '✓ In Library', done: true };
+    if (libraryEntry) return { label: 'In Library', done: true };
     return { label: 'Download' };
   })();
 
@@ -230,7 +219,7 @@ export default function DiscoveryDetail({ malId, accent, onResolveTitle }) {
               style={{ '--accent': accent, cursor: (!!btn.busy || (!detail && !libraryEntry)) ? 'default' : 'pointer', opacity: (!!btn.busy || (!detail && !libraryEntry)) ? 0.55 : 1 }}
             >
               <span className="candy-face" style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
-                {btn.done ? '✓' : <IconDownload size={15}/>} {btn.label}
+                {btn.done ? <IconCheck size={14}/> : <IconDownload size={15}/>} {btn.label}
               </span>
             </button>
             {(!libraryEntry || addBusy) && (

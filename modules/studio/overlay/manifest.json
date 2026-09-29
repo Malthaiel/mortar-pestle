@@ -11,6 +11,6 @@
   "tier": "studio",
   "platforms": ["linux", "windows"],
   "routeBase": "/tools/overlay",
-  "iconKey": "IconGamepad",
+  "iconKey": "IconLayout",
   "setupRequired": false
 }

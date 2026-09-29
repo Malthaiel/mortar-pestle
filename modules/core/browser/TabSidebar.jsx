@@ -20,6 +20,7 @@ import TreeToolbar from '@host/components/vault-tree/TreeToolbar.jsx';
 import NameInputModal from '@host/components/vault-tree/NameInputModal.jsx';
 import { usePersistedState } from '@host/components/vault-tree/useTreeExpansion.js';
 import { hit } from '@host/components/vault-tree/treeSearch.js';
+import { renderTreeIcon } from '@host/components/vault-tree/treeIcons.jsx';
 import {
   AnimCtx, SuffixCtx, REVEAL, GAP, NAV_H, NAV_TEXT, NAV_ICON, TOOLBAR_BAND,
   CandyHeader, Collapsible, StaggerChild, TreeChildren,
@@ -146,7 +147,7 @@ export default function TabSidebar({ api, accent }) {
                 ...(isDrop ? { outline: '2px solid var(--accent)', outlineOffset: 2, borderRadius: 12 } : {}),
               }}>
                 <CandyHeader
-                  label={f.name} open={open} accent={accent}
+                  label={f.name} open={open} accent={accent} leadIcon={renderTreeIcon('IconFolder')}
                   onToggle={() => store.toggleFolder(f.id)} onContextMenu={(e) => folderMenu(e, f)}
                   trailing={<span style={{ opacity: 0.5, fontSize: 9 }}>{fts.length}</span>}
                 />

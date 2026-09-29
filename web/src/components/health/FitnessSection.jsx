@@ -20,7 +20,7 @@ import { useTodayWorkout, isRestDay } from '../../hooks/useTodayWorkout.js';
 import { useCardioPresets } from '../../hooks/useCardioPresets.js';
 import { computeFitnessStreak } from '../../util/fitnessStreak.js';
 import PaneHeader from '../planner/PaneHeader.jsx';
-import { IconCheck, IconTrash, IconDumbbell, IconPlus, IconHeartPulse, IconBot } from '../icons.jsx';
+import { IconCheck, IconTrash, IconDumbbell, IconPlus, IconHeartPulse, IconBot, IconRadioOff } from '../icons.jsx';
 import SplitChooserPopover from './SplitChooserPopover.jsx';
 import SplitEditorWindow from './SplitEditorWindow.jsx';
 import CardioChooserPopover from './CardioChooserPopover.jsx';
@@ -39,7 +39,7 @@ function ExerciseRow({ ex, index, isToday, onPatch, accent }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, ...mono12 }}>
       <button type="button" className="candy-btn" data-shape="icon" disabled={!isToday} title={ex.done ? 'Done' : 'Mark done'} onClick={() => onPatch(index, ex, { done: !ex.done })} style={{ flexShrink: 0, opacity: isToday ? 1 : 0.5 }}>
-        <span className="candy-face" style={{ color: ex.done ? accent : 'var(--text-faint)' }}>{ex.done ? <IconCheck size={12} /> : '○'}</span>
+        <span className="candy-face" style={{ color: ex.done ? accent : 'var(--text-faint)' }}>{ex.done ? <IconCheck size={12} /> : <IconRadioOff size={12} />}</span>
       </button>
       <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: ex.done ? 'line-through' : 'none', opacity: ex.done ? 0.55 : 1 }}>{ex.name}</span>
       <span style={{ color: 'var(--text-faint)', flexShrink: 0 }}>{ex.sets}×{ex.reps}{ex.weight ? ` @${ex.weight}` : ''}</span>
@@ -57,7 +57,7 @@ function CardioRow({ seg, index, isToday, onPatch, onDelete, accent }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, ...mono12 }}>
       <button type="button" className="candy-btn" data-shape="icon" disabled={!isToday} title={seg.done ? 'Done' : 'Mark done'} onClick={() => onPatch(index, seg, { done: !seg.done })} style={{ flexShrink: 0, opacity: isToday ? 1 : 0.5 }}>
-        <span className="candy-face" style={{ color: seg.done ? accent : 'var(--text-faint)' }}>{seg.done ? <IconCheck size={12} /> : '○'}</span>
+        <span className="candy-face" style={{ color: seg.done ? accent : 'var(--text-faint)' }}>{seg.done ? <IconCheck size={12} /> : <IconRadioOff size={12} />}</span>
       </button>
       <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: seg.done ? 'line-through' : 'none', opacity: seg.done ? 0.55 : 1 }}>{seg.type}</span>
       <span style={{ color: 'var(--text-faint)', flexShrink: 0 }}>{seg.minutes}m{seg.zone ? ` (${seg.zone})` : ''}</span>

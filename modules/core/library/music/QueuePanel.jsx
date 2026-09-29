@@ -6,6 +6,7 @@ import { useMusicPlayer } from './MusicPlayerProvider.jsx';
 import AddToPlaylistButton from './AddToPlaylistButton.jsx';
 import { refFromQueueItem } from './PlaylistProvider.jsx';
 import { useSongMenu } from './contextMenus.js';
+import { IconCaretRight, IconX } from '@host/components/icons.jsx';
 
 const DOCK_WIDTH = 300;
 
@@ -75,7 +76,7 @@ export default function QueuePanel({ open, onClose, accent }) {
           color: 'var(--text-muted)',
           fontVariantNumeric: 'tabular-nums',
         }}>Queue · {queue.length}</span>
-        <button onClick={onClose} title="Close" data-own-press className="candy-btn" data-shape="circle"><span className="candy-face">×</span></button>
+        <button onClick={onClose} title="Close" data-own-press className="candy-btn" data-shape="circle"><span className="candy-face"><IconX/></span></button>
       </div>
       <div style={{ overflowY: 'auto', flex: 1, padding: '8px 8px', display: 'flex', flexDirection: 'column', gap: 6 }}>
         {queue.length === 0 && (
@@ -128,7 +129,7 @@ export default function QueuePanel({ open, onClose, accent }) {
                 color: active ? '#fff' : 'var(--text-faint)',
                 fontWeight: active ? 700 : 500,
                 minWidth: 16, textAlign: 'center',
-              }}>{active ? '▸' : i + 1}</span>
+              }}>{active ? <IconCaretRight size="0.8em"/> : i + 1}</span>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{
                   fontSize: 12, color: active ? '#fff' : 'var(--text)',
@@ -164,7 +165,7 @@ export default function QueuePanel({ open, onClose, accent }) {
                   transition: 'opacity 120ms ease',
                   flexShrink: 0,
                 }}
-              ><span className="candy-face">×</span></button>
+              ><span className="candy-face"><IconX/></span></button>
               </div>
             </div>
           );

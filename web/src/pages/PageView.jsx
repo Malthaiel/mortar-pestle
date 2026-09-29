@@ -15,6 +15,7 @@ import { useContextMenu } from '../context-menu/useContextMenu.js';
 import { buildWikilinkMenu, buildExternalLinkMenu, openExternalUrl } from '../context-menu/defaultMenus.js';
 import { openConcierge } from '../agents/concierge/ConciergeProvider.jsx';
 import { todayLocalStr } from '../util/time.js';
+import { IconArrowLeft, IconSparkle, IconSwap } from '../components/icons.jsx';
 
 function dailyLogDsFromPath(path) {
   if (typeof path !== 'string' || !path.startsWith('Pulse/Daily Logs/')) return null;
@@ -518,13 +519,13 @@ export default function PageView({ path, accent }) {
               <FilterChip
                 onClick={() => openConcierge({ recipe: 'organize-md', target: filePath })}
                 accent={accent}
-              >✦ Organize with Concierge</FilterChip>
+              ><IconSparkle size="1em"/> Organize with Concierge</FilterChip>
             )}
             <FilterChip
               onClick={() => setShowLinks(v => !v)}
               active={showLinks}
               accent={accent}
-            >⇄ Links</FilterChip>
+            ><IconSwap size="1em"/> Links</FilterChip>
           </>}
         />
       )}
@@ -610,7 +611,7 @@ export default function PageView({ path, accent }) {
               Can&apos;t open <code style={{ background: 'var(--surface-3)', padding: '2px 6px', borderRadius: 'var(--radius-sm)' }}>{path}</code> — file not found.
             </div>
             <button onClick={() => { if (window.history.length > 1) window.history.back(); else navigate('/vault'); }}
-              style={{ background: 'transparent', border: 'none', color: accent || 'var(--text)', cursor: 'pointer', padding: 0, textDecoration: 'underline', fontSize: 13 }}>← Go back</button>
+              style={{ background: 'transparent', border: 'none', color: accent || 'var(--text)', cursor: 'pointer', padding: 0, textDecoration: 'underline', fontSize: 13 }}><IconArrowLeft size="1.3em"/> Go back</button>
           </div>
         )}
         {!loading && !notFound && error && (

@@ -25,6 +25,7 @@ import { Channel } from '@tauri-apps/api/core';
 import { PrimaryBtn, OutlinedBtn, TextInput } from '../ui/index.js';
 import { invoke } from '../../api.js';
 import { eyebrowStyle } from '../ui/Eyebrow.jsx';
+import { IconDot, IconPlayMark, IconRotateCw, IconStop, IconX } from '../icons.jsx';
 
 const mono = { fontFamily: 'var(--font-mono)', fontSize: 11 };
 const EVENT_LOG_CAP = 20;
@@ -234,7 +235,7 @@ export default function SttDevPanel({ accent }) {
 
       {lastError && (
         <div style={{ ...mono, color: 'var(--error)', marginBottom: 12, fontWeight: 700 }} title={lastError.message}>
-          ✕ {lastError.code}: {lastError.message}
+          <IconX size="0.8em"/> {lastError.code}: {lastError.message}
         </div>
       )}
 
@@ -248,10 +249,10 @@ export default function SttDevPanel({ accent }) {
         </PrimaryBtn>
       </div>
       <div style={{ ...mono, marginTop: 8, lineHeight: 1.6, color: 'var(--text-muted)', minHeight: 16 }}>
-        {modelPct != null && <span>⟳ downloading {modelPct}%</span>}
+        {modelPct != null && <span><IconRotateCw size="0.9em"/> downloading {modelPct}%</span>}
         {modelPct == null && modelInfo && (
           <span>
-            <span style={{ color: '#4fc878', fontWeight: 700 }}>●</span>{' '}
+            <span style={{ color: '#4fc878', fontWeight: 700 }}><IconDot size="0.6em"/></span>{' '}
             loaded {modelInfo.name} · {modelInfo.backend} · <span style={{ color: 'var(--text-faint)' }}>{shortSha(modelInfo.sha)}</span>
           </span>
         )}
@@ -272,7 +273,7 @@ export default function SttDevPanel({ accent }) {
       </div>
       <div style={{ ...mono, marginTop: 8, lineHeight: 1.6, color: 'var(--text-muted)', minHeight: 16 }}>
         {filePct != null
-          ? <span>⟳ {filePct}%</span>
+          ? <span><IconRotateCw size="0.9em"/> {filePct}%</span>
           : (fileSegments.length || fileFinal)
             ? <span style={{ color: 'var(--text-faint)' }}>{fileSegments.length} segment(s)</span>
             : <span style={{ color: 'var(--text-faint)' }}>—</span>}
@@ -301,9 +302,9 @@ export default function SttDevPanel({ accent }) {
           placeholder="300" disabled={dictActive} style={{ width: 70, ...mono }} />
       </div>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
-        <PrimaryBtn small accent={accent} onClick={startDictation} disabled={dictActive}>▶ Start</PrimaryBtn>
-        <OutlinedBtn small onClick={stopDictation} disabled={!dictActive}>■ Stop</OutlinedBtn>
-        {dictActive && <span style={{ ...mono, color: '#4fc878', fontWeight: 700 }}>● live</span>}
+        <PrimaryBtn small accent={accent} onClick={startDictation} disabled={dictActive}><IconPlayMark size="1.1em"/> Start</PrimaryBtn>
+        <OutlinedBtn small onClick={stopDictation} disabled={!dictActive}><IconStop size="0.7em"/> Stop</OutlinedBtn>
+        {dictActive && <span style={{ ...mono, color: '#4fc878', fontWeight: 700 }}><IconDot size="0.6em"/> live</span>}
       </div>
       {/* live VU meter */}
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
@@ -339,7 +340,7 @@ export default function SttDevPanel({ accent }) {
       {/* ---- Utility ---- */}
       <SectionLabel>Utility</SectionLabel>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <OutlinedBtn small onClick={runStatus}>↻ Status</OutlinedBtn>
+        <OutlinedBtn small onClick={runStatus}><IconRotateCw size="0.9em"/> Status</OutlinedBtn>
         <OutlinedBtn small onClick={runUnload}>Unload</OutlinedBtn>
         <OutlinedBtn small onClick={runCancel}>Cancel</OutlinedBtn>
       </div>

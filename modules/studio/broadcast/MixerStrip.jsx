@@ -18,7 +18,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
-import { IconSpeaker } from '@host/components/icons.jsx';
+import { IconSpeaker, IconCaretDown, IconCaretUp } from '@host/components/icons.jsx';
 import { LevelMeter, VFader, dbToFill } from '@host/components/ui';
 import { verb } from './broadcastStore.js';
 
@@ -235,7 +235,7 @@ export default function MixerStrip({ api, snapshot, accent, expanded, onToggle, 
         <button type="button" className="bcast-mixer-tab" onClick={onToggle}>
           <span>Mixer</span>
           <span className="bcast-mixer-count">{rows.length}</span>
-          <span className="bcast-mixer-caret">{expanded ? '▾' : '▴'}</span>
+          <span className="bcast-mixer-caret">{expanded ? <IconCaretDown size="0.7em"/> : <IconCaretUp size="0.7em"/>}</span>
         </button>
         {onOpenProps ? (
           <button

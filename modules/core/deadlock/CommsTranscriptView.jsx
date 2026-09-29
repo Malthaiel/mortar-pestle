@@ -18,7 +18,7 @@ import { api } from '@host/api.js';
 import { parseCommsSidecar, segIndexForStamp } from './commsCompile.js';
 import { speakerColor } from './diarize.js';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
-import { IconUser } from '@host/components/icons.jsx';
+import { IconUser, IconCaretDown, IconCaretRight } from '@host/components/icons.jsx';
 
 const muted = { color: 'var(--text-muted)', fontSize: 12 };
 
@@ -82,7 +82,7 @@ export default function CommsTranscriptView({ sidecarPath, roster = [], onReassi
       <button type="button" className="candy-btn" data-shape="chip"
         onClick={() => setOpen((o) => !o)}
         title={open ? 'Collapse transcript' : 'Expand transcript'}>
-        <span className="candy-face">{open ? '▾' : '▸'} {segs.length} segment{segs.length === 1 ? '' : 's'} · {mmss(durationMs)}</span>
+        <span className="candy-face">{open ? <IconCaretDown size="0.7em"/> : <IconCaretRight size="0.7em"/>} {segs.length} segment{segs.length === 1 ? '' : 's'} · {mmss(durationMs)}</span>
       </button>
       {open && (
         <div style={{

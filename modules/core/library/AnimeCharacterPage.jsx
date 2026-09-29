@@ -10,6 +10,7 @@ import { videoApi } from './api.js';
 import LoadingScreen from './LoadingScreen.jsx';
 import ImageLightbox, { useLightbox } from './ImageLightbox.jsx';
 import { EyebrowHeading } from '@host/components/ui/Eyebrow.jsx';
+import { IconArrowLeft } from '@host/components/icons.jsx';
 
 function initials(text) {
   const w = (text || '').trim().split(/\s+/).filter(Boolean);
@@ -75,7 +76,7 @@ export default function AnimeCharacterPage({ malId, accent }) {
           background: 'none', border: 'none', cursor: 'pointer', padding: 0,
           color: 'var(--text-muted)', fontSize: 12, fontFamily: 'var(--font-mono)',
           letterSpacing: '0.04em',
-        }}>← Back</button>
+        }}><IconArrowLeft size="1.3em"/> Back</button>
       </div>
 
       {/* Header */}

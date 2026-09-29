@@ -18,11 +18,11 @@ import { ROOTS_CHANGED } from './vault-tree/useVaultTree.js';
 // root folder — user-made in a Citadel vault, or any top folder of a foreign vault —
 // is an ordinary folder and drags like one.
 const CITADEL_SECTIONS = [
-  { key: 'knowledge', label: 'Knowledge', section: 'Knowledge', fixed: true, accentAlways: true, chipDomains: true, gearDomains: true, add: 'domain' },
-  { key: 'infrastructure', label: 'Infrastructure', section: 'Infrastructure', fixed: true, accentAlways: true, chipDomains: true,
+  { key: 'knowledge', label: 'Knowledge', section: 'Knowledge', icon: 'IconBrain', fixed: true, accentAlways: true, chipDomains: true, gearDomains: true, add: 'domain' },
+  { key: 'infrastructure', label: 'Infrastructure', section: 'Infrastructure', icon: 'IconServer', fixed: true, accentAlways: true, chipDomains: true,
     // Pinned virtual leaf: the interactive Update Queue view has no .md file, so
     // it's surfaced here as a fixed entry that routes to /vault/infrastructure/update-queue.
-    pins: [{ label: 'Update Queue', hash: '/vault/infrastructure/update-queue' }] },
+    pins: [{ label: 'Update Queue', hash: '/vault/infrastructure/update-queue', icon: 'IconChecklist' }] },
 ];
 
 export default function VaultSidebar({ route, accent }) {

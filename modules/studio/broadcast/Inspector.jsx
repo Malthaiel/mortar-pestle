@@ -7,7 +7,7 @@
 import React from 'react';
 import { IconBtn, SectionHeader } from '@host/components/ui';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
-import { IconMove, IconMaximize } from '@host/components/icons.jsx';
+import { IconMove, IconMaximize, IconX } from '@host/components/icons.jsx';
 import PropertiesForm, { NumField } from './PropertiesForm.jsx';
 import BespokePanel, { hasBespokePanel } from './BespokePanels.jsx';
 import { glyphFor } from './sourceGlyphs.jsx';
@@ -110,7 +110,7 @@ export default function Inspector({ api, snapshot, selection, accent }) {
         <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600, fontSize: 13 }}>
           {node ? node.name : 'Inspector'}
         </span>
-        <IconBtn title="Close" accent={accent} onClick={() => updateBroadcastUi({ inspectorOpen: false })}>×</IconBtn>
+        <IconBtn title="Close" accent={accent} onClick={() => updateBroadcastUi({ inspectorOpen: false })}><IconX size="0.65em"/></IconBtn>
       </div>
       {!node ? (
         <div style={{ fontSize: 11.5, color: 'var(--text-faint)', paddingTop: 8 }}>

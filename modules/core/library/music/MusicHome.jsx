@@ -30,6 +30,7 @@ import { useMusicPlayer } from './MusicPlayerProvider.jsx';
 import { youtubeQueueItem, TILE_GRID } from './util.js';
 import { encodePath } from '../paths.js';
 import { navigate as go } from '@host/router.js';
+import { IconArrowRight } from '@host/components/icons.jsx';
 
 const toAlbum = (path) => go('/tools/library/music/downloaded/' + encodePath(path));
 const toBrowse = (q, mode) =>
@@ -358,7 +359,7 @@ export function SearchResults({ query, tab, source = 'both', accent, albums, own
             {mbAlbums && mbAlbums.length > 0 && (
               <button onClick={() => toBrowse(query, 'albums')} data-own-press
                       className="candy-btn" data-shape="chip" style={{ marginLeft: 'auto' }}>
-                <span className="candy-face" style={{ fontSize: 11 }}>See All →</span>
+                <span className="candy-face" style={{ fontSize: 11 }}>See All <IconArrowRight size="1.3em"/></span>
               </button>
             )}
           </div>

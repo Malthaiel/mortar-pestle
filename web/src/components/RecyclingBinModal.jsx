@@ -8,7 +8,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { OutlinedBtn, DangerOutlinedBtn, AppWindow } from './ui';
 import ConfirmModal from './ui/ConfirmModal.jsx';
-import { IconTrash } from './icons.jsx';
+import { IconTrash, IconAlert } from './icons.jsx';
 import { timeAgo } from '../util/time.js';
 import { useRecycleBin } from '../hooks/useRecycleBin.js';
 
@@ -315,7 +315,7 @@ export default function RecyclingBinModal({ open, onClose, accent, retentionDays
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <SourceBadge source={it.source} />
                       <span style={{ fontSize: 12.5, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.label}</span>
-                      {it.externalIrreversible && <span title={it.externalIrreversible} style={{ fontSize: 11, color: '#d9a55a', flexShrink: 0 }}>⚠</span>}
+                      {it.externalIrreversible && <span title={it.externalIrreversible} style={{ fontSize: 11, color: '#d9a55a', flexShrink: 0 }}><IconAlert size="1em"/></span>}
                       {it.itemCount != null && (
                         <span style={{ fontSize: 10.5, color: 'var(--text-muted)', flexShrink: 0 }}>{it.itemCount} item{it.itemCount === 1 ? '' : 's'}</span>
                       )}
@@ -335,7 +335,7 @@ export default function RecyclingBinModal({ open, onClose, accent, retentionDays
           <div style={{ width: 320, flexShrink: 0, overflowY: 'auto', padding: 14 }}>
             {selectedItem?.externalIrreversible && (
               <div style={{ fontSize: 11, lineHeight: 1.5, color: '#d9a55a', background: 'color-mix(in srgb, #d9a55a 12%, transparent)', border: '1px solid color-mix(in srgb, #d9a55a 40%, transparent)', borderRadius: 7, padding: '8px 10px', marginBottom: 10 }}>
-                ⚠ {selectedItem.externalIrreversible}
+                <IconAlert size="1em"/> {selectedItem.externalIrreversible}
               </div>
             )}
             {!preview ? (

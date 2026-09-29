@@ -6,7 +6,8 @@
 // children and is deliberately simpler.
 //
 //   Node = { id, label, isFolder, active?, onActivate?, onContextMenu?, suffix?,
-//            leadIcon?, trailing?, children?[] }
+//            icon?, leadIcon?, trailing?, children?[] }
+//   icon = an icons.jsx export name; leadIcon = a ready element (favicon, glyph).
 //   controller = expand surface (isOpen/toggle/anyExpanded/expandAll/collapseAll)
 //                + sort (sortMode/setSortMode/sortModes) + reveal — exactly what
 //                TreeToolbar consumes.
@@ -21,7 +22,7 @@ import {
 } from './treeKit.jsx';
 import TreeToolbar from './TreeToolbar.jsx';
 import { searchTree } from './treeSearch.js';
-import { useTreeIcons } from './treeIcons.jsx';
+import { useTreeIcons, renderTreeIcon } from './treeIcons.jsx';
 import TreeIconPicker from './TreeIconPicker.jsx';
 
 // A folder's children, staggered in once the group has "entered" (a deferred rAF
@@ -49,8 +50,10 @@ function NodeBody({ node, controller, accent, icons, open, animateOnMount = true
 function TreeNode({ node, controller, accent, icons, topLevel = false }) {
   // A surface's own right-click wins; with none, the row's icon picker takes it.
   const onContextMenu = node.onContextMenu || (icons ? (e) => icons.open(e, node.id) : undefined);
-  // A node that ships its own leadIcon (a favicon, a count dot) keeps it.
-  const leadIcon = node.leadIcon ?? icons?.leadIcon(node.id);
+  // The user's right-click pick wins, then the row's own icon, then the plain
+  // folder / page mark, so every row carries one.
+  const leadIcon = icons?.leadIcon(node.id) ?? node.leadIcon
+    ?? renderTreeIcon(node.icon || (node.isFolder ? 'IconFolder' : 'IconFile'));
   // In-place rename swap (SP3 Broadcast inline-rename primitive): a node in
   // rename mode renders its own pill instead of the row/header. Absent for
   // every existing surface.

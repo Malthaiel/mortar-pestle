@@ -25,6 +25,7 @@ import TimeRuler from './TimeRuler.jsx';
 import TimelineClip from './TimelineClip.jsx';
 import { newId } from './project.js';
 import { trimBounds } from './editList.js';
+import { IconCut } from '@host/components/icons.jsx';
 
 const mono = { fontFamily: 'var(--font-mono), monospace' };
 const MAGNET_PX = 8;
@@ -449,7 +450,7 @@ export default function Timeline({
           onClick={onToggleBlade}
           title="Blade — click a clip to split it at the frame under the cursor"
         >
-          ✂ BLADE
+          <IconCut size="1em"/> BLADE
         </button>
         <div style={{ width: 210 }}>
           <Slider value={pps} min={PPS_MIN} max={PPS_MAX} unit="" onChange={zoomTo} accent={accent} />

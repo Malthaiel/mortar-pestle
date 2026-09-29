@@ -29,8 +29,8 @@ import { IconDownload, IconKeyboard, IconTag, IconTrash } from '../icons.jsx';
 import { TAB_SECTIONS, PAGE_SECTIONS, tierOf, scopeFor, scopeModified, normalizeAddress } from './settings-registry.js';
 import { ConfirmUninstall } from './ModulesTab.jsx';
 
-const TIERS = [['core', 'Core'], ['studio', 'Studio'], ['widget', 'Widget']];
-const sectionLabel = (id) => TAB_SECTIONS.modules.sections.find(s => s.id === id)?.label || id;
+const TIERS = [['core', 'Core', 'IconCube'], ['studio', 'Studio', 'IconMagicWand'], ['widget', 'Widget', 'IconExtension']];
+const modulesSection = (id) => TAB_SECTIONS.modules.sections.find(s => s.id === id) || { label: id };
 
 // The tree row an address lights. Tools / Community live at modules/tier/<id>;
 // a module page is modules/<id>, or modules/<id>/<section> when it has a strip.
@@ -101,25 +101,24 @@ export default function SettingsNav({
       const secs = PAGE_SECTIONS[m.id];
       // Settings that live on a host tab (agents → Agents) open that tab.
       if (!secs) return leaf({ tab: 'modules', page: m.id }, name, {
-        onContextMenu, ...(m.settingsTarget && { onActivate: () => onNavigate(m.settingsTarget) }),
+        icon: m.iconKey, onContextMenu, ...(m.settingsTarget && { onActivate: () => onNavigate(m.settingsTarget) }),
       });
       return {
-        id: `modules/${m.id}`, label: name, isFolder: true, onContextMenu,
-        children: secs.sections.map(s => leaf({ tab: 'modules', page: m.id, section: s.id }, s.label)),
+        id: `modules/${m.id}`, label: name, icon: m.iconKey, isFolder: true, onContextMenu,
+        children: secs.sections.map(s => leaf({ tab: 'modules', page: m.id, section: s.id }, s.label, { icon: s.icon })),
       };
     };
 
     const modulesChildren = () => [
-      ...TIERS.flatMap(([tier, label]) => {
+      ...TIERS.flatMap(([tier, label, icon]) => {
         const inTier = Object.values(manifests).filter(m => tierOf(m) === tier)
           .sort((a, b) => a.name.localeCompare(b.name));
         // An empty tier (no widget modules exist yet) shows no folder.
         if (!inTier.length) return [];
-        return [{ id: `modules:${tier}`, label, isFolder: true,
+        return [{ id: `modules:${tier}`, label, icon, isFolder: true,
           children: applyOrder(inTier, orders[tier], m => m.id).map(addonNode) }];
       }),
-      leaf({ tab: 'modules', section: 'tools' }, sectionLabel('tools')),
-      leaf({ tab: 'modules', section: 'community' }, sectionLabel('community')),
+      ...['tools', 'community'].map((id) => leaf({ tab: 'modules', section: id }, modulesSection(id).label, { icon: modulesSection(id).icon })),
     ];
 
     const nodes = tabs.map((t) => {
@@ -129,14 +128,14 @@ export default function SettingsNav({
       if (t.id === 'releases') {
         const areas = AREA_PALETTE.filter(a => !moduleIdForArea(a, manifests));
         return { id: 'releases', label: t.label, isFolder: true, leadIcon,
-          children: areas.map(a => leaf({ tab: 'releases', section: a }, a)) };
+          children: areas.map(a => leaf({ tab: 'releases', section: a }, a, { icon: 'IconTag' })) };
       }
       const strip = TAB_SECTIONS[t.id]?.sections;
       if (strip?.length) {
         return { id: t.id, label: t.label, isFolder: true, leadIcon, trailing: sysDot,
           children: strip.map(s => {
             const target = { tab: t.id, section: s.id };
-            return leaf(target, s.label, { trailing: (t.id === 'system' && s.id === 'system' && sysDot) || dot(target) });
+            return leaf(target, s.label, { icon: s.icon, trailing: (t.id === 'system' && s.id === 'system' && sysDot) || dot(target) });
           }) };
       }
       return leaf({ tab: t.id, section: null }, t.label, { leadIcon });

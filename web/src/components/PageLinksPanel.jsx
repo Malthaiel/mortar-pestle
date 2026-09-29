@@ -16,6 +16,7 @@ import { useManifestData } from '../lib/manifestReader.js';
 import { navigate } from '../router.js';
 import { encodePagePath } from './SidebarBrowser.jsx';
 import { basename, buildIndex, resolveTarget } from '../lib/linkGraph.js';
+import { IconX } from './icons.jsx';
 
 function LinkGroup({ title, items, emptyLabel }) {
   return (
@@ -108,7 +109,7 @@ export default function PageLinksPanel({ filePath, accent, onClose }) {
         <button
           type="button" onClick={onClose} title="Close links panel"
           style={{ background: 'transparent', border: 'none', color: 'var(--text-faint)', cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: 2 }}
-        >×</button>
+        ><IconX size="0.65em"/></button>
       </div>
       <div style={{ flex: 1, overflow: 'auto', minHeight: 0, padding: '4px 0 24px' }}>
         {!indexed && (

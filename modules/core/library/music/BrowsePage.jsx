@@ -10,6 +10,7 @@ import { FilterChip, TextInput } from '@host/components/ui/index.js';
 import { navigate as go } from '@host/router.js';
 import BrowseResultCard from './BrowseResultCard.jsx';
 import { TILE_GRID } from './util.js';
+import { IconArrowLeft } from '@host/components/icons.jsx';
 
 const MODE_ALBUMS = 'albums';
 const MODE_ARTISTS = 'artists';
@@ -165,7 +166,7 @@ export default function BrowsePage({ accent, initialQuery = '', initialMode = MO
                 background: 'transparent', border: 'none', cursor: 'pointer',
                 color: 'var(--text-muted)', fontSize: 12, padding: 0,
               }}
-            >← Back</button>
+            ><IconArrowLeft size="1.3em"/> Back</button>
             <span style={{ color: 'var(--text-faint)' }}>/</span>
             <span style={{ color: 'var(--text)', fontWeight: 500 }}>{selectedArtist.name}</span>
           </div>

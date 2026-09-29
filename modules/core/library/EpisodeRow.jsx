@@ -12,7 +12,7 @@
 // It is hidden once the file is on disk — a downloaded row just plays.
 // `dlPct` replaces it with live progress while that episode's job runs.
 
-import { IconDownload } from '@host/components/icons.jsx';
+import { IconDownload, IconCheck, IconPlayMark } from '@host/components/icons.jsx';
 
 export default function EpisodeRow({ ep, idx, accent, watched, playing, progress, onPlay, onDownload, dlPct }) {
   const unavailable = !ep.available;
@@ -45,7 +45,7 @@ export default function EpisodeRow({ ep, idx, accent, watched, playing, progress
         boxShadow: 'none',
         transition: 'background 100ms ease, color 100ms ease, box-shadow 120ms ease',
       }}>
-        {playing ? '▶' : (watched ? '✓' : String(ep.n).padStart(2, '0'))}
+        {playing ? <IconPlayMark size="1.1em"/> : (watched ? <IconCheck size="0.9em"/> : String(ep.n).padStart(2, '0'))}
       </div>
 
       {/* Title + date stack */}

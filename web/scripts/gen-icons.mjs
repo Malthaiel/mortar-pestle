@@ -1,27 +1,16 @@
 // Generates web/src/components/icons.jsx. THIS is the source of truth for the
-// icon pack — never hand-edit the generated file; edit the MAP/SIZES/OVERRIDES
-// below and re-run. Every export name is preserved so no call site changes.
+// icon pack — never hand-edit the generated file; edit MAP/SIZES below and
+// re-run. Every export name is preserved so no call site changes.
 //
-//   node web/scripts/gen-icons.mjs [path/to/boxicons/svg]
+//   node web/scripts/gen-icons.mjs
 //
-// Boxicons path data is read off disk, so the pack has to be present. It is NOT
-// a dependency of this repo (the app ships zero npm deps and that stays true) —
-// install it OUTSIDE the repo and point the script at it. npm run in a folder
-// with no package.json walks UP to the nearest one, so `npm i` anywhere inside
-// this repo (the gitignored .iconpacks/ included) writes boxicons, and an old
-// React it drags in, into the app's own package.json and lock (2026-09-25):
+// One source: the Boxicons v3 Filled free set, all 1,884 files, copied into
+// web/src/assets/icons/filled/ (2026-09-28). The whole folder lives in the repo
+// so any icon can be added by name; icons.jsx carries only the ones MAP names.
+// The right-click icon pickers read the full folder lazily (iconLibrary.js).
+// No npm package, no other pack, no hand-drawn marks.
 //
-//   mkdir <dir outside the repo> && echo {} > <dir>/package.json
-//   npm i boxicons --prefix <dir>
-//   node web/scripts/gen-icons.mjs <dir>/node_modules/boxicons/svg
-//
-// Then `git status package.json package-lock.json` must be clean. Default
-// location if no argument is given: <repo>/.iconpacks/node_modules/boxicons/svg
-// (gitignored), only safe to fill if that folder has its own package.json. The
-// Font Awesome marks need no download — their path data is inlined in OVERRIDES.
-//
-// Verify a run by diffing the result against the committed file; the generator
-// reproduces it exactly.
+// Verify a run by diffing the result against the committed file.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -29,32 +18,20 @@ import { fileURLToPath } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');
 const OUT = path.join(REPO, 'web', 'src', 'components', 'icons.jsx');
-const ROOT = process.argv[2]
-  ? path.resolve(process.argv[2])
-  : path.join(REPO, '.iconpacks', 'node_modules', 'boxicons', 'svg');
-const FILLED = path.join(ROOT, 'solid');
-const BASIC = path.join(ROOT, 'regular');
+const DIR = path.join(REPO, 'web', 'src', 'assets', 'icons', 'filled');
 
-if (!fs.existsSync(FILLED)) {
-  console.error(`No Boxicons pack at ${ROOT}\nRun: npm i boxicons somewhere, then pass <that>/node_modules/boxicons/svg`);
-  process.exit(1);
-}
-
-// Icon export -> Boxicons Regular name. Grouped exactly as the current file is.
+// Icon export -> file stem in DIR (bx-<stem>.svg). Grouped as the file is.
 const MAP = {
   // Sidebar / chrome
-  IconTimer: 'bx-time-five', IconChart: 'bx-bar-chart-alt-2', IconNotes: 'bx-file',
-  IconTerminal: 'bx-terminal', IconBrush: 'bx-brush', IconConsole: 'bx-window-alt',
-  IconBookOpen: 'bx-book-open', IconLibrary: 'bx-collection',
-  IconActivity: 'bx-chart', IconStar: 'bx-star', IconCalendar: 'bx-calendar',
-  IconLayoutGrid: 'bx-grid-alt', IconHome: 'bx-home', IconPin: 'bx-pin', IconRotateCw: 'bx-refresh',
-  IconLayers: 'bx-layer', IconHardDrive: 'bx-hdd', IconSettings: 'bx-cog',
-  IconBell: 'bx-bell', IconTrash: 'bx-trash', IconDownload: 'bx-download', IconSearch: 'bx-search',
+  IconTimer: 'timer', IconChart: 'bar-chart', IconNotes: 'file-detail',
+  IconTerminal: 'terminal', IconBrush: 'brush', IconConsole: 'window',
+  IconBookOpen: 'book-open', IconLibrary: 'book-library',
+  IconActivity: 'line-chart-square', IconStar: 'star', IconCalendar: 'calendar',
+  IconLayoutGrid: 'grid', IconHome: 'home', IconPin: 'pin', IconRotateCw: 'rotate-cw',
+  IconLayers: 'layers', IconHardDrive: 'hard-drive', IconSettings: 'cog',
+  IconBell: 'bell', IconTrash: 'trash', IconDownload: 'arrow-to-bottom', IconSearch: 'search',
   // Non-sidebar / inline
-  IconReset: 'bx-reset', IconSkip: 'bx-skip-next',
-  // Boxicons v3 icons, all carried in OVERRIDES — the pack read off
-  // disk is v2 and has none of them. The names here are their v3 names and are
-  // never looked up; an override short-circuits the disk read.
+  IconReset: 'rotate-ccw', IconSkip: 'skip-next',
   IconRepeatSolid: 'repeat', IconPlayMark: 'play', IconSkipMark: 'skip-next',
   IconBookmarkPlus: 'bookmark-plus-alt', IconSwatch: 'swatch', IconDiscussion: 'discussion', IconCamcorder: 'camcoder',
   IconEarAlt: 'ear-alt', IconAnnouncement: 'announcement',
@@ -62,70 +39,103 @@ const MAP = {
   IconPaperPlane: 'paper-plane', IconFire: 'fire', IconFingerUp: 'finger-up',
   IconTrophyStar: 'trophy-star', IconMedalStar: 'medal-star', IconRocket: 'rocket',
   IconHandRock: 'hand-rock', IconBookmarkAlt: 'bookmark-alt', IconFireAlt: 'fire-alt', IconStarMark: 'star',
+  IconHot: 'hot', IconArrowBigDown: 'arrow-big-down', IconPlusBig: 'plus-big',
   IconRadio: 'radio', IconListPlus: 'list-plus',
-  IconSkipBack: 'bx-skip-previous',
-  IconRewind: 'bx-rewind', IconFastForward: 'bx-fast-forward', IconPause: 'bx-pause',
-  IconStop: 'bx-stop',
-  IconMaximize: 'bx-fullscreen', IconX: 'bx-x',
-  IconMinus: 'minus', IconSquare: 'bx-square', IconRestore: 'bx-copy',
-  IconCheck: 'bx-check',
-  IconChevronLeft: 'bx-chevron-left', IconChevronRight: 'bx-chevron-right',
-  IconSort: 'bx-sort-a-z', IconChevronsDownUp: 'bx-collapse-vertical', IconChevronsUpDown: 'bx-expand-vertical',
-  IconSend: 'bx-send',
+  IconSkipBack: 'skip-previous',
+  IconRewind: 'rewind', IconFastForward: 'fast-forward', IconPause: 'pause',
+  IconStop: 'stop',
+  IconMaximize: 'fullscreen', IconX: 'x',
+  IconMinus: 'minus', IconSquare: 'square', IconRestore: 'copy',
+  IconCheck: 'check',
+  IconChevronLeft: 'chevron-left', IconChevronRight: 'chevron-right',
+  IconCaretDown: 'caret-big-down', IconCaretRight: 'caret-big-right', IconCaretUp: 'caret-big-up', IconCaretLeft: 'caret-big-left',
+  IconArrowUp: 'arrow-up', IconArrowDown: 'arrow-down',
+  IconSort: 'arrow-down-a-z', IconChevronsDownUp: 'chevrons-up', IconChevronsUpDown: 'chevrons-down',
+  IconSend: 'send',
   // Knowledge areas
-  IconCrosshair: 'bx-bullseye', IconFilm: 'bx-film', IconHeartPulse: 'bx-heart-circle',
-  IconCpu: 'bx-chip', IconDumbbell: 'bx-dumbbell', IconCrown: 'bx-crown',
-  IconVideo: 'bx-video', IconBook: 'bx-book', IconClapperboard: 'bx-movie',
-  IconMusic: 'bx-music', IconVolume: 'bx-volume-full', IconLeaf: 'bx-leaf',
-  IconDroplet: 'bx-droplet', IconTv: 'bx-tv',
-  IconGamepad: 'bx-joystick', IconBroadcast: 'bx-radio',
+  IconCrosshair: 'bullseye', IconFilm: 'film', IconHeartPulse: 'heart-circle',
+  IconCpu: 'chip', IconDumbbell: 'dumbbell', IconCrown: 'crown',
+  IconVideo: 'video', IconBook: 'book', IconClapperboard: 'movie',
+  IconMusic: 'music', IconVolume: 'volume-full', IconLeaf: 'leaf',
+  IconDroplet: 'water-drop', IconTv: 'tv',
+  IconGamepad: 'joystick', IconBroadcast: 'broadcast',
   // Knowledge subfolders
-  IconFolder: 'bx-folder', IconDatabase: 'bx-data', IconLock: 'bx-lock-alt',
-  IconUser: 'bx-user', IconUsers: 'bx-group',
-  IconBot: 'bx-bot', IconPackage: 'bx-package',
-  IconHeart: 'bx-heart', IconWrench: 'bx-wrench',
-  IconRepeat: 'bx-repeat', IconMap: 'bx-map-alt', IconBuilding: 'bx-building',
-  IconCalculator: 'bx-calculator', IconMove: 'bx-move', IconBrain: 'bx-brain',
-  IconMousePointer: 'bx-pointer', IconClock: 'bx-time-five', IconPlay: 'bx-play',
-  IconFileText: 'bx-detail', IconGlobe: 'bx-globe', IconMic: 'bx-microphone',
-  IconLink: 'bx-link', IconLightbulb: 'bx-bulb', IconTag: 'bx-purchase-tag',
-  IconArchive: 'bx-archive', IconImage: 'bx-image', IconCheckCircle: 'bx-check-circle',
+  IconFolder: 'folder', IconDatabase: 'database', IconLock: 'lock',
+  IconUser: 'user', IconUsers: 'group',
+  IconBot: 'robot', IconPackage: 'package',
+  IconHeart: 'heart', IconWrench: 'spanner',
+  IconRepeat: 'repeat', IconMap: 'map', IconBuilding: 'building',
+  IconCalculator: 'calculator', IconMove: 'move', IconBrain: 'brain',
+  IconMousePointer: 'cursor', IconClock: 'clock', IconPlay: 'play',
+  IconFileText: 'file-detail', IconGlobe: 'globe', IconMic: 'microphone',
+  IconLink: 'link', IconLightbulb: 'light-bulb', IconTag: 'tag',
+  IconArchive: 'archive', IconImage: 'image', IconCheckCircle: 'check-circle',
   // View-mode + file
-  IconCards: 'bx-grid-alt', IconTable: 'bx-spreadsheet', IconFile: 'bx-file-blank',
-  IconExternal: 'bx-link-external', IconGrip: 'bx-grid', IconSpeaker: 'bx-speaker',
+  IconCards: 'grid', IconTable: 'table', IconFile: 'file',
+  IconExternal: 'arrow-out-up-right-square', IconGrip: 'grid-9', IconSpeaker: 'speaker',
   // Broadcast source-type + tree
-  IconEye: 'bx-show', IconEyeOff: 'bx-hide', IconMonitor: 'bx-devices',
-  IconAppWindow: 'bx-window-alt', IconCamera: 'bx-camera', IconTypeText: 'bx-text',
-  IconPalette: 'bx-palette', IconPlayCircle: 'bx-play-circle',
+  IconEye: 'eye', IconEyeOff: 'eye-slash', IconMonitor: 'devices',
+  IconAppWindow: 'window', IconCamera: 'camera', IconTypeText: 'font-family',
+  IconPalette: 'palette', IconPlayCircle: 'play-circle',
   // Dock chrome
-  IconDock: 'bx-dock-bottom', IconPlus: 'bx-plus', IconHelp: 'bx-help-circle',
-  IconKeyboard: 'bx-keyboard', IconCommand: 'bx-command',
-  IconSunMoon: 'bx-circle-half',
-  // Folded in from modules/core/browser/vaultIcons.jsx + BrowserPage ShieldGlyph
-  IconKey: 'bx-key', IconLockOpen: 'bx-lock-open-alt', IconCopy: 'bx-copy',
+  IconDock: 'dock-bottom', IconPlus: 'plus-big', IconHelp: 'help-circle',
+  IconKeyboard: 'keyboard', IconCommand: 'command',
+  IconSunMoon: 'circle-half',
+  // Password vault + browser shield
+  IconKey: 'key', IconLockOpen: 'lock-open-alt', IconCopy: 'copy',
   // Context-menu clipboard rows
-  IconCut: 'bx-cut', IconPaste: 'bx-paste', IconSelectAll: 'bx-select-multiple',
-  IconShield: 'bx-shield', IconShieldOff: 'bx-shield-x',
+  IconCut: 'cut', IconPaste: 'paste', IconSelectAll: 'select-all',
+  IconShield: 'shield', IconShieldOff: 'x-shield',
   // Replacements for typed characters previously standing in for icons
-  IconDot: 'bx-circle', IconAlert: 'bx-error',
+  IconDot: 'circle', IconAlert: 'alert-triangle',
+  IconArrowLeft: 'arrow-left-stroke', IconArrowRight: 'arrow-right-stroke',
+  IconPencil: 'pencil', IconSparkle: 'sparkle', IconSwap: 'swap-horizontal',
+  IconKeyframe: 'keyframe', IconRadioOn: 'radio-circle', IconRadioOff: 'radio-circle-marked',
+  IconShuffle: 'shuffle', IconBlock: 'block',
+  // Left-sidebar rows (every sidebar button carries an icon)
+  IconDashboard: 'dashboard', IconChecklist: 'checklist', IconForkKnife: 'fork-knife',
+  IconPauseCircle: 'pause-circle', IconXCircle: 'x-circle', IconList: 'list-ul', IconCloud: 'cloud',
+  IconEqualizer: 'equalizer', IconDockLeft: 'dock-left', IconDockRight: 'dock-right',
+  IconSliders: 'slider-alt', IconDesktop: 'desktop', IconRecycle: 'recycle',
+  IconCube: 'cube', IconBlocks: 'blocks', IconMagicWand: 'magic-wand', IconExtension: 'extension',
+  IconBriefcase: 'briefcase', IconCommunity: 'community', IconChat: 'message-bubble-dots',
+  IconHeadset: 'headphone-mic', IconHistory: 'history', IconSidebar: 'sidebar',
+  IconServer: 'server', IconShare: 'share', IconNotebook: 'note-book', IconLayout: 'layout',
 };
 
-// Default render size per icon, carried over from the current file so call
-// sites that omit `size` keep the size they have today.
+// Default render size per icon, carried over so call sites that omit `size`
+// keep the box they have today. `size` is a viewBox scale, not a painted size:
+// thin marks (x, check, minus) paint small, so tune them from a photograph.
 const SIZES = {
   IconReset: 15, IconSkip: 15, IconSkipBack: 15, IconRewind: 15, IconFastForward: 15,
   IconPause: 15, IconStop: 15, IconMaximize: 15, IconX: 10, IconCheck: 14, IconChevronLeft: 14,
   IconChevronRight: 14, IconExternal: 14, IconGrip: 14, IconPlayCircle: 14,
+  IconCaretDown: 14, IconCaretRight: 14, IconCaretUp: 14, IconArrowUp: 14, IconArrowDown: 14,
   IconKey: 15, IconLockOpen: 15, IconCopy: 14, IconShield: 15, IconShieldOff: 15,
   IconDot: 14, IconSend: 14,
   IconRepeatSolid: 14, IconPlayMark: 14, IconSkipMark: 14, IconListPlus: 14,
   IconBookmarkPlus: 14, IconSwatch: 14, IconDiscussion: 14, IconCamcorder: 14, IconEarAlt: 14, IconAnnouncement: 14,
   IconRocket: 14, IconFire: 14, IconPaperPlane: 14, IconFingerUp: 14,
   IconHandRock: 14, IconBookmarkAlt: 14, IconFireAlt: 14, IconStarMark: 14,
+  IconHot: 14, IconArrowBigDown: 14, IconPlusBig: 14,
   IconGroup: 14, IconCopyPlus: 14, IconTrophyStar: 14, IconMedalStar: 14, IconRadio: 14,
   IconMinus: 10, IconSquare: 10, IconRestore: 10,
   IconCut: 14, IconPaste: 14, IconSelectAll: 14,
 };
+
+// Painted-size match for bare marks. The old pack drew these (Font Awesome,
+// v2 Basic) at a different share of their box than these files, and ~90% of
+// call sites pass their own `size`, so SIZES can't carry it. Each factor is
+// measured, not guessed: old ink box / new ink box at the same size, rendered
+// headless (2026-09-28). The box is cropped (>1, mark grows) or padded (<1)
+// around its centre, so every call site keeps today's painted size.
+const ZOOM = {
+  IconX: 1.25, IconCheck: 1.2, IconChevronLeft: 1.22, IconChevronRight: 1.22,
+  IconChevronsDownUp: 1.63, IconChevronsUpDown: 1.63, IconPause: 1.77, IconStop: 1.77,
+  IconMaximize: 1.18, IconSquare: 1.13, IconReset: 1.2, IconRotateCw: 1.2,
+  IconSkip: 0.83, IconSkipBack: 0.83, IconRewind: 0.88, IconFastForward: 0.88, IconPlay: 0.86,
+};
+const box = (z) => { const w = +(24 / z).toFixed(2), o = +(12 - w / 2).toFixed(2); return `${o} ${o} ${w} ${w}`; };
 
 // Section banners, keyed by the icon that opens each block.
 const SECTIONS = {
@@ -136,326 +146,56 @@ const SECTIONS = {
   IconCards:    'View-mode + file icons',
   IconEye:      'Broadcast source-type + tree glyphs',
   IconDock:     'Dock chrome icons',
-  IconKey:      'Password-vault + browser-shield glyphs (folded in from vaultIcons.jsx)',
+  IconKey:      'Password-vault + browser-shield glyphs',
   IconCut:      'Clipboard glyphs (context-menu rows: Cut / Paste / Select All)',
   IconDot:      'Menu / notification marks (replace typed characters)',
 };
 
-// Comment blocks printed right above an icon (after its section banner), for
-// icons whose source or fill rule needs explaining where the icon lives.
-const NOTES = {
-  IconHelp: `// The titlebar's Help button. bxs-help-circle is a filled disc with the query
-// mark CUT OUT of it, so it needs fillRule evenodd: nonzero fill swallows the
-// knock-out and leaves a plain dot. Path copied from boxicons 2.1.4 solid.`,
-  IconCut: `// Cut is the ONE exception to the solid rule: Boxicons ships no bxs-cut, so the
-// Regular scissors is the only form of the mark that exists.`,
-};
-
 const HEADER = `// Icon pack. Every icon in the app comes from here — nothing is hand-drawn.
-// Path data is copied inline from the source packages; there is no runtime
-// dependency. Colour flows through currentColor; \`size\` is the only knob.
+// GENERATED by web/scripts/gen-icons.mjs — edit its MAP, never this file.
 //
-// Two sources, and which one you use is decided by the shape, not by taste:
-//
-//   1. Boxicons Regular (https://boxicons.com) — MIT. The default. Draws
-//      filled shapes on a 24 grid. Use it for every NAMED THING: folder,
-//      clock, key, chart, shield.
-//   2. Font Awesome Free 7 solid (https://fontawesome.com) — icons are
-//      CC BY 4.0, credited here as the licence requires. Used ONLY for BARE
-//      MARKS: tick, cross, plus, pause, stop, the collapse/expand chevrons,
-//      sort, fullscreen, the two rotate arrows. Boxicons' free tier has no filled
-//      form of any of them, so each fell back to its thin Basic set and read
-//      visibly lighter than every solid icon beside them. Font Awesome draws
-//      the same marks much larger inside their box, so at a given \`size\` they
-//      land at the same stroke thickness but ~1.7x the mark — which is what
-//      makes them read as heavy.
-//
-// Adding an icon: find it at boxicons.com (Regular weight), copy the <path>
-// out of svg/regular/<name>.svg, add one line below. Do NOT hand-draw one.
-// Reach for Font Awesome only for another bare mark (plus, minus, pause) and
-// only after confirming Boxicons has no filled form.
-//
-// Non-24 viewBoxes: pass the third \`wrap\` argument. Font Awesome authors on a
-// 512-tall box of varying width, so each mark is re-framed to a 512 square by
-// shifting min-x — framing only, the path data is untouched.
+// One source: Boxicons v3 Filled (https://boxicons.com, free tier), read from
+// web/src/assets/icons/filled/. Each export's trailing comment names its file.
+// Colour flows through currentColor; \`size\` is the only knob, and it scales
+// the 24 box, not the mark — thin marks paint smaller at the same size. A few
+// bare marks carry a cropped/padded viewBox (ZOOM) to keep today's painted size.
 
+// A string size ('0.9em') sizes the mark to the text around it — how typed
+// glyphs (× ✓ ▶) were swapped for icons — and sets it on the text's middle.
+const INLINE = { verticalAlign: '-0.15em' };
 function wrap(size, children, viewBox = '0 0 24 24') {
-  return <svg width={size} height={size} viewBox={viewBox} fill="currentColor">{children}</svg>;
+  return <svg width={size} height={size} viewBox={viewBox} fill="currentColor" style={typeof size === 'string' ? INLINE : undefined}>{children}</svg>;
 }
-
-// Font Awesome's own square framings, kept next to each other so the offsets
-// are obviously (512 - nativeWidth) / 2 and not a magic number.
-const FA_BOX_384 = '-64 0 512 512';
-const FA_BOX_448 = '-32 0 512 512';
-const FA_BOX_512 = '0 0 512 512';
 `;
 
-// Bare marks Boxicons' free tier cannot supply: `bxs-check` and `bxs-x` do not
-// exist at all, and the rest fall back to the thin Basic set, which reads
-// visibly lighter than the solid icons they sit beside. These ten come from
-// Font Awesome Free 7 solid (icons CC BY 4.0, credited in HEADER above). Path
-// data is inlined rather than read off disk so the generator keeps its single
-// npm dependency on `boxicons`. The other Basic fallbacks are shapes, not bare
-// marks — leave them on Boxicons.
-const OVERRIDES = {
-  // ── Boxicons v3 bare marks ──────────────────────────────────────────────────
-  // Chosen 2026-09-20 for the Planner clock underside run. The generator reads
-  // Boxicons v2 off disk and v2 has no filled play or skip at all, which is why
-  // the v2 IconPlay/IconSkip fall back to the thin Basic set and paint a mark
-  // roughly a third the size of a solid one beside them. These four are v3, so
-  // their path data is inlined here the same way the Font Awesome marks are.
-  //
-  // DO NOT retune the v2 IconPlay/IconSkip to match: PlannerDock hand-compensates
-  // for how small they draw ("bx 24 box, path y 6..18 -> 0.50 of the box"), and
-  // changing the glyph would double those icons.
-  //
-  // `size` is a viewBox scale, not a painted size — each of these fills its 24 box
-  // differently, so one size across a row paints four different marks. Measured at
-  // size 14: repeat 12 across, play 7, skip-next 8, list-plus 10. A row that wants
-  // them even passes a size per icon and checks the result on a photograph; the
-  // clock underside uses 14 / 20 / 22 / 18 for a painted height of 12 rows.
-  IconRepeatSolid: {
-    d: '<path d="M17 5H6c-1.1 0-2 .9-2 2v5h2V7h11v3l5-4-5-4zm1 12H7v-3l-5 4 5 4v-3h11c1.1 0 2-.9 2-2v-5h-2z"/>',
-    box: "'0 0 24 24'",
-    pack: 'Boxicons v3 repeat',
-  },
-  IconPlayMark: {
-    d: '<path d="M6.51 18.87c.15.09.32.13.49.13s.36-.05.51-.14l10-6c.3-.18.49-.51.49-.86s-.18-.68-.49-.86l-10-6a.99.99 0 0 0-1.01-.01c-.31.18-.51.51-.51.87v12c0 .36.19.69.51.87Z"/>',
-    box: "'0 0 24 24'",
-    pack: 'Boxicons v3 play',
-  },
-  IconSkipMark: {
-    d: '<path d="m14.58 11.19-7-5c-.31-.22-.71-.25-1.04-.08S6 6.62 6 7v10c0 .37.21.72.54.89.14.07.3.11.46.11.21 0 .41-.06.58-.19l7-5c.26-.19.42-.49.42-.81s-.16-.63-.42-.81M16 6h2v12h-2z"/>',
-    box: "'0 0 24 24'",
-    pack: 'Boxicons v3 skip-next',
-  },
-  IconListPlus: {
-    d: '<path d="M4 11h11v2H4zm0-5h16v2H4zm0 10h8v2H4zm15-3h-2v3h-3v2h3v3h2v-3h3v-2h-3z"/>',
-    box: "'0 0 24 24'",
-    pack: 'Boxicons v3 list-plus',
-  },
-  // Album song-row parts (2026-09-26), picked live from Boxicons v3 SVGs in
-  // Downloads: playlist, queue, video, own listens, world plays.
-  IconBookmarkPlus: {
-    d: '<path d="M18.5 2h-12C4.57 2 3 3.57 3 5.5V21c0 .35.18.67.47.85s.66.2.97.04l5.55-2.78 5.55 2.78a.997.997 0 0 0 1.45-.89v-8h4c.55 0 1-.45 1-1V5.5c0-1.93-1.57-3.5-3.5-3.5ZM13 11h-2v2H9v-2H7V9h2V7h2v2h2zm7 0h-3V5.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5z"/>',
-    box: "'0 0 24 24'",
-    pack: 'Boxicons v3 bookmark-plus-alt',
-  },
-  IconSwatch: {
-    d: '<path d="M10 5.51V4c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v9.51l1.85-1.85zM18.16 3c-.78-.78-2.05-.78-2.83 0l-8.99 9h11.33l3.34-3.34c.78-.78.78-2.05 0-2.83l-2.84-2.84ZM6 22h14c1.1 0 2-.9 2-2v-4c0-1.1-.9-2-2-2H6c-2.21 0-4 1.79-4 4s1.79 4 4 4m0-5.5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5-1.5-.67-1.5-1.5.67-1.5 1.5-1.5"/>',
-    box: "'0 0 24 24'",
-    pack: 'Boxicons v3 swatch',
-  },
-  IconDiscussion: {
-    d: '<path d="M15.5 14c.83 0 1.5-.67 1.5-1.5v-9c0-.83-.67-1.5-1.5-1.5h-12C2.67 2 2 2.67 2 3.5v9c0 .83.67 1.5 1.5 1.5H5v2.96c0 .42.48.65.81.39L10 14z"/><path d="M20.5 8H19v4.5c0 1.93-1.57 3.5-3.5 3.5h-4.8l-1.51 1.21c.25.47.74.79 1.31.79H14l4.19 3.35c.33.26.81.03.81-.39V18h1.5c.83 0 1.5-.67 1.5-1.5v-7c0-.83-.67-1.5-1.5-1.5"/>',
-    box: "'0 0 24 24'",
-    pack: 'Boxicons v3 discussion',
-  },
-  IconCamcorder: {
-    d: '<path d="M18 10c0-1.1-.9-2-2-2h-1.43l-2.71-4.51c-.18-.3-.51-.49-.86-.49H5v2h5.43l1.8 3H4c-1.1 0-2 .9-2 2v9c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-3l4 2v-7l-4 2zm-6 7H6v-2h6z"/>',
-    box: "'0 0 24 24'",
-    pack: 'Boxicons v3 camcoder',
-  },
-  IconEarAlt: {
-    d: '<path d="M12 2c-4.41 0-8 3.59-8 8v7c0 2.76 2.24 5 5 5 1.91 0 2.99-1.25 4.25-2.69.45-.51.91-1.04 1.46-1.6.47-.47 1.04-.83 1.63-1.21C18.06 15.41 20 14.17 20 10c0-4.41-3.59-8-8-8m3 8c0-1.65-1.35-3-3-3s-3 1.35-3 3c2.76 0 5 2.24 5 5h-2c0-1.65-1.35-3-3-3v3H7v-5c0-2.76 2.24-5 5-5s5 2.24 5 5z"/>',
-    box: "'0 0 24 24'",
-    pack: 'Boxicons v3 ear-alt',
-  },
-  IconAnnouncement: {
-    d: '<path d="M18.5 10H22v2h-3.5zm.05-1.17 1.5-1 1.5-1L21 6l-.55-.83-1.5 1-1.5 1L18 8zm0 4.34L18 14l-.55.83 1.5 1 1.5 1L21 16l.55-.83-1.5-1zM15 8.18V4c0-.37-.2-.71-.53-.88-.32-.17-.72-.16-1.03.05L7.69 7h-1.7c-2.21 0-4 1.79-4 4 0 1.52.86 2.82 2.1 3.5l1.94 6.77 1.92-.55-1.64-5.73h1.37l5.75 3.83c.17.11.36.17.55.17.16 0 .32-.04.47-.12.33-.17.53-.51.53-.88v-4.18c1.16-.41 2-1.51 2-2.82s-.84-2.4-2-2.82Z"/>',
-    box: "'0 0 24 24'",
-    pack: 'Boxicons v3 announcement',
-  },
-  IconGroup: {
-    d: '<path d="M9 4a4 4 0 1 0 0 8 4 4 0 1 0 0-8m1 9H8c-2.76 0-5 2.24-5 5v1c0 .55.45 1 1 1h10c.55 0 1-.45 1-1v-1c0-2.76-2.24-5-5-5m5-9c-.47 0-.9.09-1.31.22C14.51 5.24 15 6.55 15 8s-.49 2.75-1.31 3.78c.41.13.84.22 1.31.22 2.28 0 4-1.72 4-4s-1.72-4-4-4m1 9h-1.11A6.97 6.97 0 0 1 17 18v1c0 .35-.07.69-.18 1H20c.55 0 1-.45 1-1v-1c0-2.76-2.24-5-5-5"/>',
-    box: "'0 0 24 24'",
-    pack: 'Boxicons v3 group',
-  },
-  IconCopyPlus: {
-    d: '<path d="M20 2H10c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2m-1 8h-3v3h-2v-3h-3V8h3V5h2v3h3z"/><path d="M4 22h10c1.1 0 2-.9 2-2v-2H8.5A2.5 2.5 0 0 1 6 15.5V8H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2"/>',
-    box: "'0 0 24 24'",
-    pack: 'Boxicons v3 copy-plus (filled)',
-  },
-  IconTrophyStar: {
-    d: '<path d="m21,4h-3v-1c0-.55-.45-1-1-1H7c-.55,0-1,.45-1,1v1h-3c-.55,0-1,.45-1,1v3c0,4.29,1.79,6.88,4.81,6.99.88,1.52,2.4,2.62,4.19,2.92v2.09h-3v2h8v-2h-3v-2.09c1.79-.3,3.32-1.4,4.19-2.92,3.01-.11,4.81-2.7,4.81-6.99v-3c0-.55-.45-1-1-1ZM4,8v-2h2v6c0,.28.03.56.06.83-1.84-.71-2.06-3.52-2.06-4.83Zm9.85,3.62l-1.85-.97-1.85.97.35-2.06-1.5-1.46,2.07-.3.93-1.88.93,1.88,2.07.3-1.5,1.46.35,2.06Zm6.15-3.62c0,1.31-.22,4.12-2.06,4.83.04-.27.06-.55.06-.83v-6h2v2Z"/>',
-    box: "'0 0 24 24'",
-    pack: 'Boxicons v3 trophy-star (filled)',
-  },
-  IconMedalStar: {
-    d: '<path d="m12,22c3.86,0,7-3.14,7-7s-3.14-7-7-7-7,3.14-7,7,3.14,7,7,7Zm-1.08-8.37l1.08-2.19,1.08,2.19,2.42.35-1.75,1.71.41,2.41-2.16-1.14-2.16,1.14.41-2.41-1.75-1.71,2.42-.35Z"/><path d="m11,2h-4c-.55,0-1,.45-1,1v6.73c1.26-1.43,3.02-2.41,5-2.66V2Z"/><path d="m18,9.73V3c0-.55-.45-1-1-1h-4v5.07c1.98.25,3.74,1.23,5,2.66Z"/>',
-    box: "'0 0 24 24'",
-    pack: 'Boxicons v3 medal-star (filled)',
-  },
-  IconRadio: {
-    d: '<path d="m20.25,5.03l-7.9-2.96-.7,1.87,2.84,1.06H4c-1.1,0-2,.9-2,2v12c0,1.1.9,2,2,2h16c1.1,0,2-.9,2-2V7c0-1.02-.77-1.85-1.75-1.97Zm-14.25,11.97v-2h6v2h-6Zm10,1c-1.1,0-2-.9-2-2s.9-2,2-2,2,.9,2,2-.9,2-2,2Zm4-7H4v-4h16v4Z"/>',
-    box: "'0 0 24 24'",
-    pack: 'Boxicons v3 radio (filled)',
-  },
-  IconX: {
-    d: '<path fill="currentColor" d="M55.1 73.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L147.2 256 9.9 393.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L192.5 301.3 329.9 438.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L237.8 256 375.1 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L192.5 210.7 55.1 73.4z"/>',
-    box: 'FA_BOX_384',
-    pack: 'Font Awesome solid xmark (Boxicons has no bxs-x)',
-  },
-  IconCheck: {
-    d: '<path fill="currentColor" d="M434.8 70.1c14.3 10.4 17.5 30.4 7.1 44.7l-256 352c-5.5 7.6-14 12.3-23.4 13.1s-18.5-2.7-25.1-9.3l-128-128c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l101.5 101.5 234-321.7c10.4-14.3 30.4-17.5 44.7-7.1z"/>',
-    box: 'FA_BOX_448',
-    pack: 'Font Awesome solid check (Boxicons has no bxs-check)',
-  },
-  IconPlus: {
-    d: '<path fill="currentColor" d="M256 64c0-17.7-14.3-32-32-32s-32 14.3-32 32l0 160-160 0c-17.7 0-32 14.3-32 32s14.3 32 32 32l160 0 0 160c0 17.7 14.3 32 32 32s32-14.3 32-32l0-160 160 0c17.7 0 32-14.3 32-32s-14.3-32-32-32l-160 0 0-160z"/>',
-    box: 'FA_BOX_448',
-    pack: 'Font Awesome solid plus (Boxicons has no bxs-plus)',
-  },
-  IconPause: {
-    d: '<path fill="currentColor" d="M48 32C21.5 32 0 53.5 0 80L0 432c0 26.5 21.5 48 48 48l64 0c26.5 0 48-21.5 48-48l0-352c0-26.5-21.5-48-48-48L48 32zm224 0c-26.5 0-48 21.5-48 48l0 352c0 26.5 21.5 48 48 48l64 0c26.5 0 48-21.5 48-48l0-352c0-26.5-21.5-48-48-48l-64 0z"/>',
-    box: 'FA_BOX_384',
-    pack: 'Font Awesome solid pause (Boxicons has no bxs-pause)',
-  },
-  IconStop: {
-    d: '<path fill="currentColor" d="M64 32l320 0c35.3 0 64 28.7 64 64l0 320c0 35.3-28.7 64-64 64L64 480c-35.3 0-64-28.7-64-64L0 96C0 60.7 28.7 32 64 32z"/>',
-    box: 'FA_BOX_448',
-    pack: 'Font Awesome solid stop (Boxicons has no bxs-stop)',
-  },
-  IconChevronsDownUp: {
-    d: '<path fill="currentColor" d="M214.6 41.4c-12.5-12.5-32.8-12.5-45.3 0l-160 160c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L192 109.3 329.4 246.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3l-160-160zm160 352l-160-160c-12.5-12.5-32.8-12.5-45.3 0l-160 160c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L192 301.3 329.4 438.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3z"/>',
-    box: 'FA_BOX_384',
-    pack: 'Font Awesome solid angles-up (collapse-all; Boxicons pair is Basic-only)',
-  },
-  IconChevronsUpDown: {
-    d: '<path fill="currentColor" d="M214.6 470.6c-12.5 12.5-32.8 12.5-45.3 0l-160-160c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0L192 402.7 329.4 265.4c12.5-12.5 32.8-12.5 45.3 0s12.5 32.8 0 45.3l-160 160zm160-352l-160 160c-12.5 12.5-32.8 12.5-45.3 0l-160-160c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0L192 210.7 329.4 73.4c12.5-12.5 32.8-12.5 45.3 0s12.5 32.8 0 45.3z"/>',
-    box: 'FA_BOX_384',
-    pack: 'Font Awesome solid angles-down (expand-all; Boxicons pair is Basic-only)',
-  },
-  IconSort: {
-    d: '<path fill="currentColor" d="M230.6 390.6l-80 80c-12.5 12.5-32.8 12.5-45.3 0l-80-80c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0L96 370.7 96 64c0-17.7 14.3-32 32-32s32 14.3 32 32l0 306.7 25.4-25.4c12.5-12.5 32.8-12.5 45.3 0s12.5 32.8 0 45.3zm182-340.9c50.7 101.3 77.3 154.7 80 160 7.9 15.8 1.5 35-14.3 42.9s-35 1.5-42.9-14.3l-7.2-14.3-88.4 0-7.2 14.3c-7.9 15.8-27.1 22.2-42.9 14.3s-22.2-27.1-14.3-42.9c2.7-5.3 29.3-58.7 80-160 5.4-10.8 16.5-17.7 28.6-17.7s23.2 6.8 28.6 17.7zM384 135.6l-20.2 40.4 40.4 0-20.2-40.4zM288 320c0-17.7 14.3-32 32-32l128 0c12.9 0 24.6 7.8 29.6 19.8s2.2 25.7-6.9 34.9L397.3 416 448 416c17.7 0 32 14.3 32 32s-14.3 32-32 32l-128 0c-12.9 0-24.6-7.8-29.6-19.8s-2.2-25.7 6.9-34.9l73.4-73.4-50.7 0c-17.7 0-32-14.3-32-32z"/>',
-    box: 'FA_BOX_512',
-    pack: 'Font Awesome solid arrow-down-a-z (Boxicons bx-sort-a-z is Basic-only)',
-  },
-  IconMaximize: {
-    d: '<path fill="currentColor" d="M32 32C14.3 32 0 46.3 0 64l0 96c0 17.7 14.3 32 32 32s32-14.3 32-32l0-64 64 0c17.7 0 32-14.3 32-32s-14.3-32-32-32L32 32zM64 352c0-17.7-14.3-32-32-32S0 334.3 0 352l0 96c0 17.7 14.3 32 32 32l96 0c17.7 0 32-14.3 32-32s-14.3-32-32-32l-64 0 0-64zM320 32c-17.7 0-32 14.3-32 32s14.3 32 32 32l64 0 0 64c0 17.7 14.3 32 32 32s32-14.3 32-32l0-96c0-17.7-14.3-32-32-32l-96 0zM448 352c0-17.7-14.3-32-32-32s-32 14.3-32 32l0 64-64 0c-17.7 0-32 14.3-32 32s14.3 32 32 32l96 0c17.7 0 32-14.3 32-32l0-96z"/>',
-    box: 'FA_BOX_448',
-    pack: 'Font Awesome solid expand (Boxicons bx-fullscreen is Basic-only)',
-  },
-  IconReset: {
-    d: '<path fill="currentColor" d="M256 64c-56.8 0-107.9 24.7-143.1 64l47.1 0c17.7 0 32 14.3 32 32s-14.3 32-32 32L32 192c-17.7 0-32-14.3-32-32L0 32C0 14.3 14.3 0 32 0S64 14.3 64 32l0 54.7C110.9 33.6 179.5 0 256 0 397.4 0 512 114.6 512 256S397.4 512 256 512c-87 0-163.9-43.4-210.1-109.7-10.1-14.5-6.6-34.4 7.9-44.6s34.4-6.6 44.6 7.9c34.8 49.8 92.4 82.3 157.6 82.3 106 0 192-86 192-192S362 64 256 64z"/>',
-    box: 'FA_BOX_512',
-    pack: 'Font Awesome solid arrow-rotate-left (Boxicons bx-reset is Basic-only)',
-  },
-  IconRotateCw: {
-    d: '<path fill="currentColor" d="M436.7 74.7L448 85.4 448 32c0-17.7 14.3-32 32-32s32 14.3 32 32l0 128c0 17.7-14.3 32-32 32l-128 0c-17.7 0-32-14.3-32-32s14.3-32 32-32l47.9 0-7.6-7.2c-.2-.2-.4-.4-.6-.6-75-75-196.5-75-271.5 0s-75 196.5 0 271.5 196.5 75 271.5 0c8.2-8.2 15.5-16.9 21.9-26.1 10.1-14.5 30.1-18 44.6-7.9s18 30.1 7.9 44.6c-8.5 12.2-18.2 23.8-29.1 34.7-100 100-262.1 100-362 0S-25 175 75 75c99.9-99.9 261.7-100 361.7-.3z"/>',
-    box: 'FA_BOX_512',
-    pack: 'Font Awesome solid arrow-rotate-right (Boxicons bx-refresh is Basic-only)',
-  },
-  // ── Hand-picked forms (titlebar marks, clipboard rows, knock-out fills) ──
-  // These were first hand-added to icons.jsx and folded back in here
-  // 2026-09-25, so a regeneration keeps them. Each carries its exact path.
-  IconMinus: {
-    d: '<path fill="currentColor" d="M432 256c0 17.7-14.3 32-32 32L48 288c-17.7 0-32-14.3-32-32s14.3-32 32-32l352 0c17.7 0 32 14.3 32 32z"/>',
-    box: 'FA_BOX_448',
-    pack: 'Font Awesome solid minus (bare mark — Boxicons has no bxs-minus)',
-  },
-  IconSquare: {
-    d: '<path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2zM4 4h16v16H4V4z"/>',
-    pack: 'bx-square (outlined by design — the titlebar maximize mark)',
-  },
-  IconRestore: {
-    d: '<path d="M20 2H10a2 2 0 0 0-2 2v4H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4h4a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zM4 20V10h10l.002 10H4zm16-6h-4v-4a2 2 0 0 0-2-2h-4V4h10v10z"/>',
-    pack: 'bx-copy (two offset frames — the titlebar restore mark)',
-  },
-  IconHelp: {
-    d: '<path fillRule="evenodd" d="M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10 10-4.486 10-10S17.514 2 12 2zm1 16h-2v-2h2v2zm.976-4.885c-.196.158-.385.309-.535.459-.408.407-.44.777-.441.793v.133h-2v-.167c0-.118.029-1.177 1.026-2.174.195-.195.437-.393.691-.599.734-.595 1.216-1.029 1.216-1.627a1.934 1.934 0 0 0-3.867.001h-2C8.066 7.765 9.831 6 12 6s3.934 1.765 3.934 3.934c0 1.597-1.179 2.55-1.958 3.181z"/>',
-    pack: 'bxs-help-circle',
-  },
-  IconCut: {
-    d: '<path d="M10 6.5C10 4.57 8.43 3 6.5 3S3 4.57 3 6.5 4.57 10 6.5 10a3.45 3.45 0 0 0 1.613-.413l2.357 2.528-2.318 2.318A3.46 3.46 0 0 0 6.5 14C4.57 14 3 15.57 3 17.5S4.57 21 6.5 21s3.5-1.57 3.5-3.5c0-.601-.166-1.158-.434-1.652l2.269-2.268L17 19.121a3 3 0 0 0 2.121.879H22L9.35 8.518c.406-.572.65-1.265.65-2.018zM6.5 8C5.673 8 5 7.327 5 6.5S5.673 5 6.5 5 8 5.673 8 6.5 7.327 8 6.5 8zm0 11c-.827 0-1.5-.673-1.5-1.5S5.673 16 6.5 16s1.5.673 1.5 1.5S7.327 19 6.5 19z"/><path d="m17 4.879-3.707 4.414 1.414 1.414L22 4h-2.879A3 3 0 0 0 17 4.879z"/>',
-    pack: 'bx-cut (no solid form exists)',
-  },
-  // Album page (2026-09-27), picked live from Boxicons v3 SVGs in Downloads:
-  // Currently status, rating, Add to Queue, Add to Playlist.
-  IconRocket: {
-    d: '<path d="M5 16c-2 1-2 5-2 5s3 0 5-2zM21 2h-3.69c-2.4 0-4.66.94-6.36 2.64L8.69 6.9a8.4 8.4 0 0 0-6.24 1.27c-.25.17-.41.44-.44.73s.08.59.29.81l12 12c.2.2.45.29.71.29s.51-.1.71-.29c1.9-1.9 1.6-5.08 1.38-6.38l2.28-2.28c1.7-1.7 2.64-3.96 2.64-6.36V3c0-.55-.45-1-1-1Zm-3.59 7.41c-.78.78-2.05.78-2.83 0s-.78-2.05 0-2.83 2.05-.78 2.83 0 .78 2.05 0 2.83"/>',
-    box: "'0 0 24 24'",
-    pack: 'rocket (user-supplied rocket.svg, 2026-09-27)',
-  },
-  IconFire: {
-    d: '<path d="M14.5 18.56c0-2.05-1.68-3.38-2.5-3.91-.82.53-2.5 1.86-2.5 3.91 0 1.62 1.12 2.94 2.5 2.94s2.5-1.32 2.5-2.94"/><path d="M18.78 7.39a.99.99 0 0 0-.83.32c-.77.84-1.82 1.31-2.94 1.31-2.21 0-4.01-1.8-4.01-4.01 0-.27.03-.56.1-.87.08-.39-.07-.79-.38-1.02a.98.98 0 0 0-1.09-.06C7.16 4.48 3 7.67 3 13.01c0 3.59 2.12 6.7 5.18 8.14-.42-.75-.68-1.63-.68-2.57 0-3.96 3.9-5.88 4.07-5.96.28-.13.59-.13.87 0 .17.08 4.07 2.01 4.07 5.96 0 .95-.26 1.82-.68 2.57 3.05-1.44 5.18-4.54 5.18-8.14 0-1.82-.49-3.55-1.47-5.14a.98.98 0 0 0-.76-.47Z"/>',
-    box: "'0 0 24 24'",
-    pack: 'Boxicons v3 fire (user-supplied, 2026-09-27)',
-  },
-  IconPaperPlane: {
-    d: '<path d="M20.56 3.17c-.29-.2-.67-.23-.99-.08l-17 8.01c-.36.17-.58.53-.57.92 0 .39.24.75.6.9l3.36 1.47L16 8l-7 8v6l5.46-3.9 4.14 1.81c.13.06.26.08.4.08.18 0 .36-.05.52-.15a.99.99 0 0 0 .48-.79l1-15c.02-.35-.14-.69-.43-.89Z"/>',
-    box: "'0 0 24 24'",
-    pack: 'Boxicons v3 paper-plane (user-supplied, 2026-09-27)',
-  },
-  IconFingerUp: {
-    d: '<path d="M12 9.57V4c0-1.1-.9-2-2-2s-2 .9-2 2v11.87l-3.06-1.15c-1.06-.4-2.24.16-2.6 1.24l-.13.38c-.13.39 0 .82.31 1.08l5.2 4.33c.18.15.41.23.64.23H21c.55 0 1-.45 1-1v-8.27c0-1-.73-1.84-1.72-1.98L12 9.55Z"/>',
-    box: "'0 0 24 24'",
-    pack: 'Boxicons v3 finger-up (user-supplied, 2026-09-27)',
-  },
-  IconHandRock: {
-    d: '<path d="M20.5 5c-.83 0-1.5.67-1.5 1.5v7a2.5 2.5 0 0 1-2.5 2.5c-.64 0-1.22-.25-1.66-.65-.35.96-1.26 1.65-2.34 1.65a2.5 2.5 0 0 1-2.5-2.5v-10C10 3.67 9.33 3 8.5 3S7 3.67 7 4.5v11.81l-2.22-3.6c-.44-.71-1.36-.93-2.07-.49s-.93 1.36-.49 2.07l3.31 5.34A5 5 0 0 0 9.78 22H17c2.76 0 5-2.24 5-5V6.5c0-.83-.67-1.5-1.5-1.5"/><path d="M12.5 16c.83 0 1.5-.67 1.5-1.5v-4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v4c0 .83.67 1.5 1.5 1.5m4-1c.83 0 1.5-.67 1.5-1.5v-3c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v3c0 .83.67 1.5 1.5 1.5"/>',
-    box: "'0 0 24 24'",
-    pack: 'Boxicons v3 hand-rock (user-supplied hand-rock.svg, 2026-09-27)',
-  },
-  IconBookmarkAlt: {
-    d: '<path d="M18.5 2h-12C4.57 2 3 3.57 3 5.5V21c0 .35.18.67.47.85s.66.2.97.04l5.55-2.78 5.55 2.78a.997.997 0 0 0 1.45-.89v-8h4c.55 0 1-.45 1-1V5.5c0-1.93-1.57-3.5-3.5-3.5Zm1.5 9h-3V5.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5z"/>',
-    box: "'0 0 24 24'",
-    pack: 'Boxicons v3 bookmark-alt (user-supplied bookmark-alt.svg, 2026-09-27)',
-  },
-  IconFireAlt: {
-    d: '<path d="M17.55 6.17c-.35-.23-.8-.22-1.14.02-.34.25-.49.68-.37 1.08.27.95.75 3.7-.23 4.99-.38.5-.97.74-1.81.74-.6 0-1.4-.16-1.8-.91-.47-.88-.23-2.24.64-3.54 1.03-1.54 1.13-3.2.29-4.68a5.5 5.5 0 0 0-1.56-1.71.97.97 0 0 0-.81-.13c-.28.07-.51.26-.64.52-.58 1.17-1.86 2.22-3.09 3.23-.63.52-1.22 1-1.73 1.51C3.03 9.56 3.01 12.86 3.01 13c0 4.96 4.04 9 9 9s9-4.04 9-9c0-.19-.04-4.56-3.45-6.83Z"/>',
-    box: "'0 0 24 24'",
-    pack: 'Boxicons v3 fire-alt (user-supplied fire-alt.svg, 2026-09-27)',
-  },
-  IconStarMark: {
-    d: '<path d="m6.87 14.33-1.83 6.4c-.12.4.03.84.37 1.08.34.25.8.26 1.14.02L12 18.2l5.45 3.63a.99.99 0 0 0 1.14-.02c.34-.25.49-.68.37-1.08l-1.83-6.4 4.54-4.08c.3-.27.41-.69.28-1.06-.13-.38-.47-.64-.87-.68l-5.7-.45-2.47-5.46a.998.998 0 0 0-1.82 0L8.62 8.06l-5.7.45c-.4.03-.74.3-.87.68s-.02.8.28 1.06z"/>',
-    box: "'0 0 24 24'",
-    pack: 'Boxicons v3 star (user-supplied star.svg, 2026-09-27; IconStar is the older bxs-star)',
-  },
-};
-
-const read = (dir, file) => {
-  const p = path.join(dir, file + '.svg');
+// Inner markup of one file: drop the <svg> shell, the licence comment and the
+// meaningless class="b" some paths carry (JSX would reject `class`).
+const read = (stem) => {
+  const p = path.join(DIR, `bx-${stem}.svg`);
   if (!fs.existsSync(p)) return null;
   return fs.readFileSync(p, 'utf8')
     .replace(/^[\s\S]*?<svg[^>]*>/, '').replace(/<\/svg>[\s\S]*$/, '')
+    .replace(/<!--[\s\S]*?-->/g, '').replace(/\sclass="[^"]*"/g, '')
     .replace(/\s+/g, ' ').trim();
 };
 
-// Filled first (it prefixes the Basic name with `bxs-`); fall back to Basic for
-// the plain marks — close, tick, plus, chevrons — which have no filled form
-// because they are strokes, not shapes. Both packs are Boxicons' free tier.
-const body = (name) => {
-  const filled = read(FILLED, name.replace(/^bx-/, 'bxs-'));
-  if (filled) return { d: filled, pack: name.replace(/^bx-/, 'bxs-') };
-  const basic = read(BASIC, name);
-  return basic ? { d: basic, pack: `${name} (Basic — no filled form)` } : null;
-};
-
-const rule = (title) => {
-  const bar = '─'.repeat(Math.max(1, 74 - title.length));
-  return `\n// ── ${title} ${bar}`;
-};
+const rule = (title) => `\n// ── ${title} ${'─'.repeat(Math.max(1, 74 - title.length))}`;
 
 const missing = [];
-const fellBack = [];
 const lines = [];
 const names = Object.keys(MAP);
 const pad = Math.max(...names.map((n) => n.length));
-for (const [icon, bx] of Object.entries(MAP)) {
-  const over = OVERRIDES[icon];
-  const hit = over || body(bx);
-  if (!hit) { missing.push(`${icon} -> ${bx}`); continue; }
-  if (!over && hit.pack.includes('Basic')) fellBack.push(icon);
+for (const [icon, stem] of Object.entries(MAP)) {
+  const d = read(stem);
+  if (!d) { missing.push(`${icon} -> bx-${stem}.svg`); continue; }
   if (SECTIONS[icon]) lines.push(rule(SECTIONS[icon]));
-  if (NOTES[icon]) lines.push(NOTES[icon]);
-  // An override on the plain 24 box leaves `box` out, so no third argument.
-  const box = hit.box ? `, ${hit.box}` : '';
-  lines.push(`export function ${icon.padEnd(pad)}({ size = ${SIZES[icon] || 18} }) { return wrap(size, <>${hit.d}</>${box}); } // ${hit.pack}`);
+  lines.push(`export function ${icon.padEnd(pad)}({ size = ${SIZES[icon] || 18} }) { return wrap(size, <>${d}</>${ZOOM[icon] ? `, '${box(ZOOM[icon])}'` : ''}); } // bx-${stem}`);
 }
 
+if (missing.length) {
+  console.error('MISSING (nothing written):\n  ' + missing.join('\n  '));
+  process.exit(1);
+}
 const out = HEADER + lines.join('\n') + '\n';
 fs.writeFileSync(OUT, out);
-console.log('MISSING:', missing.length ? '\n  ' + missing.join('\n  ') : 'none');
-console.log(`\nBASIC fallback (${fellBack.length}):\n  ${fellBack.join(', ')}`);
-console.log('\ngenerated:', names.length - missing.length, 'icons,', out.length, 'bytes ->', path.relative(REPO, OUT));
+console.log('generated:', names.length, 'icons,', out.length, 'bytes ->', path.relative(REPO, OUT));

@@ -26,7 +26,7 @@ import Rail, { useRailOrder } from '@host/components/ui/Rail.jsx';
 import { api, mediaHttpUrl } from '@host/api.js';
 import { openConcierge } from '@host/agents/concierge/ConciergeProvider.jsx';
 import useOverlayPanelDrag from './useOverlayPanelDrag.js';
-import { IconX } from '../components/icons.jsx';
+import { IconX, IconCamera, IconDot, IconFilm, IconImage, IconPlayMark, IconStop } from '../components/icons.jsx';
 import '@modules/studio/overlay/stt.css'; // reused .stt-vu / .stt-transcript chrome (the host never mounts SttPage)
 
 // Panel presence — shared with StudioOverlayLauncher via localStorage + a window
@@ -81,10 +81,10 @@ function ViewAllModal({ section, clips, shots, history, onClose, doCopy, onDelHi
         </div>
         <div className={`ov-studio-modal-body${isList ? ' is-list' : ''}`}>
           {section === 'video' && (clips.length
-            ? clips.map((c) => <Thumb key={c.path} poster={c.poster} glyph="▶" />)
+            ? clips.map((c) => <Thumb key={c.path} poster={c.poster} glyph={<IconPlayMark size="1.1em"/>} />)
             : <div className="ov-studio-empty">No clips yet</div>)}
           {section === 'shots' && (shots.length
-            ? shots.map((s) => <Thumb key={s.path} poster={s.poster} glyph="🖼" />)
+            ? shots.map((s) => <Thumb key={s.path} poster={s.poster} glyph={<IconImage size="1em"/>} />)
             : <div className="ov-studio-empty">No screenshots yet</div>)}
           {section === 'voice' && (history.length
             ? history.map((r) => (
@@ -204,7 +204,7 @@ export default function OverlayStudioPanel({ showToast }) {
         <div className="candy-btn rail-tile is-panel" data-shape="tile" aria-label="Voice section">
           <div className="candy-face">
             <div className="candy-center-row ov-studio-sec-head">
-              <span className="ov-studio-sec-title section-title">Voice{recording && <> · <span style={{ color: 'var(--accent)' }}>● live</span> · {mmss(elapsed)}</>}</span>
+              <span className="ov-studio-sec-title section-title">Voice{recording && <> · <span style={{ color: 'var(--accent)' }}><IconDot size="0.6em"/> live</span> · {mmss(elapsed)}</>}</span>
               <button type="button" data-no-drag className="candy-btn" data-size="small" onClick={() => setViewAll('voice')}><span className="candy-face">View All</span></button>
             </div>
             <div className="candy-center-row" style={{ gap: 10 }}>
@@ -246,11 +246,11 @@ export default function OverlayStudioPanel({ showToast }) {
               <button type="button" data-no-drag className="candy-btn" data-size="small" onClick={() => setViewAll('video')}><span className="candy-face">View All</span></button>
             </div>
             <div className="candy-center-row" style={{ gap: 8 }}>
-              <button type="button" data-no-drag className="candy-btn" data-size="small" onClick={clip}><span className="candy-face">▣ Clip Last 30s</span></button>
-              <button type="button" data-no-drag className={`candy-btn${recordingVid ? ' is-active' : ''}`} data-size="small" onClick={toggleRecord}><span className="candy-face">{recordingVid ? '■ Stop' : '● Record'}</span></button>
+              <button type="button" data-no-drag className="candy-btn" data-size="small" onClick={clip}><span className="candy-face"><IconFilm size="1em"/> Clip Last 30s</span></button>
+              <button type="button" data-no-drag className={`candy-btn${recordingVid ? ' is-active' : ''}`} data-size="small" onClick={toggleRecord}><span className="candy-face">{recordingVid ? <><IconStop size="0.7em"/> Stop</> : <><IconDot size="0.6em"/> Record</>}</span></button>
             </div>
             {clips.length ? (
-              <div className="ov-studio-thumbs">{clips.slice(0, 3).map((c) => <Thumb key={c.path} poster={c.poster} glyph="▶" />)}</div>
+              <div className="ov-studio-thumbs">{clips.slice(0, 3).map((c) => <Thumb key={c.path} poster={c.poster} glyph={<IconPlayMark size="1.1em"/>} />)}</div>
             ) : <div className="ov-studio-empty">No clips yet</div>}
           </div>
         </div>
@@ -266,10 +266,10 @@ export default function OverlayStudioPanel({ showToast }) {
               <button type="button" data-no-drag className="candy-btn" data-size="small" onClick={() => setViewAll('shots')}><span className="candy-face">View All</span></button>
             </div>
             <div className="candy-center-row" style={{ gap: 8 }}>
-              <button type="button" data-no-drag className="candy-btn" data-size="small" onClick={screenshot}><span className="candy-face">📷 Screenshot</span></button>
+              <button type="button" data-no-drag className="candy-btn" data-size="small" onClick={screenshot}><span className="candy-face"><IconCamera size="1em"/> Screenshot</span></button>
             </div>
             {shots.length ? (
-              <div className="ov-studio-thumbs">{shots.slice(0, 3).map((s) => <Thumb key={s.path} poster={s.poster} glyph="🖼" />)}</div>
+              <div className="ov-studio-thumbs">{shots.slice(0, 3).map((s) => <Thumb key={s.path} poster={s.poster} glyph={<IconImage size="1em"/>} />)}</div>
             ) : <div className="ov-studio-empty">No screenshots yet</div>}
           </div>
         </div>

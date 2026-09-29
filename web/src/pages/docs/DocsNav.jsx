@@ -73,7 +73,7 @@ export default function DocsNav({ route, accent }) {
     if (!manifest) return [];
     // Pinned top-level Releases leaf (folded in from the retired standalone page).
     const releases = {
-      id: '/docs/releases', label: 'Releases', isFolder: false,
+      id: '/docs/releases', label: 'Releases', icon: 'IconTag', isFolder: false,
       active: selectedPath === '/docs/releases',
       onActivate: () => navigate('/docs/releases'),
       onContextMenu: fileMenu('Mortar & Pestle/Releases.md', '/docs/releases'),
@@ -121,5 +121,5 @@ export default function DocsNav({ route, accent }) {
   };
 
   if (!manifest) return null;
-  return <TreeSidebar nodes={nodes} controller={controller} buttons={buttons} accent={accent}/>;
+  return <TreeSidebar nodes={nodes} controller={controller} buttons={buttons} accent={accent} iconScope="docs:tree"/>;
 }

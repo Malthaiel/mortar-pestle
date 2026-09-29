@@ -11,7 +11,7 @@ import { useEventTypes } from '../../hooks/useEventTypes.js';
 import { MIN_REMINDERS, DAY_REMINDERS, reminderLabel, keyForDate } from '../../util/events.js';
 import { candyGap } from '../../util/candy.js';
 import { AccentGrid } from '../ui/AccentPicker.jsx';
-import { IconX, IconLink } from '../icons.jsx';
+import { IconX, IconLink, IconCheck } from '../icons.jsx';
 import MiniMonthPicker from './MiniMonthPicker.jsx';
 import { PrimaryBtn, OutlinedBtn, DangerOutlinedBtn } from '../ui/index.js';
 
@@ -435,9 +435,9 @@ function TypePill({ type, active, accent, editing, confirming, onClick, onAskDel
       }}>
         Delete {type.name}?
         <button type="button" data-own-press className="candy-btn is-danger" data-shape="chip" onClick={onConfirmDelete}
-          title="Delete type"><span className="candy-face">✓</span></button>
+          title="Delete type"><span className="candy-face"><IconCheck size="0.9em"/></span></button>
         <button type="button" data-own-press className="candy-btn" data-shape="chip" onClick={onCancelDelete}
-          title="Keep type"><span className="candy-face">✕</span></button>
+          title="Keep type"><span className="candy-face"><IconX size="0.8em"/></span></button>
       </span>
     );
   }
@@ -454,7 +454,7 @@ function TypePill({ type, active, accent, editing, confirming, onClick, onAskDel
       {editing && (
         <button type="button" data-own-press className="candy-btn is-danger" data-shape="chip" onClick={onAskDelete}
           aria-label={`Delete ${type.name}`} title={`Delete ${type.name}`}>
-          <span className="candy-face" style={{ lineHeight: 1 }}>×</span></button>
+          <span className="candy-face" style={{ lineHeight: 1 }}><IconX size="0.65em"/></span></button>
       )}
     </span>
   );

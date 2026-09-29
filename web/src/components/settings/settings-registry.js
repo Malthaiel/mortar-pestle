@@ -8,6 +8,7 @@
 //   page    module id, only under tab:'modules'; null elsewhere
 //   section sub-tab id within a tab strip or module page; null when the
 //           surface has no strip
+// A section's `icon` is the icons.jsx export its Settings-tree row shows.
 // String form: 'system/downloads' | 'modules/browser/vault' — segment 2 is a
 // page only under 'modules'.
 
@@ -17,18 +18,18 @@ export const TAB_SECTIONS = {
   navigation: {
     default: 'dock',
     sections: [
-      { id: 'dock',    label: 'Dock' },
-      { id: 'left',    label: 'Left Sidebar' },
-      { id: 'right',   label: 'Right Sidebar' },
-      { id: 'general', label: 'General' },
+      { id: 'dock',    label: 'Dock',          icon: 'IconDock' },
+      { id: 'left',    label: 'Left Sidebar',  icon: 'IconDockLeft' },
+      { id: 'right',   label: 'Right Sidebar', icon: 'IconDockRight' },
+      { id: 'general', label: 'General',       icon: 'IconSliders' },
     ],
   },
   system: {
     default: 'system',
     sections: [
-      { id: 'system',    label: 'System' },
-      { id: 'downloads', label: 'Downloads' },
-      { id: 'recycle',   label: 'Recycling Bin' },
+      { id: 'system',    label: 'System',        icon: 'IconDesktop' },
+      { id: 'downloads', label: 'Downloads',     icon: 'IconDownload' },
+      { id: 'recycle',   label: 'Recycling Bin', icon: 'IconRecycle' },
     ],
   },
   // The Core / Studio / Widget tier pages retired 2026-09-28: tiers are folders
@@ -36,16 +37,16 @@ export const TAB_SECTIONS = {
   modules: {
     default: 'tools',
     sections: [
-      { id: 'tools',     label: 'Tools' },
-      { id: 'community', label: 'Community' },
+      { id: 'tools',     label: 'Tools',     icon: 'IconBriefcase' },
+      { id: 'community', label: 'Community', icon: 'IconCommunity' },
     ],
   },
   agents: {
     default: 'general',
     sections: [
-      { id: 'general',     label: 'General' },
-      { id: 'chat-window', label: 'Chat Window' },
-      { id: 'concierge',   label: 'Concierge' },
+      { id: 'general',     label: 'General',     icon: 'IconSliders' },
+      { id: 'chat-window', label: 'Chat Window', icon: 'IconChat' },
+      { id: 'concierge',   label: 'Concierge',   icon: 'IconHeadset' },
     ],
   },
   // Releases tab sections ARE Area names (free-form, module-less subset built
@@ -59,10 +60,10 @@ export const PAGE_SECTIONS = {
   browser: {
     default: 'adblock',
     sections: [
-      { id: 'adblock', label: 'Ad Blocker' },
-      { id: 'data',    label: 'Browsing Data' },
-      { id: 'vault',   label: 'Password Vault' },
-      { id: 'sidebar', label: 'Browser Sidebar' },
+      { id: 'adblock', label: 'Ad Blocker',      icon: 'IconShield' },
+      { id: 'data',    label: 'Browsing Data',   icon: 'IconHistory' },
+      { id: 'vault',   label: 'Password Vault',  icon: 'IconKey' },
+      { id: 'sidebar', label: 'Browser Sidebar', icon: 'IconSidebar' },
     ],
   },
   // The 'video-settings' legacy alias lands here with section:null → 'anime',
@@ -70,28 +71,28 @@ export const PAGE_SECTIONS = {
   library: {
     default: 'anime',
     sections: [
-      { id: 'anime', label: 'Anime' },
-      { id: 'music', label: 'Music' },
+      { id: 'anime', label: 'Anime', icon: 'IconSparkle' },
+      { id: 'music', label: 'Music', icon: 'IconMusic' },
     ],
   },
   overlay: {
     default: 'capture',
     sections: [
-      { id: 'capture', label: 'Capture' },
-      { id: 'voice',   label: 'Voice' },
-      { id: 'agents',  label: 'Agents' },
-      { id: 'monitor', label: 'Monitor' },
-      { id: 'deadlock', label: 'Deadlock' },
+      { id: 'capture', label: 'Capture', icon: 'IconCamcorder' },
+      { id: 'voice',   label: 'Voice',   icon: 'IconMic' },
+      { id: 'agents',  label: 'Agents',  icon: 'IconBot' },
+      { id: 'monitor', label: 'Monitor', icon: 'IconActivity' },
+      { id: 'deadlock', label: 'Deadlock', icon: 'IconGamepad' },
     ],
   },
   broadcast: {
     default: 'engine',
     sections: [
-      { id: 'engine',    label: 'Engine' },
-      { id: 'output',    label: 'Output' },
-      { id: 'recording', label: 'Recording' },
-      { id: 'replay',    label: 'Replay' },
-      { id: 'stream',    label: 'Stream' },
+      { id: 'engine',    label: 'Engine',    icon: 'IconServer' },
+      { id: 'output',    label: 'Output',    icon: 'IconShare' },
+      { id: 'recording', label: 'Recording', icon: 'IconVideo' },
+      { id: 'replay',    label: 'Replay',    icon: 'IconRepeat' },
+      { id: 'stream',    label: 'Stream',    icon: 'IconBroadcast' },
     ],
   },
 };

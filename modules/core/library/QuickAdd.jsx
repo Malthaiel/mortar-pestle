@@ -8,10 +8,11 @@
 
 import { useMenuTrigger } from '@host/context-menu/useContextMenu.js';
 import { STATUS_ICON } from '@host/util/media-status.js';
+import { IconCaretDown, IconCheck, IconPlus } from '@host/components/icons.jsx';
 
 export function AddToLibraryButton({ accent, statuses, defaultStatus, busy, added, disabled, onAdd }) {
   const dead = !!(busy || added || disabled);
-  const text = added ? '✓ In library' : busy ? 'Adding' : '+ Add to Library';
+  const text = added ? <><IconCheck size="0.9em"/> In library</> : busy ? 'Adding' : <><IconPlus size="0.9em"/> Add to Library</>;
   const menu = useMenuTrigger(() => statuses.map(s => ({
     label: s.replace(/-/g, ' '),
     icon: STATUS_ICON[s],
@@ -40,7 +41,7 @@ export function AddToLibraryButton({ accent, statuses, defaultStatus, busy, adde
         title="Add with a different status"
         aria-label="Add with a different status"
         style={{ '--accent': accent, height: 33, opacity: dead ? 0.65 : 1 }}
-      ><span className="candy-face" style={{ padding: '0 9px', fontSize: 11 }}>▾</span></button>
+      ><span className="candy-face" style={{ padding: '0 9px', fontSize: 11 }}><IconCaretDown size="0.7em"/></span></button>
     </div>
   );
 }

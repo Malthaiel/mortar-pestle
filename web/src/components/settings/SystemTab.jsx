@@ -13,6 +13,7 @@ import EnableToggle from '../ui/EnableToggle.jsx';
 import { SectionBand, Row, StackedRow } from './section-primitives.jsx';
 import { useNetworkUpdate } from '../../hooks/useNetworkUpdate.js';
 import { TAB_SECTIONS } from './settings-registry.js';
+import { IconCaretRight, IconCheck, IconX } from '../icons.jsx';
 
 export default function SystemTab({ settings, setSetting, accent, section }) {
   const active = section || TAB_SECTIONS.system.default;
@@ -422,7 +423,7 @@ function OutputPanel({ lines, open, onToggle, running }) {
           transform: open ? 'rotate(90deg)' : 'rotate(0deg)',
           transition: 'transform 160ms ease',
           fontFamily: 'var(--font-mono)',
-        }}>▸</span>
+        }}><IconCaretRight size="0.7em"/></span>
         <span style={{}}>Output · {count} line{count === 1 ? '' : 's'}</span>
         {!open && tailLine && (
           <span style={{
@@ -464,8 +465,8 @@ function BuildResultLine({ result, mode }) {
   const elapsed = formatElapsed(result.elapsedMs);
   const modeLabel = MODE_LABELS[mode] || 'App';
   const text = ok
-    ? `✓ Built (${modeLabel}) — ${elapsed}`
-    : `✗ Build failed (exit ${result.exitCode})${result.error ? ` — ${result.error}` : ' — see output'}`;
+    ? <><IconCheck size="0.9em"/> Built ({modeLabel}) — {elapsed}</>
+    : <><IconX size="0.8em"/> Build failed (exit {result.exitCode}){result.error ? ` — ${result.error}` : ' — see output'}</>;
   return (
     <div style={{
       fontSize: 11, fontFamily: 'var(--font-mono)',

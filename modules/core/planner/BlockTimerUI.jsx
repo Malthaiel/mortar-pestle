@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Popover, Toast, OutlinedBtn } from '@host/components/ui/index.js';
 import { toHM } from './blockPull.js';
+import { IconPlayMark } from '@host/components/icons.jsx';
 
 function fmtT(mins, t24) {
   if (mins >= 1440) return t24 ? '24:00' : '12:00 AM';
@@ -199,7 +200,7 @@ export function NextBlockToast({ accent, prompt, onAction, onDismiss }) {
     <div style={{ position: 'fixed', right: 20, bottom: 20, zIndex: 99, pointerEvents: 'none' }}>
       <Toast
         accent={accent}
-        glyph="▶"
+        glyph={<IconPlayMark size="1.1em"/>}
         title="Block complete"
         message={`Up next: ${prompt.label}`}
         actions={(

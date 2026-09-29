@@ -18,6 +18,7 @@ import { useContextMenu } from '../context-menu/useContextMenu.js';
 import { buildFileItemMenu } from '../context-menu/defaultMenus.js';
 import { IconChevronRight } from './icons.jsx';
 import { NAV_H } from './vault-tree/treeKit.jsx';
+import { renderTreeIcon } from './vault-tree/treeIcons.jsx';
 
 const CAPTION_STYLE = {
   fontSize: 9,
@@ -222,8 +223,10 @@ function SidebarNavItem({ item, selected, accent, onClick, onItemContextMenu }) 
           ...(item.mono ? { fontFamily: 'var(--font-mono)' } : {}),
         }}
       >
+        {renderTreeIcon(item.icon)}
+        {/* Hugs its text when nothing trails, so icon + label centre as a pair. */}
         <span style={{
-          flex: 1, minWidth: 0,
+          flex: item.trailing ? 1 : '0 1 auto', minWidth: 0,
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>
           {item.title || item.name}

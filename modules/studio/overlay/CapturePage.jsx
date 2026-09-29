@@ -7,7 +7,7 @@ import { sendToEditor } from './sendToEditor.js';
 import { remuxWithProcess } from '../video-editor/remuxJob.js';
 import { sendToStt } from './sendToStt.js';
 import { openInFiles } from '@host/components/vault-tree/revealInFiles.js';
-import { IconFolder } from '@host/components/icons.jsx';
+import { IconFolder, IconAlert, IconCheck, IconX } from '@host/components/icons.jsx';
 
 // Game Capture review surface (Step 4 frontend). Mirrors EditorPage's shell:
 // a header bar (title + status readout + actions), a body row (left clip list
@@ -390,7 +390,7 @@ export default function CapturePage({ api, accent }) {
           {deleteToast && (
             <Toast
               accent={accent}
-              glyph={deleteToast.error ? '!' : deleteToast.restored ? '✓' : '×'}
+              glyph={deleteToast.error ? <IconAlert size="1em"/> : deleteToast.restored ? <IconCheck size="0.9em"/> : <IconX size="0.65em"/>}
               title={deleteToast.error ? 'Delete failed' : deleteToast.restored ? 'Clip restored' : 'Clip deleted'}
               message={deleteToast.error ? undefined : deleteToast.name}
               error={deleteToast.error}
@@ -407,7 +407,7 @@ export default function CapturePage({ api, accent }) {
           {sendToast && (
             <Toast
               accent={accent}
-              glyph={sendToast.error ? '!' : sendToast.done ? '✓' : ''}
+              glyph={sendToast.error ? <IconAlert size="1em"/> : sendToast.done ? <IconCheck size="0.9em"/> : ''}
               title={sendToast.error ? 'Send failed' : sendToast.done ? 'Ready in the editor' : 'Sending'}
               message={sendToast.error ? undefined : sendToast.name}
               error={sendToast.error}

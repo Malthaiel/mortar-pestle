@@ -123,7 +123,7 @@ function TreeNode({ node, tree, accent, currentPath, openMenu, nav, onGear, icon
             a long scrim name made its own gear unclickable. */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
           <CandyHeader label={node.name} open={open} accent={accent}
-            onToggle={() => tree.toggle(node.vaultPath)} leadIcon={icons.leadIcon(node.vaultPath)}
+            onToggle={() => tree.toggle(node.vaultPath)} leadIcon={icons.leadIcon(node.vaultPath, 'IconFolder')}
             onContextMenu={(e) => openMenu(e, node, hasMenu)}/>
           {/* size=NAV_H, not a hand-picked number: it is the same min-height the
               row pill uses, so the two buttons side by side are exactly the same
@@ -144,7 +144,7 @@ function TreeNode({ node, tree, accent, currentPath, openMenu, nav, onGear, icon
   const selected = currentPath === node.vaultPath;
   return (
     <TreeRow label={node.name} selected={selected} accent={accent}
-      leadIcon={icons.leadIcon(node.vaultPath)}
+      leadIcon={icons.leadIcon(node.vaultPath, 'IconFile')}
       onContextMenu={(e) => openMenu(e, node, !!vodOf(node.vaultPath))}
       onClick={() => nav('/deadlock/' + encodePagePath(node.vaultPath))}/>
   );
@@ -420,7 +420,7 @@ export default function DeadlockTree({ route, accent, tree, nav = navigate, onNe
               return (
                 <div key={g.vaultPath} style={{ display: 'flex', flexDirection: 'column' }}>
                   <CandyHeader label={g.name} open={open} onToggle={() => tree.toggle(g.vaultPath)} accent={accent}
-                    leadIcon={icons.leadIcon(g.vaultPath)} onContextMenu={(e) => openMenu(e, g, false)}/>
+                    leadIcon={icons.leadIcon(g.vaultPath, 'IconFolder')} onContextMenu={(e) => openMenu(e, g, false)}/>
                   <Collapsible open={open} count={count}>
                     {mounted && <TreeBody open={open} animateOnMount={false} node={g}
                       tree={tree} accent={accent} currentPath={currentPath}

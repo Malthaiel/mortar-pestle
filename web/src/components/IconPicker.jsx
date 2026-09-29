@@ -8,11 +8,12 @@
 // (ConfirmModal's `width` prop can stay — it's generally useful.)
 //
 // An override value is either a pack export name ('IconStar') or raw <svg> markup
-// pasted from boxicons.com / fontawesome.com.
+// (a pick from the full Boxicons folder, or pasted).
 
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import * as icons from './icons.jsx';
 import ConfirmModal from './ui/ConfirmModal.jsx';
+import { useIconLibrary, svgComponent, isMarkup, iconWords } from './iconLibrary.jsx';
 import { TextInput, OutlinedBtn } from './ui';
 
 export const ICON_OVERRIDE_KEY = 'iconOverrides:v1';
@@ -42,33 +43,9 @@ const setOverride = (key, value) => {
 };
 
 // ── resolving an override to a component ─────────────────────────────────────
-// Pasted markup is re-framed to the requested size; whatever `fill` the source
-// carries is left alone unless it has none, in which case currentColor applies.
-const sizeSvg = (markup, size) => markup
-  .replace(/\swidth="[^"]*"/i, '')
-  .replace(/\sheight="[^"]*"/i, '')
-  .replace(/<svg/i, `<svg width="${size}" height="${size}" fill="currentColor"`);
-
-// One component per distinct markup string, so a re-render doesn't hand React a
-// brand-new component type and remount the icon on every paint.
-const svgComponents = new Map();
-function svgComponent(markup) {
-  let C = svgComponents.get(markup);
-  if (!C) {
-    C = ({ size = 18 }) => (
-      <span
-        style={{ display: 'inline-flex', width: size, height: size }}
-        dangerouslySetInnerHTML={{ __html: sizeSvg(markup, size) }}
-      />
-    );
-    svgComponents.set(markup, C);
-  }
-  return C;
-}
-
 function resolve(value, Fallback) {
   if (!value) return Fallback;
-  if (value.trim().startsWith('<')) return svgComponent(value.trim());
+  if (isMarkup(value)) return svgComponent(value.trim());
   return icons[value] || Fallback;
 }
 
@@ -103,9 +80,11 @@ const NAMES = Object.keys(icons).filter(n => n.startsWith('Icon')).sort();
 export function IconPickerHost() {
   const [target, setTarget] = useState(null);
   const [paste, setPaste] = useState('');
+  const [q, setQ] = useState('');
   const map = useSyncExternalStore(subscribe, readMap);
+  const folder = useIconLibrary(!!target);
 
-  useEffect(() => { openFn = (key, label) => { setPaste(''); setTarget({ key, label }); }; return () => { openFn = null; }; }, []);
+  useEffect(() => { openFn = (key, label) => { setPaste(''); setQ(''); setTarget({ key, label }); }; return () => { openFn = null; }; }, []);
 
   if (!target) return null;
   const current = map[target.key];
@@ -117,6 +96,14 @@ export function IconPickerHost() {
   // there is one, otherwise reset.
   const pasted = paste.trim();
   const hasPaste = pasted.startsWith('<');
+  // [title, search words, saved value, Component]: the app's own icons (saved by
+  // name), then the whole folder (saved as markup, drawn on demand).
+  const term = q.trim().toLowerCase();
+  const cells = [
+    ...NAMES.map((n) => [n, iconWords(n), n, icons[n]]),
+    ...folder.map(([stem, svg]) => [stem, iconWords(stem), svg, null]),
+  ];
+  const list = term ? cells.filter(([, w]) => w.includes(term)) : cells;
 
   return (
     <ConfirmModal
@@ -129,13 +116,15 @@ export function IconPickerHost() {
       onCancel={close}
       onConfirm={() => (hasPaste ? pick(pasted) : close())}
     >
+      <TextInput value={q} onChange={setQ} placeholder="Search" autoFocus/>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, maxHeight: 320, overflowY: 'auto', padding: 2 }}>
-        {NAMES.map((n) => {
-          const C = icons[n];
+        {/* ponytail: every cell renders unfiltered; window the grid if opening lags. */}
+        {list.map(([title, , value, Cell]) => {
+          const C = Cell || svgComponent(value);
           return (
             <button
-              key={n} type="button" data-own-press title={n} onClick={() => pick(n)}
-              className={`candy-btn${current === n ? ' is-active' : ''}`} data-shape="icon"
+              key={title} type="button" data-own-press title={title} onClick={() => pick(value)}
+              className={`candy-btn${current === value ? ' is-active' : ''}`} data-shape="icon"
               style={{ width: 30, height: 30, '--corner-max': '15px', '--cbtn-depth': 'var(--candy-depth-nav)' }}
             >
               <span className="candy-face"><C size={17}/></span>

@@ -1,4 +1,5 @@
 import { PrimaryBtn, DangerOutlinedBtn } from '@host/components/ui/Button.jsx';
+import { IconDot, IconStop } from '@host/components/icons.jsx';
 
 // Toggle record control: click to start, click to stop (the start/stop dictation
 // lifecycle). Idle uses the filled primary candy button; while recording it flips
@@ -8,13 +9,13 @@ export default function RecordButton({ recording, disabled, accent, onToggle }) 
   if (recording) {
     return (
       <span className="stt-rec-pulse">
-        <DangerOutlinedBtn small onClick={onToggle} title="Stop recording">■ Stop</DangerOutlinedBtn>
+        <DangerOutlinedBtn small onClick={onToggle} title="Stop recording"><IconStop size="0.7em"/> Stop</DangerOutlinedBtn>
       </span>
     );
   }
   return (
     <PrimaryBtn small accent={accent} onClick={onToggle} disabled={disabled} title="Start recording">
-      ● Record
+      <IconDot size="0.6em"/> Record
     </PrimaryBtn>
   );
 }

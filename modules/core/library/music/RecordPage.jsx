@@ -6,7 +6,7 @@
 // live in recordHooks.js.
 
 import { Fragment, useEffect, useRef, useState } from 'react';
-import { IconStarMark, IconSwatch, IconPaperPlane, IconArrowBigDown, IconPlusBig, IconBookmarkAlt, IconHandRock, IconCamcorder, IconEarAlt, IconAnnouncement, IconTag, IconHot, IconBrush } from '@host/components/icons.jsx';
+import { IconStarMark, IconSwatch, IconPaperPlane, IconArrowBigDown, IconPlusBig, IconBookmarkAlt, IconHandRock, IconCamcorder, IconEarAlt, IconAnnouncement, IconTag, IconHot, IconBrush, IconPlayMark } from '@host/components/icons.jsx';
 import CandySelect from '@host/components/ui/CandySelect.jsx';
 import { NAV_H, NAV_TEXT, NAV_ICON } from '@host/components/vault-tree/treeKit.jsx';
 import { statusLabel, STATUS_ICON } from '@host/util/media-status.js';
@@ -427,9 +427,9 @@ export function TrackRow({ track, artist, artistSizers, plays, playsDigits, acce
           <span className="track-n" style={{
             flexShrink: 0, fontVariantNumeric: 'tabular-nums', opacity: 0.7,
             display: 'inline-grid', justifyItems: 'center',
-          }}>{playing ? '▶' : <>
+          }}>{playing ? <IconPlayMark size="1.1em"/> : <>
             <span className="track-n-num" style={{ gridArea: '1 / 1' }}>{String(track.n).padStart(2, '0')}</span>
-            <span className="track-n-play" style={{ gridArea: '1 / 1' }}>▶</span>
+            <span className="track-n-play" style={{ gridArea: '1 / 1' }}><IconPlayMark size="1.1em"/></span>
           </>}</span>
 
           <span style={{

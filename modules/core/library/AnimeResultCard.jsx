@@ -7,6 +7,7 @@
 
 import { useState } from 'react';
 import { prefetchTitle } from './api.js';
+import { IconStarMark } from '@host/components/icons.jsx';
 
 function initials(text) {
   const words = (text || '').trim().split(/\s+/).filter(Boolean);
@@ -21,8 +22,8 @@ export default function AnimeResultCard({ result, accent, onSelect }) {
   const meta = [
     result.year || null,
     result.episodes ? `${result.episodes} ep` : null,
-    result.score ? `★ ${result.score}` : null,
-  ].filter(Boolean).join(' · ');
+    result.score ? <><IconStarMark size="0.95em"/> {result.score}</> : null,
+  ].filter(Boolean).map((m, i) => <span key={i}>{i ? ' · ' : ''}{m}</span>);
   const sub = result.titleEnglish && result.titleEnglish !== result.title ? result.titleEnglish : null;
   const activate = () => onSelect && onSelect(result);
   const onKeyDown = (e) => {
@@ -74,7 +75,7 @@ export default function AnimeResultCard({ result, accent, onSelect }) {
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>{sub}</div>
         )}
-        {meta && (
+        {meta.length > 0 && (
           <div style={{
             fontSize: 10, color: 'var(--text-faint)',
             fontFamily: 'var(--font-mono)', letterSpacing: '0.04em', marginTop: 3,

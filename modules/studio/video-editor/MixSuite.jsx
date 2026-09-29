@@ -16,6 +16,7 @@ import { useEffect, useRef, useState } from 'react';
 import { VFader, LevelMeter as Meter, ampToFill } from '@host/components/ui';
 import { trackAudible } from './audio/mix.js';
 import { evaluate } from './keyframes/engine.js';
+import { IconKeyframe } from '@host/components/icons.jsx';
 
 const mono = { fontFamily: 'var(--font-mono), monospace' };
 const paneLabel = {
@@ -307,7 +308,7 @@ function ChannelStrip({
               onClick={() => (armed ? onVolDisarm() : onVolKeyframe(v))} style={pillStyle(armed, accent)}>KF</button>
             {armed ? (
               <button type="button" title={onPt ? 'Delete keyframe at playhead' : 'Set keyframe at playhead'}
-                onClick={() => onVolKeyframe(onPt ? null : v)} style={pillStyle(onPt, accent)}>◆</button>
+                onClick={() => onVolKeyframe(onPt ? null : v)} style={pillStyle(onPt, accent)}><IconKeyframe size="0.8em"/></button>
             ) : null}
           </div>
         );
