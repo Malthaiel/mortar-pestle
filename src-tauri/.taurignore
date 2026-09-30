@@ -7,3 +7,12 @@
 scripts/.fdc_work/
 scripts/*.csv
 scripts/*.zip
+
+# Ship Release rewrites these version files, then commits, tags and pushes.
+# Watched, they made the dev watcher kill the app mid-Ship and the push never
+# ran (v0.2.0, 2026-09-29). ponytail: a Cargo.toml-only dependency edit no
+# longer auto-rebuilds (save any .rs or restart); a tauri.conf.json edit already
+# needed a manual restart. Takes effect on the next dev-window start.
+tauri.conf.json
+Cargo.toml
+Cargo.lock

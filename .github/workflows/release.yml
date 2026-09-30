@@ -41,10 +41,9 @@ jobs:
           npm ci
           npm --prefix web ci
 
-      - name: Verify web gates (WCAG AA + drag math)
-        run: |
-          npm --prefix web run check-themes
-          npm --prefix web run check-drag
+      # check-drag was retired with the FLIP drag rewrite (1135a5c).
+      - name: Verify web gates (WCAG AA)
+        run: npm --prefix web run check-themes
 
       - name: Build and publish release
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5   # v0
