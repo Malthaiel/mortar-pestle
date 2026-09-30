@@ -1,28 +1,32 @@
 // Module ↔ release-Area bridge. Releases.md has no per-release "type" — entries
 // are grouped by Area (AREA_PALETTE in useReleaseQueue.js). A module's releases
-// are therefore the shipped history filtered to its matching Area name. Most
-// module display names equal an Area name (Planner, Browser, Library, Domain
-// Builder); the few mismatches live in the override map below. Modules whose
-// name maps to no shipped Area simply render an empty state.
+// are therefore the shipped history filtered to the Areas it owns. A module
+// whose name equals an Area (Planner) owns just that one; the map below covers
+// the rest, including modules that own several Areas (Library). Modules whose
+// Areas have no shipped releases simply render an empty state.
 
-// Module display-name → release Area, for the names that don't match 1:1.
-const MODULE_NAME_TO_AREA = {
-  'Vault View': 'Vault',
-  'Video Editor': 'Video',
+// Module display-name → the release Areas it owns, for names that don't match 1:1.
+const MODULE_NAME_TO_AREAS = {
+  'Library': ['Music', 'Movies & TV', 'Anime'],
+  'Broadcast': ['Broadcast & Game Capture'],
+  'Overlay': ['Broadcast & Game Capture'],
+  'Video Editor': ['Broadcast & Game Capture'],
+  'Deadlock': ['Deadlock & Coaching'],
+  'Vault View': ['Vault & Notes'],
 };
 
-// The Area a module's releases live under. Override map first, else the name.
-export function areaForModule(manifest) {
-  if (!manifest) return null;
-  return MODULE_NAME_TO_AREA[manifest.name] || manifest.name;
+// The Areas a module's releases live under. Override map first, else the name.
+export function areasForModule(manifest) {
+  if (!manifest) return [];
+  return MODULE_NAME_TO_AREAS[manifest.name] || [manifest.name];
 }
 
-// Reverse lookup: the module id whose Area equals `areaName`, else null. Lets a
+// Reverse lookup: the first module id that owns `areaName`, else null. Lets a
 // release-history Area header deep-link to a module sub-page when one exists,
 // and fall back to the standalone Releases tab when the Area is module-less.
 export function moduleIdForArea(areaName, manifests) {
   for (const m of Object.values(manifests || {})) {
-    if (areaForModule(m) === areaName) return m.id;
+    if (areasForModule(m).includes(areaName)) return m.id;
   }
   return null;
 }

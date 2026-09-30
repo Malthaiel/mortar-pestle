@@ -446,9 +446,9 @@ export default function SettingsDrawer({ open, onClose, settings, setSetting, se
 
 // ── Releases tab ─────────────────────────────────────────────────────────────
 
-// Standalone home for release Areas that aren't backed by a module (Dock,
-// Design, Music, Pomodoro, Shield, Release Pipeline, Settings, System,
-// General). Module-backed Areas live on their module's Releases sub-page; this
+// Standalone home for release Areas that aren't backed by a module (Look and
+// Feel, Window, Dock & Sidebars, Settings & Everything Else, Smaller fixes and
+// polish, General). Module-backed Areas live on their module's Releases sub-page; this
 // tab's Areas (rows in the Settings tree) are the module-LESS subset of the Area palette, built live from
 // the manifest registry. Each tile renders the shared per-Area history view.
 function ReleasesTab({ accent, section }) {
@@ -460,7 +460,7 @@ function ReleasesTab({ accent, section }) {
   const active = section && areas.includes(section)
     ? section
     : (areas.includes('General') ? 'General' : areas[0]);
-  return <AreaReleasesView key={active} area={active} accent={accent}/>;
+  return <AreaReleasesView key={active} areas={[active]} accent={accent}/>;
 }
 
 // ── Search results view (Feature 2) ─────────────────────────────────────────

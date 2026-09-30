@@ -10,7 +10,9 @@ const CANONICAL_SECTIONS = ['New', 'Changed', 'Removed', 'Performance', 'Fixed',
 const SURFACE_ORDER = ['host', 'tauri', 'vault', 'sdk', 'web', 'infra', 'docs'];
 // Suggested Area palette (Releases.md schema). Free-form names are allowed;
 // they sort after the palette, alphabetically, with General always last.
-export const AREA_PALETTE = ['Vault', 'Planner', 'Dock', 'Design', 'Browser', 'Music', 'Video', 'Library', 'Pomodoro', 'Shield', 'Release Pipeline', 'Settings', 'System', 'Domain Builder', 'General'];
+// 'Headlines' is deliberately absent: it is written by hand at the top of a
+// shipped block and repeats bullets from their own Areas.
+export const AREA_PALETTE = ['Planner', 'Music', 'Movies & TV', 'Anime', 'Broadcast & Game Capture', 'Deadlock & Coaching', 'Vault & Notes', 'Look and Feel', 'Window, Dock & Sidebars', 'Settings & Everything Else', 'Smaller fixes and polish', 'General'];
 
 export function orderAreaNames(names) {
   const known = AREA_PALETTE.filter(n => n !== 'General' && names.has(n));

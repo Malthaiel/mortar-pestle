@@ -8,7 +8,7 @@
 // props; a page's sections are rows in the Settings tree, so a page hides its
 // own strip whenever onNavigateSection is passed (it keeps it standalone).
 
-import { areaForModule } from '../../hooks/useModuleAreas.js';
+import { areasForModule } from '../../hooks/useModuleAreas.js';
 import AreaReleasesView from '../../pages/docs/AreaReleasesView.jsx';
 
 export default function ModulePage({
@@ -23,7 +23,7 @@ export default function ModulePage({
   if (section === 'releases') {
     // Release history is not module settings — show it regardless of install
     // state (Releases is on every module row's right-click, installed or not).
-    body = <AreaReleasesView area={areaForModule(manifest)} accent={accent} />;
+    body = <AreaReleasesView areas={areasForModule(manifest)} accent={accent} />;
   } else if (!enabled) {
     body = (
       <EmptyBox>

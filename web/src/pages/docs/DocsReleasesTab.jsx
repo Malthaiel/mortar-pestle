@@ -17,9 +17,9 @@ import { moduleIdForArea } from '../../hooks/useModuleAreas.js';
 import { eyebrowStyle } from '../../components/ui/Eyebrow.jsx';
 
 const BUMP_LEVELS = ['patch', 'minor', 'major'];
-// 0.0.x pre-beta scheme: patch is the default ship, minor (0.1.0) is the
-// deliberate move into beta, major (1.0.0) is reserved for public release.
-const BUMP_LABELS = { patch: 'Patch', minor: 'Minor (0.1, Beta)', major: 'Major (1.0, Public)' };
+// 0.MINOR.PATCH scheme: minor for a feature batch, patch for fixes only, major
+// (1.0.0) is the public open beta.
+const BUMP_LABELS = { patch: 'Patch (fixes only)', minor: 'Minor (new batch)', major: 'Major (1.0, Open Beta)' };
 const CANON = ['New', 'Changed', 'Removed', 'Performance', 'Fixed', 'Migration', 'Process'];
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 

@@ -189,11 +189,11 @@ export function maxSemver(a, b) {
   return fmt(pa);
 }
 
-// Patch is the default for every ship under the two-tier 0.x scheme; minor is a
-// deliberate milestone judgment made by a human in the Ship modal; major (1.0.0)
-// is reserved for public readiness. Signature kept for existing call sites.
-export function inferBumpLevel() {
-  return 'patch';
+// 0.MINOR.PATCH scheme (2026-09-29): a batch carrying anything new, changed, or
+// removed turns the minor dial; a fix-only batch turns the patch dial. Major
+// (1.0.0 = public open beta) is only ever picked by hand in the Ship modal.
+export function inferBumpLevel(sections = {}) {
+  return ['New', 'Changed', 'Removed'].some(s => sections[s]?.length) ? 'minor' : 'patch';
 }
 
 export function useReleases() {
