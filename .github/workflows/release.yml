@@ -31,27 +31,15 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30   # stable
 
-      - name: Cache Rust build
-        uses: swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32   # v2
-        with:
-          workspaces: src-tauri
-
-      - name: Install dependencies
-        run: |
-          npm ci
-          npm --prefix web ci
-
-      # check-drag was retired with the FLIP drag rewrite (1135a5c).
-      - name: Verify web gates (WCAG AA)
-        run: npm --prefix web run check-themes
-
       # STT is GPU-only since c937035: beforeBuildCommand builds it with
       # --features vulkan, and whisper-rs-sys on Windows needs the Vulkan SDK
       # (VULKAN_SDK + glslc), MSVC in env + the Ninja generator (the VS generator
       # can't hand a compiler to ggml's nested vulkan-shaders-gen configure), and
       # a short root (ggml's try-compile PDB path passes MAX_PATH from the repo
       # root; cl.exe ignores LongPathsEnabled). Same recipe as the local build —
-      # see mortar-pestle-stt/Cargo.toml [features].
+      # see mortar-pestle-stt/Cargo.toml [features]. The short root is a real
+      # worktree at C:\m, not a subst alias: Vite realpaths through a subst
+      # drive and dies on the X:/D: mismatch (run 36659108525).
       - name: STT GPU build env (Vulkan SDK, MSVC, Ninja, short path)
         run: |
           $sdk = 'C:\VulkanSDK\1.4.350.0'
@@ -67,8 +55,24 @@ jobs:
           }
           if (-not (Get-Command ninja -ErrorAction SilentlyContinue)) { choco install ninja -y --no-progress }
           "CMAKE_GENERATOR=Ninja" >> $env:GITHUB_ENV
-          subst X: $env:GITHUB_WORKSPACE
+          git worktree add --detach C:\m HEAD
           Get-Command cl, ninja, glslc | Format-Table Name, Source
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32   # v2
+        with:
+          workspaces: C:\m\src-tauri
+
+      - name: Install dependencies
+        working-directory: C:\m
+        run: |
+          npm ci
+          npm --prefix web ci
+
+      # check-drag was retired with the FLIP drag rewrite (1135a5c).
+      - name: Verify web gates (WCAG AA)
+        working-directory: C:\m
+        run: npm --prefix web run check-themes
 
       - name: Build and publish release
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5   # v0
@@ -87,8 +91,8 @@ jobs:
           MORTAR_PESTLE_SUPABASE_URL: ${{ secrets.MORTAR_PESTLE_SUPABASE_URL }}
           MORTAR_PESTLE_SUPABASE_ANON_KEY: ${{ secrets.MORTAR_PESTLE_SUPABASE_ANON_KEY }}
         with:
-          # Short root for the STT vulkan build (subst in the step above).
-          projectPath: 'X:\'
+          # Short root for the STT vulkan build (worktree made above).
+          projectPath: C:\m
           tagName: ${{ github.ref_name }}
           releaseName: 'Mortar & Pestle ${{ github.ref_name }}'
           releaseBody: |
