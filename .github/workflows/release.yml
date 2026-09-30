@@ -45,6 +45,31 @@ jobs:
       - name: Verify web gates (WCAG AA)
         run: npm --prefix web run check-themes
 
+      # STT is GPU-only since c937035: beforeBuildCommand builds it with
+      # --features vulkan, and whisper-rs-sys on Windows needs the Vulkan SDK
+      # (VULKAN_SDK + glslc), MSVC in env + the Ninja generator (the VS generator
+      # can't hand a compiler to ggml's nested vulkan-shaders-gen configure), and
+      # a short root (ggml's try-compile PDB path passes MAX_PATH from the repo
+      # root; cl.exe ignores LongPathsEnabled). Same recipe as the local build —
+      # see mortar-pestle-stt/Cargo.toml [features].
+      - name: STT GPU build env (Vulkan SDK, MSVC, Ninja, short path)
+        run: |
+          $sdk = 'C:\VulkanSDK\1.4.350.0'
+          Invoke-WebRequest https://sdk.lunarg.com/sdk/download/1.4.350.0/windows/vulkansdk-windows-X64-1.4.350.0.exe -OutFile "$env:RUNNER_TEMP\vulkansdk.exe"
+          Start-Process "$env:RUNNER_TEMP\vulkansdk.exe" -ArgumentList 'install','--root',$sdk,'--accept-licenses','--default-answer','--confirm-command' -Wait
+          if (-not (Test-Path "$sdk\Lib\vulkan-1.lib")) { throw "Vulkan SDK install failed" }
+          "VULKAN_SDK=$sdk" >> $env:GITHUB_ENV
+          $env:PATH = "$sdk\Bin;$env:PATH"
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          cmd /c "`"$vs\VC\Auxiliary\Build\vcvars64.bat`" >nul && set" | ForEach-Object {
+            $k, $v = $_ -split '=', 2
+            if ([Environment]::GetEnvironmentVariable($k) -ne $v) { Set-Item "env:$k" $v; "$k=$v" >> $env:GITHUB_ENV }
+          }
+          if (-not (Get-Command ninja -ErrorAction SilentlyContinue)) { choco install ninja -y --no-progress }
+          "CMAKE_GENERATOR=Ninja" >> $env:GITHUB_ENV
+          subst X: $env:GITHUB_WORKSPACE
+          Get-Command cl, ninja, glslc | Format-Table Name, Source
+
       - name: Build and publish release
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5   # v0
         env:
@@ -62,6 +87,8 @@ jobs:
           MORTAR_PESTLE_SUPABASE_URL: ${{ secrets.MORTAR_PESTLE_SUPABASE_URL }}
           MORTAR_PESTLE_SUPABASE_ANON_KEY: ${{ secrets.MORTAR_PESTLE_SUPABASE_ANON_KEY }}
         with:
+          # Short root for the STT vulkan build (subst in the step above).
+          projectPath: 'X:\'
           tagName: ${{ github.ref_name }}
           releaseName: 'Mortar & Pestle ${{ github.ref_name }}'
           releaseBody: |
