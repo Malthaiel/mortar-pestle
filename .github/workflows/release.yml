@@ -74,6 +74,14 @@ jobs:
         working-directory: C:\m
         run: npm --prefix web run check-themes
 
+      # mpv.exe (Native Video Player, 5e8ef45) is gitignored and tauri-build
+      # refuses to build without it. Stored as the mpv-v1 release asset, like
+      # usda-db-v1 (uploaded --latest=false so the updater endpoint is untouched).
+      - name: Fetch mpv
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release download mpv-v1 -p mpv.exe -D C:\m\src-tauri\resources\bin
+
       - name: Build and publish release
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5   # v0
         env:
