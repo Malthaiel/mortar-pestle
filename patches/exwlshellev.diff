@@ -1,0 +1,248 @@
+--- a/LICENSE
++++ b/LICENSE
+@@ -0,0 +1,20 @@
++MIT License
++Copyright (c) 2023 DecodeTalkers
++
++Permission is hereby granted, free of charge, to any person obtaining a copy
++of this software and associated documentation files (the "Software"), to deal
++in the Software without restriction, including without limitation the rights
++to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
++copies of the Software, and to permit persons to whom the Software is
++furnished to do so, subject to the following conditions:
++
++The above copyright notice and this permission notice shall be included in all
++copies or substantial portions of the Software.
++
++THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
++OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
++SOFTWARE.
+--- a/src/layershell.rs
++++ b/src/layershell.rs
+@@ -29,10 +29,22 @@
+             } => {
+                 surface.ack_configure(serial);
+ 
++                let next_size = PhysicalSize { width, height };
+                 let Some(unit_index) = unit_index else {
++                    // mortar-pestle patch: a never-drawn sheet's size, for the unit
++                    // waiting on it; the sheet goes.
++                    for unit in state.shells.iter_mut() {
++                        if unit.probed(surface, next_size) {
++                            break;
++                        }
++                    }
+                     return;
+                 };
+-                let next_size = PhysicalSize { width, height };
++                // A layout is held for the next frame: this configure answers an older
++                // one, so its size would undo the held one.
++                if state.shells[unit_index].pending_layout.is_some() || state.shells[unit_index].probe.is_some() {
++                    return;
++                }
+                 if !state.shells[unit_index].physical_size.is_empty()
+                     && state.shells[unit_index].physical_size != next_size
+                 {
+@@ -83,6 +95,7 @@
+         let wl_surface = self.wl_compositor.create_surface(&qh, ());
+ 
+         let id = crate::id::Id::unique();
++        let layer_kind = layer;
+         let layer = layer_shell.get_layer_surface(
+             &wl_surface,
+             output.as_ref(),
+@@ -133,6 +146,7 @@
+             .as_ref()
+             .map(|viewport| viewport.get_viewport(&wl_surface, &qh, ()));
+ 
++        let spec = (layer_shell.clone(), layer_kind, margin);
+         self.push_shell(
+             ExWlShellStateBuilder::new(
+                 id,
+@@ -151,6 +165,10 @@
+             .binding(binding.into())
+             .build(),
+         );
++        // mortar-pestle patch: kept to measure a size niri picks (`commit_layout`).
++        if let Some(unit) = self.shells.last_mut() {
++            unit.layer_spec = Some(spec);
++        }
+         Ok(id)
+     }
+ }
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -521,6 +521,9 @@
+                 request_flag: Default::default(),
+                 present_available_state: Default::default(),
+                 frame_callback: None,
++                pending_layout: None,
++                layer_spec: None,
++                probe: None,
+             },
+         }
+     }
+@@ -647,6 +650,16 @@
+     request_flag: WindowStateUnitRequestFlag,
+     present_available_state: PresentAvailableState,
+     frame_callback: Option<WlCallback>,
++
++    /// mortar-pestle patch: a layout held for the next frame and sent with that frame's
++    /// picture, so niri never shows the old picture at the new place (a size change
++    /// committed alone flashed the old picture at the new corner for a frame or two).
++    pending_layout: Option<(Anchor, LayerSize)>,
++    /// The layer shell, layer and margin this layer surface was made with: a size niri
++    /// picks is measured first on a sheet of the same kind that is never drawn.
++    layer_spec: Option<(ZwlrLayerShellV1, Layer, Option<Margin>)>,
++    /// That sheet while niri measures it, and the layout waiting on it.
++    probe: Option<(ZwlrLayerSurfaceV1, WlSurface, Anchor, LayerSize)>,
+ }
+ 
+ /// wayland-rs sends nothing on drop.
+@@ -660,6 +673,7 @@
+         {
+             let _ = backend.destroy_object(&callback.id());
+         }
++        self.drop_probe();
+         self.shell.destroy();
+ 
+         if let Some(scale) = &self.fractional_scale {
+@@ -870,11 +884,40 @@
+     }
+ 
+     /// commit anchor and size, while adding required edges for size
+-    fn commit_layout(&mut self, anchor: Anchor, size: LayerSize) {
++    ///
++    /// mortar-pestle patch: a size known here is held and sent with the next frame's
++    /// picture; a size niri picks is measured first on a sheet never drawn (same layer,
++    /// output and margin), then held the same way. Only without what that needs is it
++    /// committed alone, as upstream does.
++    fn commit_layout(&mut self, anchor: Anchor, size: LayerSize) where T: 'static {
++        if !matches!(self.shell, Shell::LayerShell(_)) {
++            return;
++        }
++        let (width, height) = size.to_set();
++        if width > 0 && height > 0 {
++            self.hold_layout(anchor, size, PhysicalSize { width, height });
++            return;
++        }
++        if let (Some((shell, layer, margin)), Some(output)) = (self.layer_spec.clone(), self.wl_outputs.first().cloned()) {
++            self.drop_probe();
++            let surface = self.wl_compositor.create_surface(&self.qh, ());
++            let probe = shell.get_layer_surface(&surface, Some(&output), layer, "exwlshellev-probe".to_string(), &self.qh, ());
++            probe.set_anchor(size.resolve_anchor(anchor));
++            probe.set_size(width, height);
++            probe.set_exclusive_zone(0);
++            if let Some(Margin { top, right, bottom, left }) = margin {
++                probe.set_margin(top, right, bottom, left);
++            }
++            let region = self.wl_compositor.create_region(&self.qh, ());
++            surface.set_input_region(Some(&region));
++            region.destroy();
++            surface.commit();
++            self.probe = Some((probe, surface, anchor, size));
++            return;
++        }
+         let Shell::LayerShell(layer_shell) = &self.shell else {
+             return;
+         };
+-        let (width, height) = size.to_set();
+         layer_shell.set_anchor(size.resolve_anchor(anchor));
+         layer_shell.set_size(width, height);
+         self.anchor = anchor;
+@@ -882,14 +925,56 @@
+         self.window.wl_surface.commit();
+     }
+ 
++    /// mortar-pestle patch: the next frame is drawn at `px` and carries this layout.
++    fn hold_layout(&mut self, anchor: Anchor, size: LayerSize, px: PhysicalSize<u32>) {
++        self.anchor = anchor;
++        self.layer_size = size;
++        self.pending_layout = Some((anchor, size));
++        if self.physical_size != px {
++            self.physical_size = px;
++            self.mark_resized();
++        }
++        self.request_refresh(RefreshRequest::NextFrame);
++    }
++
++    /// mortar-pestle patch: the held layout, sent just before the frame's picture
++    /// commits it (never committed here).
++    fn send_layout(&mut self) {
++        let (Some((anchor, size)), Shell::LayerShell(layer_shell)) = (self.pending_layout.take(), &self.shell) else {
++            return;
++        };
++        let (width, height) = size.to_set();
++        layer_shell.set_anchor(size.resolve_anchor(anchor));
++        layer_shell.set_size(width, height);
++    }
++
++    fn drop_probe(&mut self) {
++        if let Some((probe, surface, ..)) = self.probe.take() {
++            probe.destroy();
++            surface.destroy();
++        }
++    }
++
++    /// mortar-pestle patch: the sheet's size came; the layout waiting on it is held
++    /// for the next frame at that size. True when `surface` was this unit's sheet.
++    pub(crate) fn probed(&mut self, surface: &ZwlrLayerSurfaceV1, px: PhysicalSize<u32>) -> bool {
++        if !self.probe.as_ref().is_some_and(|(p, ..)| p == surface) {
++            return false;
++        }
++        let (_, _, anchor, size) = self.probe.clone().expect("checked");
++        self.drop_probe();
++        self.hold_layout(anchor, size, px);
++        true
++    }
++
+     /// set the anchor of the current unit. please take the simple.rs as reference
+-    pub fn set_anchor(&mut self, anchor: Anchor) {
++    pub fn set_anchor(&mut self, anchor: Anchor) where T: 'static {
+         self.commit_layout(anchor, self.layer_size);
+     }
+ 
+     /// you can reset the margin which bind to the surface
+     pub fn set_margin(
+-        &self,
++        &mut self,
+         Margin {
+             top,
+             right,
+@@ -901,6 +986,9 @@
+             layer_shell.set_margin(top, right, bottom, left);
+             self.window.wl_surface.commit();
+         }
++        if let Some((_, _, margin)) = &mut self.layer_spec {
++            *margin = Some(Margin { top, right, bottom, left });
++        }
+     }
+ 
+     /// set the layer
+@@ -913,12 +1001,12 @@
+ 
+     /// set the anchor and set the size together
+     /// When you want to change the layout from LEFT|RIGHT|BOTTOM to TOP|LEFT|BOTTOM, use it.
+-    pub fn set_layout(&mut self, anchor: Anchor, size: LayerSize) {
++    pub fn set_layout(&mut self, anchor: Anchor, size: LayerSize) where T: 'static {
+         self.commit_layout(anchor, size);
+     }
+ 
+     /// set the layer size of current unit
+-    pub fn set_size(&mut self, size: LayerSize) {
++    pub fn set_size(&mut self, size: LayerSize) where T: 'static {
+         self.commit_layout(self.anchor, size);
+     }
+ 
+@@ -3211,6 +3299,7 @@
+                         }
+                         context.state.shells[idx].window.wl_surface.commit();
+                     }
++                    context.state.shells[idx].send_layout();
+                     context.handle_refresh(unit_id, state);
+                     context.state.shells[idx].reset_present_slot();
+                 }

@@ -1,0 +1,12 @@
+# Rust build output.
+target/
+
+# Logs and editor leftovers.
+*.log
+*.swp
+
+# Secrets: never commit.
+.env
+.env.*
+*.key
+*.pem

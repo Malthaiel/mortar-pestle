@@ -1,0 +1,34 @@
+name: CI
+
+# Builds the Linux apps, runs their tests and asks OSV.dev about known holes in the
+# packages (Fable Sweep rows G18 / C17). No format check yet: four spots still differ
+# from `cargo fmt` (add `cargo fmt --check -p mp-shell -p mp-files -p mp-player
+# -p mp-theme -p mp-ui` once they are formatted; never `--all`, see rustfmt.toml).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5   # v4
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30   # stable
+        with:
+          components: clippy
+      - uses: swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32   # v2
+      # The system libraries the tree links: wayland-sys, and opusic-sys (the player's Opus
+      # decoder: it links the system's libopus); the rest is opened at run time.
+      - name: System libraries
+        run: sudo apt-get update -y && sudo apt-get install -y libwayland-dev libxkbcommon-dev libopus-dev
+      - name: Clippy
+        run: cargo clippy --workspace --locked
+      - name: Tests
+        run: cargo test --workspace --locked
+      - name: Known holes (OSV.dev)
+        run: python3 .github/osv.py

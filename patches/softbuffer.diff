@@ -1,0 +1,20 @@
+--- a/src/backends/wayland/buffer.rs
++++ b/src/backends/wayland/buffer.rs
+@@ -99,7 +99,7 @@
+             width,
+             height,
+             width * 4,
+-            wl_shm::Format::Xrgb8888,
++            wl_shm::Format::Argb8888, // mortar-pestle: was Xrgb8888; see the root Cargo.toml [patch]
+             qh,
+             released.clone(),
+         );
+@@ -139,7 +139,7 @@
+                 width,
+                 height,
+                 width * 4,
+-                wl_shm::Format::Xrgb8888,
++                wl_shm::Format::Argb8888, // mortar-pestle: was Xrgb8888; see the root Cargo.toml [patch]
+                 &self.qh,
+                 self.released.clone(),
+             );

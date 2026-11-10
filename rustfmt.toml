@@ -1,0 +1,5 @@
+# The code is written wide: these two settings change the fewest lines of the 8 tried
+# (Fable Sweep row C1, 2026-11-09). `patches/` holds other projects' code: never format it
+# (`cargo fmt -p mp-shell -p mp-files -p mp-player -p mp-theme -p mp-ui`, not `--all`).
+max_width = 240
+use_small_heuristics = "Max"

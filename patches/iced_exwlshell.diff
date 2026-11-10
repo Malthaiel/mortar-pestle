@@ -1,0 +1,61 @@
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -73,10 +73,12 @@
+ version = "0.14"
+ 
+ [dependencies.iced_exdevtools]
+-version = "0.21.2"
++# mortar-pestle: exact, as this copy is 0.21.2 (a newer one stops the build; root Cargo.toml [patch])
++version = "=0.21.2"
+ 
+ [dependencies.iced_exwlshell_macros]
+-version = "0.21.2"
++# mortar-pestle: exact, as this copy is 0.21.2 (a newer one stops the build; root Cargo.toml [patch])
++version = "=0.21.2"
+ optional = true
+ 
+ [dependencies.iced_futures]
+--- a/LICENSE
++++ b/LICENSE
+@@ -0,0 +1,20 @@
++MIT License
++Copyright (c) 2023 DecodeTalkers
++
++Permission is hereby granted, free of charge, to any person obtaining a copy
++of this software and associated documentation files (the "Software"), to deal
++in the Software without restriction, including without limitation the rights
++to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
++copies of the Software, and to permit persons to whom the Software is
++furnished to do so, subject to the following conditions:
++
++The above copyright notice and this permission notice shall be included in all
++copies or substantial portions of the Software.
++
++THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
++OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
++SOFTWARE.
+--- a/src/event.rs
++++ b/src/event.rs
+@@ -10,11 +10,17 @@
+ 
+ use iced_wayland_subscriber::ExWlOutputInfo;
+ 
++// Patched (mortar-pestle, 2026-11-03): upstream read every button but right and
++// middle as Left, so the mouse's back and forward came as left clicks. Linux's codes
++// (input-event-codes.h): BTN_LEFT 0x110, RIGHT, MIDDLE, SIDE (back), EXTRA (forward).
+ fn from_u32_to_icedmouse(code: u32) -> mouse::Button {
+     match code {
++        272 => mouse::Button::Left,
+         273 => mouse::Button::Right,
+         274 => mouse::Button::Middle,
+-        _ => mouse::Button::Left,
++        275 => mouse::Button::Back,
++        276 => mouse::Button::Forward,
++        other => mouse::Button::Other(other as u16),
+     }
+ }
+ 

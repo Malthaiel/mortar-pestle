@@ -1,0 +1,25 @@
+[package]
+name = "mp-ui"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+# What every native app draws with (the Native UI rulebook, colours, motion, icons, the
+# sliding accent pill, the font), shared once a second app drew (M&P Library plan, step 3).
+[dependencies]
+# "canvas": the frame's boxes and their curves (`shape`, `drawer`), drawn as the shell
+# always drew its menus.
+iced = { workspace = true, features = ["advanced", "image-without-codecs", "canvas"] }
+resvg.workspace = true
+# Covers: JPEG and PNG, `image` (already built in under iced) with its readers on.
+image.workspace = true
+# The colours-changed tap (SIGUSR2 held + waited for), as the shell's own signals.
+libc.workspace = true
+# The desktop's Open window (`portal`), asked over the session bus: the zbus the shell
+# already builds.
+zbus.workspace = true
+
+[lints]
+workspace = true

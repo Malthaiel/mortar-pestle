@@ -1,0 +1,21 @@
+[package]
+name = "mp-files"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+# The File Explorer (File Explorer plan): GNOME Files 51.1's design with yazi's
+# speed, started on demand, gone with its last window.
+[dependencies]
+mp-ui = { path = "../../crates/mp-ui" }
+iced = { workspace = true, features = ["tiny-skia", "wayland", "thread-pool", "crisp", "advanced", "image-without-codecs"] }
+libc.workspace = true
+serde_json.workspace = true
+# org.freedesktop.FileManager1 (other programs' "show in folder") and one File
+# Explorer for every window: the zbus every other app builds.
+zbus = { workspace = true, features = ["service"] }
+
+[lints]
+workspace = true

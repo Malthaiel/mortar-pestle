@@ -1,0 +1,137 @@
+# The native Linux apps (Linux Native Apps plan, Phase 5). Shared parts live in
+# crates/; each app is its own program (and its own package) with the shared code
+# built in.
+[workspace]
+resolver = "3"
+members = ["crates/*", "apps/*"]
+
+[workspace.package]
+edition = "2024"
+# The compiler the apps are built and tested with (Arch's rustc 1.99.1, 2026-11-10); an
+# older one is untried.
+rust-version = "1.99"
+license = "PolyForm-Noncommercial-1.0.0"
+
+# One version of each outside library two or more packages use, so no two can drift
+# apart (a package adds only its own features).
+[workspace.dependencies]
+iced = { version = "0.14", default-features = false }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+libc = "0.2"
+lofty = "0.25.5"
+pulseaudio = "0.3.2"
+resvg = { version = "0.49", default-features = false }
+serde_json = "1"
+zbus = { version = "6.2", default-features = false, features = ["default-rt"] }
+
+# `cargo clippy` runs Clippy's default set; these on top (zed's two), and one off:
+# iced's tuples of widgets and messages read better in place than behind a name.
+[workspace.lints.clippy]
+dbg_macro = "deny"
+todo = "deny"
+type_complexity = "allow"
+undocumented_unsafe_blocks = "warn"
+
+# Small files: one optimisation unit, no symbols, and a crash stops the program at
+# once (no unwinding: its clean-up code and tables cut mp-shell 8,993 -> 8,143 KB,
+# 9.5%; Malthaiel's pick 2026-11-03). A crashed side thread then ends the program
+# (systemd brings the shell back) instead of leaving one piece frozen. Tests and
+# build scripts ignore it and keep unwinding.
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
+
+# Look tweaks only (`cargo build --profile tweak -p mp-shell`, into target/tweak/): a
+# one-file rebuild of mp-shell takes 9.6 s against release's 74.2 s, for a program 27%
+# bigger (timed 2026-11-10, Fable Sweep row C20). What is installed and what a look is
+# signed off on stays the release build.
+[profile.tweak]
+inherits = "release"
+lto = false
+codegen-units = 16
+
+# Our edited copies of four outside libraries (patches/README.md: what each is, its
+# licence, `patches/<name>.diff` = exactly our edits, `patches/remake.sh` = a copy made
+# again from its maker's release + that diff). Checked against the makers' newest on
+# 2026-11-10 (iced master = 0.15.0-dev, softbuffer master, exwlshell 0.21.4): NO copy
+# can be dropped, and iced 0.15 ends none of them whole. Each fix below says GOES (it
+# is in iced master: leave it out when the copy is re-made from 0.15) or KEEP.
+#
+# softbuffer 0.4.8 (under iced's CPU renderer) hands Wayland Xrgb8888, so no
+# surface can be see-through. tiny-skia already writes premultiplied alpha in
+# Argb8888's byte order; the copy changes only that format (2 lines in
+# src/backends/wayland/buffer.rs). KEEP: softbuffer's AlphaMode is still unreleased
+# (no release since 0.4.8, 2025-12-13) and iced master still asks for softbuffer 0.4,
+# so this copy outlives iced 0.15. M&P Shell plan, step 1.
+#
+# iced_tiny_skia 0.14.1 keeps one background colour per window but softbuffer
+# swaps two buffers, so after a live recolour one buffer kept the old colour
+# wherever no widget sits (the window's edge flickered old/new on every redraw).
+# The copy keeps the colour with each remembered frame, as iced master does
+# (Frame.background, src/window/compositor.rs). GOES at iced 0.15.
+#
+# It also paints each frame's changes as one patch (2026-11-02, M&P Library plan
+# step 6): iced splits them into many (damage::group) and paints a box that only
+# partly overlaps a patch whole under the clip mask (tiny-skia 0.11 fills the
+# full path), so every big box was painted once a patch. A wheel glide down the
+# Library's Home made 66 patches and 85 ms a frame; one patch, 3 ms. KEEP: iced
+# master still groups (compositor.rs:172, 2026-11-10). iced 0.15 paints with
+# tiny-skia 0.12: measure the patch count's cost again there before putting it back.
+#
+# And a box's shadow keeps to the patch being painted and widens the patch
+# (2026-11-09, engine.rs + layer.rs, iced master's own fix, checked 2026-11-09):
+# 0.14 painted it unclipped, so each repaint laid it again over pixels not
+# cleared and a drop menu's shadow went black. Both GO at iced 0.15. Ours, KEEP: a
+# patch touching only a shadow's edge paints the shadow there (master still skips
+# it: engine.rs:39, 2026-11-10).
+#
+# And an opaque box's shadow is worked out and drawn only round the box, as four
+# strips kept to the surface (2026-11-09, ours, engine.rs): 0.14 works out every
+# pixel under the box too, which the box hides. The side panel's 430 x 1386 card
+# slid at ~20 ms a frame (4-8 ms with no shadow, Noctalia Look step 7). KEEP: iced
+# master works out the whole shadow (engine.rs:76-110, 2026-11-10).
+#
+# And it draws a stretched picture at its exact place (2026-11-03, raster.rs):
+# iced cuts the place to a whole pixel of the picture, so a resized picture sat
+# up to one of those off its box, by a different part at each size, and the
+# Library's covers shook while its wall was dragged wider. A picture at its own
+# size keeps iced's cut (whole pixels keep it sharp). KEEP: iced master still cuts
+# it (raster.rs:63-64, 2026-11-10).
+#
+# And it scales a drawn text's box by the zoom alone (2026-11-03, layer.rs): iced
+# multiplies it through the whole transform, where 0 x an endless side is NaN,
+# so a text drawn in an endless box (mp-shell's lyrics, its "Media" tab) laid out
+# at width 0, a letter a line. KEEP: iced master still multiplies (layer.rs:81,
+# 2026-11-10).
+#
+# And a changed text's repaint area follows the text when it is centred, right or
+# bottom aligned (2026-11-04, `visible_bounds` in layer.rs): iced puts the area at
+# the text's anchor point but draws the text before it, so a change missed part of
+# it (a fading highlight left half-lit letters in mp-shell's replay menu). KEEP:
+# iced master's `Text::visible_bounds` is unchanged (graphics/src/text.rs:99-103,
+# 2026-11-10).
+#
+# exwlshellev (2026-11-03, Music Tab Redesign chat 57): a layer surface's size change
+# is held and sent with the next frame's picture instead of committed alone
+# (`commit_layout`, `send_layout`). Committed alone, niri drew the old picture at the
+# new corner for a frame or two (the music box jumped 185 px as you clicked into or out
+# of its search; WAYLAND_DEBUG showed set_size + commit 6-9 ms before the new-size
+# buffer). A size niri picks (FILL) is measured first on a layer surface of the same
+# layer, output and margin that never gets a buffer (`probe`, layershell.rs), so it
+# costs no memory. KEEP: upstream still commits at once in 0.21.4 (lib.rs:958-968,
+# 2026-11-10). Both exwlshell copies are 0.21.2; four exact pins keep the maker's
+# other 0.21.2 packages with them, so a `cargo update` cannot pull a newer half past
+# the copies (patches/README.md).
+#
+# iced_exwlshell (2026-11-03, Music Tab Redesign chat 58): upstream 0.21.2 read every
+# mouse button but right and middle as Left (`from_u32_to_icedmouse`, event.rs), so
+# the mouse's back and forward buttons came as left clicks in a layer (the music box's
+# back button did nothing, and on a cover it opened it). Now Back / Forward / Other,
+# as winit does. KEEP: 0.21.4 still reads them as Left (event.rs:15-21, 2026-11-10).
+[patch.crates-io]
+softbuffer = { path = "patches/softbuffer" }
+iced_tiny_skia = { path = "patches/iced_tiny_skia" }
+exwlshellev = { path = "patches/exwlshellev" }
+iced_exwlshell = { path = "patches/iced_exwlshell" }

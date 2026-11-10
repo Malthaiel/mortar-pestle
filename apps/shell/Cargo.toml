@@ -1,0 +1,46 @@
+[package]
+name = "mp-shell"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+# CPU drawing only (tiny-skia): the GPU path measured ~100 MB in the toolkit test.
+[dependencies]
+mp-ui = { path = "../../crates/mp-ui" }
+iced = { workspace = true, features = ["tiny-skia", "wayland", "thread-pool", "crisp", "advanced", "image-without-codecs", "canvas"] }
+# Both pinned to the exact release our edited copies in patches/ are (Fable Sweep row
+# C7): "0.21.2" alone lets `cargo update` take iced_wayland_subscriber 0.21.4, which
+# needs exwlshellev 0.21.4, drops our copy and stops the build. Two more pins sit in
+# patches/iced_exwlshell/Cargo.toml; lift all four only when the copies are re-made
+# (patches/README.md).
+iced_exwlshell = { version = "=0.21.2", default-features = false, features = ["macros"] }
+iced_wayland_subscriber = "=0.21.2"
+resvg.workspace = true
+libc.workspace = true
+# niri's event stream, read by hand (niri-ipc is GPL-3.0 and pinned to one niri version).
+serde_json.workspace = true
+# Rubik's cap height for the clock's spacing; already built in under cosmic-text.
+ttf-parser = { version = "0.25", default-features = false }
+# The sound server's wire format, pure Rust (his pick 2026-10-30 over libpulse and a
+# pactl helper); only its plain reader/writer is used, its async client sits unused.
+pulseaudio.workspace = true
+# The session bus (zbus 6, as mp-player): "service" serves the notices (`notices.rs`,
+# M&P Shell plan step 2) as mp-player serves MPRIS, and the music box's name (Mod+Shift+D,
+# `music/bus.rs`). Notice pictures and the music box's covers (JPEG, PNG): `image`,
+# already built in under iced.
+zbus = { workspace = true, features = ["service"] }
+image.workspace = true
+# The click sheet under a bar panel (`sheet.rs`, Noctalia Look step 7): its own small
+# link to niri. All three already built in under iced_exwlshell, same versions and
+# features, so nothing new is compiled.
+wayland-client = "0.31.15"
+wayland-protocols = { version = "0.32.13", default-features = false, features = ["client", "staging"] }
+wayland-protocols-wlr = { version = "0.3.12", default-features = false, features = ["client"] }
+# The music box (Top Strip plan step 2, from mp-library): lengths and tags of songs with no
+# release (as the player), written into what it downloads.
+lofty.workspace = true
+
+[lints]
+workspace = true

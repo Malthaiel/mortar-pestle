@@ -1,0 +1,9 @@
+# Line endings: LF inside the repo.
+* text=auto
+
+# Never touch line endings in these.
+*.ttf binary
+
+# Other people's libraries with our edits (patches/README.md): not counted as our code
+# in GitHub's language bar.
+patches/** linguist-vendored

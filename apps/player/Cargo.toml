@@ -1,0 +1,30 @@
+[package]
+name = "mp-player"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+# The music player (M&P Library plan, step 1): runs only while a song is loaded; the
+# Library window and the shell's top bar control it over MPRIS.
+[dependencies]
+# Song files. Only the formats a song in ~/Music can be in today or after a download,
+# and YouTube's WebM (`mkv`) for songs played off the internet as they arrive.
+symphonia = { version = "0.6.1", default-features = false, features = ["mp3", "ogg", "mkv", "vorbis", "flac", "isomp4", "aac", "wav", "pcm"] }
+# Opus through the system's libopus 1.6.1 (his pick 2026-10-30 after measuring 8 pure-Rust
+# decoders: fastest, exact, Xiph's own). `bundled` off: link the installed library.
+symphonia-adapter-libopus = { version = "0.3.0", default-features = false }
+# Titles, artists and albums: symphonia reads no MP3 ID3 title; lofty reads every one,
+# 10x faster (his 49 songs, 2026-10-31).
+lofty.workspace = true
+# The sound server's wire format, as mp-shell's sound box.
+pulseaudio.workspace = true
+# MPRIS on the session bus, written by hand (his pick over mpris-server).
+zbus = { workspace = true, features = ["service"] }
+# Change notices from the sound thread to the bus thread (zbus's own runtime, already built in).
+zruntime = { version = "0.2", default-features = false, features = ["mpmc"] }
+libc.workspace = true
+
+[lints]
+workspace = true
