@@ -68,13 +68,9 @@ use workspaces::{Kind, Workspaces};
 /// 3), by name (saved for the one picked last). Their tab row went 2026-11-08 (his ask:
 /// the top bar switches them: its page buttons, 2026-11-09; the shortcut opens Music).
 const PANELS: [&str; 3] = ["Dashboard", "Music", "Performance"];
-/// The bar's page buttons' pictures, `PANELS`' order, as the Caelestia copy's tab row
-/// had them (his pick 2026-11-09): Boxicons Basic, and Filled for the open page.
-const PAGES: [(&[u8], &[u8]); 3] = [
-    (include_bytes!("../assets/bx-dashboard-basic.svg"), include_bytes!("../assets/bx-dashboard.svg")),
-    (include_bytes!("../assets/bx-music-basic.svg"), include_bytes!("../assets/bx-music.svg")),
-    (include_bytes!("../assets/bx-rocket-basic.svg"), include_bytes!("../assets/bx-rocket.svg")),
-];
+/// The bar's page buttons' pictures, `PANELS`' order, the Caelestia copy's (his pick
+/// 2026-11-09), Boxicons Filled (his ask 2026-11-10: every picture Filled again).
+const PAGES: [&[u8]; 3] = [include_bytes!("../assets/bx-dashboard.svg"), include_bytes!("../assets/bx-music.svg"), include_bytes!("../assets/bx-rocket.svg")];
 /// The panel the music box fills; the others are blank, its size, for now.
 const MUSIC_PANEL: usize = 1;
 
@@ -89,31 +85,30 @@ fn saved_panel() -> usize {
 const POWER: [(&str, &[u8]); 4] =
     [("Lock", include_bytes!("../assets/bx-lock-keyhole.svg")), ("Sleep", include_bytes!("../assets/bx-moon-stars.svg")), ("Restart", include_bytes!("../assets/bx-refresh-cw.svg")), ("Shut down", include_bytes!("../assets/bx-power.svg"))];
 
-/// The bar's pictures are Noctalia's Tabler glyphs (his pick 2026-11-08). The network,
-/// as Noctalia's `network_display.cpp` picks it: a cable in, no network, then the wifi
-/// by its signal band (Noctalia's own wifi drawings, lifted from its icon font).
-const NETWORK: [&[u8]; 7] = [
-    include_bytes!("../assets/tb-ethernet.svg"),
-    include_bytes!("../assets/tb-wifi-off.svg"),
-    include_bytes!("../assets/tb-wifi-0.svg"),
-    include_bytes!("../assets/tb-wifi-1.svg"),
-    include_bytes!("../assets/tb-wifi-2.svg"),
-    include_bytes!("../assets/tb-wifi-3.svg"),
-    include_bytes!("../assets/tb-wifi.svg"),
+/// The bar's pictures are Boxicons Filled (his ask 2026-11-10; Tabler, Noctalia's, from
+/// 2026-11-08 till then). The network, as Noctalia's `network_display.cpp` picks it: a
+/// cable in, no network, then the wifi by its signal band.
+const NETWORK: [&[u8]; 6] = [
+    include_bytes!("../assets/bx-ethernet.svg"),
+    include_bytes!("../assets/bx-wifi-slash.svg"),
+    include_bytes!("../assets/bx-wifi-0.svg"),
+    include_bytes!("../assets/bx-wifi-1.svg"),
+    include_bytes!("../assets/bx-wifi-2.svg"),
+    include_bytes!("../assets/bx-wifi.svg"),
 ];
 
 fn network(n: net::Net) -> usize {
     match n {
         net::Net::Cable => 0,
         net::Net::Off => 1,
-        // Noctalia's `wifiSignalBand`: 80, 60, 35, 15.
-        net::Net::Wifi(s) => 2 + [15, 35, 60, 80].iter().filter(|&&at| s >= at).count(),
+        // Noctalia's `wifiSignalBand` less its 80: Boxicons has a dot and three arcs.
+        net::Net::Wifi(s) => 2 + [15, 35, 60].iter().filter(|&&at| s >= at).count(),
     }
 }
 
 /// Bluetooth, as Noctalia's bluetooth widget picks it: off (no controller, or it is
 /// off), on, a device connected.
-const BLUETOOTH: [&[u8]; 3] = [include_bytes!("../assets/tb-bluetooth-off.svg"), include_bytes!("../assets/tb-bluetooth.svg"), include_bytes!("../assets/tb-bluetooth-connected.svg")];
+const BLUETOOTH: [&[u8]; 3] = [include_bytes!("../assets/bx-bluetooth-slash.svg"), include_bytes!("../assets/bx-bluetooth.svg"), include_bytes!("../assets/bx-bluetooth-connected.svg")];
 
 fn bluetooth(b: &bluetooth::Bluetooth) -> usize {
     match b.adapter() {
@@ -125,20 +120,20 @@ fn bluetooth(b: &bluetooth::Bluetooth) -> usize {
 
 /// The speaker, by volume as Noctalia's `audioVolumeGlyph`: muted or at 0%, under
 /// 40%, the rest. The music box's playing bar shows the player's volume by them too.
-const SPEAKER: [&[u8]; 3] = [include_bytes!("../assets/tb-volume-off.svg"), include_bytes!("../assets/tb-volume-2.svg"), include_bytes!("../assets/tb-volume.svg")];
+const SPEAKER: [&[u8]; 3] = [include_bytes!("../assets/bx-volume-mute.svg"), include_bytes!("../assets/bx-volume-low.svg"), include_bytes!("../assets/bx-volume-full.svg")];
 
-/// The weather's sky, in `weather::Sky`'s order, Noctalia's weather glyphs (Tabler; the
-/// cloud with a sun lifted from Noctalia's icon font, upstream has none).
+/// The weather's sky, in `weather::Sky`'s order: the Boxicon nearest each of Noctalia's
+/// weather glyphs.
 const WEATHER: [&[u8]; 9] = [
-    include_bytes!("../assets/tb-sun.svg"),
-    include_bytes!("../assets/tb-moon.svg"),
-    include_bytes!("../assets/tb-cloud-sun.svg"),
-    include_bytes!("../assets/tb-moon-stars.svg"),
-    include_bytes!("../assets/tb-cloud.svg"),
-    include_bytes!("../assets/tb-cloud-fog.svg"),
-    include_bytes!("../assets/tb-cloud-rain.svg"),
-    include_bytes!("../assets/tb-cloud-snow.svg"),
-    include_bytes!("../assets/tb-cloud-bolt.svg"),
+    include_bytes!("../assets/bx-sun.svg"),
+    include_bytes!("../assets/bx-moon.svg"),
+    include_bytes!("../assets/bx-cloud-sun.svg"),
+    include_bytes!("../assets/bx-moon-stars.svg"),
+    include_bytes!("../assets/bx-cloud.svg"),
+    include_bytes!("../assets/bx-cloud-fog.svg"),
+    include_bytes!("../assets/bx-cloud-rain.svg"),
+    include_bytes!("../assets/bx-cloud-snow.svg"),
+    include_bytes!("../assets/bx-cloud-lightning.svg"),
 ];
 
 /// Which `SPEAKER` picture a volume (1.0 = 100%) shows.
@@ -238,7 +233,7 @@ struct Pictures {
     bluetooth: Vec<image::Handle>,
     speaker: Vec<image::Handle>,
     weather: Vec<image::Handle>,
-    /// The page buttons' (`PAGES`): plain in Text, the open page's in On Accent.
+    /// The page buttons' (`PAGES`): in Text, and in On Accent for the open page.
     pages: [[image::Handle; 2]; 3],
     /// A connected device's picture after the Bluetooth one (`bluetooth_menu::DEVICES`,
     /// the Bluetooth box's Boxicons, not yet redone).
@@ -248,7 +243,7 @@ struct Pictures {
     power_rows: Vec<menu::Row>,
     /// The calendar's arrows: back, forward.
     arrows: [image::Handle; 2],
-    /// A floating panel's X: Noctalia's `close` (Tabler `x`) at its header glyph's 14.
+    /// A floating panel's X (Noctalia's `close`) at its header glyph's 14.
     close: image::Handle,
     /// The notice cards' arrows, X and bell.
     notices: popups::Pictures,
@@ -263,21 +258,21 @@ impl Pictures {
         let arrows = [icon::svg(include_bytes!("../assets/bx-chevron-left.svg"), style::ICON, colours.text), icon::svg(include_bytes!("../assets/bx-chevron-right.svg"), style::ICON, colours.text)];
         let bt_menu = bluetooth_menu::Pictures::new(colours);
         Self {
-            search: bare(include_bytes!("../assets/tb-search.svg")),
-            power: bare(include_bytes!("../assets/tb-power.svg")),
-            keys: bare(include_bytes!("../assets/tb-keyboard.svg")),
-            bell: bare(include_bytes!("../assets/tb-bell.svg")),
-            grip: bare(include_bytes!("../assets/tb-grip-vertical.svg")),
+            search: bare(include_bytes!("../assets/bx-search.svg")),
+            power: bare(include_bytes!("../assets/bx-power.svg")),
+            keys: bare(include_bytes!("../assets/bx-keyboard.svg")),
+            bell: bare(include_bytes!("../assets/bx-bell.svg")),
+            grip: bare(include_bytes!("../assets/bx-dots-vertical-rounded.svg")),
             network,
             bluetooth,
             speaker,
             weather,
-            pages: PAGES.map(|(plain, open)| [bare(plain), icon::svg(open, style::ICON, colours.on_accent)]),
+            pages: PAGES.map(|svg| [bare(svg), icon::svg(svg, style::ICON, colours.on_accent)]),
             bt_devices,
             bt_menu,
             power_rows,
             arrows,
-            close: icon::svg(include_bytes!("../assets/tb-x.svg"), style::ICON_SM, colours.text),
+            close: icon::svg(include_bytes!("../assets/bx-x.svg"), style::ICON_SM, colours.text),
             notices: popups::Pictures::new(colours),
         }
     }
@@ -1268,15 +1263,15 @@ impl Shell {
         let weather = row![pic(&p.weather[sky as usize]), text(words).size(style::BAR_TEXT).font(MEDIUM)].spacing(style::GAP_1).align_y(Center);
         // The page buttons (his picks 2026-11-09), their own box right of the workspace
         // marks: Dashboard, Music, Performance. While the drawer shows, its page's button sits
-        // on an accent block (Noctalia's picked tab) the patch's size, its picture filled in
+        // on an accent block (Noctalia's picked tab) the patch's size, its picture in
         // On Accent; the hovered other one gets the patch. Each room is the patch's size, so
         // each draws its own; the box adds the other half `pad` at its ends. A press opens,
         // slides or shuts (`page`).
         let open = self.music.as_ref().is_some_and(music::Music::open).then_some(self.panel);
         let accent = c.accent;
-        let pages = p.pages.iter().enumerate().map(|(i, [plain, filled])| {
+        let pages = p.pages.iter().enumerate().map(|(i, [plain, lit])| {
             let (picture, fill) = match () {
-                _ if open == Some(i) => (filled, Some(accent)),
+                _ if open == Some(i) => (lit, Some(accent)),
                 _ if s.page_over == Some(i) => (plain, Some(patch)),
                 _ => (plain, None),
             };

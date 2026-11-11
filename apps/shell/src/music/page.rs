@@ -106,17 +106,17 @@ impl Pictures {
     pub fn new(c: &mp_ui::colours::Colours) -> Self {
         let pair = |svg: &[u8]| Pair::new(svg, ICON, c.text, c.on_accent);
         Self {
-            year: pair(include_bytes!("../../assets/tb-calendar.svg")),
-            save: pair(include_bytes!("../../assets/tb-bookmark.svg")),
-            queue: pair(include_bytes!("../../assets/tb-send.svg")),
-            download: pair(include_bytes!("../../assets/tb-arrow-big-down.svg")),
-            globe: pair(include_bytes!("../../assets/tb-world.svg")),
-            tabs: [pair(include_bytes!("../../assets/tb-music.svg")), pair(include_bytes!("../../assets/tb-microphone-2.svg")), pair(include_bytes!("../../assets/tb-users.svg")), pair(include_bytes!("../../assets/tb-radio.svg"))],
-            star: pair(include_bytes!("../../assets/tb-star.svg")),
-            tag: pair(include_bytes!("../../assets/tb-tag.svg")),
-            status: [pair(include_bytes!("../../assets/tb-clock.svg")), pair(include_bytes!("../../assets/tb-rocket.svg")), pair(include_bytes!("../../assets/tb-check.svg")), pair(include_bytes!("../../assets/tb-x.svg"))],
-            ear: pair(include_bytes!("../../assets/tb-ear.svg")),
-            clock: pair(include_bytes!("../../assets/tb-clock.svg")),
+            year: pair(include_bytes!("../../assets/bx-calendar.svg")),
+            save: pair(include_bytes!("../../assets/bx-bookmark-alt.svg")),
+            queue: pair(include_bytes!("../../assets/bx-paper-plane.svg")),
+            download: pair(include_bytes!("../../assets/bx-arrow-big-down.svg")),
+            globe: pair(include_bytes!("../../assets/bx-globe.svg")),
+            tabs: [pair(include_bytes!("../../assets/bx-music.svg")), pair(include_bytes!("../../assets/bx-microphone-alt.svg")), pair(include_bytes!("../../assets/bx-group.svg")), pair(include_bytes!("../../assets/bx-radio.svg"))],
+            star: pair(include_bytes!("../../assets/bx-star.svg")),
+            tag: pair(include_bytes!("../../assets/bx-tag.svg")),
+            status: [pair(include_bytes!("../../assets/bx-clock.svg")), pair(include_bytes!("../../assets/bx-rocket.svg")), pair(include_bytes!("../../assets/bx-check.svg")), pair(include_bytes!("../../assets/bx-x.svg"))],
+            ear: pair(include_bytes!("../../assets/bx-ear-alt.svg")),
+            clock: pair(include_bytes!("../../assets/bx-clock.svg")),
         }
     }
 }

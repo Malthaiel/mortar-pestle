@@ -60,23 +60,22 @@ const REPEAT: usize = 4;
 
 /// The player bar's pictures (shuffle, previous, play, pause, next, repeat, repeat one
 /// song), each plain (Text) and on (Accent, as Spotify lights shuffle and repeat), at
-/// `ICON` as the button column's. Tabler, the glyphs Noctalia's media tab picks
-/// (`media_tab.cpp`, `glyph_registry.cpp`: filled play / pause / skips, `arrows-shuffle`,
-/// `repeat`, and `repeat-once` for one song, where Windows' `Badge` tag was drawn over
-/// the repeat picture until Noctalia Look step 6). Then the speaker by the volume, the
-/// top bar's (`crate::SPEAKER`).
+/// `ICON` as the button column's. Boxicons Filled (his ask 2026-11-10), the Windows
+/// Media tab's; one song = `bx-repeat-one`, Boxicons' repeat with a 1 made inside it
+/// (Boxicons has none; Windows drew a `Badge` tag, Noctalia Look step 6 Tabler's
+/// `repeat-once`). Then the speaker by the volume, the top bar's (`crate::SPEAKER`).
 pub struct Player([[image::Handle; 2]; 7], [image::Handle; 3]);
 
 impl Player {
     pub fn new(c: &mp_ui::colours::Colours) -> Self {
         let svgs: [&[u8]; 7] = [
-            include_bytes!("../../assets/tb-arrows-shuffle.svg"),
-            include_bytes!("../../assets/tb-player-skip-back-filled.svg"),
-            include_bytes!("../../assets/tb-player-play-filled.svg"),
-            include_bytes!("../../assets/tb-player-pause-filled.svg"),
-            include_bytes!("../../assets/tb-player-skip-forward-filled.svg"),
-            include_bytes!("../../assets/tb-repeat.svg"),
-            include_bytes!("../../assets/tb-repeat-once.svg"),
+            include_bytes!("../../assets/bx-shuffle.svg"),
+            include_bytes!("../../assets/bx-skip-previous.svg"),
+            include_bytes!("../../assets/bx-play.svg"),
+            include_bytes!("../../assets/bx-pause.svg"),
+            include_bytes!("../../assets/bx-skip-next.svg"),
+            include_bytes!("../../assets/bx-repeat.svg"),
+            include_bytes!("../../assets/bx-repeat-one.svg"),
         ];
         Self(svgs.map(|d| [c.text, c.accent].map(|colour| mp_ui::icon::svg(d, ICON, colour))), crate::SPEAKER.map(|d| mp_ui::icon::svg(d, ICON, c.text)))
     }
