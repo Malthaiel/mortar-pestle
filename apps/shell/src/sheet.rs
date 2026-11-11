@@ -124,9 +124,7 @@ fn open(tx: mpsc::Sender<()>) -> Result<(Connection, QueueHandle<State>, Arc<Ato
     let stop = Arc::new(AtomicBool::new(false));
     let mut state = State { tx, dot, shapes, pointer: None };
     let held = stop.clone();
-    std::thread::Builder::new().name("sheet".into()).spawn(move || {
-        while !held.load(Ordering::Relaxed) && queue.blocking_dispatch(&mut state).is_ok() {}
-    })?;
+    std::thread::Builder::new().name("sheet".into()).spawn(move || while !held.load(Ordering::Relaxed) && queue.blocking_dispatch(&mut state).is_ok() {})?;
     Ok((conn, qh, stop))
 }
 

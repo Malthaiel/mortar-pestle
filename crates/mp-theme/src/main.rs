@@ -135,9 +135,7 @@ impl Colours {
 }
 
 /// foot.ini(5) defaults for regular0-7 then bright0-7 (starlight theme, V4).
-const FOOT_DEFAULTS: [u32; 16] = [
-    0x242424, 0xf62b5a, 0x47b413, 0xe3c401, 0x24acd4, 0xf2affd, 0x13c299, 0xe6e6e6, 0x616161, 0xff4d51, 0x35d450, 0xe9e836, 0x5dc5f8, 0xfeabf2, 0x24dfc4, 0xffffff,
-];
+const FOOT_DEFAULTS: [u32; 16] = [0x242424, 0xf62b5a, 0x47b413, 0xe3c401, 0x24acd4, 0xf2affd, 0x13c299, 0xe6e6e6, 0x616161, 0xff4d51, 0x35d450, 0xe9e836, 0x5dc5f8, 0xfeabf2, 0x24dfc4, 0xffffff];
 
 /// Writes through a temporary file, so niri never reads half a file.
 fn write(path: &Path, text: &str) {
@@ -166,11 +164,7 @@ fn colours_toml(mode: &str, dark: &Colours, light: &Colours) -> String {
 /// bar's colour (his ask 2026-11-09, plan Window Title Strips). niri's config holds
 /// the width.
 fn niri_kdl(c: &Colours) -> String {
-    format!(
-        "// {HEADER}\nlayout {{\n    border {{\n        active-color \"#{}ff\"\n        inactive-color \"#{}ff\"\n    }}\n}}\n",
-        c.text.as_hex(),
-        c.frame.as_hex()
-    )
+    format!("// {HEADER}\nlayout {{\n    border {{\n        active-color \"#{}ff\"\n        inactive-color \"#{}ff\"\n    }}\n}}\n", c.text.as_hex(), c.frame.as_hex())
 }
 
 fn foot_ini(mode: &str, dark: &Colours, light: &Colours) -> String {

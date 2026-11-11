@@ -981,22 +981,7 @@ impl Shell {
         let list = notices::list();
         let mut drawn = HashMap::new();
         let faces = notices::group_pictures(&list, &mut drawn);
-        let panel = Panel {
-            id,
-            band,
-            corner: !band && !bell,
-            over: false,
-            bell,
-            list,
-            faces,
-            drawn,
-            pictures: side::Pictures::new(&self.colours),
-            height: menu::side_inner(hole),
-            output: name,
-            shut: false,
-            pinned: false,
-            shot: None,
-        };
+        let panel = Panel { id, band, corner: !band && !bell, over: false, bell, list, faces, drawn, pictures: side::Pictures::new(&self.colours), height: menu::side_inner(hole), output: name, shut: false, pinned: false, shot: None };
         let settings = NewLayerShellSettings {
             anchor: Anchor::Top | Anchor::Bottom | Anchor::Right,
             layer: Layer::Top,
@@ -1279,7 +1264,8 @@ impl Shell {
             mouse_area(container(room).padding([style::BAR_INSET, 0.0])).on_press(Message::Page(id, i)).on_enter(Message::PageHover(id, i, true)).on_exit(Message::PageHover(id, i, false)).interaction(mouse::Interaction::Pointer).into()
         });
         let pages = container(row(pages)).padding([0.0, half]).style(boxed);
-        let members = row![clock, cell(pic(&p.grip).into(), half, half), cell(weather.into(), half, pad)];
+        // No station file: the clock alone, the box ending half a `pad` past its patch.
+        let members = if self.weather.set() { row![clock, cell(pic(&p.grip).into(), half, half), cell(weather.into(), half, pad)] } else { row![clock, Space::new().width(half)] };
         let clock_w = s.buttons.iter().find(|(p, _)| *p == Pop::Clock).map_or(0.0, |(_, b)| b.at.width);
         let spot = over(Pop::Clock).then(|| patch_at(half, (clock_w - half).max(0.0)));
         let clock = container(stack(std::iter::once(Element::from(members)).chain(spot.map(Element::from)))).style(boxed);

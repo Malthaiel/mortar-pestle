@@ -107,6 +107,11 @@ impl Weather {
         }
     }
 
+    /// Whether a station is named: with none the bar leaves the weather out.
+    pub fn set(&self) -> bool {
+        self.latest.is_some()
+    }
+
     /// The sky picture and the words beside it, as Noctalia's `WeatherWidget::sync`:
     /// the reading once there is one; before it, a cloud and "Weather" while asking
     /// (Noctalia's "Weather…", its dots left off: his rule) or "Weather err" after a
