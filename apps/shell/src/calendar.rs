@@ -9,7 +9,7 @@
 //! nothing until the Planner exists; the strip's menus in bold.
 
 use iced::advanced::image::{self, Renderer as _};
-use iced::advanced::text::{self, Paragraph as _, Renderer as _};
+use iced::advanced::text::{self, Renderer as _};
 use iced::advanced::{Renderer as _, mouse, renderer};
 use iced::alignment::Vertical;
 use iced::time::Instant;
@@ -18,6 +18,7 @@ use iced::{Border, Color, Event, Pixels, Point, Rectangle, Renderer, Size, Vecto
 use crate::colours::Colours;
 use crate::menu::{Body, Reply};
 use crate::motion::{self, Tween};
+use crate::popups::width_in;
 use crate::style::{self, CONTROL, GAP_1, GAP_2, GAP_3, SMALL};
 
 /// An arrow button: Windows' `chip`, padded gap-3 round its icon.
@@ -76,6 +77,7 @@ pub struct State {
 /// box is square (his call 2026-10-29: Windows' 30 tall was too small for 15
 /// numbers). Whole pixels keep every box on the pixel grid.
 fn side(year: i32) -> f32 {
+    let width = |s: &str, size| width_in(s, size, crate::BOLD);
     let day = (1..=31).map(|d| width(&d.to_string(), style::BODY)).fold(0.0, f32::max) + 2.0 * GAP_3;
     let name = WEEKDAYS.iter().map(|d| width(d, SMALL)).fold(0.0, f32::max);
     let title = MONTHS.iter().map(|m| width(&format!("{m} {year}"), style::BODY)).fold(0.0, f32::max);
@@ -90,10 +92,6 @@ pub fn height(year: i32) -> f32 {
 
 fn words<T>(content: T, size: f32, bounds: Size, align_x: text::Alignment, align_y: Vertical) -> text::Text<T> {
     text::Text { content, bounds, size: Pixels(size), line_height: style::LINE.into(), font: crate::BOLD, align_x, align_y, shaping: text::Shaping::Basic, wrapping: text::Wrapping::None }
-}
-
-fn width(content: &str, size: f32) -> f32 {
-    <Renderer as text::Renderer>::Paragraph::with_text(words(content, size, Size::INFINITE, text::Alignment::Left, Vertical::Top)).min_width()
 }
 
 /// (year, month 0-11) moved by `by` months.

@@ -184,8 +184,7 @@ impl Asks {
 /// server's state anew (one read at a time; notices during a read ask for one more).
 pub fn events() -> Subscription<()> {
     Subscription::run(|| {
-        let (mut tx, rx) = mpsc::channel(1);
-        thread::spawn(move || {
+        crate::listener(|mut tx| {
             // The server may not be up yet as the strip starts, and may restart under
             // it: try again every 5 s (as `music/now.rs`), or the speaker stays frozen
             // and the wheel and slider dead until the strip restarts. One log line a
@@ -207,8 +206,7 @@ pub fn events() -> Subscription<()> {
                 }
                 thread::sleep(Duration::from_secs(5));
             }
-        });
-        rx
+        })
     })
 }
 

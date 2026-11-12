@@ -3,10 +3,7 @@
 //! new colours. A thread waits in `sigwait`, so nothing runs in between. (The music
 //! box's shortcut and the media keys come over the session bus instead: `music/bus.rs`.)
 
-use std::thread;
-
 use iced::Subscription;
-use iced::futures::channel::mpsc;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Signal {
@@ -37,8 +34,7 @@ pub fn hold() {
 
 pub fn events() -> Subscription<Signal> {
     Subscription::run(|| {
-        let (mut tx, rx) = mpsc::channel(1);
-        thread::spawn(move || {
+        crate::listener(|mut tx| {
             let set = set();
             let mut signal = 0;
             // SAFETY: sigwait reads the set and writes the signal's number.
@@ -49,7 +45,6 @@ pub fn events() -> Subscription<Signal> {
                 };
                 let _ = tx.try_send(tap);
             }
-        });
-        rx
+        })
     })
 }

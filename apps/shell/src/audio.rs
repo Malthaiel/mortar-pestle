@@ -7,7 +7,7 @@
 //! 2026-10-30). Windows' "Open settings" is left out: no
 //! Settings app yet. What it shows comes from `sound.rs`; picks and the slider set it there.
 
-use iced::advanced::text::{self, Paragraph as _, Renderer as _};
+use iced::advanced::text::{self, Renderer as _};
 use iced::advanced::{Renderer as _, mouse, renderer};
 use iced::alignment::Vertical;
 use iced::border::Radius;
@@ -17,6 +17,7 @@ use iced::{Border, Color, Event, Pixels, Point, Rectangle, Renderer, Size};
 use crate::colours::Colours;
 use crate::menu::{Body, Reply};
 use crate::motion::{self, Tween};
+use crate::popups;
 use crate::sound::{self, Sound};
 use crate::style::{self, GAP_3};
 
@@ -82,25 +83,6 @@ pub fn height(s: &Sound) -> f32 {
 
 fn words<T>(content: T, size: f32, bounds: Size) -> text::Text<T> {
     text::Text { content, bounds, size: Pixels(size), line_height: style::LINE_TIGHT.into(), font: crate::BOLD, align_x: text::Alignment::Left, align_y: Vertical::Center, shaping: text::Shaping::Basic, wrapping: text::Wrapping::None }
-}
-
-fn width(content: &str) -> f32 {
-    <Renderer as text::Renderer>::Paragraph::with_text(words(content, style::SMALL, Size::INFINITE)).min_width()
-}
-
-/// `name` as it fits `room` by `width`'s measure: whole, or as many letters as fit
-/// before the "…".
-pub fn fit(name: &str, room: f32, mut width: impl FnMut(&str) -> f32) -> String {
-    if width(name) <= room {
-        return name.into();
-    }
-    let cut = |keep: usize| format!("{}\u{2026}", name.chars().take(keep).collect::<String>().trim_end());
-    let (mut lo, mut hi) = (0, name.chars().count());
-    while lo < hi {
-        let mid = (lo + hi).div_ceil(2);
-        if width(&cut(mid)) <= room { lo = mid } else { hi = mid - 1 }
-    }
-    cut(lo)
 }
 
 fn quad(bounds: Rectangle, radius: impl Into<Radius>) -> renderer::Quad {
@@ -176,7 +158,7 @@ impl Body for Audio {
     fn size(&self, s: &mut State) -> Size {
         let devices = || self.sound.outputs.iter().chain(&self.sound.inputs);
         if !s.names.iter().map(|(name, _)| name).eq(devices().map(|d| &d.description)) {
-            s.names = devices().map(|d| (d.description.clone(), fit(&d.description, WIDTH - RING - GAP_3, width))).collect();
+            s.names = devices().map(|d| (d.description.clone(), popups::fit(&d.description, WIDTH - RING - GAP_3, |s| popups::width_in(s, style::SMALL, crate::BOLD)))).collect();
         }
         Size::new(WIDTH, height(&self.sound))
     }

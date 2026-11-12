@@ -7,13 +7,13 @@
 //! it blocks, so it runs off the window's thread.
 
 use std::collections::HashMap;
+use std::fs;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
-use std::{env, fs};
 
 use serde_json::Value;
 
@@ -54,7 +54,7 @@ pub struct Video {
 
 /// `~/.cache/mp-library`.
 pub fn cache() -> PathBuf {
-    env::var_os("XDG_CACHE_HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from(env::var_os("HOME").unwrap_or_default()).join(".cache")).join("mp-library")
+    crate::apps::xdg("XDG_CACHE_HOME", ".cache").join("mp-library")
 }
 
 /// The last MusicBrainz ask: each one waits a second after it.

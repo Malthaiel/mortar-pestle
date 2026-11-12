@@ -27,7 +27,6 @@ use std::sync::atomic::Ordering::Relaxed;
 use std::thread;
 use std::time::Duration;
 
-use iced::futures::channel::mpsc;
 use iced::time::Instant;
 use iced::widget::{column, container, image, row, space, text};
 use iced::{Alignment, Element, Length, Subscription, border};
@@ -209,14 +208,12 @@ impl Capture {
     pub fn ticks(&self) -> Subscription<()> {
         self.pace().map_or_else(Subscription::none, |ms| {
             Subscription::run_with(ms, |&ms| {
-                let (mut tx, rx) = mpsc::channel(1);
-                thread::spawn(move || {
+                crate::listener(move |mut tx| {
                     while !tx.is_closed() {
                         thread::sleep(Duration::from_millis(ms));
                         let _ = tx.try_send(());
                     }
-                });
-                rx
+                })
             })
         })
     }

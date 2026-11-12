@@ -10,10 +10,8 @@
 use std::fs;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::sync::Mutex;
-use std::thread;
 
 use iced::Subscription;
-use iced::futures::channel::mpsc;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Net {
@@ -89,8 +87,7 @@ fn listen() -> Option<OwnedFd> {
 /// Fires whenever `NET` changes.
 pub fn events() -> Subscription<()> {
     Subscription::run(|| {
-        let (mut tx, rx) = mpsc::channel(1);
-        thread::spawn(move || {
+        crate::listener(|mut tx| {
             let Some(sock) = listen() else { return eprintln!("mp-shell: network: {}", std::io::Error::last_os_error()) };
             let mut buf = [0u8; 8192];
             while !tx.is_closed() {
@@ -107,8 +104,7 @@ pub fn events() -> Subscription<()> {
                     while unsafe { libc::recv(sock.as_raw_fd(), buf.as_mut_ptr().cast(), buf.len(), libc::MSG_DONTWAIT) } > 0 {}
                 }
             }
-        });
-        rx
+        })
     })
 }
 

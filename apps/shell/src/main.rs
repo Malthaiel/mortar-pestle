@@ -1333,6 +1333,14 @@ fn input_region(id: Id, hit: Rectangle) -> Task<Message> {
     Task::done(Message::SetInputRegion { id, callback: region })
 }
 
+/// What each of the strip's listeners is: a plain thread of its own that waits (so
+/// nothing runs in between), and one slot to the app (a burst of changes wakes it once).
+fn listener<T: Send + 'static>(wait: impl FnOnce(iced::futures::channel::mpsc::Sender<T>) + Send + 'static) -> iced::futures::channel::mpsc::Receiver<T> {
+    let (tx, rx) = iced::futures::channel::mpsc::channel(1);
+    std::thread::spawn(move || wait(tx));
+    rx
+}
+
 /// A program started by niri (`Spawn`), so it is niri's child, not the shell's;
 /// one made for a terminal starts inside foot.
 fn launch(app: &apps::App) {

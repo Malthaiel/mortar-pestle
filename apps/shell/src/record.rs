@@ -34,7 +34,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use iced::Color;
 use serde_json::json;
 
-use crate::{niri, notices};
+use crate::{apps, clock, niri, notices};
 
 /// When the last clip landed on the disk (ms since 1970): the replay picture shows a
 /// check for a moment after.
@@ -240,7 +240,7 @@ fn rename(path: &str, word: &str) -> PathBuf {
 }
 
 pub fn folder() -> PathBuf {
-    PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join("Videos/Recordings")
+    apps::home().join("Videos/Recordings")
 }
 
 /// A recording or clip in the folder: where, and what and when as the box's row says it.
@@ -295,12 +295,9 @@ pub fn trash(path: &Path) -> bool {
 /// "Nov 3, 9:45 PM".
 fn when(t: SystemTime) -> String {
     const MONTHS: [&str; 12] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    let t = local(t.duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64));
-    let h = match t.tm_hour % 12 {
-        0 => 12,
-        h => h,
-    };
-    format!("{} {}, {h}:{:02} {}", MONTHS[t.tm_mon as usize % 12], t.tm_mday, t.tm_min, if t.tm_hour < 12 { "AM" } else { "PM" })
+    let now = clock::at(t.duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64));
+    let ((h, half), t) = (now.twelve(), now.0);
+    format!("{} {}, {h}:{:02} {half}", MONTHS[t.tm_mon as usize % 12], t.tm_mday, t.tm_min)
 }
 
 /// Starts recording screen `output`, or an `area` of it, with or without the PC's
@@ -443,25 +440,16 @@ pub fn save() {
 /// Where niri saves screenshots: its `screenshot-path`'s folder (his config), else
 /// niri's default.
 pub fn shots_folder() -> PathBuf {
-    let home = PathBuf::from(std::env::var_os("HOME").unwrap_or_default());
-    let config = std::env::var_os("NIRI_CONFIG").map(PathBuf::from).unwrap_or_else(|| std::env::var_os("XDG_CONFIG_HOME").map_or_else(|| home.join(".config"), PathBuf::from).join("niri/config.kdl"));
+    let home = apps::home();
+    let config = std::env::var_os("NIRI_CONFIG").map(PathBuf::from).unwrap_or_else(|| apps::xdg("XDG_CONFIG_HOME", ".config").join("niri/config.kdl"));
     let set = fs::read_to_string(config).ok().and_then(|text| text.lines().map(str::trim).find_map(|l| l.strip_prefix("screenshot-path")).and_then(|v| v.trim().strip_prefix('"')?.split('"').next().map(String::from)));
     let path = set.map_or_else(|| home.join("Pictures/Screenshots/x"), |p| p.strip_prefix("~/").map_or_else(|| PathBuf::from(&p), |rest| home.join(rest)));
     path.parent().map_or(path.clone(), Path::to_path_buf)
 }
 
-fn local(secs: i64) -> libc::tm {
-    // SAFETY: localtime_r only writes the tm it is given.
-    unsafe {
-        let mut tm = std::mem::zeroed();
-        libc::localtime_r(&secs, &mut tm);
-        tm
-    }
-}
-
 /// Now, as niri's screenshot names: `2026-11-03 21-45-10`.
 fn stamp() -> String {
-    let t = local((now_ms() / 1000) as i64);
+    let t = clock::at((now_ms() / 1000) as i64).0;
     format!("{}-{:02}-{:02} {:02}-{:02}-{:02}", t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec)
 }
 

@@ -6,7 +6,7 @@
 //! screen (`menu.rs`, `Edge::Bottom`) and holds the keyboard until it closes.
 
 use iced::advanced::image::{self, Renderer as _};
-use iced::advanced::text::{self, Paragraph as _, Renderer as _};
+use iced::advanced::text::{self, Renderer as _};
 use iced::advanced::{Renderer as _, renderer};
 use iced::alignment::Vertical;
 use iced::keyboard::{self, Key, key::Named};
@@ -18,6 +18,7 @@ use crate::colours::Colours;
 use crate::icon;
 use crate::menu::{Body, Reply};
 use crate::motion::{self, Tween};
+use crate::popups::width_in as width;
 use crate::style::{BODY, CONTROL, CORNER, GAP_1, GAP_2, GAP_3, ICON, ICON_LG, LINE_TIGHT, SMALL};
 use crate::{BOLD, MEDIUM};
 
@@ -56,10 +57,6 @@ pub fn tallest(apps: usize) -> f32 {
 
 fn line<T>(content: T, size: f32, font: Font, bounds: Size) -> text::Text<T> {
     text::Text { content, bounds, size: size.into(), line_height: LINE_TIGHT.into(), font, align_x: text::Alignment::Left, align_y: Vertical::Top, shaping: text::Shaping::Basic, wrapping: text::Wrapping::None }
-}
-
-fn width(content: &str, size: f32, font: Font) -> f32 {
-    <Renderer as text::Renderer>::Paragraph::with_text(line(content, size, font, Size::INFINITE)).min_width()
 }
 
 /// The content's width, as the menus size themselves: the widest name or grey

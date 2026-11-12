@@ -7,7 +7,6 @@ use std::sync::Mutex;
 use std::thread;
 
 use iced::Subscription;
-use iced::futures::channel::mpsc;
 use serde_json::Value;
 
 /// A window as niri reports it: only what the bar draws (which workspace holds it;
@@ -51,8 +50,7 @@ fn connect() -> std::io::Result<UnixStream> {
 /// event per line, niri-ipc's documented protocol), so nothing runs between events.
 pub fn events() -> Subscription<()> {
     Subscription::run(|| {
-        let (mut tx, rx) = mpsc::channel(1);
-        thread::spawn(move || {
+        crate::listener(|mut tx| {
             let stream = match connect().and_then(|mut s| s.write_all(b"\"EventStream\"\n").map(|()| s)) {
                 Ok(s) => s,
                 Err(e) => return eprintln!("mp-shell: niri socket: {e}"),
@@ -70,8 +68,7 @@ pub fn events() -> Subscription<()> {
                 }
             }
             eprintln!("mp-shell: niri event stream ended");
-        });
-        rx
+        })
     })
 }
 

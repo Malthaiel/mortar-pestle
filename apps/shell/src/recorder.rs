@@ -44,7 +44,7 @@ use crate::capture::Shot;
 use crate::colours::Colours;
 use crate::menu::Reply;
 use crate::motion::{self, Tween};
-use crate::popups::{self, say, width, words};
+use crate::popups::{self, centred, say, width, words};
 use crate::record::{self, Live, Saved};
 use crate::side::{Glide, Item, Pill};
 use crate::{icon, side, style};
@@ -578,9 +578,4 @@ impl Recorder<'_> {
             }
         });
     }
-}
-
-/// A square `side` big in the middle of `b`, in whole pixels.
-fn centred(b: Rectangle, side: f32) -> Rectangle {
-    Rectangle { x: b.x + ((b.width - side) / 2.0).round(), y: b.y + ((b.height - side) / 2.0).round(), width: side, height: side }
 }

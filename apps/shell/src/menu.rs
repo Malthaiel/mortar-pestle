@@ -23,7 +23,7 @@ use std::time::Duration;
 
 use iced::advanced::image::{self, Renderer as _};
 use iced::advanced::layout::{self, Layout};
-use iced::advanced::text::{self, Paragraph as _, Renderer as _};
+use iced::advanced::text::{self, Renderer as _};
 use iced::advanced::widget::{Tree, Widget, tree};
 use iced::advanced::{Clipboard, Renderer as _, Shell, mouse, renderer};
 use iced::alignment::Vertical;
@@ -390,7 +390,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Menu<'_, Message> {
         // A bar panel: the body under its head, at least as wide as the title, a gap and
         // the X.
         let (pad, head) = self.insets();
-        let least = self.head.as_ref().map_or(0.0, |h| <Renderer as text::Renderer>::Paragraph::with_text(title_text(h.title, f32::INFINITY)).min_width() + style::GAP_2 + style::CONTROL_SM);
+        let least = self.head.as_ref().map_or(0.0, |h| crate::popups::width_in(h.title, style::TITLE, crate::BOLD) + style::GAP_2 + style::CONTROL_SM);
         // Whole pixels (see `draw`).
         s.sizes = self
             .pages
@@ -644,7 +644,7 @@ impl Body for Rows {
 
     fn size(&self, _: &mut RowsState) -> Size {
         // The widest name, measured, sets the width.
-        let widest = self.rows.iter().map(|row| <Renderer as text::Renderer>::Paragraph::with_text(label(row.label.as_str(), f32::INFINITY)).min_width()).fold(0.0, f32::max);
+        let widest = self.rows.iter().map(|row| crate::popups::width_in(&row.label, style::BODY, crate::BOLD)).fold(0.0, f32::max);
         Size::new(Self::TEXT_X + widest + INSET, self.rows.len() as f32 * ROW)
     }
 

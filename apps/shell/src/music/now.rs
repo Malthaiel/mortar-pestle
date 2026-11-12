@@ -96,16 +96,14 @@ pub fn send(command: Command) {
 
 pub fn events() -> Subscription<Now> {
     Subscription::run(|| {
-        let (tx, rx) = mpsc::channel(1);
-        thread::spawn(move || {
+        crate::listener(|tx| {
             // A bus error ends one run: begun again, or the box would be deaf to the
             // player until the strip restarts.
             while let Err(e) = zbus::block_on(run(tx.clone())) {
                 eprintln!("mp-shell: music: now playing: {e}");
                 thread::sleep(std::time::Duration::from_secs(5));
             }
-        });
-        rx
+        })
     })
 }
 

@@ -6,9 +6,9 @@
 //! playlists are files in `~/.local/share/mp-library/playlists/`.
 
 use std::collections::HashMap;
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
-use std::{env, fs};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Status {
@@ -74,12 +74,12 @@ pub struct Album {
 }
 
 pub fn music() -> PathBuf {
-    PathBuf::from(env::var_os("HOME").unwrap_or_default()).join("Music")
+    crate::apps::home().join("Music")
 }
 
 /// `~/.local/share`: the Library's own files and the bin live under it.
 fn share() -> PathBuf {
-    env::var_os("XDG_DATA_HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from(env::var_os("HOME").unwrap_or_default()).join(".local/share"))
+    crate::apps::xdg("XDG_DATA_HOME", ".local/share")
 }
 
 fn data() -> PathBuf {

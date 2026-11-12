@@ -40,7 +40,7 @@ use crate::colours::Colours;
 use crate::menu::{Body, Reply};
 use crate::motion::{self, Tween};
 use crate::notices::{self, Notice};
-use crate::popups::{self, cut, say, tall, width, words};
+use crate::popups::{self, centred, cut, say, tall, width, words};
 use crate::record::Live;
 use crate::recorder::{self, Part, Recorder};
 use crate::{icon, style};
@@ -531,16 +531,7 @@ impl Side<'_> {
     /// An open notice's buttons from its box's top left: X (as wide as it is tall, or the
     /// whole row with no other), then the sender's, sharing the rest (the pop-ups').
     fn buttons(n: &Notice, h: f32) -> Vec<Rectangle> {
-        let (x0, w) = (PAD, COL_W - 2.0 * PAD);
-        let y = h - PAD - style::CONTROL;
-        let k = n.actions.len();
-        let x_w = if k == 0 { w } else { style::CONTROL };
-        let mut out = vec![Rectangle { x: x0, y, width: x_w, height: style::CONTROL }];
-        let each = ((w - x_w - k as f32 * SMALL) / k.max(1) as f32).floor();
-        for i in 0..k {
-            out.push(Rectangle { x: x0 + x_w + SMALL + i as f32 * (each + SMALL), y, width: each, height: style::CONTROL });
-        }
-        out
+        popups::buttons(PAD, h - PAD - style::CONTROL, COL_W - 2.0 * PAD, n.actions.len())
     }
 
     fn over(&self, s: &State, p: Point, now: Instant) -> Over {
@@ -907,7 +898,6 @@ impl Side<'_> {
         let hover = |on: Color, by: f32| fade(Color { a: style::HOVER, ..on }, by);
         let quad = |b: Rectangle, radius: f32| renderer::Quad { bounds: b, border: border::rounded(radius), ..Default::default() };
         let at = |r: Rectangle| Rectangle { x: (c.x + r.x).round(), y: (c.y + r.y).round(), width: r.width.round(), height: r.height.round() };
-        let centred = |b: Rectangle, side: f32| Rectangle { x: b.x + ((b.width - side) / 2.0).round(), y: b.y + ((b.height - side) / 2.0).round(), width: side, height: side };
         let picture = |renderer: &mut Renderer, h: &image::Handle, b: Rectangle, by: f32, clip: Rectangle| {
             renderer.draw_image(img::Image { opacity: alpha * by, ..img::Image::new(h.clone()) }, b, clip);
         };
@@ -994,7 +984,6 @@ impl Side<'_> {
         let by = (1.0 - s.gx.get(g.app).map_or(0.0, |t| t.value(now)).abs() / GW).clamp(0.0, 1.0);
         let fade = |colour: Color, f: f32| Color { a: colour.a * alpha * by * f, ..colour };
         let quad = |b: Rectangle, radius: f32| renderer::Quad { bounds: b, border: border::rounded(radius), ..Default::default() };
-        let centred = |b: Rectangle, side: f32| Rectangle { x: b.x + ((b.width - side) / 2.0).round(), y: b.y + ((b.height - side) / 2.0).round(), width: side, height: side };
         renderer.fill_quad(quad(card, style::CORNER), fade(col.raised, 1.0));
 
         let spot = Rectangle { x: card.x + PAD, y: card.y + PAD, width: PICTURE, height: PICTURE };

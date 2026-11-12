@@ -13,7 +13,7 @@ use std::collections::HashMap;
 
 use iced::advanced::graphics::geometry::Renderer as _;
 use iced::advanced::image::{self, Renderer as _};
-use iced::advanced::text::{self, Paragraph as _, Renderer as _};
+use iced::advanced::text::{self, Renderer as _};
 use iced::advanced::{Renderer as _, mouse, renderer};
 use iced::alignment::Vertical;
 use iced::time::Instant;
@@ -26,6 +26,7 @@ use crate::colours::Colours;
 use crate::icon;
 use crate::menu::{Body, Reply};
 use crate::motion::{self, Tween};
+use crate::popups;
 use crate::style::{self, GAP_1, GAP_2, GAP_3};
 
 /// The sound box's width, so the box keeps its width gliding between the two
@@ -135,10 +136,6 @@ fn words<T>(content: T, size: f32, bounds: Size) -> text::Text<T> {
     text::Text { content, bounds, size: Pixels(size), line_height: style::LINE_TIGHT.into(), font: crate::BOLD, align_x: text::Alignment::Left, align_y: Vertical::Center, shaping: text::Shaping::Basic, wrapping: text::Wrapping::None }
 }
 
-fn width(content: &str) -> f32 {
-    <Renderer as text::Renderer>::Paragraph::with_text(words(content, style::BODY, Size::INFINITE)).min_width()
-}
-
 /// A press spot: a switch, or a device's (its path) connect or forget button.
 #[derive(Debug, Clone, PartialEq)]
 enum Spot {
@@ -222,7 +219,7 @@ pub struct State {
     patch: Tween,
     /// Each row as it came in: its fade and its growth, by path.
     rows: HashMap<String, (Tween, Tween)>,
-    /// Each listed name and as it shows (`audio::fit`), by path.
+    /// Each listed name and as it shows (`popups::fit`), by path.
     names: HashMap<String, (String, f32, String)>,
 }
 
@@ -278,7 +275,7 @@ impl Body for Menu<'_> {
             let room = places(d).name.1;
             let fresh = s.names.get(*path).is_none_or(|(name, was, _)| *name != d.name || *was != room);
             if fresh {
-                s.names.insert(path.to_string(), (d.name.clone(), room, crate::audio::fit(&d.name, room, width)));
+                s.names.insert(path.to_string(), (d.name.clone(), room, popups::fit(&d.name, room, |s| popups::width_in(s, style::BODY, crate::BOLD))));
             }
         }
         Size::new(WIDTH, height(listed.len()))

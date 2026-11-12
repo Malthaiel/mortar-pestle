@@ -12,7 +12,6 @@ use std::collections::{BTreeMap, HashMap};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Mutex;
-use std::thread;
 
 use iced::Subscription;
 use iced::futures::channel::mpsc;
@@ -119,13 +118,11 @@ pub fn bluetooth() -> Bluetooth {
 /// Fires whenever `BLUETOOTH` changes.
 pub fn events() -> Subscription<()> {
     Subscription::run(|| {
-        let (tx, rx) = mpsc::channel(1);
-        thread::spawn(move || {
+        crate::listener(|tx| {
             if let Err(e) = zbus::block_on(run(tx)) {
                 eprintln!("mp-shell: bluetooth: {e}");
             }
-        });
-        rx
+        })
     })
 }
 

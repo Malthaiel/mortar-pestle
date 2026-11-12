@@ -18,7 +18,7 @@ use iced::advanced::{Renderer as _, renderer};
 use iced::alignment::Vertical;
 use iced::time::Instant;
 use iced::widget::image;
-use iced::{Color, Event, Pixels, Point, Rectangle, Renderer, Size, border, mouse};
+use iced::{Color, Event, Font, Pixels, Point, Rectangle, Renderer, Size, border, mouse};
 
 use crate::colours::Colours;
 use crate::menu::{Body, Reply};
@@ -92,8 +92,14 @@ pub(crate) fn words(content: &str, size: f32, width: f32, wrap: bool) -> text::T
     }
 }
 
+/// One line's width at `size` in `font`, as every part of the strip measures its words
+/// (`Basic` shaping; a line's height and placing change no width).
+pub(crate) fn width_in(s: &str, size: f32, font: Font) -> f32 {
+    <Renderer as text::Renderer>::Paragraph::with_text(text::Text { font, ..words(s, size, f32::INFINITY, false) }).min_width()
+}
+
 pub(crate) fn width(s: &str, size: f32) -> f32 {
-    <Renderer as text::Renderer>::Paragraph::with_text(words(s, size, f32::INFINITY, false)).min_width()
+    width_in(s, size, crate::MEDIUM)
 }
 
 pub(crate) fn tall(s: &str, size: f32, w: f32) -> f32 {
@@ -102,18 +108,39 @@ pub(crate) fn tall(s: &str, size: f32, w: f32) -> f32 {
 
 /// `s` on one line, cut with an ellipsis to `w` (Caelestia's `ElideRight`).
 pub(crate) fn cut(s: &str, size: f32, w: f32) -> String {
-    let one = s.split_whitespace().collect::<Vec<_>>().join(" ");
-    if width(&one, size) <= w {
-        return one;
+    fit(&s.split_whitespace().collect::<Vec<_>>().join(" "), w, |s| width(s, size))
+}
+
+/// `name` as it fits `room` by `width`'s measure: whole, or as many letters as fit
+/// before the "…".
+pub(crate) fn fit(name: &str, room: f32, mut width: impl FnMut(&str) -> f32) -> String {
+    if width(name) <= room {
+        return name.into();
     }
-    let chars: Vec<char> = one.chars().collect();
-    let shown = |n: usize| chars[..n].iter().collect::<String>().trim_end().to_string() + "\u{2026}";
-    let (mut lo, mut hi) = (0, chars.len());
+    let shown = |keep: usize| format!("{}\u{2026}", name.chars().take(keep).collect::<String>().trim_end());
+    let (mut lo, mut hi) = (0, name.chars().count());
     while lo < hi {
         let mid = (lo + hi).div_ceil(2);
-        if width(&shown(mid), size) <= w { lo = mid } else { hi = mid - 1 }
+        if width(&shown(mid)) <= room { lo = mid } else { hi = mid - 1 }
     }
     shown(lo)
+}
+
+/// A square `side` big in the middle of `b`, in whole pixels.
+pub(crate) fn centred(b: Rectangle, side: f32) -> Rectangle {
+    Rectangle { x: b.x + ((b.width - side) / 2.0).round(), y: b.y + ((b.height - side) / 2.0).round(), width: side, height: side }
+}
+
+/// An open notice's buttons, a row `w` wide from `x` with its top at `y`: X (as wide as
+/// it is tall, or the whole row with no other), then the sender's `n`, sharing the rest.
+pub(crate) fn buttons(x: f32, y: f32, w: f32, n: usize) -> Vec<Rectangle> {
+    let x_w = if n == 0 { w } else { style::CONTROL };
+    let mut out = vec![Rectangle { x, y, width: x_w, height: style::CONTROL }];
+    let each = ((w - x_w - n as f32 * SMALL_GAP) / n.max(1) as f32).floor();
+    for i in 0..n {
+        out.push(Rectangle { x: x + x_w + SMALL_GAP + i as f32 * (each + SMALL_GAP), y, width: each, height: style::CONTROL });
+    }
+    out
 }
 
 /// A card's words, measured: cut again only when they change (and the age, whose
@@ -202,22 +229,9 @@ impl Card {
         Rectangle { x: CARD - PAD - ARROW, y: PAD + ((TITLE_LINE - ARROW) / 2.0).round(), width: ARROW, height: ARROW }
     }
 
-    /// The buttons when open, from the card's top left: X (as wide as it is tall, or
-    /// the whole row with no other), then the sender's, sharing the rest.
+    /// The buttons when open, from the card's top left.
     fn buttons(&self) -> Vec<Rectangle> {
-        let y = self.open_h() - PAD - style::CONTROL;
-        let n = self.n.actions.len();
-        let mut out = Vec::with_capacity(n + 1);
-        let x_w = if n == 0 { TEXT_W } else { style::CONTROL };
-        out.push(Rectangle { x: TEXT_X, y, width: x_w, height: style::CONTROL });
-        if n > 0 {
-            let each = ((TEXT_W - x_w - n as f32 * SMALL_GAP) / n as f32).floor();
-            for i in 0..n {
-                let x = TEXT_X + x_w + SMALL_GAP + i as f32 * (each + SMALL_GAP);
-                out.push(Rectangle { x, y, width: each, height: style::CONTROL });
-            }
-        }
-        out
+        buttons(TEXT_X, self.open_h() - PAD - style::CONTROL, TEXT_W, self.n.actions.len())
     }
 }
 
@@ -438,7 +452,6 @@ impl Body for Popups<'_> {
 
                 let spot = Rectangle { x: at.x + PAD, y: at.y + PAD, width: PICTURE, height: PICTURE };
                 picture(renderer, spot, (n.face.as_ref(), n.badge.as_ref()), n.critical, c, p, alpha, cut);
-                let centred = |b: Rectangle, side: f32| Rectangle { x: b.x + ((b.width - side) / 2.0).round(), y: b.y + ((b.height - side) / 2.0).round(), width: side, height: side };
 
                 let l = &card.lines;
                 let x = at.x + TEXT_X;
@@ -523,7 +536,6 @@ pub(crate) fn picture(renderer: &mut Renderer, spot: Rectangle, (face, badge): (
     let draw = |renderer: &mut Renderer, h: &image::Handle, b: Rectangle| {
         renderer.draw_image(img::Image { opacity: alpha, ..img::Image::new(h.clone()) }, b, clip);
     };
-    let centred = |b: Rectangle, side: f32| Rectangle { x: b.x + ((b.width - side) / 2.0).round(), y: b.y + ((b.height - side) / 2.0).round(), width: side, height: side };
     match (face, badge) {
         (Some(face), badge) => {
             draw(renderer, face, spot);
@@ -563,4 +575,38 @@ pub fn size(cards: &[Notice]) -> Size {
     let n = cards.len() as f32;
     let h = if n > 0.0 { n * Card::shut_h() + (n - 1.0) * SPACE } else { 0.0 };
     Size::new(WIDTH, (h + 2.0 * style::MENU_PAD).ceil())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fits_or_cuts() {
+        // One wide a letter.
+        let w = |s: &str| s.chars().count() as f32;
+        assert_eq!(fit("Speakers", 8.0, w), "Speakers");
+        assert_eq!(fit("Speakers", 5.0, w), "Spea\u{2026}");
+        // No blank is left before the dots.
+        assert_eq!(fit("HDMI 2 out", 6.0, w), "HDMI\u{2026}");
+        assert_eq!(fit("Speakers", 0.0, w), "\u{2026}");
+    }
+
+    #[test]
+    fn centred_on_whole_pixels() {
+        let b = Rectangle { x: 10.0, y: 20.0, width: 25.0, height: 24.0 };
+        assert_eq!(centred(b, 16.0), Rectangle { x: 15.0, y: 24.0, width: 16.0, height: 16.0 });
+    }
+
+    #[test]
+    fn button_rows() {
+        let c = style::CONTROL;
+        // Alone, X is the whole row.
+        assert_eq!(buttons(10.0, 5.0, 300.0, 0), [Rectangle { x: 10.0, y: 5.0, width: 300.0, height: c }]);
+        // With the sender's two: X square, then the two sharing the rest, a gap between each.
+        let each = ((300.0 - c - 2.0 * SMALL_GAP) / 2.0).floor();
+        let second = 10.0 + c + SMALL_GAP;
+        let row = [(10.0, c), (second, each), (second + each + SMALL_GAP, each)].map(|(x, width)| Rectangle { x, y: 5.0, width, height: c });
+        assert_eq!(buttons(10.0, 5.0, 300.0, 2), row);
+    }
 }

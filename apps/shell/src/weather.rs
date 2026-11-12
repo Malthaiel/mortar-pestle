@@ -11,9 +11,9 @@
 //! cache). Measured 2026-11-08: an ask costs ~11 ms of processor and ~15 MB for under
 //! 0.6 s, in curl, then nothing.
 
+use std::fs;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use std::{env, fs};
 
 use iced::Task;
 use iced::futures::channel::oneshot;
@@ -161,7 +161,7 @@ fn sky(icon: &str) -> Sky {
 
 /// `~/.cache/mp-shell/weather`: the last reading as "<seconds since 1970> <°F> <sky>".
 fn file() -> PathBuf {
-    env::var_os("XDG_CACHE_HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from(env::var_os("HOME").unwrap_or_default()).join(".cache")).join("mp-shell/weather")
+    crate::apps::xdg("XDG_CACHE_HOME", ".cache").join("mp-shell/weather")
 }
 
 #[cfg(test)]

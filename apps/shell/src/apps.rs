@@ -24,12 +24,12 @@ pub struct App {
     pub picture: Option<image::Handle>,
 }
 
-fn home() -> PathBuf {
+pub(crate) fn home() -> PathBuf {
     PathBuf::from(env::var_os("HOME").unwrap_or_default())
 }
 
 /// `$XDG_<name>` if set, else `~/<default>`.
-fn xdg(name: &str, default: &str) -> PathBuf {
+pub(crate) fn xdg(name: &str, default: &str) -> PathBuf {
     env::var_os(name).filter(|v| !v.is_empty()).map(PathBuf::from).unwrap_or_else(|| home().join(default))
 }
 
