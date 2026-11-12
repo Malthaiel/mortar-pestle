@@ -11,9 +11,8 @@
 //! closes it.
 //! niri's Mod+D opens the Start menu (`start.rs`) at the bottom of the mouse's screen;
 //! Mod+Shift+D opens the top drawer on Music, its three panels side by side (Dashboard,
-//! Music, Performance; Weather gone, Chat Tab plan 2026-11-05; Chat gone with M&P Chat,
-//! scrapped 2026-11-07), sliding to the one picked last (`music/`, its own program
-//! mp-library until the Top Strip plan's step 2). Only Music has content yet. Quick
+//! Music, Performance), sliding to the one picked last (`music/`). Only Music has
+//! content yet. Quick
 //! toggles' replay and camera pills open a capture pop-up centred on their screen
 //! (`capture.rs`). CPU drawing; nothing runs on a timer except the clock, once a minute
 //! (it also asks the weather every 30 minutes, `weather.rs`), the wifi's signal read every 6 s while it is joined (`net.rs`), a recording's clock
@@ -252,7 +251,7 @@ struct Pictures {
 impl Pictures {
     fn new(colours: &Colours) -> Self {
         let bare = |svg: &[u8]| icon::svg(svg, style::ICON, colours.text);
-        let power_rows = POWER.iter().map(|&(label, svg)| menu::Row { label: label.into(), icon: Some([icon::svg(svg, style::ICON, colours.text), icon::svg(svg, style::ICON, colours.on_accent)]) }).collect();
+        let power_rows = POWER.iter().map(|&(label, svg)| menu::Row { label: label.into(), icon: [icon::svg(svg, style::ICON, colours.text), icon::svg(svg, style::ICON, colours.on_accent)] }).collect();
         let plain = |svgs: &[&[u8]]| svgs.iter().map(|svg| bare(svg)).collect();
         let (network, bluetooth, speaker, weather, bt_devices) = (plain(&NETWORK), plain(&BLUETOOTH), plain(&SPEAKER), plain(&WEATHER), plain(&bluetooth_menu::DEVICES));
         let arrows = [icon::svg(include_bytes!("../assets/bx-chevron-left.svg"), style::ICON, colours.text), icon::svg(include_bytes!("../assets/bx-chevron-right.svg"), style::ICON, colours.text)];
@@ -886,8 +885,7 @@ impl Shell {
         }
         let room = menu::corner_room(popups::size(&self.popups));
         let mut tasks = Vec::new();
-        for (output, s) in self.screens.iter_mut().filter(|(o, s)| s.notices.is_none() && only.is_none_or(|x| x == *o)) {
-            let _ = output;
+        for (_, s) in self.screens.iter_mut().filter(|(o, s)| s.notices.is_none() && only.is_none_or(|x| x == *o)) {
             let id = Id::unique();
             s.notices = Some(id);
             let settings = NewLayerShellSettings {
@@ -1132,7 +1130,7 @@ impl Shell {
         if self.screens.values().any(|s| s.notices == Some(id)) {
             let body = popups::Popups { cards: &self.popups, colours: self.colours, pictures: &self.pictures.notices };
             let menu = Menu::new(vec![(0.0, Box::new(body))], 0, !self.popups.is_empty(), self.corner, self.colours.frame, move |e| Message::Menu(id, e));
-            return menu.from_corner().into();
+            return menu.at_corner().into();
         }
         if let Some(p) = self.side.as_ref().filter(|p| p.id == id) {
             let body = side::Side {
@@ -1151,7 +1149,7 @@ impl Shell {
                 pictures: &p.pictures,
             };
             let menu = Menu::new(vec![(0.0, Box::new(body))], 0, p.open(), self.corner, self.colours.frame, move |e| Message::Menu(id, e));
-            return menu.from_side().into();
+            return menu.at_side().into();
         }
         if self.screens.values().any(|s| s.side_zone == id || s.corner_zone == id) {
             return mouse_area(Space::new().width(Fill).height(Fill)).on_enter(Message::Zone(id, true)).on_exit(Message::Zone(id, false)).into();
@@ -1159,7 +1157,7 @@ impl Shell {
         if let Some(start) = self.start.as_ref().filter(|s| s.id == id) {
             let body = start::Start { apps: &start.apps, width: start.width, colours: self.colours, pictures: &start.pictures };
             let menu = Menu::new(vec![(0.0, Box::new(body))], 0, start.open, self.corner, self.colours.frame, move |e| Message::Menu(id, e));
-            return menu.from_bottom().into();
+            return menu.at_bottom().into();
         }
         let Some(s) = self.screens.values().find(|s| s.strip == id || s.menu == Some(id)) else {
             return Space::new().into();
@@ -1340,4 +1338,15 @@ fn input_region(id: Id, hit: Rectangle) -> Task<Message> {
 fn launch(app: &apps::App) {
     let command: Vec<&str> = app.terminal.then_some("foot").into_iter().chain(app.exec.iter().map(String::as_str)).collect();
     niri::act(json!({ "Spawn": { "command": command } }));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bar_pictures() {
+        assert_eq!([net::Net::Cable, net::Net::Off, net::Net::Wifi(0), net::Net::Wifi(15), net::Net::Wifi(35), net::Net::Wifi(60), net::Net::Wifi(100)].map(network), [0, 1, 2, 3, 4, 5, 5]);
+        assert_eq!([(0.0, false), (0.5, true), (0.004, false), (0.39, false), (0.4, false), (1.5, false)].map(|(v, m)| speaker(v, m)), [0, 0, 0, 1, 2, 2]);
+    }
 }

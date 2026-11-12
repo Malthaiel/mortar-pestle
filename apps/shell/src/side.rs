@@ -439,7 +439,7 @@ impl Side<'_> {
     /// gliding.
     fn rec_rect(&self, s: &State, now: Instant) -> Rectangle {
         let h = s.rec.h(now);
-        Rectangle { x: 0.0, y: self.switches_y(s) - style::MENU_PAD - h, width: W, height: h }
+        Rectangle { x: 0.0, y: self.switches_y() - style::MENU_PAD - h, width: W, height: h }
     }
 
     /// The list's box, from the content's top left: down to the recorder.
@@ -464,7 +464,7 @@ impl Side<'_> {
     }
 
     /// The switches: at the column's bottom.
-    fn switches_y(&self, _s: &State) -> f32 {
+    fn switches_y(&self) -> f32 {
         self.height - switches_h()
     }
 
@@ -487,11 +487,11 @@ impl Side<'_> {
 
     /// The row's pills from the content's top left (the switches, replay, the camera):
     /// centred, a gap-2 apart.
-    fn pills_at(&self, s: &State) -> [Point; 3] {
+    fn pills_at(&self) -> [Point; 3] {
         let [rec, shot] = self.capture();
         let ws = [self.switches().w(), rec.w(), shot.w()];
         let mut x = ((W - ws.iter().sum::<f32>() - 2.0 * style::GAP_2) / 2.0).round();
-        let y = self.switches_y(s) + row_top();
+        let y = self.switches_y() + row_top();
         ws.map(|w| {
             let at = Point::new(x, y);
             x += w + style::GAP_2;
@@ -548,7 +548,7 @@ impl Side<'_> {
         if let Some(part) = self.recorder().over(&s.rec, Point::new(p.x - rec.x, p.y - rec.y), rec.height, now) {
             return Over::Rec(part);
         }
-        let [at, rec_at, shot_at] = self.pills_at(s);
+        let [at, rec_at, shot_at] = self.pills_at();
         let switches = self.switches();
         if let Some(i) = switches.at(at, p) {
             return Over::Switch(i);
@@ -912,50 +912,48 @@ impl Side<'_> {
             renderer.draw_image(img::Image { opacity: alpha * by, ..img::Image::new(h.clone()) }, b, clip);
         };
 
-        {
-            let dock = at(Rectangle { x: 0.0, y: 0.0, width: W, height: self.dock_h(s, now) });
-            renderer.fill_quad(quad(dock, style::CORNER), fade(col.panel, 1.0));
-            // Caelestia's title: the count, then "notifications".
-            let title = match self.list.len() {
-                0 => "Notifications".to_string(),
-                1 => "1 notification".to_string(),
-                n => format!("{n} notifications"),
-            };
-            // The Quick toggles title's size (Malthaiel's call 2026-11-04).
-            let to = Point::new(dock.x + PAD + SMALL, dock.y + PAD + SMALL + TITLE_LINE / 2.0);
-            say(renderer, bold(words(&title, style::BODY, f32::INFINITY, false)), to, fade(col.text_muted, 1.0), dock, clip);
+        let dock = at(Rectangle { x: 0.0, y: 0.0, width: W, height: self.dock_h(s, now) });
+        renderer.fill_quad(quad(dock, style::CORNER), fade(col.panel, 1.0));
+        // Caelestia's title: the count, then "notifications".
+        let title = match self.list.len() {
+            0 => "Notifications".to_string(),
+            1 => "1 notification".to_string(),
+            n => format!("{n} notifications"),
+        };
+        // The Quick toggles title's size (Malthaiel's call 2026-11-04).
+        let to = Point::new(dock.x + PAD + SMALL, dock.y + PAD + SMALL + TITLE_LINE / 2.0);
+        say(renderer, bold(words(&title, style::BODY, f32::INFINITY, false)), to, fade(col.text_muted, 1.0), dock, clip);
 
-            let list = at(self.list_rect(s, now));
-            if self.list.is_empty() {
-                // Caelestia's empty list: its picture and "All up to date!".
-                let (side, line) = (DINO as f32, style::TITLE * style::LINE_TIGHT);
-                let top = (list.y + (list.height - side - style::GAP_3 - line) / 2.0).round();
-                picture(renderer, &self.pictures.dino, Rectangle { x: (list.x + (list.width - side) / 2.0).round(), y: top, width: side, height: side }, 1.0, clip);
-                let words_w = width("All up to date!", style::TITLE);
-                let to = Point::new((list.x + (list.width - words_w) / 2.0).round(), top + side + style::GAP_3 + line / 2.0);
-                say(renderer, words("All up to date!", style::TITLE, f32::INFINITY, false), to, fade(col.text_faint, 1.0), list, clip);
-            } else if let Some(shown) = list.intersection(&clip) {
-                renderer.with_layer(shown, |renderer| {
-                    for g in self.groups() {
-                        self.draw_card(s, renderer, &g, at(self.card_rect(s, g.app, now)), shown, alpha, now);
-                    }
-                });
-                // Clear all, over the list's bottom right (Caelestia's `clearBtn`).
-                let b = at(self.clear_rect(s, now));
-                renderer.fill_quad(quad(b, b.height / 2.0), fade(col.raised, 1.0));
-                if s.over == Over::Clear {
-                    renderer.fill_quad(quad(b, b.height / 2.0), hover(col.text, 1.0));
+        let list = at(self.list_rect(s, now));
+        if self.list.is_empty() {
+            // Caelestia's empty list: its picture and "All up to date!".
+            let (side, line) = (DINO as f32, style::TITLE * style::LINE_TIGHT);
+            let top = (list.y + (list.height - side - style::GAP_3 - line) / 2.0).round();
+            picture(renderer, &self.pictures.dino, Rectangle { x: (list.x + (list.width - side) / 2.0).round(), y: top, width: side, height: side }, 1.0, clip);
+            let words_w = width("All up to date!", style::TITLE);
+            let to = Point::new((list.x + (list.width - words_w) / 2.0).round(), top + side + style::GAP_3 + line / 2.0);
+            say(renderer, words("All up to date!", style::TITLE, f32::INFINITY, false), to, fade(col.text_faint, 1.0), list, clip);
+        } else if let Some(shown) = list.intersection(&clip) {
+            renderer.with_layer(shown, |renderer| {
+                for g in self.groups() {
+                    self.draw_card(s, renderer, &g, at(self.card_rect(s, g.app, now)), shown, alpha, now);
                 }
-                picture(renderer, &self.pictures.clear, centred(b, style::ICON as f32), 1.0, clip);
+            });
+            // Clear all, over the list's bottom right (Caelestia's `clearBtn`).
+            let b = at(self.clear_rect(s, now));
+            renderer.fill_quad(quad(b, b.height / 2.0), fade(col.raised, 1.0));
+            if s.over == Over::Clear {
+                renderer.fill_quad(quad(b, b.height / 2.0), hover(col.text, 1.0));
             }
-            // The pin: clear-all's look; pinned, Accent with the pin in On Accent.
-            let b = at(Self::pin_rect());
-            renderer.fill_quad(quad(b, b.height / 2.0), fade(if self.pinned { col.accent } else { col.raised }, 1.0));
-            if s.over == Over::Pin {
-                renderer.fill_quad(quad(b, b.height / 2.0), hover(if self.pinned { col.on_accent } else { col.text }, 1.0));
-            }
-            picture(renderer, &self.pictures.pin[self.pinned as usize], centred(b, style::ICON as f32), 1.0, clip);
+            picture(renderer, &self.pictures.clear, centred(b, style::ICON as f32), 1.0, clip);
         }
+        // The pin: clear-all's look; pinned, Accent with the pin in On Accent.
+        let b = at(Self::pin_rect());
+        renderer.fill_quad(quad(b, b.height / 2.0), fade(if self.pinned { col.accent } else { col.raised }, 1.0));
+        if s.over == Over::Pin {
+            renderer.fill_quad(quad(b, b.height / 2.0), hover(if self.pinned { col.on_accent } else { col.text }, 1.0));
+        }
+        picture(renderer, &self.pictures.pin[self.pinned as usize], centred(b, style::ICON as f32), 1.0, clip);
     }
 
     /// The corner box: the recorder (`recorder.rs`) over the switches (Caelestia's
@@ -968,9 +966,9 @@ impl Side<'_> {
         let quad = |b: Rectangle, radius: f32| renderer::Quad { bounds: b, border: border::rounded(radius), ..Default::default() };
         let at = |r: Rectangle| Rectangle { x: (c.x + r.x).round(), y: (c.y + r.y).round(), width: r.width.round(), height: r.height.round() };
         let fade = |colour: Color| Color { a: colour.a * alpha, ..colour };
-        let card = at(Rectangle { x: 0.0, y: self.switches_y(s), width: W, height: switches_h() });
+        let card = at(Rectangle { x: 0.0, y: self.switches_y(), width: W, height: switches_h() });
         renderer.fill_quad(quad(card, style::CORNER), fade(col.panel));
-        let [p, rec, shot] = self.pills_at(s);
+        let [p, rec, shot] = self.pills_at();
         let on = |p: Point| Point::new(c.x + p.x, c.y + p.y);
         self.switches().draw(renderer, on(p), &s.switches, col, alpha, clip, now);
         for ((pill, p), glide) in self.capture().iter().zip([rec, shot]).zip(&s.capture) {

@@ -3,9 +3,8 @@
 //! 1-1"; first built in the Side Panel Recorder plan, step 2, `23d98c2f`, his verified box
 //! of 2026-11-03). Caelestia @bcbb5d5 `modules/utilities/cards/Record.qml`,
 //! `RecordingList.qml` and `components/controls/SplitButton.qml`, as Windows'
-//! `RecordCard.jsx` + `SplitButton.jsx`, held to the rulebook as the switches box under it
-//! is: Windows' 16 padding -> 12, its 12 gaps -> 10, its 8 -> 4, 32-34 tall controls -> 36,
-//! 14 / 12 text -> 18 / 15, 24 / 18 / 15 icons -> 28 / 20 / 16, 16 and 12 corners -> 10.
+//! `RecordCard.jsx` + `SplitButton.jsx`, held to the rulebook (`mp_ui::style`) as the
+//! switches box under it is.
 //!
 //! Two rows, each a picture, a title and a strip pill (`side::Pill`, pictures only), then
 //! a swatch pill that shows or hides the row's list right under it, gliding open (his
@@ -311,8 +310,8 @@ impl Recorder<'_> {
             _ => SNAPPED.load(Relaxed),
         };
         s.shot.go(Some(self.shots(o).0.span(shot)), now);
-        for l in 0..2 {
-            let on = s.last == Some(Part::Swatch(l)) || SHOWN[l].load(Relaxed);
+        for (l, shown) in SHOWN.iter().enumerate() {
+            let on = s.last == Some(Part::Swatch(l)) || shown.load(Relaxed);
             s.swatch[l].go(on.then(|| self.swatch(l, o).0.span(0)), now);
         }
     }

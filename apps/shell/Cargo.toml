@@ -21,7 +21,8 @@ resvg.workspace = true
 libc.workspace = true
 # niri's event stream, read by hand (niri-ipc is GPL-3.0 and pinned to one niri version).
 serde_json.workspace = true
-# Rubik's cap height for the clock's spacing; already built in under cosmic-text.
+# The bundled font's own numbers for the music box (`music/page.rs`, `music/seek.rs`);
+# already built in under cosmic-text.
 ttf-parser = { version = "0.25", default-features = false }
 # The sound server's wire format, pure Rust (his pick 2026-10-30 over libpulse and a
 # pactl helper); only its plain reader/writer is used, its async client sits unused.

@@ -382,12 +382,12 @@ fn hint<T: TryFrom<OwnedVariant>>(hints: &HashMap<String, OwnedVariant>, keys: &
     keys.iter().find_map(|k| hints.get(*k)?.try_clone().ok()?.try_into().ok())
 }
 
-#[allow(clippy::too_many_arguments)]
 /// A notice of the shell's own (a clip saved), as any program's.
 pub fn post(app: &str, summary: &str, body: &str) {
     add(app.into(), 0, String::new(), summary.into(), body.into(), Vec::new(), HashMap::new(), -1);
 }
 
+#[allow(clippy::too_many_arguments)]
 fn add(app: String, replaces: u32, app_icon: String, summary: String, body: String, actions: Vec<String>, hints: HashMap<String, OwnedVariant>, timeout: i32) -> u32 {
     let mut list = LIST.lock().unwrap();
     let old = list.iter().position(|n| replaces != 0 && n.id == replaces);
@@ -478,18 +478,23 @@ fn from_raw((w, h, stride, _alpha, bits, channels, data): (i32, i32, i32, bool, 
 }
 
 /// A body as plain text: senders may send markup (`<b>`, `<a href>`) though we don't
-/// ask for it, so tags are taken out and the five escapes put back.
+/// ask for it, so tags are taken out and the five escapes put back. A `<` opens a tag
+/// only when a letter or `/` follows it and a `>` closes it: "i <3 you" keeps its words.
 fn plain(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
-    let mut tag = false;
-    for c in s.chars() {
-        match c {
-            '<' => tag = true,
-            '>' if tag => tag = false,
-            _ if !tag => out.push(c),
-            _ => {}
+    let mut rest = s;
+    while let Some(i) = rest.find('<') {
+        out.push_str(&rest[..i]);
+        let after = &rest[i + 1..];
+        match after.find('>').filter(|_| after.starts_with(|c: char| c.is_ascii_alphabetic() || c == '/')) {
+            Some(end) => rest = &after[end + 1..],
+            None => {
+                out.push('<');
+                rest = after;
+            }
         }
     }
+    out.push_str(rest);
     out.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&apos;", "'").replace("&amp;", "&")
 }
 
@@ -517,6 +522,22 @@ mod tests {
     fn plain_text() {
         assert_eq!(plain("<b>Hi</b> &amp; <a href=\"x\">you</a> 1 &lt; 2"), "Hi & you 1 < 2");
         assert_eq!(plain("no tags"), "no tags");
+        // A bare `<` is not a tag (Fable Sweep row H15).
+        assert_eq!(plain("i <3 you"), "i <3 you");
+        assert_eq!(plain("a < b and <b>c</b> > d"), "a < b and c > d");
+        assert_eq!(plain("cut off <b"), "cut off <b");
+    }
+
+    #[test]
+    fn ages() {
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        assert_eq!(age(now), "now");
+        assert_eq!(age(now - 59), "now");
+        assert_eq!(age(now - 5 * 60), "5m");
+        assert_eq!(age(now - 3 * 3600), "3h");
+        assert_eq!(age(now - 49 * 3600), "2d");
+        // A clock set back: never a negative age.
+        assert_eq!(age(now + 100), "now");
     }
 
     #[test]

@@ -477,7 +477,7 @@ impl Body for Popups<'_> {
                         if i == 0 {
                             renderer.draw_image(img::Image { opacity: alpha * open, ..img::Image::new(p.close.clone()) }, centred(b, style::ICON as f32), cut);
                         } else if let Some((_, label)) = n.actions.get(i - 1) {
-                            let label = cut_label(label, b.width - 2.0 * PAD);
+                            let label = self::cut(label, style::SMALL, b.width - 2.0 * PAD);
                             let w = width(&label, style::SMALL);
                             say(renderer, words(&label, style::SMALL, f32::INFINITY, false), Point::new((b.x + (b.width - w) / 2.0).round(), b.center_y()), fade(c.text, open));
                         }
@@ -556,10 +556,6 @@ pub(crate) fn say(renderer: &mut Renderer, words: text::Text<&str>, to: Point, c
     let words = text::Text { content: content.to_string(), bounds, size, line_height, font, align_x, align_y, shaping, wrapping };
     let reach = Rectangle { x: near.x - near.width, y: near.y - near.width, width: 3.0 * near.width, height: 4096.0 };
     renderer.fill_text(words, to, colour, reach);
-}
-
-fn cut_label(label: &str, w: f32) -> String {
-    cut(label, style::SMALL, w)
 }
 
 /// The box's size for the pop-ups now, before any card has a state (a new surface).

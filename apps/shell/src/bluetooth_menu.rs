@@ -413,3 +413,14 @@ impl Body for Menu<'_> {
         s.hovered.is_some()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pictures_by_kind_and_charge() {
+        assert_eq!(["audio-headset", "audio-headphones", "audio-card", "phone", "input-mouse", "input-keyboard", "computer"].map(kind), [0, 0, 1, 2, 3, 4, 5]);
+        assert_eq!([0, 33, 34, 66, 67, 99, 100].map(battery), [0, 0, 1, 1, 2, 2, 3]);
+    }
+}

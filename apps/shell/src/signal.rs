@@ -1,8 +1,7 @@
 //! The taps other programs give the shell: niri's Mod+D sends SIGUSR1 (`pkill
 //! -USR1 -x mp-shell`, the Start menu), mp-theme sends SIGUSR2 once it has written
 //! new colours. A thread waits in `sigwait`, so nothing runs in between. (The music
-//! box's shortcut and the media keys call mp-library and mp-player on the session bus
-//! straight since the Music Tab Redesign, step 2.)
+//! box's shortcut and the media keys come over the session bus instead: `music/bus.rs`.)
 
 use std::thread;
 

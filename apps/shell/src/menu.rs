@@ -249,17 +249,17 @@ impl<'a, Message> Menu<'a, Message> {
     }
 
     /// Up from behind the screen's bottom edge instead (the Start menu).
-    pub fn from_bottom(self) -> Self {
+    pub fn at_bottom(self) -> Self {
         Self { edge: Edge::Bottom, ..self }
     }
 
     /// In from behind the right edge, under the bar, the surface sized to it (the notices).
-    pub fn from_corner(self) -> Self {
+    pub fn at_corner(self) -> Self {
         Self { edge: Edge::Corner, ..self }
     }
 
     /// The side panel instead: the room's height, in from behind the right edge.
-    pub fn from_side(self) -> Self {
+    pub fn at_side(self) -> Self {
         Self { edge: Edge::Side, ..self }
     }
 
@@ -589,11 +589,11 @@ impl<'a, Message: 'a> From<Menu<'a, Message>> for Element<'a, Message> {
 #[derive(Clone)]
 pub struct Row {
     pub label: String,
-    /// Plain and lit (on the pill); a program's window rows have none, as Windows'.
-    pub icon: Option<[image::Handle; 2]>,
+    /// Plain and lit (on the pill).
+    pub icon: [image::Handle; 2],
 }
 
-/// A menu's rows (the power menu's, a program's windows): an icon and a name each, the
+/// A menu's rows (the power menu's): an icon and a name each, the
 /// accent pill under the hovered one.
 pub struct Rows {
     pub rows: Vec<Row>,
@@ -601,15 +601,8 @@ pub struct Rows {
 }
 
 impl Rows {
-    /// Where a row's name starts.
-    fn text_x(&self) -> f32 {
-        if self.rows.iter().any(|r| r.icon.is_some()) { INSET + style::ICON as f32 + INSET } else { INSET }
-    }
-
-    /// The rows' height inside the box.
-    pub fn height(rows: usize) -> f32 {
-        rows as f32 * ROW
-    }
+    /// Where a row's name starts: after its picture.
+    const TEXT_X: f32 = INSET + style::ICON as f32 + INSET;
 }
 
 pub struct RowsState {
@@ -652,7 +645,7 @@ impl Body for Rows {
     fn size(&self, _: &mut RowsState) -> Size {
         // The widest name, measured, sets the width.
         let widest = self.rows.iter().map(|row| <Renderer as text::Renderer>::Paragraph::with_text(label(row.label.as_str(), f32::INFINITY)).min_width()).fold(0.0, f32::max);
-        Size::new(self.text_x() + widest + INSET, Self::height(self.rows.len()))
+        Size::new(Self::TEXT_X + widest + INSET, self.rows.len() as f32 * ROW)
     }
 
     fn update(&self, s: &mut RowsState, event: &Event, at: Option<Point>, now: Instant) -> Reply {
@@ -693,18 +686,17 @@ impl Body for Rows {
             // ease along with its slide (his ask 2026-10-29).
             let lit = ((pill.y + ROW).min(y + ROW) - pill.y.max(y)).max(0.0) / ROW * pill_alpha;
             let side = style::ICON as f32;
-            if let Some([icon, lit_icon]) = &row.icon {
-                let spot = Rectangle { x: c.x + INSET, y: y + (ROW - side) / 2.0, width: side, height: side };
-                renderer.draw_image(image::Image { opacity: alpha, ..image::Image::new(icon.clone()) }, spot, full);
-                if lit > 0.0 {
-                    renderer.draw_image(image::Image { opacity: alpha * lit, ..image::Image::new(lit_icon.clone()) }, spot, full);
-                }
+            let [icon, lit_icon] = &row.icon;
+            let spot = Rectangle { x: c.x + INSET, y: y + (ROW - side) / 2.0, width: side, height: side };
+            renderer.draw_image(image::Image { opacity: alpha, ..image::Image::new(icon.clone()) }, spot, full);
+            if lit > 0.0 {
+                renderer.draw_image(image::Image { opacity: alpha * lit, ..image::Image::new(lit_icon.clone()) }, spot, full);
             }
             // Two colours only, the lit name faded in over the plain one (as the
             // icons): iced_tiny_skia 0.14.1 caches each letter per colour, so an
             // eased colour cached a new set every frame (1.3 MiB kept, 2026-10-29).
             // Fully lit, the plain one goes, or its edges would show round the lit one.
-            let start = self.text_x();
+            let start = Self::TEXT_X;
             let name = Rectangle { x: c.x + start, y, width: c.width - start, height: ROW };
             let at = Point::new(name.x, name.center_y());
             if lit < 0.99 {

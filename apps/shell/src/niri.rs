@@ -3,19 +3,18 @@
 
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
-use std::sync::{LazyLock, Mutex};
+use std::sync::Mutex;
 use std::thread;
 
 use iced::Subscription;
 use iced::futures::channel::mpsc;
 use serde_json::Value;
 
-/// A window as niri reports it.
+/// A window as niri reports it: only what the bar draws (which workspace holds it;
+/// no name since the window name left the bar, Noctalia Look step 2).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Window {
     pub id: u64,
-    pub title: String,
-    pub app_id: String,
     pub workspace: Option<u64>,
 }
 
@@ -26,8 +25,6 @@ pub struct Workspace {
     pub idx: u64,
     pub output: String,
     pub active: bool,
-    /// The window last used on it (niri's `active_window_id`).
-    pub active_window: Option<u64>,
 }
 
 /// niri's windows (in opening order: niri's ids only grow) and workspaces.
@@ -35,14 +32,6 @@ pub struct Workspace {
 pub struct Desktop {
     pub windows: Vec<Window>,
     pub workspaces: Vec<Workspace>,
-}
-
-impl Desktop {
-    /// What the bar draws: the workspaces, and which one each window is on (no
-    /// titles since the window name left the bar, Noctalia Look step 2).
-    fn strip(&self) -> (Vec<(u64, Option<u64>)>, &[Workspace]) {
-        (self.windows.iter().map(|w| (w.id, w.workspace)).collect(), &self.workspaces)
-    }
 }
 
 /// The latest `Desktop`, kept by the reader thread; the strip reads it when it draws.
@@ -56,12 +45,10 @@ fn connect() -> std::io::Result<UnixStream> {
     UnixStream::connect(std::env::var_os("NIRI_SOCKET").ok_or(std::io::ErrorKind::NotFound)?)
 }
 
-/// Fires whenever `DESKTOP` changes in a way the strip draws (foot's title spinner
-/// sends about one title change a second while Claude works, measured
-/// 2026-10-29: only a shown active window's could wake it, and `drawable` leaves
-/// the spinner out). A thread waits on niri's
-/// event stream (one JSON event per line, niri-ipc's documented protocol), so
-/// nothing runs between events.
+/// Fires whenever `DESKTOP` changes: only what the strip draws is kept in it, so a
+/// window's new name wakes nothing (foot's title spinner sends about one a second while
+/// Claude works, measured 2026-10-29). A thread waits on niri's event stream (one JSON
+/// event per line, niri-ipc's documented protocol), so nothing runs between events.
 pub fn events() -> Subscription<()> {
     Subscription::run(|| {
         let (mut tx, rx) = mpsc::channel(1);
@@ -76,7 +63,7 @@ pub fn events() -> Subscription<()> {
                 let Ok(event) = line.map(|l| serde_json::from_str::<Value>(&l).unwrap_or_default()) else { break };
                 let mut d = DESKTOP.lock().unwrap();
                 apply(&mut d, &event);
-                if d.strip() != sent.strip() {
+                if *d != sent {
                     sent = d.clone();
                     drop(d);
                     let _ = tx.try_send(());
@@ -88,22 +75,12 @@ pub fn events() -> Subscription<()> {
     })
 }
 
-/// A title as the strip can draw it. Ioskeley Mono is the shell's only font (its service
-/// hides the system's), so letters it has no shape for (Claude's spinner, emoji,
-/// Japanese) would draw as boxes: they are left out (his pick 2026-10-30), and the
-/// spaces round them close up. A spinner turning then changes nothing drawn.
-fn drawable(title: &str) -> String {
-    static FACE: LazyLock<ttf_parser::Face<'static>> = LazyLock::new(|| ttf_parser::Face::parse(crate::FONT_TTF, 0).expect("bundled font"));
-    let kept: String = title.chars().filter(|&c| c.is_whitespace() || FACE.glyph_index(c).is_some()).collect();
-    kept.split_whitespace().collect::<Vec<_>>().join(" ")
-}
-
 fn window(w: &Value) -> Window {
-    Window { id: w["id"].as_u64().unwrap_or(0), title: drawable(w["title"].as_str().unwrap_or("")), app_id: w["app_id"].as_str().unwrap_or("").into(), workspace: w["workspace_id"].as_u64() }
+    Window { id: w["id"].as_u64().unwrap_or(0), workspace: w["workspace_id"].as_u64() }
 }
 
 fn workspace(w: &Value) -> Workspace {
-    Workspace { id: w["id"].as_u64().unwrap_or(0), idx: w["idx"].as_u64().unwrap_or(0), output: w["output"].as_str().unwrap_or("").into(), active: w["is_active"].as_bool().unwrap_or(false), active_window: w["active_window_id"].as_u64() }
+    Workspace { id: w["id"].as_u64().unwrap_or(0), idx: w["idx"].as_u64().unwrap_or(0), output: w["output"].as_str().unwrap_or("").into(), active: w["is_active"].as_bool().unwrap_or(false) }
 }
 
 /// Folds one event in; events the strip doesn't use are skipped, so a newer
@@ -127,11 +104,6 @@ fn apply(d: &mut Desktop, event: &Value) {
         "WindowsChanged" => {
             d.windows = list(&e["windows"]).iter().map(window).collect();
             d.windows.sort_by_key(|w| w.id);
-        }
-        "WorkspaceActiveWindowChanged" => {
-            if let Some(w) = d.workspaces.iter_mut().find(|w| Some(w.id) == e["workspace_id"].as_u64()) {
-                w.active_window = e["active_window_id"].as_u64();
-            }
         }
         "WindowOpenedOrChanged" => {
             let w = window(&e["window"]);
@@ -209,4 +181,41 @@ pub fn act(action: Value) {
             eprintln!("mp-shell: niri action: {e}");
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn events_fold_in() {
+        let mut d = Desktop::default();
+        apply(&mut d, &json!({ "Ok": "Handled" }));
+        apply(
+            &mut d,
+            &json!({ "WorkspacesChanged": { "workspaces": [
+            { "id": 7, "idx": 2, "output": "DP-1", "is_active": false },
+            { "id": 5, "idx": 1, "output": "DP-1", "is_active": true },
+            { "id": 9, "idx": 1, "output": "DP-2", "is_active": true },
+        ] } }),
+        );
+        assert_eq!(d.workspaces.iter().map(|w| w.id).collect::<Vec<_>>(), [5, 9, 7]);
+        // Activating one switches off only its own screen's others.
+        apply(&mut d, &json!({ "WorkspaceActivated": { "id": 7, "focused": true } }));
+        assert_eq!(d.workspaces.iter().filter(|w| w.active).map(|w| w.id).collect::<Vec<_>>(), [9, 7]);
+
+        apply(&mut d, &json!({ "WindowsChanged": { "windows": [{ "id": 4, "title": "b", "workspace_id": 7 }, { "id": 2, "title": "a", "workspace_id": 5 }] } }));
+        apply(&mut d, &json!({ "WindowOpenedOrChanged": { "window": { "id": 3, "title": "c", "workspace_id": 5 } } }));
+        assert_eq!(d.windows.iter().map(|w| (w.id, w.workspace)).collect::<Vec<_>>(), [(2, Some(5)), (3, Some(5)), (4, Some(7))]);
+        // A new name alone changes nothing the strip draws; a move does.
+        let before = d.clone();
+        apply(&mut d, &json!({ "WindowOpenedOrChanged": { "window": { "id": 3, "title": "renamed", "workspace_id": 5 } } }));
+        assert_eq!(d, before);
+        apply(&mut d, &json!({ "WindowOpenedOrChanged": { "window": { "id": 3, "title": "renamed", "workspace_id": 9 } } }));
+        assert_ne!(d, before);
+        apply(&mut d, &json!({ "WindowClosed": { "id": 2 } }));
+        apply(&mut d, &json!({ "SomethingNewer": { "id": 2 } }));
+        assert_eq!(d.windows.iter().map(|w| w.id).collect::<Vec<_>>(), [3, 4]);
+    }
 }

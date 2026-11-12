@@ -1,8 +1,7 @@
 //! The programs the Start menu lists (M&P Shell plan, step 3): the desktop
 //! entries (freedesktop Desktop Entry spec 1.5) a menu shows, each one's picture
 //! from the icon theme, how it starts and how often it was started. Read on every
-//! open and dropped on close; nothing is kept between. Also an open window's
-//! program's `Categories`, which pick its picture in the strip (`category.rs`).
+//! open and dropped on close; nothing is kept between.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -49,7 +48,7 @@ pub fn load(side: u32) -> Vec<App> {
     let mut apps = Vec::new();
     for (id, file) in read_entries() {
         let keys = group(&file);
-        if keys.get("NoDisplay") == Some(&"true") || keys.get("OnlyShowIn").is_some_and(|l| !ours(*l)) || keys.get("NotShowIn").is_some_and(|l| ours(*l)) || keys.get("Name").is_some_and(|n| hidden_name(&unescape(n))) {
+        if keys.get("NoDisplay") == Some(&"true") || keys.get("OnlyShowIn").is_some_and(|l| !ours(l)) || keys.get("NotShowIn").is_some_and(|l| ours(l)) || keys.get("Name").is_some_and(|n| hidden_name(&unescape(n))) {
             continue;
         }
         apps.extend(app(id, &keys, &icons, side));

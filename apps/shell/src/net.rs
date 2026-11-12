@@ -53,7 +53,10 @@ fn read() -> Net {
 /// / 70, dBm held to -90..-20), so the bars match its own tools; 0 when the
 /// kernel gives none (Caelestia's `strength ?? 0`).
 fn strength(card: &str) -> u8 {
-    let table = fs::read_to_string("/proc/net/wireless").unwrap_or_default();
+    percent(&fs::read_to_string("/proc/net/wireless").unwrap_or_default(), card)
+}
+
+fn percent(table: &str, card: &str) -> u8 {
     let dbm = table.lines().find_map(|line| {
         let (name, fields) = line.split_once(':')?;
         if name.trim() != card {
@@ -67,6 +70,8 @@ fn strength(card: &str) -> u8 {
 
 /// A netlink route socket joined to the link group: a message on every link change.
 fn listen() -> Option<OwnedFd> {
+    // SAFETY: the socket is ours from the moment it is made (`OwnedFd` closes it on every
+    // way out), and `bind` only reads the zeroed, then filled, address of the length given.
     unsafe {
         let fd = libc::socket(libc::AF_NETLINK, libc::SOCK_RAW | libc::SOCK_CLOEXEC, libc::NETLINK_ROUTE);
         if fd < 0 {
@@ -95,12 +100,29 @@ pub fn events() -> Subscription<()> {
                 }
                 let wait = if matches!(now, Net::Wifi(_)) { 6000 } else { -1 };
                 let mut ready = libc::pollfd { fd: sock.as_raw_fd(), events: libc::POLLIN, revents: 0 };
+                // SAFETY: one `pollfd`, alive for the call, on a socket this thread owns.
                 if unsafe { libc::poll(&mut ready, 1, wait) } > 0 {
                     // What changed is read from /sys, so the messages are only emptied.
+                    // SAFETY: `recv` writes at most `buf.len()` bytes into `buf`.
                     while unsafe { libc::recv(sock.as_raw_fd(), buf.as_mut_ptr().cast(), buf.len(), libc::MSG_DONTWAIT) } > 0 {}
                 }
             }
         });
         rx
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn signal_percent() {
+        let table = "Inter-| sta-|   Quality        |   Discarded packets\n face | tus | link level noise |  nwid  crypt\n wlan0: 0000   60.  -50.  -256        0      0\n";
+        assert_eq!(percent(table, "wlan0"), 70);
+        // Held to NetworkManager's -90..-20, none for a card not listed.
+        assert_eq!(percent(" wlan0: 0000 70. -10. -256", "wlan0"), 100);
+        assert_eq!(percent(" wlan0: 0000 5. -95. -256", "wlan0"), 30);
+        assert_eq!(percent(table, "wlan1"), 0);
+    }
 }

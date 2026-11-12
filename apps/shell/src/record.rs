@@ -471,3 +471,39 @@ pub fn clock(ms: u64) -> String {
     let (h, m, sec) = (s / 3600, s / 60 % 60, s % 60);
     if h > 0 { format!("{h}:{m:02}:{sec:02}") } else { format!("{m}:{sec:02}") }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn clocks() {
+        assert_eq!(clock(0), "0:00");
+        assert_eq!(clock(65_999), "1:05");
+        assert_eq!(clock(3_661_000), "1:01:01");
+    }
+
+    #[test]
+    fn filmed_holds_while_paused() {
+        let live = Live { pid: 1, since: 1000, paused_ms: 200, paused_at: 0, inside: false };
+        assert_eq!(live.filmed(5000), 3800);
+        assert_eq!(Live { paused_at: 3000, ..live }.filmed(5000), 1800);
+        // A clock set back: never below zero.
+        assert_eq!(live.filmed(500), 0);
+    }
+
+    #[test]
+    fn renames_as_niri_names_its_shots() {
+        let dir = std::env::temp_dir().join(format!("mp-shell-test-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let from = dir.join("Replay_2026-11-04_13-12-43.mp4");
+        fs::write(&from, b"").unwrap();
+        let to = rename(from.to_str().unwrap(), "Clip");
+        assert_eq!(to, dir.join("Clip from 2026-11-04 13-12-43.mp4"));
+        assert!(to.exists() && !from.exists());
+        // No `_` to cut at, or nothing to rename: the name it came with.
+        assert_eq!(rename("/nowhere/plain.mp4", "Clip"), PathBuf::from("/nowhere/plain.mp4"));
+        assert_eq!(rename("/nowhere/Replay_1.mp4", "Clip"), PathBuf::from("/nowhere/Replay_1.mp4"));
+        fs::remove_dir_all(&dir).unwrap();
+    }
+}

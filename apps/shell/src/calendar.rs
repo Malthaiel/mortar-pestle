@@ -289,3 +289,24 @@ impl Body for Calendar {
         s.hovered.is_some()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn months() {
+        assert_eq!(add((2026, 11), 1), (2027, 0));
+        assert_eq!(add((2026, 0), -1), (2025, 11));
+        assert_eq!(add((2026, 5), 14), (2027, 7));
+        assert_eq!([(2024, 1), (2025, 1), (1900, 1), (2000, 1), (2026, 10), (2026, 11)].map(days_in), [29, 28, 28, 29, 30, 31]);
+    }
+
+    #[test]
+    fn weekdays() {
+        // 0 = Monday: Wednesday 11 November 2026, Thursday 29 February 2024, Saturday 1 January 2000.
+        assert_eq!(weekday((2026, 10), 11), 2);
+        assert_eq!(weekday((2024, 1), 29), 3);
+        assert_eq!(weekday((2000, 0), 1), 5);
+    }
+}

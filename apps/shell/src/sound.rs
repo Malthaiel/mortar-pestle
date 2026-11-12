@@ -12,6 +12,7 @@ use std::os::unix::net::UnixStream;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU32, Ordering::Relaxed};
 use std::thread;
+use std::time::Duration;
 
 use iced::Subscription;
 use iced::futures::channel::mpsc;
@@ -185,56 +186,74 @@ pub fn events() -> Subscription<()> {
     Subscription::run(|| {
         let (mut tx, rx) = mpsc::channel(1);
         thread::spawn(move || {
-            let (mut sock, version) = match connect() {
-                Ok(c) => c,
-                Err(e) => return eprintln!("mp-shell: sound server: {e}"),
-            };
-            *WRITE.lock().unwrap() = sock.get_ref().try_clone().ok().map(|s| (s, version));
-            let mut asks = Asks::send();
-            let mut again = false;
-            let mut payload = Vec::new();
-            loop {
-                let Ok(desc) = pa::read_descriptor(&mut sock) else { break };
-                payload.resize(desc.length as usize, 0);
-                if sock.read_exact(&mut payload).is_err() {
-                    break;
-                }
-                let mut r = Cursor::new(payload.as_slice());
-                match Command::read_tag_prefixed(&mut r, version) {
-                    Ok((_, Command::SubscribeEvent(_))) if asks.waiting() => again = true,
-                    Ok((_, Command::SubscribeEvent(_))) => asks = Asks::send(),
-                    Ok((seq, Command::Reply)) => {
-                        if let Err(e) = asks.answer(seq, &mut TagStructReader::new(&mut r, version), version) {
-                            eprintln!("mp-shell: sound server answer: {e}");
-                        }
+            // The server may not be up yet as the strip starts, and may restart under
+            // it: try again every 5 s (as `music/now.rs`), or the speaker stays frozen
+            // and the wheel and slider dead until the strip restarts. One log line a
+            // failed stretch, not one a try.
+            let mut said = false;
+            while !tx.is_closed() {
+                match connect() {
+                    Ok((sock, version)) => {
+                        said = false;
+                        listen(sock, version, &mut tx);
+                        *WRITE.lock().unwrap() = None;
+                        eprintln!("mp-shell: sound server connection ended");
                     }
-                    // Our sets' refusals, and a refused ask (its read is dropped).
-                    Ok((seq, Command::Error(e))) => {
-                        eprintln!("mp-shell: sound server refused #{seq}: {e:?}");
-                        asks.seqs.iter_mut().filter(|s| **s == Some(seq)).for_each(|s| *s = None);
+                    Err(e) if !said => {
+                        said = true;
+                        eprintln!("mp-shell: sound server: {e}");
                     }
-                    Ok(_) => {}
-                    Err(e) => eprintln!("mp-shell: sound server message: {e}"),
+                    Err(_) => {}
                 }
-                if asks.waiting() {
-                    continue;
-                }
-                if let Some(new) = asks.sound() {
-                    let mut s = SOUND.lock().unwrap();
-                    if *s != new {
-                        *s = new;
-                        drop(s);
-                        let _ = tx.try_send(());
-                    }
-                    asks.server = None;
-                }
-                if std::mem::take(&mut again) {
-                    asks = Asks::send();
-                }
+                thread::sleep(Duration::from_secs(5));
             }
-            *WRITE.lock().unwrap() = None;
-            eprintln!("mp-shell: sound server connection ended");
         });
         rx
     })
+}
+
+/// Reads one connection until it ends.
+fn listen(mut sock: BufReader<UnixStream>, version: u16, tx: &mut mpsc::Sender<()>) {
+    *WRITE.lock().unwrap() = sock.get_ref().try_clone().ok().map(|s| (s, version));
+    let mut asks = Asks::send();
+    let mut again = false;
+    let mut payload = Vec::new();
+    while let Ok(desc) = pa::read_descriptor(&mut sock) {
+        payload.resize(desc.length as usize, 0);
+        if sock.read_exact(&mut payload).is_err() {
+            break;
+        }
+        let mut r = Cursor::new(payload.as_slice());
+        match Command::read_tag_prefixed(&mut r, version) {
+            Ok((_, Command::SubscribeEvent(_))) if asks.waiting() => again = true,
+            Ok((_, Command::SubscribeEvent(_))) => asks = Asks::send(),
+            Ok((seq, Command::Reply)) => {
+                if let Err(e) = asks.answer(seq, &mut TagStructReader::new(&mut r, version), version) {
+                    eprintln!("mp-shell: sound server answer: {e}");
+                }
+            }
+            // Our sets' refusals, and a refused ask (its read is dropped).
+            Ok((seq, Command::Error(e))) => {
+                eprintln!("mp-shell: sound server refused #{seq}: {e:?}");
+                asks.seqs.iter_mut().filter(|s| **s == Some(seq)).for_each(|s| *s = None);
+            }
+            Ok(_) => {}
+            Err(e) => eprintln!("mp-shell: sound server message: {e}"),
+        }
+        if asks.waiting() {
+            continue;
+        }
+        if let Some(new) = asks.sound() {
+            let mut s = SOUND.lock().unwrap();
+            if *s != new {
+                *s = new;
+                drop(s);
+                let _ = tx.try_send(());
+            }
+            asks.server = None;
+        }
+        if std::mem::take(&mut again) {
+            asks = Asks::send();
+        }
+    }
 }

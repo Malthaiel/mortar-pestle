@@ -89,7 +89,7 @@ fn width(content: &str) -> f32 {
 }
 
 /// `name` as it fits `room` by `width`'s measure: whole, or as many letters as fit
-/// before Rubik's "...".
+/// before the "…".
 pub fn fit(name: &str, room: f32, mut width: impl FnMut(&str) -> f32) -> String {
     if width(name) <= room {
         return name.into();

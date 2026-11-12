@@ -110,7 +110,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Workspaces<'_, Message> {
             .iter()
             .map(|&(id, kind)| match old.iter().find(|(i, _)| *i == id) {
                 Some((_, t)) => {
-                    let mut t = t.clone();
+                    let mut t = *t;
                     t.go(length(kind), now);
                     (id, t)
                 }
